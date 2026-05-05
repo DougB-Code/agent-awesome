@@ -1,0 +1,19 @@
+{
+  "id": "memory-personal",
+  "label": "Personal Memory",
+  "kind": "memory",
+  "endpoint": "${MEMORY_MCP_URL}",
+  "health_url": "${MEMORY_HEALTH_URL}",
+  "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/memory",
+  "package_path": "./cmd/memoryd",
+  "arguments": [
+    "--addr",
+    "${MEMORY_MCP_ADDR}",
+    "--db",
+    "${AGENTAWESOME_WORKSPACE_ROOT}/harness/build/pilot/personal-assistant/data/memory.db",
+    "--data",
+    "${AGENTAWESOME_WORKSPACE_ROOT}/harness/build/pilot/personal-assistant/data/memory-data"
+  ],
+  "auto_start": ${AUTO_START_LOCAL_SERVICES},
+  "enabled": true
+}

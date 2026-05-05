@@ -1,0 +1,19 @@
+local-exec:
+  enabled: true
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  allowed-workdirs:
+    - .
+  commands:
+    - name: git_status
+      executable: git
+      description: Show repository status.
+      args:
+        - status
+        - --short
+      timeout: 5s
+      max-output-bytes: 16384
+      approval:
+        always-allow-within-workspace: false
+        always-allow-command-starts-with: []
+        always-allow: false

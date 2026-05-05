@@ -1,0 +1,68 @@
+default: cloudflare:gemma-4
+providers:
+  anthropic:
+    adapter: anthropic
+    api-key: ANTHROPIC_API_KEY
+    default: haiku
+    url: https://api.anthropic.com/v1/messages
+    models:
+      - id: haiku
+        model: claude-haiku-4-5
+  cloudflare:
+    adapter: openai
+    api-key: CLOUDFLARE_API_KEY
+    default: kimi-k2
+    url: ${CLOUDFLARE_GATEWAY_URL}
+    models:
+      - id: gemma-4
+        model: workers-ai/@cf/google/gemma-4-26b-a4b-it
+      - id: kimi-k2
+        model: workers-ai/@cf/moonshotai/kimi-k2.6
+      - id: nemotron-3
+        model: workers-ai/@cf/nvidia/nemotron-3-120b-a12b
+  google:
+    adapter: google
+    api-key: GOOGLE_API_KEY
+    default: gemini-flash-lite
+    models:
+      - id: gemini-pro
+        model: gemini-2.5-pro
+        capabilities:
+          streaming: true
+      - id: gemini-flash-lite
+        model: gemini-3.1-flash-lite-preview
+        capabilities:
+          streaming: true
+  huggingface:
+    adapter: openai
+    api-key: HUGGINGFACE_API_KEY
+    default: kimi-k2-thinking
+    url: https://router.huggingface.co/v1/chat/completions
+    models:
+      - id: glm-5
+        model: zai-org/GLM-5.1:fireworks-ai
+      - id: kimi-k2-thinking
+        model: moonshotai/Kimi-K2-Thinking
+  local-fast:
+    adapter: openai
+    default: gemma
+    url: http://127.0.0.1:8080/v1/chat/completions
+    models:
+      - id: gemma
+        model: ggml-org/gemma-4-E2B-it-GGUF:Q8_0
+  openai:
+    adapter: openai
+    api-key: OPENAI_API_KEY
+    default: gpt-mini
+    url: https://api.openai.com/v1/chat/completions
+    models:
+      - id: gpt-mini
+        model: gpt-5.4-mini
+  xai:
+    adapter: openai
+    api-key: XAI_API_KEY
+    default: grok
+    url: https://api.x.ai/v1/chat/completions
+    models:
+      - id: grok
+        model: grok-4-0709
