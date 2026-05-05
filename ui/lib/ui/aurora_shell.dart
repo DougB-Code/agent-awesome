@@ -79,6 +79,17 @@ class _AuroraShellState extends State<AuroraShell> {
   Widget _buildContent(BuildContext context) {
     final panelLayout = _buildPanelLayout();
     if (panelLayout != null) {
+      if (panelLayout.third != null) {
+        return SplitPanelShell(
+          split: panelLayout.outerSplit,
+          left: SplitPanelShell(
+            split: panelLayout.split,
+            left: panelLayout.left,
+            right: panelLayout.right,
+          ),
+          right: panelLayout.third!,
+        );
+      }
       return SplitPanelShell(
         split: panelLayout.split,
         left: panelLayout.left,
@@ -143,10 +154,16 @@ class _AuroraShellState extends State<AuroraShell> {
             controller: widget.controller,
             onAreaChanged: _rememberArea(AppSections.backlog),
           ),
-          right: BacklogInspectorPanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea('Backlog Inspector'),
-          ),
+          right: widget.controller.backlogReviewPanelOpen
+              ? BacklogReviewPanel(controller: widget.controller)
+              : BacklogInspectorPanel(
+                  controller: widget.controller,
+                  onAreaChanged: _rememberArea('Backlog Inspector'),
+                ),
+          third: widget.controller.backlogChatPanelOpen
+              ? _ChatCommandPanel(controller: widget.controller)
+              : null,
+          outerSplit: const PanelSplit(left: 0.74, min: 0.52, max: 0.86),
         );
       case AppSections.settings:
         return SectionLayout(
@@ -230,8 +247,16 @@ class _AuroraShellState extends State<AuroraShell> {
         await widget.controller.applyMemoryFilters(route.memoryFilters!);
       case CommandRouteKind.refreshMemory:
         await widget.controller.refreshMemoryFromUi();
+      case CommandRouteKind.screenAi:
+        await widget.controller.runBacklogScreenCommand(
+          text: context.text,
+          scopeLabel: context.scopeLabel,
+        );
       case CommandRouteKind.assistant:
-        await widget.controller.sendUserMessage(route.assistantText);
+        await widget.controller.sendUserMessage(
+          route.assistantText,
+          displayText: route.displayText,
+        );
     }
   }
 

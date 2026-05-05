@@ -36,13 +36,25 @@ flutter run -d linux --dart-define=AGENTAWESOME_RUNTIME_PROFILE=/home/doug/dev/a
 The UI reads these optional `--dart-define` values:
 
 - `AGENT_API_BASE_URL`, default `http://127.0.0.1:8080/api`
+- `AGENT_GATEWAY_BASE_URL`, default `http://127.0.0.1:8070/api`
 - `MEMORY_MCP_URL`, default `http://127.0.0.1:8090/mcp`
 - `AGENT_APP_NAME`, default `personal_pilot`
 - `AGENT_USER_ID`, default `doug`
-- `AGENTAWESOME_WORKSPACE_ROOT`, default `/home/doug/dev/agentawesome`
+- `AGENTAWESOME_WORKSPACE_ROOT`, default `/home/doug/dev/agentawesome/agent`
 - `AUTO_START_LOCAL_SERVICES`, default `true`
 - `AGENTAWESOME_RUNTIME_PROFILE`, default empty, which loads
   `runtime_profiles/personal_assistant.json`
 
 When services are unavailable, the app marks the relevant connections as
 disconnected and shows empty states.
+
+## Gateway Mode
+
+The default personal assistant profile starts memory, the harness, and
+`agent-gateway`. The UI sends assistant traffic through the gateway while the
+gateway forwards to the harness. To override the gateway endpoint:
+
+```sh
+flutter run -d linux \
+  --dart-define=AGENT_GATEWAY_BASE_URL=http://127.0.0.1:8070/api
+```

@@ -13,6 +13,7 @@ class RuntimeProfile {
     required this.id,
     required this.label,
     required this.harness,
+    this.gateway,
     required this.memoryServerConfigPath,
     required this.mcpServers,
   });
@@ -25,6 +26,9 @@ class RuntimeProfile {
 
   /// Harness process and API configuration.
   final HarnessRuntime harness;
+
+  /// Optional gateway process and API configuration.
+  final GatewayRuntime? gateway;
 
   /// Memory server config file referenced by this profile.
   final String memoryServerConfigPath;
@@ -44,6 +48,7 @@ class RuntimeProfile {
     String? id,
     String? label,
     HarnessRuntime? harness,
+    GatewayRuntime? gateway,
     String? memoryServerConfigPath,
     List<McpServerRuntime>? mcpServers,
   }) {
@@ -51,6 +56,7 @@ class RuntimeProfile {
       id: id ?? this.id,
       label: label ?? this.label,
       harness: harness ?? this.harness,
+      gateway: gateway ?? this.gateway,
       memoryServerConfigPath:
           memoryServerConfigPath ?? this.memoryServerConfigPath,
       mcpServers: mcpServers ?? this.mcpServers,
@@ -63,6 +69,7 @@ class RuntimeProfile {
       'id': id,
       'label': label,
       'harness': harness.toJson(),
+      if (gateway != null) 'gateway': gateway!.toJson(),
       'memory_server_config': memoryServerConfigPath,
     };
   }
@@ -73,8 +80,122 @@ class RuntimeProfile {
       id: _requiredString(json, 'id'),
       label: _requiredString(json, 'label'),
       harness: HarnessRuntime.fromJson(_requiredMap(json, 'harness')),
+      gateway: _optionalGateway(json['gateway']),
       memoryServerConfigPath: _requiredString(json, 'memory_server_config'),
       mcpServers: const <McpServerRuntime>[],
+    );
+  }
+}
+
+/// GatewayRuntime describes the personal gateway process and active endpoints.
+class GatewayRuntime {
+  /// Creates an immutable gateway runtime definition.
+  const GatewayRuntime({
+    required this.id,
+    required this.label,
+    required this.apiBaseUrl,
+    required this.healthUrl,
+    required this.workingDirectory,
+    required this.packagePath,
+    required this.harnessBaseUrl,
+    required this.memoryMcpUrl,
+    required this.appName,
+    required this.userId,
+    required this.port,
+    required this.autoStart,
+    required this.enabled,
+  });
+
+  /// Stable gateway id.
+  final String id;
+
+  /// Human-readable gateway label.
+  final String label;
+
+  /// Gateway API base URL consumed by UI chat clients.
+  final String apiBaseUrl;
+
+  /// Gateway health URL used before and after launching.
+  final String healthUrl;
+
+  /// Directory where the Go gateway package is built and run.
+  final String workingDirectory;
+
+  /// Go package path for the gateway command.
+  final String packagePath;
+
+  /// Upstream harness API base URL.
+  final String harnessBaseUrl;
+
+  /// Memory MCP URL reported to the gateway.
+  final String memoryMcpUrl;
+
+  /// ADK app name passed through gateway status and policy.
+  final String appName;
+
+  /// ADK user id passed through gateway status and policy.
+  final String userId;
+
+  /// Gateway listen port.
+  final int port;
+
+  /// Whether the UI should start this gateway.
+  final bool autoStart;
+
+  /// Whether the UI should use this gateway for assistant traffic.
+  final bool enabled;
+
+  /// Command arguments passed to the built gateway executable.
+  List<String> get arguments {
+    return <String>[
+      '--addr',
+      _listenAddress(apiBaseUrl, port),
+      '--harness-base-url',
+      harnessBaseUrl,
+      '--memory-mcp-url',
+      memoryMcpUrl,
+      '--app-name',
+      appName,
+      '--user-id',
+      userId,
+    ];
+  }
+
+  /// Encodes this gateway runtime to explicit JSON values.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'label': label,
+      'api_base_url': apiBaseUrl,
+      'health_url': healthUrl,
+      'working_directory': workingDirectory,
+      'package_path': packagePath,
+      'harness_base_url': harnessBaseUrl,
+      'memory_mcp_url': memoryMcpUrl,
+      'app_name': appName,
+      'user_id': userId,
+      'port': port,
+      'auto_start': autoStart,
+      'enabled': enabled,
+    };
+  }
+
+  /// Parses gateway runtime JSON from explicit profile values.
+  factory GatewayRuntime.fromJson(Map<String, dynamic> json) {
+    return GatewayRuntime(
+      id: _requiredString(json, 'id'),
+      label: _requiredString(json, 'label'),
+      apiBaseUrl: _requiredString(json, 'api_base_url'),
+      healthUrl: _requiredString(json, 'health_url'),
+      workingDirectory: _requiredString(json, 'working_directory'),
+      packagePath: _requiredString(json, 'package_path'),
+      harnessBaseUrl: _requiredString(json, 'harness_base_url'),
+      memoryMcpUrl: _requiredString(json, 'memory_mcp_url'),
+      appName: _requiredString(json, 'app_name'),
+      userId: _requiredString(json, 'user_id'),
+      port: _requiredInt(json, 'port'),
+      autoStart: _requiredBool(json, 'auto_start'),
+      enabled: _requiredBool(json, 'enabled'),
     );
   }
 }
@@ -241,7 +362,7 @@ class HarnessRuntime {
   }
 }
 
-/// McpServerRuntime describes one memory, task, or auxiliary MCP server.
+/// McpServerRuntime describes one managed MCP server.
 class McpServerRuntime {
   /// Creates an immutable MCP server runtime definition.
   const McpServerRuntime({
@@ -263,7 +384,7 @@ class McpServerRuntime {
   /// Human-readable MCP server label.
   final String label;
 
-  /// Logical server kind, such as memory or tasks.
+  /// Logical server kind, such as memory.
   final String kind;
 
   /// Streamable HTTP MCP endpoint.
@@ -413,10 +534,14 @@ class RuntimeProfileLoader {
   Map<String, String> _templateVariables() {
     final agentApi = Uri.parse(config.agentApiBaseUrl);
     final memoryMcp = Uri.parse(config.memoryMcpUrl);
+    final gatewayApi = Uri.parse(config.agentGatewayBaseUrl);
     return <String, String>{
       'AGENTAWESOME_WORKSPACE_ROOT': config.workspaceRoot,
       'AGENT_API_BASE_URL': config.agentApiBaseUrl,
       'AGENT_API_PORT': _portString(agentApi, 8080),
+      'AGENT_GATEWAY_BASE_URL': config.agentGatewayBaseUrl,
+      'AGENT_GATEWAY_PORT': _portString(gatewayApi, 8070),
+      'AGENT_GATEWAY_HEALTH_URL': _healthUrl(config.agentGatewayBaseUrl),
       'AGENT_APP_NAME': config.agentAppName,
       'AGENT_USER_ID': config.agentUserId,
       'MEMORY_MCP_URL': config.memoryMcpUrl,
@@ -534,12 +659,31 @@ String _portString(Uri uri, int fallback) {
   return fallback.toString();
 }
 
+String _listenAddress(String apiBaseUrl, int fallbackPort) {
+  final uri = Uri.parse(apiBaseUrl);
+  final port = uri.hasPort ? uri.port : fallbackPort;
+  final host = uri.host.isEmpty ? '127.0.0.1' : uri.host;
+  return '$host:$port';
+}
+
 Map<String, dynamic> _requiredMap(Map<String, dynamic> json, String field) {
   final value = json[field];
   if (value is Map<String, dynamic>) {
     return value;
   }
   throw FormatException('Runtime profile field "$field" must be an object');
+}
+
+GatewayRuntime? _optionalGateway(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+  if (value is Map<String, dynamic>) {
+    return GatewayRuntime.fromJson(value);
+  }
+  throw const FormatException(
+    'Runtime profile field "gateway" must be an object',
+  );
 }
 
 String _requiredString(Map<String, dynamic> json, String field) {

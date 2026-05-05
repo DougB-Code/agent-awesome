@@ -2,6 +2,7 @@
 library;
 
 import '../../domain/models.dart';
+import '../../domain/user_message_text.dart';
 import '../shell/app_sections.dart';
 import 'command_context.dart';
 
@@ -28,6 +29,9 @@ enum CommandRouteKind {
   /// Refresh memory data from the graph service.
   refreshMemory,
 
+  /// Send a screen-scoped command to structured AI planning.
+  screenAi,
+
   /// Send a screen-scoped instruction to Aurora.
   assistant,
 }
@@ -42,6 +46,7 @@ class CommandRoute {
     this.taskFilters,
     this.memoryFilters,
     this.assistantText = '',
+    this.displayText = '',
   });
 
   /// No-op routing result.
@@ -51,7 +56,8 @@ class CommandRoute {
       settingsSection = '',
       taskFilters = null,
       memoryFilters = null,
-      assistantText = '';
+      assistantText = '',
+      displayText = '';
 
   /// Routing action kind.
   final CommandRouteKind kind;
@@ -70,6 +76,9 @@ class CommandRoute {
 
   /// Screen-scoped assistant instruction.
   final String assistantText;
+
+  /// User-facing text to display when assistantText contains hidden context.
+  final String displayText;
 }
 
 /// CommandRouter converts global command text into UI actions.
@@ -111,9 +120,13 @@ class CommandRouter {
         return memory;
       }
     }
+    if (_isTaskContext(context)) {
+      return const CommandRoute(kind: CommandRouteKind.screenAi);
+    }
     return CommandRoute(
       kind: CommandRouteKind.assistant,
       assistantText: _screenInstruction(context),
+      displayText: context.text.trim(),
     );
   }
 
@@ -266,10 +279,11 @@ class CommandRouter {
       if (context.selectedMemoryId.isNotEmpty)
         'selected memory id: ${context.selectedMemoryId}',
     ].join(', ');
-    final suffix = selected.isEmpty ? '' : '\nRelevant ids: $selected';
-    return 'Treat this as a command for the current UI screen: '
-        '${context.scopeLabel}.\n'
-        'User command: ${context.text.trim()}$suffix';
+    return buildScreenCommandPrompt(
+      scopeLabel: context.scopeLabel,
+      userText: context.text,
+      relevantIds: selected,
+    );
   }
 
   /// Reports whether the command is running in the backlog workspace.

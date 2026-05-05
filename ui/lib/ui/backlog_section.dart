@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../app/app_controller.dart';
 import '../app/theme.dart';
 import '../domain/models.dart';
+import '../domain/screen_command.dart';
 import '../domain/task_insight_explanations.dart';
 import '../domain/task_insight_query.dart';
 import 'panels/panels.dart';
@@ -130,6 +131,7 @@ class BacklogInspectorPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return SwitcherPanel(
       onAreaChanged: onAreaChanged,
+      titleControl: _BacklogReviewTitleControl(controller: controller),
       areas: <SwitcherPanelArea>[
         SwitcherPanelArea(
           title: 'Backlog Inspector',
@@ -172,6 +174,326 @@ class BacklogInspectorPanel extends StatelessWidget {
       );
     }
     return const _TaskSelectionEmpty();
+  }
+}
+
+class _BacklogReviewTitleControl extends StatelessWidget {
+  const _BacklogReviewTitleControl({required this.controller});
+
+  final AuroraAppController controller;
+
+  /// Builds an inspector header action for returning to AI review.
+  @override
+  Widget build(BuildContext context) {
+    final run = controller.activeScreenCommandRun;
+    if (run == null || run.changes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Tooltip(
+      message: 'Review AI changes',
+      child: IconButton(
+        onPressed: controller.openBacklogReviewPanel,
+        icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+      ),
+    );
+  }
+}
+
+/// BacklogReviewPanel renders AI-proposed screen changes for review.
+class BacklogReviewPanel extends StatelessWidget {
+  /// Creates the Backlog AI change review panel.
+  const BacklogReviewPanel({super.key, required this.controller});
+
+  /// Shared app controller.
+  final AuroraAppController controller;
+
+  /// Builds the right-side AI change review surface.
+  @override
+  Widget build(BuildContext context) {
+    final run = controller.activeScreenCommandRun;
+    return SwitcherPanel(
+      showAreaQuickSelect: false,
+      titleControl: Tooltip(
+        message: 'Show inspector',
+        child: IconButton(
+          onPressed: controller.openBacklogInspectorPanel,
+          icon: const Icon(Icons.close, size: 18),
+        ),
+      ),
+      areas: <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          title: 'Review Changes',
+          icon: Icons.auto_awesome_outlined,
+          builder: (query) {
+            if (run == null) {
+              return const PanelEmptyBlock(label: 'No AI changes to review');
+            }
+            final changes = run.changes.where((change) {
+              return _matchesTaskChange(change, query);
+            }).toList();
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  _ScreenRunSummaryBlock(controller: controller, run: run),
+                  const SizedBox(height: 12),
+                  if (changes.isEmpty)
+                    const PanelEmptyBlock(label: 'No changes match this view')
+                  else
+                    for (final change in changes)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _ScreenChangeReviewCard(
+                          controller: controller,
+                          change: change,
+                        ),
+                      ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _ScreenRunSummaryBlock extends StatelessWidget {
+  const _ScreenRunSummaryBlock({required this.controller, required this.run});
+
+  final AuroraAppController controller;
+  final ScreenCommandRun run;
+
+  /// Builds summary counts for one screen-command run.
+  @override
+  Widget build(BuildContext context) {
+    final applied = run.changes
+        .where((change) => change.status == ScreenChangeStatus.applied)
+        .length;
+    final review = run.changes
+        .where((change) => change.status == ScreenChangeStatus.proposed)
+        .length;
+    final rejected = run.changes
+        .where((change) => change.status == ScreenChangeStatus.rejected)
+        .length;
+    return PanelSectionBlock(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            'AI found ${run.changes.length} changes',
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            controller.screenCommandMessage,
+            style: const TextStyle(color: AuroraColors.muted),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _TaskBadge(label: 'Applied $applied'),
+              _TaskBadge(label: 'Needs review $review'),
+              _TaskBadge(label: 'Rejected $rejected'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScreenChangeReviewCard extends StatelessWidget {
+  const _ScreenChangeReviewCard({
+    required this.controller,
+    required this.change,
+  });
+
+  final AuroraAppController controller;
+  final ScreenChange change;
+
+  /// Builds one reviewable AI change card.
+  @override
+  Widget build(BuildContext context) {
+    final focused = controller.focusedScreenChangeId == change.id;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => controller.focusBacklogScreenChange(change.id),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: focused ? AuroraColors.greenSoft : const Color(0xfffffcf8),
+          border: Border.all(
+            color: focused ? AuroraColors.green : AuroraColors.border,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(
+                  _screenChangeIcon(change),
+                  size: 18,
+                  color: _screenChangeColor(change),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    change.summary,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _TaskBadge(label: _screenChangeStatusLabel(change)),
+              ],
+            ),
+            if (change.reason.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                change.reason,
+                style: const TextStyle(color: AuroraColors.muted),
+              ),
+            ],
+            if (change.error.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                change.error,
+                style: const TextStyle(
+                  color: AuroraColors.coral,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 10),
+            _ScreenChangeDiffList(change: change),
+            const SizedBox(height: 10),
+            Row(
+              children: <Widget>[
+                Tooltip(
+                  message: 'Focus change',
+                  child: IconButton.outlined(
+                    onPressed: () =>
+                        controller.focusBacklogScreenChange(change.id),
+                    icon: const Icon(Icons.center_focus_strong, size: 18),
+                  ),
+                ),
+                const Spacer(),
+                if (change.status == ScreenChangeStatus.proposed &&
+                    change.safety != ScreenChangeSafety.rejected) ...<Widget>[
+                  Tooltip(
+                    message: 'Apply change',
+                    child: IconButton.filled(
+                      onPressed: controller.screenCommandBusy
+                          ? null
+                          : () => unawaited(
+                              controller.applyScreenChangeFromUi(change.id),
+                            ),
+                      icon: const Icon(Icons.check, size: 18),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Reject change',
+                    child: IconButton.outlined(
+                      onPressed: controller.screenCommandBusy
+                          ? null
+                          : () => unawaited(
+                              controller.rejectScreenChangeFromUi(change.id),
+                            ),
+                      icon: const Icon(Icons.close, size: 18),
+                    ),
+                  ),
+                ],
+                if (controller.screenChangeCanUndo(change))
+                  Tooltip(
+                    message: 'Undo change',
+                    child: IconButton.outlined(
+                      onPressed: controller.screenCommandBusy
+                          ? null
+                          : () => unawaited(
+                              controller.undoScreenChangeFromUi(change.id),
+                            ),
+                      icon: const Icon(Icons.undo, size: 18),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScreenChangeDiffList extends StatelessWidget {
+  const _ScreenChangeDiffList({required this.change});
+
+  final ScreenChange change;
+
+  /// Builds before/after diff rows for one change.
+  @override
+  Widget build(BuildContext context) {
+    final keys = <String>{
+      ...change.beforeValues.keys,
+      ...change.afterValues.keys,
+    }.toList();
+    if (keys.isEmpty) {
+      return Text(
+        _screenChangeOperationLabel(change.operation),
+        style: const TextStyle(color: AuroraColors.muted),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        for (final key in keys)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: <Widget>[
+                SizedBox(
+                  width: 110,
+                  child: Text(
+                    _taskLabel(key.replaceAll('_', ' ')),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AuroraColors.muted,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    _screenValueLabel(change.beforeValues[key]),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: AuroraColors.muted),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Icon(Icons.arrow_forward, size: 16),
+                ),
+                Expanded(
+                  child: Text(
+                    _screenValueLabel(change.afterValues[key]),
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AuroraColors.green,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
   }
 }
 
@@ -254,7 +576,9 @@ class _BacklogQueueContent extends StatelessWidget {
                 child: _TaskQueueTile(
                   task: task,
                   selected: controller.selectedTask?.id == task.id,
-                  onTap: () => controller.selectTask(task.id),
+                  focused: controller.focusedBacklogTaskId == task.id,
+                  changes: controller.screenChangesForTask(task.id),
+                  onTap: () => controller.inspectBacklogTask(task.id),
                   onComplete: task.done || task.status == 'canceled'
                       ? null
                       : () => unawaited(controller.completeTaskFromUi(task.id)),
@@ -471,6 +795,8 @@ class _TaskQueueTile extends StatelessWidget {
   const _TaskQueueTile({
     required this.task,
     required this.selected,
+    required this.focused,
+    required this.changes,
     required this.onTap,
     required this.onComplete,
     required this.onDelete,
@@ -479,6 +805,8 @@ class _TaskQueueTile extends StatelessWidget {
 
   final WorkspaceTask task;
   final bool selected;
+  final bool focused;
+  final List<ScreenChange> changes;
   final VoidCallback onTap;
   final VoidCallback? onComplete;
   final VoidCallback onDelete;
@@ -493,9 +821,18 @@ class _TaskQueueTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected ? AuroraColors.greenSoft : const Color(0xfffffcf8),
+          color: selected || focused
+              ? AuroraColors.greenSoft
+              : const Color(0xfffffcf8),
           border: Border.all(
-            color: selected ? AuroraColors.green : AuroraColors.border,
+            color: focused
+                ? AuroraColors.coral
+                : selected
+                ? AuroraColors.green
+                : changes.isNotEmpty
+                ? const Color(0xffc98219)
+                : AuroraColors.border,
+            width: focused || changes.isNotEmpty ? 1.5 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -582,6 +919,10 @@ class _TaskQueueTile extends StatelessWidget {
                         _TaskBadge(label: topic),
                     ],
                   ),
+                  if (changes.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 10),
+                    _TaskTileScreenChanges(changes: changes),
+                  ],
                 ],
               ),
             ),
@@ -761,7 +1102,10 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
                       child: _TaskQueueTile(
                         task: task,
                         selected: widget.controller.selectedTask?.id == task.id,
-                        onTap: () => widget.controller.selectTask(task.id),
+                        focused: false,
+                        changes: const <ScreenChange>[],
+                        onTap: () =>
+                            widget.controller.inspectBacklogTask(task.id),
                         onComplete: null,
                         onDelete: () => unawaited(
                           widget.controller.deleteTaskFromUi(task.id),
@@ -2318,6 +2662,71 @@ class _TaskPanelLabel extends StatelessWidget {
   }
 }
 
+class _TaskTileScreenChanges extends StatelessWidget {
+  const _TaskTileScreenChanges({required this.changes});
+
+  final List<ScreenChange> changes;
+
+  /// Builds inline AI annotations for a queue tile.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xfffffbf1),
+        border: Border.all(color: const Color(0xffeed7ad)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (final change in changes)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(
+                    _screenChangeIcon(change),
+                    size: 16,
+                    color: _screenChangeColor(change),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          change.summary,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: AuroraColors.green,
+                          ),
+                        ),
+                        if (change.afterValues.isNotEmpty)
+                          Text(
+                            _inlineScreenChangeDiff(change),
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AuroraColors.muted,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _TaskBadge(label: _screenChangeStatusLabel(change)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _TaskBadge extends StatelessWidget {
   const _TaskBadge({required this.label});
 
@@ -3614,6 +4023,102 @@ String _constellationEndpointLabel(
     return endpointId.substring('anchor:'.length);
   }
   return _taskTitleFor(controller, endpointId);
+}
+
+/// Reports whether one screen change matches a review filter query.
+bool _matchesTaskChange(ScreenChange change, String query) {
+  final text = <String>[
+    change.summary,
+    change.reason,
+    change.error,
+    change.target.taskId,
+    change.target.taskTitle,
+    _screenChangeOperationLabel(change.operation),
+    _screenChangeStatusLabel(change),
+  ].join(' ');
+  return _matchesText(text, query);
+}
+
+/// Returns an icon for one AI screen change.
+IconData _screenChangeIcon(ScreenChange change) {
+  if (change.status == ScreenChangeStatus.rejected) {
+    return Icons.block_outlined;
+  }
+  if (change.status == ScreenChangeStatus.failed) {
+    return Icons.error_outline;
+  }
+  if (change.status == ScreenChangeStatus.applied) {
+    return Icons.check_circle_outline;
+  }
+  return switch (change.operation) {
+    ScreenChangeOperation.createTask => Icons.add_task_outlined,
+    ScreenChangeOperation.updateTask => Icons.edit_outlined,
+    ScreenChangeOperation.completeTask => Icons.task_alt_outlined,
+    ScreenChangeOperation.cancelTask => Icons.cancel_outlined,
+    ScreenChangeOperation.deleteTask => Icons.delete_outline,
+    ScreenChangeOperation.upsertTaskRelation => Icons.account_tree_outlined,
+    ScreenChangeOperation.deleteTaskRelation => Icons.link_off_outlined,
+    ScreenChangeOperation.linkTaskMemory => Icons.link_outlined,
+  };
+}
+
+/// Returns a color for one AI screen change status.
+Color _screenChangeColor(ScreenChange change) {
+  return switch (change.status) {
+    ScreenChangeStatus.applied => AuroraColors.green,
+    ScreenChangeStatus.rejected ||
+    ScreenChangeStatus.failed => AuroraColors.coral,
+    ScreenChangeStatus.undone => AuroraColors.muted,
+    ScreenChangeStatus.proposed =>
+      change.safety == ScreenChangeSafety.autoApply
+          ? AuroraColors.green
+          : const Color(0xffc98219),
+  };
+}
+
+/// Formats one AI screen change operation label.
+String _screenChangeOperationLabel(ScreenChangeOperation operation) {
+  return screenChangeOperationToolName(operation).replaceAll('_', ' ');
+}
+
+/// Formats one AI screen change status label.
+String _screenChangeStatusLabel(ScreenChange change) {
+  return switch (change.status) {
+    ScreenChangeStatus.proposed =>
+      change.safety == ScreenChangeSafety.autoApply
+          ? 'Auto safe'
+          : 'Needs review',
+    ScreenChangeStatus.applied => 'Applied',
+    ScreenChangeStatus.rejected => 'Rejected',
+    ScreenChangeStatus.failed => 'Failed',
+    ScreenChangeStatus.undone => 'Undone',
+  };
+}
+
+/// Formats a screen-change diff value.
+String _screenValueLabel(dynamic value) {
+  if (value == null || value.toString().trim().isEmpty) {
+    return '-';
+  }
+  if (value is List) {
+    return value.map((item) => item.toString()).join(', ');
+  }
+  return value.toString();
+}
+
+/// Formats a compact inline diff for a task tile.
+String _inlineScreenChangeDiff(ScreenChange change) {
+  final keys = <String>{
+    ...change.beforeValues.keys,
+    ...change.afterValues.keys,
+  }.take(3);
+  return keys
+      .map((key) {
+        final before = _screenValueLabel(change.beforeValues[key]);
+        final after = _screenValueLabel(change.afterValues[key]);
+        return '${_taskLabel(key)}: $before -> $after';
+      })
+      .join(' • ');
 }
 
 /// Parses a human-entered task date.

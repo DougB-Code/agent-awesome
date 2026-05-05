@@ -2,6 +2,7 @@
 library;
 
 import 'package:agentawesome_ui/domain/models.dart';
+import 'package:agentawesome_ui/domain/user_message_text.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_context.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_router.dart';
 import 'package:agentawesome_ui/ui/shell/app_sections.dart';
@@ -35,7 +36,7 @@ void main() {
     expect(route.section, 'Chat');
   });
 
-  test('wraps unknown screen commands with current UI context', () {
+  test('routes unknown Backlog commands to structured screen AI', () {
     final route = _router().route(
       const CommandContext(
         section: AppSections.backlog,
@@ -45,9 +46,27 @@ void main() {
       ),
     );
 
+    expect(route.kind, CommandRouteKind.screenAi);
+    expect(route.assistantText, isEmpty);
+  });
+
+  test('wraps unknown non-Backlog commands with current UI context', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.memory,
+        area: 'Library',
+        text: 'what does this screen mean?',
+        selectedMemoryId: 'mem-123',
+      ),
+    );
+
     expect(route.kind, CommandRouteKind.assistant);
-    expect(route.assistantText, contains('Backlog / Stream'));
-    expect(route.assistantText, contains('task-123'));
+    expect(route.assistantText, contains('Memory / Library'));
+    expect(route.assistantText, contains('mem-123'));
+    expect(
+      displayTextFromUserPrompt(route.assistantText),
+      'what does this screen mean?',
+    );
   });
 }
 

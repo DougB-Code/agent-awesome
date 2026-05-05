@@ -74,7 +74,7 @@ class ServiceProcessLaunchPlan {
   final bool ownsProcessGroup;
 }
 
-/// LocalServiceSupervisor starts missing local services and owns their lifetime.
+/// LocalServiceSupervisor starts and restarts local services for the UI.
 class LocalServiceSupervisor {
   /// Creates a supervisor for services described by the app configuration.
   LocalServiceSupervisor({required this.config, http.Client? httpClient})
@@ -91,12 +91,13 @@ class LocalServiceSupervisor {
 
   /// Starts required services when auto-start is enabled.
   Future<List<ServiceProcessStatus>> startRequiredServices(
-    RuntimeProfile profile,
-  ) async {
+    RuntimeProfile profile, {
+    bool restartAutoStarted = false,
+  }) async {
     await _prepareLogDirectory();
     await _writeLogLine(
       'supervisor',
-      'checking services for profile ${profile.id}',
+      'checking services for profile ${profile.id}; restart=$restartAutoStarted',
     );
     if (!config.autoStartLocalServices) {
       final status = _status(
@@ -111,13 +112,30 @@ class LocalServiceSupervisor {
 
     final statuses = <ServiceProcessStatus>[];
     for (final server in profile.mcpServers.where((server) => server.enabled)) {
-      final status = await _ensureMcpServerStatus(profile, server);
+      final status = await _ensureMcpServerStatus(
+        profile,
+        server,
+        restartAutoStarted: restartAutoStarted,
+      );
       await _writeStatusLog(status);
       statuses.add(status);
     }
-    final harnessStatus = await _ensureHarnessStatus(profile);
+    final harnessStatus = await _ensureHarnessStatus(
+      profile,
+      restartAutoStarted: restartAutoStarted,
+    );
     await _writeStatusLog(harnessStatus);
     statuses.add(harnessStatus);
+    final gateway = profile.gateway;
+    if (gateway != null && gateway.enabled) {
+      final gatewayStatus = await _ensureGatewayStatus(
+        profile,
+        gateway,
+        restartAutoStarted: restartAutoStarted,
+      );
+      await _writeStatusLog(gatewayStatus);
+      statuses.add(gatewayStatus);
+    }
     return statuses;
   }
 
@@ -129,36 +147,144 @@ class LocalServiceSupervisor {
     _http.close();
   }
 
+  /// Stops an auto-started service endpoint so it can reload fresh config.
+  Future<void> _restartAutoStartedEndpoint({
+    required String id,
+    required String name,
+    required Uri health,
+  }) async {
+    await _stopOwnedProcess(id: id, name: name);
+    if (!await _isHealthy(health)) {
+      return;
+    }
+    if (!_isLocalEndpoint(health)) {
+      throw StateError(
+        'Cannot restart $name because ${health.host} is not a local endpoint.',
+      );
+    }
+    await _writeLogLine(name, 'stopping existing listener on ${health.port}');
+    await _signalEndpointPort(name: name, port: health.port, signal: 'TERM');
+    if (await _waitUntilUnhealthy(health)) {
+      return;
+    }
+    await _signalEndpointPort(name: name, port: health.port, signal: 'KILL');
+    if (!await _waitUntilUnhealthy(health)) {
+      throw StateError(
+        'Could not stop existing $name listener on port ${health.port}.',
+      );
+    }
+  }
+
+  /// Stops one process started by this supervisor if it is still tracked.
+  Future<void> _stopOwnedProcess({
+    required String id,
+    required String name,
+  }) async {
+    final process = _started.remove(id);
+    if (process == null) {
+      return;
+    }
+    await _writeLogLine(name, 'stopping owned process ${process.pid}');
+    await _terminateProcess(process);
+  }
+
+  /// Sends one signal to every process listening on a local TCP port.
+  Future<void> _signalEndpointPort({
+    required String name,
+    required int port,
+    required String signal,
+  }) async {
+    if (port <= 0) {
+      throw StateError(
+        'Cannot restart $name because the health port is empty.',
+      );
+    }
+    if (Platform.isWindows) {
+      throw StateError('Cannot restart an unowned $name listener on Windows.');
+    }
+    final result = await Process.run('fuser', <String>[
+      '-k',
+      '-$signal',
+      '$port/tcp',
+    ]);
+    await _writeLogLine(
+      name,
+      'fuser -$signal port $port exit ${result.exitCode}: ${result.stderr}',
+    );
+  }
+
+  /// Waits until a previously healthy endpoint stops answering.
+  Future<bool> _waitUntilUnhealthy(Uri health) async {
+    for (var attempt = 0; attempt < 20; attempt++) {
+      if (!await _isHealthy(health)) {
+        return true;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    return false;
+  }
+
   /// Ensures one MCP server and converts launch failures into a status.
   Future<ServiceProcessStatus> _ensureMcpServerStatus(
     RuntimeProfile profile,
-    McpServerRuntime server,
-  ) async {
+    McpServerRuntime server, {
+    required bool restartAutoStarted,
+  }) async {
     try {
-      return await _ensureMcpServer(profile, server);
+      return await _ensureMcpServer(
+        profile,
+        server,
+        restartAutoStarted: restartAutoStarted,
+      );
     } catch (error) {
       return _status(
         server.label,
         server.healthUrl,
         ConnectionStateKind.disconnected,
-        'Startup failed: $error',
+        await _startupFailureMessage(server.label, error),
       );
     }
   }
 
   /// Ensures the harness and converts launch failures into a status.
   Future<ServiceProcessStatus> _ensureHarnessStatus(
-    RuntimeProfile profile,
-  ) async {
+    RuntimeProfile profile, {
+    required bool restartAutoStarted,
+  }) async {
     try {
-      return await _ensureHarness(profile);
+      return await _ensureHarness(
+        profile,
+        restartAutoStarted: restartAutoStarted,
+      );
     } catch (error) {
       final harness = profile.harness;
       return _status(
         harness.label,
         harness.sessionsUrl,
         ConnectionStateKind.disconnected,
-        'Startup failed: $error',
+        await _startupFailureMessage(harness.label, error),
+      );
+    }
+  }
+
+  /// Ensures the gateway and converts launch failures into a status.
+  Future<ServiceProcessStatus> _ensureGatewayStatus(
+    RuntimeProfile profile,
+    GatewayRuntime gateway, {
+    required bool restartAutoStarted,
+  }) async {
+    try {
+      return await _ensureGateway(
+        profile,
+        gateway,
+        restartAutoStarted: restartAutoStarted,
+      );
+    } catch (error) {
+      return _status(
+        gateway.label,
+        gateway.healthUrl,
+        ConnectionStateKind.disconnected,
+        await _startupFailureMessage(gateway.label, error),
       );
     }
   }
@@ -166,9 +292,17 @@ class LocalServiceSupervisor {
   /// Ensures one MCP server is reachable, starting it when the profile manages it.
   Future<ServiceProcessStatus> _ensureMcpServer(
     RuntimeProfile profile,
-    McpServerRuntime server,
-  ) async {
+    McpServerRuntime server, {
+    required bool restartAutoStarted,
+  }) async {
     final health = Uri.parse(server.healthUrl);
+    if (restartAutoStarted && server.autoStart) {
+      await _restartAutoStartedEndpoint(
+        id: server.id,
+        name: server.label,
+        health: health,
+      );
+    }
     if (server.healthUrl.isNotEmpty && await _isHealthy(health)) {
       return _status(
         server.label,
@@ -211,9 +345,19 @@ class LocalServiceSupervisor {
   }
 
   /// Ensures the harness web API is reachable, starting it when needed.
-  Future<ServiceProcessStatus> _ensureHarness(RuntimeProfile profile) async {
+  Future<ServiceProcessStatus> _ensureHarness(
+    RuntimeProfile profile, {
+    required bool restartAutoStarted,
+  }) async {
     final harness = profile.harness;
     final health = Uri.parse(harness.sessionsUrl);
+    if (restartAutoStarted && harness.autoStart) {
+      await _restartAutoStartedEndpoint(
+        id: harness.id,
+        name: harness.label,
+        health: health,
+      );
+    }
     if (await _isHealthy(health)) {
       return _status(
         harness.label,
@@ -243,6 +387,52 @@ class LocalServiceSupervisor {
       health,
       process,
       logPath: '${config.serviceLogDirectory}/harness.log',
+    );
+  }
+
+  /// Ensures the gateway API is reachable, starting it when configured.
+  Future<ServiceProcessStatus> _ensureGateway(
+    RuntimeProfile profile,
+    GatewayRuntime gateway, {
+    required bool restartAutoStarted,
+  }) async {
+    final health = Uri.parse(gateway.healthUrl);
+    if (restartAutoStarted && gateway.autoStart) {
+      await _restartAutoStartedEndpoint(
+        id: gateway.id,
+        name: gateway.label,
+        health: health,
+      );
+    }
+    if (await _isHealthy(health)) {
+      return _status(
+        gateway.label,
+        health.toString(),
+        ConnectionStateKind.connected,
+        'Already running',
+      );
+    }
+    if (!gateway.autoStart) {
+      return _status(
+        gateway.label,
+        health.toString(),
+        ConnectionStateKind.disconnected,
+        'External gateway is not reachable',
+      );
+    }
+    final process = await _startProcess(
+      profile: profile,
+      name: gateway.label,
+      workingDirectory: gateway.workingDirectory,
+      packagePath: gateway.packagePath,
+      arguments: gateway.arguments,
+    );
+    _started[gateway.id] = process;
+    return _waitForProcessHealth(
+      gateway.label,
+      health,
+      process,
+      logPath: '${config.serviceLogDirectory}/gateway.log',
     );
   }
 
@@ -318,7 +508,7 @@ class LocalServiceSupervisor {
     await _writeLogBlock(name, 'go build stdout', result.stdout.toString());
     await _writeLogBlock(name, 'go build stderr', result.stderr.toString());
     if (result.exitCode != 0) {
-      throw StateError('Build failed for $name: ${result.stderr}');
+      throw StateError('Could not build $name. See service logs for details.');
     }
     return executable;
   }
@@ -356,7 +546,7 @@ class LocalServiceSupervisor {
     process.process.kill(signal);
   }
 
-  /// Captures process output for concise readiness failure messages.
+  /// Captures process output for service logs and readiness diagnostics.
   void _captureOutput(String name, Stream<List<int>> stream, String source) {
     final buffer = _logs.putIfAbsent(name, StringBuffer.new);
     stream.transform(utf8.decoder).transform(const LineSplitter()).listen((
@@ -380,25 +570,33 @@ class LocalServiceSupervisor {
           name,
           health.toString(),
           ConnectionStateKind.connected,
-          'Started locally; log $logPath',
+          'Started locally',
         );
       }
       final exited = await _hasExited(process);
       if (exited != null) {
+        await _writeLogLine(
+          name,
+          'process exited before readiness with code $exited; recent output: ${_recentLog(name)}; log $logPath',
+        );
         return _status(
           name,
           health.toString(),
           ConnectionStateKind.disconnected,
-          'Exited with code $exited: ${_recentLog(name)}. Log $logPath',
+          'Exited before it was ready. See service logs for details.',
         );
       }
       await Future<void>.delayed(const Duration(milliseconds: 100));
     }
+    await _writeLogLine(
+      name,
+      'process did not become ready; recent output: ${_recentLog(name)}; log $logPath',
+    );
     return _status(
       name,
       health.toString(),
       ConnectionStateKind.disconnected,
-      'Started but did not become ready: ${_recentLog(name)}. Log $logPath',
+      'Started but did not become ready. See service logs for details.',
     );
   }
 
@@ -434,7 +632,14 @@ class LocalServiceSupervisor {
     }
   }
 
-  /// Returns the last process output lines for UI diagnostics.
+  /// Reports whether an endpoint is safe for local process supervision.
+  bool _isLocalEndpoint(Uri uri) {
+    return uri.host == '127.0.0.1' ||
+        uri.host == 'localhost' ||
+        uri.host == '::1';
+  }
+
+  /// Returns the last process output lines for internal readiness logs.
   String _recentLog(String name) {
     final lines =
         _logs[name]?.toString().trim().split('\n') ?? const <String>[];
@@ -444,6 +649,12 @@ class LocalServiceSupervisor {
     return lines.length <= 3
         ? lines.join(' ')
         : lines.sublist(lines.length - 3).join(' ');
+  }
+
+  /// Logs raw startup failures and returns a UI-safe status message.
+  Future<String> _startupFailureMessage(String name, Object error) async {
+    await _writeLogLine(name, 'startup failed: $error');
+    return 'Startup failed. See service logs for details.';
   }
 
   /// Converts a display name into a stable local binary filename.
@@ -499,7 +710,6 @@ class LocalServiceSupervisor {
   String _serviceLogPath(String kind) {
     return switch (kind) {
       'memory' => '${config.serviceLogDirectory}/memory.log',
-      'tasks' => '${config.serviceLogDirectory}/tasks.log',
       _ => '${config.serviceLogDirectory}/ui.log',
     };
   }

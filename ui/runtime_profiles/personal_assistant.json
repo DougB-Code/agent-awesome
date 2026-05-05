@@ -15,5 +15,20 @@
     "port": ${AGENT_API_PORT},
     "auto_start": ${AUTO_START_LOCAL_SERVICES}
   },
+  "gateway": {
+    "id": "personal-pilot-gateway",
+    "label": "Personal Pilot Gateway",
+    "api_base_url": "${AGENT_GATEWAY_BASE_URL}",
+    "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
+    "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/gateway",
+    "package_path": "./cmd/agent-gateway",
+    "harness_base_url": "${AGENT_API_BASE_URL}",
+    "memory_mcp_url": "${MEMORY_MCP_URL}",
+    "app_name": "${AGENT_APP_NAME}",
+    "user_id": "${AGENT_USER_ID}",
+    "port": ${AGENT_GATEWAY_PORT},
+    "auto_start": ${AUTO_START_LOCAL_SERVICES},
+    "enabled": true
+  },
   "memory_server_config": "${AGENTAWESOME_WORKSPACE_ROOT}/ui/runtime_profiles/memory/personal_memory.json"
 }

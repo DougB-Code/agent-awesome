@@ -6,6 +6,7 @@ class AppConfig {
   /// Creates an immutable app configuration.
   const AppConfig({
     required this.agentApiBaseUrl,
+    required this.agentGatewayBaseUrl,
     required this.memoryMcpUrl,
     required this.agentAppName,
     required this.agentUserId,
@@ -21,6 +22,10 @@ class AppConfig {
         'AGENT_API_BASE_URL',
         defaultValue: 'http://127.0.0.1:8080/api',
       ),
+      agentGatewayBaseUrl: String.fromEnvironment(
+        'AGENT_GATEWAY_BASE_URL',
+        defaultValue: 'http://127.0.0.1:8070/api',
+      ),
       memoryMcpUrl: String.fromEnvironment(
         'MEMORY_MCP_URL',
         defaultValue: 'http://127.0.0.1:8090/mcp',
@@ -35,7 +40,7 @@ class AppConfig {
       ),
       workspaceRoot: String.fromEnvironment(
         'AGENTAWESOME_WORKSPACE_ROOT',
-        defaultValue: '/home/doug/dev/agentawesome',
+        defaultValue: '/home/doug/dev/agentawesome/agent',
       ),
       autoStartLocalServices: bool.fromEnvironment(
         'AUTO_START_LOCAL_SERVICES',
@@ -51,6 +56,9 @@ class AppConfig {
   /// Base URL for the ADK REST API.
   final String agentApiBaseUrl;
 
+  /// Base URL for the Agent Awesome gateway API.
+  final String agentGatewayBaseUrl;
+
   /// URL for the memory MCP JSON-RPC endpoint.
   final String memoryMcpUrl;
 
@@ -60,10 +68,10 @@ class AppConfig {
   /// ADK user id used for local sessions.
   final String agentUserId;
 
-  /// Root directory containing the ui, memory, tasks, harness, and pilots repos.
+  /// Root directory containing the ui, memory, harness, and gateway packages.
   final String workspaceRoot;
 
-  /// Whether the UI should start missing local services during initialization.
+  /// Whether the UI should manage local services during initialization.
   final bool autoStartLocalServices;
 
   /// Optional JSON runtime profile path for harness and MCP topology.

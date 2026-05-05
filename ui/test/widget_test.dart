@@ -7,6 +7,7 @@ import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/domain/models.dart';
+import 'package:agentawesome_ui/domain/screen_command.dart';
 import 'package:agentawesome_ui/ui/aurora_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
 import 'package:flutter/material.dart';
@@ -311,7 +312,7 @@ void main() {
     expect(find.byTooltip('Copy message'), findsOneWidget);
     expect(find.text('Message Aurora in this chat...'), findsOneWidget);
     expect(
-      find.text('Command current screen, Ctrl+Enter for chat...'),
+      find.text('Command current screen, Ctrl/Shift+Enter for chat...'),
       findsOneWidget,
     );
     await tester.tap(
@@ -497,6 +498,116 @@ void main() {
     await tester.tap(find.byTooltip('Expand panel'));
     await tester.pumpAndSettle();
     expect(find.text('TERRAIN'), findsOneWidget);
+  });
+
+  testWidgets(
+    'shows Backlog AI review changes and restores inspector on task tap',
+    (tester) async {
+      tester.view.physicalSize = const Size(1800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = AuroraAppController(config: _testConfig());
+      controller.workspace = const ProjectWorkspace(
+        title: 'Workspace',
+        subtitle: 'Live connected workspace',
+        tasks: <WorkspaceTask>[
+          WorkspaceTask(
+            id: 'task-brief',
+            title: 'Draft task brief',
+            detail: 'Open',
+            done: false,
+            status: 'open',
+            priority: 'normal',
+          ),
+        ],
+        sources: <SourceItem>[],
+        memoryRecords: <MemoryRecord>[],
+      );
+      controller.activeScreenCommandRun = ScreenCommandRun(
+        id: 'run-1',
+        command: 'make it high priority',
+        intent: ScreenCommandIntent.change,
+        confidence: 0.9,
+        createdAt: DateTime(2026, 5, 5),
+        changes: const <ScreenChange>[
+          ScreenChange(
+            id: 'change-1',
+            operation: ScreenChangeOperation.updateTask,
+            target: ScreenChangeTarget(taskId: 'task-brief'),
+            summary: 'Priority changed to high',
+            confidence: 0.8,
+            beforeValues: <String, dynamic>{'priority': 'normal'},
+            afterValues: <String, dynamic>{'priority': 'high'},
+            safety: ScreenChangeSafety.needsReview,
+          ),
+        ],
+      );
+      controller.backlogReviewPanelOpen = true;
+
+      await tester.pumpWidget(
+        MaterialApp(home: AuroraShell(controller: controller)),
+      );
+      await tester.tap(find.text('Backlog').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('REVIEW CHANGES'), findsOneWidget);
+      expect(find.text('Priority changed to high'), findsWidgets);
+      await tester.tap(find.byTooltip('Focus change'));
+      await tester.pumpAndSettle();
+      expect(controller.focusedBacklogTaskId, 'task-brief');
+
+      await tester.tap(find.text('Draft task brief').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('BACKLOG INSPECTOR'), findsOneWidget);
+      expect(controller.backlogReviewPanelOpen, isFalse);
+    },
+  );
+
+  testWidgets('shows Backlog chat as a third screen-command pane', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1900, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = AuroraAppController(config: _testConfig());
+    controller.workspace = const ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live connected workspace',
+      tasks: <WorkspaceTask>[
+        WorkspaceTask(
+          id: 'task-brief',
+          title: 'Draft task brief',
+          detail: 'Open',
+          done: false,
+        ),
+      ],
+      sources: <SourceItem>[],
+      memoryRecords: <MemoryRecord>[],
+    );
+    controller.backlogChatPanelOpen = true;
+    controller.messages = <ChatMessage>[
+      ChatMessage(
+        id: 'msg-1',
+        role: ChatRole.user,
+        author: 'You',
+        text: 'What changed here?',
+        createdAt: DateTime(2026, 5, 5),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuroraShell(controller: controller)),
+    );
+    await tester.tap(find.text('Backlog').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('QUEUE'), findsOneWidget);
+    expect(find.text('BACKLOG INSPECTOR'), findsOneWidget);
+    expect(find.text('CONVERSATION'), findsOneWidget);
+    expect(find.text('What changed here?'), findsOneWidget);
   });
 
   testWidgets('loads workflow content inside the persistent app shell', (
@@ -689,6 +800,7 @@ RuntimeProfile _settingsProfile() {
 AppConfig _testConfig() {
   return const AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
+    agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
     memoryMcpUrl: 'http://127.0.0.1:1/mcp',
     agentAppName: 'test',
     agentUserId: 'user',

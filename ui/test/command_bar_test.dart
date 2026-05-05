@@ -69,6 +69,34 @@ void main() {
     expect(screenCommands, isEmpty);
     expect(newChatCount, 1);
   });
+
+  testWidgets('Shift+Enter launches a new chat instead of a screen command', (
+    tester,
+  ) async {
+    final commandController = TextEditingController();
+    final screenCommands = <CommandContext>[];
+    var newChatCount = 0;
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: commandController,
+        onScreenCommand: screenCommands.add,
+        onNewChatSubmit: () => newChatCount++,
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('global-command-input')),
+      'plan this weekend',
+    );
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+
+    expect(screenCommands, isEmpty);
+    expect(newChatCount, 1);
+  });
 }
 
 class _CommandBarHarness extends StatelessWidget {
@@ -114,6 +142,7 @@ class _CommandBarHarness extends StatelessWidget {
 AppConfig _testConfig() {
   return const AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
+    agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
     memoryMcpUrl: 'http://127.0.0.1:1/mcp',
     agentAppName: 'test',
     agentUserId: 'user',

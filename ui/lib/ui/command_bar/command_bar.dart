@@ -495,6 +495,8 @@ class _CommandInputFrame extends StatelessWidget {
                     const _SubmitScreenCommandIntent(),
                 const SingleActivator(LogicalKeyboardKey.enter, control: true):
                     const _SubmitNewChatIntent(),
+                const SingleActivator(LogicalKeyboardKey.enter, shift: true):
+                    const _SubmitNewChatIntent(),
               },
               child: Actions(
                 actions: <Type, Action<Intent>>{
@@ -518,7 +520,8 @@ class _CommandInputFrame extends StatelessWidget {
                   focusNode: focusNode,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    hintText: 'Command current screen, Ctrl+Enter for chat...',
+                    hintText:
+                        'Command current screen, Ctrl/Shift+Enter for chat...',
                   ),
                   onTap: onTap,
                   onChanged: onChanged,
@@ -547,7 +550,8 @@ class _CommandInputFrame extends StatelessWidget {
             ),
             onPressed: onSubmitCommand,
             icon: const Icon(Icons.arrow_upward),
-            tooltip: 'Run screen command. Ctrl+Enter starts a new chat.',
+            tooltip:
+                'Run screen command. Ctrl+Enter or Shift+Enter starts a new chat.',
           ),
         ],
       ),
@@ -561,7 +565,7 @@ class _SubmitScreenCommandIntent extends Intent {
   const _SubmitScreenCommandIntent();
 }
 
-/// Intent for Ctrl+Enter in the global command field.
+/// Intent for Ctrl+Enter or Shift+Enter in the global command field.
 class _SubmitNewChatIntent extends Intent {
   /// Creates the new-chat intent.
   const _SubmitNewChatIntent();

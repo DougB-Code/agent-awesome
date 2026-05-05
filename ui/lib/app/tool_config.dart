@@ -5,6 +5,34 @@ import 'dart:convert';
 
 import 'package:yaml/yaml.dart';
 
+import 'runtime_profile.dart';
+
+/// Tools currently exposed by the graph-backed memory MCP endpoint.
+const List<String> graphBackedMcpToolNames = <String>[
+  'save_memory_candidate',
+  'search_memory',
+  'search_sources',
+  'load_entity_page',
+  'load_timeline',
+  'refresh_compiled_page',
+  'repair_memory_record',
+  'submit_memory_correction',
+  'query_context_graph',
+  'create_task',
+  'get_task',
+  'list_tasks',
+  'task_graph_projection',
+  'update_task',
+  'complete_task',
+  'cancel_task',
+  'delete_task',
+  'link_task_memory',
+  'list_task_relations',
+  'traverse_task_relations',
+  'upsert_task_relation',
+  'delete_task_relation',
+];
+
 /// ToolConfigDocument represents one harness tool config YAML file.
 class ToolConfigDocument {
   /// Creates a tool config document.
@@ -632,6 +660,35 @@ McpServerToolConfig newHttpMcpServerToolConfig({
     requireConfirmation: false,
     requireConfirmationTools: const <String>[],
     tools: const McpToolFilterConfig(allow: <String>[]),
+  );
+}
+
+/// Creates the target-state MCP tool config for one graph-backed memory server.
+ToolConfigDocument graphBackedMemoryToolConfig({
+  required McpServerRuntime server,
+  required LocalExecToolConfig localExec,
+  Map<String, dynamic> extra = const <String, dynamic>{},
+}) {
+  return ToolConfigDocument(
+    localExec: localExec,
+    mcp: McpToolConfig(
+      enabled: true,
+      servers: <McpServerToolConfig>[
+        newHttpMcpServerToolConfig(
+          name: server.kind.isEmpty ? 'memory' : server.kind,
+          endpoint: server.endpoint,
+        ).copyWith(
+          requireConfirmationTools: const <String>[
+            'save_memory_candidate',
+            'refresh_compiled_page',
+            'repair_memory_record',
+            'submit_memory_correction',
+          ],
+          tools: const McpToolFilterConfig(allow: graphBackedMcpToolNames),
+        ),
+      ],
+    ),
+    extra: extra,
   );
 }
 

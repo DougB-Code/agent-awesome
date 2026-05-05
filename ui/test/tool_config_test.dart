@@ -1,6 +1,7 @@
 /// Tests structured harness tool config parsing and serialization.
 library;
 
+import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/app/tool_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -77,8 +78,8 @@ mcp:
         enabled: true,
         servers: <McpServerToolConfig>[
           newHttpMcpServerToolConfig(
-            name: 'tasks',
-            endpoint: 'http://127.0.0.1:8091/mcp',
+            name: 'memory',
+            endpoint: 'http://127.0.0.1:8090/mcp',
           ).copyWith(
             tools: const McpToolFilterConfig(
               allow: <String>['list_tasks', 'create_task'],
@@ -95,8 +96,40 @@ mcp:
     expect(encoded, contains('name: git_status'));
     expect(encoded, contains('executable: git'));
     expect(encoded, contains('mcp:'));
-    expect(encoded, contains('endpoint: http://127.0.0.1:8091/mcp'));
+    expect(encoded, contains('endpoint: http://127.0.0.1:8090/mcp'));
     expect(encoded, contains('create_task'));
+  });
+
+  test('creates target graph-backed memory MCP tool config', () {
+    const server = McpServerRuntime(
+      id: 'memory-personal',
+      label: 'Personal Memory',
+      kind: 'memory',
+      endpoint: 'http://127.0.0.1:8090/mcp',
+      healthUrl: 'http://127.0.0.1:8090/healthz',
+      workingDirectory: '/tmp/memory',
+      packagePath: './cmd/memoryd',
+      arguments: <String>[],
+      autoStart: true,
+      enabled: true,
+    );
+
+    final document = graphBackedMemoryToolConfig(
+      server: server,
+      localExec: emptyToolConfigDocument().localExec,
+    );
+
+    expect(document.mcp.enabled, isTrue);
+    expect(document.mcp.servers, hasLength(1));
+    expect(document.mcp.servers.single.name, 'memory');
+    expect(document.mcp.servers.single.endpoint, 'http://127.0.0.1:8090/mcp');
+    expect(document.mcp.servers.single.tools.allow, graphBackedMcpToolNames);
+    expect(document.mcp.servers.single.requireConfirmationTools, <String>[
+      'save_memory_candidate',
+      'refresh_compiled_page',
+      'repair_memory_record',
+      'submit_memory_correction',
+    ]);
   });
 
   test('validates local execution command requirements', () {
