@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
-	graphrepo "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/repository"
+	"memory/internal/memory/domain"
+	graphrepo "memory/internal/memory/graph/repository"
 )
 
 // TestSearchMemoryBuildsRetrievalBundle verifies service-level retrieval context.

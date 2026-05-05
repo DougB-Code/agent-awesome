@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
+	"memory/internal/memory/domain"
 )
 
 const taskGraphProjectionSchemaVersion = "task-graph-projection/v1"

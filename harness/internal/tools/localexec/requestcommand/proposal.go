@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/tools/localexec/commandline"
+	"agentawesome/internal/tools/localexec/commandline"
 )
 
 type proposalBuilder struct{}

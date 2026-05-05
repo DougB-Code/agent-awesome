@@ -40,10 +40,10 @@ func approvalOptions(proposal Proposal) []ApprovalOption {
 }
 
 // decodeReviewDecision converts the runtime confirmation payload into a typed
-// review decision, defaulting old/simple approvals to approve-once.
+// review decision.
 func decodeReviewDecision(value any) (ReviewDecision, error) {
 	if value == nil {
-		return ReviewDecision{Action: "approve_once"}, nil
+		return ReviewDecision{}, fmt.Errorf("review decision payload is required")
 	}
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -52,6 +52,9 @@ func decodeReviewDecision(value any) (ReviewDecision, error) {
 	var decision ReviewDecision
 	if err := json.Unmarshal(data, &decision); err != nil {
 		return ReviewDecision{}, fmt.Errorf("decode review decision: %w", err)
+	}
+	if strings.TrimSpace(decision.Action) == "" {
+		return ReviewDecision{}, fmt.Errorf("review decision action is required")
 	}
 	return decision, nil
 }
@@ -136,7 +139,7 @@ func (p *reviewPolicies) apply(base string, proposal Proposal, decision ReviewDe
 	defer p.mu.Unlock()
 
 	switch decision.Action {
-	case "", "approve_once":
+	case "approve_once":
 		return nil
 	case "always_exact_session":
 		p.sessionExact[proposal.Signature] = struct{}{}

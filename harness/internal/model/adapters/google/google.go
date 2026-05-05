@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/model/adapter"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/model/adapter"
 	llmapi "google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/genai"

@@ -8,11 +8,11 @@ import (
 	"sort"
 	"strings"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
-	graph "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/domain"
-	graphquery "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/query"
-	graphstore "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/store"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memoryports"
+	"memory/internal/memory/domain"
+	graph "memory/internal/memory/graph/domain"
+	graphquery "memory/internal/memory/graph/query"
+	graphstore "memory/internal/memory/graph/store"
+	"memory/internal/memory/ports"
 )
 
 const (

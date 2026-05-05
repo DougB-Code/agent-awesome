@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"agent-awesome.com/harnesscmd/agent-awesome/cli"
+	"agentawesome/cmd/agent-awesome/cli"
 )
 
 // main starts the Agent Awesome CLI with the process context.

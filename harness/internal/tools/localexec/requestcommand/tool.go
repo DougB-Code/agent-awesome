@@ -4,8 +4,8 @@ package requestcommand
 import (
 	"context"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/tools/localexec/execspec"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/tools/localexec/execspec"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 )

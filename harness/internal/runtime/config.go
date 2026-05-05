@@ -7,7 +7,7 @@ import (
 	"flag"
 	"fmt"
 
-	agentpkg "agent-awesome.com/harnessinternal/agent"
+	agentpkg "agentawesome/internal/agent"
 	aaagent "google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"

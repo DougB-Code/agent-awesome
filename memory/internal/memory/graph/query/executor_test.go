@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
-	graph "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/domain"
-	graphstore "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/store"
+	"memory/internal/memory/domain"
+	graph "memory/internal/memory/graph/domain"
+	graphstore "memory/internal/memory/graph/store"
 )
 
 // TestExecuteFindTaskFiltersNonEnglishProperty verifies FIND reads graph facts and values.

@@ -1,0 +1,4 @@
+2026/05/05 18:00:52 harness status: {Name:harness URL:http://127.0.0.1:8080/api/apps/personal_pilot/users/doug/sessions State:connected Message:already running PID:0}
+2026/05/05 18:00:52 memory status: {Name:memory URL:http://127.0.0.1:8090/healthz State:connected Message:already running PID:0}
+2026/05/05 18:00:52 agent-gateway listening on http://127.0.0.1:8070
+2026/05/05 18:00:52 serve gateway: listen tcp 127.0.0.1:8070: bind: address already in use

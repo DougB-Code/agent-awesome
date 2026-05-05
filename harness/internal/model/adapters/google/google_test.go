@@ -4,7 +4,7 @@ package google
 import (
 	"testing"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 )
 
 func TestClientConfigUsesCredentialResolver(t *testing.T) {

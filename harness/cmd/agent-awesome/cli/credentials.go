@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	"agent-awesome.com/harnessinternal/secrets"
+	"agentawesome/internal/secrets"
 	"github.com/spf13/cobra"
 )
 

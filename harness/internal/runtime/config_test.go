@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	agentpkg "agent-awesome.com/harnessinternal/agent"
+	agentpkg "agentawesome/internal/agent"
 	llmapi "google.golang.org/adk/model"
 )
 

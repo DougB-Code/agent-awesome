@@ -5,9 +5,9 @@ import (
 	"context"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/tools/localexec/execspec"
-	"agent-awesome.com/harnessinternal/tools/localexec/workdir"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/workdir"
 )
 
 type commandExecutor interface {
@@ -100,9 +100,6 @@ func (f requestCommandFlow) review(ctx confirmationRequester, base string, propo
 	if err != nil {
 		out, err := requestCommandError(proposal, nil, err)
 		return &out, err
-	}
-	if decision.Action == "" {
-		decision.Action = "approve_once"
 	}
 	if decision.Action == "deny" {
 		return deniedRequestCommand(proposal), nil

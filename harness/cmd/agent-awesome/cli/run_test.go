@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"agent-awesome.com/harnessinternal/app"
+	"agentawesome/internal/app"
 )
 
 func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {

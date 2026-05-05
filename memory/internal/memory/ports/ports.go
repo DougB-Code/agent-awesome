@@ -3,7 +3,7 @@ package ports
 import (
 	"context"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
+	"memory/internal/memory/domain"
 )
 
 // Repository stores source evidence, memory records, jobs, pages, and audit events.

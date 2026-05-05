@@ -2,7 +2,7 @@
 package config
 
 import (
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -106,6 +106,7 @@ func TestLoadModelConfig(t *testing.T) {
 default: cloudflare-gateway:example
 providers:
   cloudflare-gateway:
+    name: Cloudflare Gateway
     adapter: openai
     api-key: CLOUDFLARE_API_KEY
     url: https://example.test/v1/chat/completions
@@ -127,6 +128,9 @@ providers:
 	}
 	if got, want := selection.Name, "cloudflare-gateway"; got != want {
 		t.Fatalf("selection.Name = %q, want %q", got, want)
+	}
+	if got, want := selection.Provider.Name, "Cloudflare Gateway"; got != want {
+		t.Fatalf("selection.Provider.Name = %q, want %q", got, want)
 	}
 	if got, want := selection.Provider.Adapter, "openai"; got != want {
 		t.Fatalf("selection.Provider.Adapter = %q, want %q", got, want)

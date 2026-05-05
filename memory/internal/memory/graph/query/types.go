@@ -1,6 +1,6 @@
 package query
 
-import graph "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/domain"
+import graph "memory/internal/memory/graph/domain"
 
 // StatementMode describes which graph grammar branch was parsed.
 type StatementMode string

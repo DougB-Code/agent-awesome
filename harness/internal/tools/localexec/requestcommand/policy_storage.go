@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 )
 
 // workspacePolicies is the JSON shape stored under .agentawesome for one
@@ -29,7 +29,6 @@ type globalPolicies struct {
 
 // workspaceExactApproval is an editable exact command approval record.
 type workspaceExactApproval struct {
-	Signature   string    `json:"signature,omitempty"`
 	Executable  string    `json:"executable,omitempty"`
 	Args        []string  `json:"args,omitempty"`
 	CWD         string    `json:"cwd,omitempty"`
@@ -41,30 +40,6 @@ type workspaceExactApproval struct {
 }
 
 type workspaceExactApprovals []workspaceExactApproval
-
-// UnmarshalJSON accepts both the current object form and the older signature
-// string form for exact workspace approvals.
-func (approvals *workspaceExactApprovals) UnmarshalJSON(data []byte) error {
-	var raw []json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	out := make([]workspaceExactApproval, 0, len(raw))
-	for _, item := range raw {
-		var signature string
-		if err := json.Unmarshal(item, &signature); err == nil {
-			out = append(out, workspaceExactApproval{Signature: signature})
-			continue
-		}
-		var approval workspaceExactApproval
-		if err := json.Unmarshal(item, &approval); err != nil {
-			return err
-		}
-		out = append(out, approval)
-	}
-	*approvals = out
-	return nil
-}
 
 // loadWorkspacePolicies reads workspace approvals, returning an empty policy set
 // when the file does not exist yet.
@@ -200,28 +175,18 @@ func exactAllows(approvals workspaceExactApprovals, proposal Proposal) bool {
 	return false
 }
 
-// signature returns the stored signature or reconstructs one from editable
-// command fields.
+// signature reconstructs the approval signature from editable command fields.
 func (a workspaceExactApproval) signature() string {
-	if a.hasCommandFields() {
-		cwd := strings.TrimSpace(a.CWD)
-		if cwd == "" {
-			cwd = "."
-		}
-		return proposalSignature(Proposal{
-			Executable: strings.TrimSpace(a.Executable),
-			Args:       append([]string(nil), a.Args...),
-			CWD:        cwd,
-			Stdin:      a.Stdin,
-		})
+	cwd := strings.TrimSpace(a.CWD)
+	if cwd == "" {
+		cwd = "."
 	}
-	return strings.TrimSpace(a.Signature)
-}
-
-// hasCommandFields reports whether an exact approval stores editable command
-// fields instead of only a signature.
-func (a workspaceExactApproval) hasCommandFields() bool {
-	return strings.TrimSpace(a.Executable) != "" || len(a.Args) > 0 || strings.TrimSpace(a.CWD) != "" || a.Stdin != ""
+	return proposalSignature(Proposal{
+		Executable: strings.TrimSpace(a.Executable),
+		Args:       append([]string(nil), a.Args...),
+		CWD:        cwd,
+		Stdin:      a.Stdin,
+	})
 }
 
 // sliceSet converts a string slice into a membership map.

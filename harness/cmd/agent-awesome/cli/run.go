@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"agent-awesome.com/harnessinternal/app"
-	"agent-awesome.com/harnessinternal/config"
+	"agentawesome/internal/app"
+	"agentawesome/internal/config"
 	"github.com/spf13/cobra"
 )
 

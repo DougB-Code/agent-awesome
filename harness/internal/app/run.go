@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"strings"
 
-	agentpkg "agent-awesome.com/harnessinternal/agent"
-	"agent-awesome.com/harnessinternal/config"
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/console"
-	"agent-awesome.com/harnessinternal/logging"
-	"agent-awesome.com/harnessinternal/model"
-	"agent-awesome.com/harnessinternal/runtime"
-	"agent-awesome.com/harnessinternal/tools/toolsets"
+	agentpkg "agentawesome/internal/agent"
+	"agentawesome/internal/config"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/console"
+	"agentawesome/internal/logging"
+	"agentawesome/internal/model"
+	"agentawesome/internal/runtime"
+	"agentawesome/internal/tools/toolsets"
 	"google.golang.org/adk/cmd/launcher"
 )
 

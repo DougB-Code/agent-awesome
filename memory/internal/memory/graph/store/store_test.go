@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	graph "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/domain"
+	graph "memory/internal/memory/graph/domain"
 )
 
 // TestUpsertNodeReusesStableIdentity verifies node stable keys are idempotent.

@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/runtime"
-	"agent-awesome.com/harnessinternal/tools/localexec"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/runtime"
+	"agentawesome/internal/tools/localexec"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/mcptoolset"

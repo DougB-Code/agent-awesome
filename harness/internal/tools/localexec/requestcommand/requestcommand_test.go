@@ -5,15 +5,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/tools/localexec/execspec"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/tools/localexec/execspec"
 	"google.golang.org/adk/tool/toolconfirmation"
 )
 
@@ -216,9 +214,6 @@ func TestRequestCommandAlwaysExactWorkspaceSkipsLaterReview(t *testing.T) {
 		t.Fatalf("workspace exact approvals = %#v, want one approval", policies.Exact)
 	}
 	approval := policies.Exact[0]
-	if approval.Signature != "" {
-		t.Fatalf("approval signature = %q, want empty for editable command approval", approval.Signature)
-	}
 	if approval.Executable != "printf" || strings.Join(approval.Args, ",") != "hello" || approval.CWD != "." || approval.CommandLine != "printf hello" {
 		t.Fatalf("workspace approval = %#v, want stored command details", approval)
 	}
@@ -269,39 +264,6 @@ func TestRequestCommandWorkspaceExactApprovalCanBeEdited(t *testing.T) {
 	}
 	if ctx.requestCount != 0 {
 		t.Fatalf("RequestConfirmation count = %d, want 0 for edited workspace approval", ctx.requestCount)
-	}
-}
-
-func TestRequestCommandReadsLegacyWorkspaceExactHash(t *testing.T) {
-	root := t.TempDir()
-	t.Chdir(root)
-	input := RequestCommandInput{
-		Executable: "printf",
-		Args:       []string{"legacy"},
-		CWD:        ".",
-		Reason:     "Print a legacy approval.",
-		Risk:       "read_only",
-	}
-	proposal := newProposal(input)
-	if err := os.MkdirAll(filepath.Dir(workspacePolicyPath(root)), 0o700); err != nil {
-		t.Fatalf("MkdirAll() error = %v", err)
-	}
-	contents := fmt.Sprintf(`{"version":1,"exact":[%q],"prefixes":null}`+"\n", proposal.Signature)
-	if err := os.WriteFile(workspacePolicyPath(root), []byte(contents), 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	requestTool := newRequestCommandToolForTest()
-	ctx := newFakeToolContext(nil)
-	got, err := requestTool.runWithConfirmation(ctx, input)
-	if err != nil {
-		t.Fatalf("run() error = %v", err)
-	}
-	if got.Status != "executed" || got.Result == nil || got.Result.Stdout != "legacy" {
-		t.Fatalf("run() = %#v, want legacy hash approval", got)
-	}
-	if ctx.requestCount != 0 {
-		t.Fatalf("RequestConfirmation count = %d, want 0 for legacy approval", ctx.requestCount)
 	}
 }
 

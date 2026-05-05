@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/model/adapter"
-	"agent-awesome.com/harnessinternal/model/adapters/anthropic"
-	"agent-awesome.com/harnessinternal/model/adapters/google"
-	"agent-awesome.com/harnessinternal/model/adapters/openai"
-	"agent-awesome.com/harnessinternal/secrets"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/model/adapter"
+	"agentawesome/internal/model/adapters/anthropic"
+	"agentawesome/internal/model/adapters/google"
+	"agentawesome/internal/model/adapters/openai"
+	"agentawesome/internal/secrets"
 	llmapi "google.golang.org/adk/model"
 )
 

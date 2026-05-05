@@ -2,7 +2,7 @@
 package config
 
 import (
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 	"os"
 	"path/filepath"
 )

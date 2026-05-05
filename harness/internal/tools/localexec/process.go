@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/execspec"
 )
 
 type processExecutor struct{}

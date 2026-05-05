@@ -4,7 +4,7 @@ package toolsets
 import (
 	"testing"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 )
 
 func TestBuildReturnsLocalToolsAndMCPToolsets(t *testing.T) {

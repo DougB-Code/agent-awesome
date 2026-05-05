@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/tools/localexec/execspec"
-	"agent-awesome.com/harnessinternal/tools/localexec/workdir"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/workdir"
 )
 
 // commandCatalog resolves configured local_exec aliases into executable tool

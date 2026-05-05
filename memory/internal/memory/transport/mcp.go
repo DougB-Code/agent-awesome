@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memoryservice"
+	"memory/internal/memory/domain"
+	"memory/internal/memory/service"
 )
 
 // MCPServer serves a small MCP-compatible JSON-RPC tool surface.
@@ -351,7 +351,7 @@ func taskWorkBreakdownSchema() map[string]any {
 		"acceptance_criteria": arraySchema("Conditions required to accept the work.", stringSchema("Acceptance criterion.")),
 		"requirement_refs":    arraySchema("Requirement references.", stringSchema("Requirement reference.")),
 		"rubric_refs":         arraySchema("Rubric references.", stringSchema("Rubric reference.")),
-		"resources":           arraySchema("Required WBS resources.", taskResourceRequirementSchema()),
+		"resources":           arraySchema("Required WBS resources.", objectSchema(taskResourceRequirementSchema(), []string{})),
 		"spend_cents":         map[string]any{"type": "integer", "description": "Estimated cost in cents."},
 		"spend_currency":      stringSchema("Estimated cost currency."),
 	}

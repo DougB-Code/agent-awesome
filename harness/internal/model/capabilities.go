@@ -4,7 +4,7 @@ package model
 import (
 	"fmt"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 )
 
 // ValidateRequestedCapabilities checks that the selected configured model

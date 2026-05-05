@@ -14,9 +14,9 @@ import (
 	"syscall"
 	"time"
 
-	graphrepo "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/repository"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memoryservice"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorytransport"
+	graphrepo "memory/internal/memory/graph/repository"
+	"memory/internal/memory/service"
+	"memory/internal/memory/transport"
 )
 
 // main parses configuration, starts workers, and serves MCP plus health routes.

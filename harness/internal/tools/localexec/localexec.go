@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/tools/localexec/execspec"
-	"agent-awesome.com/harnessinternal/tools/localexec/requestcommand"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/requestcommand"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 )

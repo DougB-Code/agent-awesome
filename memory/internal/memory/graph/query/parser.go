@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	graph "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/domain"
+	graph "memory/internal/memory/graph/domain"
 )
 
 var unsupportedMutationKeywords = map[string]bool{

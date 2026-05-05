@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 	"google.golang.org/adk/agent"
 )
 

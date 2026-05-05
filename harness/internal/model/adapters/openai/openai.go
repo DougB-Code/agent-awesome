@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/model/adapter"
-	"agent-awesome.com/harnessinternal/model/protocol"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/model/adapter"
+	"agentawesome/internal/model/protocol"
 	llmapi "google.golang.org/adk/model"
 	"google.golang.org/genai"
 )

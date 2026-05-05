@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 )
 
 func TestValidateRequestedCapabilitiesRejectsUndeclaredStreaming(t *testing.T) {

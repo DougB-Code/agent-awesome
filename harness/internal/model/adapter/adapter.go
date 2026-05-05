@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 	llmapi "google.golang.org/adk/model"
 )
 

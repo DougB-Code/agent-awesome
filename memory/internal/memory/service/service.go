@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memoryid"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memoryports"
+	"memory/internal/memory/domain"
+	"memory/internal/memory/id"
+	"memory/internal/memory/ports"
 )
 
 // Config controls worker behavior for the memory service.

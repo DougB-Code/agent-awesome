@@ -1,8 +1,8 @@
 package repository
 
 import (
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
-	graph "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/domain"
+	"memory/internal/memory/domain"
+	graph "memory/internal/memory/graph/domain"
 )
 
 // toGraphScope maps memory scope vocabulary onto graph scope vocabulary.

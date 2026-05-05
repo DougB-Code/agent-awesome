@@ -1,7 +1,7 @@
 // This file defines request_command input, output, and review payloads.
 package requestcommand
 
-import "agent-awesome.com/harnessinternal/tools/localexec/execspec"
+import "agentawesome/internal/tools/localexec/execspec"
 
 // RequestCommandInput is the model-proposed arbitrary command that must be
 // reviewed before execution unless a saved policy already allows it.

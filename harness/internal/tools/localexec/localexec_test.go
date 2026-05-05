@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"agent-awesome.com/harnessinternal/config/schema"
+	"agentawesome/internal/config/schema"
 	"google.golang.org/adk/tool/toolconfirmation"
 )
 

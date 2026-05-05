@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"agent-awesome.com/harnessinternal/config/schema"
-	"agent-awesome.com/harnessinternal/tools/localexec/commandline"
-	"agent-awesome.com/harnessinternal/tools/localexec/workdir"
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/tools/localexec/commandline"
+	"agentawesome/internal/tools/localexec/workdir"
 )
 
 // This file contains approval prompts and policy checks shared by local command

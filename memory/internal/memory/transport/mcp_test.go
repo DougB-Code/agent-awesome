@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	graphrepo "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/repository"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memoryservice"
+	graphrepo "memory/internal/memory/graph/repository"
+	"memory/internal/memory/service"
 )
 
 // TestMCPToolsList verifies the MCP tool list is exposed.
@@ -21,6 +21,25 @@ func TestMCPToolsList(t *testing.T) {
 	tools := result["tools"].([]any)
 	if len(tools) != 22 {
 		t.Fatalf("tool count = %d, want 22", len(tools))
+	}
+}
+
+// TestMCPTaskResourceSchemaIsJSONObject verifies nested array items are schemas.
+func TestMCPTaskResourceSchemaIsJSONObject(t *testing.T) {
+	server := newTestMCPServer(t)
+	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+	tool := mcpToolDefinition(t, body, "create_task")
+	schema := tool["inputSchema"].(map[string]any)
+	properties := schema["properties"].(map[string]any)
+	workBreakdown := properties["work_breakdown"].(map[string]any)
+	workProperties := workBreakdown["properties"].(map[string]any)
+	resources := workProperties["resources"].(map[string]any)
+	items := resources["items"].(map[string]any)
+	if items["type"] != "object" {
+		t.Fatalf("resources.items.type = %#v, want object", items["type"])
+	}
+	if _, ok := items["properties"].(map[string]any); !ok {
+		t.Fatalf("resources.items.properties = %#v, want object properties", items["properties"])
 	}
 }
 
@@ -192,6 +211,21 @@ func TestMCPGraphTaskTools(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("query rows = %#v, want two open tasks", rows)
 	}
+}
+
+// mcpToolDefinition returns one named tool definition from a tools/list body.
+func mcpToolDefinition(t *testing.T, body map[string]any, name string) map[string]any {
+	t.Helper()
+	result := body["result"].(map[string]any)
+	tools := result["tools"].([]any)
+	for _, raw := range tools {
+		tool := raw.(map[string]any)
+		if tool["name"] == name {
+			return tool
+		}
+	}
+	t.Fatalf("tool %q not found in %#v", name, tools)
+	return nil
 }
 
 // newTestMCPServer creates an isolated MCP server.

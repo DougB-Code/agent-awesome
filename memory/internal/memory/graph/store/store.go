@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	graph "agent-awesome.com/memoryinternal/agent-awesome.com/memorygraph/domain"
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memoryid"
+	graph "memory/internal/memory/graph/domain"
+	"memory/internal/memory/id"
 
 	_ "modernc.org/sqlite"
 )

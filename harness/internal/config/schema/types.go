@@ -96,6 +96,7 @@ type LocalExecCommand struct {
 
 // Provider describes one model provider configuration.
 type Provider struct {
+	Name      string  `koanf:"name"`
 	Adapter   string  `koanf:"adapter"`
 	APIKeyEnv string  `koanf:"api-key"`
 	Default   string  `koanf:"default"`

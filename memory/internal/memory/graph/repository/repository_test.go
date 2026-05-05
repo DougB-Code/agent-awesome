@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"agent-awesome.com/memoryinternal/agent-awesome.com/memorydomain"
+	"memory/internal/memory/domain"
 )
 
 // TestCaptureProjectsGraphMemory verifies capture writes graph-backed graph-backed memory records.
