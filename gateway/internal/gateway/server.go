@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
@@ -9,15 +10,19 @@ import (
 
 	"agentgateway/internal/config"
 	"agentgateway/internal/proxy"
+	"agentgateway/internal/slack"
 	"agentgateway/internal/supervisor"
 )
 
 // Server routes gateway-owned endpoints and harness proxy traffic.
 type Server struct {
-	config     config.Config
-	manager    *supervisor.Manager
-	apiProxy   *proxy.Proxy
-	httpServer *http.Server
+	config       config.Config
+	manager      *supervisor.Manager
+	apiProxy     *proxy.Proxy
+	contextProxy *proxy.Proxy
+	memoryProxy  *proxy.Proxy
+	slack        *slack.Adapter
+	httpServer   *http.Server
 }
 
 // NewServer creates a configured gateway server.
@@ -26,7 +31,22 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 	if err != nil {
 		return nil, err
 	}
-	server := &Server{config: cfg, manager: manager, apiProxy: apiProxy}
+	contextProxy, err := proxy.New(cfg.ContextBaseURL, "/api/context", cfg.RequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	memoryProxy, err := proxy.New(cfg.MemoryMCPURL, "/mcp", cfg.RequestTimeout)
+	if err != nil {
+		return nil, err
+	}
+	server := &Server{
+		config:       cfg,
+		manager:      manager,
+		apiProxy:     apiProxy,
+		contextProxy: contextProxy,
+		memoryProxy:  memoryProxy,
+		slack:        slack.NewAdapter(slackConfig(cfg)),
+	}
 	server.httpServer = &http.Server{
 		Addr:              cfg.ListenAddress,
 		Handler:           server.routes(),
@@ -46,6 +66,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/healthz", s.healthHandler)
 	mux.HandleFunc("/api/gateway/status", s.authenticated(s.statusHandler))
 	mux.HandleFunc("/api/gateway/channels", s.authenticated(s.channelsHandler))
+	mux.HandleFunc("/slack/events", s.slack.EventsHandler)
+	mux.HandleFunc("/mcp", s.authenticated(s.memoryProxy.ServeHTTP))
+	mux.Handle("/api/context/", s.authenticated(s.contextProxy.ServeHTTP))
 	mux.Handle("/api/", s.authenticated(s.apiProxy.ServeHTTP))
 	return s.cors(mux)
 }
@@ -68,11 +91,47 @@ func (s *Server) channelsHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"channels": []map[string]any{
 			{"name": "flutter", "state": "active", "description": "ADK-compatible API traffic through /api/*"},
-			{"name": "slack", "state": "planned", "description": "Inbound message adapter for future Slack Events API support"},
+			{"name": "slack", "state": s.slackState(), "description": "Inbound message adapter for Slack Events API and Socket Mode"},
 			{"name": "sms", "state": "planned", "description": "Inbound message adapter for future SMS provider webhooks"},
 			{"name": "email", "state": "planned", "description": "Inbound message adapter for future email ingestion"},
 		},
 	})
+}
+
+// RunSlackSocketMode runs the Slack Socket Mode loop when configured.
+func (s *Server) RunSlackSocketMode(ctx context.Context) error {
+	return s.slack.RunSocketMode(ctx)
+}
+
+// SlackSocketModeEnabled reports whether Slack Socket Mode should start.
+func (s *Server) SlackSocketModeEnabled() bool {
+	return s.slack.SocketModeEnabled()
+}
+
+// slackState reports the Slack channel status shown in gateway metadata.
+func (s *Server) slackState() string {
+	if s.slack.Enabled() {
+		return "active"
+	}
+	return "planned"
+}
+
+// slackConfig maps gateway config into the Slack adapter config.
+func slackConfig(cfg config.Config) slack.Config {
+	return slack.Config{
+		Enabled:          cfg.Slack.Enabled,
+		SocketMode:       cfg.Slack.SocketMode,
+		SigningSecret:    cfg.Slack.SigningSecret,
+		BotToken:         cfg.Slack.BotToken,
+		AppToken:         cfg.Slack.AppToken,
+		AllowedTeamID:    cfg.Slack.AllowedTeamID,
+		AllowedUserID:    cfg.Slack.AllowedUserID,
+		AllowedChannelID: cfg.Slack.AllowedChannelID,
+		HarnessBaseURL:   cfg.HarnessBaseURL,
+		AppName:          cfg.AppName,
+		AgentUserID:      cfg.UserID,
+		RequestTimeout:   cfg.RequestTimeout,
+	}
 }
 
 // authenticated wraps API handlers with optional bearer token checks.

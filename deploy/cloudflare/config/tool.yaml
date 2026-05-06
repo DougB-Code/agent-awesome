@@ -1,0 +1,9 @@
+# This file configures harness tools for the Cloudflare pilot container.
+local-exec:
+  enabled: false
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp

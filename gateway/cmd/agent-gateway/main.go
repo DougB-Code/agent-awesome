@@ -33,6 +33,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("create gateway: %v", err)
 	}
+	if server.SlackSocketModeEnabled() {
+		go func() {
+			if err := server.RunSlackSocketMode(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("slack socket mode stopped: %v", err)
+			}
+		}()
+	}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

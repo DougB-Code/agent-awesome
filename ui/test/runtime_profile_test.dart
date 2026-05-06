@@ -32,12 +32,14 @@ void main() {
       containsAllInOrder(<String>[
         '--harness-base-url',
         'http://127.0.0.1:8080/api',
+        '--context-base-url',
+        'http://127.0.0.1:8081/api/context',
         '--memory-mcp-url',
         'http://127.0.0.1:8090/mcp',
       ]),
     );
     expect(profile.memoryServers.single.label, 'Personal Memory');
-    expect(profile.memoryServers.single.endpoint, 'http://127.0.0.1:8090/mcp');
+    expect(profile.memoryServers.single.endpoint, 'http://127.0.0.1:8070/mcp');
   });
 
   test('rejects configured profile with missing harness config', () {
@@ -60,6 +62,7 @@ AppConfig _testConfig() {
   return const AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:8080/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
+    agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
     agentAppName: 'personal_pilot',
     agentUserId: 'doug',

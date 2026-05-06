@@ -7,6 +7,8 @@
 // High-level examples:
 //   - gateway.NewServer(...) returns the HTTP handler used by cmd/agent-gateway.
 //   - Server exposes /api/gateway/status and proxies /api/* to the harness.
+//   - Server exposes /mcp as the UI-facing memory MCP control-plane endpoint.
+//   - Server exposes /slack/events when the Slack adapter is enabled.
 //
 // This package should not parse flags or start subprocesses directly.
 package gateway

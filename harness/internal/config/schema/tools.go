@@ -226,6 +226,19 @@ func validateMCPServer(server MCPServer, name string) error {
 			return fmt.Errorf("mcp server %q env must not contain empty variable names", name)
 		}
 	}
+	for key := range server.Headers {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("mcp server %q headers must not contain empty names", name)
+		}
+	}
+	for key, envName := range server.HeadersFromEnv {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("mcp server %q headers-from-env must not contain empty header names", name)
+		}
+		if strings.TrimSpace(envName) == "" {
+			return fmt.Errorf("mcp server %q headers-from-env %q must name an environment variable", name, key)
+		}
+	}
 	return nil
 }
 

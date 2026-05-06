@@ -1,0 +1,7 @@
+# This file excludes Worker dependency installs and local secret files.
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+.env
+.env.*

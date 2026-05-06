@@ -312,6 +312,14 @@ class LocalServiceSupervisor {
       );
     }
     if (!server.autoStart) {
+      if (server.healthUrl.isEmpty) {
+        return _status(
+          server.label,
+          server.endpoint,
+          ConnectionStateKind.unknown,
+          'External service is not supervised locally',
+        );
+      }
       return _status(
         server.label,
         server.healthUrl,
@@ -426,6 +434,7 @@ class LocalServiceSupervisor {
       workingDirectory: gateway.workingDirectory,
       packagePath: gateway.packagePath,
       arguments: gateway.arguments,
+      outputLogPath: '${config.serviceLogDirectory}/gateway.log',
     );
     _started[gateway.id] = process;
     return _waitForProcessHealth(
@@ -443,12 +452,14 @@ class LocalServiceSupervisor {
     required String workingDirectory,
     required String packagePath,
     required List<String> arguments,
+    String? outputLogPath,
   }) async {
     final env = Map<String, String>.of(Platform.environment);
     env['GOCACHE'] =
         env['GOCACHE'] ?? '${config.workspaceRoot}/harness/build/gocache';
     await Directory(env['GOCACHE']!).create(recursive: true);
-    final outputLogPath = _processOutputLogPath(arguments);
+    final resolvedOutputLogPath =
+        outputLogPath ?? _processOutputLogPath(arguments);
     await _writeLogLine(name, 'building $packagePath in $workingDirectory');
     final executable = await _buildBinary(
       profile: profile,
@@ -463,7 +474,7 @@ class LocalServiceSupervisor {
     final launch = buildServiceProcessLaunchPlan(
       executable: executable,
       arguments: arguments,
-      outputLogPath: outputLogPath,
+      outputLogPath: resolvedOutputLogPath,
       canStartProcessGroup: processGroup,
       isWindows: Platform.isWindows,
     );

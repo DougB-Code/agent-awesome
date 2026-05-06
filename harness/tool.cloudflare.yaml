@@ -1,0 +1,54 @@
+# This file configures a local harness to use the Cloudflare context MCP server.
+local-exec:
+  enabled: true
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  allowed-workdirs:
+    - .
+  commands:
+    - name: git_status
+      executable: git
+      description: Show repository status.
+      args:
+        - status
+        - --short
+      timeout: 5s
+      max-output-bytes: 16384
+      approval:
+        always-allow-within-workspace: false
+        always-allow-command-starts-with: []
+        always-allow: false
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: https://agent-awesome.com/mcp
+      headers-from-env:
+        Authorization: AGENTAWESOME_CLOUDFLARE_GATEWAY_AUTHORIZATION
+        CF-Access-Client-Id: CF_ACCESS_CLIENT_ID
+        CF-Access-Client-Secret: CF_ACCESS_CLIENT_SECRET
+      tools:
+        allow:
+          - save_memory_candidate
+          - search_memory
+          - search_sources
+          - load_entity_page
+          - load_timeline
+          - refresh_compiled_page
+          - repair_memory_record
+          - submit_memory_correction
+          - query_context_graph
+          - create_task
+          - get_task
+          - list_tasks
+          - task_graph_projection
+          - update_task
+          - complete_task
+          - cancel_task
+          - delete_task
+          - link_task_memory
+          - list_task_relations
+          - traverse_task_relations
+          - upsert_task_relation
+          - delete_task_relation

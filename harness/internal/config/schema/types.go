@@ -54,6 +54,8 @@ type MCPServer struct {
 	Command                  string            `koanf:"command"`
 	Args                     []string          `koanf:"args"`
 	Env                      map[string]string `koanf:"env"`
+	Headers                  map[string]string `koanf:"headers"`
+	HeadersFromEnv           map[string]string `koanf:"headers-from-env"`
 	Endpoint                 string            `koanf:"endpoint"`
 	URL                      string            `koanf:"url"`
 	RequireConfirmation      bool              `koanf:"require-confirmation"`

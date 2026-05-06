@@ -7,6 +7,7 @@ class AppConfig {
   const AppConfig({
     required this.agentApiBaseUrl,
     required this.agentGatewayBaseUrl,
+    required this.agentContextApiBaseUrl,
     required this.memoryMcpUrl,
     required this.agentAppName,
     required this.agentUserId,
@@ -25,6 +26,10 @@ class AppConfig {
       agentGatewayBaseUrl: String.fromEnvironment(
         'AGENT_GATEWAY_BASE_URL',
         defaultValue: 'http://127.0.0.1:8070/api',
+      ),
+      agentContextApiBaseUrl: String.fromEnvironment(
+        'AGENT_CONTEXT_API_BASE_URL',
+        defaultValue: 'http://127.0.0.1:8081/api/context',
       ),
       memoryMcpUrl: String.fromEnvironment(
         'MEMORY_MCP_URL',
@@ -59,7 +64,22 @@ class AppConfig {
   /// Base URL for the Agent Awesome gateway API.
   final String agentGatewayBaseUrl;
 
-  /// URL for the memory MCP JSON-RPC endpoint.
+  /// Base URL for the harness-owned context API.
+  final String agentContextApiBaseUrl;
+
+  /// Memory MCP URL exposed by the Agent Awesome gateway control plane.
+  String get agentGatewayMcpUrl {
+    final uri = Uri.parse(agentGatewayBaseUrl);
+    return uri.replace(path: '/mcp', query: null).toString();
+  }
+
+  /// Context API URL exposed through the Agent Awesome gateway.
+  String get agentGatewayContextBaseUrl {
+    final uri = Uri.parse(agentGatewayBaseUrl);
+    return uri.replace(path: '/api/context', query: null).toString();
+  }
+
+  /// Direct memory MCP JSON-RPC endpoint used as the gateway upstream.
   final String memoryMcpUrl;
 
   /// ADK app name that hosts the configured agent.

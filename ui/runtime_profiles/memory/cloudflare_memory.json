@@ -1,0 +1,12 @@
+{
+  "id": "memory-cloudflare",
+  "label": "Cloudflare Memory",
+  "kind": "memory",
+  "endpoint": "https://agent-awesome.com/mcp",
+  "health_url": "",
+  "working_directory": "",
+  "package_path": "",
+  "arguments": [],
+  "auto_start": false,
+  "enabled": true
+}

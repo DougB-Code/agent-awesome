@@ -324,8 +324,8 @@ void main() {
     expect(find.text('WORKSPACES'), findsOneWidget);
     expect(find.text('SETTINGS'), findsOneWidget);
     expect(find.text('Personal'), findsWidgets);
-    await tester.tap(find.text('Personal').first);
-    await tester.pump();
+    await tester.tap(find.text('Personal').last);
+    await tester.pumpAndSettle();
     expect(find.text('PROFILES'), findsOneWidget);
     expect(find.text('Selected for new chat'), findsOneWidget);
     final globalInput = tester.widget<TextField>(
@@ -608,6 +608,63 @@ void main() {
     expect(find.text('BACKLOG INSPECTOR'), findsOneWidget);
     expect(find.text('CONVERSATION'), findsOneWidget);
     expect(find.text('What changed here?'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('global-command-input')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('New chat'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsOneWidget);
+  });
+
+  testWidgets('keeps quick access stable when Backlog opens a third pane', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1900, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = AuroraAppController(config: _testConfig());
+    controller.workspace = const ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live connected workspace',
+      tasks: <WorkspaceTask>[
+        WorkspaceTask(
+          id: 'task-brief',
+          title: 'Draft task brief',
+          detail: 'Open',
+          done: false,
+        ),
+      ],
+      sources: <SourceItem>[],
+      memoryRecords: <MemoryRecord>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuroraShell(controller: controller)),
+    );
+    await tester.tap(find.text('Backlog').first);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('global-command-input')),
+    );
+    await tester.pump();
+    expect(find.text('PROFILES'), findsOneWidget);
+
+    controller.backlogChatPanelOpen = true;
+    controller.notifyListeners();
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('CONVERSATION'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('global-command-input')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Command current screen, Ctrl/Shift+Enter for chat...'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('loads workflow content inside the persistent app shell', (
@@ -769,6 +826,7 @@ RuntimeProfile _settingsProfile() {
       id: 'harness',
       label: 'Local Harness',
       apiBaseUrl: 'http://127.0.0.1:1/api',
+      contextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
@@ -801,6 +859,7 @@ AppConfig _testConfig() {
   return const AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
+    agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:1/mcp',
     agentAppName: 'test',
     agentUserId: 'user',

@@ -11,6 +11,7 @@ import (
 	"agentawesome/internal/config"
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/console"
+	"agentawesome/internal/contextapi"
 	"agentawesome/internal/logging"
 	"agentawesome/internal/model"
 	"agentawesome/internal/runtime"
@@ -28,6 +29,7 @@ type Options struct {
 	ModelID         string
 	ProviderName    string
 	LogFilePath     string
+	ContextAPIAddr  string
 }
 
 // Run loads Agent Awesome configuration, builds the runtime config, and starts
@@ -47,6 +49,9 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	toolsCfg, err := config.LoadTools(opts.ToolPath, opts.ToolSet)
 	if err != nil {
+		return err
+	}
+	if _, err := contextapi.Start(ctx, opts.ContextAPIAddr, toolsCfg); err != nil {
 		return err
 	}
 

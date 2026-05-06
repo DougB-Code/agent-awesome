@@ -58,3 +58,19 @@ gateway forwards to the harness. To override the gateway endpoint:
 flutter run -d linux \
   --dart-define=AGENT_GATEWAY_BASE_URL=http://127.0.0.1:8070/api
 ```
+
+## Context Profiles
+
+The UI talks to the gateway context API for memory and task surfaces. The
+harness owns MCP tool invocation, and the gateway adapts harness context
+responses for the UI.
+
+- `runtime_profiles/local_dev.json` starts local memory and points the harness
+  at `harness/tool.local.yaml`.
+- `runtime_profiles/cloudflare_context.json` points the local harness at
+  `harness/tool.cloudflare.yaml`, which reaches `https://agent-awesome.com/mcp`
+  with auth headers from the environment.
+
+For the Cloudflare profile, set `AGENTAWESOME_CLOUDFLARE_GATEWAY_AUTHORIZATION`
+to the full `Bearer ...` gateway authorization header. When Cloudflare Access is
+enabled, also set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`.

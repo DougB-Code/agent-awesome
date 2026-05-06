@@ -1,0 +1,23 @@
+# This file keeps the Cloudflare container build context small and secret-free.
+*
+
+!Dockerfile.cloudflare
+!.dockerignore
+
+!gateway/
+!gateway/**
+!harness/
+!harness/**
+!memory/
+!memory/**
+
+!deploy/
+!deploy/cloudflare/
+!deploy/cloudflare/config/
+!deploy/cloudflare/config/**
+!deploy/cloudflare/scripts/
+!deploy/cloudflare/scripts/**
+
+gateway/build/
+harness/build/
+memory/build/

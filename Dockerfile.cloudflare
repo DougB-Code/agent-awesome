@@ -1,0 +1,57 @@
+# This Dockerfile builds the Agent Awesome Cloudflare Container image.
+#
+# It compiles the gateway, harness, and memory services from their existing Go
+# modules, then runs a single gateway process that supervises the two local
+# dependencies inside the container.
+FROM golang:1.26-bookworm AS build
+
+WORKDIR /src
+
+COPY gateway/go.mod gateway/go.sum ./gateway/
+RUN cd gateway && go mod download
+
+COPY harness/go.mod harness/go.sum ./harness/
+RUN cd harness && go mod download
+
+COPY memory/go.mod memory/go.sum ./memory/
+RUN cd memory && go mod download
+
+COPY gateway ./gateway
+COPY harness ./harness
+COPY memory ./memory
+
+RUN cd gateway && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/agent-gateway ./cmd/agent-gateway
+RUN cd harness && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/agent-awesome ./cmd/agent-awesome
+RUN cd memory && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/memoryd ./cmd/memoryd
+
+FROM debian:bookworm-slim
+
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app \
+  && mkdir -p /app/config /app/data /app/logs \
+  && chown -R app:app /app
+
+COPY --from=build /out/agent-gateway /usr/local/bin/agent-gateway
+COPY --from=build /out/agent-awesome /usr/local/bin/agent-awesome
+COPY --from=build /out/memoryd /usr/local/bin/memoryd
+COPY deploy/cloudflare/config /app/config
+COPY deploy/cloudflare/scripts/entrypoint.sh /usr/local/bin/agentawesome-cloudflare
+
+RUN chmod 0755 /usr/local/bin/agentawesome-cloudflare
+
+USER app
+WORKDIR /app
+
+ENV AGENTAWESOME_GATEWAY_ADDR=0.0.0.0:8070
+ENV AGENTAWESOME_HARNESS_API_BASE_URL=http://127.0.0.1:8080/api
+ENV AGENTAWESOME_CONTEXT_API_BASE_URL=http://127.0.0.1:8081/api/context
+ENV AGENTAWESOME_MEMORY_MCP_URL=http://127.0.0.1:8090/mcp
+ENV AGENTAWESOME_APP_NAME=personal_pilot
+ENV AGENTAWESOME_USER_ID=doug
+ENV AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT=10m
+ENV AGENTAWESOME_SERVICE_START_TIMEOUT=45s
+ENV SLACK_ENABLED=true
+ENV SLACK_SOCKET_MODE=false
+
+EXPOSE 8070
+
+ENTRYPOINT ["/usr/local/bin/agentawesome-cloudflare"]

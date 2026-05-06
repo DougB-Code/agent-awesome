@@ -283,6 +283,7 @@ RuntimeProfile _profile() {
       id: 'harness',
       label: 'Local Harness',
       apiBaseUrl: 'http://127.0.0.1:1/api',
+      contextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
@@ -316,6 +317,7 @@ AppConfig _testConfig() {
   return const AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
+    agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: _memoryEndpoint,
     agentAppName: 'test',
     agentUserId: 'user',

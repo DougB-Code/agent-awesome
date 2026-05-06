@@ -1,0 +1,81 @@
+# Cloudflare Pilot Deployment
+
+This folder contains the Cloudflare Worker and Container scaffold for a personal
+Agent Awesome Slack pilot.
+
+The deployment runs one Cloudflare Container behind a Worker. Inside the
+container, `agent-gateway` listens on port `8070` and supervises the local
+harness on `8080` plus memory MCP on `8090`. Slack uses the HTTP Events API at
+`/slack/events`; Socket Mode remains for local testing only. The Worker rejects
+all public requests except Slack-signed `POST /slack/events` requests.
+
+Memory context is restored from and saved to the `agent-awesome-context` R2
+bucket through a private Worker endpoint. The endpoint requires
+`AGENTAWESOME_PERSISTENCE_TOKEN` and is only intended for the colocated
+container.
+
+## Files
+
+- `../../Dockerfile.cloudflare` builds the Go gateway, harness, and memory
+  binaries into one Linux container.
+- `scripts/entrypoint.sh` starts the gateway with harness and memory auto-start
+  flags.
+- `config/*.yaml` contains the pilot model, agent, and tool configuration used
+  inside the container.
+- `worker/src/index.ts` defines the Cloudflare Container class and request
+  routing.
+- `worker/wrangler.jsonc` declares the Container, Durable Object binding,
+  observability, non-secret vars, and required secrets.
+
+## Deploy
+
+Use Node.js `22` or newer for Wrangler.
+
+Run these commands from `deploy/cloudflare/worker`:
+
+```sh
+npm install --cache ../../../build/npm-cache
+npx wrangler r2 bucket create agent-awesome-context
+npx wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
+npx wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
+npx wrangler secret put SLACK_SIGNING_SECRET
+npx wrangler secret put SLACK_BOT_TOKEN
+npx wrangler secret put OPENAI_API_KEY
+npx wrangler deploy
+```
+
+The R2 bucket command requires a Cloudflare API token or OAuth session with
+`Workers R2 Storage Write`. If Wrangler asks for `CLOUDFLARE_API_TOKEN`, create a
+temporary token with that permission, export it for the command, then unset it.
+
+After the first deployment, wait for the container application to finish
+provisioning, then set the Slack app Event Request URL to:
+
+```text
+https://agent-awesome.com/slack/events
+```
+
+Use the same Slack bot token and signing secret you tested locally. Do not set
+`SLACK_APP_TOKEN` for this deployment unless you deliberately switch the cloud
+config back to Socket Mode.
+
+The public `workers.dev` URL is disabled. `agent-awesome.com/*` is the configured
+Cloudflare Worker route for the existing domain, and the Worker only forwards
+Slack-signed Events API requests.
+
+## Security Notes
+
+Set `AGENTAWESOME_GATEWAY_TOKEN` before deployment. Slack requests are verified
+with Slack signatures by the gateway, while `/api/*`, `/mcp`, and gateway status
+routes use the bearer token.
+
+Keep `SLACK_ALLOWED_USER_ID` populated in `worker/wrangler.jsonc` for a
+single-user pilot. Add `SLACK_ALLOWED_TEAM_ID` or `SLACK_ALLOWED_CHANNEL_ID`
+when you want tighter Slack routing.
+
+## Persistence Note
+
+The bundled memory database lives under `/app/data` inside the container. This
+is enough for an HTTP pilot while the container stays alive, but Cloudflare
+Container disk is ephemeral after the instance sleeps. Plan a persistent memory
+backend before relying on this deployment for durable personal memory.

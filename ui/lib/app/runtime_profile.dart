@@ -98,6 +98,7 @@ class GatewayRuntime {
     required this.workingDirectory,
     required this.packagePath,
     required this.harnessBaseUrl,
+    required this.contextBaseUrl,
     required this.memoryMcpUrl,
     required this.appName,
     required this.userId,
@@ -127,6 +128,9 @@ class GatewayRuntime {
   /// Upstream harness API base URL.
   final String harnessBaseUrl;
 
+  /// Upstream harness context API base URL.
+  final String contextBaseUrl;
+
   /// Memory MCP URL reported to the gateway.
   final String memoryMcpUrl;
 
@@ -138,6 +142,12 @@ class GatewayRuntime {
 
   /// Gateway listen port.
   final int port;
+
+  /// Memory MCP URL exposed by this gateway control plane.
+  String get mcpUrl {
+    final uri = Uri.parse(apiBaseUrl);
+    return uri.replace(path: '/mcp', query: null).toString();
+  }
 
   /// Whether the UI should start this gateway.
   final bool autoStart;
@@ -152,6 +162,8 @@ class GatewayRuntime {
       _listenAddress(apiBaseUrl, port),
       '--harness-base-url',
       harnessBaseUrl,
+      '--context-base-url',
+      contextBaseUrl,
       '--memory-mcp-url',
       memoryMcpUrl,
       '--app-name',
@@ -171,6 +183,7 @@ class GatewayRuntime {
       'working_directory': workingDirectory,
       'package_path': packagePath,
       'harness_base_url': harnessBaseUrl,
+      'context_base_url': contextBaseUrl,
       'memory_mcp_url': memoryMcpUrl,
       'app_name': appName,
       'user_id': userId,
@@ -182,6 +195,8 @@ class GatewayRuntime {
 
   /// Parses gateway runtime JSON from explicit profile values.
   factory GatewayRuntime.fromJson(Map<String, dynamic> json) {
+    final harnessBaseUrl = _requiredString(json, 'harness_base_url');
+    final contextBaseUrl = _optionalString(json['context_base_url']);
     return GatewayRuntime(
       id: _requiredString(json, 'id'),
       label: _requiredString(json, 'label'),
@@ -189,7 +204,10 @@ class GatewayRuntime {
       healthUrl: _requiredString(json, 'health_url'),
       workingDirectory: _requiredString(json, 'working_directory'),
       packagePath: _requiredString(json, 'package_path'),
-      harnessBaseUrl: _requiredString(json, 'harness_base_url'),
+      harnessBaseUrl: harnessBaseUrl,
+      contextBaseUrl: contextBaseUrl.isEmpty
+          ? _defaultContextBaseUrl(harnessBaseUrl)
+          : contextBaseUrl,
       memoryMcpUrl: _requiredString(json, 'memory_mcp_url'),
       appName: _requiredString(json, 'app_name'),
       userId: _requiredString(json, 'user_id'),
@@ -207,6 +225,7 @@ class HarnessRuntime {
     required this.id,
     required this.label,
     required this.apiBaseUrl,
+    required this.contextApiBaseUrl,
     required this.appName,
     required this.userId,
     required this.workingDirectory,
@@ -226,6 +245,9 @@ class HarnessRuntime {
 
   /// ADK API base URL.
   final String apiBaseUrl;
+
+  /// Harness-owned context API base URL.
+  final String contextApiBaseUrl;
 
   /// ADK app name hosted by this harness.
   final String appName;
@@ -272,6 +294,10 @@ class HarnessRuntime {
       agentConfigPath,
       '--tool',
       toolConfigPath,
+      if (contextApiBaseUrl.isNotEmpty) ...<String>[
+        '--context-api-addr',
+        _listenAddress(contextApiBaseUrl, _contextPort(contextApiBaseUrl)),
+      ],
       '--',
       'web',
       '--port',
@@ -299,6 +325,7 @@ class HarnessRuntime {
     String? id,
     String? label,
     String? apiBaseUrl,
+    String? contextApiBaseUrl,
     String? appName,
     String? userId,
     String? workingDirectory,
@@ -313,6 +340,7 @@ class HarnessRuntime {
       id: id ?? this.id,
       label: label ?? this.label,
       apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
+      contextApiBaseUrl: contextApiBaseUrl ?? this.contextApiBaseUrl,
       appName: appName ?? this.appName,
       userId: userId ?? this.userId,
       workingDirectory: workingDirectory ?? this.workingDirectory,
@@ -331,6 +359,7 @@ class HarnessRuntime {
       'id': id,
       'label': label,
       'api_base_url': apiBaseUrl,
+      'context_api_base_url': contextApiBaseUrl,
       'app_name': appName,
       'user_id': userId,
       'working_directory': workingDirectory,
@@ -345,10 +374,15 @@ class HarnessRuntime {
 
   /// Parses harness runtime JSON from explicit profile values.
   factory HarnessRuntime.fromJson(Map<String, dynamic> json) {
+    final apiBaseUrl = _requiredString(json, 'api_base_url');
+    final contextApiBaseUrl = _optionalString(json['context_api_base_url']);
     return HarnessRuntime(
       id: _requiredString(json, 'id'),
       label: _requiredString(json, 'label'),
-      apiBaseUrl: _requiredString(json, 'api_base_url'),
+      apiBaseUrl: apiBaseUrl,
+      contextApiBaseUrl: contextApiBaseUrl.isEmpty
+          ? _defaultContextBaseUrl(apiBaseUrl)
+          : contextApiBaseUrl,
       appName: _requiredString(json, 'app_name'),
       userId: _requiredString(json, 'user_id'),
       workingDirectory: _requiredString(json, 'working_directory'),
@@ -490,10 +524,11 @@ class RuntimeProfileLoader {
       throw const FormatException('Runtime profile must be a JSON object');
     }
     final profile = RuntimeProfile.fromJson(decoded);
+    final mcpServers = <McpServerRuntime>[
+      await _loadMcpServerConfig(profile.memoryServerConfigPath, 'memory'),
+    ];
     return profile.copyWith(
-      mcpServers: <McpServerRuntime>[
-        await _loadMcpServerConfig(profile.memoryServerConfigPath, 'memory'),
-      ],
+      mcpServers: _controlPlaneMcpServers(profile, mcpServers),
     );
   }
 
@@ -535,11 +570,16 @@ class RuntimeProfileLoader {
     final agentApi = Uri.parse(config.agentApiBaseUrl);
     final memoryMcp = Uri.parse(config.memoryMcpUrl);
     final gatewayApi = Uri.parse(config.agentGatewayBaseUrl);
+    final contextApi = Uri.parse(config.agentContextApiBaseUrl);
     return <String, String>{
       'AGENTAWESOME_WORKSPACE_ROOT': config.workspaceRoot,
       'AGENT_API_BASE_URL': config.agentApiBaseUrl,
       'AGENT_API_PORT': _portString(agentApi, 8080),
+      'AGENT_CONTEXT_API_BASE_URL': config.agentContextApiBaseUrl,
+      'AGENT_CONTEXT_API_PORT': _portString(contextApi, 8081),
       'AGENT_GATEWAY_BASE_URL': config.agentGatewayBaseUrl,
+      'AGENT_GATEWAY_CONTEXT_BASE_URL': config.agentGatewayContextBaseUrl,
+      'AGENT_GATEWAY_MCP_URL': config.agentGatewayMcpUrl,
       'AGENT_GATEWAY_PORT': _portString(gatewayApi, 8070),
       'AGENT_GATEWAY_HEALTH_URL': _healthUrl(config.agentGatewayBaseUrl),
       'AGENT_APP_NAME': config.agentAppName,
@@ -576,6 +616,23 @@ class RuntimeProfileLoader {
       );
     }
     return server;
+  }
+
+  /// Rewrites UI MCP endpoints to the gateway when a control plane is active.
+  List<McpServerRuntime> _controlPlaneMcpServers(
+    RuntimeProfile profile,
+    List<McpServerRuntime> servers,
+  ) {
+    final gateway = profile.gateway;
+    if (gateway == null || !gateway.enabled) {
+      return servers;
+    }
+    return servers.map((server) {
+      if (server.kind != 'memory') {
+        return server;
+      }
+      return server.copyWith(endpoint: gateway.mcpUrl);
+    }).toList();
   }
 }
 
@@ -657,6 +714,20 @@ String _portString(Uri uri, int fallback) {
     return uri.port.toString();
   }
   return fallback.toString();
+}
+
+String _defaultContextBaseUrl(String apiBaseUrl) {
+  final uri = Uri.parse(apiBaseUrl);
+  final port = uri.hasPort ? uri.port + 1 : 8081;
+  return uri.replace(path: '/api/context', query: null, port: port).toString();
+}
+
+int _contextPort(String contextApiBaseUrl) {
+  final uri = Uri.parse(contextApiBaseUrl);
+  if (uri.hasPort) {
+    return uri.port;
+  }
+  return 8081;
 }
 
 String _listenAddress(String apiBaseUrl, int fallbackPort) {

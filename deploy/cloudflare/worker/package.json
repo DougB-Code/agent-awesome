@@ -1,0 +1,22 @@
+{
+  "name": "agent-awesome-cloudflare-pilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker and Container deployment for the Agent Awesome Slack pilot.",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "0.3.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20260505.1",
+    "typescript": "6.0.3",
+    "wrangler": "4.88.0"
+  }
+}

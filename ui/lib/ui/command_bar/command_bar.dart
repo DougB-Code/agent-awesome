@@ -76,6 +76,7 @@ class _CommandBarState extends State<CommandBar> {
   final GlobalKey _fieldKey = GlobalKey();
   final LayerLink _fieldLink = LayerLink();
   OverlayEntry? _quickAccessEntry;
+  bool _quickAccessRebuildScheduled = false;
   String _profilePathForNextChat = '';
 
   /// Cleans up quick-access overlay and text focus resources.
@@ -90,7 +91,7 @@ class _CommandBarState extends State<CommandBar> {
   @override
   void didUpdateWidget(covariant CommandBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _quickAccessEntry?.markNeedsBuild();
+    _scheduleQuickAccessRebuild();
   }
 
   /// Builds the global command bar.
@@ -198,7 +199,7 @@ class _CommandBarState extends State<CommandBar> {
   /// Inserts the quick-access dropdown under the global command field.
   void _showQuickAccess() {
     if (_quickAccessEntry != null) {
-      _quickAccessEntry?.markNeedsBuild();
+      _scheduleQuickAccessRebuild();
       return;
     }
     _quickAccessEntry = OverlayEntry(
@@ -243,6 +244,23 @@ class _CommandBarState extends State<CommandBar> {
   void _removeQuickAccess() {
     _quickAccessEntry?.remove();
     _quickAccessEntry = null;
+    _quickAccessRebuildScheduled = false;
+  }
+
+  /// Refreshes the quick-access overlay after the current frame is stable.
+  void _scheduleQuickAccessRebuild() {
+    final entry = _quickAccessEntry;
+    if (entry == null || _quickAccessRebuildScheduled) {
+      return;
+    }
+    _quickAccessRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _quickAccessRebuildScheduled = false;
+      if (!mounted || _quickAccessEntry != entry) {
+        return;
+      }
+      entry.markNeedsBuild();
+    });
   }
 
   /// Returns the dropdown width matched to the command field.
@@ -305,7 +323,7 @@ class _CommandBarState extends State<CommandBar> {
     setState(() {
       _profilePathForNextChat = profilePath;
     });
-    _quickAccessEntry?.markNeedsBuild();
+    _scheduleQuickAccessRebuild();
     _focusCommandInput();
   }
 

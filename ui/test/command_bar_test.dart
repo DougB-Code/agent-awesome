@@ -143,6 +143,7 @@ AppConfig _testConfig() {
   return const AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
+    agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:1/mcp',
     agentAppName: 'test',
     agentUserId: 'user',

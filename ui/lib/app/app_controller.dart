@@ -113,8 +113,8 @@ class AuroraAppController extends ChangeNotifier {
        memoryClient =
            memoryClient ??
            MemoryClient(
-             rpc: McpJsonRpcClient(
-               endpoint: config.memoryMcpUrl,
+             rpc: GatewayContextClient(
+               baseUrl: config.agentGatewayContextBaseUrl,
                logger:
                    logger ?? AppLogger(directory: config.serviceLogDirectory),
              ),
@@ -122,8 +122,8 @@ class AuroraAppController extends ChangeNotifier {
        tasksClient =
            tasksClient ??
            TasksClient(
-             rpc: McpJsonRpcClient(
-               endpoint: config.memoryMcpUrl,
+             rpc: GatewayContextClient(
+               baseUrl: config.agentGatewayContextBaseUrl,
                logger:
                    logger ?? AppLogger(directory: config.serviceLogDirectory),
              ),
@@ -994,20 +994,20 @@ class AuroraAppController extends ChangeNotifier {
         logger: logger,
       );
     }
-    if (!_memoryClientInjected && profile.memoryServers.isNotEmpty) {
+    if (!_memoryClientInjected) {
       memoryClient.close();
       memoryClient = MemoryClient(
-        rpc: McpJsonRpcClient(
-          endpoint: profile.memoryServers.first.endpoint,
+        rpc: GatewayContextClient(
+          baseUrl: _contextBaseUrl(profile),
           logger: logger,
         ),
       );
     }
-    if (!_tasksClientInjected && profile.memoryServers.isNotEmpty) {
+    if (!_tasksClientInjected) {
       tasksClient.close();
       tasksClient = TasksClient(
-        rpc: McpJsonRpcClient(
-          endpoint: profile.memoryServers.first.endpoint,
+        rpc: GatewayContextClient(
+          baseUrl: _contextBaseUrl(profile),
           logger: logger,
         ),
       );
@@ -3719,22 +3719,21 @@ class AuroraAppController extends ChangeNotifier {
     return profile;
   }
 
-  MemoryClient _memoryClientFor(McpServerRuntime server) {
-    if (memoryClient.endpoint == server.endpoint) {
-      return memoryClient;
-    }
-    return MemoryClient(
-      rpc: McpJsonRpcClient(endpoint: server.endpoint, logger: logger),
-    );
+  MemoryClient _memoryClientFor(McpServerRuntime _) {
+    return memoryClient;
   }
 
-  TasksClient _tasksClientFor(McpServerRuntime server) {
-    if (tasksClient.endpoint == server.endpoint) {
-      return tasksClient;
+  TasksClient _tasksClientFor(McpServerRuntime _) {
+    return tasksClient;
+  }
+
+  String _contextBaseUrl(RuntimeProfile profile) {
+    final gateway = profile.gateway;
+    if (gateway != null && gateway.enabled) {
+      final uri = Uri.parse(gateway.apiBaseUrl);
+      return uri.replace(path: '/api/context', query: null).toString();
     }
-    return TasksClient(
-      rpc: McpJsonRpcClient(endpoint: server.endpoint, logger: logger),
-    );
+    return profile.harness.contextApiBaseUrl;
   }
 
   McpServerRuntime? _primaryGraphServer() {

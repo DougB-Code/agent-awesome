@@ -15,6 +15,7 @@ import (
 	"time"
 
 	graphrepo "memory/internal/memory/graph/repository"
+	"memory/internal/memory/persistence"
 	"memory/internal/memory/service"
 	"memory/internal/memory/transport"
 )
@@ -26,12 +27,24 @@ func main() {
 	dataRoot := flag.String("data", "data", "filesystem artifact root")
 	logFile := flag.String("log-file", "", "log file path")
 	workers := flag.Int("workers", 2, "background worker count")
+	snapshotURL := flag.String("snapshot-url", "", "optional authenticated HTTP snapshot endpoint")
+	snapshotToken := flag.String("snapshot-token", "", "bearer token for the snapshot endpoint")
+	snapshotTimeout := flag.Duration("snapshot-timeout", 30*time.Second, "snapshot restore and save timeout")
 	flag.Parse()
 	closeLog := configureLogging(*logFile)
 	defer closeLog()
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
+
+	snapshotStore := persistence.HTTPStore{
+		URL:     *snapshotURL,
+		Token:   *snapshotToken,
+		Timeout: *snapshotTimeout,
+	}
+	if err := snapshotStore.Restore(ctx, *dbPath, *dataRoot); err != nil {
+		log.Fatalf("restore memory snapshot: %v", err)
+	}
 
 	repo, err := graphrepo.Open(ctx, graphrepo.Config{DBPath: *dbPath, DataRoot: *dataRoot})
 	if err != nil {
@@ -40,10 +53,15 @@ func main() {
 	memoryService := service.New(repo, nil, service.Config{WorkerCount: *workers})
 	memoryService.Start(ctx)
 	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := memoryService.Close(shutdownCtx); err != nil {
+		closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelClose()
+		if err := memoryService.Close(closeCtx); err != nil {
 			log.Printf("close memory service: %v", err)
+		}
+		snapshotCtx, cancelSnapshot := context.WithTimeout(context.Background(), *snapshotTimeout)
+		defer cancelSnapshot()
+		if err := snapshotStore.Save(snapshotCtx, *dbPath, *dataRoot); err != nil {
+			log.Printf("save memory snapshot: %v", err)
 		}
 	}()
 

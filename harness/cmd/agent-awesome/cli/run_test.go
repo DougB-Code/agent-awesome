@@ -22,6 +22,7 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--provider", "cloudflare",
 		"--model-id=kimi-k2",
 		"--log-file", "/tmp/harness.log",
+		"--context-api-addr", "127.0.0.1:8081",
 		"console",
 		"--input-file", "prompt.txt",
 	})
@@ -49,6 +50,9 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	}
 	if got, want := captured.LogFilePath, "/tmp/harness.log"; got != want {
 		t.Fatalf("LogFilePath = %q, want %q", got, want)
+	}
+	if got, want := captured.ContextAPIAddr, "127.0.0.1:8081"; got != want {
+		t.Fatalf("ContextAPIAddr = %q, want %q", got, want)
 	}
 	if want := []string{"console", "--input-file", "prompt.txt"}; !reflect.DeepEqual(captured.Args, want) {
 		t.Fatalf("args = %#v, want %#v", captured.Args, want)

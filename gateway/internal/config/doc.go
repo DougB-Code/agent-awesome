@@ -3,6 +3,7 @@
 // Intended use cases:
 //   - Build gateway configuration from flags and environment variables.
 //   - Keep local binary launch settings separate from HTTP gateway behavior.
+//   - Validate personal Slack channel settings before serving events.
 //
 // High-level examples:
 //   - config.FromFlags(os.Args[1:]) prepares settings for cmd/agent-gateway.

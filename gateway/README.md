@@ -64,12 +64,52 @@ For packaged pilots, the same values can be supplied with environment variables:
 - `AGENTAWESOME_MEMORY_AUTO_START`
 - `AGENTAWESOME_MEMORY_COMMAND`
 - `AGENTAWESOME_MEMORY_ARGS`, as a JSON string array
+- `SLACK_ENABLED`
+- `SLACK_SOCKET_MODE`
+- `SLACK_SIGNING_SECRET`
+- `SLACK_BOT_TOKEN`
+- `SLACK_APP_TOKEN`
+- `SLACK_ALLOWED_TEAM_ID`
+- `SLACK_ALLOWED_USER_ID`
+- `SLACK_ALLOWED_CHANNEL_ID`
+
+## Slack Pilot
+
+For local testing, enable Slack Socket Mode so Slack does not need a public
+Request URL:
+
+```sh
+SLACK_ENABLED=true \
+SLACK_SOCKET_MODE=true \
+SLACK_APP_TOKEN=xapp-... \
+SLACK_BOT_TOKEN=xoxb-... \
+SLACK_ALLOWED_USER_ID=U... \
+go run ./cmd/agent-gateway
+```
+
+The Slack app needs Socket Mode enabled, an app-level token with
+`connections:write`, a bot token with `chat:write`, and message event
+subscriptions such as `message.im` for direct-message pilots. Add
+`SLACK_ALLOWED_TEAM_ID` or `SLACK_ALLOWED_CHANNEL_ID` to narrow the pilot
+further.
+
+For cloud deployments, turn Socket Mode off and configure Slack's Events API
+Request URL to:
+
+```text
+https://<gateway-host>/slack/events
+```
+
+Then provide `SLACK_SIGNING_SECRET` so the gateway can verify Slack's HTTP
+request signatures before accepting events.
 
 ## API Surface
 
 - `GET /healthz` reports gateway liveness.
 - `GET /api/gateway/status` reports sanitized gateway and dependency status.
 - `GET /api/gateway/channels` lists active and planned channel adapters.
+- `POST /slack/events` receives Slack Events API webhooks.
+- `POST /mcp` proxies UI-facing memory MCP traffic to the configured memory service.
 - `/api/*` proxies ADK-compatible API traffic to the configured harness.
 
 `POST /api/run_sse` receives server-owned runtime policy injection before the

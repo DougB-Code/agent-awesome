@@ -51,6 +51,7 @@ AA runtime syntax:
 	cmd.Flags().StringVar(&opts.ProviderName, "provider", opts.ProviderName, "provider name from config")
 	cmd.Flags().StringVar(&opts.ModelID, "model-id", opts.ModelID, "model id from provider config")
 	cmd.Flags().StringVar(&opts.LogFilePath, "log-file", opts.LogFilePath, "log file path")
+	cmd.Flags().StringVar(&opts.ContextAPIAddr, "context-api-addr", opts.ContextAPIAddr, "optional harness-owned context API listen address")
 	cmd.Flags().SetInterspersed(false)
 	return cmd
 }

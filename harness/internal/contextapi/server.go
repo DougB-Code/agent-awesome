@@ -1,0 +1,240 @@
+// This file serves normalized context tool operations from configured MCP tools.
+package contextapi
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/http"
+	"strings"
+	"time"
+
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/tools/mcptransport"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+const contextAPIPrefix = "/api/context"
+
+// Server exposes harness-owned context operations for the gateway.
+type Server struct {
+	tools *schema.Tools
+	http  *http.Server
+}
+
+// Start begins serving the context API on addr when addr is non-empty.
+func Start(ctx context.Context, addr string, tools *schema.Tools) (*Server, error) {
+	if strings.TrimSpace(addr) == "" {
+		return nil, nil
+	}
+	server := &Server{tools: tools}
+	server.http = &http.Server{
+		Addr:              addr,
+		Handler:           server.routes(),
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, fmt.Errorf("listen context api: %w", err)
+	}
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.http.Shutdown(shutdownCtx); err != nil {
+			log.Printf("shutdown context api: %v", err)
+		}
+	}()
+	go func() {
+		if err := server.http.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("serve context api: %v", err)
+		}
+	}()
+	return server, nil
+}
+
+// routes builds the context API request multiplexer.
+func (s *Server) routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc(contextAPIPrefix+"/healthz", s.healthHandler)
+	mux.HandleFunc(contextAPIPrefix+"/tools/list", s.listToolsHandler)
+	mux.HandleFunc(contextAPIPrefix+"/tools/call", s.callToolHandler)
+	return mux
+}
+
+// healthHandler reports context API liveness.
+func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// listToolsHandler returns tool names available through configured MCP servers.
+func (s *Server) listToolsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	names, err := s.listToolNames(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tools": names})
+}
+
+// callToolHandler invokes one configured MCP tool and returns structured data.
+func (s *Server) callToolHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req toolCallRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "decode request: " + err.Error()})
+		return
+	}
+	result, err := s.callTool(r.Context(), req.Name, req.Arguments)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"structuredContent": result})
+}
+
+// listToolNames returns the union of configured MCP tool names.
+func (s *Server) listToolNames(ctx context.Context) ([]string, error) {
+	servers := configuredMCPServers(s.tools)
+	names := make([]string, 0)
+	seen := map[string]struct{}{}
+	for _, server := range servers {
+		session, err := connectMCP(ctx, server)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", server.Name, err)
+		}
+		result, err := session.ListTools(ctx, nil)
+		_ = session.Close()
+		if err != nil {
+			return nil, fmt.Errorf("%s list tools: %w", server.Name, err)
+		}
+		allowed := allowedTools(server)
+		for _, tool := range result.Tools {
+			if tool == nil || !toolAllowed(tool.Name, allowed) {
+				continue
+			}
+			if _, ok := seen[tool.Name]; ok {
+				continue
+			}
+			seen[tool.Name] = struct{}{}
+			names = append(names, tool.Name)
+		}
+	}
+	return names, nil
+}
+
+// callTool invokes one configured MCP tool by name.
+func (s *Server) callTool(ctx context.Context, name string, arguments map[string]any) (any, error) {
+	server, err := serverForTool(ctx, configuredMCPServers(s.tools), name)
+	if err != nil {
+		return nil, err
+	}
+	session, err := connectMCP(ctx, server)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", server.Name, err)
+	}
+	defer session.Close()
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{
+		Name:      name,
+		Arguments: arguments,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s call %s: %w", server.Name, name, err)
+	}
+	if result.IsError {
+		return nil, fmt.Errorf("%s returned an MCP tool error", name)
+	}
+	if result.StructuredContent != nil {
+		return result.StructuredContent, nil
+	}
+	return map[string]any{"content": result.Content}, nil
+}
+
+// serverForTool finds the configured MCP server that exposes a tool.
+func serverForTool(ctx context.Context, servers []schema.MCPServer, name string) (schema.MCPServer, error) {
+	for _, server := range servers {
+		if allowed := allowedTools(server); len(allowed) > 0 && !toolAllowed(name, allowed) {
+			continue
+		}
+		session, err := connectMCP(ctx, server)
+		if err != nil {
+			return schema.MCPServer{}, fmt.Errorf("%s: %w", server.Name, err)
+		}
+		result, err := session.ListTools(ctx, nil)
+		_ = session.Close()
+		if err != nil {
+			return schema.MCPServer{}, fmt.Errorf("%s list tools: %w", server.Name, err)
+		}
+		allowed := allowedTools(server)
+		for _, tool := range result.Tools {
+			if tool != nil && tool.Name == name && toolAllowed(name, allowed) {
+				return server, nil
+			}
+		}
+	}
+	return schema.MCPServer{}, fmt.Errorf("tool %q is not exposed by harness MCP configuration", name)
+}
+
+// connectMCP opens one MCP client session for a configured server.
+func connectMCP(ctx context.Context, server schema.MCPServer) (*mcp.ClientSession, error) {
+	transport, err := mcptransport.New(server)
+	if err != nil {
+		return nil, err
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "agent-awesome-context-api", Version: "v1.0.0"}, nil)
+	return client.Connect(ctx, transport, nil)
+}
+
+// configuredMCPServers returns enabled MCP servers from tool configuration.
+func configuredMCPServers(tools *schema.Tools) []schema.MCPServer {
+	if tools == nil || !tools.MCP.Enabled {
+		return nil
+	}
+	return tools.MCP.Servers
+}
+
+// allowedTools returns one server's explicit allow list.
+func allowedTools(server schema.MCPServer) map[string]struct{} {
+	if len(server.Tools.Allow) == 0 {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(server.Tools.Allow))
+	for _, name := range server.Tools.Allow {
+		allowed[name] = struct{}{}
+	}
+	return allowed
+}
+
+// toolAllowed reports whether a tool passes an optional allow list.
+func toolAllowed(name string, allowed map[string]struct{}) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	_, ok := allowed[name]
+	return ok
+}
+
+// toolCallRequest is the request body for one context tool call.
+type toolCallRequest struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
+}
+
+// writeJSON writes a JSON HTTP response.
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	encoder := json.NewEncoder(w)
+	encoder.SetEscapeHTML(false)
+	_ = encoder.Encode(body)
+}

@@ -2,7 +2,7 @@
   "id": "memory-personal",
   "label": "Personal Memory",
   "kind": "memory",
-  "endpoint": "${MEMORY_MCP_URL}",
+  "endpoint": "${AGENT_GATEWAY_MCP_URL}",
   "health_url": "${MEMORY_HEALTH_URL}",
   "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/memory",
   "package_path": "./cmd/memoryd",

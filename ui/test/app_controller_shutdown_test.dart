@@ -54,6 +54,7 @@ AppConfig _testConfig() {
   return const AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:8080/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
+    agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
     agentAppName: 'personal_pilot',
     agentUserId: 'doug',

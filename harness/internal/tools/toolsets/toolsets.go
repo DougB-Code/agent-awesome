@@ -3,13 +3,12 @@ package toolsets
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/runtime"
 	"agentawesome/internal/tools/localexec"
+	"agentawesome/internal/tools/mcptransport"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/mcptoolset"
@@ -81,18 +80,7 @@ func buildMCPToolset(server schema.MCPServer) (tool.Toolset, error) {
 
 // buildMCPTransport creates the configured MCP transport.
 func buildMCPTransport(server schema.MCPServer) (mcp.Transport, error) {
-	switch normalizeTransport(server.Transport) {
-	case "stdio":
-		command := exec.Command(strings.TrimSpace(server.Command), server.Args...)
-		if len(server.Env) > 0 {
-			command.Env = append(os.Environ(), envPairs(server.Env)...)
-		}
-		return &mcp.CommandTransport{Command: command}, nil
-	case "streamable-http":
-		return &mcp.StreamableClientTransport{Endpoint: endpoint(server)}, nil
-	default:
-		return nil, fmt.Errorf("unsupported transport %q", server.Transport)
-	}
+	return mcptransport.New(server)
 }
 
 // confirmationProvider returns a predicate that requires confirmation for the
@@ -111,31 +99,4 @@ func confirmationProvider(toolNames []string) tool.ConfirmationProvider {
 		_, ok := require[toolName]
 		return ok
 	}
-}
-
-// normalizeTransport maps supported MCP transport aliases to canonical names.
-func normalizeTransport(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "http", "streamable-http":
-		return "streamable-http"
-	default:
-		return strings.ToLower(strings.TrimSpace(value))
-	}
-}
-
-// endpoint returns the preferred HTTP endpoint field for an MCP server.
-func endpoint(server schema.MCPServer) string {
-	if value := strings.TrimSpace(server.Endpoint); value != "" {
-		return value
-	}
-	return strings.TrimSpace(server.URL)
-}
-
-// envPairs converts an environment map into KEY=value pairs.
-func envPairs(values map[string]string) []string {
-	pairs := make([]string, 0, len(values))
-	for key, value := range values {
-		pairs = append(pairs, key+"="+value)
-	}
-	return pairs
 }
