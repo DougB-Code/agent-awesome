@@ -4,13 +4,15 @@
 set -eu
 
 mkdir -p /app/data /app/logs
+touch /app/logs/harness.log /app/logs/memory.log
+tail -n +1 -F /app/logs/harness.log /app/logs/memory.log &
 
 exec agent-gateway \
   --addr "${AGENTAWESOME_GATEWAY_ADDR:-0.0.0.0:8070}" \
   --harness-base-url "${AGENTAWESOME_HARNESS_API_BASE_URL:-http://127.0.0.1:8080/api}" \
   --context-base-url "${AGENTAWESOME_CONTEXT_API_BASE_URL:-http://127.0.0.1:8081/api/context}" \
   --memory-mcp-url "${AGENTAWESOME_MEMORY_MCP_URL:-http://127.0.0.1:8090/mcp}" \
-  --app-name "${AGENTAWESOME_APP_NAME:-personal_pilot}" \
+  --app-name "${AGENTAWESOME_APP_NAME:-agent_awesome}" \
   --user-id "${AGENTAWESOME_USER_ID:-doug}" \
   --auth-token "${AGENTAWESOME_GATEWAY_TOKEN:-}" \
   --request-timeout "${AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT:-10m}" \

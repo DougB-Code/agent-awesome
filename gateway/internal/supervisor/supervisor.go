@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"sort"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -22,11 +24,14 @@ type Service struct {
 
 // Status reports current readiness and process ownership for one dependency.
 type Status struct {
-	Name    string `json:"name"`
-	URL     string `json:"url"`
-	State   string `json:"state"`
-	Message string `json:"message"`
-	PID     int    `json:"pid,omitempty"`
+	Name      string    `json:"name"`
+	URL       string    `json:"url"`
+	State     string    `json:"state"`
+	Message   string    `json:"message"`
+	PID       int       `json:"pid,omitempty"`
+	StartedAt time.Time `json:"started_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	ElapsedMS int64     `json:"elapsed_ms"`
 }
 
 // Manager owns dependency processes started by this gateway instance.
@@ -34,8 +39,21 @@ type Manager struct {
 	client       *http.Client
 	startTimeout time.Duration
 	mu           sync.Mutex
-	processes    map[string]*exec.Cmd
+	processes    map[string]processHandle
 	statuses     map[string]Status
+}
+
+// processHandle tracks one started process and its single wait result.
+type processHandle struct {
+	command *exec.Cmd
+	done    <-chan struct{}
+	result  *processResult
+}
+
+// processResult stores the single process wait result for multiple readers.
+type processResult struct {
+	mu  sync.Mutex
+	err error
 }
 
 // New creates a local service manager.
@@ -46,24 +64,27 @@ func New(startTimeout time.Duration) *Manager {
 	return &Manager{
 		client:       &http.Client{Timeout: 2 * time.Second},
 		startTimeout: startTimeout,
-		processes:    make(map[string]*exec.Cmd),
+		processes:    make(map[string]processHandle),
 		statuses:     make(map[string]Status),
 	}
 }
 
 // Ensure verifies a dependency and starts it when configured.
 func (m *Manager) Ensure(ctx context.Context, service Service) Status {
+	startedAt := time.Now().UTC()
+	m.remember(newStatus(service, "checking", "checking health", 0, startedAt))
 	if service.HealthURL != "" && m.isHealthy(ctx, service.HealthURL) {
-		return m.remember(Status{Name: service.Name, URL: service.HealthURL, State: "connected", Message: "already running"})
+		return m.remember(newStatus(service, "connected", "already running", 0, startedAt))
 	}
 	if !service.AutoStart {
-		return m.remember(Status{Name: service.Name, URL: service.HealthURL, State: "disconnected", Message: "external service is not reachable"})
+		return m.remember(newStatus(service, "disconnected", "external service is not reachable", 0, startedAt))
 	}
-	cmd, err := m.start(ctx, service)
+	process, err := m.start(ctx, service)
 	if err != nil {
-		return m.remember(Status{Name: service.Name, URL: service.HealthURL, State: "disconnected", Message: "startup failed: " + err.Error()})
+		return m.remember(newStatus(service, "disconnected", "startup failed: "+err.Error(), 0, startedAt))
 	}
-	status := m.waitForHealth(ctx, service, cmd)
+	m.remember(newStatus(service, "starting", "process started; waiting for health", process.command.Process.Pid, startedAt))
+	status := m.waitForHealth(ctx, service, process, startedAt)
 	return m.remember(status)
 }
 
@@ -71,40 +92,48 @@ func (m *Manager) Ensure(ctx context.Context, service Service) Status {
 func (m *Manager) Statuses() []Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	now := time.Now().UTC()
 	statuses := make([]Status, 0, len(m.statuses))
 	for _, status := range m.statuses {
+		if status.State == "checking" || status.State == "starting" {
+			status.UpdatedAt = now
+			status.ElapsedMS = elapsedMilliseconds(status.StartedAt, now)
+		}
 		statuses = append(statuses, status)
 	}
+	sort.Slice(statuses, func(i int, j int) bool {
+		return statuses[i].Name < statuses[j].Name
+	})
 	return statuses
 }
 
 // Close terminates only processes started by this manager.
 func (m *Manager) Close(ctx context.Context) error {
 	m.mu.Lock()
-	processes := make([]*exec.Cmd, 0, len(m.processes))
-	for _, cmd := range m.processes {
-		processes = append(processes, cmd)
+	processes := make([]processHandle, 0, len(m.processes))
+	for _, process := range m.processes {
+		processes = append(processes, process)
 	}
 	m.mu.Unlock()
 
-	for _, cmd := range processes {
-		if cmd.Process == nil {
+	for _, process := range processes {
+		if process.command.Process == nil {
 			continue
 		}
-		_ = cmd.Process.Signal(os.Interrupt)
+		_ = process.command.Process.Signal(os.Interrupt)
 	}
 	done := make(chan struct{})
 	go func() {
-		for _, cmd := range processes {
-			_ = cmd.Wait()
+		for _, process := range processes {
+			<-process.done
 		}
 		close(done)
 	}()
 	select {
 	case <-ctx.Done():
-		for _, cmd := range processes {
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
+		for _, process := range processes {
+			if process.command.Process != nil {
+				_ = process.command.Process.Kill()
 			}
 		}
 		return ctx.Err()
@@ -114,39 +143,86 @@ func (m *Manager) Close(ctx context.Context) error {
 }
 
 // start launches one configured local service command.
-func (m *Manager) start(ctx context.Context, service Service) (*exec.Cmd, error) {
+func (m *Manager) start(ctx context.Context, service Service) (processHandle, error) {
 	if service.Command == "" {
-		return nil, fmt.Errorf("command is required")
+		return processHandle{}, fmt.Errorf("command is required")
 	}
 	cmd := exec.CommandContext(ctx, service.Command, service.Arguments...)
 	cmd.Dir = service.WorkingDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return nil, err
+		return processHandle{}, err
 	}
+	process := newProcessHandle(cmd)
 	m.mu.Lock()
-	m.processes[service.Name] = cmd
+	m.processes[service.Name] = process
 	m.mu.Unlock()
-	return cmd, nil
+	return process, nil
 }
 
 // waitForHealth waits until a started process is healthy or exits.
-func (m *Manager) waitForHealth(ctx context.Context, service Service, cmd *exec.Cmd) Status {
+func (m *Manager) waitForHealth(ctx context.Context, service Service, process processHandle, startedAt time.Time) Status {
 	deadline, cancel := context.WithTimeout(ctx, m.startTimeout)
 	defer cancel()
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
+		case <-process.done:
+			return newStatus(service, "disconnected", processExitMessage(process.err()), process.command.Process.Pid, startedAt)
 		case <-deadline.Done():
-			return Status{Name: service.Name, URL: service.HealthURL, State: "disconnected", Message: "startup timed out", PID: cmd.Process.Pid}
+			return newStatus(service, "disconnected", "startup timed out", process.command.Process.Pid, startedAt)
 		case <-ticker.C:
 			if service.HealthURL != "" && m.isHealthy(deadline, service.HealthURL) {
-				return Status{Name: service.Name, URL: service.HealthURL, State: "connected", Message: "started", PID: cmd.Process.Pid}
+				return newStatus(service, "connected", "started", process.command.Process.Pid, startedAt)
 			}
 		}
 	}
+}
+
+// newProcessHandle starts the one goroutine allowed to wait on a process.
+func newProcessHandle(cmd *exec.Cmd) processHandle {
+	done := make(chan struct{})
+	result := &processResult{}
+	go func() {
+		result.set(cmd.Wait())
+		close(done)
+	}()
+	return processHandle{command: cmd, done: done, result: result}
+}
+
+// err returns the stored wait result after process completion.
+func (p processHandle) err() error {
+	p.result.mu.Lock()
+	defer p.result.mu.Unlock()
+	return p.result.err
+}
+
+// set records the process wait result before waiters observe completion.
+func (r *processResult) set(err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.err = err
+}
+
+// processExitMessage describes a child process exit without exposing internals.
+func processExitMessage(err error) string {
+	if err == nil {
+		return "process exited before health"
+	}
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok {
+		return "process exited before health: " + err.Error()
+	}
+	status, ok := exitErr.Sys().(syscall.WaitStatus)
+	if !ok {
+		return "process exited before health: " + err.Error()
+	}
+	if status.Signaled() {
+		return fmt.Sprintf("process exited before health: signal %s", status.Signal())
+	}
+	return fmt.Sprintf("process exited before health: exit code %d", status.ExitStatus())
 }
 
 // isHealthy reports whether one dependency health endpoint is reachable.
@@ -169,4 +245,27 @@ func (m *Manager) remember(status Status) Status {
 	defer m.mu.Unlock()
 	m.statuses[status.Name] = status
 	return status
+}
+
+// newStatus builds one timestamped dependency status snapshot.
+func newStatus(service Service, state string, message string, pid int, startedAt time.Time) Status {
+	now := time.Now().UTC()
+	return Status{
+		Name:      service.Name,
+		URL:       service.HealthURL,
+		State:     state,
+		Message:   message,
+		PID:       pid,
+		StartedAt: startedAt,
+		UpdatedAt: now,
+		ElapsedMS: elapsedMilliseconds(startedAt, now),
+	}
+}
+
+// elapsedMilliseconds returns a non-negative millisecond duration.
+func elapsedMilliseconds(startedAt time.Time, now time.Time) int64 {
+	if startedAt.IsZero() || now.Before(startedAt) {
+		return 0
+	}
+	return now.Sub(startedAt).Milliseconds()
 }

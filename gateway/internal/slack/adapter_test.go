@@ -58,6 +58,29 @@ func TestAcceptedMessageRejectsBotMessages(t *testing.T) {
 	}
 }
 
+// TestAcceptedMessageAcceptsAppMentions verifies channel mentions can dispatch to the agent.
+func TestAcceptedMessageAcceptsAppMentions(t *testing.T) {
+	adapter := NewAdapter(Config{Enabled: true})
+	event, _, ok := adapter.acceptedMessage(EventEnvelope{
+		Type:   "event_callback",
+		TeamID: "T1",
+		Event: MessageEvent{
+			Type:    "app_mention",
+			Channel: "C1",
+			User:    "U1",
+			Text:    "<@B1> hello",
+			TS:      "1.0",
+		},
+	})
+
+	if !ok {
+		t.Fatalf("acceptedMessage() rejected app_mention")
+	}
+	if event.Type != "app_mention" {
+		t.Fatalf("event type = %q, want app_mention", event.Type)
+	}
+}
+
 // TestSessionIDForMessageUsesThreadRoot verifies Slack threads map to one session.
 func TestSessionIDForMessageUsesThreadRoot(t *testing.T) {
 	root := MessageEvent{Channel: "C1", TS: "1.0", ThreadTS: "0.5"}

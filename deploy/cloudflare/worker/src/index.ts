@@ -4,6 +4,8 @@ import { env as workerEnv } from "cloudflare:workers";
 
 const slackSignatureVersion = "v0";
 const slackTimestampWindowSeconds = 60 * 5;
+const gatewayPort = 8070;
+const containerPortReadyTimeoutMS = 90_000;
 
 /** Env describes Worker bindings, vars, and secrets used by the pilot. */
 export interface Env {
@@ -15,6 +17,7 @@ export interface Env {
   AGENTAWESOME_CONTEXT_API_BASE_URL?: string;
   AGENTAWESOME_PERSISTENCE_TOKEN?: string;
   AGENTAWESOME_MEMORY_SNAPSHOT_URL?: string;
+  AGENTAWESOME_MEMORY_SNAPSHOT_KEY?: string;
   AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT?: string;
   AGENTAWESOME_SERVICE_START_TIMEOUT?: string;
   SLACK_ENABLED?: string;
@@ -30,8 +33,8 @@ export interface Env {
 
 /** AgentAwesomeContainer configures the Linux container that runs the Go services. */
 export class AgentAwesomeContainer extends Container {
-  defaultPort = 8070;
-  requiredPorts = [8070];
+  defaultPort = gatewayPort;
+  requiredPorts = [gatewayPort];
   sleepAfter = "30m";
   envVars = buildContainerEnv(workerEnv as Env);
 
@@ -55,7 +58,7 @@ export class AgentAwesomeContainer extends Container {
 /** buildContainerEnv maps Worker vars and secrets into process env variables. */
 export function buildContainerEnv(env: Env): Record<string, string> {
   return {
-    AGENTAWESOME_APP_NAME: env.AGENTAWESOME_APP_NAME ?? "personal_pilot",
+    AGENTAWESOME_APP_NAME: env.AGENTAWESOME_APP_NAME ?? "agent_awesome",
     AGENTAWESOME_USER_ID: env.AGENTAWESOME_USER_ID ?? "doug",
     AGENTAWESOME_GATEWAY_TOKEN: env.AGENTAWESOME_GATEWAY_TOKEN ?? "",
     AGENTAWESOME_CONTEXT_API_BASE_URL:
@@ -91,17 +94,36 @@ export async function routeRequest(
     return persistenceResponse;
   }
   if (isGatewayRequest(request) && hasGatewayAuth(request, env)) {
-    return getContainer(env.AGENT_AWESOME_CONTAINER, "personal-pilot").fetch(
-      request,
-    );
+    return fetchPilotContainer(request, env);
   }
   const signedBody = await readSignedSlackBody(request, env);
-  if (signedBody === null) {
+  if (signedBody.body === null) {
+    if (new URL(request.url).pathname === "/slack/events") {
+      console.warn("Slack request rejected before container", {
+        reason: signedBody.reason,
+        method: request.method,
+      });
+    }
     return new Response("Not found\n", { status: 404 });
   }
-  return getContainer(env.AGENT_AWESOME_CONTAINER, "personal-pilot").fetch(
-    rebuildRequest(request, signedBody),
-  );
+  console.log("Slack request verified by Worker");
+  return fetchPilotContainer(rebuildRequest(request, signedBody.body), env);
+}
+
+/** fetchPilotContainer waits for the gateway port with pilot-friendly startup time. */
+async function fetchPilotContainer(
+  request: Request,
+  env: Env,
+): Promise<Response> {
+  const container = getContainer(env.AGENT_AWESOME_CONTAINER, "personal-pilot");
+  await container.startAndWaitForPorts({
+    ports: [gatewayPort],
+    cancellationOptions: {
+      portReadyTimeoutMS: containerPortReadyTimeoutMS,
+      waitInterval: 500,
+    },
+  });
+  return container.fetch(request);
 }
 
 /** isGatewayRequest reports whether a request targets the gateway control plane. */
@@ -126,22 +148,26 @@ function hasGatewayAuth(request: Request, env: Env): boolean {
 async function readSignedSlackBody(
   request: Request,
   env: Env,
-): Promise<string | null> {
+): Promise<{ body: ArrayBuffer | null; reason: string }> {
   const url = new URL(request.url);
   if (request.method !== "POST" || url.pathname !== "/slack/events") {
-    return null;
+    return { body: null, reason: "not Slack events path" };
   }
   const timestamp = request.headers.get("x-slack-request-timestamp");
   const signature = request.headers.get("x-slack-signature");
-  if (
-    env.SLACK_SIGNING_SECRET === undefined ||
-    timestamp === null ||
-    signature === null ||
-    !isFreshSlackTimestamp(timestamp)
-  ) {
-    return null;
+  if (env.SLACK_SIGNING_SECRET === undefined || env.SLACK_SIGNING_SECRET === "") {
+    return { body: null, reason: "missing signing secret" };
   }
-  const body = await request.text();
+  if (timestamp === null) {
+    return { body: null, reason: "missing timestamp" };
+  }
+  if (signature === null) {
+    return { body: null, reason: "missing signature" };
+  }
+  if (!isFreshSlackTimestamp(timestamp)) {
+    return { body: null, reason: "stale timestamp" };
+  }
+  const body = await request.arrayBuffer();
   if (
     !(await hasValidSlackSignature(
       env.SLACK_SIGNING_SECRET,
@@ -150,9 +176,9 @@ async function readSignedSlackBody(
       signature,
     ))
   ) {
-    return null;
+    return { body: null, reason: "invalid signature" };
   }
-  return body;
+  return { body, reason: "verified" };
 }
 
 /** handlePersistenceRequest serves the private R2-backed context snapshot endpoint. */
@@ -191,7 +217,7 @@ function hasPersistenceAuth(request: Request, env: Env): boolean {
 
 /** readContextSnapshot returns the latest persisted memory snapshot from R2. */
 async function readContextSnapshot(env: Env): Promise<Response> {
-  const object = await env.CONTEXT_SNAPSHOTS.get(contextSnapshotKey());
+  const object = await env.CONTEXT_SNAPSHOTS.get(contextSnapshotKey(env));
   if (object === null) {
     return new Response("Not found\n", { status: 404 });
   }
@@ -208,7 +234,7 @@ async function writeContextSnapshot(
   request: Request,
   env: Env,
 ): Promise<Response> {
-  await env.CONTEXT_SNAPSHOTS.put(contextSnapshotKey(), request.body, {
+  await env.CONTEXT_SNAPSHOTS.put(contextSnapshotKey(env), request.body, {
     httpMetadata: {
       contentType: request.headers.get("content-type") ?? "application/gzip",
     },
@@ -216,13 +242,16 @@ async function writeContextSnapshot(
   return new Response(null, { status: 204 });
 }
 
-/** contextSnapshotKey returns the canonical R2 object key for this pilot. */
-function contextSnapshotKey(): string {
-  return "personal-pilot/context-snapshot.tar.gz";
+/** contextSnapshotKey returns the configured R2 object key for this agent. */
+function contextSnapshotKey(env: Env): string {
+  return (
+    env.AGENTAWESOME_MEMORY_SNAPSHOT_KEY ??
+    "personal-pilot/context-snapshot.tar.gz"
+  );
 }
 
 /** rebuildRequest restores the raw Slack body after signature verification reads it. */
-function rebuildRequest(request: Request, body: string): Request {
+function rebuildRequest(request: Request, body: ArrayBuffer): Request {
   const headers = new Headers(request.headers);
   headers.delete("content-length");
   return new Request(request.url, {
@@ -246,7 +275,7 @@ function isFreshSlackTimestamp(timestamp: string): boolean {
 async function hasValidSlackSignature(
   signingSecret: string,
   timestamp: string,
-  body: string,
+  body: ArrayBuffer,
   signature: string,
 ): Promise<boolean> {
   const expected = await slackSignature(signingSecret, timestamp, body);
@@ -257,7 +286,7 @@ async function hasValidSlackSignature(
 async function slackSignature(
   signingSecret: string,
   timestamp: string,
-  body: string,
+  body: ArrayBuffer,
 ): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
@@ -267,12 +296,22 @@ async function slackSignature(
     false,
     ["sign"],
   );
+  const prefix = encoder.encode(`${slackSignatureVersion}:${timestamp}:`);
+  const message = concatBytes(prefix, new Uint8Array(body));
   const digest = await crypto.subtle.sign(
     "HMAC",
     key,
-    encoder.encode(`${slackSignatureVersion}:${timestamp}:${body}`),
+    message,
   );
   return `${slackSignatureVersion}=${hexEncode(new Uint8Array(digest))}`;
+}
+
+/** concatBytes joins byte slices without decoding the signed body. */
+function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  const output = new Uint8Array(left.byteLength + right.byteLength);
+  output.set(left, 0);
+  output.set(right, left.byteLength);
+  return output;
 }
 
 /** hexEncode renders bytes as lowercase hexadecimal text. */

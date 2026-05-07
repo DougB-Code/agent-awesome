@@ -30,6 +30,7 @@ RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app \
   && mkdir -p /app/config /app/data /app/logs \
   && chown -R app:app /app
 
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/agent-gateway /usr/local/bin/agent-gateway
 COPY --from=build /out/agent-awesome /usr/local/bin/agent-awesome
 COPY --from=build /out/memoryd /usr/local/bin/memoryd
@@ -45,7 +46,7 @@ ENV AGENTAWESOME_GATEWAY_ADDR=0.0.0.0:8070
 ENV AGENTAWESOME_HARNESS_API_BASE_URL=http://127.0.0.1:8080/api
 ENV AGENTAWESOME_CONTEXT_API_BASE_URL=http://127.0.0.1:8081/api/context
 ENV AGENTAWESOME_MEMORY_MCP_URL=http://127.0.0.1:8090/mcp
-ENV AGENTAWESOME_APP_NAME=personal_pilot
+ENV AGENTAWESOME_APP_NAME=agent_awesome
 ENV AGENTAWESOME_USER_ID=doug
 ENV AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT=10m
 ENV AGENTAWESOME_SERVICE_START_TIMEOUT=45s

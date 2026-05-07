@@ -27,12 +27,12 @@ func main() {
 	defer stop()
 
 	manager := supervisor.New(cfg.ServiceStartTimeout)
-	ensureServices(ctx, cfg, manager)
 
 	server, err := gateway.NewServer(cfg, manager)
 	if err != nil {
 		log.Fatalf("create gateway: %v", err)
 	}
+	go ensureServices(ctx, cfg, manager)
 	if server.SlackSocketModeEnabled() {
 		go func() {
 			if err := server.RunSlackSocketMode(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -60,6 +60,8 @@ func main() {
 
 // ensureServices checks or starts dependencies declared in gateway config.
 func ensureServices(ctx context.Context, cfg config.Config, manager *supervisor.Manager) {
+	started := time.Now()
+	log.Printf("dependency startup begin")
 	harness := supervisor.Service{
 		Name:       cfg.HarnessService.Name,
 		HealthURL:  cfg.HarnessService.HealthURL,
@@ -76,6 +78,11 @@ func ensureServices(ctx context.Context, cfg config.Config, manager *supervisor.
 		WorkingDir: cfg.MemoryService.WorkingDir,
 		AutoStart:  cfg.MemoryService.AutoStart,
 	}
-	log.Printf("harness status: %+v", manager.Ensure(ctx, harness))
-	log.Printf("memory status: %+v", manager.Ensure(ctx, memory))
+	harnessStarted := time.Now()
+	log.Printf("harness startup begin")
+	log.Printf("harness status after %s: %+v", time.Since(harnessStarted).Round(time.Millisecond), manager.Ensure(ctx, harness))
+	memoryStarted := time.Now()
+	log.Printf("memory startup begin")
+	log.Printf("memory status after %s: %+v", time.Since(memoryStarted).Round(time.Millisecond), manager.Ensure(ctx, memory))
+	log.Printf("dependency startup complete after %s", time.Since(started).Round(time.Millisecond))
 }

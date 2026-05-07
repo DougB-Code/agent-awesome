@@ -274,3 +274,5 @@ $RECYCLE.BIN/
 ## Custom Files
 fcomb_*
 .agents/
+logs/*
+deploy/cloudflare/worker/pnpm-lock.yaml

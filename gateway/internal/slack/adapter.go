@@ -61,15 +61,18 @@ func (a *Adapter) EventsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxSlackRequestBytes))
 	if err != nil {
+		log.Printf("slack request read failed: %v", err)
 		http.Error(w, "read Slack request", http.StatusBadRequest)
 		return
 	}
 	if err := VerifySignature(a.config.SigningSecret, r.Header, body, time.Now()); err != nil {
+		log.Printf("slack signature rejected by gateway: %v", err)
 		http.Error(w, "invalid Slack signature", http.StatusUnauthorized)
 		return
 	}
 	challenge, err := a.AcceptEnvelope(body)
 	if err != nil {
+		log.Printf("slack envelope rejected by gateway: %v", err)
 		http.Error(w, "invalid Slack event", http.StatusBadRequest)
 		return
 	}
@@ -115,8 +118,8 @@ func (a *Adapter) AcceptEnvelope(body []byte) (string, error) {
 // acceptedMessage filters Slack events to the configured personal pilot scope.
 func (a *Adapter) acceptedMessage(envelope EventEnvelope) (MessageEvent, string, bool) {
 	event := envelope.Event
-	if event.Type != "message" {
-		return MessageEvent{}, "event type is not message", false
+	if event.Type != "message" && event.Type != "app_mention" {
+		return MessageEvent{}, "event type is not message or app_mention", false
 	}
 	if event.Subtype != "" {
 		return MessageEvent{}, "message subtype is not supported", false
