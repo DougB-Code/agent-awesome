@@ -8,10 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const maxSlackRequestBytes = 1 << 20
@@ -61,18 +62,18 @@ func (a *Adapter) EventsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxSlackRequestBytes))
 	if err != nil {
-		log.Printf("slack request read failed: %v", err)
+		log.Error().Err(err).Msg("slack request read failed")
 		http.Error(w, "read Slack request", http.StatusBadRequest)
 		return
 	}
 	if err := VerifySignature(a.config.SigningSecret, r.Header, body, time.Now()); err != nil {
-		log.Printf("slack signature rejected by gateway: %v", err)
+		log.Warn().Err(err).Msg("slack signature rejected by gateway")
 		http.Error(w, "invalid Slack signature", http.StatusUnauthorized)
 		return
 	}
 	challenge, err := a.AcceptEnvelope(body)
 	if err != nil {
-		log.Printf("slack envelope rejected by gateway: %v", err)
+		log.Warn().Err(err).Msg("slack envelope rejected by gateway")
 		http.Error(w, "invalid Slack event", http.StatusBadRequest)
 		return
 	}
@@ -92,20 +93,19 @@ func (a *Adapter) AcceptEnvelope(body []byte) (string, error) {
 	}
 	switch envelope.Type {
 	case "url_verification":
-		log.Printf("slack url verification received")
+		log.Info().Msg("slack url verification received")
 		return envelope.Challenge, nil
 	case "event_callback":
-		log.Printf(
-			"slack event callback type=%s subtype=%s channel=%s user=%s bot=%t",
-			envelope.Event.Type,
-			envelope.Event.Subtype,
-			envelope.Event.Channel,
-			envelope.Event.User,
-			envelope.Event.BotID != "",
-		)
+		log.Info().
+			Str("type", envelope.Event.Type).
+			Str("subtype", envelope.Event.Subtype).
+			Str("channel", envelope.Event.Channel).
+			Str("user", envelope.Event.User).
+			Bool("bot", envelope.Event.BotID != "").
+			Msg("slack event callback received")
 		event, reason, ok := a.acceptedMessage(envelope)
 		if !ok {
-			log.Printf("slack event ignored: %s", reason)
+			log.Info().Str("reason", reason).Msg("slack event ignored")
 			return "", nil
 		}
 		go a.dispatch(context.Background(), envelope.TeamID, event)
@@ -147,15 +147,20 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 	ctx, cancel := context.WithTimeout(parent, a.client.Timeout)
 	defer cancel()
 	sessionID := SessionIDForMessage(teamID, event)
-	log.Printf("slack dispatch start channel=%s thread=%s session=%s", event.Channel, ReplyThreadTS(event), sessionID)
+	threadTS := ReplyThreadTS(event)
+	log.Info().
+		Str("channel", event.Channel).
+		Str("thread", threadTS).
+		Str("session", sessionID).
+		Msg("slack dispatch start")
 	if err := a.agent.EnsureSession(ctx, sessionID); err != nil {
-		log.Printf("slack ensure session: %v", err)
+		log.Error().Err(err).Msg("slack ensure session")
 		a.postFailure(ctx, event)
 		return
 	}
 	reply, err := a.agent.RunText(ctx, sessionID, event.Text)
 	if err != nil {
-		log.Printf("slack run agent: %v", err)
+		log.Error().Err(err).Msg("slack run agent")
 		a.postFailure(ctx, event)
 		return
 	}
@@ -163,16 +168,20 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 		reply = "Done."
 	}
 	if err := a.slack.PostMessage(ctx, event.Channel, ReplyThreadTS(event), reply); err != nil {
-		log.Printf("slack post reply: %v", err)
+		log.Error().Err(err).Msg("slack post reply")
 		return
 	}
-	log.Printf("slack dispatch complete channel=%s thread=%s session=%s", event.Channel, ReplyThreadTS(event), sessionID)
+	log.Info().
+		Str("channel", event.Channel).
+		Str("thread", threadTS).
+		Str("session", sessionID).
+		Msg("slack dispatch complete")
 }
 
 // postFailure posts a generic Slack failure without exposing internal details.
 func (a *Adapter) postFailure(ctx context.Context, event MessageEvent) {
 	if err := a.slack.PostMessage(ctx, event.Channel, ReplyThreadTS(event), "I hit an error running the agent. Check the gateway logs for details."); err != nil {
-		log.Printf("slack post failure: %v", err)
+		log.Error().Err(err).Msg("slack post failure")
 	}
 }
 

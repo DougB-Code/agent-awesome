@@ -1,0 +1,51 @@
+= Desktop UI
+:description: How users start and configure the Agent Awesome desktop UI.
+
+The desktop UI is a Flutter application in `ui`.
+It starts with the default runtime profile and connects to the local gateway, harness, and memory services described by that profile.
+
+The default profile expects the checked-in personal-assistant pilot config under `pilots/personal-assistant`.
+It also needs a model credential, such as `OPENAI_API_KEY`, available to the harness keyring or environment.
+
+== Start The UI
+
+From `ui`:
+
+[source,sh]
+----
+flutter run -d linux
+----
+
+The default runtime profile is `runtime_profiles/personal_assistant.json`.
+When local service auto-start is enabled, the UI starts the services it owns and marks unavailable services as disconnected.
+
+== Runtime Profile Override
+
+Use `AGENTAWESOME_RUNTIME_PROFILE` when you need a different service topology:
+
+[source,sh]
+----
+flutter run -d linux --dart-define=AGENTAWESOME_RUNTIME_PROFILE=/path/to/profile.json
+----
+
+Profiles describe service URLs, managed service commands, working directories, and configuration files.
+They are user-facing only when the profile has already been prepared by a developer or operations maintainer.
+
+== Common Defines
+
+[cols="1,2",options="header"]
+|===
+|Define |Use
+
+|`AGENT_GATEWAY_BASE_URL`
+|Gateway API endpoint used by the UI.
+
+|`AGENT_API_BASE_URL`
+|Direct harness API endpoint for profiles that bypass the gateway.
+
+|`MEMORY_MCP_URL`
+|Memory MCP endpoint used by local context surfaces.
+
+|`AUTO_START_LOCAL_SERVICES`
+|Whether the UI should start managed local services from the runtime profile.
+|===

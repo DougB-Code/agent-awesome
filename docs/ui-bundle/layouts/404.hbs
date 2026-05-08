@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Page Not Found | {{site.title}}</title>
+  <script>
+    (() => {
+      const requested = new URLSearchParams(window.location.search).get('theme')
+      const stored = localStorage.getItem('agent-awesome-docs-theme')
+      const preferred = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+      document.documentElement.dataset.theme = requested === 'dark' || requested === 'light' ? requested : stored || preferred
+    })()
+  </script>
+  <link rel="stylesheet" href="{{uiRootPath}}/css/site.css">
+</head>
+<body>
+  <div class="not-found">
+    <a class="brand" href="{{siteRootPath}}/agent-awesome/0.1/index.html">
+      <span class="brand-mark" aria-hidden="true">
+        <img class="brand-logo" src="{{uiRootPath}}/img/agent-awesome-logo.png" alt="">
+      </span>
+      <span class="brand-copy"><span class="brand-name">Agent Awesome</span><span class="brand-section">Documentation</span></span>
+    </a>
+    <section class="not-found-card">
+      <h1>Page Not Found</h1>
+      <p>The requested documentation page does not exist.</p>
+      <a class="button button-primary" href="{{siteRootPath}}/agent-awesome/0.1/index.html">Back to docs <span>→</span></a>
+    </section>
+  </div>
+  <script src="{{uiRootPath}}/js/theme.js"></script>
+</body>
+</html>

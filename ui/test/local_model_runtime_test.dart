@@ -1,0 +1,325 @@
+/// Tests local LiteRT-LM model installation behavior.
+library;
+
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:agentawesome_ui/app/app_config.dart';
+import 'package:agentawesome_ui/app/local_model_runtime.dart';
+import 'package:agentawesome_ui/app/process_supervisor.dart';
+import 'package:agentawesome_ui/domain/models.dart';
+import 'package:crypto/crypto.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+
+/// Runs local model installer tests without downloading real model artifacts.
+void main() {
+  test('downloads, verifies, and records a local model manifest', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-local-model-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final bytes = utf8.encode('hello local model');
+    final descriptor = _testDescriptor(bytes);
+    final phases = <String>[];
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        expect(request.url.toString(), descriptor.downloadUrl);
+        return http.Response.bytes(bytes, 200);
+      }),
+    );
+    addTearDown(runtime.close);
+
+    final install = await runtime.ensureInstalled(
+      descriptor,
+      onProgress: (progress) => phases.add(progress.phase),
+    );
+
+    expect(await File(install.modelPath).readAsBytes(), bytes);
+    expect(await runtime.isInstalled(descriptor), isTrue);
+    expect(phases, containsAll(<String>['downloading', 'verifying', 'ready']));
+    final manifest = jsonDecode(
+      await File(install.manifestPath).readAsString(),
+    );
+    expect(manifest['sha256'], descriptor.expectedSha256);
+    expect(manifest['license'], descriptor.license);
+  });
+
+  test('rejects a downloaded model when the checksum does not match', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-local-model-bad-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final descriptor = _testDescriptor(
+      utf8.encode('expected'),
+      expectedSha256: '0' * 64,
+    );
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(utf8.encode('expected'), 200);
+      }),
+    );
+    addTearDown(runtime.close);
+
+    await expectLater(
+      runtime.ensureInstalled(descriptor),
+      throwsA(isA<StateError>()),
+    );
+    expect(await runtime.isInstalled(descriptor), isFalse);
+  });
+
+  test('resolves the underscore LiteRT-LM binary name from PATH', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-path-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final bin = Directory('${root.path}/bin');
+    await bin.create(recursive: true);
+    final executable = File('${bin.path}/litert_lm');
+    await executable.writeAsString('#!/bin/sh\nexit 0\n');
+    await _makeExecutable(executable.path);
+    final resolver = LocalModelExecutableResolver(
+      environment: <String, String>{'PATH': bin.path},
+    );
+
+    final resolved = await resolver.resolve(
+      configuredExecutable: 'litert-lm',
+      dataDirectory: '${root.path}/data',
+    );
+
+    expect(resolved, executable.path);
+  });
+
+  test(
+    'reports a missing executable before starting the local endpoint',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'agentawesome-litert-missing-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final bytes = utf8.encode('installed local model');
+      final descriptor = _testDescriptor(bytes);
+      final runtime = LiteRtLocalModelRuntime(
+        config: _testConfig(litertLmExecutable: 'missing-litert-lm'),
+        processSupervisor: _testProcessSupervisor(root),
+        dataDirectory: root.path,
+        httpClient: MockClient((request) async {
+          return http.Response.bytes(bytes, 200);
+        }),
+        executableResolver: const LocalModelExecutableResolver(
+          environment: <String, String>{'PATH': ''},
+        ),
+      );
+      addTearDown(runtime.close);
+      await runtime.ensureInstalled(descriptor);
+
+      final status = await runtime.start(descriptor);
+
+      expect(status.state, ConnectionStateKind.disconnected);
+      expect(status.message, contains('LiteRT-LM executable'));
+      expect(status.message, contains('missing-litert-lm'));
+    },
+  );
+
+  test('reports executable dependency failures before serving chat', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-invalid-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final executable = File('${root.path}/litert_lm');
+    await executable.writeAsString(
+      '#!/bin/sh\necho missing shared lib >&2\nexit 127\n',
+    );
+    await _makeExecutable(executable.path);
+    final bytes = utf8.encode('installed local model');
+    final descriptor = _testDescriptor(bytes);
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(litertLmExecutable: executable.path),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(bytes, 200);
+      }),
+    );
+    addTearDown(runtime.close);
+    await runtime.ensureInstalled(descriptor);
+
+    final status = await runtime.start(descriptor);
+
+    expect(status.state, ConnectionStateKind.disconnected);
+    expect(status.message, contains('LiteRT-LM could not start'));
+    expect(status.message, contains('missing shared lib'));
+  });
+
+  test('translates Gemma textual task calls into OpenAI tool calls', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-tool-call-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final port = await _freePort();
+    final executable = File('${root.path}/litert_lm');
+    await executable.writeAsString('''
+#!/bin/sh
+if [ "\$1" = "--help" ]; then
+  exit 0
+fi
+echo '<|tool_call>call:task_tool{action: "create", details: { "description": "Buy milk" }, idempotency_key: "personal_pilot:session:"}<tool_call|>'
+''');
+    await _makeExecutable(executable.path);
+    final bytes = utf8.encode('installed local model');
+    final descriptor = _testDescriptor(bytes);
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(
+        litertLmExecutable: executable.path,
+        localModelBaseUrl: 'http://127.0.0.1:$port',
+      ),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(bytes, 200);
+      }),
+    );
+    addTearDown(runtime.close);
+    await runtime.ensureInstalled(descriptor);
+    final status = await runtime.start(descriptor);
+    expect(status.state, ConnectionStateKind.connected);
+
+    final response = await http.post(
+      Uri.parse('http://127.0.0.1:$port/v1/chat/completions'),
+      headers: const <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'model': descriptor.modelName,
+        'messages': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'role': 'user',
+            'content': 'Remember that I need to buy milk',
+          },
+        ],
+        'tools': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'type': 'function',
+            'function': <String, dynamic>{
+              'name': 'create_task',
+              'description': 'Create a graph-backed task.',
+              'parameters': <String, dynamic>{
+                'type': 'object',
+                'properties': <String, dynamic>{
+                  'title': <String, dynamic>{'type': 'string'},
+                  'description': <String, dynamic>{'type': 'string'},
+                  'idempotency_key': <String, dynamic>{'type': 'string'},
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(response.statusCode, HttpStatus.ok);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final choice = (decoded['choices'] as List).single as Map<String, dynamic>;
+    expect(choice['finish_reason'], 'tool_calls');
+    final message = choice['message'] as Map<String, dynamic>;
+    final calls = message['tool_calls'] as List;
+    final call = calls.single as Map<String, dynamic>;
+    final function = call['function'] as Map<String, dynamic>;
+    expect(function['name'], 'create_task');
+    final arguments = jsonDecode(function['arguments'].toString());
+    expect(arguments['title'], 'Buy milk');
+    expect(arguments['idempotency_key'], 'personal_pilot:session:');
+  });
+}
+
+LocalModelDescriptor _testDescriptor(
+  List<int> bytes, {
+  String? expectedSha256,
+}) {
+  return LocalModelDescriptor(
+    id: 'test-model',
+    displayName: 'Test Model',
+    modelName: 'test-model',
+    repository: 'example/test-model',
+    revision: 'revision',
+    fileName: 'test.litertlm',
+    downloadUrl: 'https://example.test/test.litertlm',
+    expectedBytes: bytes.length,
+    expectedSha256: expectedSha256 ?? sha256.convert(bytes).toString(),
+    license: 'Apache-2.0',
+  );
+}
+
+Future<void> _makeExecutable(String path) async {
+  if (Platform.isWindows) {
+    return;
+  }
+  final result = await Process.run('chmod', <String>['755', path]);
+  if (result.exitCode != 0) {
+    throw StateError('chmod failed: ${result.stderr}');
+  }
+}
+
+Future<int> _freePort() async {
+  final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+  final port = socket.port;
+  await socket.close();
+  return port;
+}
+
+ProcessSupervisor _testProcessSupervisor(Directory root) {
+  final supervisor = ProcessSupervisor(
+    logDirectory: '${root.path}/logs',
+    workspaceRoot: root.path,
+  );
+  addTearDown(supervisor.close);
+  return supervisor;
+}
+
+AppConfig _testConfig({
+  String litertLmExecutable = 'litert_lm',
+  String localModelBaseUrl = 'http://127.0.0.1:0',
+}) {
+  return AppConfig(
+    agentApiBaseUrl: 'http://127.0.0.1:1/api',
+    agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
+    agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
+    memoryMcpUrl: 'http://127.0.0.1:1/mcp',
+    agentAppName: 'test',
+    agentUserId: 'user',
+    workspaceRoot: '/tmp/agentawesome-local-model-test',
+    autoStartLocalServices: false,
+    runtimeProfilePath: '',
+    litertLmExecutable: litertLmExecutable,
+    localModelBaseUrl: localModelBaseUrl,
+  );
+}

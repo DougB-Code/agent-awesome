@@ -3,12 +3,14 @@ library;
 
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
+import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:agentawesome_ui/domain/screen_command.dart';
 import 'package:agentawesome_ui/ui/aurora_shell.dart';
+import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Runs widget tests for the shell.
 void main() {
   testWidgets('renders home workspace without local demo data', (tester) async {
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
 
     await tester.pumpWidget(
       MaterialApp(home: AuroraShell(controller: controller)),
@@ -28,12 +30,89 @@ void main() {
     expect(find.text('Prepare investor meeting brief'), findsNothing);
   });
 
+  testWidgets('walks through first-launch model setup', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final settingsStore = _MemoryAppSettingsStore();
+    final controller = AuroraAppController(
+      config: _testConfig(),
+      appSettingsStore: settingsStore,
+    );
+    final profile = _settingsProfile();
+    controller.runtimeProfile = profile.copyWith(
+      harness: profile.harness.copyWith(
+        modelConfigPath: '/tmp/onboarding-model.yaml',
+      ),
+    );
+    controller.runtimeProfilePath = '/tmp/personal.json';
+
+    await tester.pumpWidget(
+      MaterialApp(home: SetupWizardShell(controller: controller)),
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('getting-started-wizard')),
+      findsOneWidget,
+    );
+    expect(find.text('Connect your model'), findsOneWidget);
+    expect(find.text('Use API key'), findsOneWidget);
+    expect(find.text('Run local model'), findsOneWidget);
+    expect(find.textContaining('go run'), findsNothing);
+
+    await tester.tap(find.text('Connect provider'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add your API key'), findsOneWidget);
+    expect(find.text('Provider'), findsOneWidget);
+    expect(find.text('Model'), findsOneWidget);
+    expect(find.text('Verify connection'), findsOneWidget);
+
+    await tester.tap(find.text('Use local model instead'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Run a local model'), findsOneWidget);
+    expect(find.text('System check'), findsOneWidget);
+    expect(find.textContaining('gemma-4-E2B-it.litertlm'), findsOneWidget);
+    expect(find.textContaining('Apache-2.0'), findsOneWidget);
+    expect(find.text('View source'), findsOneWidget);
+    expect(find.text('Learn more'), findsNothing);
+    expect(find.text('Download and continue'), findsOneWidget);
+    expect(controller.gettingStartedCompleted, isFalse);
+    expect(settingsStore.saved.gettingStartedCompleted, isFalse);
+  });
+
+  testWidgets('keeps the app shell chat unlocked during first setup', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+    controller.appSettings = const AuroraAppSettings();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuroraShell(controller: controller)),
+    );
+
+    expect(controller.hasConfiguredModel, isTrue);
+    expect(controller.canStartChat, isTrue);
+    expect(find.text('Connect your model'), findsNothing);
+    expect(find.byTooltip('New chat'), findsOneWidget);
+
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('CONVERSATION'), findsOneWidget);
+  });
+
   testWidgets('opens settings command workspace', (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
     controller.runtimeProfile = _settingsProfile();
     controller.runtimeProfilePath = '/tmp/personal.json';
     controller.availableProfiles = const <RuntimeProfileFileEntry>[
@@ -215,7 +294,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
     controller.runtimeProfile = _settingsProfile();
     controller.runtimeProfilePath = '/tmp/personal.json';
     controller.availableProfiles = const <RuntimeProfileFileEntry>[
@@ -365,12 +444,47 @@ void main() {
     );
   });
 
+  testWidgets('keeps chat navigation unlocked without a configured model', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _unconfiguredModelController();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuroraShell(controller: controller)),
+    );
+
+    expect(controller.hasConfiguredModel, isFalse);
+    expect(controller.canStartChat, isTrue);
+    expect(find.byTooltip('New chat'), findsOneWidget);
+    expect(find.text('Setup incomplete'), findsOneWidget);
+
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('CONVERSATION'), findsOneWidget);
+
+    await tester.tap(find.text('Memory'));
+    await tester.pumpAndSettle();
+    expect(find.text('SEARCH'), findsOneWidget);
+    expect(find.text('No memory records'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('global-command-input')),
+    );
+    await tester.pump();
+    expect(find.text('No profiles configured'), findsNothing);
+    expect(find.text('Chat'), findsWidgets);
+  });
+
   testWidgets('opens memory stewardship workspace', (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
     controller.workspace = _memoryWorkspace();
 
     await tester.pumpWidget(
@@ -386,6 +500,71 @@ void main() {
     expect(find.text('MEMORY'), findsOneWidget);
   });
 
+  testWidgets('shows memory-backed route errors as generic pages', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+    controller.memoryMessage =
+        'Personal Memory: McpException: HTTP 401 from http://127.0.0.1:8070/api/context/tools/call';
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuroraShell(controller: controller)),
+    );
+
+    await tester.tap(find.text('Memory'));
+    await tester.pumpAndSettle();
+    expect(find.text('Memory service unavailable'), findsOneWidget);
+    expect(find.text('Connection failed'), findsOneWidget);
+    expect(find.textContaining('HTTP 401'), findsOneWidget);
+    expect(find.text('Try again'), findsOneWidget);
+    expect(find.text('SEARCH'), findsNothing);
+    expect(find.text('OVERVIEW'), findsNothing);
+    expect(find.text('No memory records'), findsNothing);
+
+    await tester.tap(find.text('Timeline'));
+    await tester.pumpAndSettle();
+    expect(find.text('Memory service unavailable'), findsOneWidget);
+    expect(find.text('Topic Timelines'), findsNothing);
+
+    await tester.tap(find.text('People'));
+    await tester.pumpAndSettle();
+    expect(find.text('Memory service unavailable'), findsOneWidget);
+    expect(find.text('No entities in memory'), findsNothing);
+  });
+
+  testWidgets('shows files as agent files with add-file empty action', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AuroraShell(controller: controller)),
+    );
+
+    await tester.tap(find.text('Files'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Files for your agent.'), findsOneWidget);
+    expect(find.text('Add file'), findsOneWidget);
+    expect(
+      find.text('Immutable evidence and source material from memory.'),
+      findsNothing,
+    );
+    expect(find.text('No source evidence loaded'), findsNothing);
+
+    await tester.tap(find.text('Add file'));
+    await tester.pumpAndSettle();
+    expect(find.text('File import is not connected yet'), findsOneWidget);
+  });
+
   testWidgets('opens backlog workspace with queue and inspector', (
     tester,
   ) async {
@@ -393,7 +572,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
     controller.workspace = const ProjectWorkspace(
       title: 'Workspace',
       subtitle: 'Live connected workspace',
@@ -507,7 +686,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final controller = AuroraAppController(config: _testConfig());
+      final controller = _readyController();
       controller.workspace = const ProjectWorkspace(
         title: 'Workspace',
         subtitle: 'Live connected workspace',
@@ -572,7 +751,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
     controller.workspace = const ProjectWorkspace(
       title: 'Workspace',
       subtitle: 'Live connected workspace',
@@ -623,7 +802,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
     controller.workspace = const ProjectWorkspace(
       title: 'Workspace',
       subtitle: 'Live connected workspace',
@@ -670,7 +849,7 @@ void main() {
   testWidgets('loads workflow content inside the persistent app shell', (
     tester,
   ) async {
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
 
     await tester.pumpWidget(
       MaterialApp(home: AuroraShell(controller: controller)),
@@ -691,7 +870,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
 
     await tester.pumpWidget(
       MaterialApp(home: AuroraShell(controller: controller)),
@@ -714,7 +893,7 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
 
     await tester.pumpWidget(
       MaterialApp(home: AuroraShell(controller: controller)),
@@ -737,7 +916,7 @@ void main() {
   testWidgets('cycles and filters workflow command panel content', (
     tester,
   ) async {
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
     controller.workspace = const ProjectWorkspace(
       title: 'Workspace',
       subtitle: 'Live connected workspace',
@@ -780,7 +959,7 @@ void main() {
   });
 
   testWidgets('collapses sidebar without layout overflow', (tester) async {
-    final controller = AuroraAppController(config: _testConfig());
+    final controller = _readyController();
 
     await tester.pumpWidget(
       MaterialApp(home: AuroraShell(controller: controller)),
@@ -794,6 +973,69 @@ void main() {
     expect(find.byIcon(Icons.menu), findsOneWidget);
     expect(find.text('AURORA'), findsNothing);
   });
+}
+
+AuroraAppController _readyController() {
+  final controller = AuroraAppController(config: _testConfig());
+  controller.appSettings = const AuroraAppSettings(
+    gettingStartedCompleted: true,
+  );
+  controller.runtimeProfile = _settingsProfile();
+  controller.runtimeProfilePath = '/tmp/personal.json';
+  controller.availableModelConfigs = const <ConfigFileEntry>[
+    ConfigFileEntry(
+      path: '/tmp/model.yaml',
+      kind: ConfigFileKind.model,
+      assigned: true,
+      displayName: 'Configured Model',
+      modelChoices: <ModelConfigChoice>[
+        ModelConfigChoice(
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          modelId: 'gpt-5.4-mini',
+          modelName: 'GPT-5.4 Mini',
+          isDefault: true,
+        ),
+      ],
+    ),
+  ];
+  return controller;
+}
+
+AuroraAppController _unconfiguredModelController() {
+  final controller = AuroraAppController(config: _testConfig());
+  controller.appSettings = const AuroraAppSettings(
+    gettingStartedCompleted: true,
+  );
+  controller.runtimeProfile = _settingsProfile();
+  controller.runtimeProfilePath = '/tmp/personal.json';
+  controller.availableModelConfigs = const <ConfigFileEntry>[
+    ConfigFileEntry(
+      path: '/tmp/model.yaml',
+      kind: ConfigFileKind.model,
+      assigned: true,
+      displayName: 'Empty Model',
+    ),
+  ];
+  return controller;
+}
+
+class _MemoryAppSettingsStore extends AuroraAppSettingsStore {
+  _MemoryAppSettingsStore();
+
+  AuroraAppSettings saved = const AuroraAppSettings();
+
+  /// Loads the latest in-memory app settings.
+  @override
+  Future<AuroraAppSettings> load() async {
+    return saved;
+  }
+
+  /// Saves app settings in memory for widget assertions.
+  @override
+  Future<void> save(AuroraAppSettings settings) async {
+    saved = settings;
+  }
 }
 
 ProjectWorkspace _memoryWorkspace() {

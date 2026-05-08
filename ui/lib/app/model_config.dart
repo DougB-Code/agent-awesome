@@ -10,6 +10,7 @@ const List<String> supportedModelAdapters = <String>[
   'openai',
   'anthropic',
   'google',
+  'litert',
 ];
 
 /// ModelConfigDocument represents one model config YAML file.
@@ -97,6 +98,7 @@ class ModelProviderConfig {
     required this.defaultModel,
     required this.url,
     required this.models,
+    this.executable = '',
     this.extra = const <String, dynamic>{},
   });
 
@@ -124,6 +126,9 @@ class ModelProviderConfig {
   /// Provider endpoint URL.
   final String url;
 
+  /// Provider-local executable path or command.
+  final String executable;
+
   /// Models configured for this provider.
   final List<ModelConfigModel> models;
 
@@ -146,6 +151,7 @@ class ModelProviderConfig {
       ..remove('api_key')
       ..remove('default')
       ..remove('url')
+      ..remove('executable')
       ..remove('models');
     return ModelProviderConfig(
       id: id,
@@ -154,6 +160,7 @@ class ModelProviderConfig {
       apiKey: _configString(map['api-key'] ?? map['api_key']),
       defaultModel: _configString(map['default']),
       url: _configString(map['url']),
+      executable: _configString(map['executable']),
       models: models,
       extra: extra,
     );
@@ -167,6 +174,7 @@ class ModelProviderConfig {
     String? apiKey,
     String? defaultModel,
     String? url,
+    String? executable,
     List<ModelConfigModel>? models,
     Map<String, dynamic>? extra,
   }) {
@@ -177,6 +185,7 @@ class ModelProviderConfig {
       apiKey: apiKey ?? this.apiKey,
       defaultModel: defaultModel ?? this.defaultModel,
       url: url ?? this.url,
+      executable: executable ?? this.executable,
       models: models ?? this.models,
       extra: extra ?? this.extra,
     );
@@ -191,6 +200,7 @@ class ModelProviderConfig {
       if (apiKey.isNotEmpty) 'api-key': apiKey,
       'default': defaultModel,
       if (url.isNotEmpty) 'url': url,
+      if (executable.isNotEmpty) 'executable': executable,
       'models': models.map((model) => model.toJson()).toList(),
     };
   }
@@ -202,6 +212,7 @@ class ModelConfigModel {
   const ModelConfigModel({
     required this.id,
     required this.model,
+    this.path = '',
     this.extra = const <String, dynamic>{},
   });
 
@@ -211,6 +222,9 @@ class ModelConfigModel {
   /// Provider-specific model name sent to the API.
   final String model;
 
+  /// Local artifact path for file-backed model adapters.
+  final String path;
+
   /// Model fields preserved outside the known schema.
   final Map<String, dynamic> extra;
 
@@ -218,10 +232,12 @@ class ModelConfigModel {
   factory ModelConfigModel.fromMap(Map<String, dynamic> map) {
     final extra = Map<String, dynamic>.from(map)
       ..remove('id')
-      ..remove('model');
+      ..remove('model')
+      ..remove('path');
     return ModelConfigModel(
       id: _configString(map['id']),
       model: _configString(map['model']),
+      path: _configString(map['path']),
       extra: extra,
     );
   }
@@ -230,18 +246,25 @@ class ModelConfigModel {
   ModelConfigModel copyWith({
     String? id,
     String? model,
+    String? path,
     Map<String, dynamic>? extra,
   }) {
     return ModelConfigModel(
       id: id ?? this.id,
       model: model ?? this.model,
+      path: path ?? this.path,
       extra: extra ?? this.extra,
     );
   }
 
   /// Encodes the model as JSON-compatible data.
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{'id': id, 'model': model, ...extra};
+    return <String, dynamic>{
+      'id': id,
+      'model': model,
+      if (path.isNotEmpty) 'path': path,
+      ...extra,
+    };
   }
 }
 
@@ -294,10 +317,16 @@ ModelProviderConfig newModelProviderConfig(String id) {
     apiKey: '',
     defaultModel: 'model',
     url: '',
+    executable: '',
     models: const <ModelConfigModel>[
       ModelConfigModel(id: 'model', model: 'provider-model-name'),
     ],
   );
+}
+
+/// Returns an empty model config for first-run provider setup.
+ModelConfigDocument emptyModelConfigDocument() {
+  return const ModelConfigDocument(defaultRef: '', providers: []);
 }
 
 /// Encodes one provider as YAML in the shape used under `providers`.

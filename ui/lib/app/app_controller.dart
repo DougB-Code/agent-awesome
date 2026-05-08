@@ -23,8 +23,13 @@ import 'app_settings.dart';
 import 'chat_history.dart';
 import 'config_files.dart';
 import 'credential_store.dart';
+import 'local_model_runtime.dart';
 import 'local_services.dart';
+import 'model_config.dart';
+import 'onboarding_model_setup.dart';
+import 'process_supervisor.dart';
 import 'runtime_profile.dart';
+import 'system_capabilities.dart';
 import 'tool_config.dart';
 
 const List<String> _requiredTaskProjectionTools = <String>[
@@ -84,12 +89,14 @@ class RuntimeProfileFileEntry {
 /// AuroraAppController stores app state and service orchestration.
 class AuroraAppController extends ChangeNotifier {
   /// Creates the app controller and its service clients.
-  AuroraAppController({
-    required this.config,
+  factory AuroraAppController({
+    required AppConfig config,
+    ProcessSupervisor? processSupervisor,
     AssistantClient? assistantClient,
     MemoryClient? memoryClient,
     TasksClient? tasksClient,
     LocalServiceSupervisor? localServices,
+    LocalModelRuntime? localModels,
     ConfigFileStore? configFiles,
     AuroraAppSettingsStore? appSettingsStore,
     ChatHistoryStore? chatHistoryStore,
@@ -97,58 +104,113 @@ class AuroraAppController extends ChangeNotifier {
     ChatTitleClient? titleClient,
     ScreenCommandPlanner? screenCommandPlanner,
     AppLogger? logger,
-  }) : _assistantClientInjected = assistantClient != null,
-       _memoryClientInjected = memoryClient != null,
-       _tasksClientInjected = tasksClient != null,
-       _screenCommandPlannerInjected = screenCommandPlanner != null,
-       logger = logger ?? AppLogger(directory: config.serviceLogDirectory),
-       assistantClient =
-           assistantClient ??
-           AssistantClient(
-             baseUrl: config.agentApiBaseUrl,
-             appName: config.agentAppName,
-             userId: config.agentUserId,
-             logger: logger ?? AppLogger(directory: config.serviceLogDirectory),
-           ),
-       memoryClient =
-           memoryClient ??
-           MemoryClient(
-             rpc: GatewayContextClient(
-               baseUrl: config.agentGatewayContextBaseUrl,
-               logger:
-                   logger ?? AppLogger(directory: config.serviceLogDirectory),
-             ),
-           ),
-       tasksClient =
-           tasksClient ??
-           TasksClient(
-             rpc: GatewayContextClient(
-               baseUrl: config.agentGatewayContextBaseUrl,
-               logger:
-                   logger ?? AppLogger(directory: config.serviceLogDirectory),
-             ),
-           ),
-       localServices = localServices ?? LocalServiceSupervisor(config: config),
-       configFiles = configFiles ?? const ConfigFileStore(),
-       appSettingsStore = appSettingsStore ?? const AuroraAppSettingsStore(),
-       chatHistoryStore = chatHistoryStore ?? const ChatHistoryStore(),
-       credentialStore = credentialStore ?? const CredentialStore(),
-       titleClient =
-           titleClient ??
-           ChatTitleClient(
-             logger: logger ?? AppLogger(directory: config.serviceLogDirectory),
-           ),
-       screenCommandPlanner =
-           screenCommandPlanner ??
-           ScreenCommandClient(
-             logger: logger ?? AppLogger(directory: config.serviceLogDirectory),
-           );
+  }) {
+    final effectiveLogger =
+        logger ?? AppLogger(directory: config.serviceLogDirectory);
+    final effectiveProcessSupervisor =
+        processSupervisor ??
+        ProcessSupervisor(
+          logDirectory: config.serviceLogDirectory,
+          workspaceRoot: config.workspaceRoot,
+        );
+    final commandRunner = ProcessSupervisorCommandRunner(
+      effectiveProcessSupervisor,
+    );
+    return AuroraAppController._(
+      config: config,
+      processSupervisor: effectiveProcessSupervisor,
+      logger: effectiveLogger,
+      assistantClient:
+          assistantClient ??
+          AssistantClient(
+            baseUrl: config.agentApiBaseUrl,
+            appName: config.agentAppName,
+            userId: config.agentUserId,
+            logger: effectiveLogger,
+          ),
+      memoryClient:
+          memoryClient ??
+          MemoryClient(
+            rpc: GatewayContextClient(
+              baseUrl: config.agentGatewayContextBaseUrl,
+              headers: config.gatewayAuthHeaders,
+              logger: effectiveLogger,
+            ),
+          ),
+      tasksClient:
+          tasksClient ??
+          TasksClient(
+            rpc: GatewayContextClient(
+              baseUrl: config.agentGatewayContextBaseUrl,
+              headers: config.gatewayAuthHeaders,
+              logger: effectiveLogger,
+            ),
+          ),
+      localServices:
+          localServices ??
+          LocalServiceSupervisor(
+            config: config,
+            processSupervisor: effectiveProcessSupervisor,
+          ),
+      localModels:
+          localModels ??
+          LiteRtLocalModelRuntime(
+            config: config,
+            processSupervisor: effectiveProcessSupervisor,
+          ),
+      configFiles: configFiles ?? const ConfigFileStore(),
+      appSettingsStore: appSettingsStore ?? const AuroraAppSettingsStore(),
+      chatHistoryStore: chatHistoryStore ?? const ChatHistoryStore(),
+      credentialStore:
+          credentialStore ?? CredentialStore(commandRunner: commandRunner),
+      titleClient:
+          titleClient ??
+          ChatTitleClient(
+            localModelChatCompletionsUrl: config.localModelChatCompletionsUrl,
+            logger: effectiveLogger,
+          ),
+      screenCommandPlanner:
+          screenCommandPlanner ?? ScreenCommandClient(logger: effectiveLogger),
+      assistantClientInjected: assistantClient != null,
+      memoryClientInjected: memoryClient != null,
+      tasksClientInjected: tasksClient != null,
+      screenCommandPlannerInjected: screenCommandPlanner != null,
+    );
+  }
+
+  /// Creates the controller after dependencies have been resolved once.
+  AuroraAppController._({
+    required this.config,
+    required this.processSupervisor,
+    required this.logger,
+    required this.assistantClient,
+    required this.memoryClient,
+    required this.tasksClient,
+    required this.localServices,
+    required this.localModels,
+    required this.configFiles,
+    required this.appSettingsStore,
+    required this.chatHistoryStore,
+    required this.credentialStore,
+    required this.titleClient,
+    required this.screenCommandPlanner,
+    required bool assistantClientInjected,
+    required bool memoryClientInjected,
+    required bool tasksClientInjected,
+    required bool screenCommandPlannerInjected,
+  }) : _assistantClientInjected = assistantClientInjected,
+       _memoryClientInjected = memoryClientInjected,
+       _tasksClientInjected = tasksClientInjected,
+       _screenCommandPlannerInjected = screenCommandPlannerInjected;
 
   /// Runtime service configuration.
   final AppConfig config;
 
   /// File logger for UI and client diagnostics.
   final AppLogger logger;
+
+  /// Shared owner for all app-started subprocesses.
+  final ProcessSupervisor processSupervisor;
 
   /// ADK assistant client.
   AssistantClient assistantClient;
@@ -161,6 +223,9 @@ class AuroraAppController extends ChangeNotifier {
 
   /// Local process supervisor for the pilot service stack.
   final LocalServiceSupervisor localServices;
+
+  /// Local model installer and runtime supervisor.
+  final LocalModelRuntime localModels;
 
   /// File store for editable model and agent configurations.
   final ConfigFileStore configFiles;
@@ -212,8 +277,12 @@ class AuroraAppController extends ChangeNotifier {
 
   Future<void>? _initialization;
   bool _initialized = false;
+  bool _shellDecisionReady = false;
   bool _clientsClosed = false;
   Future<void>? _localServicesCloseFuture;
+  Future<void>? _localModelsCloseFuture;
+  Future<void>? _closeFuture;
+  bool _closing = false;
 
   /// All known chat sessions.
   List<ChatSession> sessions = const <ChatSession>[];
@@ -365,8 +434,16 @@ class AuroraAppController extends ChangeNotifier {
 
   /// Loads initial service data from connected services.
   Future<void> initialize() async {
+    if (_isClosing) {
+      return;
+    }
     _initialization ??= _initialize();
     return _initialization!;
+  }
+
+  /// Returns whether startup settings have resolved the initial app shell.
+  bool get shellDecisionReady {
+    return _shellDecisionReady;
   }
 
   Future<void> _ensureInitialized() async {
@@ -376,12 +453,29 @@ class AuroraAppController extends ChangeNotifier {
     await initialize();
   }
 
+  /// Returns whether app-managed runtime shutdown has started.
+  bool get _isClosing {
+    return _closing || processSupervisor.isClosing;
+  }
+
+  /// Rejects work that could start subprocesses during shutdown.
+  void _throwIfClosing() {
+    if (_isClosing) {
+      throw StateError('Aurora runtime is shutting down');
+    }
+  }
+
   Future<void> _initialize() async {
     await _log('initialize start');
     localProcessStatuses = const <ServiceProcessStatus>[];
     try {
       appSettings = await appSettingsStore.load();
+      _shellDecisionReady = true;
+      notifyListeners();
       chatHistory = await chatHistoryStore.load();
+      await _log(
+        'loaded chat history ${chatHistory.length} from ${chatHistoryPath()}',
+      );
       final loader = RuntimeProfileLoader(config);
       final profileFile = await _resolveInitialProfileFile(loader);
       await _log('resolved runtime profile ${profileFile.path}');
@@ -393,6 +487,7 @@ class AuroraAppController extends ChangeNotifier {
       await _log('loaded runtime profile ${runtimeProfile!.id}');
     } catch (error) {
       await _log('runtime profile load failed: $error');
+      _shellDecisionReady = true;
       runtimeProfile = null;
       runtimeProfilePath = config.runtimeProfilePath;
       endpointStatuses = <EndpointStatus>[
@@ -425,7 +520,14 @@ class AuroraAppController extends ChangeNotifier {
         ),
     ];
     notifyListeners();
+    if (_isClosing) {
+      statusMessage = 'Aurora runtime is shutting down';
+      _initialized = true;
+      notifyListeners();
+      return;
+    }
     try {
+      _throwIfClosing();
       await _log('starting required local services');
       localProcessStatuses = await localServices.startRequiredServices(
         runtimeProfile!,
@@ -446,6 +548,17 @@ class AuroraAppController extends ChangeNotifier {
           message: error.toString(),
         ),
       ];
+    }
+    try {
+      await _startConfiguredLocalModelRuntime();
+    } catch (error) {
+      if (_isClosing) {
+        statusMessage = 'Aurora runtime is shutting down';
+        _initialized = true;
+        notifyListeners();
+        return;
+      }
+      await _log('local model startup failed: $error');
     }
     notifyListeners();
     await _loadToolCapabilities();
@@ -504,6 +617,63 @@ class AuroraAppController extends ChangeNotifier {
     return entries;
   }
 
+  /// Starts an already installed local model when the active config selects it.
+  Future<void> _startConfiguredLocalModelRuntime() async {
+    _throwIfClosing();
+    final provider = await _activeLocalProviderConfig();
+    if (provider == null) {
+      return;
+    }
+    final descriptor = onboardingLocalModelDescriptor(provider.defaultModel);
+    if (!await localModels.isInstalled(descriptor)) {
+      final status = ServiceProcessStatus(
+        name: 'Local model',
+        url: config.localModelHealthUrl,
+        state: ConnectionStateKind.disconnected,
+        message: '${descriptor.displayName} is not installed',
+      );
+      localProcessStatuses = <ServiceProcessStatus>[
+        ...localProcessStatuses.where((item) => item.name != 'Local model'),
+        status,
+      ];
+      await _log('local model not installed: ${descriptor.id}');
+      return;
+    }
+    final status = await localModels.start(descriptor);
+    localProcessStatuses = <ServiceProcessStatus>[
+      ...localProcessStatuses.where((item) => item.name != 'Local model'),
+      status,
+    ];
+    await _log('local model status ${status.state.name}: ${status.message}');
+  }
+
+  /// Returns the active local provider from the current model config.
+  Future<ModelProviderConfig?> _activeLocalProviderConfig() async {
+    final profile = runtimeProfile;
+    if (profile == null) {
+      return null;
+    }
+    final path = profile.harness.modelConfigPath.trim();
+    if (path.isEmpty) {
+      return null;
+    }
+    final file = File(path);
+    if (!await file.exists()) {
+      return null;
+    }
+    final document = ModelConfigDocument.parse(await file.readAsString());
+    final defaultProvider = document.defaultRef.split(':').first.trim();
+    if (defaultProvider != 'local') {
+      return null;
+    }
+    for (final provider in document.providers) {
+      if (provider.id == defaultProvider && provider.adapter == 'litert') {
+        return provider;
+      }
+    }
+    return null;
+  }
+
   /// Reloads profile, model, and agent file collection metadata.
   Future<void> _refreshConfigCollections() async {
     final profile = runtimeProfile;
@@ -537,12 +707,54 @@ class AuroraAppController extends ChangeNotifier {
 
   /// Returns the model config path used for app-owned chat title summaries.
   String get summaryModelConfigPath {
-    return appSettings.summaryModelConfigPath.trim();
+    final configured = appSettings.summaryModelConfigPath.trim();
+    if (configured.isNotEmpty) {
+      return configured;
+    }
+    return runtimeProfile?.harness.modelConfigPath.trim() ?? '';
   }
 
   /// Returns the provider:model ref used for app-owned chat title summaries.
   String get summaryModelRef {
     return appSettings.summaryModelRef.trim();
+  }
+
+  /// Returns whether the first-launch setup guide should stay hidden.
+  bool get gettingStartedCompleted {
+    return appSettings.gettingStartedCompleted;
+  }
+
+  /// Returns whether the active profile has at least one selectable model.
+  bool get hasConfiguredModel {
+    final profile = runtimeProfile;
+    if (profile == null) {
+      return false;
+    }
+    final modelConfigPath = profile.harness.modelConfigPath.trim();
+    if (modelConfigPath.isEmpty) {
+      return false;
+    }
+    for (final entry in availableModelConfigs) {
+      if (entry.path == modelConfigPath || entry.assigned) {
+        return entry.modelChoices.isNotEmpty;
+      }
+    }
+    return false;
+  }
+
+  /// Returns whether the UI should allow user-initiated chat entry points.
+  bool get canStartChat {
+    return true;
+  }
+
+  /// Returns the standard user-facing message for model-gated surfaces.
+  String get modelRequiredMessage {
+    return 'Set up a model to use model-backed responses.';
+  }
+
+  /// Returns the current reason chat entry points are unavailable.
+  String get chatUnavailableMessage {
+    return modelRequiredMessage;
   }
 
   /// Returns the selected chat history key, if a chat is active.
@@ -607,6 +819,175 @@ class AuroraAppController extends ChangeNotifier {
   Future<void> setChatTitleSummariesEnabled(bool enabled) async {
     await saveAppSettings(
       appSettings.copyWith(chatTitleSummariesEnabled: enabled),
+    );
+  }
+
+  /// Shows or hides the first-launch setup guide.
+  Future<void> setGettingStartedCompleted(bool completed) async {
+    await saveAppSettings(
+      appSettings.copyWith(gettingStartedCompleted: completed),
+    );
+  }
+
+  /// Reads local system capability facts through supervised probes.
+  Future<SystemCapabilitySnapshot> readSystemCapabilities() {
+    return SystemCapabilityReader(
+      commandRunner: ProcessSupervisorCommandRunner(processSupervisor),
+    ).read();
+  }
+
+  /// Stores a cloud API key and makes the selected model the active default.
+  Future<OnboardingModelSetupResult> configureOnboardingCloudModel({
+    required String providerId,
+    required String modelId,
+    required String apiKey,
+  }) async {
+    if (_isClosing) {
+      return const OnboardingModelSetupResult(
+        success: false,
+        message: 'Aurora runtime is shutting down',
+      );
+    }
+    final provider = onboardingCloudProviderById(providerId);
+    final trimmedKey = apiKey.trim();
+    if (trimmedKey.isEmpty) {
+      return const OnboardingModelSetupResult(
+        success: false,
+        message: 'API key is required',
+      );
+    }
+    final credentialResult = await credentialStore.store(
+      reference: provider.credentialReference,
+      secret: trimmedKey,
+    );
+    if (!credentialResult.success) {
+      return OnboardingModelSetupResult(
+        success: false,
+        message: credentialResult.message,
+        providerName: provider.name,
+        modelId: modelId,
+      );
+    }
+    final result = await _saveOnboardingProviderConfig(
+      provider.toProviderConfig(modelId: modelId),
+    );
+    if (!result.success) {
+      return result;
+    }
+    return OnboardingModelSetupResult(
+      success: true,
+      message: 'Model connection saved',
+      providerName: provider.name,
+      modelId: provider.modelForId(modelId).id,
+    );
+  }
+
+  /// Makes a local LiteRT model artifact the active default.
+  Future<OnboardingModelSetupResult> configureOnboardingLocalModel({
+    required String modelId,
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    if (_isClosing) {
+      return const OnboardingModelSetupResult(
+        success: false,
+        message: 'Aurora runtime is shutting down',
+        providerName: 'Local model',
+      );
+    }
+    final model = onboardingLocalModelById(modelId);
+    final descriptor = onboardingLocalModelDescriptor(model.id);
+    late final LocalModelInstall install;
+    late final String executable;
+    try {
+      _throwIfClosing();
+      install = await localModels.ensureInstalled(
+        descriptor,
+        onProgress: onProgress,
+      );
+      _throwIfClosing();
+      executable = await const LocalModelExecutableResolver().resolve(
+        configuredExecutable: config.litertLmExecutable,
+        dataDirectory: auroraDataDirectoryPath(),
+      );
+    } catch (error) {
+      return OnboardingModelSetupResult(
+        success: false,
+        message: error.toString(),
+        providerName: 'Local model',
+        modelId: model.id,
+      );
+    }
+    onProgress?.call(
+      const LocalModelInstallProgress(
+        phase: 'saving',
+        message: 'Saving local model configuration',
+      ),
+    );
+    final result = await _saveOnboardingProviderConfig(
+      onboardingLocalProviderConfig(
+        modelId: model.id,
+        executable: executable,
+        modelPath: install.modelPath,
+      ),
+    );
+    if (!result.success) {
+      return result;
+    }
+    return OnboardingModelSetupResult(
+      success: true,
+      message: 'Local model saved',
+      providerName: 'Local model',
+      modelId: model.id,
+    );
+  }
+
+  /// Writes the active model provider into the current model config file.
+  Future<OnboardingModelSetupResult> _saveOnboardingProviderConfig(
+    ModelProviderConfig provider,
+  ) async {
+    final profile = runtimeProfile;
+    if (profile == null) {
+      return const OnboardingModelSetupResult(
+        success: false,
+        message: 'Runtime profile is not loaded',
+      );
+    }
+    final path = profile.harness.modelConfigPath.trim();
+    if (path.isEmpty) {
+      return const OnboardingModelSetupResult(
+        success: false,
+        message: 'Model config path is not configured',
+      );
+    }
+    final file = File(path);
+    final content = await file.exists() ? await file.readAsString() : '';
+    final document = ModelConfigDocument.parse(content);
+    final providers = await _configuredModelProviders(
+      document,
+      replacingProvider: provider,
+    );
+    final next = document.copyWith(
+      defaultRef: modelProviderDefaultRef(provider),
+      providers: providers,
+    );
+    final validationError = modelConfigValidationError(next);
+    if (validationError.isNotEmpty) {
+      return OnboardingModelSetupResult(
+        success: false,
+        message: validationError,
+        providerName: provider.displayName,
+        modelId: provider.defaultModel,
+      );
+    }
+    await saveConfigurationFile(path, next.toYaml());
+    await refreshConfigurationCollections();
+    statusMessage = 'Model configured: ${provider.displayName}';
+    notifyListeners();
+    return OnboardingModelSetupResult(
+      success: true,
+      message: 'Model config saved',
+      providerName: provider.displayName,
+      modelId: provider.defaultModel,
     );
   }
 
@@ -829,11 +1210,10 @@ class AuroraAppController extends ChangeNotifier {
     if (config.runtimeProfilePath.trim().isNotEmpty) {
       return profile;
     }
+    final storageProfile = _withDefaultMemoryStorage(profile);
     final harness = profile.harness;
-    final modelPath = await _copyConfigIntoAppDirectory(
+    final modelPath = await _ensureSharedModelConfig(
       sourcePath: harness.modelConfigPath,
-      targetDirectory: modelConfigsDirectoryPath(),
-      targetName: '${profile.id}-model.yaml',
     );
     final agentPath = await _copyConfigIntoAppDirectory(
       sourcePath: harness.agentConfigPath,
@@ -846,16 +1226,16 @@ class AuroraAppController extends ChangeNotifier {
       targetName: '${profile.id}-tool.yaml',
     );
     final serverPaths = await _copyRequiredServerConfigsIntoAppDirectory(
-      profile,
+      storageProfile,
     );
     final graphToolPath = await _writeDefaultGraphToolConfig(
-      profile: profile,
+      profile: storageProfile,
       requestedPath: toolPath ?? harness.toolConfigPath,
       targetName: '${profile.id}-tool.yaml',
     );
-    final next = profile.copyWith(
+    final next = storageProfile.copyWith(
       harness: harness.copyWith(
-        modelConfigPath: modelPath ?? harness.modelConfigPath,
+        modelConfigPath: modelPath,
         agentConfigPath: agentPath ?? harness.agentConfigPath,
         toolConfigPath: graphToolPath,
       ),
@@ -870,6 +1250,122 @@ class AuroraAppController extends ChangeNotifier {
       await file.writeAsString(encodeRuntimeProfileJson(next));
     }
     return next;
+  }
+
+  /// Places default managed memory files in the OS app data directory.
+  RuntimeProfile _withDefaultMemoryStorage(RuntimeProfile profile) {
+    return profile.copyWith(
+      mcpServers: profile.mcpServers.map((server) {
+        if (server.kind != 'memory' || !server.autoStart) {
+          return server;
+        }
+        return server.copyWith(
+          arguments: _memoryStorageArguments(server.arguments),
+        );
+      }).toList(),
+    );
+  }
+
+  /// Creates or migrates the shared model config referenced by all profiles.
+  Future<String> _ensureSharedModelConfig({required String sourcePath}) async {
+    final target = File(defaultModelConfigPath());
+    await target.parent.create(recursive: true);
+    if (!await target.exists()) {
+      final document = await _configuredModelDocumentFromSource(sourcePath);
+      await target.writeAsString(document.toYaml());
+    }
+    return target.path;
+  }
+
+  /// Reads configured model providers from a source config file.
+  Future<ModelConfigDocument> _configuredModelDocumentFromSource(
+    String sourcePath,
+  ) async {
+    final path = sourcePath.trim();
+    if (path.isEmpty) {
+      return emptyModelConfigDocument();
+    }
+    final source = File(path);
+    if (!await source.exists()) {
+      return emptyModelConfigDocument();
+    }
+    final document = ModelConfigDocument.parse(await source.readAsString());
+    return _modelDocumentWithConfiguredProviders(
+      document,
+      await _configuredModelProviders(document),
+    );
+  }
+
+  /// Keeps only model providers the app can prove were configured.
+  Future<List<ModelProviderConfig>> _configuredModelProviders(
+    ModelConfigDocument document, {
+    ModelProviderConfig? replacingProvider,
+  }) async {
+    final providers = <ModelProviderConfig>[];
+    for (final candidate in document.providers) {
+      if (candidate.id == replacingProvider?.id) {
+        continue;
+      }
+      if (await _isConfiguredModelProvider(candidate)) {
+        providers.add(candidate);
+      }
+    }
+    if (replacingProvider != null) {
+      providers.add(replacingProvider);
+    }
+    return providers;
+  }
+
+  /// Returns whether a provider has local runtime or stored credential backing.
+  Future<bool> _isConfiguredModelProvider(ModelProviderConfig provider) async {
+    if (provider.id == 'local') {
+      return true;
+    }
+    if (provider.apiKey.trim().isEmpty) {
+      return false;
+    }
+    if (_isClosing) {
+      return false;
+    }
+    final lookup = await credentialStore.lookup(provider.apiKey);
+    return lookup.found;
+  }
+
+  /// Builds a model document whose default points at an available provider.
+  ModelConfigDocument _modelDocumentWithConfiguredProviders(
+    ModelConfigDocument document,
+    List<ModelProviderConfig> providers,
+  ) {
+    final refs = <String>{
+      for (final provider in providers)
+        for (final model in provider.models) '${provider.id}:${model.id}',
+    };
+    final defaultRef = refs.contains(document.defaultRef)
+        ? document.defaultRef
+        : providers.isEmpty
+        ? ''
+        : modelProviderDefaultRef(providers.first);
+    return document.copyWith(defaultRef: defaultRef, providers: providers);
+  }
+
+  /// Rewrites memory daemon storage arguments while preserving other flags.
+  List<String> _memoryStorageArguments(List<String> arguments) {
+    final withoutStorageFlags = <String>[];
+    for (var index = 0; index < arguments.length; index++) {
+      final value = arguments[index];
+      if (value == '--db' || value == '--data') {
+        index++;
+        continue;
+      }
+      withoutStorageFlags.add(value);
+    }
+    return <String>[
+      ...withoutStorageFlags,
+      '--db',
+      defaultMemoryDatabasePath(),
+      '--data',
+      defaultMemoryDataDirectoryPath(),
+    ];
   }
 
   /// Writes the target graph-backed MCP tool config before harness startup.
@@ -897,6 +1393,7 @@ class AuroraAppController extends ChangeNotifier {
     final target = graphBackedMemoryToolConfig(
       server: graphServer,
       localExec: document.localExec,
+      headersFromEnv: _mcpHeadersFromEnv(profile, graphServer),
       extra: document.extra,
     );
     final validationError = toolConfigValidationError(target);
@@ -969,14 +1466,37 @@ class AuroraAppController extends ChangeNotifier {
   }
 
   /// Releases HTTP clients and stops locally started service processes.
-  Future<void> close() async {
-    closeClients();
-    await _closeLocalServices();
+  Future<void> close({void Function(String message)? onStatus}) {
+    return _closeFuture ??= () async {
+      _closing = true;
+      processSupervisor.beginClosing();
+
+      onStatus?.call('Closing service clients');
+      closeClients();
+
+      onStatus?.call('Stopping local model runtime');
+      await _closeLocalModels();
+
+      onStatus?.call('Stopping managed service processes');
+      await _closeLocalServices(onStatus: onStatus);
+
+      onStatus?.call('Stopping remaining subprocesses');
+      await processSupervisor.close(onStatus: onStatus);
+
+      onStatus?.call('Managed runtime stopped');
+    }();
+  }
+
+  /// Stops locally started local model runtime resources once.
+  Future<void> _closeLocalModels() {
+    return _localModelsCloseFuture ??= localModels.close();
   }
 
   /// Stops locally started service processes once.
-  Future<void> _closeLocalServices() {
-    return _localServicesCloseFuture ??= localServices.close();
+  Future<void> _closeLocalServices({void Function(String message)? onStatus}) {
+    return _localServicesCloseFuture ??= localServices.close(
+      onStatus: onStatus,
+    );
   }
 
   /// Rebuilds owned service clients from the active runtime profile.
@@ -991,6 +1511,7 @@ class AuroraAppController extends ChangeNotifier {
         baseUrl: assistantBaseUrl,
         appName: profile.harness.appName,
         userId: profile.harness.userId,
+        headers: _gatewayHeadersForProfile(profile),
         logger: logger,
       );
     }
@@ -999,6 +1520,7 @@ class AuroraAppController extends ChangeNotifier {
       memoryClient = MemoryClient(
         rpc: GatewayContextClient(
           baseUrl: _contextBaseUrl(profile),
+          headers: _gatewayHeadersForProfile(profile),
           logger: logger,
         ),
       );
@@ -1008,6 +1530,7 @@ class AuroraAppController extends ChangeNotifier {
       tasksClient = TasksClient(
         rpc: GatewayContextClient(
           baseUrl: _contextBaseUrl(profile),
+          headers: _gatewayHeadersForProfile(profile),
           logger: logger,
         ),
       );
@@ -1026,20 +1549,33 @@ class AuroraAppController extends ChangeNotifier {
 
   /// Selects a chat session and loads its events when connected.
   Future<void> selectSession(String sessionId) async {
-    selectedSessionId = sessionId;
-    await _touchHistoryChat(sessionId);
+    await _log('select session requested $sessionId');
     try {
       final events = await assistantClient.loadSessionEvents(sessionId);
+      _rememberLiveSession(sessionId);
+      selectedSessionId = sessionId;
+      await _touchHistoryChat(sessionId);
       messages = events
           .map(_messageFromEvent)
           .whereType<ChatMessage>()
           .toList();
+      _scheduleChatTitleRefresh(
+        profilePath: runtimeProfilePath,
+        sessionId: sessionId,
+        transcript: List<ChatMessage>.from(messages),
+      );
       _setEndpoint(
         'Agent API',
         ConnectionStateKind.connected,
         'Loaded session',
       );
     } catch (error) {
+      await _log('select session failed $sessionId: $error');
+      if (selectedSessionId == sessionId) {
+        selectedSessionId = null;
+        messages = const <ChatMessage>[];
+      }
+      await _log('preserving chat history entry for unavailable session');
       _setEndpoint(
         'Agent API',
         ConnectionStateKind.disconnected,
@@ -3103,6 +3639,9 @@ class AuroraAppController extends ChangeNotifier {
         selectedSessionId = loaded.first.id;
         await selectSession(loaded.first.id);
       } else {
+        await _log(
+          'load sessions empty; preserving local chat history ${chatHistory.length}',
+        );
         selectedSessionId = null;
         messages = const <ChatMessage>[];
       }
@@ -3217,6 +3756,29 @@ class AuroraAppController extends ChangeNotifier {
     await chatHistoryStore.save(chatHistory);
   }
 
+  /// Reports whether the active harness session list includes a session.
+  bool _hasLiveSession(String sessionId) {
+    return sessions.any((session) => session.id == sessionId);
+  }
+
+  /// Ensures a successfully loaded session is present in local live state.
+  void _rememberLiveSession(String sessionId) {
+    if (_hasLiveSession(sessionId)) {
+      return;
+    }
+    final entry = _historyEntryByKey(
+      _chatHistoryKey(runtimeProfilePath, sessionId),
+    );
+    sessions = <ChatSession>[
+      ChatSession(
+        id: sessionId,
+        title: entry?.title ?? titleFromSession(sessionId),
+        updatedAt: entry?.updatedAt ?? DateTime.now(),
+      ),
+      ...sessions,
+    ];
+  }
+
   /// Returns one history entry by stable key.
   ChatHistoryEntry? _historyEntryByKey(String key) {
     for (final entry in chatHistory) {
@@ -3236,37 +3798,69 @@ class AuroraAppController extends ChangeNotifier {
     return _parseChatHistoryKey(key);
   }
 
+  /// Starts model-backed chat title refresh without blocking chat display.
+  void _scheduleChatTitleRefresh({
+    required String profilePath,
+    required String sessionId,
+    required List<ChatMessage> transcript,
+  }) {
+    unawaited(
+      _refreshChatTitle(
+        profilePath: profilePath,
+        sessionId: sessionId,
+        transcript: transcript,
+      ).catchError((Object error) {
+        return _log('chat title refresh crashed for $sessionId: $error');
+      }),
+    );
+  }
+
   /// Generates and persists a model-backed chat title when configured.
   Future<void> _refreshChatTitle({
     required String profilePath,
     required String sessionId,
     required List<ChatMessage> transcript,
   }) async {
-    if (!appSettings.chatTitleSummariesEnabled ||
-        appSettings.summaryModelConfigPath.trim().isEmpty ||
-        profilePath.trim().isEmpty ||
-        sessionId.trim().isEmpty) {
+    final titleModelConfigPath = summaryModelConfigPath;
+    final titleModelRef = summaryModelRef;
+    if (!appSettings.chatTitleSummariesEnabled) {
+      await _log('chat title refresh skipped for $sessionId: disabled');
+      return;
+    }
+    if (titleModelConfigPath.isEmpty) {
+      await _log('chat title refresh skipped for $sessionId: no title model');
+      return;
+    }
+    if (profilePath.trim().isEmpty || sessionId.trim().isEmpty) {
+      await _log('chat title refresh skipped: missing profile or session id');
       return;
     }
     final key = _chatHistoryKey(profilePath, sessionId);
     final entry = _historyEntryByKey(key);
     if (entry == null) {
+      await _log('chat title refresh skipped for $sessionId: no history entry');
       return;
     }
     final status = entry.titleStatus.trim();
     if (status == 'pending' || status == 'generated') {
+      await _log('chat title refresh skipped for $sessionId: status=$status');
       return;
     }
     if (status == 'manual' && !_isFallbackChatTitle(entry.title, sessionId)) {
+      await _log('chat title refresh skipped for $sessionId: manual title');
       return;
     }
     await _saveHistoryEntry(
       entry.copyWith(titleStatus: 'pending', titleError: ''),
     );
+    await _log(
+      'chat title refresh started for $sessionId using $titleModelConfigPath'
+      '${titleModelRef.isEmpty ? '' : ' $titleModelRef'}',
+    );
     try {
       final title = await titleClient.generateTitle(
-        modelConfigPath: appSettings.summaryModelConfigPath,
-        modelRef: appSettings.summaryModelRef,
+        modelConfigPath: titleModelConfigPath,
+        modelRef: titleModelRef,
         messages: transcript,
       );
       final current = _historyEntryByKey(key) ?? entry;
@@ -3736,6 +4330,29 @@ class AuroraAppController extends ChangeNotifier {
     return profile.harness.contextApiBaseUrl;
   }
 
+  Map<String, String> _gatewayHeadersForProfile(RuntimeProfile profile) {
+    final gateway = profile.gateway;
+    if (gateway == null || !gateway.enabled) {
+      return const <String, String>{};
+    }
+    return config.gatewayAuthHeaders;
+  }
+
+  Map<String, String> _mcpHeadersFromEnv(
+    RuntimeProfile profile,
+    McpServerRuntime server,
+  ) {
+    final gateway = profile.gateway;
+    if (gateway == null ||
+        !gateway.enabled ||
+        server.endpoint != gateway.mcpUrl) {
+      return const <String, String>{};
+    }
+    return const <String, String>{
+      'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
+    };
+  }
+
   McpServerRuntime? _primaryGraphServer() {
     final servers = runtimeProfile?.memoryServers ?? const <McpServerRuntime>[];
     if (servers.isEmpty) {
@@ -3883,9 +4500,16 @@ class AuroraAppController extends ChangeNotifier {
   }
 
   Future<bool> _ensureLiveSession() async {
-    if (selectedSessionId != null) {
-      await _log('live session already selected $selectedSessionId');
+    final sessionId = selectedSessionId;
+    if (sessionId != null && _hasLiveSession(sessionId)) {
+      await _log('live session already selected $sessionId');
       return true;
+    }
+    if (sessionId != null) {
+      await _log('selected session missing from live harness list $sessionId');
+      await _log('preserving chat history entry for missing live session');
+      selectedSessionId = null;
+      messages = const <ChatMessage>[];
     }
     await _log('no selected session; creating chat');
     return createChat();
@@ -3894,12 +4518,20 @@ class AuroraAppController extends ChangeNotifier {
   /// Starts required local services before creating or continuing a chat.
   Future<bool> _ensureChatRuntimeReady() async {
     await _ensureInitialized();
+    if (_isClosing) {
+      statusMessage = 'Aurora runtime is shutting down';
+      notifyListeners();
+      return false;
+    }
     final profile = runtimeProfile;
     if (profile == null) {
       return false;
     }
     try {
+      _throwIfClosing();
       localProcessStatuses = await localServices.startRequiredServices(profile);
+      _throwIfClosing();
+      await _startConfiguredLocalModelRuntime();
       final failures = localProcessStatuses
           .where((status) => status.state == ConnectionStateKind.disconnected)
           .toList();
@@ -3986,12 +4618,10 @@ class AuroraAppController extends ChangeNotifier {
         );
       }
       if (reply == null) {
-        unawaited(
-          _refreshChatTitle(
-            profilePath: runtimeProfilePath,
-            sessionId: sessionId,
-            transcript: List<ChatMessage>.from(messages),
-          ),
+        _scheduleChatTitleRefresh(
+          profilePath: runtimeProfilePath,
+          sessionId: sessionId,
+          transcript: List<ChatMessage>.from(messages),
         );
       }
     } catch (error) {

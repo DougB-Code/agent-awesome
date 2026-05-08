@@ -447,6 +447,7 @@ class McpServerToolConfig {
     required this.command,
     required this.args,
     required this.env,
+    required this.headersFromEnv,
     required this.endpoint,
     required this.url,
     required this.requireConfirmation,
@@ -469,6 +470,9 @@ class McpServerToolConfig {
 
   /// Stdio server environment variables.
   final Map<String, String> env;
+
+  /// HTTP headers resolved from environment variables for this MCP server.
+  final Map<String, String> headersFromEnv;
 
   /// Preferred streamable HTTP endpoint.
   final String endpoint;
@@ -496,6 +500,8 @@ class McpServerToolConfig {
       ..remove('command')
       ..remove('args')
       ..remove('env')
+      ..remove('headers-from-env')
+      ..remove('headers_from_env')
       ..remove('endpoint')
       ..remove('url')
       ..remove('require-confirmation')
@@ -509,6 +515,9 @@ class McpServerToolConfig {
       command: _configString(map['command']),
       args: _stringList(map['args']),
       env: _stringMap(map['env']),
+      headersFromEnv: _stringMap(
+        map['headers-from-env'] ?? map['headers_from_env'],
+      ),
       endpoint: _configString(map['endpoint']),
       url: _configString(map['url']),
       requireConfirmation: _configBool(
@@ -529,6 +538,7 @@ class McpServerToolConfig {
     String? command,
     List<String>? args,
     Map<String, String>? env,
+    Map<String, String>? headersFromEnv,
     String? endpoint,
     String? url,
     bool? requireConfirmation,
@@ -542,6 +552,7 @@ class McpServerToolConfig {
       command: command ?? this.command,
       args: args ?? this.args,
       env: env ?? this.env,
+      headersFromEnv: headersFromEnv ?? this.headersFromEnv,
       endpoint: endpoint ?? this.endpoint,
       url: url ?? this.url,
       requireConfirmation: requireConfirmation ?? this.requireConfirmation,
@@ -561,6 +572,7 @@ class McpServerToolConfig {
       if (command.isNotEmpty) 'command': command,
       if (args.isNotEmpty) 'args': args,
       if (env.isNotEmpty) 'env': env,
+      if (headersFromEnv.isNotEmpty) 'headers-from-env': headersFromEnv,
       if (endpoint.isNotEmpty) 'endpoint': endpoint,
       if (url.isNotEmpty) 'url': url,
       if (requireConfirmation) 'require-confirmation': requireConfirmation,
@@ -648,6 +660,7 @@ LocalExecCommandConfig newLocalExecCommandConfig({
 McpServerToolConfig newHttpMcpServerToolConfig({
   required String name,
   required String endpoint,
+  Map<String, String> headersFromEnv = const <String, String>{},
 }) {
   return McpServerToolConfig(
     name: name,
@@ -655,6 +668,7 @@ McpServerToolConfig newHttpMcpServerToolConfig({
     command: '',
     args: const <String>[],
     env: const <String, String>{},
+    headersFromEnv: headersFromEnv,
     endpoint: endpoint,
     url: '',
     requireConfirmation: false,
@@ -667,6 +681,7 @@ McpServerToolConfig newHttpMcpServerToolConfig({
 ToolConfigDocument graphBackedMemoryToolConfig({
   required McpServerRuntime server,
   required LocalExecToolConfig localExec,
+  Map<String, String> headersFromEnv = const <String, String>{},
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
   return ToolConfigDocument(
@@ -677,6 +692,7 @@ ToolConfigDocument graphBackedMemoryToolConfig({
         newHttpMcpServerToolConfig(
           name: server.kind.isEmpty ? 'memory' : server.kind,
           endpoint: server.endpoint,
+          headersFromEnv: headersFromEnv,
         ).copyWith(
           requireConfirmationTools: const <String>[
             'save_memory_candidate',
@@ -703,6 +719,7 @@ McpServerToolConfig newStdioMcpServerToolConfig({
     command: command,
     args: const <String>[],
     env: const <String, String>{},
+    headersFromEnv: const <String, String>{},
     endpoint: '',
     url: '',
     requireConfirmation: false,
@@ -865,6 +882,9 @@ String _mcpServerValidationError(McpServerToolConfig server) {
   }
   if (server.env.keys.any((key) => key.trim().isEmpty)) {
     return 'mcp server "$name" env must not contain empty variable names';
+  }
+  if (server.headersFromEnv.keys.any((key) => key.trim().isEmpty)) {
+    return 'mcp server "$name" headers-from-env must not contain empty header names';
   }
   return '';
 }

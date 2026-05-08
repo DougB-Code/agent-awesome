@@ -1,0 +1,21 @@
+= Provisioning State
+:description: Provisioning records and secrets.
+
+Provisioning state is split between non-secret records and secret values.
+Non-secret records live under the Agent Awesome config directory.
+Secret values live in the OS keyring when possible, with environment variables as an operations-controlled fallback.
+
+== Credential Lookup
+
+Lookup order:
+
+1. OS keyring.
+2. Environment variable.
+3. Interactive prompt when running in a terminal.
+
+Do not write real secret values into generated Cloudflare artifacts, documentation, logs, or chat.
+
+== Idempotency
+
+Apply operations should reuse existing generated internal tokens.
+They should repair missing or drifted resources instead of rotating secrets or creating duplicate resources.

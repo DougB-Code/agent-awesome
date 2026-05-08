@@ -1,0 +1,44 @@
+= Harness
+:description: Agent Awesome harness subsystem documentation.
+
+The harness is the Go agent runtime in `harness`.
+It loads model, agent, and tool configuration, creates the configured model provider client, builds toolsets, and launches either console or web runtime modes.
+
+== Responsibilities
+
+* Parse CLI options from `cmd/agent-awesome`.
+* Load model, agent, and tool YAML files.
+* Validate agent identity, provider capabilities, and tool declarations.
+* Create model clients through provider adapters.
+* Build local execution and MCP toolsets.
+* Start console or ADK-compatible web runtimes.
+
+The harness should not own desktop UI behavior, memory persistence, gateway request policy, or cloud provisioning.
+
+== Main Packages
+
+[cols="1,2",options="header"]
+|===
+|Package |Responsibility
+
+|`internal/app`
+|Cross-package runtime wiring.
+
+|`internal/agent`
+|Agent-domain definition and validation.
+
+|`internal/model`
+|Provider selection, capabilities, factory, and shared model contracts.
+
+|`internal/model/adapters/*`
+|Provider-specific OpenAI, Google, and Anthropic integrations.
+
+|`internal/tools`
+|Local execution tools, MCP transports, and runtime toolset assembly.
+
+|`internal/console`
+|Console runtime behavior.
+
+|`internal/contextapi`
+|HTTP context API support used by local surfaces.
+|===

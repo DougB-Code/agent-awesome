@@ -1,0 +1,19 @@
+= Operations Overview
+:description: Operations-facing Agent Awesome documentation.
+
+This module is for people provisioning, deploying, migrating, supporting, and repairing Agent Awesome environments.
+It may describe credentials, Cloudflare resources, Slack app configuration, and operational checks.
+
+Do not place end-user guidance or code contribution guidance here unless it is part of an operations-run procedure.
+User workflows belong in xref:user:index.adoc[].
+Development workflows belong in xref:development:contributor-setup.adoc[].
+
+== Step Order
+
+Use this order for a literal first pilot:
+
+1. xref:operations:cloudflare-setup.adoc[].
+2. xref:development:build-package.adoc[] when the local binaries or package archive are missing or stale.
+3. xref:operations:local-deployment.adoc[].
+4. xref:operations:cloud-agents.adoc[].
+5. xref:operations:slack-migration.adoc[] only when moving an existing Slack pilot.

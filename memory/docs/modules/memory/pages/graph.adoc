@@ -1,0 +1,27 @@
+= Memory Graph
+:description: Graph-backed task context in the memory service.
+
+The memory graph stores task facts, relationships, projections, and queryable context for the assistant.
+The graph packages keep graph concepts separate from MCP transport and snapshot persistence.
+
+== Package Split
+
+[cols="1,2",options="header"]
+|===
+|Package |Use
+
+|`graph/domain`
+|Graph types and validation rules.
+
+|`graph/store`
+|SQLite schema and low-level storage operations.
+
+|`graph/repository`
+|Service-facing repository implementation.
+
+|`graph/query`
+|Query lexer, parser, and executor.
+|===
+
+Use graph packages when adding task context semantics.
+Use memory service packages when exposing those semantics to callers.

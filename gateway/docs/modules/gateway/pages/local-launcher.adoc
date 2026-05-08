@@ -1,0 +1,47 @@
+= Local Launcher
+:description: Gateway local launcher and supervision mode.
+
+The gateway can start sibling harness and memory binaries when their health checks are unavailable.
+This mode is for local desktop-style deployments where the UI profile delegates process ownership to the gateway.
+
+== Harness Auto-Start
+
+[source,sh]
+----
+go run ./cmd/agent-gateway \
+  --harness-auto-start \
+  --harness-command /path/to/agent-awesome \
+  --harness-workdir /home/doug/dev/agentawesome/agent/harness \
+  --harness-arg run \
+  --harness-arg -- \
+  --harness-arg web \
+  --harness-arg --port \
+  --harness-arg 8080
+----
+
+Arguments are repeatable so launchers do not need to invoke a shell.
+
+== Environment Controls
+
+[cols="1,2",options="header"]
+|===
+|Variable |Use
+
+|`AGENTAWESOME_GATEWAY_ADDR`
+|Gateway listen address.
+
+|`AGENTAWESOME_HARNESS_API_BASE_URL`
+|Harness API dependency URL.
+
+|`AGENTAWESOME_MEMORY_MCP_URL`
+|Memory MCP dependency URL.
+
+|`AGENTAWESOME_GATEWAY_TOKEN`
+|Bearer token required by protected gateway routes.
+
+|`AGENTAWESOME_HARNESS_AUTO_START`
+|Enables harness supervision.
+
+|`AGENTAWESOME_MEMORY_AUTO_START`
+|Enables memory supervision.
+|===

@@ -28,6 +28,7 @@ class CommandBar extends StatefulWidget {
     required this.onOpenSection,
     required this.onOpenSettingsSection,
     required this.onOpenSettings,
+    required this.onOpenSetup,
   });
 
   /// Text controller for the global command input.
@@ -63,6 +64,9 @@ class CommandBar extends StatefulWidget {
 
   /// Opens the settings workspace.
   final VoidCallback onOpenSettings;
+
+  /// Reopens the first-run setup shell.
+  final VoidCallback onOpenSetup;
 
   @override
   State<CommandBar> createState() => _CommandBarState();
@@ -123,6 +127,8 @@ class _CommandBarState extends State<CommandBar> {
               ),
             ),
           ),
+          if (!widget.appController.hasConfiguredModel)
+            _SetupStatusButton(onTap: _handleOpenSetup),
           _CommandIconButton(
             icon: Icons.add,
             tooltip: 'New chat',
@@ -178,6 +184,13 @@ class _CommandBarState extends State<CommandBar> {
     _clearProfilePathForNextChat();
     _removeQuickAccess();
     widget.onOpenSettings();
+  }
+
+  /// Opens the setup wizard from the app shell.
+  void _handleOpenSetup() {
+    _clearProfilePathForNextChat();
+    _removeQuickAccess();
+    widget.onOpenSetup();
   }
 
   /// Opens quick access while the command input is not carrying a message.
@@ -475,6 +488,46 @@ class _CommandBarState extends State<CommandBar> {
   }
 }
 
+class _SetupStatusButton extends StatelessWidget {
+  /// Creates the setup status action.
+  const _SetupStatusButton({required this.onTap});
+
+  /// Opens the setup wizard.
+  final VoidCallback onTap;
+
+  /// Builds a prominent setup status action for incomplete model setup.
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Finish setup',
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          height: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: const BoxDecoration(
+            color: Color(0xfffff7ef),
+            border: Border(right: BorderSide(color: AuroraColors.border)),
+          ),
+          child: const Row(
+            children: <Widget>[
+              Icon(Icons.error_outline, color: AuroraColors.coral, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Setup incomplete',
+                style: TextStyle(
+                  color: AuroraColors.green,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CommandInputFrame extends StatelessWidget {
   const _CommandInputFrame({
     required this.controller,
@@ -536,7 +589,7 @@ class _CommandInputFrame extends StatelessWidget {
                   key: const ValueKey<String>('global-command-input'),
                   controller: controller,
                   focusNode: focusNode,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     border: InputBorder.none,
                     hintText:
                         'Command current screen, Ctrl/Shift+Enter for chat...',
@@ -594,13 +647,13 @@ class _CommandIconButton extends StatelessWidget {
     required this.icon,
     required this.tooltip,
     required this.size,
-    required this.onTap,
+    this.onTap,
   });
 
   final IconData icon;
   final String tooltip;
   final double size;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   /// Builds a flat command bar icon button.
   @override
@@ -615,7 +668,12 @@ class _CommandIconButton extends StatelessWidget {
           decoration: const BoxDecoration(
             border: Border(left: BorderSide(color: AuroraColors.border)),
           ),
-          child: Icon(icon, color: AuroraColors.muted),
+          child: Icon(
+            icon,
+            color: onTap == null
+                ? AuroraColors.muted.withValues(alpha: 0.45)
+                : AuroraColors.muted,
+          ),
         ),
       ),
     );

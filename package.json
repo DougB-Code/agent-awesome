@@ -1,0 +1,15 @@
+{
+  "name": "agent-awesome-docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Antora documentation build for Agent Awesome.",
+  "scripts": {
+    "docs:build": "antora antora-playbook.yml",
+    "docs:clean": "rm -rf build/site build/antora-cache"
+  },
+  "devDependencies": {
+    "@antora/cli": "3.1.14",
+    "@antora/lunr-extension": "^1.0.0-alpha.13",
+    "@antora/site-generator": "3.1.14"
+  }
+}

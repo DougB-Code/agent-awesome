@@ -45,7 +45,7 @@ class ChatHistoryStore {
 
 /// Returns the chat history JSON path.
 String chatHistoryPath() {
-  return '${auroraAppConfigDirectoryPath()}/data/chats.json';
+  return '${auroraDataDirectoryPath()}/chats.json';
 }
 
 /// Sorts chat entries by latest activity first.

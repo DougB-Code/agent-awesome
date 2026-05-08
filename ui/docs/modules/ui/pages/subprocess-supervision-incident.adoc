@@ -1,0 +1,125 @@
+= Subprocess Supervision Incident
+:description: Operational record for the UI subprocess cleanup and the logout-causing process-group signal bug.
+
+This page documents the UI subprocess handling bug fixed in May 2026.
+Use it when reviewing startup, shutdown, local service cleanup, LiteRT inference cleanup, keyring commands, or system capability probes.
+
+== Summary
+
+The UI previously launched, tracked, and stopped subprocesses from several app modules.
+That made startup and shutdown slower, made cleanup behavior inconsistent, and left process-group signaling logic close to service-specific code.
+
+The fix moved app-owned subprocess handling into `lib/app/process_supervisor.dart`.
+Production UI code outside that file should not call `Process.run`, `Process.runSync`, `Process.start`, or `Process.killPid`.
+
+== Previous State
+
+Subprocess ownership was spread across multiple responsibilities:
+
+* `lib/app/local_services.dart` started long-running local services, wrote service pid records, cleaned stale listeners, and sent shutdown signals.
+* `lib/app/local_model_runtime.dart` launched LiteRT validation and inference commands directly.
+* `lib/app/credential_store.dart` launched platform keyring commands directly.
+* `lib/app/system_capabilities.dart` launched bounded host probes directly.
+* `lib/app/app_controller.dart` coordinated shutdown without one shared process-owner boundary.
+
+This meant each caller had to remember its own timeout, stderr/stdout draining, shutdown race handling, and stale-process behavior.
+Long-running services could keep pipes open, one-shot commands were harder to cancel, and repeated close paths could duplicate shutdown work.
+
+== Logout Cause
+
+The logout was caused by unsafe process-group signaling during cleanup testing.
+The dangerous behavior was sending a POSIX signal to a negative pid before proving that pid represented an isolated process group owned by the UI.
+
+The risky code path lived in the old local-service cleanup implementation:
+
+[source,dart]
+----
+final result = await Process.run('kill', <String>[
+  '-$signalName',
+  '-$pid',
+]);
+----
+
+In POSIX `kill`, a negative pid means "signal this process group".
+If the pid is not actually a separate process-group leader, or if the target group/session overlaps the current terminal or desktop session, this can signal processes outside the intended service tree.
+That is consistent with the observed full logout during tests that exercised process-group shutdown.
+
+The root issue was not that cleanup used `kill`.
+The root issue was using `-$pid` as a process-group target without all of these guards:
+
+* Refuse unsafe pids such as `0`, `1`, or negative values.
+* Verify the pid still belongs to the expected executable.
+* Verify the pid is a process-group leader.
+* Verify the target process group and session are not the current Dart process group or session.
+* Pass `--` before the negative pid so command-line parsing cannot confuse a group id with an option.
+
+== Fixed State
+
+`ProcessSupervisor` is now the single owner for UI subprocess lifecycle behavior.
+It provides one API for long-running services, request-scoped LiteRT inference, keyring commands, system probes, and bounded one-shot commands.
+
+The supervisor now owns:
+
+* Launch specs and process metadata through `ManagedProcessSpec`.
+* Active-process handles through `ManagedProcessHandle`.
+* Bounded command results through `ManagedProcessResult`.
+* PID records for long-running app-owned services.
+* Stale pid cleanup after UI restart.
+* Local port listener cleanup after executable ownership checks.
+* Scoped shutdown for request-owned work such as LiteRT inference.
+* Idempotent app shutdown through one shared close future.
+
+Process-group signaling is now guarded by `ProcessSupervisor._canSignalProcessGroup`.
+The supervisor sends a process-group signal only when Linux reports that the target pid is the process-group leader, the target group and session are isolated from the current process, and the pid still matches the expected executable.
+If any check fails, cleanup falls back to signaling only the root process.
+
+The fixed process-group command also includes an option separator:
+
+[source,dart]
+----
+final result = await Process.run('kill', <String>[
+  '-$signalName',
+  '--',
+  '-$pid',
+]);
+----
+
+== Operational Rules
+
+Do not add direct subprocess calls in production UI code outside `lib/app/process_supervisor.dart`.
+Use the shared `ProcessSupervisor` or `ProcessSupervisorCommandRunner` instead.
+
+Before running any manual test that could start or stop services, update the repository action log with the exact command and the expected process behavior.
+Do not repeat a shutdown or signal test that previously logged out the user until the command and expected target pids have been reviewed.
+
+When investigating startup or shutdown regressions, check these invariants first:
+
+* App shutdown calls `ProcessSupervisor.beginClosing()` before service/client teardown can launch new subprocesses.
+* App shutdown uses the supervisor's single close future, so repeated window-close and Ctrl-C paths do not duplicate cleanup.
+* Long-running service stdout and stderr are drained so Dart `exitCode` futures can complete.
+* Timeout cleanup stops the supervised process before returning a one-shot command result.
+* Persisted pid records include the expected executable and are verified before signaling stale pids.
+
+== Verification
+
+Run these checks after subprocess-related changes:
+
+[source,bash]
+----
+cd ui
+flutter analyze
+flutter test
+rg -n "Process\.(run|runSync|start|killPid)" lib --glob '!lib/app/process_supervisor.dart'
+----
+
+The final `rg` command should produce no matches.
+Any new match means production code has bypassed the supervisor and should be refactored before the change is accepted.
+
+For focused coverage, also run:
+
+[source,bash]
+----
+cd ui
+flutter test test/process_supervisor_test.dart
+----
+

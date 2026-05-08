@@ -1,0 +1,15 @@
+= User Overview
+:description: User-facing Agent Awesome documentation.
+
+This module is for people using Agent Awesome as an assistant.
+It avoids infrastructure setup, deployment secrets, and operations-only controls.
+
+Use these pages when you need to:
+
+* Run the desktop app.
+* Understand local chat behavior.
+* Recognize whether memory, gateway, or harness services are connected.
+
+Internal development procedures live in xref:development:contributor-setup.adoc[].
+Internal operations procedures live in xref:operations:index.adoc[].
+Implementation details live in the subsystem modules.

@@ -42,11 +42,17 @@ class McpJsonRpcClient implements ToolRpcClient {
   McpJsonRpcClient({
     required this.endpoint,
     http.Client? httpClient,
+    Map<String, String> headers = const <String, String>{},
     this.logger,
-  }) : _http = httpClient ?? http.Client();
+  }) : headers = Map<String, String>.unmodifiable(headers),
+       _http = httpClient ?? http.Client();
 
   /// JSON-RPC endpoint URL.
+  @override
   final String endpoint;
+
+  /// Headers applied to every MCP JSON-RPC request.
+  final Map<String, String> headers;
 
   final http.Client _http;
   final AppLogger? logger;
@@ -71,7 +77,7 @@ class McpJsonRpcClient implements ToolRpcClient {
     await _log('POST $endpoint tools/call id=$id name=$name');
     final response = await _http.post(
       Uri.parse(endpoint),
-      headers: const {'Content-Type': 'application/json'},
+      headers: _headers(contentTypeJson: true),
       body: jsonEncode(payload),
     );
     await _log('POST $endpoint tools/call id=$id -> ${response.statusCode}');
@@ -96,7 +102,7 @@ class McpJsonRpcClient implements ToolRpcClient {
     await _log('POST $endpoint tools/list id=$id');
     final response = await _http.post(
       Uri.parse(endpoint),
-      headers: const {'Content-Type': 'application/json'},
+      headers: _headers(contentTypeJson: true),
       body: jsonEncode(payload),
     );
     await _log('POST $endpoint tools/list id=$id -> ${response.statusCode}');
@@ -115,6 +121,13 @@ class McpJsonRpcClient implements ToolRpcClient {
   Future<void> _log(String message) async {
     await logger?.write('mcp-client', message);
   }
+
+  Map<String, String> _headers({bool contentTypeJson = false}) {
+    return <String, String>{
+      ...headers,
+      if (contentTypeJson) 'Content-Type': 'application/json',
+    };
+  }
 }
 
 /// GatewayContextClient calls harness-owned context tools through the gateway.
@@ -123,11 +136,16 @@ class GatewayContextClient implements ToolRpcClient {
   GatewayContextClient({
     required this.baseUrl,
     http.Client? httpClient,
+    Map<String, String> headers = const <String, String>{},
     this.logger,
-  }) : _http = httpClient ?? http.Client();
+  }) : headers = Map<String, String>.unmodifiable(headers),
+       _http = httpClient ?? http.Client();
 
   /// Gateway context API base URL.
   final String baseUrl;
+
+  /// Headers applied to every gateway context API request.
+  final Map<String, String> headers;
 
   final http.Client _http;
   final AppLogger? logger;
@@ -145,7 +163,7 @@ class GatewayContextClient implements ToolRpcClient {
     await _log('POST $uri context tool name=$name');
     final response = await _http.post(
       uri,
-      headers: const {'Content-Type': 'application/json'},
+      headers: _headers(contentTypeJson: true),
       body: jsonEncode(<String, dynamic>{
         'name': name,
         'arguments': arguments ?? <String, dynamic>{},
@@ -170,7 +188,7 @@ class GatewayContextClient implements ToolRpcClient {
   Future<List<String>> listToolNames() async {
     final uri = _uri('/tools/list');
     await _log('GET $uri context tools/list');
-    final response = await _http.get(uri);
+    final response = await _http.get(uri, headers: _headers());
     await _log('GET $uri context tools/list -> ${response.statusCode}');
     if (response.statusCode != 200) {
       throw McpException('HTTP ${response.statusCode} from $uri');
@@ -201,6 +219,13 @@ class GatewayContextClient implements ToolRpcClient {
 
   Future<void> _log(String message) async {
     await logger?.write('context-client', message);
+  }
+
+  Map<String, String> _headers({bool contentTypeJson = false}) {
+    return <String, String>{
+      ...headers,
+      if (contentTypeJson) 'Content-Type': 'application/json',
+    };
   }
 }
 

@@ -1,0 +1,46 @@
+= Memory
+:description: Agent Awesome memory subsystem documentation.
+
+The memory service is the Go module in `memory`.
+It exposes memory and task-context capabilities through MCP and stores graph-backed context in SQLite.
+
+== Responsibilities
+
+* Define stable memory and graph domain data.
+* Validate memory task, graph, and projection requests.
+* Persist snapshots and graph records.
+* Expose MCP tools for retrieval and task context.
+* Keep transport, service, domain, and persistence code separate.
+
+The memory service should not know about Flutter widgets, Slack event handling, model provider clients, or Cloudflare provisioning.
+
+== Main Packages
+
+[cols="1,2",options="header"]
+|===
+|Package |Responsibility
+
+|`internal/memory/domain`
+|Stable DTOs, validation, and request contracts.
+
+|`internal/memory/service`
+|Memory behavior and orchestration across ports.
+
+|`internal/memory/transport`
+|MCP transport adapter.
+
+|`internal/memory/ports`
+|Interfaces between service behavior and storage.
+
+|`internal/memory/graph/domain`
+|Graph-native task and relationship model.
+
+|`internal/memory/graph/query`
+|Graph query parsing and execution.
+
+|`internal/memory/graph/repository`
+|Repository adapter between graph storage and memory DTOs.
+
+|`internal/memory/persistence`
+|Snapshot persistence.
+|===

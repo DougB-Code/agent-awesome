@@ -1,0 +1,10 @@
+name: agent-awesome
+title: Agent Awesome
+version: '0.1'
+prerelease: true
+start_page: ROOT:index.adoc
+nav:
+  - modules/ROOT/nav.adoc
+  - modules/user/nav.adoc
+  - modules/development/nav.adoc
+  - modules/operations/nav.adoc

@@ -1,0 +1,41 @@
+= Gateway
+:description: Agent Awesome gateway subsystem documentation.
+
+The gateway is the Go module in `gateway`.
+It is a small HTTP command plane that fronts the harness, memory service, and channel adapters.
+
+== Responsibilities
+
+* Serve gateway health and sanitized status endpoints.
+* Proxy ADK-compatible UI traffic to the harness.
+* Proxy memory MCP traffic to the configured memory service.
+* Inject server-owned runtime policy into agent runs.
+* Receive Slack events through HTTP Events API or Socket Mode.
+* Optionally supervise sibling harness and memory processes for local deployments.
+
+The gateway should not implement model provider behavior, memory storage, or Flutter UI state.
+
+== API Surface
+
+[cols="1,2",options="header"]
+|===
+|Route |Use
+
+|`GET /healthz`
+|Gateway liveness.
+
+|`GET /api/gateway/status`
+|Sanitized gateway and dependency status.
+
+|`GET /api/gateway/channels`
+|Active and planned channel adapters.
+
+|`POST /slack/events`
+|Slack Events API ingress.
+
+|`POST /mcp`
+|UI-facing memory MCP proxy.
+
+|`/api/*`
+|Harness API proxy.
+|===

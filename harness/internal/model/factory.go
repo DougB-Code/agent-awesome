@@ -11,6 +11,7 @@ import (
 	"agentawesome/internal/model/adapter"
 	"agentawesome/internal/model/adapters/anthropic"
 	"agentawesome/internal/model/adapters/google"
+	"agentawesome/internal/model/adapters/litert"
 	"agentawesome/internal/model/adapters/openai"
 	"agentawesome/internal/secrets"
 	llmapi "google.golang.org/adk/model"
@@ -21,6 +22,7 @@ import (
 var (
 	_ adapter.ProviderFactory = anthropic.NewFactory(nil, nil)
 	_ adapter.ProviderFactory = google.NewFactory(nil)
+	_ adapter.ProviderFactory = litert.NewFactory()
 	_ adapter.ProviderFactory = openai.NewFactory(nil, nil)
 )
 
@@ -52,6 +54,7 @@ func NewFactoryWithDependencies(credentials adapter.CredentialResolver, httpClie
 	}
 	factory.Register("anthropic", anthropic.NewFactory(credentials, httpClients))
 	factory.Register("google", google.NewFactory(credentials))
+	factory.Register("litert", litert.NewFactory())
 	factory.Register("openai", openai.NewFactory(credentials, httpClients))
 	return factory
 }

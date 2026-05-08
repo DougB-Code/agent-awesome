@@ -40,6 +40,22 @@ void main() {
     );
     expect(profile.memoryServers.single.label, 'Personal Memory');
     expect(profile.memoryServers.single.endpoint, 'http://127.0.0.1:8070/mcp');
+    expect(
+      profile.memoryServers.single.arguments,
+      containsAllInOrder(<String>[
+        '--db',
+        '${auroraDataDirectoryPath()}/memory/memory.db',
+        '--data',
+        '${auroraDataDirectoryPath()}/memory/files',
+      ]),
+    );
+  });
+
+  test('uses one shared app model config path', () {
+    expect(
+      defaultModelConfigPath(),
+      '${modelConfigsDirectoryPath()}/model.yaml',
+    );
   });
 
   test('rejects configured profile with missing harness config', () {

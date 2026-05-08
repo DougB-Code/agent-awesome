@@ -573,6 +573,8 @@ class RuntimeProfileLoader {
     final contextApi = Uri.parse(config.agentContextApiBaseUrl);
     return <String, String>{
       'AGENTAWESOME_WORKSPACE_ROOT': config.workspaceRoot,
+      'AGENTAWESOME_CONFIG_DIR': auroraConfigDirectoryPath(),
+      'AGENTAWESOME_DATA_DIR': auroraDataDirectoryPath(),
       'AGENT_API_BASE_URL': config.agentApiBaseUrl,
       'AGENT_API_PORT': _portString(agentApi, 8080),
       'AGENT_CONTEXT_API_BASE_URL': config.agentContextApiBaseUrl,
@@ -586,6 +588,8 @@ class RuntimeProfileLoader {
       'AGENT_USER_ID': config.agentUserId,
       'MEMORY_MCP_URL': config.memoryMcpUrl,
       'MEMORY_MCP_ADDR': memoryMcp.authority,
+      'MEMORY_DB_PATH': defaultMemoryDatabasePath(),
+      'MEMORY_DATA_DIR': defaultMemoryDataDirectoryPath(),
       'MEMORY_HEALTH_URL': _healthUrl(config.memoryMcpUrl),
       'AUTO_START_LOCAL_SERVICES': config.autoStartLocalServices.toString(),
     };
@@ -667,6 +671,11 @@ String auroraConfigDirectoryPath() {
   return '${auroraAppConfigDirectoryPath()}/config';
 }
 
+/// Returns the directory where Aurora-owned data files live.
+String auroraDataDirectoryPath() {
+  return '${auroraAppConfigDirectoryPath()}/data';
+}
+
 /// Returns the directory where editable runtime profiles live.
 String runtimeProfilesDirectoryPath() {
   return '${auroraConfigDirectoryPath()}/profiles';
@@ -675,6 +684,11 @@ String runtimeProfilesDirectoryPath() {
 /// Returns the directory where editable model config files live.
 String modelConfigsDirectoryPath() {
   return '${auroraConfigDirectoryPath()}/models';
+}
+
+/// Returns the shared model config referenced by runtime profiles.
+String defaultModelConfigPath() {
+  return '${modelConfigsDirectoryPath()}/model.yaml';
 }
 
 /// Returns the directory where editable agent config files live.
@@ -690,6 +704,16 @@ String toolConfigsDirectoryPath() {
 /// Returns the directory where editable memory server config files live.
 String memoryServerConfigsDirectoryPath() {
   return '${auroraConfigDirectoryPath()}/memory';
+}
+
+/// Returns the default SQLite database path for local memory.
+String defaultMemoryDatabasePath() {
+  return '${auroraDataDirectoryPath()}/memory/memory.db';
+}
+
+/// Returns the default sidecar data directory for local memory.
+String defaultMemoryDataDirectoryPath() {
+  return '${auroraDataDirectoryPath()}/memory/files';
 }
 
 /// Encodes a runtime profile as stable, human-editable JSON.

@@ -1,0 +1,130 @@
+= Agent Awesome
+:description: Agent Awesome documentation entry point.
+
+++++
+<div class="aa-home">
+  <section class="hero-panel">
+    <div class="hero-content">
+      <div class="eyebrow">Agent Awesome</div>
+      <h1>Design and run your AI agent system</h1>
+      <p>Agent Awesome gives you everything you need to build, run, and ship reliable AI agents with the models, tools, memory, workflows, and deployment paths you control.</p>
+      <div class="button-row">
+        <a class="button button-primary" href="user/local-chat.html">Start Building <span>→</span></a>
+        <a class="button" href="docs-architecture.html">Explore the Mental Model <span>→</span></a>
+      </div>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <div class="hero-orbit"></div>
+      <div class="art-chip">AI</div>
+      <div class="art-chip">API</div>
+      <div class="art-chip">CLI</div>
+      <div class="art-chip">MCP</div>
+      <div class="stack">
+        <div class="stack-layer three"></div>
+        <div class="stack-layer two"></div>
+        <div class="stack-layer one"></div>
+        <div class="stack-core"><span>◆</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-title-row">
+    <h2>Choose your path</h2>
+  </div>
+  <section class="card-grid five">
+    <a class="aa-card" href="user/local-chat.html" style="--card-color:#0f66ff">
+      <span class="card-icon">▷</span>
+      <h3>Run my first agent</h3>
+      <p>Launch a simple agent and chat in minutes.</p>
+    </a>
+    <a class="aa-card" href="harness/configuration.html" style="--card-color:#0f66ff">
+      <span class="card-icon">≋</span>
+      <h3>Configure models</h3>
+      <p>Connect and configure LLMs that fit your needs.</p>
+    </a>
+    <a class="aa-card" href="memory/mcp.html" style="--card-color:#0f66ff">
+      <span class="card-icon">⚙</span>
+      <h3>Add tools</h3>
+      <p>Give your agent access to APIs and services.</p>
+    </a>
+    <a class="aa-card" href="docs-architecture.html" style="--card-color:#0f66ff">
+      <span class="card-icon">⌘</span>
+      <h3>Build a workflow</h3>
+      <p>Orchestrate steps and make decisions.</p>
+    </a>
+    <a class="aa-card" href="operations/cloud-agents.html" style="--card-color:#0f66ff">
+      <span class="card-icon">☁</span>
+      <h3>Deploy it</h3>
+      <p>Deploy locally or to the cloud with confidence.</p>
+    </a>
+  </section>
+
+  <div class="section-title-row">
+    <h2>System Overview</h2>
+  </div>
+  <section class="system-flow">
+    <div class="flow-row">
+      <div class="flow-node" style="--card-color:#a871ff"><span class="card-icon">▷</span><strong>Harness</strong><span>Entry point and orchestration</span></div>
+      <div class="flow-node" style="--card-color:#4ea3ff"><span class="card-icon">◌</span><strong>Agents</strong><span>Reasoning and action</span></div>
+      <div class="flow-node" style="--card-color:#5bd777"><span class="card-icon">⚙</span><strong>Tools</strong><span>Capabilities and integrations</span></div>
+      <div class="flow-node" style="--card-color:#f0ad37"><span class="card-icon">◎</span><strong>Memory</strong><span>Context and state</span></div>
+      <div class="flow-node" style="--card-color:#4ea3ff"><span class="card-icon">⌘</span><strong>Workflows</strong><span>Processes and automation</span></div>
+      <div class="flow-node" style="--card-color:#a871ff"><span class="card-icon">◇</span><strong>Policy Gates</strong><span>Guardrails and compliance</span></div>
+    </div>
+  </section>
+
+  <div class="section-title-row">
+    <h2>Build your system</h2>
+  </div>
+  <section class="card-grid six">
+    <a class="aa-card" href="operations/cloudflare-setup.html"><span class="step-badge">1</span><h3>Choose providers</h3><p>Select model and infrastructure providers.</p></a>
+    <a class="aa-card" href="ui/runtime-profiles.html"><span class="step-badge">2</span><h3>Define profiles</h3><p>Create profiles with roles, goals, and instructions.</p></a>
+    <a class="aa-card" href="memory/mcp.html"><span class="step-badge">3</span><h3>Register tools</h3><p>Add tools and define schemas, auth, and permissions.</p></a>
+    <a class="aa-card" href="memory/index.html"><span class="step-badge">4</span><h3>Attach memory</h3><p>Connect memory stores for context and state.</p></a>
+    <a class="aa-card" href="docs-architecture.html"><span class="step-badge">5</span><h3>Create workflows</h3><p>Design workflows and state machines to automate.</p></a>
+    <a class="aa-card" href="operations/index.html"><span class="step-badge">6</span><h3>Validate everything</h3><p>Test, run validations, and enforce policy compliance.</p></a>
+  </section>
+
+  <div class="section-title-row">
+    <h2>Core concepts</h2>
+  </div>
+  <section class="card-grid five">
+    <a class="aa-card concept-card" href="harness/index.html" style="--card-color:#0f66ff">
+      <span class="card-icon">⬡</span>
+      <h3>Harness</h3>
+      <p>The runtime that brings models, tools, memory, and workflows together reliably.</p>
+    </a>
+    <a class="aa-card concept-card" href="ui/runtime-profiles.html" style="--card-color:#2aaa55">
+      <span class="card-icon">◌</span>
+      <h3>Profiles</h3>
+      <p>Reusable configurations for models, tools, and behavior.</p>
+    </a>
+    <a class="aa-card concept-card" href="memory/mcp.html" style="--card-color:#a334d6">
+      <span class="card-icon">⚙</span>
+      <h3>Tools</h3>
+      <p>Capabilities your agent can call to interact with the real world.</p>
+    </a>
+    <a class="aa-card concept-card" href="memory/index.html" style="--card-color:#16a8a8">
+      <span class="card-icon">◎</span>
+      <h3>Memory</h3>
+      <p>Short- and long-term context that informs your agent's decisions.</p>
+    </a>
+    <a class="aa-card concept-card" href="docs-architecture.html" style="--card-color:#ff8a1d">
+      <span class="card-icon">⌘</span>
+      <h3>Workflows</h3>
+      <p>Directed graphs that orchestrate actions and control flow.</p>
+    </a>
+  </section>
+
+  <div class="section-title-row">
+    <h2>Example workflows</h2>
+    <a href="development/contributor-setup.html">View development workflow →</a>
+  </div>
+  <section class="card-grid four workflow-grid">
+    <a class="aa-card" href="development/contributor-setup.html" style="--card-color:#a871ff"><span class="card-icon">‹›</span><h3>Coding Workflow</h3><p>Plan, write, test, and iterate on code with built-in review.</p><div class="workflow-tags"><span>Agents</span><span>Tools</span><span>Memory</span></div></a>
+    <a class="aa-card" href="development/build-package.html" style="--card-color:#4ea3ff"><span class="card-icon">⌕</span><h3>Review Workflow</h3><p>Automate code or content reviews with structured feedback loops.</p><div class="workflow-tags"><span>Agents</span><span>Policy Gates</span></div></a>
+    <a class="aa-card" href="memory/graph.html" style="--card-color:#5bd777"><span class="card-icon">◎</span><h3>Research Workflow</h3><p>Collect, synthesize, and summarize information from the web.</p><div class="workflow-tags"><span>Tools</span><span>Memory</span><span>Agents</span></div></a>
+    <a class="aa-card" href="gateway/index.html" style="--card-color:#f0ad37"><span class="card-icon">▭</span><h3>Browser Workflow</h3><p>Navigate, extract, and act on web state with visual context.</p><div class="workflow-tags"><span>Agents</span><span>Tools</span><span>Memory</span></div></a>
+  </section>
+</div>
+++++

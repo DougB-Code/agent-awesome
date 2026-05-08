@@ -1,0 +1,33 @@
+// This file installs an ADK plugin that captures sessions after each run.
+package adkmemory
+
+import (
+	"context"
+	"time"
+
+	"github.com/rs/zerolog/log"
+	"google.golang.org/adk/agent"
+	"google.golang.org/adk/plugin"
+)
+
+const sessionCaptureTimeout = 10 * time.Second
+
+// NewSessionCapturePlugin creates a best-effort post-run memory capture plugin.
+func NewSessionCapturePlugin() (*plugin.Plugin, error) {
+	return plugin.New(plugin.Config{
+		Name:             "agentawesome-memory-capture",
+		AfterRunCallback: captureSessionAfterRun,
+	})
+}
+
+// captureSessionAfterRun saves the completed ADK session to configured memory.
+func captureSessionAfterRun(invocation agent.InvocationContext) {
+	if invocation == nil || invocation.Memory() == nil || invocation.Session() == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), sessionCaptureTimeout)
+	defer cancel()
+	if err := invocation.Memory().AddSessionToMemory(ctx, invocation.Session()); err != nil {
+		log.Error().Err(err).Msg("persist ADK session to memory")
+	}
+}

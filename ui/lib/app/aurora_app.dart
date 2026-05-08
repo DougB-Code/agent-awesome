@@ -3,12 +3,14 @@ library;
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, AppExitType;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../domain/models.dart';
 import '../ui/aurora_shell.dart';
+import '../ui/onboarding/setup_wizard_shell.dart';
 import 'app_config.dart';
 import 'app_controller.dart';
 import 'theme.dart';
@@ -31,7 +33,9 @@ class _AuroraAppState extends State<AuroraApp> {
   ConfirmationRequest? _shownConfirmation;
   StreamSubscription<ProcessSignal>? _sigIntSubscription;
   StreamSubscription<ProcessSignal>? _sigTermSubscription;
-  Future<void>? _servicePreservingCloseFuture;
+  Future<void>? _closeFuture;
+  bool _shutdownVisible = false;
+  String _shutdownMessage = 'Preparing to shut down';
 
   /// Initializes the app controller.
   @override
@@ -39,7 +43,7 @@ class _AuroraAppState extends State<AuroraApp> {
     super.initState();
     controller = AuroraAppController(config: widget.config);
     controller.addListener(_watchConfirmation);
-    _exitObserver = _ExitObserver(onExit: _closeForServicePreservingExit);
+    _exitObserver = _ExitObserver(onExitRequested: _requestAppExit);
     WidgetsBinding.instance.addObserver(_exitObserver);
     _sigIntSubscription = _watchSignal(ProcessSignal.sigint);
     if (!Platform.isWindows) {
@@ -48,13 +52,13 @@ class _AuroraAppState extends State<AuroraApp> {
     unawaited(controller.initialize());
   }
 
-  /// Cleans up UI-owned listeners while preserving managed services.
+  /// Cleans up UI-owned listeners and managed service processes.
   @override
   void dispose() {
     unawaited(_sigIntSubscription?.cancel());
     unawaited(_sigTermSubscription?.cancel());
     WidgetsBinding.instance.removeObserver(_exitObserver);
-    unawaited(_closeForServicePreservingExit());
+    unawaited(_closeForExit(requestPlatformExit: false));
     super.dispose();
   }
 
@@ -65,7 +69,24 @@ class _AuroraAppState extends State<AuroraApp> {
       debugShowCheckedModeBanner: false,
       title: 'Aurora',
       theme: buildAuroraTheme(),
-      home: AuroraShell(controller: controller),
+      home: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          AnimatedBuilder(
+            animation: controller,
+            builder: (context, _) {
+              if (!controller.shellDecisionReady) {
+                return const _StartupShell();
+              }
+              if (!controller.gettingStartedCompleted) {
+                return SetupWizardShell(controller: controller);
+              }
+              return AuroraShell(controller: controller);
+            },
+          ),
+          if (_shutdownVisible) _ShutdownOverlay(message: _shutdownMessage),
+        ],
+      ),
     );
   }
 
@@ -115,36 +136,144 @@ class _AuroraAppState extends State<AuroraApp> {
     }
   }
 
-  /// Detaches the UI from clients before exiting from a terminal signal.
+  /// Cancels the first close request so shutdown progress can be shown.
+  Future<AppExitResponse> _requestAppExit() async {
+    unawaited(_closeForExit(requestPlatformExit: true));
+    return AppExitResponse.cancel;
+  }
+
+  /// Stops local resources before exiting from a terminal signal.
   Future<void> _handleProcessSignal(ProcessSignal signal) async {
     try {
-      await _closeForServicePreservingExit();
+      await _closeForExit(requestPlatformExit: false);
     } finally {
       exit(signal == ProcessSignal.sigint ? 130 : 143);
     }
   }
 
-  /// Closes UI-owned clients without terminating managed service state.
-  Future<void> _closeForServicePreservingExit() {
-    return _servicePreservingCloseFuture ??= () async {
+  /// Closes UI-owned clients and stops managed service state once.
+  Future<void> _closeForExit({required bool requestPlatformExit}) {
+    return _closeFuture ??= () async {
+      _setShutdownMessage('Preparing to shut down');
       controller.removeListener(_watchConfirmation);
-      controller.closeClients();
+      await controller.close(onStatus: _setShutdownMessage);
+      _setShutdownMessage('Shutdown complete');
+      if (requestPlatformExit) {
+        await ServicesBinding.instance.exitApplication(AppExitType.required);
+      }
     }();
+  }
+
+  /// Updates the shutdown overlay while teardown is running.
+  void _setShutdownMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _shutdownVisible = true;
+      _shutdownMessage = message;
+    });
+  }
+}
+
+/// StartupShell keeps first paint neutral until the app chooses a real shell.
+class _StartupShell extends StatelessWidget {
+  /// Creates the neutral startup surface.
+  const _StartupShell();
+
+  /// Builds a non-setup loading state while persisted settings are read.
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: AuroraColors.surface,
+      body: Center(
+        child: SizedBox.square(
+          dimension: 28,
+          child: CircularProgressIndicator(strokeWidth: 3),
+        ),
+      ),
+    );
+  }
+}
+
+/// ShutdownOverlay blocks duplicate close requests and reports teardown progress.
+class _ShutdownOverlay extends StatelessWidget {
+  /// Creates a modal shutdown progress surface.
+  const _ShutdownOverlay({required this.message});
+
+  /// Latest shutdown status line.
+  final String message;
+
+  /// Builds the modal shutdown progress surface.
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.45),
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AuroraColors.surface,
+            border: Border.all(color: AuroraColors.border),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x33000000),
+                blurRadius: 24,
+                offset: Offset(0, 14),
+              ),
+            ],
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 340, maxWidth: 460),
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  const SizedBox.square(
+                    dimension: 26,
+                    child: CircularProgressIndicator(strokeWidth: 3),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Shutting down',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          message,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AuroraColors.muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
 /// ExitObserver waits for async UI cleanup before window close exits.
 class _ExitObserver extends WidgetsBindingObserver {
   /// Creates an app-exit observer.
-  _ExitObserver({required this.onExit});
+  _ExitObserver({required this.onExitRequested});
 
-  /// Cleanup callback invoked before the platform exits.
-  final Future<void> Function() onExit;
+  /// Callback invoked when the platform asks whether the app may exit.
+  final Future<AppExitResponse> Function() onExitRequested;
 
   /// Handles desktop app-exit requests.
   @override
   Future<AppExitResponse> didRequestAppExit() async {
-    await onExit();
-    return AppExitResponse.exit;
+    return onExitRequested();
   }
 }

@@ -23,6 +23,7 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--model-id=kimi-k2",
 		"--log-file", "/tmp/harness.log",
 		"--context-api-addr", "127.0.0.1:8081",
+		"--session-db", "/tmp/agent-sessions.db",
 		"console",
 		"--input-file", "prompt.txt",
 	})
@@ -53,6 +54,9 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	}
 	if got, want := captured.ContextAPIAddr, "127.0.0.1:8081"; got != want {
 		t.Fatalf("ContextAPIAddr = %q, want %q", got, want)
+	}
+	if got, want := captured.SessionDatabase, "/tmp/agent-sessions.db"; got != want {
+		t.Fatalf("SessionDatabase = %q, want %q", got, want)
 	}
 	if want := []string{"console", "--input-file", "prompt.txt"}; !reflect.DeepEqual(captured.Args, want) {
 		t.Fatalf("args = %#v, want %#v", captured.Args, want)

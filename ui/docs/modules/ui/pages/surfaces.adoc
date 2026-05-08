@@ -1,0 +1,14 @@
+= UI Surfaces
+:description: UI chat, memory, and task context surfaces.
+
+UI surfaces are built from clients and domain models.
+Widgets should render state and user intent, while clients own network calls and app controllers coordinate long-running behavior.
+
+== Boundaries
+
+* `lib/ui` owns presentation and interaction.
+* `lib/app` owns app-level state and local service coordination.
+* `lib/clients` owns HTTP and MCP calls.
+* `lib/domain` owns data shapes and pure derivations.
+
+Do not put business rules directly into widgets when the rule can live in a domain or app-layer type.

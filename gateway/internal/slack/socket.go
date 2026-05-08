@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"nhooyr.io/websocket"
 )
 
@@ -22,7 +22,7 @@ func (a *Adapter) RunSocketMode(ctx context.Context) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		log.Printf("slack socket disconnected: %v", err)
+		log.Error().Err(err).Msg("slack socket disconnected")
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -45,7 +45,7 @@ func (a *Adapter) runSocketOnce(ctx context.Context) error {
 		return err
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "agent gateway shutting down")
-	log.Printf("slack socket connected")
+	log.Info().Msg("slack socket connected")
 	for {
 		_, data, err := conn.Read(ctx)
 		if err != nil {
@@ -79,12 +79,12 @@ func (a *Adapter) acceptSocketMessage(ctx context.Context, conn *websocket.Conn,
 	}
 	switch envelope.Type {
 	case "hello":
-		log.Printf("slack socket hello")
+		log.Info().Msg("slack socket hello")
 		return nil
 	case "disconnect":
 		return fmt.Errorf("Slack requested disconnect: %s", envelope.Reason)
 	case "events_api":
-		log.Printf("slack socket events_api envelope received")
+		log.Info().Msg("slack socket events_api envelope received")
 		_, err := a.AcceptEnvelope(envelope.Payload)
 		return err
 	default:

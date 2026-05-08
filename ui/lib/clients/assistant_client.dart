@@ -65,8 +65,10 @@ class AssistantClient {
     required this.appName,
     required this.userId,
     http.Client? httpClient,
+    Map<String, String> headers = const <String, String>{},
     this.logger,
-  }) : _http = httpClient ?? http.Client();
+  }) : headers = Map<String, String>.unmodifiable(headers),
+       _http = httpClient ?? http.Client();
 
   /// Base URL of the ADK REST API.
   final String baseUrl;
@@ -77,6 +79,9 @@ class AssistantClient {
   /// ADK user id.
   final String userId;
 
+  /// Headers applied to every assistant API request.
+  final Map<String, String> headers;
+
   final http.Client _http;
   final AppLogger? logger;
 
@@ -84,7 +89,7 @@ class AssistantClient {
   Future<List<ChatSession>> listSessions() async {
     final uri = _uri('/apps/$appName/users/$userId/sessions');
     await _log('GET $uri');
-    final response = await _http.get(uri);
+    final response = await _http.get(uri, headers: _headers());
     await _log('GET $uri -> ${response.statusCode}');
     if (response.statusCode != 200) {
       throw AssistantException('HTTP ${response.statusCode} listing sessions');
@@ -105,7 +110,7 @@ class AssistantClient {
     await _log('POST $uri create session');
     final response = await _http.post(
       uri,
-      headers: const {'Content-Type': 'application/json'},
+      headers: _headers(contentTypeJson: true),
       body: jsonEncode(<String, dynamic>{'state': <String, dynamic>{}}),
     );
     await _log('POST $uri -> ${response.statusCode}');
@@ -119,7 +124,7 @@ class AssistantClient {
   Future<void> deleteSession(String sessionId) async {
     final uri = _uri('/apps/$appName/users/$userId/sessions/$sessionId');
     await _log('DELETE $uri');
-    final response = await _http.delete(uri);
+    final response = await _http.delete(uri, headers: _headers());
     await _log('DELETE $uri -> ${response.statusCode}');
     if (response.statusCode != 200 &&
         response.statusCode != 204 &&
@@ -132,7 +137,7 @@ class AssistantClient {
   Future<List<AssistantEvent>> loadSessionEvents(String sessionId) async {
     final uri = _uri('/apps/$appName/users/$userId/sessions/$sessionId');
     await _log('GET $uri load session events');
-    final response = await _http.get(uri);
+    final response = await _http.get(uri, headers: _headers());
     await _log('GET $uri -> ${response.statusCode}');
     if (response.statusCode != 200) {
       throw AssistantException('HTTP ${response.statusCode} loading session');
@@ -162,7 +167,7 @@ class AssistantClient {
       'POST $uri run_sse session=$sessionId textLength=${text.length} confirmation=${confirmation != null}',
     );
     final request = http.Request('POST', uri);
-    request.headers['Content-Type'] = 'application/json';
+    request.headers.addAll(_headers(contentTypeJson: true));
     request.body = jsonEncode(_runBody(sessionId, text, confirmation));
     final response = await _http.send(request);
     await _log('POST $uri -> ${response.statusCode}');
@@ -217,6 +222,13 @@ class AssistantClient {
         ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;
     return Uri.parse('$trimmedBase$path');
+  }
+
+  Map<String, String> _headers({bool contentTypeJson = false}) {
+    return <String, String>{
+      ...headers,
+      if (contentTypeJson) 'Content-Type': 'application/json',
+    };
   }
 
   Future<void> _log(String message) async {

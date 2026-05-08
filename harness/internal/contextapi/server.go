@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/mcptransport"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 )
 
 const contextAPIPrefix = "/api/context"
@@ -45,12 +45,12 @@ func Start(ctx context.Context, addr string, tools *schema.Tools) (*Server, erro
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.http.Shutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown context api: %v", err)
+			log.Error().Err(err).Msg("shutdown context api")
 		}
 	}()
 	go func() {
 		if err := server.http.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("serve context api: %v", err)
+			log.Error().Err(err).Msg("serve context api")
 		}
 	}()
 	return server, nil

@@ -97,6 +97,27 @@ void main() {
     expect(screenCommands, isEmpty);
     expect(newChatCount, 1);
   });
+
+  testWidgets('setup status opens first-run setup', (tester) async {
+    final commandController = TextEditingController();
+    var setupOpenCount = 0;
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: commandController,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+        onOpenSetup: () => setupOpenCount++,
+      ),
+    );
+
+    expect(find.text('Setup incomplete'), findsOneWidget);
+
+    await tester.tap(find.text('Setup incomplete'));
+    await tester.pump();
+
+    expect(setupOpenCount, 1);
+  });
 }
 
 class _CommandBarHarness extends StatelessWidget {
@@ -104,11 +125,15 @@ class _CommandBarHarness extends StatelessWidget {
     required this.commandController,
     required this.onScreenCommand,
     required this.onNewChatSubmit,
+    this.onOpenSetup,
   });
 
   final TextEditingController commandController;
   final ValueChanged<CommandContext> onScreenCommand;
   final VoidCallback onNewChatSubmit;
+
+  /// Optional setup callback used by tests that exercise the status action.
+  final VoidCallback? onOpenSetup;
 
   /// Builds a minimal shell around the command bar.
   @override
@@ -132,6 +157,7 @@ class _CommandBarHarness extends StatelessWidget {
           onOpenSection: (_) {},
           onOpenSettingsSection: (_) {},
           onOpenSettings: () {},
+          onOpenSetup: onOpenSetup ?? () {},
         ),
       ),
     );

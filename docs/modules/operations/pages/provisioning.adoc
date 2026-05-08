@@ -1,0 +1,59 @@
+= Provisioning
+:description: Operations provisioning workflow for managed Cloudflare agents.
+
+The provisioning CLI lives in `provision`.
+It creates and reconciles per-agent Cloudflare resources, keeps stable generated tokens in the local keyring, and stores non-secret records under the Agent Awesome config directory.
+
+== First-Time Platform Setup
+
+[source,sh]
+----
+agent-awesome-provision platform init --zone-name agent-awesome.com --cloudflare-account-id <account-id>
+agent-awesome-provision credentials set CLOUDFLARE_API_TOKEN
+agent-awesome-provision credentials set OPENAI_API_KEY
+----
+
+The Cloudflare token must have enough access to reconcile Workers, routes, DNS preflight checks, R2 buckets, and Worker secrets.
+
+== Provision An Agent
+
+[source,sh]
+----
+agent-awesome-provision cloudflare apply --agent-id sister
+agent-awesome-provision agent status sister
+----
+
+Provisioning is intended to be idempotent.
+Running `cloudflare apply` repeatedly should reuse internal tokens and repair drift instead of duplicating resources.
+
+For the full literal cloud-agent checklist, use xref:operations:cloud-agents.adoc[].
+
+== Delete An Agent
+
+[source,sh]
+----
+agent-awesome-provision agent delete sister --dry-run
+agent-awesome-provision agent delete sister
+----
+
+Destructive deletion requires exact agent-id confirmation unless `--force` is supplied for non-interactive automation.
+Use `--local-only` when the remote resources are already gone and only local state needs cleanup.
+
+== Resource Shape
+
+[cols="1,2",options="header"]
+|===
+|Resource |Example
+
+|Worker
+|`agent-awesome-sister`
+
+|Hostname
+|`sister.agent-awesome.com`
+
+|R2 bucket
+|`agent-awesome-sister-memory`
+
+|Snapshot key
+|`context-snapshot.tar.gz`
+|===

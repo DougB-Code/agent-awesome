@@ -14,6 +14,7 @@ class AuroraAppSettings {
     this.summaryModelConfigPath = '',
     this.summaryModelRef = '',
     this.chatTitleSummariesEnabled = true,
+    this.gettingStartedCompleted = false,
   });
 
   /// Runtime profile used by fast-path new chat creation.
@@ -28,12 +29,16 @@ class AuroraAppSettings {
   /// Whether the app should generate compact chat titles.
   final bool chatTitleSummariesEnabled;
 
+  /// Whether the first-launch setup guide has been completed or hidden.
+  final bool gettingStartedCompleted;
+
   /// Returns a copy with selected settings changed.
   AuroraAppSettings copyWith({
     String? defaultChatProfilePath,
     String? summaryModelConfigPath,
     String? summaryModelRef,
     bool? chatTitleSummariesEnabled,
+    bool? gettingStartedCompleted,
   }) {
     return AuroraAppSettings(
       defaultChatProfilePath:
@@ -43,6 +48,8 @@ class AuroraAppSettings {
       summaryModelRef: summaryModelRef ?? this.summaryModelRef,
       chatTitleSummariesEnabled:
           chatTitleSummariesEnabled ?? this.chatTitleSummariesEnabled,
+      gettingStartedCompleted:
+          gettingStartedCompleted ?? this.gettingStartedCompleted,
     );
   }
 
@@ -53,6 +60,7 @@ class AuroraAppSettings {
       'summary_model_config': summaryModelConfigPath,
       'summary_model_ref': summaryModelRef,
       'chat_title_summaries_enabled': chatTitleSummariesEnabled,
+      'getting_started_completed': gettingStartedCompleted,
     };
   }
 
@@ -65,6 +73,10 @@ class AuroraAppSettings {
       chatTitleSummariesEnabled: _boolValue(
         json['chat_title_summaries_enabled'],
         fallback: true,
+      ),
+      gettingStartedCompleted: _boolValue(
+        json['getting_started_completed'],
+        fallback: false,
       ),
     );
   }

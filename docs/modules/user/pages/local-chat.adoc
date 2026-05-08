@@ -1,0 +1,36 @@
+= Local Chat
+:description: User-facing local chat workflow.
+
+Local chat uses the Flutter UI, the gateway, the harness, and memory.
+The UI sends assistant traffic through the configured gateway endpoint; the gateway forwards agent calls to the harness and memory calls to the memory service.
+
+== Before You Chat
+
+Make sure your selected runtime profile has access to a configured model credential.
+For local development profiles, that usually means the credential is available in the shell environment or the Agent Awesome keyring.
+
+For the default desktop profile, store the OpenAI credential from `harness`:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome credentials set OPENAI_API_KEY
+----
+
+== Run From The Harness
+
+For a direct console session, run the harness from `harness`:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome run -- console
+----
+
+For a web API session:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome run -- web --port 8080
+----
+
+The UI normally uses the gateway profile rather than direct harness mode.
+Use direct harness commands when you are testing the agent runtime without the desktop shell.

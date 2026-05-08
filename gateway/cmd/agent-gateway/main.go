@@ -4,7 +4,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,14 +12,22 @@ import (
 
 	"agentgateway/internal/config"
 	"agentgateway/internal/gateway"
+	"agentgateway/internal/logging"
 	"agentgateway/internal/supervisor"
+	"github.com/rs/zerolog/log"
 )
 
 // main loads configuration, starts optional local services, and serves HTTP.
 func main() {
+	closeLog, err := logging.Configure("")
+	if err != nil {
+		log.Fatal().Err(err).Msg("configure logging")
+	}
+	defer closeLog()
+
 	cfg, err := config.FromFlags(os.Args[1:])
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		log.Fatal().Err(err).Msg("load config")
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -30,13 +37,13 @@ func main() {
 
 	server, err := gateway.NewServer(cfg, manager)
 	if err != nil {
-		log.Fatalf("create gateway: %v", err)
+		log.Fatal().Err(err).Msg("create gateway")
 	}
 	go ensureServices(ctx, cfg, manager)
 	if server.SlackSocketModeEnabled() {
 		go func() {
 			if err := server.RunSlackSocketMode(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				log.Printf("slack socket mode stopped: %v", err)
+				log.Error().Err(err).Msg("slack socket mode stopped")
 			}
 		}()
 	}
@@ -45,23 +52,23 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.HTTPServer().Shutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown gateway: %v", err)
+			log.Error().Err(err).Msg("shutdown gateway")
 		}
 		if err := manager.Close(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
-			log.Printf("shutdown services: %v", err)
+			log.Error().Err(err).Msg("shutdown services")
 		}
 	}()
 
-	log.Printf("agent-gateway listening on http://%s", cfg.ListenAddress)
+	log.Info().Str("addr", cfg.ListenAddress).Msg("agent-gateway listening")
 	if err := server.HTTPServer().ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("serve gateway: %v", err)
+		log.Fatal().Err(err).Msg("serve gateway")
 	}
 }
 
 // ensureServices checks or starts dependencies declared in gateway config.
 func ensureServices(ctx context.Context, cfg config.Config, manager *supervisor.Manager) {
 	started := time.Now()
-	log.Printf("dependency startup begin")
+	log.Info().Msg("dependency startup begin")
 	harness := supervisor.Service{
 		Name:       cfg.HarnessService.Name,
 		HealthURL:  cfg.HarnessService.HealthURL,
@@ -79,10 +86,20 @@ func ensureServices(ctx context.Context, cfg config.Config, manager *supervisor.
 		AutoStart:  cfg.MemoryService.AutoStart,
 	}
 	harnessStarted := time.Now()
-	log.Printf("harness startup begin")
-	log.Printf("harness status after %s: %+v", time.Since(harnessStarted).Round(time.Millisecond), manager.Ensure(ctx, harness))
+	log.Info().Msg("harness startup begin")
+	harnessStatus := manager.Ensure(ctx, harness)
+	log.Info().
+		Dur("duration", time.Since(harnessStarted).Round(time.Millisecond)).
+		Any("status", harnessStatus).
+		Msg("harness startup complete")
 	memoryStarted := time.Now()
-	log.Printf("memory startup begin")
-	log.Printf("memory status after %s: %+v", time.Since(memoryStarted).Round(time.Millisecond), manager.Ensure(ctx, memory))
-	log.Printf("dependency startup complete after %s", time.Since(started).Round(time.Millisecond))
+	log.Info().Msg("memory startup begin")
+	memoryStatus := manager.Ensure(ctx, memory)
+	log.Info().
+		Dur("duration", time.Since(memoryStarted).Round(time.Millisecond)).
+		Any("status", memoryStatus).
+		Msg("memory startup complete")
+	log.Info().
+		Dur("duration", time.Since(started).Round(time.Millisecond)).
+		Msg("dependency startup complete")
 }

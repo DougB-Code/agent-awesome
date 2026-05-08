@@ -1,0 +1,276 @@
+= Contributor Setup
+:description: Repository orientation and first-build checklist for Agent Awesome contributors.
+
+This page is the note to future-us for joining the project, finding the right code, and proving a workstation can build Agent Awesome.
+It is operational documentation because it covers repository access, build tooling, generated artifacts, and contributor workflow.
+
+== Repository
+
+The canonical repository is:
+
+[source,sh]
+----
+git clone https://github.com/DougB-Code/agent-awesome.git
+cd agent-awesome
+----
+
+If you already have a checkout, make sure it points at the expected remote and start from a clean branch:
+
+[source,sh]
+----
+git remote -v
+git status --short
+git switch main
+git pull --ff-only
+----
+
+Use short-lived branches for changes:
+
+[source,sh]
+----
+git switch -c docs/contributor-setup
+----
+
+Do not commit local secrets, generated credentials, package archives, or inspection output.
+Temporary build, verification, and inspection files belong under `build`.
+
+== Required Tools
+
+Install these before the first build:
+
+[cols="1,2"]
+|===
+|Tool |Use
+
+|Git
+|Clone the repository and manage contribution branches.
+
+|Go `1.26`
+|Build and test the harness, memory service, gateway, and provisioning CLI.
+
+|Node.js `22` or newer
+|Build the Antora docs site and run Cloudflare Wrangler checks.
+
+|npm
+|Install Antora, Lunr search, and Cloudflare Worker dependencies.
+
+|Flutter with Dart `3.10.4` or compatible
+|Analyze and build the desktop UI.
+
+|Cloudflare Wrangler
+|Installed through the Cloudflare Worker package; used for cloud deployment checks.
+|===
+
+Verify the toolchain:
+
+[source,sh]
+----
+git --version
+go version
+node --version
+npm --version
+flutter --version
+----
+
+== Repository Organization
+
+The repository is split by runtime responsibility.
+Root-adjacent directories wire complete systems together; deeper `internal` packages hold narrower reusable logic.
+
+[cols="1,2"]
+|===
+|Path |Use
+
+|`docs`
+|Antora playbook content root, shared documentation pages, user/development/operations modules, and the local UI bundle.
+
+|`harness`
+|The local agent runtime and `agent-awesome` CLI. This is the entry point that composes models, tools, memory, and workflows.
+
+|`memory`
+|Local memory service and MCP-facing memory primitives.
+
+|`gateway`
+|HTTP/WebSocket gateway used by local and cloud surfaces, including Slack-facing paths.
+
+|`provision`
+|Provisioning CLI and state reconciliation for Cloudflare resources and generated operations records.
+
+|`ui`
+|Flutter desktop workspace for the Agent Awesome local interface.
+
+|`deploy/cloudflare`
+|Cloudflare Worker, Container, Wrangler config, Dockerfile, and deployment scripts.
+
+|`pilots`
+|Pilot configuration profiles, including the default personal-assistant setup.
+
+|`build`
+|Generated docs, caches, compiled binaries, packaged archives, test output, and temporary inspection files.
+|===
+
+Most source packages keep commands under `cmd` and implementation details under `internal`.
+Documentation that belongs beside subsystem code lives in each subsystem's `docs` directory and is consolidated by Antora.
+
+== First Setup
+
+Run commands from the repository root unless a step changes directories.
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+
+npm install --cache ./build/npm-cache
+----
+
+The root npm package owns the Antora documentation build.
+Cloudflare Worker dependencies are installed separately because they belong to `deploy/cloudflare/worker`.
+
+[source,sh]
+----
+cd deploy/cloudflare/worker
+npm install --cache ../../../build/npm-cache
+cd ../../..
+----
+
+== Build The Docs
+
+Build the documentation site first.
+It verifies the Antora playbook, distributed content roots, custom UI bundle, and Lunr search index.
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+npm run docs:build
+----
+
+Generated docs are written to:
+
+[source,text]
+----
+build/site
+----
+
+View the operations docs locally:
+
+[source,sh]
+----
+python3 -m http.server 4183 --directory build/site
+----
+
+Then open:
+
+[source,text]
+----
+http://127.0.0.1:4183/agent-awesome/0.1/operations/index.html
+----
+
+The current combined docs build includes user, development, and operations pages.
+Because the Lunr index contains every indexed page in the build, do not publish this combined output as public user documentation while internal content is sensitive.
+
+== Test Go Modules
+
+Run each Go module test suite independently:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+
+cd harness && go test ./... && cd ..
+cd memory && go test ./... && cd ..
+cd gateway && go test ./... && cd ..
+cd provision && go test ./... && cd ..
+----
+
+Expected command packages:
+
+[source,text]
+----
+harness/cmd/agent-awesome
+memory/cmd/memory
+memory/cmd/memoryd
+gateway/cmd/agent-gateway
+provision/cmd/agent-awesome-provision
+----
+
+== Check Cloudflare Worker
+
+Use Node.js `22` or newer for Wrangler.
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/deploy/cloudflare/worker
+npm run check
+cd ../../..
+----
+
+This TypeScript check does not deploy anything.
+Deployment steps and required secrets are covered in xref:operations:cloudflare-setup.adoc[] and xref:operations:cloud-agents.adoc[].
+
+== Check The Desktop UI
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/ui
+flutter analyze
+flutter test
+cd ..
+----
+
+Build the Linux desktop bundle when you need a packaged application:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/ui
+flutter build linux --release
+cd ..
+----
+
+Flutter writes the bundle to:
+
+[source,text]
+----
+ui/build/linux/x64/release/bundle
+----
+
+== Build Local Binaries
+
+Create local binaries under `build/package/bin`:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+mkdir -p build/package/bin
+
+cd harness
+go build -trimpath -o ../build/package/bin/agent-awesome ./cmd/agent-awesome
+cd ../memory
+go build -trimpath -o ../build/package/bin/memoryd ./cmd/memoryd
+cd ../gateway
+go build -trimpath -o ../build/package/bin/agent-gateway ./cmd/agent-gateway
+cd ../provision
+go build -trimpath -o ../build/package/bin/agent-awesome-provision ./cmd/agent-awesome-provision
+cd ..
+----
+
+For full packaging, follow xref:development:build-package.adoc[].
+
+== First Contribution Checklist
+
+Before opening a pull request or handing work to another contributor, run the checks that match the files changed:
+
+[source,sh]
+----
+npm run docs:build
+
+cd harness && go test ./... && cd ..
+cd memory && go test ./... && cd ..
+cd gateway && go test ./... && cd ..
+cd provision && go test ./... && cd ..
+
+cd deploy/cloudflare/worker && npm run check && cd ../../..
+cd ui && flutter analyze && flutter test && cd ..
+----
+
+Include screenshots for docs UI or Flutter UI changes when visual behavior changes.
+Mention any checks that could not be run and why.

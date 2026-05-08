@@ -1,0 +1,43 @@
+= Harness Configuration
+:description: Harness model, agent, and tool configuration.
+
+The harness accepts separate model, agent, and tool YAML files.
+Keeping those files separate preserves the boundary between provider selection, agent behavior, and callable tools.
+
+== Default Files
+
+[cols="1,2",options="header"]
+|===
+|File |Use
+
+|`model.yaml`
+|Model provider and model id selection.
+
+|`agent.yaml`
+|Agent name, description, and instructions.
+
+|`tool.yaml`
+|Local execution and MCP tool configuration.
+
+|`tool.local.yaml`
+|Local development tool profile.
+
+|`tool.cloudflare.yaml`
+|Tool profile for the Cloudflare-hosted memory endpoint.
+
+|`../pilots/personal-assistant/*.yaml`
+|Default desktop pilot config used by the UI runtime profile.
+|===
+
+== Run With Explicit Config
+
+[source,sh]
+----
+go run ./cmd/agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- console
+----
+
+== MCP Tools
+
+MCP servers are configured under `mcp.servers`.
+The harness validates the configuration, creates MCP transports, and passes ADK-compatible MCP toolsets into the runtime.
+ADK owns MCP sessions, tool discovery, invocation, result conversion, and confirmation.

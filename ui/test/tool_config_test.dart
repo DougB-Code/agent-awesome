@@ -33,6 +33,8 @@ mcp:
     - name: memory
       transport: streamable-http
       endpoint: http://127.0.0.1:8090/mcp
+      headers-from-env:
+        Authorization: AGENTAWESOME_GATEWAY_AUTHORIZATION
       require-confirmation-tools:
         - save_memory_candidate
       tools:
@@ -54,6 +56,9 @@ mcp:
     );
     expect(document.mcp.enabled, isTrue);
     expect(document.mcp.servers.single.name, 'memory');
+    expect(document.mcp.servers.single.headersFromEnv, <String, String>{
+      'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
+    });
     expect(document.mcp.servers.single.tools.allow, <String>[
       'search_memory',
       'save_memory_candidate',
@@ -80,6 +85,9 @@ mcp:
           newHttpMcpServerToolConfig(
             name: 'memory',
             endpoint: 'http://127.0.0.1:8090/mcp',
+            headersFromEnv: const <String, String>{
+              'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
+            },
           ).copyWith(
             tools: const McpToolFilterConfig(
               allow: <String>['list_tasks', 'create_task'],
@@ -97,6 +105,11 @@ mcp:
     expect(encoded, contains('executable: git'));
     expect(encoded, contains('mcp:'));
     expect(encoded, contains('endpoint: http://127.0.0.1:8090/mcp'));
+    expect(encoded, contains('headers-from-env:'));
+    expect(
+      encoded,
+      contains('Authorization: AGENTAWESOME_GATEWAY_AUTHORIZATION'),
+    );
     expect(encoded, contains('create_task'));
   });
 
@@ -117,12 +130,18 @@ mcp:
     final document = graphBackedMemoryToolConfig(
       server: server,
       localExec: emptyToolConfigDocument().localExec,
+      headersFromEnv: const <String, String>{
+        'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
+      },
     );
 
     expect(document.mcp.enabled, isTrue);
     expect(document.mcp.servers, hasLength(1));
     expect(document.mcp.servers.single.name, 'memory');
     expect(document.mcp.servers.single.endpoint, 'http://127.0.0.1:8090/mcp');
+    expect(document.mcp.servers.single.headersFromEnv, <String, String>{
+      'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
+    });
     expect(document.mcp.servers.single.tools.allow, graphBackedMcpToolNames);
     expect(document.mcp.servers.single.requireConfirmationTools, <String>[
       'save_memory_candidate',

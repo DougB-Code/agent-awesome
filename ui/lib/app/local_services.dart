@@ -2,13 +2,13 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
 import '../domain/models.dart';
 import 'app_config.dart';
+import 'process_supervisor.dart';
 import 'runtime_profile.dart';
 
 /// ServiceProcessStatus reports local process orchestration state.
@@ -34,60 +34,52 @@ class ServiceProcessStatus {
   final String message;
 }
 
-/// ManagedServiceProcess stores an owned process and its cleanup strategy.
-class ManagedServiceProcess {
-  /// Creates an owned process handle.
-  const ManagedServiceProcess({
-    required this.process,
-    required this.ownsProcessGroup,
-  });
-
-  /// Root process started by the supervisor.
-  final Process process;
-
-  /// Whether the process was started as a process-group leader.
-  final bool ownsProcessGroup;
-
-  /// Operating system process id.
-  int get pid => process.pid;
-
-  /// Completes when the root process exits.
-  Future<int> get exitCode => process.exitCode;
-}
-
-/// ServiceProcessLaunchPlan stores the exact command used to start a service.
-class ServiceProcessLaunchPlan {
-  /// Creates an immutable process launch plan.
-  const ServiceProcessLaunchPlan({
-    required this.executable,
+/// _ManagedServiceEndpoint stores a local endpoint the UI is allowed to stop.
+class _ManagedServiceEndpoint {
+  /// Creates an endpoint stop target from runtime profile data.
+  const _ManagedServiceEndpoint({
+    required this.id,
+    required this.name,
+    required this.health,
     required this.arguments,
-    required this.ownsProcessGroup,
   });
 
-  /// Executable passed to Process.start.
-  final String executable;
+  /// Stable runtime profile service id.
+  final String id;
 
-  /// Arguments passed to Process.start.
+  /// Display name used in service logs.
+  final String name;
+
+  /// Health URL used to verify whether the process is still running.
+  final Uri health;
+
+  /// Launch arguments used to describe ports in shutdown messages.
   final List<String> arguments;
-
-  /// Whether the launched process owns a separate process group.
-  final bool ownsProcessGroup;
 }
 
 /// LocalServiceSupervisor starts and restarts local services for the UI.
 class LocalServiceSupervisor {
   /// Creates a supervisor for services described by the app configuration.
-  LocalServiceSupervisor({required this.config, http.Client? httpClient})
-    : _http = httpClient ?? http.Client();
+  LocalServiceSupervisor({
+    required this.config,
+    required ProcessSupervisor processSupervisor,
+    http.Client? httpClient,
+  }) : _processSupervisor = processSupervisor,
+       _http = httpClient ?? http.Client();
 
   /// Runtime configuration for local service commands and endpoints.
   final AppConfig config;
 
+  final ProcessSupervisor _processSupervisor;
   final http.Client _http;
-  final Map<String, ManagedServiceProcess> _started =
-      <String, ManagedServiceProcess>{};
+  final Map<String, ManagedProcessHandle> _started =
+      <String, ManagedProcessHandle>{};
+  final Map<String, _ManagedServiceEndpoint> _endpoints =
+      <String, _ManagedServiceEndpoint>{};
   final Map<String, StringBuffer> _logs = <String, StringBuffer>{};
+  final Set<String> _printedStartupKeys = <String>{};
   Future<void> _logWrite = Future<void>.value();
+  bool _closed = false;
 
   /// Starts required services when auto-start is enabled.
   Future<List<ServiceProcessStatus>> startRequiredServices(
@@ -99,6 +91,16 @@ class LocalServiceSupervisor {
       'supervisor',
       'checking services for profile ${profile.id}; restart=$restartAutoStarted',
     );
+    if (_closed || _processSupervisor.isClosing) {
+      final status = _status(
+        'Local Services',
+        config.workspaceRoot,
+        ConnectionStateKind.disconnected,
+        'Supervisor is closed',
+      );
+      await _writeStatusLog(status);
+      return <ServiceProcessStatus>[status];
+    }
     if (!config.autoStartLocalServices) {
       final status = _status(
         'Local Services',
@@ -139,10 +141,21 @@ class LocalServiceSupervisor {
     return statuses;
   }
 
-  /// Stops only processes started by this supervisor.
-  Future<void> close() async {
-    await Future.wait(_started.values.map(_terminateProcess));
+  /// Stops processes started or previously recorded by this supervisor.
+  Future<void> close({void Function(String message)? onStatus}) async {
+    _closed = true;
+    for (final entry in _started.entries.toList().reversed) {
+      final handle = entry.value;
+      onStatus?.call('Stopping ${handle.spec.name} (pid ${handle.pid})');
+      await _processSupervisor.stop(handle);
+    }
     _started.clear();
+    onStatus?.call('Checking stale managed service records');
+    await _processSupervisor.stopPersistedProcesses(
+      namespace: 'local-services',
+      onStatus: onStatus,
+    );
+    await _stopKnownEndpointListeners(onStatus: onStatus);
     await _logWrite;
     _http.close();
   }
@@ -162,12 +175,39 @@ class LocalServiceSupervisor {
         'Cannot restart $name because ${health.host} is not a local endpoint.',
       );
     }
-    await _writeLogLine(name, 'stopping existing listener on ${health.port}');
-    await _signalEndpointPort(name: name, port: health.port, signal: 'TERM');
+    await _writeLogLine(name, 'stopping registered listener on ${health.port}');
+    await _processSupervisor.stopPersistedProcess(
+      namespace: 'local-services',
+      id: id,
+      name: name,
+      onLog: (message) => _writeLogLine(name, message),
+    );
+    if (!await _isHealthy(health)) {
+      return;
+    }
+    await _writeLogLine(
+      name,
+      'looking for managed Agent Awesome listener on ${health.port}',
+    );
+    final stopped = await _signalManagedPortListeners(
+      name: name,
+      port: health.port,
+      signal: ManagedProcessSignal.term,
+    );
+    if (!stopped) {
+      throw StateError(
+        'Could not safely identify the existing $name listener on port '
+        '${health.port}. Stop it manually before restarting.',
+      );
+    }
     if (await _waitUntilUnhealthy(health)) {
       return;
     }
-    await _signalEndpointPort(name: name, port: health.port, signal: 'KILL');
+    await _signalManagedPortListeners(
+      name: name,
+      port: health.port,
+      signal: ManagedProcessSignal.kill,
+    );
     if (!await _waitUntilUnhealthy(health)) {
       throw StateError(
         'Could not stop existing $name listener on port ${health.port}.',
@@ -185,31 +225,84 @@ class LocalServiceSupervisor {
       return;
     }
     await _writeLogLine(name, 'stopping owned process ${process.pid}');
-    await _terminateProcess(process);
+    await _processSupervisor.stop(process);
   }
 
-  /// Sends one signal to every process listening on a local TCP port.
-  Future<void> _signalEndpointPort({
+  /// Remembers a managed endpoint for final shutdown verification.
+  void _rememberServiceEndpoint({
+    required String id,
+    required String name,
+    required Uri health,
+    required List<String> arguments,
+  }) {
+    _endpoints[id] = _ManagedServiceEndpoint(
+      id: id,
+      name: name,
+      health: health,
+      arguments: arguments,
+    );
+  }
+
+  /// Stops any verified managed binaries still listening on known endpoints.
+  Future<void> _stopKnownEndpointListeners({
+    void Function(String message)? onStatus,
+  }) async {
+    for (final endpoint in _endpoints.values.toList().reversed) {
+      if (!_isLocalEndpoint(endpoint.health)) {
+        continue;
+      }
+      final ports = serviceLocalPorts(
+        health: endpoint.health,
+        arguments: endpoint.arguments,
+      );
+      if (ports.isEmpty) {
+        continue;
+      }
+      onStatus?.call('Verifying ${endpoint.name} has stopped');
+      await _writeLogLine(
+        endpoint.name,
+        'final shutdown sweep for ${endpoint.id} on ports ${ports.join(', ')}',
+      );
+      var sentTerm = false;
+      for (final port in ports) {
+        sentTerm =
+            await _signalManagedPortListeners(
+              name: endpoint.name,
+              port: port,
+              signal: ManagedProcessSignal.term,
+            ) ||
+            sentTerm;
+      }
+      if (sentTerm) {
+        await _waitUntilUnhealthy(endpoint.health);
+      }
+      for (final port in ports) {
+        await _signalManagedPortListeners(
+          name: endpoint.name,
+          port: port,
+          signal: ManagedProcessSignal.kill,
+        );
+      }
+      if (!await _waitUntilUnhealthy(endpoint.health)) {
+        await _writeLogLine(
+          endpoint.name,
+          'listener on ${ports.join(', ')} survived final shutdown sweep',
+        );
+      }
+    }
+  }
+
+  /// Sends one signal to verified Agent Awesome listeners on a local TCP port.
+  Future<bool> _signalManagedPortListeners({
     required String name,
     required int port,
-    required String signal,
+    required ManagedProcessSignal signal,
   }) async {
-    if (port <= 0) {
-      throw StateError(
-        'Cannot restart $name because the health port is empty.',
-      );
-    }
-    if (Platform.isWindows) {
-      throw StateError('Cannot restart an unowned $name listener on Windows.');
-    }
-    final result = await Process.run('fuser', <String>[
-      '-k',
-      '-$signal',
-      '$port/tcp',
-    ]);
-    await _writeLogLine(
-      name,
-      'fuser -$signal port $port exit ${result.exitCode}: ${result.stderr}',
+    return _processSupervisor.signalVerifiedLocalPortListeners(
+      name: name,
+      port: port,
+      signal: signal,
+      onLog: (message) => _writeLogLine(name, message),
     );
   }
 
@@ -296,6 +389,12 @@ class LocalServiceSupervisor {
     required bool restartAutoStarted,
   }) async {
     final health = Uri.parse(server.healthUrl);
+    _rememberServiceEndpoint(
+      id: server.id,
+      name: server.label,
+      health: health,
+      arguments: server.arguments,
+    );
     if (restartAutoStarted && server.autoStart) {
       await _restartAutoStartedEndpoint(
         id: server.id,
@@ -304,6 +403,12 @@ class LocalServiceSupervisor {
       );
     }
     if (server.healthUrl.isNotEmpty && await _isHealthy(health)) {
+      await _emitObservedServiceLog(
+        id: server.id,
+        name: server.label,
+        health: health,
+        arguments: server.arguments,
+      );
       return _status(
         server.label,
         server.healthUrl,
@@ -337,19 +442,25 @@ class LocalServiceSupervisor {
     }
     await _createArgumentDirectories(server.arguments);
     final process = await _startProcess(
+      id: server.id,
       profile: profile,
       name: server.label,
+      health: health,
       workingDirectory: server.workingDirectory,
       packagePath: server.packagePath,
       arguments: _withLogFile(server.arguments, _serviceLogPath(server.kind)),
     );
     _started[server.id] = process;
-    return _waitForProcessHealth(
+    final status = await _waitForProcessHealth(
       server.label,
       health,
       process,
       logPath: _serviceLogPath(server.kind),
     );
+    if (status.state != ConnectionStateKind.connected) {
+      _started.remove(server.id);
+    }
+    return status;
   }
 
   /// Ensures the harness web API is reachable, starting it when needed.
@@ -359,6 +470,12 @@ class LocalServiceSupervisor {
   }) async {
     final harness = profile.harness;
     final health = Uri.parse(harness.sessionsUrl);
+    _rememberServiceEndpoint(
+      id: harness.id,
+      name: harness.label,
+      health: health,
+      arguments: harness.arguments,
+    );
     if (restartAutoStarted && harness.autoStart) {
       await _restartAutoStartedEndpoint(
         id: harness.id,
@@ -367,6 +484,12 @@ class LocalServiceSupervisor {
       );
     }
     if (await _isHealthy(health)) {
+      await _emitObservedServiceLog(
+        id: harness.id,
+        name: harness.label,
+        health: health,
+        arguments: harness.arguments,
+      );
       return _status(
         harness.label,
         health.toString(),
@@ -383,19 +506,25 @@ class LocalServiceSupervisor {
       );
     }
     final process = await _startProcess(
+      id: harness.id,
       profile: profile,
       name: harness.label,
+      health: health,
       workingDirectory: harness.workingDirectory,
       packagePath: harness.packagePath,
       arguments: _withHarnessLogFile(harness.arguments),
     );
     _started[harness.id] = process;
-    return _waitForProcessHealth(
+    final status = await _waitForProcessHealth(
       harness.label,
       health,
       process,
       logPath: '${config.serviceLogDirectory}/harness.log',
     );
+    if (status.state != ConnectionStateKind.connected) {
+      _started.remove(harness.id);
+    }
+    return status;
   }
 
   /// Ensures the gateway API is reachable, starting it when configured.
@@ -405,6 +534,12 @@ class LocalServiceSupervisor {
     required bool restartAutoStarted,
   }) async {
     final health = Uri.parse(gateway.healthUrl);
+    _rememberServiceEndpoint(
+      id: gateway.id,
+      name: gateway.label,
+      health: health,
+      arguments: gateway.arguments,
+    );
     if (restartAutoStarted && gateway.autoStart) {
       await _restartAutoStartedEndpoint(
         id: gateway.id,
@@ -413,6 +548,12 @@ class LocalServiceSupervisor {
       );
     }
     if (await _isHealthy(health)) {
+      await _emitObservedServiceLog(
+        id: gateway.id,
+        name: gateway.label,
+        health: health,
+        arguments: gateway.arguments,
+      );
       return _status(
         gateway.label,
         health.toString(),
@@ -429,32 +570,46 @@ class LocalServiceSupervisor {
       );
     }
     final process = await _startProcess(
+      id: gateway.id,
       profile: profile,
       name: gateway.label,
+      health: health,
       workingDirectory: gateway.workingDirectory,
       packagePath: gateway.packagePath,
       arguments: gateway.arguments,
       outputLogPath: '${config.serviceLogDirectory}/gateway.log',
     );
     _started[gateway.id] = process;
-    return _waitForProcessHealth(
+    final status = await _waitForProcessHealth(
       gateway.label,
       health,
       process,
       logPath: '${config.serviceLogDirectory}/gateway.log',
     );
+    if (status.state != ConnectionStateKind.connected) {
+      _started.remove(gateway.id);
+    }
+    return status;
   }
 
-  /// Builds and starts one service binary with captured output.
-  Future<ManagedServiceProcess> _startProcess({
+  /// Builds and starts one service binary through the shared supervisor.
+  Future<ManagedProcessHandle> _startProcess({
+    required String id,
     required RuntimeProfile profile,
     required String name,
+    required Uri health,
     required String workingDirectory,
     required String packagePath,
     required List<String> arguments,
     String? outputLogPath,
   }) async {
     final env = Map<String, String>.of(Platform.environment);
+    _applyGatewayAuthorizationEnvironment(env);
+    env.putIfAbsent(
+      'AGENTAWESOME_CONFIG_DIR',
+      () => auroraConfigDirectoryPath(),
+    );
+    env.putIfAbsent('AGENTAWESOME_DATA_DIR', () => auroraDataDirectoryPath());
     env['GOCACHE'] =
         env['GOCACHE'] ?? '${config.workspaceRoot}/harness/build/gocache';
     await Directory(env['GOCACHE']!).create(recursive: true);
@@ -468,32 +623,117 @@ class LocalServiceSupervisor {
       packagePath: packagePath,
       environment: env,
     );
+    if (_closed) {
+      throw StateError(
+        'Local service supervisor closed before starting $name.',
+      );
+    }
 
     await _writeLogLine(name, 'starting $executable ${arguments.join(' ')}');
-    final processGroup = await _canStartProcessGroup();
-    final launch = buildServiceProcessLaunchPlan(
-      executable: executable,
-      arguments: arguments,
-      outputLogPath: resolvedOutputLogPath,
-      canStartProcessGroup: processGroup,
-      isWindows: Platform.isWindows,
-    );
-    final process = await Process.start(
-      launch.executable,
-      launch.arguments,
-      workingDirectory: workingDirectory,
-      environment: env,
+    final process = await _processSupervisor.start(
+      ManagedProcessSpec(
+        id: id,
+        name: name,
+        executable: executable,
+        arguments: arguments,
+        workingDirectory: workingDirectory,
+        environment: env,
+        kind: ManagedProcessKind.longRunningService,
+        shutdownMode: ManagedProcessShutdownMode.processGroup,
+        persistence: ManagedProcessPersistence.pidRecord,
+        outputLogPath: resolvedOutputLogPath,
+        expectedExecutable: executable,
+        scope: 'local-services',
+      ),
     );
     await _writeLogLine(
       name,
-      'pid ${process.pid}; process_group=${launch.ownsProcessGroup}; log $outputLogPath',
+      'pid ${process.pid}; process_group=${process.ownsProcessGroup}; log $resolvedOutputLogPath',
     );
-    _captureOutput(name, process.stdout, 'stdout');
-    _captureOutput(name, process.stderr, 'stderr');
-    return ManagedServiceProcess(
-      process: process,
-      ownsProcessGroup: launch.ownsProcessGroup,
+    await _emitStartedServiceLog(
+      id: id,
+      name: name,
+      pid: process.pid,
+      executable: executable,
+      ownsProcessGroup: process.ownsProcessGroup,
+      health: health,
+      arguments: arguments,
+      outputLogPath: resolvedOutputLogPath,
     );
+    if (_closed) {
+      await _processSupervisor.stop(process);
+      throw StateError('Local service supervisor closed after starting $name.');
+    }
+    return process;
+  }
+
+  /// Prints a one-time log line for a service the UI started.
+  Future<void> _emitStartedServiceLog({
+    required String id,
+    required String name,
+    required int pid,
+    required String executable,
+    required bool ownsProcessGroup,
+    required Uri health,
+    required List<String> arguments,
+    required String outputLogPath,
+  }) async {
+    await _emitStartupLog(
+      key: 'started:$id:$pid',
+      line: serviceStartupLogLine(
+        state: 'started',
+        name: name,
+        pid: pid,
+        executable: executable,
+        ownsProcessGroup: ownsProcessGroup,
+        health: health,
+        arguments: arguments,
+        outputLogPath: outputLogPath,
+      ),
+    );
+  }
+
+  /// Prints a one-time log line for a reachable managed endpoint.
+  Future<void> _emitObservedServiceLog({
+    required String id,
+    required String name,
+    required Uri health,
+    required List<String> arguments,
+  }) async {
+    await _emitStartupLog(
+      key: 'observed:$id:${health.port}',
+      line: serviceStartupLogLine(
+        state: 'already-running',
+        name: name,
+        health: health,
+        arguments: arguments,
+      ),
+    );
+  }
+
+  /// Writes one visible startup line to stdout and the UI log once.
+  Future<void> _emitStartupLog({
+    required String key,
+    required String line,
+  }) async {
+    if (!_printedStartupKeys.add(key)) {
+      return;
+    }
+    stdout.writeln('[agentawesome-ui] $line');
+    await _writeLogLine('startup', line);
+  }
+
+  /// Exposes the UI-resolved gateway bearer header to managed child services.
+  void _applyGatewayAuthorizationEnvironment(Map<String, String> env) {
+    final header = config.gatewayAuthorizationHeader.trim();
+    if (header.isEmpty) {
+      return;
+    }
+    env.putIfAbsent('AGENTAWESOME_GATEWAY_AUTHORIZATION', () => header);
+    final token = config.gatewayBearerToken;
+    if (token.isNotEmpty) {
+      env.putIfAbsent('AGENTAWESOME_GATEWAY_TOKEN', () => token);
+    }
   }
 
   /// Builds a Go command binary into the pilot build directory.
@@ -509,11 +749,22 @@ class LocalServiceSupervisor {
     );
     await binRoot.create(recursive: true);
     final executable = '${binRoot.path}/${_binaryName(name)}';
-    final result = await Process.run(
-      'go',
-      buildGoBuildArguments(outputPath: executable, packagePath: packagePath),
-      workingDirectory: workingDirectory,
-      environment: environment,
+    final result = await _processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'go-build-${_binaryName(profile.id)}-${_binaryName(name)}',
+        name: 'go build $name',
+        executable: 'go',
+        arguments: buildGoBuildArguments(
+          outputPath: executable,
+          packagePath: packagePath,
+        ),
+        workingDirectory: workingDirectory,
+        environment: environment,
+        kind: ManagedProcessKind.oneShotCommand,
+        shutdownMode: ManagedProcessShutdownMode.processGroup,
+        timeout: const Duration(minutes: 5),
+        scope: 'local-services',
+      ),
     );
     await _writeLogLine(name, 'go build exit ${result.exitCode}');
     await _writeLogBlock(name, 'go build stdout', result.stdout.toString());
@@ -524,55 +775,11 @@ class LocalServiceSupervisor {
     return executable;
   }
 
-  /// Terminates one owned process gracefully before forcing it closed.
-  Future<void> _terminateProcess(ManagedServiceProcess process) async {
-    await _signalManagedProcess(process, ProcessSignal.sigterm);
-    try {
-      await process.exitCode.timeout(const Duration(seconds: 3));
-    } on TimeoutException {
-      await _signalManagedProcess(process, ProcessSignal.sigkill);
-      await process.exitCode.timeout(const Duration(seconds: 2));
-    }
-  }
-
-  /// Sends a signal to the owned process group with a process-level fallback.
-  Future<void> _signalManagedProcess(
-    ManagedServiceProcess process,
-    ProcessSignal signal,
-  ) async {
-    if (process.ownsProcessGroup && !Platform.isWindows) {
-      final signalName = signal == ProcessSignal.sigkill ? 'KILL' : 'TERM';
-      final result = await Process.run('kill', <String>[
-        '-$signalName',
-        '-${process.pid}',
-      ]);
-      if (result.exitCode == 0) {
-        return;
-      }
-      await _writeLogLine(
-        'supervisor',
-        'process-group signal $signalName failed for ${process.pid}: ${result.stderr}',
-      );
-    }
-    process.process.kill(signal);
-  }
-
-  /// Captures process output for service logs and readiness diagnostics.
-  void _captureOutput(String name, Stream<List<int>> stream, String source) {
-    final buffer = _logs.putIfAbsent(name, StringBuffer.new);
-    stream.transform(utf8.decoder).transform(const LineSplitter()).listen((
-      line,
-    ) {
-      buffer.writeln(line);
-      unawaited(_writeLogLine(name, '[$source] $line'));
-    });
-  }
-
   /// Waits for a process health endpoint or an early process exit.
   Future<ServiceProcessStatus> _waitForProcessHealth(
     String name,
     Uri health,
-    ManagedServiceProcess process, {
+    ManagedProcessHandle process, {
     required String logPath,
   }) async {
     for (var attempt = 0; attempt < 100; attempt++) {
@@ -584,7 +791,7 @@ class LocalServiceSupervisor {
           'Started locally',
         );
       }
-      final exited = await _hasExited(process);
+      final exited = await _hasExited(process.exitCode);
       if (exited != null) {
         await _writeLogLine(
           name,
@@ -603,6 +810,8 @@ class LocalServiceSupervisor {
       name,
       'process did not become ready; recent output: ${_recentLog(name)}; log $logPath',
     );
+    await _writeLogLine(name, 'stopping process ${process.pid} after timeout');
+    await _processSupervisor.stop(process);
     return _status(
       name,
       health.toString(),
@@ -612,24 +821,11 @@ class LocalServiceSupervisor {
   }
 
   /// Returns the exit code when the process has already stopped.
-  Future<int?> _hasExited(ManagedServiceProcess process) async {
+  Future<int?> _hasExited(Future<int> exitCode) async {
     try {
-      return await process.exitCode.timeout(Duration.zero);
+      return await exitCode.timeout(Duration.zero);
     } on TimeoutException {
       return null;
-    }
-  }
-
-  /// Reports whether local services can be launched as killable process groups.
-  Future<bool> _canStartProcessGroup() async {
-    if (Platform.isWindows) {
-      return false;
-    }
-    try {
-      final result = await Process.run('which', <String>['setsid']);
-      return result.exitCode == 0;
-    } catch (_) {
-      return false;
     }
   }
 
@@ -796,40 +992,6 @@ class LocalServiceSupervisor {
   }
 }
 
-/// Builds a durable process command for managed local services.
-ServiceProcessLaunchPlan buildServiceProcessLaunchPlan({
-  required String executable,
-  required List<String> arguments,
-  required String outputLogPath,
-  required bool canStartProcessGroup,
-  required bool isWindows,
-}) {
-  if (isWindows) {
-    return ServiceProcessLaunchPlan(
-      executable: executable,
-      arguments: arguments,
-      ownsProcessGroup: false,
-    );
-  }
-  final redirectedArguments = _stdioRedirectShellArguments(
-    executable: executable,
-    arguments: arguments,
-    outputLogPath: outputLogPath,
-  );
-  if (!canStartProcessGroup) {
-    return ServiceProcessLaunchPlan(
-      executable: 'sh',
-      arguments: redirectedArguments,
-      ownsProcessGroup: false,
-    );
-  }
-  return ServiceProcessLaunchPlan(
-    executable: 'setsid',
-    arguments: <String>['sh', ...redirectedArguments],
-    ownsProcessGroup: true,
-  );
-}
-
 /// Builds Go compiler arguments for managed service binaries.
 List<String> buildGoBuildArguments({
   required String outputPath,
@@ -838,17 +1000,104 @@ List<String> buildGoBuildArguments({
   return <String>['build', '-buildvcs=false', '-o', outputPath, packagePath];
 }
 
-/// Builds shell arguments that redirect child stdio without shell-escaping args.
-List<String> _stdioRedirectShellArguments({
-  required String executable,
+/// Builds the UI-visible startup line for one managed service process.
+String serviceStartupLogLine({
+  required String state,
+  required String name,
+  required Uri health,
   required List<String> arguments,
-  required String outputLogPath,
+  int? pid,
+  String executable = '',
+  bool ownsProcessGroup = false,
+  String outputLogPath = '',
 }) {
-  return <String>[
-    '-c',
-    r'exec "$@" >> "$0" 2>&1',
-    outputLogPath,
-    executable,
-    ...arguments,
+  final parts = <String>[
+    'subprocess $state',
+    'name="$name"',
+    if (pid != null) 'pid=$pid',
+    'ports="${servicePortsDescription(health: health, arguments: arguments)}"',
+    'health=$health',
+    if (executable.isNotEmpty) 'binary=$executable',
+    if (pid != null) 'process_group=$ownsProcessGroup',
+    if (outputLogPath.isNotEmpty) 'log=$outputLogPath',
   ];
+  return parts.join(' ');
+}
+
+/// Returns a concise description of the local ports a service should expose.
+String servicePortsDescription({
+  required Uri health,
+  required List<String> arguments,
+}) {
+  final ports = <String>{};
+  if (health.hasPort) {
+    ports.add('health=${_hostPort(health.host, health.port)}');
+  }
+  for (var index = 0; index < arguments.length - 1; index++) {
+    final flag = arguments[index];
+    final value = arguments[index + 1];
+    if (flag == '--addr') {
+      ports.add('listen=${_listenDescription(value)}');
+    } else if (flag == '--port') {
+      ports.add('api=${_listenDescription(value)}');
+    } else if (flag == '--context-api-addr') {
+      ports.add('context=${_listenDescription(value)}');
+    }
+  }
+  return ports.isEmpty ? 'unknown' : ports.join(', ');
+}
+
+/// Returns the local TCP ports advertised by one managed service endpoint.
+Set<int> serviceLocalPorts({
+  required Uri health,
+  required List<String> arguments,
+}) {
+  final ports = <int>{};
+  if (health.hasPort) {
+    ports.add(health.port);
+  }
+  for (var index = 0; index < arguments.length - 1; index++) {
+    final flag = arguments[index];
+    final value = arguments[index + 1];
+    if (flag == '--addr' || flag == '--port' || flag == '--context-api-addr') {
+      final port = _listenPort(value);
+      if (port != null) {
+        ports.add(port);
+      }
+    }
+  }
+  return ports;
+}
+
+/// Formats a host and port pair for log display.
+String _hostPort(String host, int port) {
+  final safeHost = host.trim().isEmpty ? '127.0.0.1' : host.trim();
+  return '$safeHost:$port';
+}
+
+/// Formats a listen flag value for log display.
+String _listenDescription(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return 'unknown';
+  }
+  return RegExp(r'^\d+$').hasMatch(trimmed) ? ':$trimmed' : trimmed;
+}
+
+/// Extracts a TCP port from a listen flag value.
+int? _listenPort(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+  final numeric = int.tryParse(trimmed);
+  if (numeric != null) {
+    return numeric > 0 ? numeric : null;
+  }
+  final separator = trimmed.lastIndexOf(':');
+  if (separator == -1 || separator + 1 >= trimmed.length) {
+    return null;
+  }
+  final port = int.tryParse(trimmed.substring(separator + 1));
+  return port != null && port > 0 ? port : null;
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"agentawesome/internal/adkmemory"
 	agentpkg "agentawesome/internal/agent"
 	"agentawesome/internal/config"
 	"agentawesome/internal/config/schema"
@@ -15,6 +16,7 @@ import (
 	"agentawesome/internal/logging"
 	"agentawesome/internal/model"
 	"agentawesome/internal/runtime"
+	"agentawesome/internal/sessionstore"
 	"agentawesome/internal/tools/toolsets"
 	"google.golang.org/adk/cmd/launcher"
 )
@@ -30,6 +32,7 @@ type Options struct {
 	ProviderName    string
 	LogFilePath     string
 	ContextAPIAddr  string
+	SessionDatabase string
 }
 
 // Run loads Agent Awesome configuration, builds the runtime config, and starts
@@ -100,8 +103,33 @@ func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCf
 	if err != nil {
 		return nil, err
 	}
+	sessionDatabasePath := sessionstore.ResolveDatabasePath(opts.SessionDatabase)
+	memoryService, memoryEnabled, err := adkmemory.NewFromToolsConfig(toolsCfg, sessionDatabasePath)
+	if err != nil {
+		return nil, err
+	}
+	if memoryEnabled {
+		tools.Tools = append(tools.Tools, adkmemory.RuntimeTools()...)
+	}
 
-	return runtime.NewConfig(def, llm, tools)
+	runtimeConfig, err := runtime.NewConfig(def, llm, tools)
+	if err != nil {
+		return nil, err
+	}
+	sessionService, err := sessionstore.Open(opts.SessionDatabase)
+	if err != nil {
+		return nil, err
+	}
+	runtimeConfig.SessionService = sessionService
+	if memoryEnabled {
+		plugin, err := adkmemory.NewSessionCapturePlugin()
+		if err != nil {
+			return nil, err
+		}
+		runtimeConfig.MemoryService = memoryService
+		runtimeConfig.PluginConfig.Plugins = append(runtimeConfig.PluginConfig.Plugins, plugin)
+	}
+	return runtimeConfig, nil
 }
 
 // @TODO is more of a CLI concern and better suited for the cmd folder

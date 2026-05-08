@@ -10,9 +10,9 @@
     "--addr",
     "${MEMORY_MCP_ADDR}",
     "--db",
-    "${AGENTAWESOME_WORKSPACE_ROOT}/harness/build/pilot/personal-assistant/data/memory.db",
+    "${MEMORY_DB_PATH}",
     "--data",
-    "${AGENTAWESOME_WORKSPACE_ROOT}/harness/build/pilot/personal-assistant/data/memory-data"
+    "${MEMORY_DATA_DIR}"
   ],
   "auto_start": ${AUTO_START_LOCAL_SERVICES},
   "enabled": true

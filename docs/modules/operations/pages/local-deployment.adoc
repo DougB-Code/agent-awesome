@@ -1,0 +1,135 @@
+= Local Deployment
+:description: Step-by-step local Agent Awesome deployment.
+
+This page starts Agent Awesome locally before any Cloudflare resources are changed.
+Use it to prove the memory service, harness, gateway, and UI can run on the workstation.
+
+== Credential
+
+The default local personal-assistant pilot uses OpenAI.
+Store the credential in the harness keyring:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/harness
+go run ./cmd/agent-awesome credentials set OPENAI_API_KEY
+----
+
+You may also export `OPENAI_API_KEY` in the shell that starts the harness.
+Keyring values take precedence over environment variables.
+
+== UI-Managed Local Run
+
+This is the normal desktop pilot path.
+The default UI runtime profile starts memory, the harness, and the gateway.
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/ui
+flutter run -d linux \
+  --dart-define=AGENTAWESOME_WORKSPACE_ROOT=/home/doug/dev/agentawesome/agent
+----
+
+The default profile uses:
+
+[cols="1,2",options="header"]
+|===
+|Service |Endpoint
+
+|Memory
+|`http://127.0.0.1:8090/mcp`
+
+|Harness API
+|`http://127.0.0.1:8080/api`
+
+|Harness context API
+|`http://127.0.0.1:8081/api/context`
+
+|Gateway API
+|`http://127.0.0.1:8070/api`
+|===
+
+Verify the managed services from another terminal:
+
+[source,sh]
+----
+curl -fsS http://127.0.0.1:8090/healthz
+curl -fsS http://127.0.0.1:8081/api/context/healthz
+curl -fsS http://127.0.0.1:8070/healthz
+curl -fsS http://127.0.0.1:8070/api/gateway/status
+----
+
+If any service fails to start, inspect logs under:
+
+[source,text]
+----
+/home/doug/dev/agentawesome/agent/logs
+----
+
+== Manual Local Run
+
+Manual mode is useful when you want each service in a separate terminal.
+Build the binaries first with xref:development:build-package.adoc[].
+
+Terminal 1, memory:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+APP_DATA_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-awesome/data"
+mkdir -p "$APP_DATA_DIR/memory" build/local/logs
+./build/package/bin/memoryd \
+  --addr 127.0.0.1:8090 \
+  --db "$APP_DATA_DIR/memory/memory.db" \
+  --data "$APP_DATA_DIR/memory/files" \
+  --log-file build/local/logs/memory.log
+----
+
+Terminal 2, harness:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+./build/package/bin/agent-awesome run \
+  --model pilots/personal-assistant/model.yaml \
+  --agent pilots/personal-assistant/agent.yaml \
+  --tool pilots/personal-assistant/tool.yaml \
+  --context-api-addr 127.0.0.1:8081 \
+  --log-file build/local/logs/harness.log \
+  -- web --port 8080 api --webui_address 127.0.0.1:8080
+----
+
+Terminal 3, gateway:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+./build/package/bin/agent-gateway \
+  --addr 127.0.0.1:8070 \
+  --harness-base-url http://127.0.0.1:8080/api \
+  --context-base-url http://127.0.0.1:8081/api/context \
+  --memory-mcp-url http://127.0.0.1:8090/mcp \
+  --app-name personal_pilot \
+  --user-id doug
+----
+
+Terminal 4, UI against the already running services:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/ui
+flutter run -d linux \
+  --dart-define=AGENTAWESOME_WORKSPACE_ROOT=/home/doug/dev/agentawesome/agent \
+  --dart-define=AUTO_START_LOCAL_SERVICES=false
+----
+
+== Local Shutdown
+
+Stop foreground services with `Ctrl+C`.
+If the UI managed the services, close the UI normally.
+On Linux, check for leftover local listeners with:
+
+[source,sh]
+----
+ss -ltnp '( sport = :8070 or sport = :8080 or sport = :8081 or sport = :8090 )'
+----

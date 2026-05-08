@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
+	"memory/internal/logging"
 	graphrepo "memory/internal/memory/graph/repository"
 	"memory/internal/memory/persistence"
 	"memory/internal/memory/service"
@@ -31,7 +32,10 @@ func main() {
 	snapshotToken := flag.String("snapshot-token", "", "bearer token for the snapshot endpoint")
 	snapshotTimeout := flag.Duration("snapshot-timeout", 30*time.Second, "snapshot restore and save timeout")
 	flag.Parse()
-	closeLog := configureLogging(*logFile)
+	closeLog, err := logging.Configure(*logFile)
+	if err != nil {
+		log.Fatal().Err(err).Msg("configure logging")
+	}
 	defer closeLog()
 
 	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -43,12 +47,12 @@ func main() {
 		Timeout: *snapshotTimeout,
 	}
 	if err := snapshotStore.Restore(ctx, *dbPath, *dataRoot); err != nil {
-		log.Fatalf("restore memory snapshot: %v", err)
+		log.Fatal().Err(err).Msg("restore memory snapshot")
 	}
 
 	repo, err := graphrepo.Open(ctx, graphrepo.Config{DBPath: *dbPath, DataRoot: *dataRoot})
 	if err != nil {
-		log.Fatalf("open graph memory store: %v", err)
+		log.Fatal().Err(err).Msg("open graph memory store")
 	}
 	memoryService := service.New(repo, nil, service.Config{WorkerCount: *workers})
 	memoryService.Start(ctx)
@@ -56,12 +60,12 @@ func main() {
 		closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancelClose()
 		if err := memoryService.Close(closeCtx); err != nil {
-			log.Printf("close memory service: %v", err)
+			log.Error().Err(err).Msg("close memory service")
 		}
 		snapshotCtx, cancelSnapshot := context.WithTimeout(context.Background(), *snapshotTimeout)
 		defer cancelSnapshot()
 		if err := snapshotStore.Save(snapshotCtx, *dbPath, *dataRoot); err != nil {
-			log.Printf("save memory snapshot: %v", err)
+			log.Error().Err(err).Msg("save memory snapshot")
 		}
 	}()
 
@@ -80,32 +84,13 @@ func main() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("shutdown server: %v", err)
+			log.Error().Err(err).Msg("shutdown server")
 		}
 	}()
 
-	log.Printf("memoryd listening on http://%s", *addr)
+	log.Info().Str("addr", *addr).Msg("memoryd listening")
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("serve memoryd: %v", err)
-	}
-}
-
-// configureLogging routes standard logs to the supplied file when configured.
-func configureLogging(path string) func() {
-	if path == "" {
-		return func() {}
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		log.Fatalf("create log directory: %v", err)
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		log.Fatalf("open log file: %v", err)
-	}
-	log.SetOutput(file)
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	return func() {
-		_ = file.Close()
+		log.Fatal().Err(err).Msg("serve memoryd")
 	}
 }
 

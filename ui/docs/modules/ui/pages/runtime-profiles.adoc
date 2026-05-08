@@ -1,0 +1,30 @@
+= Runtime Profiles
+:description: UI runtime profile responsibilities.
+
+Runtime profiles describe the services the UI should use.
+Managed services include a working directory, package path, and argument list.
+External services set auto-start to false and provide only connection details.
+
+== Shipped Profiles
+
+[cols="1,2",options="header"]
+|===
+|Profile |Use
+
+|`runtime_profiles/personal_assistant.json`
+|Default local personal assistant topology.
+
+|`runtime_profiles/local_dev.json`
+|Local memory with the harness pointed at `harness/tool.local.yaml`.
+
+|`runtime_profiles/cloudflare_context.json`
+|Local harness connected to the Cloudflare memory endpoint.
+
+|`runtime_profiles/memory/*.json`
+|Memory-specific profile variants.
+|===
+
+Use profiles to change service topology without mixing deployment policy into widgets.
+
+The default profile reads model, agent, and tool config from `pilots/personal-assistant`.
+Keep that pilot bundle present when packaging or distributing the desktop app.

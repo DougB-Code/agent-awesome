@@ -1,0 +1,35 @@
+= Harness Runtime
+:description: Harness runtime modes and credential commands.
+
+The harness can run as a console process for direct testing or as a web API for UI and gateway traffic.
+
+== Console Mode
+
+[source,sh]
+----
+go run ./cmd/agent-awesome run -- console
+----
+
+Use console mode for fast local validation of model and tool configuration.
+
+== Web Mode
+
+[source,sh]
+----
+go run ./cmd/agent-awesome run -- web --port 8080
+----
+
+Use web mode when the UI or gateway needs an ADK-compatible API endpoint.
+
+== Credentials
+
+Credentials can be stored through the harness CLI:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome credentials set OPENAI_API_KEY
+go run ./cmd/agent-awesome credentials remove OPENAI_API_KEY
+----
+
+Credential lookup should stay outside model provider implementations.
+Provider adapters receive already selected and validated configuration from the model factory.

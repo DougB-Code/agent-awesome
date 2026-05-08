@@ -1,0 +1,35 @@
+= Provisioning CLI
+:description: Agent Awesome provisioning subsystem documentation.
+
+The provisioning CLI is the Go module in `provision`.
+It is an operations tool for reconciling managed Cloudflare resources for one provisioned agent at a time.
+
+== Responsibilities
+
+* Store platform defaults such as zone, account id, and hostname suffix.
+* Store non-secret per-agent records.
+* Store generated and external secrets through the OS keyring or environment.
+* Render desired Cloudflare Worker and Container artifacts.
+* Reconcile R2 buckets, Worker secrets, routes, and deployment state.
+* Delete provisioned agents with explicit confirmation.
+
+The provisioner should not become a user onboarding UI, a long-running control plane, or a generic Cloudflare SDK wrapper.
+
+== Main Packages
+
+[cols="1,2",options="header"]
+|===
+|Package |Responsibility
+
+|`internal/platform`
+|Operations-level defaults.
+
+|`internal/state`
+|Local non-secret records and keyring-backed secret lookup.
+
+|`internal/cloudflare`
+|Cloudflare deployment rendering, reconciliation, and cleanup.
+
+|`internal/configpath`
+|Agent Awesome config path resolution.
+|===

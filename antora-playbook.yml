@@ -1,0 +1,31 @@
+site:
+  title: Agent Awesome Documentation
+  url: https://docs.agent-awesome.local
+  start_page: agent-awesome::index.adoc
+antora:
+  extensions:
+    - require: '@antora/lunr-extension'
+      index_by_heading: true
+content:
+  sources:
+    - url: .
+      branches: HEAD
+      start_paths:
+        - docs
+        - harness/docs
+        - memory/docs
+        - gateway/docs
+        - provision/docs
+        - ui/docs
+        - deploy/cloudflare/docs
+runtime:
+  cache_dir: ./build/antora-cache
+asciidoc:
+  attributes:
+    experimental: ''
+    source-language: asciidoc@
+ui:
+  bundle:
+    url: ./docs/ui-bundle
+output:
+  dir: ./build/site

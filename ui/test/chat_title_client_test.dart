@@ -97,6 +97,67 @@ void main() {
     client.close();
   });
 
+  test(
+    'uses local OpenAI-compatible endpoint for litert title model',
+    () async {
+      final directory = await Directory.systemTemp.createTemp(
+        'aurora-title-litert-test-',
+      );
+      final file = File('${directory.path}/model.yaml');
+      await file.writeAsString('''
+default: local:gemma
+providers:
+  local:
+    adapter: litert
+    default: gemma
+    models:
+      - id: gemma
+        model: gemma-4-E2B-it
+''');
+      final client = ChatTitleClient(
+        localModelChatCompletionsUrl:
+            'http://127.0.0.1:4321/v1/chat/completions',
+        httpClient: MockClient((request) async {
+          expect(
+            request.url.toString(),
+            'http://127.0.0.1:4321/v1/chat/completions',
+          );
+          expect(request.headers.containsKey('Authorization'), isFalse);
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['model'], 'gemma-4-E2B-it');
+          expect(body['max_tokens'], 24);
+          expect(jsonEncode(body['messages']), contains('Plan the migration'));
+          return http.Response(
+            jsonEncode(<String, dynamic>{
+              'choices': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'message': <String, dynamic>{'content': 'Migration Plan'},
+                },
+              ],
+            }),
+            200,
+          );
+        }),
+      );
+
+      final title = await client.generateTitle(
+        modelConfigPath: file.path,
+        messages: <ChatMessage>[
+          ChatMessage(
+            id: '1',
+            role: ChatRole.user,
+            author: 'You',
+            text: 'Plan the migration for the UI process supervisor.',
+            createdAt: _testTime,
+          ),
+        ],
+      );
+
+      expect(title, 'Migration Plan');
+      client.close();
+    },
+  );
+
   test('reports missing environment variable for configured api key', () async {
     final file = await _writeModelConfig();
     final client = ChatTitleClient(

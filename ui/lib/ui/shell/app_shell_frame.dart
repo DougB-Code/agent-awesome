@@ -30,6 +30,7 @@ class AppShellFrame extends StatelessWidget {
     required this.onOpenSection,
     required this.onOpenSettingsSection,
     required this.onOpenSettings,
+    required this.onOpenSetup,
     required this.content,
   });
 
@@ -79,6 +80,9 @@ class AppShellFrame extends StatelessWidget {
   /// Opens the settings workspace.
   final VoidCallback onOpenSettings;
 
+  /// Reopens the first-run setup shell.
+  final VoidCallback onOpenSetup;
+
   /// Main workspace content.
   final Widget content;
 
@@ -108,6 +112,7 @@ class AppShellFrame extends StatelessWidget {
                 onOpenSection: onOpenSection,
                 onOpenSettingsSection: onOpenSettingsSection,
                 onOpenSettings: onOpenSettings,
+                onOpenSetup: onOpenSetup,
               ),
               Expanded(child: content),
             ],
@@ -341,6 +346,7 @@ class _NavButton extends StatelessWidget {
   /// Builds one navigation item.
   @override
   Widget build(BuildContext context) {
+    final foreground = selected ? AuroraColors.green : AuroraColors.muted;
     return Tooltip(
       message: compact ? label : '',
       child: InkWell(
@@ -360,11 +366,7 @@ class _NavButton extends StatelessWidget {
                 ? MainAxisAlignment.center
                 : MainAxisAlignment.start,
             children: <Widget>[
-              Icon(
-                icon,
-                size: 20,
-                color: selected ? AuroraColors.green : AuroraColors.muted,
-              ),
+              Icon(icon, size: 20, color: foreground),
               if (!compact) ...<Widget>[
                 const SizedBox(width: 14),
                 Flexible(

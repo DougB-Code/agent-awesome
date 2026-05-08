@@ -29,12 +29,15 @@ class ChatTitleClient {
   ChatTitleClient({
     http.Client? httpClient,
     Map<String, String>? environment,
+    String localModelChatCompletionsUrl = '',
     this.logger,
   }) : _http = httpClient ?? http.Client(),
-       _environment = environment ?? Platform.environment;
+       _environment = environment ?? Platform.environment,
+       _localModelChatCompletionsUrl = localModelChatCompletionsUrl.trim();
 
   final http.Client _http;
   final Map<String, String> _environment;
+  final String _localModelChatCompletionsUrl;
 
   /// Optional persistent logger.
   final AppLogger? logger;
@@ -55,6 +58,7 @@ class ChatTitleClient {
     );
     final raw = switch (selection.adapter) {
       'anthropic' => await _generateAnthropic(selection, transcript),
+      'litert' => await _generateOpenAi(selection, transcript),
       'openai' ||
       'openai_compatible' => await _generateOpenAi(selection, transcript),
       _ => throw ChatTitleException(
@@ -113,7 +117,7 @@ class ChatTitleClient {
     final model = _resolveModel(provider, modelId);
     return _TitleModelSelection(
       adapter: _string(provider['adapter'], fallback: 'openai'),
-      url: _providerUrl(provider),
+      url: _providerUrl(provider, _localModelChatCompletionsUrl),
       apiKey: _apiKey(_string(provider['api-key'] ?? provider['api_key'])),
       model: model,
     );
@@ -303,12 +307,18 @@ String _resolveModel(Map<String, dynamic> provider, String modelId) {
 }
 
 /// Returns the request URL for the configured provider.
-String _providerUrl(Map<String, dynamic> provider) {
+String _providerUrl(
+  Map<String, dynamic> provider,
+  String localModelChatCompletionsUrl,
+) {
   final explicit = _string(provider['url']);
   if (explicit.isNotEmpty) {
     return explicit;
   }
   final adapter = _string(provider['adapter'], fallback: 'openai');
+  if (adapter == 'litert' && localModelChatCompletionsUrl.isNotEmpty) {
+    return localModelChatCompletionsUrl;
+  }
   final base = _string(provider['base_url'] ?? provider['base-url']);
   if (base.isEmpty) {
     if (adapter == 'openai') {

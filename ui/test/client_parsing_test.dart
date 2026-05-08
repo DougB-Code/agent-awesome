@@ -32,12 +32,14 @@ void main() {
         baseUrl: 'http://127.0.0.1:1',
         appName: 'test-app',
         userId: 'user-1',
+        headers: const <String, String>{'Authorization': 'Bearer gateway'},
         httpClient: MockClient((request) async {
           expect(request.method, 'DELETE');
           expect(
             request.url.path,
             '/apps/test-app/users/user-1/sessions/session-1',
           );
+          expect(request.headers['Authorization'], 'Bearer gateway');
           return http.Response('', 204);
         }),
       );
@@ -53,6 +55,28 @@ void main() {
 
       expect(event.author, 'Runtime');
       expect(event.errorMessage, 'provider does not support streaming');
+    });
+
+    test('creates sessions with gateway auth headers', () async {
+      final client = AssistantClient(
+        baseUrl: 'http://127.0.0.1:1',
+        appName: 'test-app',
+        userId: 'user-1',
+        headers: const <String, String>{'Authorization': 'Bearer gateway'},
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.headers['Authorization'], 'Bearer gateway');
+          expect(request.headers['Content-Type'], 'application/json');
+          return http.Response(
+            '{"id":"session-1","appName":"test-app","userId":"user-1","events":[]}',
+            200,
+          );
+        }),
+      );
+
+      final session = await client.createSession();
+
+      expect(session.id, 'session-1');
     });
 
     test('parses tool activity events', () {
@@ -434,6 +458,25 @@ void main() {
       expect(workBreakdowns['task-1']?.acceptanceCriteria, <String>[
         'WBS renders',
       ]);
+    });
+  });
+
+  group('context client', () {
+    test('sends gateway auth headers', () async {
+      final client = GatewayContextClient(
+        baseUrl: 'http://127.0.0.1:1/api/context',
+        headers: const <String, String>{'Authorization': 'Bearer gateway'},
+        httpClient: MockClient((request) async {
+          expect(request.method, 'GET');
+          expect(request.url.path, '/api/context/tools/list');
+          expect(request.headers['Authorization'], 'Bearer gateway');
+          return http.Response('{"tools":["search_memory"]}', 200);
+        }),
+      );
+
+      final tools = await client.listToolNames();
+
+      expect(tools, <String>['search_memory']);
     });
   });
 }

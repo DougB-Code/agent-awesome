@@ -2,8 +2,9 @@
 library;
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
+
+import 'process_supervisor.dart';
 
 /// Runs one external process for platform credential lookup.
 typedef CredentialProcessRunner =
@@ -72,10 +73,12 @@ class CredentialStore {
   /// Creates a credential resolver with injectable process and env sources.
   const CredentialStore({
     Map<String, String>? environment,
+    CommandRunner? commandRunner,
     CredentialProcessRunner? processRunner,
     CredentialSecretProcessRunner? secretProcessRunner,
     String? operatingSystem,
   }) : _environment = environment,
+       _commandRunner = commandRunner,
        _processRunner = processRunner,
        _secretProcessRunner = secretProcessRunner,
        _operatingSystem = operatingSystem;
@@ -84,6 +87,7 @@ class CredentialStore {
   static const Duration _lookupTimeout = Duration(seconds: 2);
 
   final Map<String, String>? _environment;
+  final CommandRunner? _commandRunner;
   final CredentialProcessRunner? _processRunner;
   final CredentialSecretProcessRunner? _secretProcessRunner;
   final String? _operatingSystem;
@@ -279,22 +283,44 @@ class CredentialStore {
     String executable,
     List<String> arguments,
   ) async {
+    final processRunner = _processRunner;
+    if (processRunner != null) {
+      try {
+        final result = await processRunner(
+          executable,
+          arguments,
+        ).timeout(_lookupTimeout);
+        if (result.exitCode != 0) {
+          return null;
+        }
+        return result.stdout.toString().trim();
+      } on Object {
+        return null;
+      }
+    }
+    final commandRunner = _commandRunner;
+    if (commandRunner == null) {
+      return null;
+    }
     try {
-      final result = await (_processRunner ?? Process.run)(
+      final result = await commandRunner.run(
         executable,
         arguments,
-      ).timeout(_lookupTimeout);
+        timeout: _lookupTimeout,
+        scope: 'credentials',
+        kind: ManagedProcessKind.keyringCommand,
+      );
       if (result.exitCode != 0) {
         return null;
       }
-      return result.stdout.toString().trim();
+      return result.stdout.trim();
     } on Object {
       return null;
     }
   }
 
   /// Runs a bounded keyring mutation command.
-  Future<ProcessResult?> _runSecretCommand(
+  Future<_CredentialCommandResult?> _runSecretCommand(
     String executable,
     List<String> arguments,
     String? stdin,
@@ -302,26 +328,30 @@ class CredentialStore {
     final runner = _secretProcessRunner;
     if (runner != null) {
       try {
-        return await runner(
+        final result = await runner(
           executable,
           arguments,
           stdin,
         ).timeout(_lookupTimeout);
+        return _CredentialCommandResult.fromProcessResult(result);
       } on Object {
         return null;
       }
     }
+    final commandRunner = _commandRunner;
+    if (commandRunner == null) {
+      return null;
+    }
     try {
-      if (stdin == null) {
-        return await Process.run(executable, arguments).timeout(_lookupTimeout);
-      }
-      final process = await Process.start(executable, arguments);
-      process.stdin.write(stdin);
-      await process.stdin.close();
-      final stdout = await process.stdout.transform(utf8.decoder).join();
-      final stderr = await process.stderr.transform(utf8.decoder).join();
-      final exitCode = await process.exitCode.timeout(_lookupTimeout);
-      return ProcessResult(0, exitCode, stdout, stderr);
+      final result = await commandRunner.run(
+        executable,
+        arguments,
+        stdinText: stdin,
+        timeout: _lookupTimeout,
+        scope: 'credentials',
+        kind: ManagedProcessKind.keyringCommand,
+      );
+      return _CredentialCommandResult.fromManagedResult(result);
     } on Object {
       return null;
     }
@@ -329,8 +359,47 @@ class CredentialStore {
 }
 
 /// Returns a compact user-safe keyring mutation error.
-String _mutationError(ProcessResult result, String fallback) {
+String _mutationError(_CredentialCommandResult result, String fallback) {
   return '$fallback (exit code ${result.exitCode})';
+}
+
+/// _CredentialCommandResult stores command output independent of process APIs.
+class _CredentialCommandResult {
+  /// Creates a credential command result.
+  const _CredentialCommandResult({
+    required this.exitCode,
+    required this.stdout,
+    required this.stderr,
+  });
+
+  /// Process exit code.
+  final int exitCode;
+
+  /// Captured stdout.
+  final String stdout;
+
+  /// Captured stderr.
+  final String stderr;
+
+  /// Creates a result from an injected dart:io process result.
+  factory _CredentialCommandResult.fromProcessResult(ProcessResult result) {
+    return _CredentialCommandResult(
+      exitCode: result.exitCode,
+      stdout: result.stdout.toString(),
+      stderr: result.stderr.toString(),
+    );
+  }
+
+  /// Creates a result from a supervised managed process result.
+  factory _CredentialCommandResult.fromManagedResult(
+    ManagedProcessResult result,
+  ) {
+    return _CredentialCommandResult(
+      exitCode: result.exitCode,
+      stdout: result.stdout,
+      stderr: result.stderr,
+    );
+  }
 }
 
 /// Masks a secret while preserving a short suffix for recognition.

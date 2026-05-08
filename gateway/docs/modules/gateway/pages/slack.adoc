@@ -1,0 +1,33 @@
+= Slack Adapter
+:description: Gateway Slack adapter behavior.
+
+The Slack adapter turns accepted Slack messages into Agent Awesome turns and posts replies back to Slack.
+It supports HTTP Events API for cloud deployments and Socket Mode for local pilots.
+
+== Cloud Mode
+
+Cloud deployments use Slack HTTP Events API:
+
+[source,text]
+----
+https://<gateway-host>/slack/events
+----
+
+The gateway verifies Slack request signatures before dispatching messages.
+The Cloudflare Worker also rejects public requests that are not Slack-signed event posts.
+
+== Local Mode
+
+Socket Mode is useful for local testing because Slack does not need a public request URL.
+
+[source,sh]
+----
+SLACK_ENABLED=true \
+SLACK_SOCKET_MODE=true \
+SLACK_APP_TOKEN=xapp-... \
+SLACK_BOT_TOKEN=xoxb-... \
+SLACK_ALLOWED_USER_ID=U... \
+go run ./cmd/agent-gateway
+----
+
+Do not use Socket Mode for the Cloudflare deployment unless an operations maintainer deliberately changes the cloud topology.

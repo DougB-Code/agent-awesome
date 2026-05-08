@@ -1,0 +1,4 @@
+* User Docs
+** xref:user:index.adoc[Overview]
+** xref:user:desktop-ui.adoc[Desktop UI]
+** xref:user:local-chat.adoc[Local Chat]

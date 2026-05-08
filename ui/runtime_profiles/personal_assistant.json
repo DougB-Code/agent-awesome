@@ -10,7 +10,7 @@
     "user_id": "${AGENT_USER_ID}",
     "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/harness",
     "package_path": "./cmd/agent-awesome",
-    "model_config": "${AGENTAWESOME_WORKSPACE_ROOT}/pilots/personal-assistant/model.yaml",
+    "model_config": "${AGENTAWESOME_CONFIG_DIR}/models/model.yaml",
     "agent_config": "${AGENTAWESOME_WORKSPACE_ROOT}/pilots/personal-assistant/agent.yaml",
     "tool_config": "${AGENTAWESOME_WORKSPACE_ROOT}/pilots/personal-assistant/tool.yaml",
     "port": ${AGENT_API_PORT},

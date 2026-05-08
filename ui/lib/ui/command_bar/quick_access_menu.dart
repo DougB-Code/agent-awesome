@@ -36,6 +36,7 @@ class QuickAccessAction {
     required this.detail,
     required this.icon,
     required this.onTap,
+    this.enabled = true,
   });
 
   /// Primary action label.
@@ -49,6 +50,9 @@ class QuickAccessAction {
 
   /// Callback invoked when the action is selected.
   final VoidCallback onTap;
+
+  /// Whether the row can currently be selected.
+  final bool enabled;
 }
 
 /// QuickAccessMenu renders global shortcuts under the command bar.
@@ -170,12 +174,18 @@ class _QuickAccessItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(6),
-      onTap: action.onTap,
+      onTap: action.enabled ? action.onTap : null,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Row(
           children: <Widget>[
-            Icon(action.icon, size: 18, color: AuroraColors.muted),
+            Icon(
+              action.enabled ? action.icon : Icons.lock_outline,
+              size: 18,
+              color: action.enabled
+                  ? AuroraColors.muted
+                  : AuroraColors.muted.withValues(alpha: 0.52),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -186,7 +196,12 @@ class _QuickAccessItem extends StatelessWidget {
                     action.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: action.enabled
+                          ? AuroraColors.ink
+                          : AuroraColors.muted.withValues(alpha: 0.62),
+                    ),
                   ),
                   if (action.detail.isNotEmpty)
                     Text(

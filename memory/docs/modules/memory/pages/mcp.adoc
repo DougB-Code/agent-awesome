@@ -1,0 +1,22 @@
+= Memory MCP
+:description: Memory service MCP responsibilities.
+
+The memory MCP transport adapts service capabilities into tools that the harness can call.
+It should validate input at the domain and service layers rather than trusting callers.
+
+== Local Endpoint
+
+Local profiles usually run memory on:
+
+[source,text]
+----
+http://127.0.0.1:8090/mcp
+----
+
+The UI and gateway profiles point to this endpoint when local memory is active.
+
+== Boundary
+
+MCP code belongs in `internal/memory/transport`.
+Business behavior belongs in `internal/memory/service`.
+DTO validation belongs in `internal/memory/domain` or graph-specific domain packages.

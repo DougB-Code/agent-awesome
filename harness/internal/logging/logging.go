@@ -14,7 +14,6 @@ import (
 
 // Configure initializes process-wide zerolog and standard-library log output.
 func Configure(logFile string) error {
-	// @TODO there's no need for firstNonEmpty. They all  need to be removed
 	levelName := firstNonEmpty(os.Getenv("LOG_LEVEL"), "info")
 	level, err := zerolog.ParseLevel(strings.ToLower(levelName))
 	if err != nil {
@@ -42,12 +41,28 @@ func Configure(logFile string) error {
 		log.Logger = log.Output(zerolog.ConsoleWriter{
 			Out:        out,
 			TimeFormat: time.Kitchen,
+			NoColor:    true,
 		})
 	}
 
 	stdlog.SetFlags(0)
-	stdlog.SetOutput(log.Logger)
+	stdlog.SetOutput(standardLogWriter{logger: log.Logger})
 	return nil
+}
+
+// standardLogWriter maps standard-library log writes to zerolog info events.
+type standardLogWriter struct {
+	logger zerolog.Logger
+}
+
+// Write logs one standard-library log message without preserving glyph levels.
+func (w standardLogWriter) Write(p []byte) (int, error) {
+	n := len(p)
+	message := strings.TrimRight(string(p), "\r\n")
+	if message != "" {
+		w.logger.Info().Msg(message)
+	}
+	return n, nil
 }
 
 // firstNonEmpty returns the first non-blank string from the provided values.

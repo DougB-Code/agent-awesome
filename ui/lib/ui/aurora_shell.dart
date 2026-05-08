@@ -68,6 +68,7 @@ class _AuroraShellState extends State<AuroraShell> {
               onOpenSection: _selectSection,
               onOpenSettingsSection: _openSettingsSection,
               onOpenSettings: () => _selectSection(AppSections.settings),
+              onOpenSetup: _openSetupWizard,
               content: _buildContent(context),
             ),
           ),
@@ -76,7 +77,16 @@ class _AuroraShellState extends State<AuroraShell> {
     );
   }
 
+  /// Leaves the workspace shell so the dedicated setup wizard can be shown.
+  void _openSetupWizard() {
+    unawaited(widget.controller.setGettingStartedCompleted(false));
+  }
+
   Widget _buildContent(BuildContext context) {
+    if (_memoryMessageIsError(widget.controller) &&
+        _memoryBackedSectionUnavailable(_section)) {
+      return _MemoryUnavailableRoute(controller: widget.controller);
+    }
     final panelLayout = _buildPanelLayout();
     if (panelLayout != null) {
       if (panelLayout.third != null) {
@@ -310,6 +320,14 @@ class _AuroraShellState extends State<AuroraShell> {
       _sidebarExpanded = !_sidebarExpanded;
     });
   }
+}
+
+/// Reports whether a top-level route depends on the memory service.
+bool _memoryBackedSectionUnavailable(String section) {
+  return section == AppSections.memory ||
+      section == AppSections.timeline ||
+      section == AppSections.people ||
+      section == 'Calendar';
 }
 
 /// Returns whether a value matches a query using ordered fuzzy characters.
@@ -1167,7 +1185,8 @@ class _MemorySearchContent extends StatelessWidget {
           _MemoryFilterBar(controller: controller, query: query),
           const SizedBox(height: 14),
           _MemoryStatusStrip(controller: controller),
-          const SizedBox(height: 14),
+          if (controller.memoryBusy || _memoryMessageIsError(controller))
+            const SizedBox(height: 14),
           if (records.isEmpty)
             PanelEmptyBlock(label: 'No memory records')
           else
@@ -1296,24 +1315,129 @@ class _MemoryStatusStrip extends StatelessWidget {
   /// Builds a compact memory operation status strip.
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: <Widget>[
-        if (controller.memoryBusy)
-          const SizedBox.square(
-            dimension: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-        else
-          const Icon(Icons.circle, size: 10, color: AuroraColors.green),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            controller.memoryMessage,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AuroraColors.muted, fontSize: 12),
+    if (controller.memoryBusy) {
+      return const _RouteNoticePanel(
+        icon: Icons.sync,
+        title: 'Loading memory',
+        message: 'Agent Awesome is reading memory, people, and timeline data.',
+      );
+    }
+    if (!_memoryMessageIsError(controller)) {
+      return const SizedBox.shrink();
+    }
+    return _RouteNoticePanel(
+      icon: Icons.error_outline,
+      title: 'Memory service unavailable',
+      message: controller.memoryMessage,
+      action: OutlinedButton.icon(
+        onPressed: () => unawaited(controller.refreshMemoryFromUi()),
+        icon: const Icon(Icons.refresh),
+        label: const Text('Try again'),
+      ),
+    );
+  }
+}
+
+class _RouteNoticePanel extends StatelessWidget {
+  const _RouteNoticePanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final Widget? action;
+
+  /// Builds a prominent route-level status or error panel.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xfffffcf8),
+        border: Border.all(color: AuroraColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            height: 42,
+            width: 42,
+            decoration: const BoxDecoration(
+              color: AuroraColors.greenSoft,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: AuroraColors.green),
           ),
-        ),
-      ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: AuroraColors.ink,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SelectableText(
+                  message,
+                  style: const TextStyle(
+                    color: AuroraColors.muted,
+                    height: 1.4,
+                  ),
+                ),
+                if (action != null) ...<Widget>[
+                  const SizedBox(height: 14),
+                  action!,
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemoryUnavailableRoute extends StatelessWidget {
+  const _MemoryUnavailableRoute({required this.controller});
+
+  final AuroraAppController controller;
+
+  /// Builds the full-page error state for memory-backed routes.
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Memory service unavailable',
+            style: Theme.of(context).textTheme.displayLarge,
+          ),
+          const SizedBox(height: 28),
+          _RouteNoticePanel(
+            icon: Icons.error_outline,
+            title: 'Connection failed',
+            message: controller.memoryMessage,
+            action: OutlinedButton.icon(
+              onPressed: () => unawaited(controller.refreshMemoryFromUi()),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Try again'),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2918,6 +3042,26 @@ bool _matchesMemoryRecord(MemoryRecord record, String query) {
   );
 }
 
+/// Reports whether the memory route status is an actionable error.
+bool _memoryMessageIsError(AuroraAppController controller) {
+  final message = controller.memoryMessage.trim().toLowerCase();
+  if (message.isEmpty) {
+    return false;
+  }
+  if (message.startsWith('no memory records') ||
+      message.startsWith('loaded ') ||
+      message == 'source evidence loaded' ||
+      message.startsWith('searching memory')) {
+    return false;
+  }
+  return message.contains('exception') ||
+      message.contains('http 4') ||
+      message.contains('http 5') ||
+      message.contains('failed') ||
+      message.contains('unauthorized') ||
+      message.contains('not loaded');
+}
+
 /// Returns cross-cutting stewardship reasons for a record.
 List<String> _memoryReviewReasons(MemoryRecord record) {
   final reasons = <String>[];
@@ -3194,14 +3338,18 @@ class _MemoryPeopleRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final entityRows = _memoryEntityRows(controller.workspace.memoryRecords);
+    final showStatus =
+        controller.memoryBusy || _memoryMessageIsError(controller);
     return _PaddedRoute(
       title: 'People',
       subtitle: 'Entity pages compiled from source-backed memory.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _MemoryStatusStrip(controller: controller),
-          const SizedBox(height: 18),
+          if (showStatus) ...<Widget>[
+            _MemoryStatusStrip(controller: controller),
+            const SizedBox(height: 18),
+          ],
           if (entityRows.isEmpty)
             const PanelEmptyBlock(label: 'No entities in memory')
           else
@@ -3274,6 +3422,8 @@ class _MemoryTimelineRoute extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final topicRows = _memoryTopicRows(controller.workspace.memoryRecords);
+    final showStatus =
+        controller.memoryBusy || _memoryMessageIsError(controller);
     final datedRecords =
         controller.workspace.memoryRecords
             .where(
@@ -3297,8 +3447,10 @@ class _MemoryTimelineRoute extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _MemoryStatusStrip(controller: controller),
-          const SizedBox(height: 18),
+          if (showStatus) ...<Widget>[
+            _MemoryStatusStrip(controller: controller),
+            const SizedBox(height: 18),
+          ],
           _MemoryPanelLabel('Topic Timelines'),
           const SizedBox(height: 12),
           if (topicRows.isEmpty)
@@ -3432,16 +3584,16 @@ class _SourcesPage extends StatelessWidget {
   /// Builds the sources and files route.
   @override
   Widget build(BuildContext context) {
-    final records = workspace.memoryRecords;
+    final files = workspace.sources;
     return _PaddedRoute(
       title: 'Files',
-      subtitle: 'Immutable evidence and source material from memory.',
-      child: records.isEmpty
-          ? const PanelEmptyBlock(label: 'No source evidence loaded')
+      subtitle: 'Files for your agent.',
+      child: files.isEmpty
+          ? const _FilesEmptyState()
           : Wrap(
               spacing: 16,
               runSpacing: 16,
-              children: records.map((record) {
+              children: files.map((file) {
                 return SizedBox(
                   width: 360,
                   child: PanelSectionBlock(
@@ -3449,32 +3601,16 @@ class _SourcesPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          record.title,
+                          file.title,
                           style: const TextStyle(
                             fontWeight: FontWeight.w900,
                             fontSize: 18,
                           ),
                         ),
                         const SizedBox(height: 10),
-                        _MemoryMetadataRow(
-                          label: 'Evidence',
-                          value: record.evidenceId,
-                        ),
-                        _MemoryMetadataRow(
-                          label: 'Source',
-                          value: record.sourceLabel,
-                        ),
-                        _MemoryMetadataRow(
-                          label: 'Path',
-                          value: record.rawPath,
-                        ),
-                        _MemoryMetadataRow(
-                          label: 'Media',
-                          value: record.rawMediaType,
-                        ),
-                        _MemoryMetadataRow(
-                          label: 'Checksum',
-                          value: record.rawChecksum,
+                        Text(
+                          file.detail,
+                          style: const TextStyle(color: AuroraColors.muted),
                         ),
                       ],
                     ),
@@ -3484,6 +3620,53 @@ class _SourcesPage extends StatelessWidget {
             ),
     );
   }
+}
+
+class _FilesEmptyState extends StatelessWidget {
+  const _FilesEmptyState();
+
+  /// Builds the empty files state with an explicit add-file action.
+  @override
+  Widget build(BuildContext context) {
+    return PanelSectionBlock(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 34),
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AuroraColors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
+            ),
+            onPressed: () => _showFileImportUnavailable(context),
+            icon: const Icon(Icons.add),
+            label: const Text('Add file'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shows a clear dialog when file import has not been wired to storage yet.
+void _showFileImportUnavailable(BuildContext context) {
+  showDialog<void>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('File import is not connected yet'),
+        content: const Text(
+          'The file picker and file-ingest backend are not wired up in this build.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class _PaddedRoute extends StatelessWidget {

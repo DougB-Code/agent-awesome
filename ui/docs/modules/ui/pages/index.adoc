@@ -1,0 +1,42 @@
+= UI
+:description: Agent Awesome Flutter UI subsystem documentation.
+
+The UI is the Flutter application in `ui`.
+It provides the desktop-first workspace for chat, memory, and task context surfaces.
+
+== Responsibilities
+
+* Load runtime profiles and app configuration.
+* Start local services when the selected profile owns them.
+* Connect to the gateway, harness, and memory endpoints.
+* Present assistant chat and context surfaces.
+* Keep UI state and presentation separate from business logic and service clients.
+* Supervise UI-owned subprocesses through one lifecycle boundary.
+
+The UI should not implement model provider calls, memory persistence, Slack event handling, or Cloudflare reconciliation.
+
+== Main Areas
+
+[cols="1,2",options="header"]
+|===
+|Path |Use
+
+|`lib/app`
+|Application controller, settings, runtime profile handling, service startup, and theme.
+
+|`lib/clients`
+|HTTP and MCP clients used by UI state.
+
+|`lib/domain`
+|Dumb data models, task graph facts, projections, and derivations.
+
+|`lib/ui`
+|Widgets, layouts, and visual presentation.
+
+|`runtime_profiles`
+|JSON service topologies for local and Cloudflare-backed runs.
+|===
+
+== Operational Notes
+
+* xref:subprocess-supervision-incident.adoc[Subprocess supervision incident]

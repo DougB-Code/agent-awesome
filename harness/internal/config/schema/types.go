@@ -98,18 +98,20 @@ type LocalExecCommand struct {
 
 // Provider describes one model provider configuration.
 type Provider struct {
-	Name      string  `koanf:"name"`
-	Adapter   string  `koanf:"adapter"`
-	APIKeyEnv string  `koanf:"api-key"`
-	Default   string  `koanf:"default"`
-	URL       string  `koanf:"url"`
-	Models    []Model `koanf:"models"`
+	Name       string  `koanf:"name"`
+	Adapter    string  `koanf:"adapter"`
+	APIKeyEnv  string  `koanf:"api-key"`
+	Default    string  `koanf:"default"`
+	URL        string  `koanf:"url"`
+	Executable string  `koanf:"executable"`
+	Models     []Model `koanf:"models"`
 }
 
 // Model describes one selectable model for a provider.
 type Model struct {
 	ID           string            `koanf:"id"`
 	Model        string            `koanf:"model"`
+	Path         string            `koanf:"path"`
 	Capabilities ModelCapabilities `koanf:"capabilities"`
 }
 
