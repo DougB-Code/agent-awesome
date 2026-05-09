@@ -9,31 +9,40 @@ class AgentAwesomeColors {
   const AgentAwesomeColors._();
 
   /// App page background.
-  static const Color page = Color(0xfff3eee4);
+  static const Color page = Color(0xfff7f3eb);
 
   /// Main surface background.
-  static const Color surface = Color(0xfffbf8f1);
+  static const Color surface = Color(0xfffffcf7);
 
   /// Soft panel background.
-  static const Color panel = Color(0xfff0eadf);
+  static const Color panel = Color(0xffeee8dc);
 
   /// Border color.
-  static const Color border = Color(0xffd8cfbf);
+  static const Color border = Color(0xffd8cdbd);
 
   /// Primary forest green.
-  static const Color green = Color(0xff1f512b);
+  static const Color green = Color(0xff244f31);
 
   /// Muted green used for selected backgrounds.
-  static const Color greenSoft = Color(0xffe5e7cf);
+  static const Color greenSoft = Color(0xffe4e8cd);
 
   /// Coral command accent.
-  static const Color coral = Color(0xffe45646);
+  static const Color coral = Color(0xffef5a4f);
 
   /// Primary text color.
-  static const Color ink = Color(0xff12100d);
+  static const Color ink = Color(0xff15120f);
 
   /// Secondary text color.
   static const Color muted = Color(0xff786f63);
+
+  /// Subtle secondary chrome text color.
+  static const Color subtle = Color(0xff918779);
+
+  /// Warm top-bar background.
+  static const Color chrome = Color(0xfffffdf8);
+
+  /// Sidebar navigation background.
+  static const Color sidebar = Color(0xfff0eadf);
 }
 
 /// Builds the Material theme for Agent Awesome.
@@ -49,18 +58,20 @@ ThemeData buildAgentAwesomeTheme() {
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: AgentAwesomeColors.page,
-    fontFamily: 'Manrope',
+    fontFamily: 'Inter',
     textTheme: const TextTheme(
       displayLarge: TextStyle(
-        fontFamily: 'Georgia',
-        fontSize: 56,
+        fontSize: 72,
+        fontWeight: FontWeight.w900,
         height: 1.05,
+        letterSpacing: 0,
         color: AgentAwesomeColors.ink,
       ),
       headlineLarge: TextStyle(
-        fontFamily: 'Georgia',
         fontSize: 48,
+        fontWeight: FontWeight.w900,
         height: 1.08,
+        letterSpacing: 0,
         color: AgentAwesomeColors.ink,
       ),
       titleLarge: TextStyle(

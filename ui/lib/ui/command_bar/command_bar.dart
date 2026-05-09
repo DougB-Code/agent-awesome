@@ -73,8 +73,11 @@ class CommandBar extends StatefulWidget {
 }
 
 class _CommandBarState extends State<CommandBar> {
-  static const double _height = 62;
-  static const double _buttonSize = 62;
+  static const double _height = 84;
+  static const double _fieldHeight = 42;
+  static const double _buttonSize = 42;
+  static const double _quickAccessGap = 8;
+  static const double _rightPadding = 24;
 
   final FocusNode _focusNode = FocusNode();
   final GlobalKey _fieldKey = GlobalKey();
@@ -104,44 +107,66 @@ class _CommandBarState extends State<CommandBar> {
     return Container(
       height: _height,
       decoration: const BoxDecoration(
-        color: AgentAwesomeColors.surface,
+        color: AgentAwesomeColors.chrome,
         border: Border(bottom: BorderSide(color: AgentAwesomeColors.border)),
       ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: CompositedTransformTarget(
-              link: _fieldLink,
-              child: GestureDetector(
-                key: _fieldKey,
-                behavior: HitTestBehavior.opaque,
-                onTap: _showQuickAccessIfIdle,
-                child: _CommandInputFrame(
-                  controller: widget.commandController,
-                  focusNode: _focusNode,
-                  onTap: _showQuickAccessIfIdle,
-                  onChanged: _handleCommandTextChanged,
-                  onSubmitCommand: () => unawaited(_handleScreenCommand()),
-                  onSubmitNewChat: () => unawaited(_handleNewChatWithText()),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 760;
+          final actionCompact = constraints.maxWidth < 980;
+          final roomy = constraints.maxWidth >= 1400;
+          return Padding(
+            padding: EdgeInsets.fromLTRB(compact ? 12 : 50, 0, 24, 0),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: CompositedTransformTarget(
+                    link: _fieldLink,
+                    child: GestureDetector(
+                      key: _fieldKey,
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _showQuickAccessIfIdle,
+                      child: _CommandInputFrame(
+                        height: _fieldHeight,
+                        controller: widget.commandController,
+                        focusNode: _focusNode,
+                        onTap: _showQuickAccessIfIdle,
+                        onChanged: _handleCommandTextChanged,
+                        onSubmitCommand: () =>
+                            unawaited(_handleScreenCommand()),
+                        onSubmitNewChat: () =>
+                            unawaited(_handleNewChatWithText()),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(width: compact ? 10 : 16),
+                if (!compact && !widget.appController.hasConfiguredModel)
+                  _SetupStatusButton(onTap: _handleOpenSetup),
+                if (roomy) ...const <Widget>[
+                  _VersionBadge(),
+                  SizedBox(width: 10),
+                ],
+                _CommandChromeButton(
+                  icon: Icons.add,
+                  label: actionCompact ? '' : 'New chat',
+                  tooltip: 'New chat',
+                  size: _buttonSize,
+                  onTap: _handleNewChat,
+                ),
+                const SizedBox(width: 8),
+                _CommandChromeButton(
+                  icon: Icons.tune,
+                  label: actionCompact ? '' : 'Settings',
+                  tooltip: 'Settings',
+                  size: _buttonSize,
+                  onTap: _handleOpenSettings,
+                ),
+                if (roomy) ...const <Widget>[SizedBox(width: 8), _ThemeBadge()],
+              ],
             ),
-          ),
-          if (!widget.appController.hasConfiguredModel)
-            _SetupStatusButton(onTap: _handleOpenSetup),
-          _CommandIconButton(
-            icon: Icons.add,
-            tooltip: 'New chat',
-            size: _buttonSize,
-            onTap: _handleNewChat,
-          ),
-          _CommandIconButton(
-            icon: Icons.tune,
-            tooltip: 'Settings',
-            size: _buttonSize,
-            onTap: _handleOpenSettings,
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -230,7 +255,7 @@ class _CommandBarState extends State<CommandBar> {
             CompositedTransformFollower(
               link: _fieldLink,
               showWhenUnlinked: false,
-              offset: const Offset(0, _height),
+              offset: const Offset(0, _fieldHeight + _quickAccessGap),
               child: Material(
                 type: MaterialType.transparency,
                 child: SizedBox(
@@ -276,11 +301,16 @@ class _CommandBarState extends State<CommandBar> {
     });
   }
 
-  /// Returns the dropdown width matched to the command field.
+  /// Returns the dropdown width from the command field to the bar's right edge.
   double _quickAccessWidth() {
     final renderObject = _fieldKey.currentContext?.findRenderObject();
     if (renderObject is RenderBox && renderObject.hasSize) {
-      return renderObject.size.width;
+      final screenWidth = MediaQuery.sizeOf(context).width;
+      final fieldLeft = renderObject.localToGlobal(Offset.zero).dx;
+      final availableWidth = screenWidth - fieldLeft - _rightPadding;
+      return availableWidth
+          .clamp(renderObject.size.width, screenWidth)
+          .toDouble();
     }
     return 720;
   }
@@ -501,26 +531,31 @@ class _SetupStatusButton extends StatelessWidget {
     return Tooltip(
       message: 'Finish setup',
       child: InkWell(
+        borderRadius: BorderRadius.circular(8),
         onTap: onTap,
         child: Container(
-          height: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          decoration: const BoxDecoration(
-            color: Color(0xfffff7ef),
-            border: Border(right: BorderSide(color: AgentAwesomeColors.border)),
+          height: 42,
+          margin: const EdgeInsets.only(right: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: const Color(0xfffff7ef),
+            border: Border.all(color: AgentAwesomeColors.border),
+            borderRadius: BorderRadius.circular(8),
           ),
           child: const Row(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Icon(
                 Icons.error_outline,
                 color: AgentAwesomeColors.coral,
-                size: 20,
+                size: 18,
               ),
-              SizedBox(width: 8),
+              SizedBox(width: 7),
               Text(
                 'Setup incomplete',
                 style: TextStyle(
                   color: AgentAwesomeColors.green,
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -534,6 +569,7 @@ class _SetupStatusButton extends StatelessWidget {
 
 class _CommandInputFrame extends StatelessWidget {
   const _CommandInputFrame({
+    required this.height,
     required this.controller,
     required this.focusNode,
     required this.onTap,
@@ -542,6 +578,7 @@ class _CommandInputFrame extends StatelessWidget {
     required this.onSubmitNewChat,
   });
 
+  final double height;
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onTap;
@@ -553,84 +590,112 @@ class _CommandInputFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: double.infinity,
-      padding: const EdgeInsets.only(left: 22, right: 8),
+      height: height,
+      padding: const EdgeInsets.only(left: 14, right: 8),
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8),
-        border: const Border(
-          right: BorderSide(color: AgentAwesomeColors.border),
-        ),
-      ),
-      child: Row(
-        children: <Widget>[
-          const Icon(Icons.search, color: AgentAwesomeColors.muted),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Shortcuts(
-              shortcuts: <ShortcutActivator, Intent>{
-                const SingleActivator(LogicalKeyboardKey.enter):
-                    const _SubmitScreenCommandIntent(),
-                const SingleActivator(LogicalKeyboardKey.enter, control: true):
-                    const _SubmitNewChatIntent(),
-                const SingleActivator(LogicalKeyboardKey.enter, shift: true):
-                    const _SubmitNewChatIntent(),
-              },
-              child: Actions(
-                actions: <Type, Action<Intent>>{
-                  _SubmitScreenCommandIntent:
-                      CallbackAction<_SubmitScreenCommandIntent>(
-                        onInvoke: (_) {
-                          onSubmitCommand();
-                          return null;
-                        },
-                      ),
-                  _SubmitNewChatIntent: CallbackAction<_SubmitNewChatIntent>(
-                    onInvoke: (_) {
-                      onSubmitNewChat();
-                      return null;
-                    },
-                  ),
-                },
-                child: TextField(
-                  key: const ValueKey<String>('global-command-input'),
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText:
-                        'Command current screen, Ctrl/Shift+Enter for chat...',
-                  ),
-                  onTap: onTap,
-                  onChanged: onChanged,
-                  onSubmitted: (_) => onSubmitCommand(),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          const Text(
-            'Enter',
-            style: TextStyle(
-              color: AgentAwesomeColors.muted,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          IconButton.filled(
-            style: IconButton.styleFrom(
-              backgroundColor: AgentAwesomeColors.coral,
-              foregroundColor: Colors.white,
-              fixedSize: const Size(46, 46),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-            onPressed: onSubmitCommand,
-            icon: const Icon(Icons.arrow_upward),
-            tooltip:
-                'Run screen command. Ctrl+Enter or Shift+Enter starts a new chat.',
+        color: AgentAwesomeColors.surface,
+        border: Border.all(color: const Color(0xff9ed1a1)),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const <BoxShadow>[
+          BoxShadow(
+            color: Color(0x0a453421),
+            blurRadius: 12,
+            offset: Offset(0, 6),
           ),
         ],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 260;
+          return Row(
+            children: <Widget>[
+              Icon(
+                Icons.search,
+                color: AgentAwesomeColors.muted,
+                size: compact ? 20 : 22,
+              ),
+              SizedBox(width: compact ? 8 : 12),
+              Expanded(
+                child: Shortcuts(
+                  shortcuts: <ShortcutActivator, Intent>{
+                    const SingleActivator(LogicalKeyboardKey.enter):
+                        const _SubmitScreenCommandIntent(),
+                    const SingleActivator(
+                      LogicalKeyboardKey.enter,
+                      control: true,
+                    ): const _SubmitNewChatIntent(),
+                    const SingleActivator(
+                      LogicalKeyboardKey.enter,
+                      shift: true,
+                    ): const _SubmitNewChatIntent(),
+                  },
+                  child: Actions(
+                    actions: <Type, Action<Intent>>{
+                      _SubmitScreenCommandIntent:
+                          CallbackAction<_SubmitScreenCommandIntent>(
+                            onInvoke: (_) {
+                              onSubmitCommand();
+                              return null;
+                            },
+                          ),
+                      _SubmitNewChatIntent:
+                          CallbackAction<_SubmitNewChatIntent>(
+                            onInvoke: (_) {
+                              onSubmitNewChat();
+                              return null;
+                            },
+                          ),
+                    },
+                    child: TextField(
+                      key: const ValueKey<String>('global-command-input'),
+                      controller: controller,
+                      focusNode: focusNode,
+                      style: TextStyle(
+                        fontSize: compact ? 15 : 16,
+                        letterSpacing: 0,
+                      ),
+                      decoration: InputDecoration(
+                        border: InputBorder.none,
+                        hintText:
+                            'Command current screen, Ctrl/Shift+Enter for chat...',
+                        hintStyle: TextStyle(
+                          color: AgentAwesomeColors.muted,
+                          fontSize: compact ? 15 : 16,
+                        ),
+                      ),
+                      onTap: onTap,
+                      onChanged: onChanged,
+                      onSubmitted: (_) => onSubmitCommand(),
+                    ),
+                  ),
+                ),
+              ),
+              if (!compact) ...<Widget>[
+                const SizedBox(width: 10),
+                Container(
+                  height: 24,
+                  padding: const EdgeInsets.symmetric(horizontal: 9),
+                  decoration: BoxDecoration(
+                    color: const Color(0xfff0eee8),
+                    border: Border.all(color: AgentAwesomeColors.border),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Enter',
+                      style: TextStyle(
+                        color: AgentAwesomeColors.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -648,39 +713,151 @@ class _SubmitNewChatIntent extends Intent {
   const _SubmitNewChatIntent();
 }
 
-class _CommandIconButton extends StatelessWidget {
-  const _CommandIconButton({
+/// _CommandChromeButton renders one screenshot-style top-bar action.
+class _CommandChromeButton extends StatelessWidget {
+  /// Creates a rounded top-bar button.
+  const _CommandChromeButton({
     required this.icon,
+    required this.label,
     required this.tooltip,
     required this.size,
     this.onTap,
   });
 
   final IconData icon;
+  final String label;
   final String tooltip;
   final double size;
   final VoidCallback? onTap;
 
-  /// Builds a flat command bar icon button.
+  /// Builds a rounded command-bar action button.
   @override
   Widget build(BuildContext context) {
+    final compact = label.isEmpty;
     return Tooltip(
       message: tooltip,
       child: InkWell(
+        borderRadius: BorderRadius.circular(8),
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
           height: size,
-          width: size,
-          decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: AgentAwesomeColors.border)),
+          width: compact ? size : 118,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
+          decoration: BoxDecoration(
+            color: AgentAwesomeColors.surface,
+            border: Border.all(color: AgentAwesomeColors.border),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            color: onTap == null
-                ? AgentAwesomeColors.muted.withValues(alpha: 0.45)
-                : AgentAwesomeColors.muted,
+          child: Row(
+            mainAxisAlignment: compact
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 19,
+                color: onTap == null
+                    ? AgentAwesomeColors.muted.withValues(alpha: 0.45)
+                    : AgentAwesomeColors.ink,
+              ),
+              if (!compact) ...<Widget>[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AgentAwesomeColors.ink,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// _VersionBadge renders the current app version shown in the screenshot.
+class _VersionBadge extends StatelessWidget {
+  /// Creates a static version badge.
+  const _VersionBadge();
+
+  /// Builds a version badge that mirrors the documentation chrome.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 42,
+      width: 104,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: AgentAwesomeColors.surface,
+        border: Border.all(color: AgentAwesomeColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Flexible(
+            child: Text(
+              'v0.1',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+          Icon(Icons.keyboard_arrow_down, size: 18),
+        ],
+      ),
+    );
+  }
+}
+
+/// _ThemeBadge reports the currently supported light theme.
+class _ThemeBadge extends StatelessWidget {
+  /// Creates a static light-mode badge.
+  const _ThemeBadge();
+
+  /// Builds the light theme indicator.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 42,
+      width: 118,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: AgentAwesomeColors.surface,
+        border: Border.all(color: AgentAwesomeColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Icon(Icons.light_mode_outlined, size: 19),
+          SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              'Light',
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AgentAwesomeColors.ink,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

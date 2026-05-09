@@ -89,11 +89,15 @@ class AppShellFrame extends StatelessWidget {
   /// Builds the single app shell that owns navigation and panel placement.
   @override
   Widget build(BuildContext context) {
+    final sidebarWidth = sidebarExpanded
+        ? _AppSidebar.expandedWidth
+        : _AppSidebar.compactWidth;
     return Row(
       children: <Widget>[
-        _AppSidebar(
-          selected: selectedSection,
+        _AppSidebarColumn(
+          width: sidebarWidth,
           expanded: sidebarExpanded,
+          selected: selectedSection,
           onSelected: onSelected,
           onToggleExpanded: onToggleSidebar,
         ),
@@ -114,7 +118,12 @@ class AppShellFrame extends StatelessWidget {
                 onOpenSettings: onOpenSettings,
                 onOpenSetup: onOpenSetup,
               ),
-              Expanded(child: content),
+              Expanded(
+                child: ColoredBox(
+                  color: AgentAwesomeColors.page,
+                  child: content,
+                ),
+              ),
             ],
           ),
         ),
@@ -123,75 +132,185 @@ class AppShellFrame extends StatelessWidget {
   }
 }
 
-class _AppSidebar extends StatelessWidget {
-  const _AppSidebar({
-    required this.selected,
+/// _AppSidebarColumn keeps the logo and navigation in one left rail.
+class _AppSidebarColumn extends StatelessWidget {
+  /// Creates a full-height sidebar column with one continuous divider.
+  const _AppSidebarColumn({
+    required this.width,
     required this.expanded,
+    required this.selected,
     required this.onSelected,
     required this.onToggleExpanded,
   });
 
-  final String selected;
+  /// Width of the sidebar column.
+  final double width;
+
+  /// Whether the sidebar shows labels or compact icons.
   final bool expanded;
+
+  /// Currently selected section id.
+  final String selected;
+
+  /// Emits section ids when a navigation item is selected.
   final ValueChanged<String> onSelected;
+
+  /// Expands or collapses the sidebar.
   final VoidCallback onToggleExpanded;
 
-  static const List<({String label, IconData icon})> _items =
-      <({String label, IconData icon})>[
-        (label: 'Today', icon: Icons.auto_awesome),
-        (label: 'Chat', icon: Icons.forum_outlined),
-        (label: 'Workflows', icon: Icons.radio_button_unchecked),
-        (label: AppSections.backlog, icon: Icons.task_alt_outlined),
-        (label: 'Memory', icon: Icons.chat_bubble_outline),
-        (label: 'Files', icon: Icons.folder_outlined),
-        (label: 'Timeline', icon: Icons.view_timeline_outlined),
-        (label: 'People', icon: Icons.people_outline),
-        (label: 'Settings', icon: Icons.settings_outlined),
-      ];
-
-  /// Builds the left navigation rail.
+  /// Builds the two-part left column as one structural frame.
   @override
   Widget build(BuildContext context) {
-    final compact = !expanded;
     return Container(
-      width: expanded ? 292 : 92,
-      color: const Color(0xfff5f0e6),
-      padding: EdgeInsets.fromLTRB(26, 26, expanded ? 24 : 18, 24),
+      width: width,
+      foregroundDecoration: const BoxDecoration(
+        border: Border(right: BorderSide(color: AgentAwesomeColors.border)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _SidebarHeader(
-            expanded: expanded,
-            onToggleExpanded: onToggleExpanded,
-          ),
-          SizedBox(height: compact ? 24 : 32),
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: <Widget>[
-                for (final item in _items)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _NavButton(
-                      label: item.label,
-                      icon: item.icon,
-                      selected: selected == item.label,
-                      onTap: () => onSelected(item.label),
-                      compact: compact,
-                    ),
-                  ),
-              ],
+          SizedBox(
+            height: 84,
+            child: _AppBrandHeader(
+              expanded: expanded,
+              onToggleExpanded: onToggleExpanded,
             ),
           ),
-          if (expanded) ...const <Widget>[SizedBox(height: 16), _ProfileTile()],
+          Expanded(
+            child: _AppSidebar(
+              selected: selected,
+              expanded: expanded,
+              onSelected: onSelected,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _SidebarHeader extends StatelessWidget {
-  const _SidebarHeader({
+/// _AppSidebar renders the grouped documentation-style navigation rail.
+class _AppSidebar extends StatelessWidget {
+  /// Creates the grouped sidebar for the current shell state.
+  const _AppSidebar({
+    required this.selected,
+    required this.expanded,
+    required this.onSelected,
+  });
+
+  /// Width used by the documentation-style expanded navigation.
+  static const double expandedWidth = 352;
+
+  /// Width used by collapsed icon-only navigation.
+  static const double compactWidth = 84;
+
+  final String selected;
+  final bool expanded;
+  final ValueChanged<String> onSelected;
+
+  static const List<_SidebarGroup> _groups = <_SidebarGroup>[
+    _SidebarGroup(
+      title: 'START HERE',
+      items: <_SidebarItem>[
+        _SidebarItem(
+          label: 'Welcome',
+          section: AppSections.today,
+          iconGlyph: '⌂',
+        ),
+        _SidebarItem(label: 'Chat', section: AppSections.chat, iconGlyph: '↗'),
+        _SidebarItem(
+          label: 'Workflows',
+          section: AppSections.workflows,
+          iconGlyph: '✦',
+        ),
+      ],
+    ),
+    _SidebarGroup(
+      title: 'USER GUIDE',
+      items: <_SidebarItem>[
+        _SidebarItem(
+          label: AppSections.backlog,
+          section: AppSections.backlog,
+          iconGlyph: '▤',
+          showsChevron: true,
+        ),
+        _SidebarItem(
+          label: AppSections.memory,
+          section: AppSections.memory,
+          iconGlyph: '◌',
+          showsChevron: true,
+        ),
+        _SidebarItem(
+          label: AppSections.files,
+          section: AppSections.files,
+          iconGlyph: '▷',
+          showsChevron: true,
+        ),
+      ],
+    ),
+    _SidebarGroup(
+      title: 'USER HOW-TO GUIDES',
+      items: <_SidebarItem>[
+        _SidebarItem(
+          label: AppSections.timeline,
+          section: AppSections.timeline,
+          iconGlyph: '▷',
+          showsChevron: true,
+        ),
+        _SidebarItem(
+          label: AppSections.people,
+          section: AppSections.people,
+          iconGlyph: '□',
+          showsChevron: true,
+        ),
+      ],
+    ),
+    _SidebarGroup(
+      title: 'DEVELOPMENT',
+      items: <_SidebarItem>[
+        _SidebarItem(
+          label: AppSections.settings,
+          section: AppSections.settings,
+          iconGlyph: '↯',
+          showsChevron: true,
+        ),
+      ],
+    ),
+  ];
+
+  /// Builds the left navigation rail.
+  @override
+  Widget build(BuildContext context) {
+    final compact = !expanded;
+    return Container(
+      color: AgentAwesomeColors.sidebar,
+      padding: EdgeInsets.fromLTRB(14, 24, expanded ? 14 : 12, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                for (final group in _groups)
+                  _SidebarGroupView(
+                    group: group,
+                    selected: selected,
+                    compact: compact,
+                    onSelected: onSelected,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _AppBrandHeader renders the full-width top-left brand block.
+class _AppBrandHeader extends StatelessWidget {
+  /// Creates the brand block and sidebar collapse action.
+  const _AppBrandHeader({
     required this.expanded,
     required this.onToggleExpanded,
   });
@@ -199,37 +318,139 @@ class _SidebarHeader extends StatelessWidget {
   final bool expanded;
   final VoidCallback onToggleExpanded;
 
-  /// Builds the top sidebar logo row and expansion control.
+  /// Builds the screenshot-style brand header.
   @override
   Widget build(BuildContext context) {
-    if (!expanded) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: PanelCollapseButton(
-          expanded: expanded,
-          onPressed: onToggleExpanded,
-          expandedTooltip: 'Collapse sidebar',
-          collapsedTooltip: 'Expand sidebar',
-        ),
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        const Expanded(child: _AgentAwesomeLogo(compact: false)),
-        PanelCollapseButton(
-          expanded: expanded,
-          onPressed: onToggleExpanded,
-          expandedTooltip: 'Collapse sidebar',
-          collapsedTooltip: 'Expand sidebar',
-        ),
-      ],
+    return Container(
+      decoration: const BoxDecoration(
+        color: AgentAwesomeColors.chrome,
+        border: Border(bottom: BorderSide(color: AgentAwesomeColors.border)),
+      ),
+      padding: EdgeInsets.fromLTRB(expanded ? 24 : 14, 12, 14, 12),
+      child: expanded
+          ? Row(
+              children: <Widget>[
+                const Expanded(child: _AgentAwesomeLogo(compact: false)),
+                PanelCollapseButton(
+                  expanded: expanded,
+                  onPressed: onToggleExpanded,
+                  expandedTooltip: 'Collapse sidebar',
+                  collapsedTooltip: 'Expand sidebar',
+                ),
+              ],
+            )
+          : Center(
+              child: PanelCollapseButton(
+                expanded: expanded,
+                onPressed: onToggleExpanded,
+                expandedTooltip: 'Collapse sidebar',
+                collapsedTooltip: 'Expand sidebar',
+              ),
+            ),
     );
   }
 }
 
+/// _SidebarGroup stores one labeled navigation group.
+class _SidebarGroup {
+  /// Creates a sidebar group with related navigation items.
+  const _SidebarGroup({required this.title, required this.items});
+
+  /// Group heading shown above the items.
+  final String title;
+
+  /// Navigation items in this group.
+  final List<_SidebarItem> items;
+}
+
+/// _SidebarItem stores one app route shown in the left rail.
+class _SidebarItem {
+  /// Creates a navigation item.
+  const _SidebarItem({
+    required this.label,
+    required this.section,
+    required this.iconGlyph,
+    this.showsChevron = false,
+  });
+
+  /// Display text.
+  final String label;
+
+  /// App section emitted when the item is selected.
+  final String section;
+
+  /// Leading glyph copied from the documentation nav.
+  final String iconGlyph;
+
+  /// Whether the row shows a nested-section chevron.
+  final bool showsChevron;
+}
+
+/// _SidebarGroupView renders one grouped set of sidebar links.
+class _SidebarGroupView extends StatelessWidget {
+  /// Creates a rendered sidebar group.
+  const _SidebarGroupView({
+    required this.group,
+    required this.selected,
+    required this.compact,
+    required this.onSelected,
+  });
+
+  /// Group data to render.
+  final _SidebarGroup group;
+
+  /// Currently selected section id.
+  final String selected;
+
+  /// Whether the sidebar is icon-only.
+  final bool compact;
+
+  /// Emits section ids when a row is selected.
+  final ValueChanged<String> onSelected;
+
+  /// Builds a grouped navigation section.
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: compact ? 14 : 26),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (!compact)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: Text(
+                group.title,
+                style: const TextStyle(
+                  color: AgentAwesomeColors.muted,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                  letterSpacing: 0.92,
+                ),
+              ),
+            ),
+          for (final item in group.items)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: _NavButton(
+                label: item.label,
+                iconGlyph: item.iconGlyph,
+                selected: selected == item.section,
+                onTap: () => onSelected(item.section),
+                compact: compact,
+                showsChevron: item.showsChevron,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _AgentAwesomeLogo renders the brand mark and wordmark.
 class _AgentAwesomeLogo extends StatelessWidget {
+  /// Creates a compact or expanded brand treatment.
   const _AgentAwesomeLogo({required this.compact});
 
   final bool compact;
@@ -242,65 +463,43 @@ class _AgentAwesomeLogo extends StatelessWidget {
       child: Row(
         mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
         children: <Widget>[
-          Container(
-            height: 52,
-            width: 52,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xfffffbf1),
-              border: Border.all(color: const Color(0xffb8a879)),
-            ),
-            child: Center(
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: <Widget>[
-                  Container(
-                    height: 28,
-                    width: 28,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xff8c7a45),
-                        width: 2,
-                      ),
-                    ),
-                  ),
-                  const Positioned(
-                    right: -3,
-                    top: 5,
-                    child: _LogoDot(color: AgentAwesomeColors.coral),
-                  ),
-                  const Positioned(
-                    left: -2,
-                    bottom: 0,
-                    child: _LogoDot(color: AgentAwesomeColors.green),
-                  ),
-                ],
-              ),
-            ),
+          Image.asset(
+            'assets/images/agent-awesome-logo.png',
+            height: compact ? 44 : 61,
+            width: compact ? 44 : 61,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (context, error, stackTrace) {
+              return const _LogoFallbackMark();
+            },
           ),
           if (!compact) ...const <Widget>[
-            SizedBox(width: 14),
+            SizedBox(width: 15),
             Flexible(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
                     'AGENT AWESOME',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 1.4,
+                      height: 1.1,
+                      letterSpacing: 4.96,
+                      color: AgentAwesomeColors.ink,
                     ),
                   ),
+                  SizedBox(height: 2),
                   Text(
-                    'PERSONAL AGENT',
+                    'DOCUMENTATION',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 10,
-                      color: AgentAwesomeColors.muted,
-                      letterSpacing: 2.4,
+                      fontSize: 12,
+                      color: AgentAwesomeColors.subtle,
+                      fontWeight: FontWeight.w500,
+                      height: 1.2,
+                      letterSpacing: 4.32,
                     ),
                   ),
                 ],
@@ -313,78 +512,28 @@ class _AgentAwesomeLogo extends StatelessWidget {
   }
 }
 
-class _LogoDot extends StatelessWidget {
-  const _LogoDot({required this.color});
+/// _LogoFallbackMark keeps the app usable if bundled assets fail to load.
+class _LogoFallbackMark extends StatelessWidget {
+  /// Creates a compact fallback mark.
+  const _LogoFallbackMark();
 
-  final Color color;
-
-  /// Builds a small brand dot.
+  /// Builds a simple fallback mark for tests and asset failures.
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      child: const SizedBox.square(dimension: 10),
-    );
-  }
-}
-
-class _NavButton extends StatelessWidget {
-  const _NavButton({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-    required this.compact,
-  });
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-  final bool compact;
-
-  /// Builds one navigation item.
-  @override
-  Widget build(BuildContext context) {
-    final foreground = selected
-        ? AgentAwesomeColors.green
-        : AgentAwesomeColors.muted;
-    return Tooltip(
-      message: compact ? label : '',
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 14 : 20,
-            vertical: compact ? 13 : 15,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? AgentAwesomeColors.greenSoft : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisAlignment: compact
-                ? MainAxisAlignment.center
-                : MainAxisAlignment.start,
-            children: <Widget>[
-              Icon(icon, size: 20, color: foreground),
-              if (!compact) ...<Widget>[
-                const SizedBox(width: 14),
-                Flexible(
-                  child: Text(
-                    label,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: selected
-                          ? AgentAwesomeColors.ink
-                          : const Color(0xff514b43),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+    return Container(
+      height: 58,
+      width: 58,
+      decoration: BoxDecoration(
+        color: AgentAwesomeColors.green,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Center(
+        child: Text(
+          'AA',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0,
           ),
         ),
       ),
@@ -392,39 +541,96 @@ class _NavButton extends StatelessWidget {
   }
 }
 
-class _ProfileTile extends StatelessWidget {
-  const _ProfileTile();
+/// _NavButton renders one selectable sidebar route.
+class _NavButton extends StatelessWidget {
+  /// Creates a navigation button for one app route.
+  const _NavButton({
+    required this.label,
+    required this.iconGlyph,
+    required this.selected,
+    required this.onTap,
+    required this.compact,
+    required this.showsChevron,
+  });
 
-  /// Builds the user account tile.
+  final String label;
+  final String iconGlyph;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool compact;
+  final bool showsChevron;
+
+  /// Builds one navigation item.
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xfff0eadf),
-        borderRadius: BorderRadius.circular(28),
-      ),
-      child: const Row(
-        children: <Widget>[
-          CircleAvatar(backgroundColor: Color(0xffd69b88)),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text('Doug', style: TextStyle(fontWeight: FontWeight.w800)),
-                Text(
-                  'Local pilot',
+    final foreground = selected
+        ? AgentAwesomeColors.ink
+        : AgentAwesomeColors.muted;
+    return Tooltip(
+      message: compact ? label : '',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+          constraints: const BoxConstraints(minHeight: 38),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 10,
+            vertical: compact ? 8 : 7,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? AgentAwesomeColors.greenSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            mainAxisAlignment: compact
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 22,
+                child: Text(
+                  iconGlyph,
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: AgentAwesomeColors.muted,
-                    fontSize: 12,
+                    color: foreground,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    height: 1,
                   ),
                 ),
+              ),
+              if (!compact) ...<Widget>[
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      letterSpacing: 0,
+                      height: 1.25,
+                      color: foreground,
+                    ),
+                  ),
+                ),
+                if (showsChevron) ...const <Widget>[
+                  SizedBox(width: 8),
+                  Text(
+                    '›',
+                    style: TextStyle(
+                      color: AgentAwesomeColors.subtle,
+                      fontSize: 19,
+                      height: 1,
+                    ),
+                  ),
+                ],
               ],
-            ),
+            ],
           ),
-          Icon(Icons.chevron_right, color: AgentAwesomeColors.muted),
-        ],
+        ),
       ),
     );
   }

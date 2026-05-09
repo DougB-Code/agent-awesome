@@ -116,7 +116,10 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
       case AppSections.people:
         return _MemoryPeopleRoute(controller: widget.controller);
       default:
-        return HomeWorkspace(controller: widget.controller);
+        return HomeWorkspace(
+          controller: widget.controller,
+          onOpenSection: _selectSection,
+        );
     }
   }
 
