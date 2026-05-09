@@ -209,23 +209,27 @@ class _AppSidebar extends StatelessWidget {
 
   static const List<_SidebarGroup> _groups = <_SidebarGroup>[
     _SidebarGroup(
-      title: 'START HERE',
+      title: 'HOME & CHAT',
       items: <_SidebarItem>[
         _SidebarItem(
-          label: 'Welcome',
+          label: AppSections.today,
           section: AppSections.today,
           iconGlyph: '⌂',
         ),
-        _SidebarItem(label: 'Chat', section: AppSections.chat, iconGlyph: '↗'),
         _SidebarItem(
-          label: 'Workflows',
+          label: AppSections.chat,
+          section: AppSections.chat,
+          iconGlyph: '↗',
+        ),
+        _SidebarItem(
+          label: AppSections.workflows,
           section: AppSections.workflows,
           iconGlyph: '✦',
         ),
       ],
     ),
     _SidebarGroup(
-      title: 'USER GUIDE',
+      title: 'WORK MANAGEMENT',
       items: <_SidebarItem>[
         _SidebarItem(
           label: AppSections.backlog,
@@ -233,6 +237,17 @@ class _AppSidebar extends StatelessWidget {
           iconGlyph: '▤',
           showsChevron: true,
         ),
+        _SidebarItem(
+          label: AppSections.timeline,
+          section: AppSections.timeline,
+          iconGlyph: '▷',
+          showsChevron: true,
+        ),
+      ],
+    ),
+    _SidebarGroup(
+      title: 'KNOWLEDGE',
+      items: <_SidebarItem>[
         _SidebarItem(
           label: AppSections.memory,
           section: AppSections.memory,
@@ -245,17 +260,6 @@ class _AppSidebar extends StatelessWidget {
           iconGlyph: '▷',
           showsChevron: true,
         ),
-      ],
-    ),
-    _SidebarGroup(
-      title: 'USER HOW-TO GUIDES',
-      items: <_SidebarItem>[
-        _SidebarItem(
-          label: AppSections.timeline,
-          section: AppSections.timeline,
-          iconGlyph: '▷',
-          showsChevron: true,
-        ),
         _SidebarItem(
           label: AppSections.people,
           section: AppSections.people,
@@ -265,7 +269,7 @@ class _AppSidebar extends StatelessWidget {
       ],
     ),
     _SidebarGroup(
-      title: 'DEVELOPMENT',
+      title: 'SYSTEM',
       items: <_SidebarItem>[
         _SidebarItem(
           label: AppSections.settings,
@@ -340,14 +344,76 @@ class _AppBrandHeader extends StatelessWidget {
               ],
             )
           : Center(
-              child: PanelCollapseButton(
-                expanded: expanded,
-                onPressed: onToggleExpanded,
-                expandedTooltip: 'Collapse sidebar',
-                collapsedTooltip: 'Expand sidebar',
-              ),
+              child: _CollapsedBrandExpandButton(onPressed: onToggleExpanded),
             ),
     );
+  }
+}
+
+/// _CollapsedBrandExpandButton shows the app logo until hover reveals expand.
+class _CollapsedBrandExpandButton extends StatefulWidget {
+  /// Creates the collapsed sidebar expansion affordance.
+  const _CollapsedBrandExpandButton({required this.onPressed});
+
+  /// Expands the sidebar when the collapsed logo is clicked.
+  final VoidCallback onPressed;
+
+  @override
+  State<_CollapsedBrandExpandButton> createState() =>
+      _CollapsedBrandExpandButtonState();
+}
+
+class _CollapsedBrandExpandButtonState
+    extends State<_CollapsedBrandExpandButton> {
+  bool _hovered = false;
+
+  /// Builds a logo button that swaps to the expand icon while hovered.
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Expand sidebar',
+      child: MouseRegion(
+        onEnter: (_) => _setHovered(true),
+        onExit: (_) => _setHovered(false),
+        child: IconButton(
+          key: const ValueKey<String>('collapsed-sidebar-logo-button'),
+          alignment: Alignment.center,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 56, height: 56),
+          onPressed: widget.onPressed,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 120),
+            child: _hovered
+                ? const Icon(
+                    Icons.keyboard_double_arrow_right,
+                    key: ValueKey<String>('collapsed-sidebar-expand-icon'),
+                    color: AgentAwesomeColors.muted,
+                    size: 22,
+                  )
+                : Image.asset(
+                    'assets/images/agent-awesome-logo.png',
+                    key: const ValueKey<String>('collapsed-sidebar-logo'),
+                    height: 44,
+                    width: 44,
+                    filterQuality: FilterQuality.medium,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const _LogoFallbackMark();
+                    },
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Updates hover state without rebuilding when the value is unchanged.
+  void _setHovered(bool hovered) {
+    if (_hovered == hovered) {
+      return;
+    }
+    setState(() {
+      _hovered = hovered;
+    });
   }
 }
 
@@ -465,8 +531,8 @@ class _AgentAwesomeLogo extends StatelessWidget {
         children: <Widget>[
           Image.asset(
             'assets/images/agent-awesome-logo.png',
-            height: compact ? 44 : 61,
-            width: compact ? 44 : 61,
+            height: 44,
+            width: 44,
             filterQuality: FilterQuality.medium,
             errorBuilder: (context, error, stackTrace) {
               return const _LogoFallbackMark();
@@ -480,7 +546,7 @@ class _AgentAwesomeLogo extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'AGENT AWESOME',
+                    'AGENT',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 16,
@@ -490,16 +556,16 @@ class _AgentAwesomeLogo extends StatelessWidget {
                       color: AgentAwesomeColors.ink,
                     ),
                   ),
-                  SizedBox(height: 2),
+                  SizedBox(height: 3),
                   Text(
-                    'DOCUMENTATION',
+                    'AWESOME',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AgentAwesomeColors.subtle,
-                      fontWeight: FontWeight.w500,
-                      height: 1.2,
-                      letterSpacing: 4.32,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                      letterSpacing: 4.96,
+                      color: AgentAwesomeColors.ink,
                     ),
                   ),
                 ],

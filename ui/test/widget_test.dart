@@ -1,6 +1,8 @@
 /// Tests the primary Agent Awesome workspace widgets.
 library;
 
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
@@ -970,8 +972,33 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.byIcon(Icons.menu), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('collapsed-sidebar-logo')),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.menu), findsNothing);
     expect(find.text('AGENT AWESOME'), findsNothing);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(gesture.removePointer);
+    await gesture.addPointer();
+    await gesture.moveTo(
+      tester.getCenter(
+        find.byKey(const ValueKey<String>('collapsed-sidebar-logo-button')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.keyboard_double_arrow_right), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('collapsed-sidebar-logo-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('AGENT'), findsOneWidget);
+    expect(find.text('AWESOME'), findsOneWidget);
   });
 }
 
