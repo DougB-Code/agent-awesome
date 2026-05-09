@@ -104,11 +104,12 @@ class _CommandBarState extends State<CommandBar> {
   /// Builds the global command bar.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       height: _height,
-      decoration: const BoxDecoration(
-        color: AgentAwesomeColors.chrome,
-        border: Border(bottom: BorderSide(color: AgentAwesomeColors.border)),
+      decoration: BoxDecoration(
+        color: colors.chrome,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -530,6 +531,7 @@ class _SetupStatusButton extends StatelessWidget {
   /// Builds a prominent setup status action for incomplete model setup.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: 'Finish setup',
       child: InkWell(
@@ -540,23 +542,19 @@ class _SetupStatusButton extends StatelessWidget {
           margin: const EdgeInsets.only(right: 10),
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: const Color(0xfffff7ef),
-            border: Border.all(color: AgentAwesomeColors.border),
+            color: colors.warningSoft,
+            border: Border.all(color: colors.warningBorder),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(
-                Icons.error_outline,
-                color: AgentAwesomeColors.coral,
-                size: 18,
-              ),
-              SizedBox(width: 7),
+              Icon(Icons.error_outline, color: colors.warningText, size: 18),
+              const SizedBox(width: 7),
               Text(
                 'Setup incomplete',
                 style: TextStyle(
-                  color: AgentAwesomeColors.green,
+                  color: colors.warningText,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -591,16 +589,17 @@ class _CommandInputFrame extends StatelessWidget {
   /// Builds the flat command input field.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       height: height,
       padding: const EdgeInsets.only(left: 14, right: 8),
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.surface,
-        border: Border.all(color: const Color(0xff9ed1a1)),
+        color: colors.surface,
+        border: Border.all(color: colors.searchBorder),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: const <BoxShadow>[
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Color(0x0a453421),
+            color: colors.softShadow,
             blurRadius: 12,
             offset: Offset(0, 6),
           ),
@@ -611,11 +610,7 @@ class _CommandInputFrame extends StatelessWidget {
           final compact = constraints.maxWidth < 260;
           return Row(
             children: <Widget>[
-              Icon(
-                Icons.search,
-                color: AgentAwesomeColors.muted,
-                size: compact ? 20 : 22,
-              ),
+              Icon(Icons.search, color: colors.muted, size: compact ? 20 : 22),
               SizedBox(width: compact ? 8 : 12),
               Expanded(
                 child: Shortcuts(
@@ -655,13 +650,14 @@ class _CommandInputFrame extends StatelessWidget {
                       style: TextStyle(
                         fontSize: compact ? 15 : 16,
                         letterSpacing: 0,
+                        color: colors.ink,
                       ),
                       decoration: InputDecoration(
                         border: InputBorder.none,
                         hintText:
                             'Command current screen, Ctrl/Shift+Enter for chat...',
                         hintStyle: TextStyle(
-                          color: AgentAwesomeColors.muted,
+                          color: colors.muted,
                           fontSize: compact ? 15 : 16,
                         ),
                       ),
@@ -678,15 +674,15 @@ class _CommandInputFrame extends StatelessWidget {
                   height: 24,
                   padding: const EdgeInsets.symmetric(horizontal: 9),
                   decoration: BoxDecoration(
-                    color: const Color(0xfff0eee8),
-                    border: Border.all(color: AgentAwesomeColors.border),
+                    color: colors.kbdBackground,
+                    border: Border.all(color: colors.border),
                     borderRadius: BorderRadius.circular(7),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
                       'Enter',
                       style: TextStyle(
-                        color: AgentAwesomeColors.muted,
+                        color: colors.muted,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0,
@@ -735,6 +731,7 @@ class _CommandChromeButton extends StatelessWidget {
   /// Builds a rounded command-bar action button.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final compact = label.isEmpty;
     return Tooltip(
       message: tooltip,
@@ -748,8 +745,8 @@ class _CommandChromeButton extends StatelessWidget {
           width: compact ? size : 118,
           padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
           decoration: BoxDecoration(
-            color: AgentAwesomeColors.surface,
-            border: Border.all(color: AgentAwesomeColors.border),
+            color: colors.surface,
+            border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -761,8 +758,8 @@ class _CommandChromeButton extends StatelessWidget {
                 icon,
                 size: 19,
                 color: onTap == null
-                    ? AgentAwesomeColors.muted.withValues(alpha: 0.45)
-                    : AgentAwesomeColors.ink,
+                    ? colors.muted.withValues(alpha: 0.45)
+                    : colors.ink,
               ),
               if (!compact) ...<Widget>[
                 const SizedBox(width: 8),
@@ -770,8 +767,8 @@ class _CommandChromeButton extends StatelessWidget {
                   child: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.ink,
+                    style: TextStyle(
+                      color: colors.ink,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0,
@@ -795,16 +792,17 @@ class _VersionBadge extends StatelessWidget {
   /// Builds a version badge that mirrors the documentation chrome.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       height: 42,
       width: 104,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.surface,
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: const Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: <Widget>[
           Flexible(
@@ -812,54 +810,70 @@ class _VersionBadge extends StatelessWidget {
               'v0.1',
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                color: colors.ink,
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0,
               ),
             ),
           ),
-          Icon(Icons.keyboard_arrow_down, size: 18),
+          Icon(Icons.keyboard_arrow_down, size: 18, color: colors.ink),
         ],
       ),
     );
   }
 }
 
-/// _ThemeBadge reports the currently supported light theme.
+/// _ThemeBadge toggles between the light and dark themes.
 class _ThemeBadge extends StatelessWidget {
-  /// Creates a static light-mode badge.
+  /// Creates a theme toggle badge.
   const _ThemeBadge();
 
-  /// Builds the light theme indicator.
+  /// Builds the active theme indicator.
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 42,
-      width: 118,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: AgentAwesomeColors.surface,
-        border: Border.all(color: AgentAwesomeColors.border),
+    final colors = context.agentAwesomeColors;
+    final themeScope = AgentAwesomeThemeScope.maybeOf(context);
+    final dark =
+        themeScope?.isDark ?? Theme.of(context).brightness == Brightness.dark;
+    return Tooltip(
+      message: dark ? 'Switch to light theme' : 'Switch to dark theme',
+      child: InkWell(
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          Icon(Icons.light_mode_outlined, size: 19),
-          SizedBox(width: 7),
-          Flexible(
-            child: Text(
-              'Light',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AgentAwesomeColors.ink,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-              ),
-            ),
+        onTap: themeScope?.onToggleTheme,
+        child: Container(
+          height: 42,
+          width: 118,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: colors.surface,
+            border: Border.all(color: colors.border),
+            borderRadius: BorderRadius.circular(8),
           ),
-        ],
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Icon(
+                dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                color: colors.ink,
+                size: 19,
+              ),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  dark ? 'Dark' : 'Light',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.ink,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

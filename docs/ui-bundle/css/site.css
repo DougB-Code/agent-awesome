@@ -42,7 +42,7 @@
   --topbar-border: #ded8ce;
   --search-bg: #fffdf8;
   --search-border: #a9d6a7;
-  --search-shadow: 0 0 0 1px rgba(42, 97, 50, 0.02), 0 8px 18px rgba(42, 97, 50, 0.08);
+  --search-shadow: 0 0 0 1px rgba(42, 97, 50, 0.008), 0 8px 18px rgba(42, 97, 50, 0.032);
   --control-bg: #fffdf8;
   --control-border: #ded8ce;
   --control-shadow: none;
@@ -93,7 +93,7 @@
   --topbar-border: #273343;
   --search-bg: #101720;
   --search-border: #2c5f9d;
-  --search-shadow: 0 0 0 1px rgba(78, 163, 255, 0.1), 0 0 22px rgba(78, 163, 255, 0.18);
+  --search-shadow: 0 0 0 1px rgba(78, 163, 255, 0.04), 0 0 22px rgba(78, 163, 255, 0.072);
   --control-bg: color-mix(in srgb, var(--panel-bg) 86%, var(--panel-soft));
   --control-border: #2f3e51;
   --control-shadow: none;

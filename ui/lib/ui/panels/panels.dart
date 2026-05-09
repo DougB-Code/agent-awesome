@@ -89,6 +89,7 @@ class PanelCollapseButton extends StatelessWidget {
   /// Builds the shared icon-only collapse affordance.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: expanded ? expandedTooltip : collapsedTooltip,
       child: IconButton(
@@ -96,7 +97,7 @@ class PanelCollapseButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints.tightFor(width: 34, height: 34),
         onPressed: onPressed,
-        icon: Icon(_icon, color: AgentAwesomeColors.muted, size: 20),
+        icon: Icon(_icon, color: colors.muted, size: 20),
       ),
     );
   }
@@ -299,12 +300,9 @@ class _SplitPanelDivider extends StatelessWidget {
   /// Builds the fixed divider shown next to a collapsed pane.
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: VerticalDivider(
-        width: 1,
-        thickness: 1,
-        color: AgentAwesomeColors.border,
-      ),
+    final colors = context.agentAwesomeColors;
+    return Center(
+      child: VerticalDivider(width: 1, thickness: 1, color: colors.border),
     );
   }
 }
@@ -324,6 +322,7 @@ class _SplitPanelHandleState extends State<_SplitPanelHandle> {
   /// Builds the draggable divider for split panel panes.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return MouseRegion(
       cursor: SystemMouseCursors.resizeColumn,
       onEnter: (_) => _setActive(true),
@@ -338,16 +337,12 @@ class _SplitPanelHandleState extends State<_SplitPanelHandle> {
         child: Stack(
           alignment: Alignment.center,
           children: <Widget>[
-            const VerticalDivider(
-              width: 1,
-              thickness: 1,
-              color: AgentAwesomeColors.border,
-            ),
+            VerticalDivider(width: 1, thickness: 1, color: colors.border),
             AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               curve: Curves.easeOut,
               width: _active ? 4 : 0,
-              color: AgentAwesomeColors.green,
+              color: colors.green,
             ),
           ],
         ),
@@ -579,6 +574,7 @@ class SearchPickerDropdown<T> extends StatelessWidget {
   /// Builds a compact button that launches the search menu.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: tooltip,
       child: SizedBox(
@@ -587,9 +583,9 @@ class SearchPickerDropdown<T> extends StatelessWidget {
         child: OutlinedButton(
           style: OutlinedButton.styleFrom(
             alignment: Alignment.centerLeft,
-            backgroundColor: AgentAwesomeColors.surface,
-            foregroundColor: AgentAwesomeColors.ink,
-            side: const BorderSide(color: AgentAwesomeColors.border),
+            backgroundColor: colors.surface,
+            foregroundColor: colors.ink,
+            side: BorderSide(color: colors.border),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -673,11 +669,12 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
   /// Builds the fuzzy-search picker popup.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final options = _options.where(_matchesQuery).toList();
     return Dialog(
       alignment: Alignment.topCenter,
       insetPadding: const EdgeInsets.only(top: 90, left: 24, right: 24),
-      backgroundColor: AgentAwesomeColors.surface,
+      backgroundColor: colors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 560),
@@ -695,32 +692,24 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
                 }),
                 decoration: InputDecoration(
                   isDense: true,
-                  prefixIcon: const Icon(
-                    Icons.search,
-                    size: 18,
-                    color: AgentAwesomeColors.muted,
-                  ),
+                  prefixIcon: const Icon(Icons.search, size: 18),
                   prefixIconConstraints: const BoxConstraints(minWidth: 36),
                   hintText: 'Search...',
-                  hintStyle: const TextStyle(color: AgentAwesomeColors.muted),
+                  hintStyle: TextStyle(color: colors.muted),
                   filled: true,
-                  fillColor: const Color(0xfffffcf8),
+                  fillColor: colors.surface,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(
-                      color: AgentAwesomeColors.border,
-                    ),
+                    borderSide: BorderSide(color: colors.border),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(
-                      color: AgentAwesomeColors.border,
-                    ),
+                    borderSide: BorderSide(color: colors.border),
                   ),
                 ),
               ),
             ),
-            const Divider(height: 1, color: AgentAwesomeColors.border),
+            Divider(height: 1, color: colors.border),
             Flexible(
               child: options.isEmpty
                   ? Center(
@@ -728,9 +717,7 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
                         padding: const EdgeInsets.all(28),
                         child: Text(
                           widget.emptyLabel,
-                          style: const TextStyle(
-                            color: AgentAwesomeColors.muted,
-                          ),
+                          style: TextStyle(color: colors.muted),
                         ),
                       ),
                     )
@@ -828,10 +815,11 @@ class _SearchPickerOptionTile<T> extends StatelessWidget {
   /// Builds one selectable row in the search picker.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return ListTile(
       leading: Icon(
         selected ? Icons.check_circle : option.icon,
-        color: selected ? AgentAwesomeColors.green : AgentAwesomeColors.muted,
+        color: selected ? colors.green : colors.muted,
       ),
       title: Text(
         option.title,
@@ -843,7 +831,7 @@ class _SearchPickerOptionTile<T> extends StatelessWidget {
           : Text(
               option.subtitle,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AgentAwesomeColors.muted),
+              style: TextStyle(color: colors.muted),
             ),
       trailing: onDelete == null
           ? null
@@ -990,6 +978,7 @@ class _CollectionSwitcherPanelState<T>
   /// Builds a high-density panel for a dynamic collection.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final selectedItem = _selectedItem();
     final collapseScope = _SplitPaneCollapseScope.maybeOf(context);
     final hasMultipleItems = widget.items.length > 1;
@@ -1013,7 +1002,7 @@ class _CollectionSwitcherPanelState<T>
       );
     }
     return ColoredBox(
-      color: const Color(0xfffffcf8),
+      color: colors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -1030,8 +1019,8 @@ class _CollectionSwitcherPanelState<T>
                             ? Text(
                                 titleText,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: AgentAwesomeColors.muted,
+                                style: TextStyle(
+                                  color: colors.muted,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 3,
@@ -1045,8 +1034,8 @@ class _CollectionSwitcherPanelState<T>
                                   child: Text(
                                     titleText,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AgentAwesomeColors.muted,
+                                    style: TextStyle(
+                                      color: colors.muted,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: 3,
@@ -1171,33 +1160,27 @@ class _CollectionSwitcherPanelState<T>
                     },
                     decoration: InputDecoration(
                       isDense: true,
-                      prefixIcon: const Icon(
+                      prefixIcon: Icon(
                         Icons.search,
                         size: 18,
-                        color: AgentAwesomeColors.muted,
+                        color: colors.muted,
                       ),
                       prefixIconConstraints: const BoxConstraints(minWidth: 36),
                       hintText: widget.filterHint,
-                      hintStyle: const TextStyle(
-                        color: AgentAwesomeColors.muted,
-                      ),
+                      hintStyle: TextStyle(color: colors.muted),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 10,
                       ),
                       filled: true,
-                      fillColor: AgentAwesomeColors.surface,
+                      fillColor: colors.surface,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: AgentAwesomeColors.border,
-                        ),
+                        borderSide: BorderSide(color: colors.border),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(
-                          color: AgentAwesomeColors.border,
-                        ),
+                        borderSide: BorderSide(color: colors.border),
                       ),
                     ),
                   ),
@@ -1205,7 +1188,7 @@ class _CollectionSwitcherPanelState<T>
               ],
             ),
           ),
-          const Divider(height: 1, color: AgentAwesomeColors.border),
+          Divider(height: 1, color: colors.border),
           Expanded(
             child: selectedItem == null
                 ? _CollectionEmptyState(
@@ -1275,8 +1258,9 @@ class _CollectionCollapsedRail<T> extends StatelessWidget {
   /// Builds the collapsed command-panel rail with vertical quick selectors.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return ColoredBox(
-      color: const Color(0xfffffcf8),
+      color: colors.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
         child: Column(
@@ -1334,14 +1318,15 @@ class _CollectionPanelSelect<T> extends StatelessWidget {
   /// Builds the compact item dropdown beside a collection title.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return SizedBox(
       width: width,
       height: 38,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.surface,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
@@ -1387,20 +1372,15 @@ class _CollectionDropdownLabel<T> extends StatelessWidget {
   /// Builds one collection dropdown label.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Row(
       children: <Widget>[
-        Icon(item.icon, size: 16, color: AgentAwesomeColors.muted),
+        Icon(item.icon, size: 16, color: colors.muted),
         const SizedBox(width: 8),
         Expanded(child: Text(item.label, softWrap: false)),
         if (item.badge.isNotEmpty) ...<Widget>[
           const SizedBox(width: 8),
-          Text(
-            item.badge,
-            style: const TextStyle(
-              color: AgentAwesomeColors.green,
-              fontSize: 11,
-            ),
-          ),
+          Text(item.badge, style: TextStyle(color: colors.green, fontSize: 11)),
         ],
       ],
     );
@@ -1423,6 +1403,7 @@ class _CollectionQuickSelect extends StatelessWidget {
   /// Builds one compact selector for a collection item.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -1432,22 +1413,14 @@ class _CollectionQuickSelect extends StatelessWidget {
           height: 36,
           width: 36,
           decoration: BoxDecoration(
-            color: selected
-                ? AgentAwesomeColors.greenSoft
-                : AgentAwesomeColors.panel,
-            border: Border.all(
-              color: selected
-                  ? AgentAwesomeColors.green
-                  : AgentAwesomeColors.border,
-            ),
+            color: selected ? colors.greenSoft : colors.panel,
+            border: Border.all(color: selected ? colors.green : colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             icon,
             size: 18,
-            color: selected
-                ? AgentAwesomeColors.green
-                : AgentAwesomeColors.muted,
+            color: selected ? colors.green : colors.muted,
           ),
         ),
       ),
@@ -1491,11 +1464,12 @@ class _CollectionEmptyState extends StatelessWidget {
   /// Builds an empty collection state with an optional create action.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(label, style: const TextStyle(color: AgentAwesomeColors.muted)),
+          Text(label, style: TextStyle(color: colors.muted)),
           if (onCreate != null) ...<Widget>[
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -1521,10 +1495,11 @@ class PanelEmptyState extends StatelessWidget {
   /// Builds a compact empty state for filtered command panel content.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Center(
       child: Text(
         'No results for "$query"',
-        style: const TextStyle(color: AgentAwesomeColors.muted),
+        style: TextStyle(color: colors.muted),
       ),
     );
   }
@@ -1583,8 +1558,9 @@ class MenuPanel extends StatelessWidget {
   /// Builds the menu panel.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return ColoredBox(
-      color: const Color(0xfffffcf8),
+      color: colors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -1595,14 +1571,11 @@ class MenuPanel extends StatelessWidget {
               children: <Widget>[
                 Text(title, style: Theme.of(context).textTheme.displayMedium),
                 const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  style: const TextStyle(color: AgentAwesomeColors.muted),
-                ),
+                Text(subtitle, style: TextStyle(color: colors.muted)),
               ],
             ),
           ),
-          const Divider(height: 1, color: AgentAwesomeColors.border),
+          Divider(height: 1, color: colors.border),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -1636,6 +1609,7 @@ class _MenuPanelTile extends StatelessWidget {
   /// Builds one menu panel tile.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: InkWell(
@@ -1644,24 +1618,13 @@ class _MenuPanelTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: selected
-                ? AgentAwesomeColors.greenSoft
-                : AgentAwesomeColors.surface,
-            border: Border.all(
-              color: selected
-                  ? AgentAwesomeColors.green
-                  : AgentAwesomeColors.border,
-            ),
+            color: selected ? colors.greenSoft : colors.surface,
+            border: Border.all(color: selected ? colors.green : colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
             children: <Widget>[
-              Icon(
-                item.icon,
-                color: selected
-                    ? AgentAwesomeColors.green
-                    : AgentAwesomeColors.muted,
-              ),
+              Icon(item.icon, color: selected ? colors.green : colors.muted),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1676,12 +1639,12 @@ class _MenuPanelTile extends StatelessWidget {
                       item.detail,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AgentAwesomeColors.muted),
+                      style: TextStyle(color: colors.muted),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AgentAwesomeColors.muted),
+              Icon(Icons.chevron_right, color: colors.muted),
             ],
           ),
         ),
@@ -1701,11 +1664,12 @@ class PanelSectionBlock extends StatelessWidget {
   /// Builds the shared bordered panel surface.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8),
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
@@ -1723,11 +1687,12 @@ class PanelSectionLabel extends StatelessWidget {
   /// Builds the uppercase label shared by panel section cards.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Text(
       label.toUpperCase(),
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        color: AgentAwesomeColors.muted,
+      style: TextStyle(
+        color: colors.muted,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 3,
@@ -1747,18 +1712,19 @@ class PanelBadge extends StatelessWidget {
   /// Builds a dense bordered badge.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.panel,
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.panel,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AgentAwesomeColors.green,
+        style: TextStyle(
+          color: colors.green,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -1778,21 +1744,19 @@ class PanelEmptyBlock extends StatelessWidget {
   /// Builds a compact bordered empty block.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8),
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(22),
-          child: SelectableText(
-            label,
-            style: const TextStyle(color: AgentAwesomeColors.muted),
-          ),
+          child: SelectableText(label, style: TextStyle(color: colors.muted)),
         ),
       ),
     );
@@ -1825,17 +1789,18 @@ class StatusRow extends StatelessWidget {
   /// Builds one reusable connection status row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final color = switch (state) {
-      ConnectionStateKind.connected => AgentAwesomeColors.green,
-      ConnectionStateKind.disconnected => AgentAwesomeColors.coral,
-      ConnectionStateKind.unknown => AgentAwesomeColors.muted,
+      ConnectionStateKind.connected => colors.green,
+      ConnectionStateKind.disconnected => colors.coral,
+      ConnectionStateKind.unknown => colors.muted,
     };
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8),
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1856,7 +1821,7 @@ class StatusRow extends StatelessWidget {
             child: Text(
               message,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AgentAwesomeColors.muted),
+              style: TextStyle(color: colors.muted),
             ),
           ),
         ],

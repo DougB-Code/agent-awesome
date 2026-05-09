@@ -45,6 +45,7 @@ abstract final class SettingsInputDecoration {
     BoxConstraints? suffixIconConstraints,
   }) {
     final activeFeedback = SettingsSaveFeedback.isActiveOf(context);
+    final colors = context.agentAwesomeColors;
     final border = _border(SettingsSaveFeedback.borderColorOf(context));
     return InputDecoration(
       labelText: label,
@@ -57,7 +58,7 @@ abstract final class SettingsInputDecoration {
       suffixIcon: suffixIcon,
       suffixIconConstraints: suffixIconConstraints,
       filled: true,
-      fillColor: AgentAwesomeColors.surface,
+      fillColor: colors.surface,
       border: border,
       enabledBorder: border,
       disabledBorder: border,
@@ -184,6 +185,7 @@ class SettingsSaveFeedback extends StatelessWidget {
   /// Builds an inherited animated border feedback scope.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return AnimatedBuilder(
       animation: _controller,
       child: child,
@@ -191,16 +193,16 @@ class SettingsSaveFeedback extends StatelessWidget {
         final state = _controller.state;
         return TweenAnimationBuilder<Color?>(
           duration: duration,
-          tween: ColorTween(end: _targetBorderColor(state)),
+          tween: ColorTween(end: _targetBorderColor(state, colors)),
           child: child,
           builder: (context, color, child) {
-            final borderColor = color ?? AgentAwesomeColors.border;
+            final borderColor = color ?? colors.border;
             return _SettingsSaveFeedbackScope(
               borderColor: borderColor,
               active:
                   state == SettingsSaveFeedbackState.success ||
                   state == SettingsSaveFeedbackState.failure ||
-                  borderColor != AgentAwesomeColors.border,
+                  borderColor != colors.border,
               child: child!,
             );
           },
@@ -211,10 +213,11 @@ class SettingsSaveFeedback extends StatelessWidget {
 
   /// Returns the inherited animated border color for a form field.
   static Color borderColorOf(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return context
             .dependOnInheritedWidgetOfExactType<_SettingsSaveFeedbackScope>()
             ?.borderColor ??
-        AgentAwesomeColors.border;
+        colors.border;
   }
 
   /// Returns whether feedback should temporarily own focused borders.
@@ -226,12 +229,15 @@ class SettingsSaveFeedback extends StatelessWidget {
   }
 
   /// Maps feedback state to the target outline color.
-  static Color _targetBorderColor(SettingsSaveFeedbackState state) {
+  static Color _targetBorderColor(
+    SettingsSaveFeedbackState state,
+    AgentAwesomePalette colors,
+  ) {
     return switch (state) {
-      SettingsSaveFeedbackState.success => AgentAwesomeColors.green,
+      SettingsSaveFeedbackState.success => colors.green,
       SettingsSaveFeedbackState.failure => Colors.red.shade700,
-      SettingsSaveFeedbackState.saving => AgentAwesomeColors.border,
-      SettingsSaveFeedbackState.idle => AgentAwesomeColors.border,
+      SettingsSaveFeedbackState.saving => colors.border,
+      SettingsSaveFeedbackState.idle => colors.border,
     };
   }
 }
@@ -293,11 +299,12 @@ class FormSectionCard extends StatelessWidget {
   /// Builds one settings-style form group.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       padding: SettingsFormMetrics.sectionPadding,
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8),
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -442,6 +449,7 @@ class SettingsToggleField extends StatelessWidget {
   /// Builds a settings toggle with consistent spacing and alignment.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: SettingsFormMetrics.compactGap),
       child: Row(
@@ -453,10 +461,7 @@ class SettingsToggleField extends StatelessWidget {
                 Text(title, style: Theme.of(context).textTheme.titleMedium),
                 if (subtitle.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(color: AgentAwesomeColors.muted),
-                  ),
+                  Text(subtitle, style: TextStyle(color: colors.muted)),
                 ],
               ],
             ),

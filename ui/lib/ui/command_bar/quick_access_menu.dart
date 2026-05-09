@@ -73,14 +73,15 @@ class QuickAccessMenu extends StatelessWidget {
   /// Builds the global quick-access dropdown.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.surface,
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: const <BoxShadow>[
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Color(0x33453421),
+            color: colors.shadow,
             blurRadius: 24,
             offset: Offset(0, 12),
           ),
@@ -116,7 +117,7 @@ class QuickAccessMenu extends StatelessWidget {
                 ),
               ),
             ),
-            const Divider(height: 1, color: AgentAwesomeColors.border),
+            Divider(height: 1, color: colors.border),
             _QuickAccessFooter(onViewSettings: onViewSettings),
           ],
         ),
@@ -133,13 +134,14 @@ class _QuickAccessColumn extends StatelessWidget {
   /// Builds one grouped quick-access column.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Row(
           children: <Widget>[
-            Icon(group.icon, size: 16, color: AgentAwesomeColors.green),
+            Icon(group.icon, size: 16, color: colors.green),
             const SizedBox(width: 8),
             Expanded(child: _QuickAccessLabel(group.title.toUpperCase())),
           ],
@@ -150,10 +152,7 @@ class _QuickAccessColumn extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               group.emptyLabel,
-              style: const TextStyle(
-                color: AgentAwesomeColors.muted,
-                fontSize: 13,
-              ),
+              style: TextStyle(color: colors.muted, fontSize: 13),
             ),
           )
         else
@@ -175,6 +174,7 @@ class _QuickAccessItem extends StatelessWidget {
   /// Builds one quick-access action row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return InkWell(
       borderRadius: BorderRadius.circular(6),
       onTap: action.enabled ? action.onTap : null,
@@ -186,8 +186,8 @@ class _QuickAccessItem extends StatelessWidget {
               action.enabled ? action.icon : Icons.lock_outline,
               size: 18,
               color: action.enabled
-                  ? AgentAwesomeColors.muted
-                  : AgentAwesomeColors.muted.withValues(alpha: 0.52),
+                  ? colors.muted
+                  : colors.muted.withValues(alpha: 0.52),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -202,8 +202,8 @@ class _QuickAccessItem extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: action.enabled
-                          ? AgentAwesomeColors.ink
-                          : AgentAwesomeColors.muted.withValues(alpha: 0.62),
+                          ? colors.ink
+                          : colors.muted.withValues(alpha: 0.62),
                     ),
                   ),
                   if (action.detail.isNotEmpty)
@@ -211,10 +211,7 @@ class _QuickAccessItem extends StatelessWidget {
                       action.detail,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AgentAwesomeColors.muted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: colors.muted, fontSize: 12),
                     ),
                 ],
               ),
@@ -256,10 +253,11 @@ class _QuickAccessLabel extends StatelessWidget {
   /// Builds a compact uppercase quick-access label.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Text(
       text,
-      style: const TextStyle(
-        color: AgentAwesomeColors.green,
+      style: TextStyle(
+        color: colors.green,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 4,

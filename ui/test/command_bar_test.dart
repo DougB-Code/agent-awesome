@@ -3,6 +3,7 @@ library;
 
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
+import 'package:agentawesome_ui/app/theme.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_bar.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_context.dart';
 import 'package:agentawesome_ui/ui/shell/app_sections.dart';
@@ -118,6 +119,26 @@ void main() {
 
     expect(setupOpenCount, 1);
   });
+
+  testWidgets('theme badge toggles between light and dark themes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _ThemeCommandBarHarness(commandController: TextEditingController()),
+    );
+
+    expect(find.text('Light'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Switch to dark theme'));
+    await tester.pump();
+
+    expect(find.text('Dark'), findsOneWidget);
+  });
 }
 
 class _CommandBarHarness extends StatelessWidget {
@@ -161,6 +182,67 @@ class _CommandBarHarness extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ThemeCommandBarHarness extends StatefulWidget {
+  const _ThemeCommandBarHarness({required this.commandController});
+
+  final TextEditingController commandController;
+
+  @override
+  State<_ThemeCommandBarHarness> createState() =>
+      _ThemeCommandBarHarnessState();
+}
+
+class _ThemeCommandBarHarnessState extends State<_ThemeCommandBarHarness> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  /// Builds a themed command-bar harness with a real toggle scope.
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      theme: buildAgentAwesomeTheme(),
+      darkTheme: buildAgentAwesomeTheme(brightness: Brightness.dark),
+      themeMode: _themeMode,
+      builder: (context, child) {
+        return AgentAwesomeThemeScope(
+          themeMode: _themeMode,
+          onToggleTheme: _toggleTheme,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
+      home: Scaffold(
+        body: CommandBar(
+          commandController: widget.commandController,
+          appController: AgentAwesomeAppController(config: _testConfig()),
+          commandContext: (text, {String profilePath = ''}) => CommandContext(
+            section: AppSections.backlog,
+            area: 'Stream',
+            text: text,
+            profilePath: profilePath,
+          ),
+          onSubmitScreenCommand: (_) async {},
+          onSubmit: ({String profilePath = ''}) async {},
+          onNewChat: () {},
+          onStartChatWithProfile: (_) {},
+          onSelectHistoryChat: (_) {},
+          onOpenSection: (_) {},
+          onOpenSettingsSection: (_) {},
+          onOpenSettings: () {},
+          onOpenSetup: () {},
+        ),
+      ),
+    );
+  }
+
+  /// Flips between the explicit light and dark test themes.
+  void _toggleTheme() {
+    setState(() {
+      _themeMode = _themeMode == ThemeMode.dark
+          ? ThemeMode.light
+          : ThemeMode.dark;
+    });
   }
 }
 

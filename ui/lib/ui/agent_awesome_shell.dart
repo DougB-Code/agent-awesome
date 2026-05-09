@@ -46,12 +46,13 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   /// Builds the main desktop shell.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
         return Scaffold(
           body: ColoredBox(
-            color: AgentAwesomeColors.surface,
+            color: colors.surface,
             child: AppShellFrame(
               selectedSection: _section,
               controller: widget.controller,
@@ -416,7 +417,7 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
             children: timelineChildren,
           ),
         ),
-        const Divider(height: 1, color: AgentAwesomeColors.border),
+        Divider(height: 1, color: context.agentAwesomeColors.border),
         _ChatComposer(
           controller: _replyController,
           sending: widget.controller.sending,
@@ -442,6 +443,7 @@ class _ChatSessionPicker extends StatelessWidget {
   /// Builds the active chat selector for the conversation panel.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final selectedChat = controller.selectedChatEntry;
     final selectedSession = _selectedSession();
     final selectedChatKey = controller.selectedChatKey;
@@ -469,8 +471,8 @@ class _ChatSessionPicker extends StatelessWidget {
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.zero,
-                foregroundColor: AgentAwesomeColors.muted,
-                side: const BorderSide(color: AgentAwesomeColors.border),
+                foregroundColor: colors.muted,
+                side: BorderSide(color: colors.border),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -541,20 +543,21 @@ class _ChatComposer extends StatelessWidget {
   /// Builds the sticky same-thread composer for the chat timeline.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return ColoredBox(
-      color: const Color(0xfffffcf8),
+      color: colors.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
         child: Container(
           constraints: const BoxConstraints(minHeight: 58),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: AgentAwesomeColors.surface,
-            border: Border.all(color: AgentAwesomeColors.border),
+            color: colors.surface,
+            border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(18),
-            boxShadow: const <BoxShadow>[
+            boxShadow: <BoxShadow>[
               BoxShadow(
-                color: Color(0x0d453421),
+                color: colors.softShadow,
                 blurRadius: 18,
                 offset: Offset(0, 8),
               ),
@@ -563,12 +566,9 @@ class _ChatComposer extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
-              const Padding(
-                padding: EdgeInsets.only(bottom: 16),
-                child: Icon(
-                  Icons.chat_bubble_outline,
-                  color: AgentAwesomeColors.muted,
-                ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Icon(Icons.chat_bubble_outline, color: colors.muted),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -579,10 +579,11 @@ class _ChatComposer extends StatelessWidget {
                   minLines: 1,
                   maxLines: 5,
                   textInputAction: TextInputAction.send,
-                  decoration: const InputDecoration(
+                  style: TextStyle(color: colors.ink),
+                  decoration: InputDecoration(
                     border: InputBorder.none,
                     hintText: 'Message Agent Awesome in this chat...',
-                    hintStyle: TextStyle(color: AgentAwesomeColors.muted),
+                    hintStyle: TextStyle(color: colors.muted),
                   ),
                   onSubmitted: (_) {
                     if (!sending) {
@@ -596,7 +597,7 @@ class _ChatComposer extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: IconButton.filled(
                   style: IconButton.styleFrom(
-                    backgroundColor: AgentAwesomeColors.green,
+                    backgroundColor: colors.green,
                     foregroundColor: Colors.white,
                     fixedSize: const Size(42, 42),
                     shape: RoundedRectangleBorder(
@@ -750,10 +751,11 @@ class _ChatRuntimeNotice extends StatelessWidget {
   /// Builds a compact live runtime notice in the chat stream.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return PanelSectionBlock(
       child: Row(
         children: <Widget>[
-          Icon(icon, color: AgentAwesomeColors.green),
+          Icon(icon, color: colors.green),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -775,6 +777,7 @@ class _ChatMemoryContextTile extends StatelessWidget {
   /// Builds one memory context tile for chat utilities.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return PanelSectionBlock(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -790,7 +793,7 @@ class _ChatMemoryContextTile extends StatelessWidget {
               record.summary,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AgentAwesomeColors.muted),
+              style: TextStyle(color: colors.muted),
             ),
           ],
           const SizedBox(height: 10),
@@ -849,10 +852,11 @@ class _ChatStatusTile extends StatelessWidget {
   /// Builds one runtime status tile for chat utilities.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final color = switch (state) {
-      ConnectionStateKind.connected => AgentAwesomeColors.green,
-      ConnectionStateKind.disconnected => AgentAwesomeColors.coral,
-      ConnectionStateKind.unknown => AgentAwesomeColors.muted,
+      ConnectionStateKind.connected => colors.green,
+      ConnectionStateKind.disconnected => colors.coral,
+      ConnectionStateKind.unknown => colors.muted,
     };
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -875,7 +879,7 @@ class _ChatStatusTile extends StatelessWidget {
                   Text(
                     detail,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: colors.muted),
                   ),
                   if (message.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 4),
@@ -960,6 +964,7 @@ class _WorkflowCommandPanel extends StatelessWidget {
   }
 
   Widget _buildOverviewContent(BuildContext context, String query) {
+    final colors = context.agentAwesomeColors;
     final filteredMessages = controller.messages.where((message) {
       return _matchesFuzzyQuery('${message.author} ${message.text}', query);
     }).toList();
@@ -994,10 +999,7 @@ class _WorkflowCommandPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             controller.workspace.subtitle,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
-              fontSize: 17,
-            ),
+            style: TextStyle(color: colors.muted, fontSize: 17),
           ),
           for (final message in filteredMessages) ChatRow(message: message),
         ],
@@ -1028,14 +1030,15 @@ class _ResearchPlanCard extends StatelessWidget {
   /// Builds the workspace context card with confirmable actions.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final visibleTasks = tasks ?? controller.workspace.tasks;
     final done = visibleTasks.where((task) => task.done).length;
     return Container(
       constraints: const BoxConstraints(maxWidth: 720),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8),
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Column(
@@ -1054,7 +1057,7 @@ class _ResearchPlanCard extends StatelessWidget {
                   'In progress - $done/${visibleTasks.length}',
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,
-                  style: const TextStyle(color: AgentAwesomeColors.muted),
+                  style: TextStyle(color: colors.muted),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1220,12 +1223,13 @@ class _MemoryFilterBar extends StatelessWidget {
   /// Builds scope, sensitivity, and service-search controls.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final filters = controller.memoryFilters;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.surface,
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1360,12 +1364,13 @@ class _RouteNoticePanel extends StatelessWidget {
   /// Builds a prominent route-level status or error panel.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8),
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -1374,11 +1379,11 @@ class _RouteNoticePanel extends StatelessWidget {
           Container(
             height: 42,
             width: 42,
-            decoration: const BoxDecoration(
-              color: AgentAwesomeColors.greenSoft,
+            decoration: BoxDecoration(
+              color: colors.greenSoft,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: AgentAwesomeColors.green),
+            child: Icon(icon, color: colors.green),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1387,8 +1392,8 @@ class _RouteNoticePanel extends StatelessWidget {
               children: <Widget>[
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: AgentAwesomeColors.ink,
+                  style: TextStyle(
+                    color: colors.ink,
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
@@ -1396,10 +1401,7 @@ class _RouteNoticePanel extends StatelessWidget {
                 const SizedBox(height: 6),
                 SelectableText(
                   message,
-                  style: const TextStyle(
-                    color: AgentAwesomeColors.muted,
-                    height: 1.4,
-                  ),
+                  style: TextStyle(color: colors.muted, height: 1.4),
                 ),
                 if (action != null) ...<Widget>[
                   const SizedBox(height: 14),

@@ -2173,6 +2173,7 @@ class _SettingsToolYamlPreview extends StatelessWidget {
   /// Builds a read-only YAML preview for the structured tool config.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return FormSectionCard(
       title: 'Tool config YAML',
       children: <Widget>[
@@ -2181,8 +2182,8 @@ class _SettingsToolYamlPreview extends StatelessWidget {
           constraints: const BoxConstraints(maxHeight: 320),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AgentAwesomeColors.surface,
-            border: Border.all(color: AgentAwesomeColors.border),
+            color: colors.surface,
+            border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: SingleChildScrollView(
@@ -2873,6 +2874,7 @@ class _SettingsModelProviderYamlPreview extends StatelessWidget {
   /// Builds a selected-provider YAML preview without exposing sibling providers.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return FormSectionCard(
       title: 'Provider YAML',
       children: <Widget>[
@@ -2881,8 +2883,8 @@ class _SettingsModelProviderYamlPreview extends StatelessWidget {
           constraints: const BoxConstraints(maxHeight: 320),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AgentAwesomeColors.surface,
-            border: Border.all(color: AgentAwesomeColors.border),
+            color: colors.surface,
+            border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: SingleChildScrollView(

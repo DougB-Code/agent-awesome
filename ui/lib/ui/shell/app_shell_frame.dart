@@ -89,6 +89,7 @@ class AppShellFrame extends StatelessWidget {
   /// Builds the single app shell that owns navigation and panel placement.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final sidebarWidth = sidebarExpanded
         ? _AppSidebar.expandedWidth
         : _AppSidebar.compactWidth;
@@ -119,10 +120,7 @@ class AppShellFrame extends StatelessWidget {
                 onOpenSetup: onOpenSetup,
               ),
               Expanded(
-                child: ColoredBox(
-                  color: AgentAwesomeColors.page,
-                  child: content,
-                ),
+                child: ColoredBox(color: colors.page, child: content),
               ),
             ],
           ),
@@ -161,10 +159,11 @@ class _AppSidebarColumn extends StatelessWidget {
   /// Builds the two-part left column as one structural frame.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       width: width,
-      foregroundDecoration: const BoxDecoration(
-        border: Border(right: BorderSide(color: AgentAwesomeColors.border)),
+      foregroundDecoration: BoxDecoration(
+        border: Border(right: BorderSide(color: colors.border)),
       ),
       child: Column(
         children: <Widget>[
@@ -285,8 +284,9 @@ class _AppSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact = !expanded;
+    final colors = context.agentAwesomeColors;
     return Container(
-      color: AgentAwesomeColors.sidebar,
+      color: colors.sidebar,
       padding: EdgeInsets.fromLTRB(14, 24, expanded ? 14 : 12, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -325,10 +325,11 @@ class _AppBrandHeader extends StatelessWidget {
   /// Builds the screenshot-style brand header.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
-      decoration: const BoxDecoration(
-        color: AgentAwesomeColors.chrome,
-        border: Border(bottom: BorderSide(color: AgentAwesomeColors.border)),
+      decoration: BoxDecoration(
+        color: colors.chrome,
+        border: Border(bottom: BorderSide(color: colors.border)),
       ),
       padding: EdgeInsets.fromLTRB(expanded ? 24 : 14, 12, 14, 12),
       child: expanded
@@ -370,6 +371,7 @@ class _CollapsedBrandExpandButtonState
   /// Builds a logo button that swaps to the expand icon while hovered.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: 'Expand sidebar',
       child: MouseRegion(
@@ -384,10 +386,12 @@ class _CollapsedBrandExpandButtonState
           icon: AnimatedSwitcher(
             duration: const Duration(milliseconds: 120),
             child: _hovered
-                ? const Icon(
+                ? Icon(
                     Icons.keyboard_double_arrow_right,
-                    key: ValueKey<String>('collapsed-sidebar-expand-icon'),
-                    color: AgentAwesomeColors.muted,
+                    key: const ValueKey<String>(
+                      'collapsed-sidebar-expand-icon',
+                    ),
+                    color: colors.muted,
                     size: 22,
                   )
                 : Image.asset(
@@ -477,6 +481,7 @@ class _SidebarGroupView extends StatelessWidget {
   /// Builds a grouped navigation section.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: EdgeInsets.only(bottom: compact ? 14 : 26),
       child: Column(
@@ -487,8 +492,8 @@ class _SidebarGroupView extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
               child: Text(
                 group.title,
-                style: const TextStyle(
-                  color: AgentAwesomeColors.muted,
+                style: TextStyle(
+                  color: colors.muted,
                   fontSize: 11.5,
                   fontWeight: FontWeight.w800,
                   height: 1.2,
@@ -524,6 +529,7 @@ class _AgentAwesomeLogo extends StatelessWidget {
   /// Builds the Agent Awesome mark and wordmark.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: compact ? 'Agent Awesome Personal Agent' : '',
       child: Row(
@@ -538,8 +544,8 @@ class _AgentAwesomeLogo extends StatelessWidget {
               return const _LogoFallbackMark();
             },
           ),
-          if (!compact) ...const <Widget>[
-            SizedBox(width: 15),
+          if (!compact) ...<Widget>[
+            const SizedBox(width: 15),
             Flexible(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -553,10 +559,10 @@ class _AgentAwesomeLogo extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       height: 1.1,
                       letterSpacing: 4.96,
-                      color: AgentAwesomeColors.ink,
+                      color: colors.ink,
                     ),
                   ),
-                  SizedBox(height: 3),
+                  const SizedBox(height: 3),
                   Text(
                     'AWESOME',
                     overflow: TextOverflow.ellipsis,
@@ -565,7 +571,7 @@ class _AgentAwesomeLogo extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       height: 1.1,
                       letterSpacing: 4.96,
-                      color: AgentAwesomeColors.ink,
+                      color: colors.ink,
                     ),
                   ),
                 ],
@@ -586,11 +592,12 @@ class _LogoFallbackMark extends StatelessWidget {
   /// Builds a simple fallback mark for tests and asset failures.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       height: 58,
       width: 58,
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.green,
+        color: colors.green,
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Center(
@@ -629,9 +636,8 @@ class _NavButton extends StatelessWidget {
   /// Builds one navigation item.
   @override
   Widget build(BuildContext context) {
-    final foreground = selected
-        ? AgentAwesomeColors.ink
-        : AgentAwesomeColors.muted;
+    final colors = context.agentAwesomeColors;
+    final foreground = selected ? colors.ink : colors.muted;
     return Tooltip(
       message: compact ? label : '',
       child: InkWell(
@@ -646,7 +652,7 @@ class _NavButton extends StatelessWidget {
             vertical: compact ? 8 : 7,
           ),
           decoration: BoxDecoration(
-            color: selected ? AgentAwesomeColors.greenSoft : Colors.transparent,
+            color: selected ? colors.greenSoft : Colors.transparent,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
@@ -682,12 +688,12 @@ class _NavButton extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (showsChevron) ...const <Widget>[
-                  SizedBox(width: 8),
+                if (showsChevron) const SizedBox(width: 8),
+                if (showsChevron) ...<Widget>[
                   Text(
                     '›',
                     style: TextStyle(
-                      color: AgentAwesomeColors.subtle,
+                      color: colors.subtle,
                       fontSize: 19,
                       height: 1,
                     ),

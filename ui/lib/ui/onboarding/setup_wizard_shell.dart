@@ -18,11 +18,12 @@ class SetupWizardShell extends StatelessWidget {
   /// Builds the dedicated setup shell without workspace navigation.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Scaffold(
-      backgroundColor: AgentAwesomeColors.surface,
+      backgroundColor: colors.surface,
       body: SizedBox.expand(
         child: ColoredBox(
-          color: AgentAwesomeColors.surface,
+          color: colors.surface,
           child: Stack(
             children: <Widget>[
               Positioned.fill(

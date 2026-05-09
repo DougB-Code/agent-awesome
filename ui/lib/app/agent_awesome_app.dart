@@ -36,6 +36,7 @@ class _AgentAwesomeAppState extends State<AgentAwesomeApp> {
   Future<void>? _closeFuture;
   bool _shutdownVisible = false;
   String _shutdownMessage = 'Preparing to shut down';
+  ThemeMode _themeMode = ThemeMode.light;
 
   /// Initializes the app controller.
   @override
@@ -69,6 +70,15 @@ class _AgentAwesomeAppState extends State<AgentAwesomeApp> {
       debugShowCheckedModeBanner: false,
       title: 'Agent Awesome',
       theme: buildAgentAwesomeTheme(),
+      darkTheme: buildAgentAwesomeTheme(brightness: Brightness.dark),
+      themeMode: _themeMode,
+      builder: (context, child) {
+        return AgentAwesomeThemeScope(
+          themeMode: _themeMode,
+          onToggleTheme: _toggleThemeMode,
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: Stack(
         fit: StackFit.expand,
         children: <Widget>[
@@ -88,6 +98,15 @@ class _AgentAwesomeAppState extends State<AgentAwesomeApp> {
         ],
       ),
     );
+  }
+
+  /// Toggles the explicit light or dark app theme.
+  void _toggleThemeMode() {
+    setState(() {
+      _themeMode = _themeMode == ThemeMode.dark
+          ? ThemeMode.light
+          : ThemeMode.dark;
+    });
   }
 
   /// Shows a tool-call approval dialog for newly pending confirmations.
@@ -184,9 +203,10 @@ class _StartupShell extends StatelessWidget {
   /// Builds a non-setup loading state while persisted settings are read.
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      backgroundColor: AgentAwesomeColors.surface,
-      body: Center(
+    final colors = context.agentAwesomeColors;
+    return Scaffold(
+      backgroundColor: colors.surface,
+      body: const Center(
         child: SizedBox.square(
           dimension: 28,
           child: CircularProgressIndicator(strokeWidth: 3),
@@ -207,13 +227,14 @@ class _ShutdownOverlay extends StatelessWidget {
   /// Builds the modal shutdown progress surface.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return ColoredBox(
       color: Colors.black.withValues(alpha: 0.45),
       child: Center(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AgentAwesomeColors.surface,
-            border: Border.all(color: AgentAwesomeColors.border),
+            color: colors.surface,
+            border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
             boxShadow: const <BoxShadow>[
               BoxShadow(
@@ -247,8 +268,9 @@ class _ShutdownOverlay extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           message,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AgentAwesomeColors.muted),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: colors.muted),
                         ),
                       ],
                     ),

@@ -31,6 +31,7 @@ class HomeWorkspace extends StatelessWidget {
   /// Builds the Today assistant workspace.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 32, 24, 34),
       child: Column(
@@ -49,10 +50,10 @@ class HomeWorkspace extends StatelessWidget {
           const SizedBox(height: 20),
           _PathGrid(onOpenSection: onOpenSection),
           const SizedBox(height: 34),
-          const Text(
+          Text(
             'Live Workspace',
             style: TextStyle(
-              color: AgentAwesomeColors.ink,
+              color: colors.ink,
               fontSize: 26,
               fontWeight: FontWeight.w900,
               letterSpacing: 0,
@@ -61,10 +62,7 @@ class HomeWorkspace extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             controller.statusMessage,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
-              fontSize: 17,
-            ),
+            style: TextStyle(color: colors.muted, fontSize: 17),
           ),
           const SizedBox(height: 24),
           LayoutBuilder(
@@ -121,23 +119,24 @@ class _HeroPanel extends StatelessWidget {
   /// Builds the bordered hero with copy and system diagram.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       constraints: const BoxConstraints(minHeight: 430),
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.surface,
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: const <BoxShadow>[
+        boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Color(0x12382718),
+            color: colors.shadow,
             blurRadius: 38,
             offset: Offset(0, 20),
           ),
         ],
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: <Color>[AgentAwesomeColors.surface, Color(0xfffff8ee)],
+          colors: <Color>[colors.surface, colors.heroEnd],
         ),
       ),
       child: LayoutBuilder(
@@ -188,14 +187,12 @@ class _HeroCopy extends StatelessWidget {
   /// Builds the hero text and buttons.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const _WorkspaceEyebrow(
-          'AGENT AWESOME AI',
-          color: AgentAwesomeColors.coral,
-        ),
+        _WorkspaceEyebrow('AGENT AWESOME AI', color: colors.coral),
         const SizedBox(height: 22),
         Text(
           'Design and\nrun your AI\nagent system',
@@ -206,10 +203,10 @@ class _HeroCopy extends StatelessWidget {
         const SizedBox(height: 26),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 610),
-          child: const Text(
+          child: Text(
             'Agent Awesome gives you everything you need to build, run, and ship reliable AI agents with the models, tools, memory, workflows, and deployment paths you control.',
             style: TextStyle(
-              color: AgentAwesomeColors.muted,
+              color: colors.muted,
               fontSize: 24,
               height: 1.5,
               letterSpacing: 0,
@@ -269,11 +266,12 @@ class _HeroActionButton extends StatelessWidget {
   /// Builds the hero action.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final style = primary
         ? FilledButton.styleFrom(
-            backgroundColor: AgentAwesomeColors.coral,
+            backgroundColor: colors.coral,
             foregroundColor: Colors.white,
-            disabledBackgroundColor: AgentAwesomeColors.coral,
+            disabledBackgroundColor: colors.coral,
             disabledForegroundColor: Colors.white,
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 16 : 24,
@@ -284,9 +282,9 @@ class _HeroActionButton extends StatelessWidget {
             ),
           )
         : OutlinedButton.styleFrom(
-            foregroundColor: AgentAwesomeColors.ink,
-            disabledForegroundColor: AgentAwesomeColors.ink,
-            side: const BorderSide(color: AgentAwesomeColors.border),
+            foregroundColor: colors.ink,
+            disabledForegroundColor: colors.ink,
+            side: BorderSide(color: colors.border),
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 16 : 24,
               vertical: compact ? 14 : 18,
@@ -335,6 +333,7 @@ class _AgentSystemDiagram extends StatelessWidget {
   /// Builds the diagram using lightweight Flutter primitives.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return LayoutBuilder(
       builder: (context, constraints) {
         final side = math.min(constraints.maxWidth, compact ? 320.0 : 520.0);
@@ -345,8 +344,10 @@ class _AgentSystemDiagram extends StatelessWidget {
               clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: <Widget>[
-                Positioned.fill(child: CustomPaint(painter: _OrbitPainter())),
-                const _LayeredAgentCore(),
+                Positioned.fill(
+                  child: CustomPaint(painter: _OrbitPainter(colors: colors)),
+                ),
+                _LayeredAgentCore(colors: colors),
                 _OrbitLabel(label: 'AI', left: side * 0.12, top: 0),
                 _OrbitLabel(label: 'CLI', left: side * 0.26, top: side * 0.18),
                 _OrbitLabel(
@@ -397,6 +398,7 @@ class _OrbitLabel extends StatelessWidget {
   /// Builds the floating label.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Positioned(
       left: left,
       right: right,
@@ -405,12 +407,12 @@ class _OrbitLabel extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.surface,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(12),
-          boxShadow: const <BoxShadow>[
+          boxShadow: <BoxShadow>[
             BoxShadow(
-              color: Color(0x12382718),
+              color: colors.shadow,
               blurRadius: 14,
               offset: Offset(0, 8),
             ),
@@ -418,8 +420,8 @@ class _OrbitLabel extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: const TextStyle(
-            color: AgentAwesomeColors.green,
+          style: TextStyle(
+            color: colors.green,
             fontSize: 18,
             fontWeight: FontWeight.w900,
             letterSpacing: 0,
@@ -433,7 +435,10 @@ class _OrbitLabel extends StatelessWidget {
 /// _LayeredAgentCore renders the isometric stack at the diagram center.
 class _LayeredAgentCore extends StatelessWidget {
   /// Creates the layered center mark.
-  const _LayeredAgentCore();
+  const _LayeredAgentCore({required this.colors});
+
+  /// Active semantic color palette.
+  final AgentAwesomePalette colors;
 
   /// Builds the stacked layers and coral diamond.
   @override
@@ -444,20 +449,32 @@ class _LayeredAgentCore extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: <Widget>[
-          _IsometricLayer(offset: const Offset(0, 58), opacity: 0.34),
-          _IsometricLayer(offset: const Offset(0, 28), opacity: 0.50),
-          _IsometricLayer(offset: const Offset(0, 0), opacity: 0.72),
+          _IsometricLayer(
+            colors: colors,
+            offset: const Offset(0, 58),
+            opacity: 0.34,
+          ),
+          _IsometricLayer(
+            colors: colors,
+            offset: const Offset(0, 28),
+            opacity: 0.50,
+          ),
+          _IsometricLayer(
+            colors: colors,
+            offset: const Offset(0, 0),
+            opacity: 0.72,
+          ),
           Transform.rotate(
             angle: math.pi / 4,
             child: Container(
               height: 94,
               width: 94,
               decoration: BoxDecoration(
-                color: AgentAwesomeColors.coral,
+                color: colors.coral,
                 borderRadius: BorderRadius.circular(22),
-                boxShadow: const <BoxShadow>[
+                boxShadow: <BoxShadow>[
                   BoxShadow(
-                    color: Color(0x332b1a12),
+                    color: colors.shadow,
                     blurRadius: 30,
                     offset: Offset(0, 18),
                   ),
@@ -477,7 +494,14 @@ class _LayeredAgentCore extends StatelessWidget {
 /// _IsometricLayer renders one pale layer under the core mark.
 class _IsometricLayer extends StatelessWidget {
   /// Creates a layer with a vertical offset and opacity.
-  const _IsometricLayer({required this.offset, required this.opacity});
+  const _IsometricLayer({
+    required this.colors,
+    required this.offset,
+    required this.opacity,
+  });
+
+  /// Active semantic color palette.
+  final AgentAwesomePalette colors;
 
   /// Offset from the center.
   final Offset offset;
@@ -496,9 +520,9 @@ class _IsometricLayer extends StatelessWidget {
           width: 132,
           height: 132,
           decoration: BoxDecoration(
-            color: const Color(0xffe6e7d8).withValues(alpha: opacity),
+            color: colors.layerFill.withValues(alpha: opacity),
             border: Border.all(
-              color: const Color(0xff93a98f).withValues(alpha: 0.50),
+              color: colors.layerBorder.withValues(alpha: 0.50),
             ),
             borderRadius: BorderRadius.circular(10),
           ),
@@ -510,11 +534,17 @@ class _IsometricLayer extends StatelessWidget {
 
 /// _OrbitPainter draws the dotted orbit and node points.
 class _OrbitPainter extends CustomPainter {
+  /// Creates the orbit painter with the active theme colors.
+  const _OrbitPainter({required this.colors});
+
+  /// Active semantic color palette.
+  final AgentAwesomePalette colors;
+
   /// Paints the orbital guide behind the system diagram.
   @override
   void paint(Canvas canvas, Size size) {
     final orbitPaint = Paint()
-      ..color = const Color(0xffb7c4ae)
+      ..color = colors.orbit
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     final rect = Rect.fromCenter(
@@ -529,10 +559,10 @@ class _OrbitPainter extends CustomPainter {
     }
 
     final nodePaint = Paint()
-      ..color = AgentAwesomeColors.surface
+      ..color = colors.surface
       ..style = PaintingStyle.fill;
     final nodeBorder = Paint()
-      ..color = const Color(0xffa4b99d)
+      ..color = colors.layerBorder
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (final angle in <double>[math.pi * 0.93, math.pi * 1.72]) {
@@ -547,7 +577,9 @@ class _OrbitPainter extends CustomPainter {
 
   /// Reports when the painter needs to redraw.
   @override
-  bool shouldRepaint(covariant _OrbitPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _OrbitPainter oldDelegate) {
+    return colors != oldDelegate.colors;
+  }
 }
 
 /// _PathGrid renders the path cards under the hero.
@@ -655,6 +687,7 @@ class _PathCard extends StatelessWidget {
   /// Builds one path card.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
@@ -662,8 +695,8 @@ class _PathCard extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 158),
         padding: const EdgeInsets.all(22),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.surface,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -673,16 +706,16 @@ class _PathCard extends StatelessWidget {
               height: 48,
               width: 48,
               decoration: BoxDecoration(
-                color: const Color(0xffdfe9ff),
+                color: colors.cardIconBackground,
                 borderRadius: BorderRadius.circular(999),
               ),
-              child: Icon(data.icon, color: const Color(0xff1473ff), size: 24),
+              child: Icon(data.icon, color: colors.cardIcon, size: 24),
             ),
             const SizedBox(height: 18),
             Text(
               data.title,
-              style: const TextStyle(
-                color: AgentAwesomeColors.ink,
+              style: TextStyle(
+                color: colors.ink,
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0,
@@ -691,8 +724,8 @@ class _PathCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               data.detail,
-              style: const TextStyle(
-                color: AgentAwesomeColors.muted,
+              style: TextStyle(
+                color: colors.muted,
                 height: 1.45,
                 letterSpacing: 0,
               ),
@@ -715,14 +748,15 @@ class ExecutionPlan extends StatelessWidget {
   /// Builds the active objective task plan.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Row(
+        Row(
           children: <Widget>[
-            Icon(Icons.circle, size: 10, color: AgentAwesomeColors.green),
-            SizedBox(width: 12),
-            _WorkspaceEyebrow('EXECUTION PLAN'),
+            Icon(Icons.circle, size: 10, color: colors.green),
+            const SizedBox(width: 12),
+            _WorkspaceEyebrow('EXECUTION PLAN', color: colors.green),
           ],
         ),
         const SizedBox(height: 24),
@@ -750,10 +784,11 @@ class TaskLine extends StatelessWidget {
   /// Builds one plan or task row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final mark = task.done
-        ? const Icon(Icons.check, size: 16, color: AgentAwesomeColors.green)
+        ? Icon(Icons.check, size: 16, color: colors.green)
         : task.active
-        ? const Icon(Icons.circle, size: 13, color: AgentAwesomeColors.green)
+        ? Icon(Icons.circle, size: 13, color: colors.green)
         : const SizedBox.shrink();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -766,11 +801,9 @@ class TaskLine extends StatelessWidget {
             width: 30,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: task.done ? const Color(0xffeef5e9) : Colors.transparent,
+              color: task.done ? colors.greenSoft : Colors.transparent,
               border: Border.all(
-                color: task.done || task.active
-                    ? AgentAwesomeColors.green
-                    : AgentAwesomeColors.border,
+                color: task.done || task.active ? colors.green : colors.border,
               ),
             ),
             child: Center(child: mark),
@@ -789,10 +822,7 @@ class TaskLine extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                task.detail,
-                style: const TextStyle(color: AgentAwesomeColors.muted),
-              ),
+              Text(task.detail, style: TextStyle(color: colors.muted)),
             ],
           ),
         ),
@@ -812,6 +842,7 @@ class ChatRow extends StatelessWidget {
   /// Builds one chat timeline row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     if (message.role == ChatRole.user) {
       return Align(
         alignment: Alignment.centerRight,
@@ -820,7 +851,7 @@ class ChatRow extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 640),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: AgentAwesomeColors.panel,
+            color: colors.panel,
             borderRadius: BorderRadius.circular(36),
           ),
           child: _MessageText(message: message),
@@ -832,16 +863,13 @@ class ChatRow extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 18),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xfffffcf8),
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           children: <Widget>[
-            const Icon(
-              Icons.extension_outlined,
-              color: AgentAwesomeColors.green,
-            ),
+            Icon(Icons.extension_outlined, color: colors.green),
             const SizedBox(width: 12),
             Expanded(child: _MessageText(message: message)),
           ],
@@ -853,9 +881,9 @@ class ChatRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const CircleAvatar(
+          CircleAvatar(
             radius: 25,
-            backgroundColor: AgentAwesomeColors.green,
+            backgroundColor: colors.green,
             child: Icon(Icons.auto_awesome, color: Colors.white),
           ),
           const SizedBox(width: 16),
@@ -867,18 +895,19 @@ class ChatRow extends StatelessWidget {
 }
 
 class _WorkspaceEyebrow extends StatelessWidget {
-  const _WorkspaceEyebrow(this.text, {this.color = AgentAwesomeColors.green});
+  const _WorkspaceEyebrow(this.text, {this.color});
 
   final String text;
-  final Color color;
+  final Color? color;
 
   /// Builds a small uppercase label.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Text(
       text,
       style: TextStyle(
-        color: color,
+        color: color ?? colors.green,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 4,
@@ -895,6 +924,7 @@ class _MessageText extends StatelessWidget {
   /// Builds message author and text.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final time =
         '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
     return Column(
@@ -914,16 +944,14 @@ class _MessageText extends StatelessWidget {
                         children: <InlineSpan>[
                           TextSpan(
                             text: message.author,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.w900,
-                              color: AgentAwesomeColors.ink,
+                              color: colors.ink,
                             ),
                           ),
                           TextSpan(
                             text: '  $time',
-                            style: const TextStyle(
-                              color: AgentAwesomeColors.muted,
-                            ),
+                            style: TextStyle(color: colors.muted),
                           ),
                         ],
                       ),
@@ -939,7 +967,7 @@ class _MessageText extends StatelessWidget {
         const SizedBox(height: 8),
         SelectableText(
           message.text,
-          style: const TextStyle(fontSize: 16, height: 1.55),
+          style: TextStyle(color: colors.ink, fontSize: 16, height: 1.55),
         ),
       ],
     );
@@ -954,6 +982,7 @@ class _CopyMessageButton extends StatelessWidget {
   /// Builds a compact control for copying one chat message.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: 'Copy message',
       child: IconButton(
@@ -967,7 +996,7 @@ class _CopyMessageButton extends StatelessWidget {
           );
         },
         icon: const Icon(Icons.copy_outlined),
-        color: AgentAwesomeColors.muted,
+        color: colors.muted,
         iconSize: 15,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints.tightFor(width: 28, height: 28),
