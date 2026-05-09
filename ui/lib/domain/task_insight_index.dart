@@ -1041,7 +1041,7 @@ List<TaskInsightQuerySummary> _buildSummaries({
         'What high-value work is coming up next week?',
     TaskInsightIds.quickUnblocks: 'What can I unblock quickly?',
     TaskInsightIds.metadataGaps:
-        'What prevents Aurora from giving better insights?',
+        'What prevents Agent Awesome from giving better insights?',
     TaskInsightIds.highRiskLowConfidence: 'What looks risky but uncertain?',
   };
   return <TaskInsightQuerySummary>[

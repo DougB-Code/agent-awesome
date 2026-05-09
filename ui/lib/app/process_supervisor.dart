@@ -1,4 +1,4 @@
-/// Supervises subprocesses started by the Aurora UI.
+/// Supervises subprocesses started by the Agent Awesome UI.
 library;
 
 import 'dart:async';

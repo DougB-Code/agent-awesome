@@ -75,13 +75,13 @@ void main() {
         ),
       );
 
-      expect(_enabledBorderColor(tester), AuroraColors.border);
+      expect(_enabledBorderColor(tester), AgentAwesomeColors.border);
 
       await controller.run(() async {});
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 250));
 
-      expect(_enabledBorderColor(tester), AuroraColors.green);
+      expect(_enabledBorderColor(tester), AgentAwesomeColors.green);
     } finally {
       controller.dispose();
     }

@@ -44,9 +44,9 @@ void main() {
       profile.memoryServers.single.arguments,
       containsAllInOrder(<String>[
         '--db',
-        '${auroraDataDirectoryPath()}/memory/memory.db',
+        '${agentAwesomeDataDirectoryPath()}/memory/memory.db',
         '--data',
-        '${auroraDataDirectoryPath()}/memory/files',
+        '${agentAwesomeDataDirectoryPath()}/memory/files',
       ]),
     );
   });
@@ -80,7 +80,7 @@ AppConfig _testConfig() {
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-    agentAppName: 'personal_pilot',
+    agentAppName: 'agent_awesome',
     agentUserId: 'doug',
     workspaceRoot: '/home/doug/dev/agentawesome/agent',
     autoStartLocalServices: true,

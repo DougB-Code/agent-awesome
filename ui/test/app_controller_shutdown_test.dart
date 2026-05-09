@@ -1,4 +1,4 @@
-/// Tests Aurora controller shutdown boundaries.
+/// Tests Agent Awesome controller shutdown boundaries.
 library;
 
 import 'package:agentawesome_ui/app/app_config.dart';
@@ -16,7 +16,7 @@ void main() {
   test('closeClients leaves managed local services running', () {
     final processSupervisor = _testProcessSupervisor();
     final localServices = _TrackingLocalServiceSupervisor(processSupervisor);
-    final controller = AuroraAppController(
+    final controller = AgentAwesomeAppController(
       config: _testConfig(),
       processSupervisor: processSupervisor,
       localServices: localServices,
@@ -30,7 +30,7 @@ void main() {
   test('close stops managed local services once', () async {
     final processSupervisor = _testProcessSupervisor();
     final localServices = _TrackingLocalServiceSupervisor(processSupervisor);
-    final controller = AuroraAppController(
+    final controller = AgentAwesomeAppController(
       config: _testConfig(),
       processSupervisor: processSupervisor,
       localServices: localServices,
@@ -45,7 +45,7 @@ void main() {
   test('close reports shutdown progress', () async {
     final processSupervisor = _testProcessSupervisor();
     final localServices = _TrackingLocalServiceSupervisor(processSupervisor);
-    final controller = AuroraAppController(
+    final controller = AgentAwesomeAppController(
       config: _testConfig(),
       processSupervisor: processSupervisor,
       localServices: localServices,
@@ -65,7 +65,7 @@ void main() {
   test('close begins process supervisor shutdown before services', () async {
     final processSupervisor = _testProcessSupervisor();
     final localServices = _TrackingLocalServiceSupervisor(processSupervisor);
-    final controller = AuroraAppController(
+    final controller = AgentAwesomeAppController(
       config: _testConfig(),
       processSupervisor: processSupervisor,
       localServices: localServices,
@@ -92,7 +92,7 @@ void main() {
           ),
         ],
       );
-      final controller = AuroraAppController(
+      final controller = AgentAwesomeAppController(
         config: _testConfig(),
         assistantClient: _RejectingAssistantClient(),
         chatHistoryStore: historyStore,
@@ -188,7 +188,7 @@ AppConfig _testConfig() {
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-    agentAppName: 'personal_pilot',
+    agentAppName: 'agent_awesome',
     agentUserId: 'doug',
     workspaceRoot: '/tmp/agentawesome-ui-test',
     autoStartLocalServices: true,

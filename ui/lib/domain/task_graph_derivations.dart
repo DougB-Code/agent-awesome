@@ -124,12 +124,10 @@ class TaskGraphDeriver {
   ) {
     final blocked = <String>{};
     for (final edge in graph.edges) {
-      if (edge.kind == TaskGraphEdgeKind.blocks &&
-          edge.fromTaskId == taskId) {
+      if (edge.kind == TaskGraphEdgeKind.blocks && edge.fromTaskId == taskId) {
         blocked.add(edge.toTaskId);
       }
-      if (edge.kind == TaskGraphEdgeKind.dependsOn &&
-          edge.toTaskId == taskId) {
+      if (edge.kind == TaskGraphEdgeKind.dependsOn && edge.toTaskId == taskId) {
         blocked.add(edge.fromTaskId);
       }
     }

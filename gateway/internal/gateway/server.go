@@ -80,7 +80,7 @@ func contextProxyOptions(cfg config.Config) []proxy.Option {
 	return []proxy.Option{proxy.WithUpstreamHeader("Authorization", "Bearer "+token)}
 }
 
-// runSSEBodyTransformer applies runtime policy only to ADK run_sse requests.
+// runSSEBodyTransformer applies optional operator policy to ADK run_sse requests.
 func runSSEBodyTransformer(injector *policy.Injector) proxy.BodyTransformer {
 	return func(r *http.Request, body []byte) ([]byte, error) {
 		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/run_sse") {

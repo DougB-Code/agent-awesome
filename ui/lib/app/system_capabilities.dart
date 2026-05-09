@@ -51,7 +51,7 @@ class SystemCapabilityReader {
       cpuThreads: Platform.numberOfProcessors,
       memoryBytes: await _readMemoryBytes(),
       diskBytes: await _readDiskBytes(
-        dataDirectoryPath ?? auroraDataDirectoryPath(),
+        dataDirectoryPath ?? agentAwesomeDataDirectoryPath(),
       ),
     );
   }

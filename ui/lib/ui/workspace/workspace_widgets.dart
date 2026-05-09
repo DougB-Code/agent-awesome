@@ -17,7 +17,7 @@ class HomeWorkspace extends StatelessWidget {
   const HomeWorkspace({super.key, required this.controller});
 
   /// Shared app controller.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds the Today assistant workspace.
   @override
@@ -27,7 +27,7 @@ class HomeWorkspace extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const _WorkspaceEyebrow('TODAY', color: AuroraColors.coral),
+          const _WorkspaceEyebrow('TODAY', color: AgentAwesomeColors.coral),
           const SizedBox(height: 22),
           Text(
             'Live Workspace',
@@ -36,7 +36,10 @@ class HomeWorkspace extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             controller.statusMessage,
-            style: const TextStyle(color: AuroraColors.muted, fontSize: 17),
+            style: const TextStyle(
+              color: AgentAwesomeColors.muted,
+              fontSize: 17,
+            ),
           ),
           const SizedBox(height: 38),
           LayoutBuilder(
@@ -98,7 +101,7 @@ class ExecutionPlan extends StatelessWidget {
       children: <Widget>[
         const Row(
           children: <Widget>[
-            Icon(Icons.circle, size: 10, color: AuroraColors.green),
+            Icon(Icons.circle, size: 10, color: AgentAwesomeColors.green),
             SizedBox(width: 12),
             _WorkspaceEyebrow('EXECUTION PLAN'),
           ],
@@ -129,9 +132,9 @@ class TaskLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mark = task.done
-        ? const Icon(Icons.check, size: 16, color: AuroraColors.green)
+        ? const Icon(Icons.check, size: 16, color: AgentAwesomeColors.green)
         : task.active
-        ? const Icon(Icons.circle, size: 13, color: AuroraColors.green)
+        ? const Icon(Icons.circle, size: 13, color: AgentAwesomeColors.green)
         : const SizedBox.shrink();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,8 +150,8 @@ class TaskLine extends StatelessWidget {
               color: task.done ? const Color(0xffeef5e9) : Colors.transparent,
               border: Border.all(
                 color: task.done || task.active
-                    ? AuroraColors.green
-                    : AuroraColors.border,
+                    ? AgentAwesomeColors.green
+                    : AgentAwesomeColors.border,
               ),
             ),
             child: Center(child: mark),
@@ -169,7 +172,7 @@ class TaskLine extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 task.detail,
-                style: const TextStyle(color: AuroraColors.muted),
+                style: const TextStyle(color: AgentAwesomeColors.muted),
               ),
             ],
           ),
@@ -198,7 +201,7 @@ class ChatRow extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 640),
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: AuroraColors.panel,
+            color: AgentAwesomeColors.panel,
             borderRadius: BorderRadius.circular(36),
           ),
           child: _MessageText(message: message),
@@ -211,12 +214,15 @@ class ChatRow extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: const Color(0xfffffcf8),
-          border: Border.all(color: AuroraColors.border),
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.extension_outlined, color: AuroraColors.green),
+            const Icon(
+              Icons.extension_outlined,
+              color: AgentAwesomeColors.green,
+            ),
             const SizedBox(width: 12),
             Expanded(child: _MessageText(message: message)),
           ],
@@ -230,7 +236,7 @@ class ChatRow extends StatelessWidget {
         children: <Widget>[
           const CircleAvatar(
             radius: 25,
-            backgroundColor: AuroraColors.green,
+            backgroundColor: AgentAwesomeColors.green,
             child: Icon(Icons.auto_awesome, color: Colors.white),
           ),
           const SizedBox(width: 16),
@@ -242,7 +248,7 @@ class ChatRow extends StatelessWidget {
 }
 
 class _WorkspaceEyebrow extends StatelessWidget {
-  const _WorkspaceEyebrow(this.text, {this.color = AuroraColors.green});
+  const _WorkspaceEyebrow(this.text, {this.color = AgentAwesomeColors.green});
 
   final String text;
   final Color color;
@@ -291,12 +297,14 @@ class _MessageText extends StatelessWidget {
                             text: message.author,
                             style: const TextStyle(
                               fontWeight: FontWeight.w900,
-                              color: AuroraColors.ink,
+                              color: AgentAwesomeColors.ink,
                             ),
                           ),
                           TextSpan(
                             text: '  $time',
-                            style: const TextStyle(color: AuroraColors.muted),
+                            style: const TextStyle(
+                              color: AgentAwesomeColors.muted,
+                            ),
                           ),
                         ],
                       ),
@@ -340,7 +348,7 @@ class _CopyMessageButton extends StatelessWidget {
           );
         },
         icon: const Icon(Icons.copy_outlined),
-        color: AuroraColors.muted,
+        color: AgentAwesomeColors.muted,
         iconSize: 15,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints.tightFor(width: 28, height: 28),

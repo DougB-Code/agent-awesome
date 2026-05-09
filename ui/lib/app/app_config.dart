@@ -42,7 +42,7 @@ class AppConfig {
       ),
       agentAppName: const String.fromEnvironment(
         'AGENT_APP_NAME',
-        defaultValue: 'personal_pilot',
+        defaultValue: 'agent_awesome',
       ),
       agentUserId: const String.fromEnvironment(
         'AGENT_USER_ID',

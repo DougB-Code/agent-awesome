@@ -1,4 +1,4 @@
-/// Implements the Aurora assistant workspace shell and feature surfaces.
+/// Implements the Agent Awesome assistant workspace shell and feature surfaces.
 library;
 
 import 'dart:async';
@@ -17,19 +17,19 @@ import 'shell/app_sections.dart';
 import 'shell/app_shell_frame.dart';
 import 'workspace/workspace_widgets.dart';
 
-/// AuroraShell renders the desktop assistant workspace.
-class AuroraShell extends StatefulWidget {
+/// AgentAwesomeShell renders the desktop assistant workspace.
+class AgentAwesomeShell extends StatefulWidget {
   /// Creates the shell bound to an app controller.
-  const AuroraShell({super.key, required this.controller});
+  const AgentAwesomeShell({super.key, required this.controller});
 
   /// Shared app controller.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   @override
-  State<AuroraShell> createState() => _AuroraShellState();
+  State<AgentAwesomeShell> createState() => _AgentAwesomeShellState();
 }
 
-class _AuroraShellState extends State<AuroraShell> {
+class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   final TextEditingController _commandController = TextEditingController();
   String _section = AppSections.today;
   String _settingsSection = 'App';
@@ -51,7 +51,7 @@ class _AuroraShellState extends State<AuroraShell> {
       builder: (context, _) {
         return Scaffold(
           body: ColoredBox(
-            color: AuroraColors.surface,
+            color: AgentAwesomeColors.surface,
             child: AppShellFrame(
               selectedSection: _section,
               controller: widget.controller,
@@ -361,7 +361,7 @@ String _chatTimestamp(DateTime timestamp) {
 class _ChatCommandPanel extends StatefulWidget {
   const _ChatCommandPanel({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   @override
   State<_ChatCommandPanel> createState() => _ChatCommandPanelState();
@@ -402,7 +402,7 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
       if (widget.controller.sending)
         const _ChatRuntimeNotice(
           icon: Icons.sync,
-          label: 'Aurora is responding',
+          label: 'Agent Awesome is responding',
         ),
     ];
     return Column(
@@ -413,7 +413,7 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
             children: timelineChildren,
           ),
         ),
-        const Divider(height: 1, color: AuroraColors.border),
+        const Divider(height: 1, color: AgentAwesomeColors.border),
         _ChatComposer(
           controller: _replyController,
           sending: widget.controller.sending,
@@ -434,7 +434,7 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
 class _ChatSessionPicker extends StatelessWidget {
   const _ChatSessionPicker({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds the active chat selector for the conversation panel.
   @override
@@ -466,8 +466,8 @@ class _ChatSessionPicker extends StatelessWidget {
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
                 padding: EdgeInsets.zero,
-                foregroundColor: AuroraColors.muted,
-                side: const BorderSide(color: AuroraColors.border),
+                foregroundColor: AgentAwesomeColors.muted,
+                side: const BorderSide(color: AgentAwesomeColors.border),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -546,8 +546,8 @@ class _ChatComposer extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 58),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
-            color: AuroraColors.surface,
-            border: Border.all(color: AuroraColors.border),
+            color: AgentAwesomeColors.surface,
+            border: Border.all(color: AgentAwesomeColors.border),
             borderRadius: BorderRadius.circular(18),
             boxShadow: const <BoxShadow>[
               BoxShadow(
@@ -564,7 +564,7 @@ class _ChatComposer extends StatelessWidget {
                 padding: EdgeInsets.only(bottom: 16),
                 child: Icon(
                   Icons.chat_bubble_outline,
-                  color: AuroraColors.muted,
+                  color: AgentAwesomeColors.muted,
                 ),
               ),
               const SizedBox(width: 12),
@@ -578,8 +578,8 @@ class _ChatComposer extends StatelessWidget {
                   textInputAction: TextInputAction.send,
                   decoration: const InputDecoration(
                     border: InputBorder.none,
-                    hintText: 'Message Aurora in this chat...',
-                    hintStyle: TextStyle(color: AuroraColors.muted),
+                    hintText: 'Message Agent Awesome in this chat...',
+                    hintStyle: TextStyle(color: AgentAwesomeColors.muted),
                   ),
                   onSubmitted: (_) {
                     if (!sending) {
@@ -593,7 +593,7 @@ class _ChatComposer extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: IconButton.filled(
                   style: IconButton.styleFrom(
-                    backgroundColor: AuroraColors.green,
+                    backgroundColor: AgentAwesomeColors.green,
                     foregroundColor: Colors.white,
                     fixedSize: const Size(42, 42),
                     shape: RoundedRectangleBorder(
@@ -618,7 +618,7 @@ class _ChatComposer extends StatelessWidget {
 class _ChatUtilitiesPanel extends StatelessWidget {
   const _ChatUtilitiesPanel({required this.controller, this.onAreaChanged});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
   /// Builds live chat utilities for context, chats, and runtime state.
@@ -750,7 +750,7 @@ class _ChatRuntimeNotice extends StatelessWidget {
     return PanelSectionBlock(
       child: Row(
         children: <Widget>[
-          Icon(icon, color: AuroraColors.green),
+          Icon(icon, color: AgentAwesomeColors.green),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -787,7 +787,7 @@ class _ChatMemoryContextTile extends StatelessWidget {
               record.summary,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AuroraColors.muted),
+              style: const TextStyle(color: AgentAwesomeColors.muted),
             ),
           ],
           const SizedBox(height: 10),
@@ -847,9 +847,9 @@ class _ChatStatusTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (state) {
-      ConnectionStateKind.connected => AuroraColors.green,
-      ConnectionStateKind.disconnected => AuroraColors.coral,
-      ConnectionStateKind.unknown => AuroraColors.muted,
+      ConnectionStateKind.connected => AgentAwesomeColors.green,
+      ConnectionStateKind.disconnected => AgentAwesomeColors.coral,
+      ConnectionStateKind.unknown => AgentAwesomeColors.muted,
     };
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -872,7 +872,7 @@ class _ChatStatusTile extends StatelessWidget {
                   Text(
                     detail,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AuroraColors.muted),
+                    style: const TextStyle(color: AgentAwesomeColors.muted),
                   ),
                   if (message.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 4),
@@ -932,7 +932,7 @@ class _WorkflowCommandPanel extends StatelessWidget {
     this.onAreaChanged,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final VoidCallback onBackHome;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
@@ -991,7 +991,10 @@ class _WorkflowCommandPanel extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             controller.workspace.subtitle,
-            style: const TextStyle(color: AuroraColors.muted, fontSize: 17),
+            style: const TextStyle(
+              color: AgentAwesomeColors.muted,
+              fontSize: 17,
+            ),
           ),
           for (final message in filteredMessages) ChatRow(message: message),
         ],
@@ -1016,7 +1019,7 @@ class _WorkflowCommandPanel extends StatelessWidget {
 class _ResearchPlanCard extends StatelessWidget {
   const _ResearchPlanCard({required this.controller, this.tasks});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final List<WorkspaceTask>? tasks;
 
   /// Builds the workspace context card with confirmable actions.
@@ -1029,7 +1032,7 @@ class _ResearchPlanCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8),
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Column(
@@ -1048,7 +1051,7 @@ class _ResearchPlanCard extends StatelessWidget {
                   'In progress - $done/${visibleTasks.length}',
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,
-                  style: const TextStyle(color: AuroraColors.muted),
+                  style: const TextStyle(color: AgentAwesomeColors.muted),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1121,7 +1124,7 @@ const List<String> _memoryStatuses = <String>[
 class _MemoryLibraryPanel extends StatelessWidget {
   const _MemoryLibraryPanel({required this.controller, this.onAreaChanged});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
   /// Builds the memory discovery command panel.
@@ -1168,7 +1171,7 @@ class _MemoryLibraryPanel extends StatelessWidget {
 class _MemorySearchContent extends StatelessWidget {
   const _MemorySearchContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds memory search results and retrieval filters.
@@ -1208,7 +1211,7 @@ class _MemorySearchContent extends StatelessWidget {
 class _MemoryFilterBar extends StatelessWidget {
   const _MemoryFilterBar({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds scope, sensitivity, and service-search controls.
@@ -1218,8 +1221,8 @@ class _MemoryFilterBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AuroraColors.surface,
-        border: Border.all(color: AuroraColors.border),
+        color: AgentAwesomeColors.surface,
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -1310,7 +1313,7 @@ class _MemoryFilterBar extends StatelessWidget {
 class _MemoryStatusStrip extends StatelessWidget {
   const _MemoryStatusStrip({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds a compact memory operation status strip.
   @override
@@ -1359,7 +1362,7 @@ class _RouteNoticePanel extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8),
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -1369,10 +1372,10 @@ class _RouteNoticePanel extends StatelessWidget {
             height: 42,
             width: 42,
             decoration: const BoxDecoration(
-              color: AuroraColors.greenSoft,
+              color: AgentAwesomeColors.greenSoft,
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: AuroraColors.green),
+            child: Icon(icon, color: AgentAwesomeColors.green),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -1382,7 +1385,7 @@ class _RouteNoticePanel extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    color: AuroraColors.ink,
+                    color: AgentAwesomeColors.ink,
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
@@ -1391,7 +1394,7 @@ class _RouteNoticePanel extends StatelessWidget {
                 SelectableText(
                   message,
                   style: const TextStyle(
-                    color: AuroraColors.muted,
+                    color: AgentAwesomeColors.muted,
                     height: 1.4,
                   ),
                 ),
@@ -1411,7 +1414,7 @@ class _RouteNoticePanel extends StatelessWidget {
 class _MemoryUnavailableRoute extends StatelessWidget {
   const _MemoryUnavailableRoute({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds the full-page error state for memory-backed routes.
   @override
@@ -1462,9 +1465,13 @@ class _MemoryRecordTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? AuroraColors.greenSoft : AuroraColors.surface,
+          color: selected
+              ? AgentAwesomeColors.greenSoft
+              : AgentAwesomeColors.surface,
           border: Border.all(
-            color: selected ? AuroraColors.green : AuroraColors.border,
+            color: selected
+                ? AgentAwesomeColors.green
+                : AgentAwesomeColors.border,
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -1495,7 +1502,7 @@ class _MemoryRecordTile extends StatelessWidget {
                 record.summary,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AuroraColors.muted),
+                style: const TextStyle(color: AgentAwesomeColors.muted),
               ),
             ],
             const SizedBox(height: 12),
@@ -1517,7 +1524,10 @@ class _MemoryRecordTile extends StatelessWidget {
               record.sourceLabel,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, color: AuroraColors.green),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AgentAwesomeColors.green,
+              ),
             ),
           ],
         ),
@@ -1529,7 +1539,7 @@ class _MemoryRecordTile extends StatelessWidget {
 class _MemoryBrowseContent extends StatelessWidget {
   const _MemoryBrowseContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds facet-based discovery paths into memory.
@@ -1591,7 +1601,7 @@ class _MemoryBrowseContent extends StatelessWidget {
 class _MemoryReviewContent extends StatelessWidget {
   const _MemoryReviewContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds the cross-cutting memory review queue.
@@ -1679,11 +1689,11 @@ class _MemoryFacetGroup extends StatelessWidget {
               for (final entry in entries)
                 ActionChip(
                   avatar: CircleAvatar(
-                    backgroundColor: AuroraColors.greenSoft,
+                    backgroundColor: AgentAwesomeColors.greenSoft,
                     child: Text(
                       '${entry.value}',
                       style: const TextStyle(
-                        color: AuroraColors.green,
+                        color: AgentAwesomeColors.green,
                         fontSize: 11,
                       ),
                     ),
@@ -1702,7 +1712,7 @@ class _MemoryFacetGroup extends StatelessWidget {
 class _MemoryMapContent extends StatelessWidget {
   const _MemoryMapContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds relationship and discovery-path context for the selected memory.
@@ -1766,7 +1776,7 @@ class _MemoryMapContent extends StatelessWidget {
                 if (memory.relationships.isEmpty)
                   const Text(
                     'No relationship edges',
-                    style: TextStyle(color: AuroraColors.muted),
+                    style: TextStyle(color: AgentAwesomeColors.muted),
                   )
                 else
                   for (final relationship in memory.relationships)
@@ -1784,7 +1794,7 @@ class _MemoryMapContent extends StatelessWidget {
                 if (related.isEmpty)
                   const Text(
                     'No related records in the current result set',
-                    style: TextStyle(color: AuroraColors.muted),
+                    style: TextStyle(color: AgentAwesomeColors.muted),
                   )
                 else
                   for (final record in related)
@@ -1809,7 +1819,7 @@ class _MemoryMapContent extends StatelessWidget {
 class _MemoryCaptureContent extends StatefulWidget {
   const _MemoryCaptureContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   @override
@@ -1820,7 +1830,7 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
   final TextEditingController _title = TextEditingController();
   final TextEditingController _content = TextEditingController();
   final TextEditingController _sourceSystem = TextEditingController(
-    text: 'aurora-ui',
+    text: 'agent_awesome_ui',
   );
   final TextEditingController _sourceId = TextEditingController();
   final TextEditingController _subjects = TextEditingController();
@@ -1961,7 +1971,7 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                 if (duplicates.isEmpty)
                   const Text(
                     'No nearby records',
-                    style: TextStyle(color: AuroraColors.muted),
+                    style: TextStyle(color: AgentAwesomeColors.muted),
                   )
                 else
                   for (final record in duplicates)
@@ -2034,7 +2044,7 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
 class _MemoryStewardshipPanel extends StatelessWidget {
   const _MemoryStewardshipPanel({required this.controller, this.onAreaChanged});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
   /// Builds the selected-memory stewardship command panel.
@@ -2087,7 +2097,7 @@ class _MemoryStewardshipPanel extends StatelessWidget {
 class _MemoryOverviewContent extends StatelessWidget {
   const _MemoryOverviewContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds selected memory metadata and stewardship posture.
@@ -2130,7 +2140,7 @@ class _MemoryOverviewContent extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   memory.summary,
-                  style: const TextStyle(color: AuroraColors.muted),
+                  style: const TextStyle(color: AgentAwesomeColors.muted),
                 ),
                 const SizedBox(height: 14),
                 Wrap(
@@ -2206,7 +2216,7 @@ class _MemoryOverviewContent extends StatelessWidget {
 class _MemorySourceContent extends StatelessWidget {
   const _MemorySourceContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds immutable raw evidence preview for the selected memory.
@@ -2264,7 +2274,7 @@ class _MemorySourceContent extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: const Color(0xfffffcf8),
-              border: Border.all(color: AuroraColors.border),
+              border: Border.all(color: AgentAwesomeColors.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: SelectableText(
@@ -2286,7 +2296,7 @@ class _MemoryRelationsContent extends StatelessWidget {
     required this.query,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds relationship review for the selected memory.
@@ -2316,7 +2326,7 @@ class _MemoryRelationsContent extends StatelessWidget {
                 if (relationships.isEmpty)
                   const Text(
                     'No matching relationship edges',
-                    style: TextStyle(color: AuroraColors.muted),
+                    style: TextStyle(color: AgentAwesomeColors.muted),
                   )
                 else
                   for (final relationship in relationships)
@@ -2348,7 +2358,7 @@ class _MemoryRelationsContent extends StatelessWidget {
 class _MemoryMetadataContent extends StatefulWidget {
   const _MemoryMetadataContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   @override
@@ -2525,7 +2535,7 @@ class _MemoryCorrectionsContent extends StatefulWidget {
     required this.query,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   @override
@@ -2594,7 +2604,7 @@ class _MemoryCorrectionsContentState extends State<_MemoryCorrectionsContent> {
                 if (corrections.isEmpty)
                   const Text(
                     'No corrections in current results',
-                    style: TextStyle(color: AuroraColors.muted),
+                    style: TextStyle(color: AgentAwesomeColors.muted),
                   )
                 else
                   for (final correction in corrections)
@@ -2640,7 +2650,7 @@ class _MemoryCorrectionsContentState extends State<_MemoryCorrectionsContent> {
 class _MemoryPagesContent extends StatelessWidget {
   const _MemoryPagesContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds entity page and timeline controls for the selected memory.
@@ -2746,7 +2756,7 @@ class _MemoryPanelLabel extends StatelessWidget {
       label.toUpperCase(),
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(
-        color: AuroraColors.muted,
+        color: AgentAwesomeColors.muted,
         fontSize: 11,
         fontWeight: FontWeight.w900,
         letterSpacing: 2.4,
@@ -2807,8 +2817,8 @@ class _MemoryDropdown extends StatelessWidget {
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AuroraColors.surface,
-          border: Border.all(color: AuroraColors.border),
+          color: AgentAwesomeColors.surface,
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
@@ -2860,14 +2870,14 @@ class _MemoryTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: AuroraColors.surface,
+        fillColor: AgentAwesomeColors.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AuroraColors.border),
+          borderSide: const BorderSide(color: AgentAwesomeColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AuroraColors.border),
+          borderSide: const BorderSide(color: AgentAwesomeColors.border),
         ),
       ),
     );
@@ -2893,7 +2903,7 @@ class _MemoryMetadataRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: AuroraColors.muted,
+                color: AgentAwesomeColors.muted,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -2923,9 +2933,13 @@ class _MemoryRelationshipLine extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isConflict ? const Color(0xffffefed) : AuroraColors.surface,
+        color: isConflict
+            ? const Color(0xffffefed)
+            : AgentAwesomeColors.surface,
         border: Border.all(
-          color: isConflict ? AuroraColors.coral : AuroraColors.border,
+          color: isConflict
+              ? AgentAwesomeColors.coral
+              : AgentAwesomeColors.border,
         ),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -2937,7 +2951,9 @@ class _MemoryRelationshipLine extends StatelessWidget {
               Icon(
                 isConflict ? Icons.warning_amber : Icons.link,
                 size: 18,
-                color: isConflict ? AuroraColors.coral : AuroraColors.green,
+                color: isConflict
+                    ? AgentAwesomeColors.coral
+                    : AgentAwesomeColors.green,
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -2968,7 +2984,7 @@ class _MemorySelectionEmpty extends StatelessWidget {
     return const Center(
       child: Text(
         'Select a memory',
-        style: TextStyle(color: AuroraColors.muted),
+        style: TextStyle(color: AgentAwesomeColors.muted),
       ),
     );
   }
@@ -3043,7 +3059,7 @@ bool _matchesMemoryRecord(MemoryRecord record, String query) {
 }
 
 /// Reports whether the memory route status is an actionable error.
-bool _memoryMessageIsError(AuroraAppController controller) {
+bool _memoryMessageIsError(AgentAwesomeAppController controller) {
   final message = controller.memoryMessage.trim().toLowerCase();
   if (message.isEmpty) {
     return false;
@@ -3106,7 +3122,7 @@ Map<String, int> _counts(Iterable<String> values) {
 
 /// Applies one server-supported memory facet.
 void _applySingleFacet(
-  AuroraAppController controller, {
+  AgentAwesomeAppController controller, {
   List<String>? kinds,
   List<String>? topics,
   List<String>? allowedSensitivities,
@@ -3125,7 +3141,7 @@ void _applySingleFacet(
 }
 
 /// Selects the first record with the requested entity label.
-void _selectFirstEntity(AuroraAppController controller, String entity) {
+void _selectFirstEntity(AgentAwesomeAppController controller, String entity) {
   final matches = controller.workspace.memoryRecords.where((record) {
     return record.entityNames.contains(entity);
   });
@@ -3194,7 +3210,7 @@ String _memoryLabel(String value) {
 class _MemoryCommandPanel extends StatelessWidget {
   const _MemoryCommandPanel({required this.controller, this.onAreaChanged});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
   /// Builds the memory command panel with switchable dense content areas.
@@ -3332,7 +3348,7 @@ class _MemoryCommandPanel extends StatelessWidget {
 class _MemoryPeopleRoute extends StatelessWidget {
   const _MemoryPeopleRoute({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds the entity page route from live memory records.
   @override
@@ -3374,7 +3390,9 @@ class _MemoryPeopleRoute extends StatelessWidget {
                           const SizedBox(height: 8),
                           Text(
                             '${entity.count} source-backed records',
-                            style: const TextStyle(color: AuroraColors.muted),
+                            style: const TextStyle(
+                              color: AgentAwesomeColors.muted,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           Wrap(
@@ -3416,7 +3434,7 @@ class _MemoryPeopleRoute extends StatelessWidget {
 class _MemoryTimelineRoute extends StatelessWidget {
   const _MemoryTimelineRoute({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds topic and event timelines from live memory records.
   @override
@@ -3463,11 +3481,11 @@ class _MemoryTimelineRoute extends StatelessWidget {
                 for (final topic in topicRows)
                   ActionChip(
                     avatar: CircleAvatar(
-                      backgroundColor: AuroraColors.greenSoft,
+                      backgroundColor: AgentAwesomeColors.greenSoft,
                       child: Text(
                         '${topic.count}',
                         style: const TextStyle(
-                          color: AuroraColors.green,
+                          color: AgentAwesomeColors.green,
                           fontSize: 11,
                         ),
                       ),
@@ -3501,7 +3519,7 @@ class _MemoryTimelineRoute extends StatelessWidget {
                             child: Text(
                               _formatDate(record.eventTime ?? record.createdAt),
                               style: const TextStyle(
-                                color: AuroraColors.muted,
+                                color: AgentAwesomeColors.muted,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
@@ -3520,7 +3538,7 @@ class _MemoryTimelineRoute extends StatelessWidget {
                                 Text(
                                   record.summary,
                                   style: const TextStyle(
-                                    color: AuroraColors.muted,
+                                    color: AgentAwesomeColors.muted,
                                   ),
                                 ),
                               ],
@@ -3610,7 +3628,9 @@ class _SourcesPage extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(
                           file.detail,
-                          style: const TextStyle(color: AuroraColors.muted),
+                          style: const TextStyle(
+                            color: AgentAwesomeColors.muted,
+                          ),
                         ),
                       ],
                     ),
@@ -3634,7 +3654,7 @@ class _FilesEmptyState extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 34),
           child: FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: AuroraColors.green,
+              backgroundColor: AgentAwesomeColors.green,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
             ),
@@ -3692,7 +3712,10 @@ class _PaddedRoute extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             subtitle,
-            style: const TextStyle(color: AuroraColors.muted, fontSize: 17),
+            style: const TextStyle(
+              color: AgentAwesomeColors.muted,
+              fontSize: 17,
+            ),
           ),
           const SizedBox(height: 32),
           child,
@@ -3704,7 +3727,7 @@ class _PaddedRoute extends StatelessWidget {
 
 Future<void> _confirmCreateTask(
   BuildContext context,
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
 ) async {
   final input = TextEditingController();
   final title = await showDialog<String>(
@@ -3745,7 +3768,7 @@ Future<void> _confirmCreateTask(
 
 Future<void> _confirmCompleteTask(
   BuildContext context,
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
   WorkspaceTask task,
 ) async {
   final approved = await _confirmWrite(

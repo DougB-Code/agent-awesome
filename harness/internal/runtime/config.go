@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	agentpkg "agentawesome/internal/agent"
+	"agentawesome/internal/runtime/callbacks"
 	aaagent "google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
@@ -33,12 +34,13 @@ type ToolsConfig struct {
 // installs any configured tools and toolsets on that agent.
 func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools ToolsConfig) (*launcher.Config, error) {
 	runtimeAgent, err := llmagent.New(llmagent.Config{
-		Name:        def.Name,
-		Model:       llm,
-		Description: def.Description,
-		Instruction: def.Instruction,
-		Tools:       tools.Tools,
-		Toolsets:    tools.Toolsets,
+		Name:                def.Name,
+		Model:               llm,
+		Description:         def.Description,
+		Instruction:         def.Instruction,
+		BeforeToolCallbacks: callbacks.TaskInvariantCallbacks(),
+		Tools:               tools.Tools,
+		Toolsets:            tools.Toolsets,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create agent: %w", err)

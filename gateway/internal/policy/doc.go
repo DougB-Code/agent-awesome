@@ -1,10 +1,10 @@
-// Package policy builds gateway-owned runtime instructions for agent requests.
+// Package policy builds optional operator runtime instructions for agent requests.
 //
 // Intended use cases:
-//   - Keep agent operating policy separate from HTTP forwarding mechanics.
-//   - Inject configurable runtime guidance into ADK run request text parts.
+//   - Keep explicit operator policy separate from HTTP forwarding mechanics.
+//   - Inject configured guidance into ADK run request text parts when enabled.
 //
 // High-level examples:
-//   - policy.NewInjector(policy.Config{Text: policy.DefaultRuntimePolicyText}) creates the default injector.
-//   - injector.Inject(body) updates ADK run request JSON when text user parts are present.
+//   - policy.NewInjector(policy.Config{Text: "Use concise replies."}) creates an enabled injector.
+//   - injector.Inject(body) updates ADK run request JSON when configured text is present.
 package policy

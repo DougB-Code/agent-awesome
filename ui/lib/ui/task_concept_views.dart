@@ -47,7 +47,7 @@ class TaskConceptProjectionPanel extends StatelessWidget {
   });
 
   /// Shared app controller.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Projection view to render.
   final TaskConceptKind kind;
@@ -56,7 +56,7 @@ class TaskConceptProjectionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: AuroraColors.surface,
+      color: AgentAwesomeColors.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
         child: _buildView(),
@@ -82,7 +82,7 @@ class TaskConceptProjectionPanel extends StatelessWidget {
 class _TaskWbsView extends StatelessWidget {
   const _TaskWbsView({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds the work-breakdown structure tree.
   @override
@@ -132,7 +132,7 @@ class _WbsTreeNodeView extends StatelessWidget {
   });
 
   final TaskWbsTreeNode node;
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final int depth;
 
   /// Builds one recursive WBS tree node.
@@ -185,10 +185,12 @@ class _WbsBranchNode extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(_wbsIndentForDepth(depth), 10, 14, 10),
       decoration: BoxDecoration(
         color: isRoot
-            ? AuroraColors.greenSoft.withValues(alpha: 0.32)
+            ? AgentAwesomeColors.greenSoft.withValues(alpha: 0.32)
             : const Color(0xfffffcf8),
         border: Border(
-          bottom: BorderSide(color: AuroraColors.border.withValues(alpha: 0.8)),
+          bottom: BorderSide(
+            color: AgentAwesomeColors.border.withValues(alpha: 0.8),
+          ),
         ),
       ),
       child: Row(
@@ -196,7 +198,7 @@ class _WbsBranchNode extends StatelessWidget {
           Icon(
             isRoot ? Icons.account_tree_outlined : Icons.folder_open_outlined,
             size: isRoot ? 20 : 18,
-            color: AuroraColors.green,
+            color: AgentAwesomeColors.green,
           ),
           const SizedBox(width: 10),
           _WbsCodeBadge(code: node.code),
@@ -205,7 +207,9 @@ class _WbsBranchNode extends StatelessWidget {
               node.title,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: isRoot ? AuroraColors.green : AuroraColors.ink,
+                color: isRoot
+                    ? AgentAwesomeColors.green
+                    : AgentAwesomeColors.ink,
                 fontSize: isRoot ? 15 : 14,
                 fontWeight: FontWeight.w900,
               ),
@@ -227,7 +231,7 @@ class _WbsWorkPackageNode extends StatelessWidget {
   });
 
   final TaskWbsTreeNode node;
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final int depth;
 
   /// Builds one leaf WBS work package.
@@ -246,7 +250,7 @@ class _WbsWorkPackageNode extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
-              color: AuroraColors.border.withValues(alpha: 0.62),
+              color: AgentAwesomeColors.border.withValues(alpha: 0.62),
             ),
           ),
         ),
@@ -256,7 +260,7 @@ class _WbsWorkPackageNode extends StatelessWidget {
             const Icon(
               Icons.task_alt_outlined,
               size: 18,
-              color: AuroraColors.muted,
+              color: AgentAwesomeColors.muted,
             ),
             const SizedBox(width: 10),
             _WbsCodeBadge(code: workBreakdown.code),
@@ -316,7 +320,7 @@ class _WbsCodeBadge extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: const Color(0xfffffcf8),
-          border: Border.all(color: AuroraColors.border),
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: ConstrainedBox(
@@ -421,7 +425,7 @@ class _WbsDetailBlock extends StatelessWidget {
             label,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: AuroraColors.muted,
+              color: AgentAwesomeColors.muted,
               fontSize: 11,
               fontWeight: FontWeight.w900,
             ),
@@ -461,7 +465,10 @@ class _WbsTaskSummary extends StatelessWidget {
               workBreakdown.deliverable,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AuroraColors.muted, fontSize: 12),
+              style: const TextStyle(
+                color: AgentAwesomeColors.muted,
+                fontSize: 12,
+              ),
             ),
           ],
           const SizedBox(height: 8),
@@ -495,7 +502,7 @@ class _WbsTextList extends StatelessWidget {
     if (values.isEmpty) {
       return const Text(
         'Missing',
-        style: TextStyle(color: AuroraColors.muted, fontSize: 12),
+        style: TextStyle(color: AgentAwesomeColors.muted, fontSize: 12),
       );
     }
     return Padding(
@@ -530,7 +537,7 @@ class _WbsResourceSummary extends StatelessWidget {
     if (resources.isEmpty) {
       return const Text(
         'Missing',
-        style: TextStyle(color: AuroraColors.muted, fontSize: 12),
+        style: TextStyle(color: AgentAwesomeColors.muted, fontSize: 12),
       );
     }
     return Padding(
@@ -565,14 +572,14 @@ class _MiniBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: AuroraColors.greenSoft.withValues(alpha: 0.34),
+        color: AgentAwesomeColors.greenSoft.withValues(alpha: 0.34),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
-          color: AuroraColors.green,
+          color: AgentAwesomeColors.green,
           fontSize: 11,
           fontWeight: FontWeight.w900,
         ),
@@ -584,7 +591,7 @@ class _MiniBadge extends StatelessWidget {
 class _TaskStreamView extends StatefulWidget {
   const _TaskStreamView({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Creates state for stream axis selection.
   @override
@@ -901,15 +908,15 @@ class _TaskStreamPresetSelector extends StatelessWidget {
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
         side: WidgetStatePropertyAll(
-          BorderSide(color: AuroraColors.border.withValues(alpha: 0.85)),
+          BorderSide(color: AgentAwesomeColors.border.withValues(alpha: 0.85)),
         ),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AuroraColors.green.withValues(alpha: 0.16);
+            return AgentAwesomeColors.green.withValues(alpha: 0.16);
           }
-          return AuroraColors.panel;
+          return AgentAwesomeColors.panel;
         }),
-        foregroundColor: const WidgetStatePropertyAll(AuroraColors.ink),
+        foregroundColor: const WidgetStatePropertyAll(AgentAwesomeColors.ink),
       ),
       segments: <ButtonSegment<_TaskStreamPreset>>[
         for (final preset in _TaskStreamPreset.values)
@@ -1035,22 +1042,22 @@ class _TaskStreamAxisSelector extends StatelessWidget {
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AuroraColors.panel,
-          border: Border.all(color: AuroraColors.border),
+          color: AgentAwesomeColors.panel,
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, size: 15, color: AuroraColors.green),
+              Icon(icon, size: 15, color: AgentAwesomeColors.green),
               const SizedBox(width: 6),
               DropdownButton<TaskStreamAxisDimension>(
                 value: value,
                 borderRadius: BorderRadius.circular(8),
                 icon: const Icon(Icons.keyboard_arrow_down, size: 16),
                 style: const TextStyle(
-                  color: AuroraColors.ink,
+                  color: AgentAwesomeColors.ink,
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1090,13 +1097,17 @@ class _TaskStreamEffortSummary extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Icon(Icons.timer_outlined, size: 15, color: AuroraColors.muted),
+          const Icon(
+            Icons.timer_outlined,
+            size: 15,
+            color: AgentAwesomeColors.muted,
+          ),
           const SizedBox(width: 6),
           Text(
             '${model.taskCount} items · ${_formatStreamEffort(model.estimateMinutes)}',
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: AuroraColors.muted,
+              color: AgentAwesomeColors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -1110,7 +1121,7 @@ class _TaskStreamEffortSummary extends StatelessWidget {
 class _TaskConstellationView extends StatefulWidget {
   const _TaskConstellationView({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Creates state for relationship focus toggling.
   @override
@@ -1209,7 +1220,7 @@ class _TaskConstellationViewState extends State<_TaskConstellationView>
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: AuroraColors.muted,
+              color: AgentAwesomeColors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -1633,13 +1644,13 @@ class _ConstellationSavedQueryMenu extends StatelessWidget {
           icon: const Icon(
             Icons.saved_search_outlined,
             size: 18,
-            color: AuroraColors.green,
+            color: AgentAwesomeColors.green,
           ),
-          color: AuroraColors.panel,
+          color: AgentAwesomeColors.panel,
           surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side: const BorderSide(color: AuroraColors.border),
+            side: const BorderSide(color: AgentAwesomeColors.border),
           ),
           onSelected: onSelected,
           itemBuilder: (context) {
@@ -1676,7 +1687,7 @@ class _ConstellationSavedQueryItem extends StatelessWidget {
             example.label,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: AuroraColors.ink,
+              color: AgentAwesomeColors.ink,
               fontSize: 13,
               fontWeight: FontWeight.w900,
             ),
@@ -1687,7 +1698,7 @@ class _ConstellationSavedQueryItem extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
-              color: AuroraColors.muted,
+              color: AgentAwesomeColors.muted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -1719,13 +1730,13 @@ class _ConstellationQueryField extends StatelessWidget {
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AuroraColors.panel,
-          border: Border.all(color: AuroraColors.border),
+          color: AgentAwesomeColors.panel,
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.search, size: 16, color: AuroraColors.muted),
+            const Icon(Icons.search, size: 16, color: AgentAwesomeColors.muted),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
@@ -1733,7 +1744,7 @@ class _ConstellationQueryField extends StatelessWidget {
                 onChanged: onChanged,
                 onSubmitted: onSubmitted,
                 style: const TextStyle(
-                  color: AuroraColors.ink,
+                  color: AgentAwesomeColors.ink,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1742,7 +1753,7 @@ class _ConstellationQueryField extends StatelessWidget {
                   border: InputBorder.none,
                   hintText:
                       'MATCH task -[depends_on*1..3]-> task RETURN from.title, path.depth, to.title LIMIT 10',
-                  hintStyle: TextStyle(color: AuroraColors.muted),
+                  hintStyle: TextStyle(color: AgentAwesomeColors.muted),
                 ),
               ),
             ),
@@ -1788,12 +1799,12 @@ class _ConstellationQueryRows extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: preview.isPath
-                  ? AuroraColors.coral.withValues(alpha: 0.1)
-                  : AuroraColors.greenSoft.withValues(alpha: 0.26),
+                  ? AgentAwesomeColors.coral.withValues(alpha: 0.1)
+                  : AgentAwesomeColors.greenSoft.withValues(alpha: 0.26),
               border: Border.all(
                 color: preview.isPath
-                    ? AuroraColors.coral.withValues(alpha: 0.24)
-                    : AuroraColors.green.withValues(alpha: 0.24),
+                    ? AgentAwesomeColors.coral.withValues(alpha: 0.24)
+                    : AgentAwesomeColors.green.withValues(alpha: 0.24),
               ),
               borderRadius: BorderRadius.circular(8),
             ),
@@ -1801,7 +1812,7 @@ class _ConstellationQueryRows extends StatelessWidget {
               preview.text,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
-                color: AuroraColors.ink,
+                color: AgentAwesomeColors.ink,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
               ),
@@ -1885,11 +1896,11 @@ class _IconBadgeButton extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: AuroraColors.panel,
-            border: Border.all(color: AuroraColors.border),
+            color: AgentAwesomeColors.panel,
+            border: Border.all(color: AgentAwesomeColors.border),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 16, color: AuroraColors.green),
+          child: Icon(icon, size: 16, color: AgentAwesomeColors.green),
         ),
       ),
     );
@@ -1926,16 +1937,20 @@ class _PositionedConstellationAnchor extends StatelessWidget {
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: expanded ? AuroraColors.greenSoft : AuroraColors.panel,
+              color: expanded
+                  ? AgentAwesomeColors.greenSoft
+                  : AgentAwesomeColors.panel,
               border: Border.all(
-                color: expanded ? AuroraColors.green : AuroraColors.border,
+                color: expanded
+                    ? AgentAwesomeColors.green
+                    : AgentAwesomeColors.border,
                 width: expanded ? 2.2 : 1.2,
               ),
               borderRadius: BorderRadius.circular(12),
               boxShadow: <BoxShadow>[
                 BoxShadow(
                   blurRadius: expanded ? 22 : 10,
-                  color: AuroraColors.green.withValues(
+                  color: AgentAwesomeColors.green.withValues(
                     alpha: expanded ? 0.22 : 0.08,
                   ),
                 ),
@@ -1961,7 +1976,7 @@ class _PositionedConstellationAnchor extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AuroraColors.muted,
+                    color: AgentAwesomeColors.muted,
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2009,10 +2024,10 @@ class _PositionedConstellationNode extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
             decoration: BoxDecoration(
               color: selected || expanded
-                  ? AuroraColors.greenSoft
+                  ? AgentAwesomeColors.greenSoft
                   : const Color(0xfffffcf8),
               border: Border.all(
-                color: selected || expanded ? AuroraColors.green : color,
+                color: selected || expanded ? AgentAwesomeColors.green : color,
                 width: expanded
                     ? 2.3
                     : selected
@@ -2047,7 +2062,7 @@ class _PositionedConstellationNode extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AuroraColors.muted,
+                    color: AgentAwesomeColors.muted,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                   ),
@@ -2145,7 +2160,7 @@ class _ConstellationOffscreenIndicatorPainter extends CustomPainter {
         size,
         visible,
         anchor.center,
-        AuroraColors.green,
+        AgentAwesomeColors.green,
       );
     }
     for (final node in layout.nodes) {
@@ -2399,7 +2414,7 @@ class _ConstellationIndicatorBucket {
 class _PriorityTerrainView extends StatefulWidget {
   const _PriorityTerrainView({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Creates state for terrain display filtering.
   @override
@@ -2673,8 +2688,8 @@ class _TerrainInsightModeSelector extends StatelessWidget {
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AuroraColors.panel,
-          border: Border.all(color: AuroraColors.border),
+          color: AgentAwesomeColors.panel,
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
@@ -2683,7 +2698,7 @@ class _TerrainInsightModeSelector extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             icon: const Icon(Icons.keyboard_arrow_down, size: 16),
             style: const TextStyle(
-              color: AuroraColors.ink,
+              color: AgentAwesomeColors.ink,
               fontSize: 13,
               fontWeight: FontWeight.w900,
             ),
@@ -2744,9 +2759,13 @@ class _TerrainFiltersButton extends StatelessWidget {
           height: 34,
           padding: const EdgeInsets.symmetric(horizontal: 11),
           decoration: BoxDecoration(
-            color: open ? AuroraColors.greenSoft : AuroraColors.panel,
+            color: open
+                ? AgentAwesomeColors.greenSoft
+                : AgentAwesomeColors.panel,
             border: Border.all(
-              color: open ? AuroraColors.green : AuroraColors.border,
+              color: open
+                  ? AgentAwesomeColors.green
+                  : AgentAwesomeColors.border,
             ),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -2756,13 +2775,17 @@ class _TerrainFiltersButton extends StatelessWidget {
               Icon(
                 Icons.tune,
                 size: 16,
-                color: open ? AuroraColors.green : AuroraColors.muted,
+                color: open
+                    ? AgentAwesomeColors.green
+                    : AgentAwesomeColors.muted,
               ),
               const SizedBox(width: 7),
               Text(
                 label,
                 style: TextStyle(
-                  color: open ? AuroraColors.green : AuroraColors.ink,
+                  color: open
+                      ? AgentAwesomeColors.green
+                      : AgentAwesomeColors.ink,
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
                 ),
@@ -2816,8 +2839,8 @@ class _TerrainFilterDrawer extends StatelessWidget {
       width: 314,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AuroraColors.surface.withValues(alpha: 0.98),
-          border: Border.all(color: AuroraColors.border),
+          color: AgentAwesomeColors.surface.withValues(alpha: 0.98),
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
           boxShadow: <BoxShadow>[
             BoxShadow(
@@ -2834,7 +2857,11 @@ class _TerrainFilterDrawer extends StatelessWidget {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  const Icon(Icons.tune, size: 16, color: AuroraColors.green),
+                  const Icon(
+                    Icons.tune,
+                    size: 16,
+                    color: AgentAwesomeColors.green,
+                  ),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Text(
@@ -2843,7 +2870,7 @@ class _TerrainFilterDrawer extends StatelessWidget {
                           : 'Area overlays $activeCount',
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: AuroraColors.ink,
+                        color: AgentAwesomeColors.ink,
                         fontSize: 13,
                         fontWeight: FontWeight.w900,
                       ),
@@ -2910,7 +2937,7 @@ class _TerrainFilterSelector extends StatelessWidget {
             Text(
               '$label:',
               style: const TextStyle(
-                color: AuroraColors.muted,
+                color: AgentAwesomeColors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
@@ -2976,8 +3003,8 @@ class _TerrainDropdownShell extends StatelessWidget {
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: AuroraColors.panel,
-        border: Border.all(color: AuroraColors.border),
+        color: AgentAwesomeColors.panel,
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
@@ -2987,7 +3014,7 @@ class _TerrainDropdownShell extends StatelessWidget {
 
 /// Shared text style for terrain dropdown controls.
 const TextStyle _terrainDropdownTextStyle = TextStyle(
-  color: AuroraColors.ink,
+  color: AgentAwesomeColors.ink,
   fontSize: 13,
   fontWeight: FontWeight.w900,
 );
@@ -3023,9 +3050,11 @@ class _PositionedTerrainCard extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
               color: selected
-                  ? AuroraColors.greenSoft
+                  ? AgentAwesomeColors.greenSoft
                   : const Color(0xfffffcf8),
-              border: Border.all(color: selected ? AuroraColors.green : color),
+              border: Border.all(
+                color: selected ? AgentAwesomeColors.green : color,
+              ),
               borderRadius: BorderRadius.circular(8),
               boxShadow: <BoxShadow>[
                 BoxShadow(
@@ -3068,7 +3097,7 @@ class _PositionedTerrainCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AuroraColors.muted,
+                          color: AgentAwesomeColors.muted,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                         ),
@@ -3147,10 +3176,12 @@ class _PositionedTerrainPin extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: selected || expanded
-                  ? AuroraColors.green
+                  ? AgentAwesomeColors.green
                   : color.withValues(alpha: 0.9),
               border: Border.all(
-                color: expanded ? AuroraColors.ink : const Color(0xfffffcf8),
+                color: expanded
+                    ? AgentAwesomeColors.ink
+                    : const Color(0xfffffcf8),
                 width: expanded ? 2.4 : 2,
               ),
               shape: BoxShape.circle,
@@ -3206,10 +3237,12 @@ class _PositionedTerrainCluster extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: expanded
-                  ? AuroraColors.green
+                  ? AgentAwesomeColors.green
                   : color.withValues(alpha: 0.9),
               border: Border.all(
-                color: expanded ? AuroraColors.ink : const Color(0xfffffcf8),
+                color: expanded
+                    ? AgentAwesomeColors.ink
+                    : const Color(0xfffffcf8),
                 width: expanded ? 2.4 : 2,
               ),
               shape: BoxShape.circle,
@@ -3279,13 +3312,15 @@ class _ConstellationPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = selected ? 3.2 : 1
         ..strokeCap = StrokeCap.round
-        ..color = AuroraColors.green.withValues(alpha: selected ? 0.82 : 0.1);
+        ..color = AgentAwesomeColors.green.withValues(
+          alpha: selected ? 0.82 : 0.1,
+        );
       if (selected) {
         final halo = Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 8
           ..strokeCap = StrokeCap.round
-          ..color = AuroraColors.green.withValues(alpha: 0.14);
+          ..color = AgentAwesomeColors.green.withValues(alpha: 0.14);
         canvas.drawLine(anchor.center, node.center, halo);
       }
       canvas.drawLine(anchor.center, node.center, paint);
@@ -3397,7 +3432,7 @@ class _TerrainPainter extends CustomPainter {
         TextSpan(
           text: zone.definition.description,
           style: TextStyle(
-            color: AuroraColors.muted.withValues(alpha: 0.72),
+            color: AgentAwesomeColors.muted.withValues(alpha: 0.72),
             fontSize: 10,
             fontWeight: FontWeight.w700,
           ),
@@ -3416,7 +3451,7 @@ class _TerrainPainter extends CustomPainter {
   /// Paints quiet reward and pressure score axes.
   void _paintAxes(Canvas canvas) {
     final paint = Paint()
-      ..color = AuroraColors.border.withValues(alpha: 0.42)
+      ..color = AgentAwesomeColors.border.withValues(alpha: 0.42)
       ..strokeWidth = 1;
     canvas.drawLine(
       Offset(
@@ -3458,7 +3493,7 @@ class _TerrainPainter extends CustomPainter {
       text: TextSpan(
         text: label,
         style: TextStyle(
-          color: AuroraColors.muted.withValues(alpha: 0.72),
+          color: AgentAwesomeColors.muted.withValues(alpha: 0.72),
           fontSize: 10,
           fontWeight: FontWeight.w800,
         ),
@@ -3476,7 +3511,10 @@ class _TerrainPainter extends CustomPainter {
 }
 
 /// Returns an empty-state label with projection loading detail when available.
-String _emptyProjectionLabel(AuroraAppController controller, String fallback) {
+String _emptyProjectionLabel(
+  AgentAwesomeAppController controller,
+  String fallback,
+) {
   final message = _firstNonEmpty(<String>[
     controller.taskInsightMessage.trim(),
     controller.taskProjectionMessage.trim(),
@@ -3573,7 +3611,7 @@ Color _categoryColor(String category) {
     return const Color(0xffd99a22);
   }
   if (normalized.contains('work')) {
-    return AuroraColors.green;
+    return AgentAwesomeColors.green;
   }
   if (normalized.contains('health')) {
     return const Color(0xff5f87b4);
@@ -3581,27 +3619,27 @@ Color _categoryColor(String category) {
   if (normalized.contains('personal')) {
     return const Color(0xff7b6398);
   }
-  return AuroraColors.border;
+  return AgentAwesomeColors.border;
 }
 
 /// Returns a color for a constellation edge.
 Color _edgeColor(TaskConstellationEdge edge) {
   if (edge.source == 'query_path') {
-    return AuroraColors.green;
+    return AgentAwesomeColors.green;
   }
   if (edge.source == 'critical_path') {
-    return AuroraColors.coral;
+    return AgentAwesomeColors.coral;
   }
   if (edge.source == 'materialized_risk') {
     return const Color(0xff7b6398);
   }
   if (edge.relationType == 'depends_on' || edge.relationType == 'blocks') {
-    return AuroraColors.coral;
+    return AgentAwesomeColors.coral;
   }
   if (edge.source == 'explicit') {
-    return AuroraColors.green;
+    return AgentAwesomeColors.green;
   }
-  return AuroraColors.muted;
+  return AgentAwesomeColors.muted;
 }
 
 /// Returns whether a constellation edge should be visually emphasized.

@@ -142,7 +142,7 @@ class _CommandBarHarness extends StatelessWidget {
       home: Scaffold(
         body: CommandBar(
           commandController: commandController,
-          appController: AuroraAppController(config: _testConfig()),
+          appController: AgentAwesomeAppController(config: _testConfig()),
           commandContext: (text, {String profilePath = ''}) => CommandContext(
             section: AppSections.backlog,
             area: 'Stream',

@@ -30,7 +30,7 @@ class TaskStreamCanvas extends StatefulWidget {
   final List<TaskStreamLink> links;
 
   /// Shared app controller for task selection.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Dimension used for left-side row ordering.
   final TaskStreamAxisDimension rowAxis;
@@ -89,7 +89,7 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: const Color(0xfffffcf8),
-              border: Border.all(color: AuroraColors.border),
+              border: Border.all(color: AgentAwesomeColors.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -125,7 +125,7 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
                     ],
                   ),
                 ),
-                const Divider(height: 1, color: AuroraColors.border),
+                const Divider(height: 1, color: AgentAwesomeColors.border),
                 Expanded(child: _buildScrollableBody(layout)),
               ],
             ),
@@ -164,7 +164,7 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
                 ),
               ),
             ),
-            const VerticalDivider(width: 1, color: AuroraColors.border),
+            const VerticalDivider(width: 1, color: AgentAwesomeColors.border),
             Expanded(
               child: Scrollbar(
                 controller: _bodyHorizontal,
@@ -1214,7 +1214,7 @@ class TaskStreamCanvasPainter extends CustomPainter {
   /// Paints vertical timeline dividers.
   void _paintColumnGuides(Canvas canvas) {
     final paint = Paint()
-      ..color = AuroraColors.border.withValues(alpha: 0.56)
+      ..color = AgentAwesomeColors.border.withValues(alpha: 0.56)
       ..strokeWidth = 1;
     for (final column in layout.columns) {
       canvas.drawLine(
@@ -1319,7 +1319,7 @@ class TaskStreamCanvasPainter extends CustomPainter {
   /// Returns the semantic color for one relation curve.
   Color _linkColor(TaskStreamLinkPlacement link) {
     if (link.link.transitionType == 'blocks') {
-      return AuroraColors.coral;
+      return AgentAwesomeColors.coral;
     }
     if (link.link.streamId.isNotEmpty) {
       return _streamRouteColor(link.link.streamId, link.from.row.color);
@@ -1457,7 +1457,7 @@ class _StreamRowLabel extends StatelessWidget {
                     row.subtitle,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       fontSize: 11,
                     ),
                   ),
@@ -1486,7 +1486,7 @@ class _StreamColumnHeader extends StatelessWidget {
           column.title.toUpperCase(),
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: AuroraColors.muted,
+            color: AgentAwesomeColors.muted,
             fontSize: 12,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.6,
@@ -1496,7 +1496,10 @@ class _StreamColumnHeader extends StatelessWidget {
           Text(
             column.subtitle,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AuroraColors.muted, fontSize: 11),
+            style: const TextStyle(
+              color: AgentAwesomeColors.muted,
+              fontSize: 11,
+            ),
           ),
       ],
     );
@@ -1526,7 +1529,7 @@ class _StreamFocusControls extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8).withValues(alpha: 0.92),
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
         boxShadow: <BoxShadow>[
           BoxShadow(
@@ -1594,16 +1597,16 @@ class _StreamFocusButton extends StatelessWidget {
           height: 30,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: selected ? AuroraColors.greenSoft : Colors.transparent,
+            color: selected ? AgentAwesomeColors.greenSoft : Colors.transparent,
             border: Border.all(
-              color: selected ? AuroraColors.green : Colors.transparent,
+              color: selected ? AgentAwesomeColors.green : Colors.transparent,
             ),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(
             icon,
             size: 17,
-            color: selected ? AuroraColors.green : AuroraColors.ink,
+            color: selected ? AgentAwesomeColors.green : AgentAwesomeColors.ink,
           ),
         ),
       ),
@@ -1635,7 +1638,7 @@ class _StreamTaskCard extends StatelessWidget {
     final card = placement.card;
     final row = placement.row;
     final emphasized = selected || focused;
-    final borderColor = emphasized ? AuroraColors.green : row.color;
+    final borderColor = emphasized ? AgentAwesomeColors.green : row.color;
     return Tooltip(
       message: card.explanation,
       child: AnimatedOpacity(
@@ -1650,7 +1653,9 @@ class _StreamTaskCard extends StatelessWidget {
               vertical: compact ? 6 : 8,
             ),
             decoration: BoxDecoration(
-              color: emphasized ? AuroraColors.greenSoft : AuroraColors.surface,
+              color: emphasized
+                  ? AgentAwesomeColors.greenSoft
+                  : AgentAwesomeColors.surface,
               border: Border.all(color: borderColor, width: emphasized ? 2 : 1),
               borderRadius: BorderRadius.circular(8),
               boxShadow: <BoxShadow>[
@@ -1685,7 +1690,7 @@ class _StreamTaskCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: AuroraColors.muted,
+                          color: AgentAwesomeColors.muted,
                           fontSize: 11,
                         ),
                       ),
@@ -1733,7 +1738,7 @@ class _StreamUrgentDot extends StatelessWidget {
   Widget build(BuildContext context) {
     return const DecoratedBox(
       decoration: BoxDecoration(
-        color: AuroraColors.coral,
+        color: AgentAwesomeColors.coral,
         shape: BoxShape.circle,
       ),
       child: SizedBox.square(dimension: 8),

@@ -1,4 +1,4 @@
-/// Owns Aurora UI state and coordinates service clients.
+/// Owns Agent Awesome UI state and coordinates service clients.
 library;
 
 import 'dart:async';
@@ -86,10 +86,10 @@ class RuntimeProfileFileEntry {
   final bool active;
 }
 
-/// AuroraAppController stores app state and service orchestration.
-class AuroraAppController extends ChangeNotifier {
+/// AgentAwesomeAppController stores app state and service orchestration.
+class AgentAwesomeAppController extends ChangeNotifier {
   /// Creates the app controller and its service clients.
-  factory AuroraAppController({
+  factory AgentAwesomeAppController({
     required AppConfig config,
     ProcessSupervisor? processSupervisor,
     AssistantClient? assistantClient,
@@ -98,7 +98,7 @@ class AuroraAppController extends ChangeNotifier {
     LocalServiceSupervisor? localServices,
     LocalModelRuntime? localModels,
     ConfigFileStore? configFiles,
-    AuroraAppSettingsStore? appSettingsStore,
+    AgentAwesomeAppSettingsStore? appSettingsStore,
     ChatHistoryStore? chatHistoryStore,
     CredentialStore? credentialStore,
     ChatTitleClient? titleClient,
@@ -116,7 +116,7 @@ class AuroraAppController extends ChangeNotifier {
     final commandRunner = ProcessSupervisorCommandRunner(
       effectiveProcessSupervisor,
     );
-    return AuroraAppController._(
+    return AgentAwesomeAppController._(
       config: config,
       processSupervisor: effectiveProcessSupervisor,
       logger: effectiveLogger,
@@ -159,7 +159,8 @@ class AuroraAppController extends ChangeNotifier {
             processSupervisor: effectiveProcessSupervisor,
           ),
       configFiles: configFiles ?? const ConfigFileStore(),
-      appSettingsStore: appSettingsStore ?? const AuroraAppSettingsStore(),
+      appSettingsStore:
+          appSettingsStore ?? const AgentAwesomeAppSettingsStore(),
       chatHistoryStore: chatHistoryStore ?? const ChatHistoryStore(),
       credentialStore:
           credentialStore ?? CredentialStore(commandRunner: commandRunner),
@@ -179,7 +180,7 @@ class AuroraAppController extends ChangeNotifier {
   }
 
   /// Creates the controller after dependencies have been resolved once.
-  AuroraAppController._({
+  AgentAwesomeAppController._({
     required this.config,
     required this.processSupervisor,
     required this.logger,
@@ -231,7 +232,7 @@ class AuroraAppController extends ChangeNotifier {
   final ConfigFileStore configFiles;
 
   /// Store for app-owned settings.
-  final AuroraAppSettingsStore appSettingsStore;
+  final AgentAwesomeAppSettingsStore appSettingsStore;
 
   /// Store for local cross-profile chat metadata.
   final ChatHistoryStore chatHistoryStore;
@@ -273,7 +274,7 @@ class AuroraAppController extends ChangeNotifier {
   List<ConfigFileEntry> availableToolConfigs = const <ConfigFileEntry>[];
 
   /// App-specific settings outside runtime profile ownership.
-  AuroraAppSettings appSettings = const AuroraAppSettings();
+  AgentAwesomeAppSettings appSettings = const AgentAwesomeAppSettings();
 
   Future<void>? _initialization;
   bool _initialized = false;
@@ -461,7 +462,7 @@ class AuroraAppController extends ChangeNotifier {
   /// Rejects work that could start subprocesses during shutdown.
   void _throwIfClosing() {
     if (_isClosing) {
-      throw StateError('Aurora runtime is shutting down');
+      throw StateError('Agent Awesome runtime is shutting down');
     }
   }
 
@@ -521,7 +522,7 @@ class AuroraAppController extends ChangeNotifier {
     ];
     notifyListeners();
     if (_isClosing) {
-      statusMessage = 'Aurora runtime is shutting down';
+      statusMessage = 'Agent Awesome runtime is shutting down';
       _initialized = true;
       notifyListeners();
       return;
@@ -553,7 +554,7 @@ class AuroraAppController extends ChangeNotifier {
       await _startConfiguredLocalModelRuntime();
     } catch (error) {
       if (_isClosing) {
-        statusMessage = 'Aurora runtime is shutting down';
+        statusMessage = 'Agent Awesome runtime is shutting down';
         _initialized = true;
         notifyListeners();
         return;
@@ -781,7 +782,7 @@ class AuroraAppController extends ChangeNotifier {
   }
 
   /// Saves app-owned settings.
-  Future<void> saveAppSettings(AuroraAppSettings settings) async {
+  Future<void> saveAppSettings(AgentAwesomeAppSettings settings) async {
     appSettings = settings;
     await appSettingsStore.save(settings);
     statusMessage = 'App settings saved';
@@ -845,7 +846,7 @@ class AuroraAppController extends ChangeNotifier {
     if (_isClosing) {
       return const OnboardingModelSetupResult(
         success: false,
-        message: 'Aurora runtime is shutting down',
+        message: 'Agent Awesome runtime is shutting down',
       );
     }
     final provider = onboardingCloudProviderById(providerId);
@@ -890,7 +891,7 @@ class AuroraAppController extends ChangeNotifier {
     if (_isClosing) {
       return const OnboardingModelSetupResult(
         success: false,
-        message: 'Aurora runtime is shutting down',
+        message: 'Agent Awesome runtime is shutting down',
         providerName: 'Local model',
       );
     }
@@ -907,7 +908,7 @@ class AuroraAppController extends ChangeNotifier {
       _throwIfClosing();
       executable = await const LocalModelExecutableResolver().resolve(
         configuredExecutable: config.litertLmExecutable,
-        dataDirectory: auroraDataDirectoryPath(),
+        dataDirectory: agentAwesomeDataDirectoryPath(),
       );
     } catch (error) {
       return OnboardingModelSetupResult(
@@ -2490,7 +2491,7 @@ class AuroraAppController extends ChangeNotifier {
       await memoryClient.saveMemoryCandidate(
         draft: draft,
         idempotencyKey:
-            'aurora-ui:${DateTime.now().microsecondsSinceEpoch}:${draft.title}',
+            'agent_awesome_ui:${DateTime.now().microsecondsSinceEpoch}:${draft.title}',
       );
       memoryMessage = 'Memory candidate saved';
       _setEndpoint(
@@ -4533,7 +4534,7 @@ class AuroraAppController extends ChangeNotifier {
   Future<bool> _ensureChatRuntimeReady() async {
     await _ensureInitialized();
     if (_isClosing) {
-      statusMessage = 'Aurora runtime is shutting down';
+      statusMessage = 'Agent Awesome runtime is shutting down';
       notifyListeners();
       return false;
     }
@@ -4573,15 +4574,15 @@ class AuroraAppController extends ChangeNotifier {
     }
     for (final status in localProcessStatuses) {
       if (status.name == profile.harness.label && status.message.isNotEmpty) {
-        return 'Aurora could not start the managed harness: ${status.message}';
+        return 'Agent Awesome could not start the managed harness: ${status.message}';
       }
     }
     for (final status in endpointStatuses) {
       if (status.name == 'Agent API' && status.message.isNotEmpty) {
-        return 'Aurora could not reach the managed Agent API: ${status.message}';
+        return 'Agent Awesome could not reach the managed Agent API: ${status.message}';
       }
     }
-    return 'Aurora is still preparing the managed Agent API.';
+    return 'Agent Awesome is still preparing the managed Agent API.';
   }
 
   Future<void> _streamRun({
@@ -4720,7 +4721,7 @@ class AuroraAppController extends ChangeNotifier {
     return ChatMessage(
       id: event.id,
       role: role,
-      author: role == ChatRole.user ? 'You' : 'Aurora',
+      author: role == ChatRole.user ? 'You' : 'Agent Awesome',
       text: text,
       createdAt: DateTime.now(),
       isPartial: event.partial,

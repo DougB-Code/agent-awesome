@@ -250,7 +250,7 @@ class AssistantClient {
   ) {
     final part = confirmation == null
         ? <String, dynamic>{
-            'text': messageTextWithRuntimePolicy(text, sessionId: sessionId),
+            'text': messageTextForAgent(text, sessionId: sessionId),
           }
         : <String, dynamic>{
             'functionResponse': <String, dynamic>{
@@ -339,7 +339,7 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
           toolActivity = ToolActivity(
             name: name,
             status: 'requested',
-            summary: 'Aurora requested $name',
+            summary: 'Agent Awesome requested $name',
           );
         }
       }
@@ -369,7 +369,7 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
       event['id'],
       fallback: DateTime.now().microsecondsSinceEpoch.toString(),
     ),
-    author: stringFrom(event['author'], fallback: 'Aurora'),
+    author: stringFrom(event['author'], fallback: 'Agent Awesome'),
     text: text,
     partial: event['partial'] == true,
     toolActivity: toolActivity,
@@ -409,59 +409,78 @@ ConfirmationRequest parseConfirmation(Map<String, dynamic> functionCall) {
     callId: stringFrom(functionCall['id']),
     hint: stringFrom(
       confirmation['hint'],
-      fallback: 'Aurora wants to use a tool.',
+      fallback: 'Agent Awesome wants to use a tool.',
     ),
     options: options,
     toolName: stringFrom(originalCallMap['name']),
   );
 }
 
-/// Prefix that carries local UI policy to stale or long-running agents.
+/// Prefix used to strip persisted runtime policy text from older transcripts.
 const String runtimePolicyPrefix =
-    '[[AGENT_AWESOME_RUNTIME_POLICY: Graph-backed task management is auto-approved. '
-    'When Doug asks to create, update, complete, cancel, delete, or link a '
-    'task, call the task tool immediately. Do not ask for '
-    'approval. Treat "remember that I need to..." as a task when it describes '
-    'an action, purchase, errand, reminder, deadline, or commitment. Ask only '
-    'for missing task details that block execution.]]\n\n';
+    '[[AGENT_AWESOME_RUNTIME_POLICY: legacy persisted policy]]\n\n';
 
-/// Prefix for per-run session metadata hidden from the transcript.
+/// Prefix used to strip persisted session metadata from older transcripts.
 const String runtimeSessionContextPrefix = '[[AGENT_AWESOME_SESSION_CONTEXT:';
 
 /// Prefix that marks UI-generated policy repair turns as non-display content.
 const String hiddenRuntimeMessagePrefix =
     '[[AGENT_AWESOME_HIDDEN_RUNTIME_MESSAGE]]\n';
 
-/// Adds the runtime policy prefix to user messages sent to the agent.
-String messageTextWithRuntimePolicy(String text, {String sessionId = ''}) {
-  if (text.trim().isEmpty || text.startsWith(runtimePolicyPrefix)) {
-    return text;
-  }
-  final trimmedSessionId = sessionId.trim();
-  final sessionContext = trimmedSessionId.isEmpty
-      ? ''
-      : '$runtimeSessionContextPrefix Current chat session id is '
-            '"$trimmedSessionId". For create_task calls made '
-            'from this chat, include an idempotency_key beginning with '
-            '"personal_pilot:$trimmedSessionId:".]]\n\n';
-  return '$runtimePolicyPrefix$sessionContext$text';
+/// Prefixes for runtime policy blocks that should never render in chat.
+///
+/// The AURORA entries are intentional old-transcript migration filters.
+const List<String> _runtimePolicyPrefixes = <String>[
+  '[[AGENT_AWESOME_RUNTIME_POLICY:',
+  '[[AURORA_RUNTIME_POLICY:',
+];
+
+/// Prefixes for runtime session blocks that should never render in chat.
+///
+/// The AURORA entries are intentional old-transcript migration filters.
+const List<String> _runtimeSessionContextPrefixes = <String>[
+  runtimeSessionContextPrefix,
+  '[[AURORA_SESSION_CONTEXT:',
+];
+
+/// Prefixes for hidden repair turns that should never render in chat.
+///
+/// The AURORA entry is an intentional old-transcript migration filter.
+const List<String> _hiddenRuntimeMessagePrefixes = <String>[
+  hiddenRuntimeMessagePrefix,
+  '[[AURORA_HIDDEN_RUNTIME_MESSAGE]]\n',
+];
+
+/// Local model control-token fragments that should never render in chat.
+const List<String> _localToolMarkupFragments = <String>[
+  '<|tool_call>',
+  '<|/tool_call|>',
+  '<tool_call|>',
+];
+
+/// Returns user text without adding UI-owned runtime policy instructions.
+String messageTextForAgent(String text, {String sessionId = ''}) {
+  return text;
 }
 
 /// Removes local runtime policy wrappers before messages are displayed.
 String displayTextFromRuntimePolicy(String text) {
   var visible = text;
   while (visible.isNotEmpty) {
-    if (visible.startsWith(hiddenRuntimeMessagePrefix)) {
+    if (_startsWithAny(visible, _hiddenRuntimeMessagePrefixes)) {
       return '';
     }
     final stripped = _stripLeadingControlBlock(visible, <String>[
-      '[[AGENT_AWESOME_RUNTIME_POLICY:',
-      runtimeSessionContextPrefix,
+      ..._runtimePolicyPrefixes,
+      ..._runtimeSessionContextPrefixes,
     ]);
     if (stripped == visible) {
       break;
     }
     visible = stripped;
+  }
+  if (_looksLikeLocalToolMarkup(visible)) {
+    return '';
   }
   return visible;
 }
@@ -481,6 +500,12 @@ String _stripLeadingControlBlock(String text, List<String> prefixes) {
     return '';
   }
   return text.substring(end + 2).trimLeft();
+}
+
+/// Reports whether text appears to contain local model tool-call control markup.
+bool _looksLikeLocalToolMarkup(String text) {
+  final trimmed = text.trimLeft();
+  return _localToolMarkupFragments.any(trimmed.contains);
 }
 
 /// Converts a dynamic value to a string.

@@ -1,4 +1,4 @@
-/// Provides the global command bar and quick-access menu for Aurora.
+/// Provides the global command bar and quick-access menu for Agent Awesome.
 library;
 
 import 'dart:async';
@@ -35,7 +35,7 @@ class CommandBar extends StatefulWidget {
   final TextEditingController commandController;
 
   /// App state used to populate quick-access shortcuts.
-  final AuroraAppController appController;
+  final AgentAwesomeAppController appController;
 
   /// Current screen context used by plain Enter commands.
   final CommandContext Function(String text, {String profilePath})
@@ -104,8 +104,8 @@ class _CommandBarState extends State<CommandBar> {
     return Container(
       height: _height,
       decoration: const BoxDecoration(
-        color: AuroraColors.surface,
-        border: Border(bottom: BorderSide(color: AuroraColors.border)),
+        color: AgentAwesomeColors.surface,
+        border: Border(bottom: BorderSide(color: AgentAwesomeColors.border)),
       ),
       child: Row(
         children: <Widget>[
@@ -507,16 +507,20 @@ class _SetupStatusButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18),
           decoration: const BoxDecoration(
             color: Color(0xfffff7ef),
-            border: Border(right: BorderSide(color: AuroraColors.border)),
+            border: Border(right: BorderSide(color: AgentAwesomeColors.border)),
           ),
           child: const Row(
             children: <Widget>[
-              Icon(Icons.error_outline, color: AuroraColors.coral, size: 20),
+              Icon(
+                Icons.error_outline,
+                color: AgentAwesomeColors.coral,
+                size: 20,
+              ),
               SizedBox(width: 8),
               Text(
                 'Setup incomplete',
                 style: TextStyle(
-                  color: AuroraColors.green,
+                  color: AgentAwesomeColors.green,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -553,11 +557,13 @@ class _CommandInputFrame extends StatelessWidget {
       padding: const EdgeInsets.only(left: 22, right: 8),
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8),
-        border: const Border(right: BorderSide(color: AuroraColors.border)),
+        border: const Border(
+          right: BorderSide(color: AgentAwesomeColors.border),
+        ),
       ),
       child: Row(
         children: <Widget>[
-          const Icon(Icons.search, color: AuroraColors.muted),
+          const Icon(Icons.search, color: AgentAwesomeColors.muted),
           const SizedBox(width: 14),
           Expanded(
             child: Shortcuts(
@@ -605,14 +611,14 @@ class _CommandInputFrame extends StatelessWidget {
           const Text(
             'Enter',
             style: TextStyle(
-              color: AuroraColors.muted,
+              color: AgentAwesomeColors.muted,
               fontSize: 11,
               fontWeight: FontWeight.w800,
             ),
           ),
           IconButton.filled(
             style: IconButton.styleFrom(
-              backgroundColor: AuroraColors.coral,
+              backgroundColor: AgentAwesomeColors.coral,
               foregroundColor: Colors.white,
               fixedSize: const Size(46, 46),
               shape: RoundedRectangleBorder(
@@ -666,13 +672,13 @@ class _CommandIconButton extends StatelessWidget {
           height: size,
           width: size,
           decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: AuroraColors.border)),
+            border: Border(left: BorderSide(color: AgentAwesomeColors.border)),
           ),
           child: Icon(
             icon,
             color: onTap == null
-                ? AuroraColors.muted.withValues(alpha: 0.45)
-                : AuroraColors.muted,
+                ? AgentAwesomeColors.muted.withValues(alpha: 0.45)
+                : AgentAwesomeColors.muted,
           ),
         ),
       ),

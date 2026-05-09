@@ -9,11 +9,16 @@ import (
 
 var runtimeHiddenPrefixes = []string{
 	"[[AGENT_AWESOME_HIDDEN_RUNTIME_MESSAGE]]",
+	// Legacy Aurora markers are stripped only when reading old persisted text.
+	"[[AURORA_HIDDEN_RUNTIME_MESSAGE]]",
 }
 
 var runtimeControlPrefixes = []string{
 	"[[AGENT_AWESOME_RUNTIME_POLICY:",
 	"[[AGENT_AWESOME_SESSION_CONTEXT:",
+	// Legacy Aurora markers are stripped only when reading old persisted text.
+	"[[AURORA_RUNTIME_POLICY:",
+	"[[AURORA_SESSION_CONTEXT:",
 }
 
 // contentText extracts sanitized text from all textual content parts.

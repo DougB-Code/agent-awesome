@@ -1,4 +1,4 @@
-/// Provides reusable panel primitives for Aurora section workspaces.
+/// Provides reusable panel primitives for Agent Awesome section workspaces.
 library;
 
 import 'dart:async';
@@ -96,7 +96,7 @@ class PanelCollapseButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints.tightFor(width: 34, height: 34),
         onPressed: onPressed,
-        icon: Icon(_icon, color: AuroraColors.muted, size: 20),
+        icon: Icon(_icon, color: AgentAwesomeColors.muted, size: 20),
       ),
     );
   }
@@ -303,7 +303,7 @@ class _SplitPanelDivider extends StatelessWidget {
       child: VerticalDivider(
         width: 1,
         thickness: 1,
-        color: AuroraColors.border,
+        color: AgentAwesomeColors.border,
       ),
     );
   }
@@ -341,13 +341,13 @@ class _SplitPanelHandleState extends State<_SplitPanelHandle> {
             const VerticalDivider(
               width: 1,
               thickness: 1,
-              color: AuroraColors.border,
+              color: AgentAwesomeColors.border,
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               curve: Curves.easeOut,
               width: _active ? 4 : 0,
-              color: AuroraColors.green,
+              color: AgentAwesomeColors.green,
             ),
           ],
         ),
@@ -587,9 +587,9 @@ class SearchPickerDropdown<T> extends StatelessWidget {
         child: OutlinedButton(
           style: OutlinedButton.styleFrom(
             alignment: Alignment.centerLeft,
-            backgroundColor: AuroraColors.surface,
-            foregroundColor: AuroraColors.ink,
-            side: const BorderSide(color: AuroraColors.border),
+            backgroundColor: AgentAwesomeColors.surface,
+            foregroundColor: AgentAwesomeColors.ink,
+            side: const BorderSide(color: AgentAwesomeColors.border),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -677,7 +677,7 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
     return Dialog(
       alignment: Alignment.topCenter,
       insetPadding: const EdgeInsets.only(top: 90, left: 24, right: 24),
-      backgroundColor: AuroraColors.surface,
+      backgroundColor: AgentAwesomeColors.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520, maxHeight: 560),
@@ -698,25 +698,29 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
                   prefixIcon: const Icon(
                     Icons.search,
                     size: 18,
-                    color: AuroraColors.muted,
+                    color: AgentAwesomeColors.muted,
                   ),
                   prefixIconConstraints: const BoxConstraints(minWidth: 36),
                   hintText: 'Search...',
-                  hintStyle: const TextStyle(color: AuroraColors.muted),
+                  hintStyle: const TextStyle(color: AgentAwesomeColors.muted),
                   filled: true,
                   fillColor: const Color(0xfffffcf8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AuroraColors.border),
+                    borderSide: const BorderSide(
+                      color: AgentAwesomeColors.border,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AuroraColors.border),
+                    borderSide: const BorderSide(
+                      color: AgentAwesomeColors.border,
+                    ),
                   ),
                 ),
               ),
             ),
-            const Divider(height: 1, color: AuroraColors.border),
+            const Divider(height: 1, color: AgentAwesomeColors.border),
             Flexible(
               child: options.isEmpty
                   ? Center(
@@ -724,7 +728,9 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
                         padding: const EdgeInsets.all(28),
                         child: Text(
                           widget.emptyLabel,
-                          style: const TextStyle(color: AuroraColors.muted),
+                          style: const TextStyle(
+                            color: AgentAwesomeColors.muted,
+                          ),
                         ),
                       ),
                     )
@@ -825,7 +831,7 @@ class _SearchPickerOptionTile<T> extends StatelessWidget {
     return ListTile(
       leading: Icon(
         selected ? Icons.check_circle : option.icon,
-        color: selected ? AuroraColors.green : AuroraColors.muted,
+        color: selected ? AgentAwesomeColors.green : AgentAwesomeColors.muted,
       ),
       title: Text(
         option.title,
@@ -837,7 +843,7 @@ class _SearchPickerOptionTile<T> extends StatelessWidget {
           : Text(
               option.subtitle,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AuroraColors.muted),
+              style: const TextStyle(color: AgentAwesomeColors.muted),
             ),
       trailing: onDelete == null
           ? null
@@ -1025,7 +1031,7 @@ class _CollectionSwitcherPanelState<T>
                                 titleText,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                  color: AuroraColors.muted,
+                                  color: AgentAwesomeColors.muted,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 3,
@@ -1040,7 +1046,7 @@ class _CollectionSwitcherPanelState<T>
                                     titleText,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      color: AuroraColors.muted,
+                                      color: AgentAwesomeColors.muted,
                                       fontSize: 13,
                                       fontWeight: FontWeight.w900,
                                       letterSpacing: 3,
@@ -1168,27 +1174,29 @@ class _CollectionSwitcherPanelState<T>
                       prefixIcon: const Icon(
                         Icons.search,
                         size: 18,
-                        color: AuroraColors.muted,
+                        color: AgentAwesomeColors.muted,
                       ),
                       prefixIconConstraints: const BoxConstraints(minWidth: 36),
                       hintText: widget.filterHint,
-                      hintStyle: const TextStyle(color: AuroraColors.muted),
+                      hintStyle: const TextStyle(
+                        color: AgentAwesomeColors.muted,
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12,
                         vertical: 10,
                       ),
                       filled: true,
-                      fillColor: AuroraColors.surface,
+                      fillColor: AgentAwesomeColors.surface,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                          color: AuroraColors.border,
+                          color: AgentAwesomeColors.border,
                         ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                          color: AuroraColors.border,
+                          color: AgentAwesomeColors.border,
                         ),
                       ),
                     ),
@@ -1197,7 +1205,7 @@ class _CollectionSwitcherPanelState<T>
               ],
             ),
           ),
-          const Divider(height: 1, color: AuroraColors.border),
+          const Divider(height: 1, color: AgentAwesomeColors.border),
           Expanded(
             child: selectedItem == null
                 ? _CollectionEmptyState(
@@ -1332,8 +1340,8 @@ class _CollectionPanelSelect<T> extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AuroraColors.surface,
-          border: Border.all(color: AuroraColors.border),
+          color: AgentAwesomeColors.surface,
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
@@ -1381,14 +1389,17 @@ class _CollectionDropdownLabel<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Icon(item.icon, size: 16, color: AuroraColors.muted),
+        Icon(item.icon, size: 16, color: AgentAwesomeColors.muted),
         const SizedBox(width: 8),
         Expanded(child: Text(item.label, softWrap: false)),
         if (item.badge.isNotEmpty) ...<Widget>[
           const SizedBox(width: 8),
           Text(
             item.badge,
-            style: const TextStyle(color: AuroraColors.green, fontSize: 11),
+            style: const TextStyle(
+              color: AgentAwesomeColors.green,
+              fontSize: 11,
+            ),
           ),
         ],
       ],
@@ -1421,16 +1432,22 @@ class _CollectionQuickSelect extends StatelessWidget {
           height: 36,
           width: 36,
           decoration: BoxDecoration(
-            color: selected ? AuroraColors.greenSoft : AuroraColors.panel,
+            color: selected
+                ? AgentAwesomeColors.greenSoft
+                : AgentAwesomeColors.panel,
             border: Border.all(
-              color: selected ? AuroraColors.green : AuroraColors.border,
+              color: selected
+                  ? AgentAwesomeColors.green
+                  : AgentAwesomeColors.border,
             ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
             icon,
             size: 18,
-            color: selected ? AuroraColors.green : AuroraColors.muted,
+            color: selected
+                ? AgentAwesomeColors.green
+                : AgentAwesomeColors.muted,
           ),
         ),
       ),
@@ -1478,7 +1495,7 @@ class _CollectionEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Text(label, style: const TextStyle(color: AuroraColors.muted)),
+          Text(label, style: const TextStyle(color: AgentAwesomeColors.muted)),
           if (onCreate != null) ...<Widget>[
             const SizedBox(height: 12),
             FilledButton.icon(
@@ -1507,7 +1524,7 @@ class PanelEmptyState extends StatelessWidget {
     return Center(
       child: Text(
         'No results for "$query"',
-        style: const TextStyle(color: AuroraColors.muted),
+        style: const TextStyle(color: AgentAwesomeColors.muted),
       ),
     );
   }
@@ -1580,12 +1597,12 @@ class MenuPanel extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: AuroraColors.muted),
+                  style: const TextStyle(color: AgentAwesomeColors.muted),
                 ),
               ],
             ),
           ),
-          const Divider(height: 1, color: AuroraColors.border),
+          const Divider(height: 1, color: AgentAwesomeColors.border),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(16),
@@ -1627,9 +1644,13 @@ class _MenuPanelTile extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: selected ? AuroraColors.greenSoft : AuroraColors.surface,
+            color: selected
+                ? AgentAwesomeColors.greenSoft
+                : AgentAwesomeColors.surface,
             border: Border.all(
-              color: selected ? AuroraColors.green : AuroraColors.border,
+              color: selected
+                  ? AgentAwesomeColors.green
+                  : AgentAwesomeColors.border,
             ),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -1637,7 +1658,9 @@ class _MenuPanelTile extends StatelessWidget {
             children: <Widget>[
               Icon(
                 item.icon,
-                color: selected ? AuroraColors.green : AuroraColors.muted,
+                color: selected
+                    ? AgentAwesomeColors.green
+                    : AgentAwesomeColors.muted,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1653,12 +1676,12 @@ class _MenuPanelTile extends StatelessWidget {
                       item.detail,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AuroraColors.muted),
+                      style: const TextStyle(color: AgentAwesomeColors.muted),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: AuroraColors.muted),
+              const Icon(Icons.chevron_right, color: AgentAwesomeColors.muted),
             ],
           ),
         ),
@@ -1682,7 +1705,7 @@ class PanelSectionBlock extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8),
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
@@ -1704,7 +1727,7 @@ class PanelSectionLabel extends StatelessWidget {
       label.toUpperCase(),
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(
-        color: AuroraColors.muted,
+        color: AgentAwesomeColors.muted,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 3,
@@ -1727,15 +1750,15 @@ class PanelBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: AuroraColors.panel,
-        border: Border.all(color: AuroraColors.border),
+        color: AgentAwesomeColors.panel,
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
-          color: AuroraColors.green,
+          color: AgentAwesomeColors.green,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -1760,7 +1783,7 @@ class PanelEmptyBlock extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8),
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Center(
@@ -1768,7 +1791,7 @@ class PanelEmptyBlock extends StatelessWidget {
           padding: const EdgeInsets.all(22),
           child: SelectableText(
             label,
-            style: const TextStyle(color: AuroraColors.muted),
+            style: const TextStyle(color: AgentAwesomeColors.muted),
           ),
         ),
       ),
@@ -1803,16 +1826,16 @@ class StatusRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (state) {
-      ConnectionStateKind.connected => AuroraColors.green,
-      ConnectionStateKind.disconnected => AuroraColors.coral,
-      ConnectionStateKind.unknown => AuroraColors.muted,
+      ConnectionStateKind.connected => AgentAwesomeColors.green,
+      ConnectionStateKind.disconnected => AgentAwesomeColors.coral,
+      ConnectionStateKind.unknown => AgentAwesomeColors.muted,
     };
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8),
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -1833,7 +1856,7 @@ class StatusRow extends StatelessWidget {
             child: Text(
               message,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: AuroraColors.muted),
+              style: const TextStyle(color: AgentAwesomeColors.muted),
             ),
           ),
         ],

@@ -1,11 +1,7 @@
 // This file tests gateway configuration parsing and safety validation.
 package config
 
-import (
-	"testing"
-
-	"agentgateway/internal/policy"
-)
+import "testing"
 
 // TestFromFlagsDerivesDefaultHealthURLs verifies local dependency health defaults.
 func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
@@ -133,15 +129,15 @@ func TestRuntimePolicyTextCanBeConfigured(t *testing.T) {
 	}
 }
 
-// TestRuntimePolicyTextDefaults verifies the gateway supplies production policy.
-func TestRuntimePolicyTextDefaults(t *testing.T) {
+// TestRuntimePolicyTextDefaultsEmpty verifies policy injection is opt-in.
+func TestRuntimePolicyTextDefaultsEmpty(t *testing.T) {
 	clearGatewayAuthEnv(t)
 	cfg, err := FromFlags(nil)
 	if err != nil {
 		t.Fatalf("FromFlags() error = %v", err)
 	}
-	if cfg.RuntimePolicyText != policy.DefaultRuntimePolicyText {
-		t.Fatalf("RuntimePolicyText = %q, want default policy", cfg.RuntimePolicyText)
+	if cfg.RuntimePolicyText != "" {
+		t.Fatalf("RuntimePolicyText = %q, want empty default", cfg.RuntimePolicyText)
 	}
 }
 

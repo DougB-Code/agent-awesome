@@ -24,14 +24,14 @@ type AgentClient struct {
 	policy  *policy.Injector
 }
 
-// NewAgentClient creates an ADK REST client with the default runtime policy.
+// NewAgentClient creates an ADK REST client without gateway policy injection.
 func NewAgentClient(client *http.Client, baseURL string, appName string, userID string) *AgentClient {
 	return NewAgentClientWithPolicy(
 		client,
 		baseURL,
 		appName,
 		userID,
-		policy.NewInjector(policy.Config{Text: policy.DefaultRuntimePolicyText}),
+		policy.NewInjector(policy.Config{}),
 	)
 }
 
@@ -229,9 +229,19 @@ func decodeAgentEvent(eventType string, data string) (string, error) {
 	}
 	var parts []string
 	for _, part := range event.Content.Parts {
-		if strings.TrimSpace(part.Text) != "" {
-			parts = append(parts, part.Text)
+		text := strings.TrimSpace(part.Text)
+		if text == "" || looksLikeLocalToolMarkup(text) {
+			continue
 		}
+		parts = append(parts, part.Text)
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n")), nil
+}
+
+// looksLikeLocalToolMarkup reports whether text contains local model control tokens.
+func looksLikeLocalToolMarkup(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	return strings.HasPrefix(trimmed, "<|tool_call>") ||
+		strings.Contains(trimmed, "<|tool_call>call:") ||
+		strings.Contains(trimmed, "<tool_call|>")
 }

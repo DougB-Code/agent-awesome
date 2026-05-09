@@ -15,6 +15,38 @@ import 'local_services.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';
 
+const List<String> _localToolArgumentFields = <String>[
+  'action',
+  'actor',
+  'assignee',
+  'confidence',
+  'context',
+  'description',
+  'due_at',
+  'effort',
+  'energy_required',
+  'estimate_minutes',
+  'follow_up_at',
+  'idempotency_key',
+  'location',
+  'note',
+  'owner',
+  'person',
+  'priority',
+  'project',
+  'risk',
+  'scheduled_at',
+  'source',
+  'status',
+  'task',
+  'text',
+  'title',
+  'topics',
+  'urgency',
+  'value',
+  'view',
+];
+
 /// LocalModelDescriptor describes one downloadable LiteRT-LM model artifact.
 class LocalModelDescriptor {
   /// Creates immutable metadata for a locally managed model.
@@ -257,7 +289,7 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     LocalModelExecutableResolver? executableResolver,
   }) : _processSupervisor = processSupervisor,
        _http = httpClient ?? http.Client(),
-       _dataDirectory = dataDirectory ?? auroraDataDirectoryPath(),
+       _dataDirectory = dataDirectory ?? agentAwesomeDataDirectoryPath(),
        _executableResolver =
            executableResolver ?? const LocalModelExecutableResolver();
 
@@ -860,12 +892,18 @@ class _LiteRtOpenAiServer {
     return payload.isEmpty ? null : payload;
   }
 
-  /// Parses call:name{arguments} payloads emitted by Gemma-family models.
+  /// Parses supported tool payloads emitted by Gemma-family models.
   _LocalModelToolCall? _parseToolCallPayload(String payload) {
-    final callPrefix = payload.startsWith('call:') ? 'call:' : '';
-    final body = callPrefix.isEmpty
-        ? payload
-        : payload.substring(callPrefix.length);
+    var body = payload.trim();
+    if (body.startsWith('call:')) {
+      body = body.substring('call:'.length).trim();
+    }
+    return _parseStandardToolCallPayload(body) ??
+        _parseWrappedToolCallPayload(body);
+  }
+
+  /// Parses name{arguments} local-model payloads.
+  _LocalModelToolCall? _parseStandardToolCallPayload(String body) {
     final argsStart = body.indexOf('{');
     final argsEnd = body.lastIndexOf('}');
     if (argsStart <= 0 || argsEnd <= argsStart) {
@@ -885,10 +923,27 @@ class _LiteRtOpenAiServer {
     );
   }
 
+  /// Parses Gemma's nested tool_call{tool_name{arguments}} wrapper.
+  _LocalModelToolCall? _parseWrappedToolCallPayload(String body) {
+    const wrapperPrefix = 'tool_call{';
+    final trimmed = body.trim();
+    if (!trimmed.startsWith(wrapperPrefix) || !trimmed.endsWith('}')) {
+      return null;
+    }
+    var inner = trimmed
+        .substring(wrapperPrefix.length, trimmed.length - 1)
+        .trim();
+    if (inner.startsWith('call:')) {
+      inner = inner.substring('call:'.length).trim();
+    }
+    return _parseStandardToolCallPayload(inner);
+  }
+
   /// Decodes JSON-like model output, accepting YAML flow maps as a fallback.
   Map<String, dynamic>? _decodeLooseObject(String text) {
+    final normalized = _normalizeGemmaToolObject(text);
     try {
-      final decoded = jsonDecode(text);
+      final decoded = jsonDecode(normalized);
       if (decoded is Map<String, dynamic>) {
         return decoded;
       }
@@ -896,15 +951,26 @@ class _LiteRtOpenAiServer {
       // Fall through to YAML for unquoted keys emitted by small local models.
     }
     try {
-      final decoded = loadYaml(text);
-      final normalized = _plainYamlValue(decoded);
-      if (normalized is Map<String, dynamic>) {
-        return normalized;
+      final decoded = loadYaml(normalized);
+      final plain = _plainYamlValue(decoded);
+      if (plain is Map<String, dynamic>) {
+        return plain;
       }
     } catch (_) {
       return null;
     }
     return null;
+  }
+
+  /// Normalizes LiteRT quote sentinels into YAML/JSON-compatible text.
+  String _normalizeGemmaToolObject(String text) {
+    var normalized = text.replaceAll('<|"|>', '"').replaceAll("<|'|>", "'");
+    for (final field in _localToolArgumentFields) {
+      normalized = normalized
+          .replaceAll('$field:"', '$field: "')
+          .replaceAll("$field:'", "$field: '");
+    }
+    return normalized;
   }
 
   /// Converts package:yaml collection types into plain Dart JSON values.

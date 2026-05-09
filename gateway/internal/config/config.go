@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"agentgateway/internal/policy"
 )
 
 // Config stores all runtime settings for one personal gateway process.
@@ -65,12 +63,12 @@ func FromFlags(args []string) (Config, error) {
 		ContextBaseURL:                   envString("AGENTAWESOME_CONTEXT_API_BASE_URL", "http://127.0.0.1:8081/api/context"),
 		ContextAPIToken:                  envString("AGENTAWESOME_CONTEXT_API_TOKEN", ""),
 		MemoryMCPURL:                     envString("AGENTAWESOME_MEMORY_MCP_URL", "http://127.0.0.1:8090/mcp"),
-		AppName:                          envString("AGENTAWESOME_APP_NAME", "personal_pilot"),
+		AppName:                          envString("AGENTAWESOME_APP_NAME", "agent_awesome"),
 		UserID:                           envString("AGENTAWESOME_USER_ID", "doug"),
 		AuthToken:                        envString("AGENTAWESOME_GATEWAY_TOKEN", ""),
 		AllowedOrigin:                    envString("AGENTAWESOME_ALLOWED_ORIGIN", ""),
 		AllowUnauthenticatedLoopbackOnly: envBool("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", true),
-		RuntimePolicyText:                envString("AGENTAWESOME_RUNTIME_POLICY_TEXT", policy.DefaultRuntimePolicyText),
+		RuntimePolicyText:                envString("AGENTAWESOME_RUNTIME_POLICY_TEXT", ""),
 		RequestTimeout:                   envDuration("AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT", 10*time.Minute),
 		ServiceStartTimeout:              envDuration("AGENTAWESOME_SERVICE_START_TIMEOUT", 30*time.Second),
 	}
@@ -114,7 +112,7 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "optional bearer token required for gateway API requests")
 	fs.StringVar(&cfg.AllowedOrigin, "allowed-origin", cfg.AllowedOrigin, "optional CORS origin for browser clients")
 	fs.BoolVar(&cfg.AllowUnauthenticatedLoopbackOnly, "allow-unauthenticated-loopback-only", cfg.AllowUnauthenticatedLoopbackOnly, "allow tokenless protected routes only when the gateway bind and CORS origin are loopback-only")
-	fs.StringVar(&cfg.RuntimePolicyText, "runtime-policy-text", cfg.RuntimePolicyText, "runtime policy text injected into ADK run requests")
+	fs.StringVar(&cfg.RuntimePolicyText, "runtime-policy-text", cfg.RuntimePolicyText, "optional operator policy text injected into ADK run requests")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "maximum upstream request duration")
 	fs.DurationVar(&cfg.ServiceStartTimeout, "service-start-timeout", cfg.ServiceStartTimeout, "maximum local service readiness wait")
 	fs.BoolVar(&cfg.Slack.Enabled, "slack-enabled", cfg.Slack.Enabled, "enable Slack channel adapter")

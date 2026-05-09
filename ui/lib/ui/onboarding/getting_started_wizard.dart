@@ -36,7 +36,7 @@ class GettingStartedWizard extends StatefulWidget {
   });
 
   /// Shared app controller.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Marks onboarding completed.
   final Future<void> Function() onComplete;
@@ -268,8 +268,8 @@ class _SetupFrame extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(36, 36, 36, 24),
       decoration: BoxDecoration(
-        color: AuroraColors.surface,
-        border: Border.all(color: AuroraColors.border),
+        color: AgentAwesomeColors.surface,
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(16),
         boxShadow: const <BoxShadow>[
           BoxShadow(
@@ -316,8 +316,8 @@ class _SetupStepper extends StatelessWidget {
                 height: 1,
                 margin: const EdgeInsets.only(bottom: 28),
                 color: current > index + 1
-                    ? AuroraColors.green
-                    : AuroraColors.border,
+                    ? AgentAwesomeColors.green
+                    : AgentAwesomeColors.border,
               ),
             ),
         ],
@@ -342,7 +342,9 @@ class _StepperItem extends StatelessWidget {
   /// Builds one step marker.
   @override
   Widget build(BuildContext context) {
-    final color = active || complete ? AuroraColors.green : AuroraColors.muted;
+    final color = active || complete
+        ? AgentAwesomeColors.green
+        : AgentAwesomeColors.muted;
     return Column(
       children: <Widget>[
         Container(
@@ -350,11 +352,13 @@ class _StepperItem extends StatelessWidget {
           width: 34,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: active || complete ? AuroraColors.green : Colors.transparent,
+            color: active || complete
+                ? AgentAwesomeColors.green
+                : Colors.transparent,
             border: Border.all(
               color: active || complete
-                  ? AuroraColors.green
-                  : AuroraColors.border,
+                  ? AgentAwesomeColors.green
+                  : AgentAwesomeColors.border,
             ),
           ),
           child: Center(
@@ -363,7 +367,7 @@ class _StepperItem extends StatelessWidget {
                 : Text(
                     number.toString(),
                     style: TextStyle(
-                      color: active ? Colors.white : AuroraColors.muted,
+                      color: active ? Colors.white : AgentAwesomeColors.muted,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -449,8 +453,8 @@ class _SetupChoiceCard extends StatelessWidget {
       height: 300,
       padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: AuroraColors.surface,
-        border: Border.all(color: AuroraColors.border),
+        color: AgentAwesomeColors.surface,
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -473,7 +477,7 @@ class _SetupChoiceCard extends StatelessWidget {
                 Text(
                   detail,
                   style: const TextStyle(
-                    color: AuroraColors.muted,
+                    color: AgentAwesomeColors.muted,
                     fontSize: 16,
                     height: 1.35,
                   ),
@@ -650,7 +654,7 @@ class _ApiKeySetup extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          const Divider(color: AuroraColors.border),
+          const Divider(color: AgentAwesomeColors.border),
           const SizedBox(height: 12),
           Row(
             children: <Widget>[
@@ -835,7 +839,7 @@ class _SystemCheckCard extends StatelessWidget {
       height: 196,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -855,7 +859,7 @@ class _SystemCheckCard extends StatelessWidget {
                 Text(
                   detail,
                   style: const TextStyle(
-                    color: AuroraColors.muted,
+                    color: AgentAwesomeColors.muted,
                     fontSize: 12,
                   ),
                 ),
@@ -894,7 +898,9 @@ class _LocalModelCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           border: Border.all(
-            color: selected ? AuroraColors.green : AuroraColors.border,
+            color: selected
+                ? AgentAwesomeColors.green
+                : AgentAwesomeColors.border,
             width: selected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(12),
@@ -906,7 +912,9 @@ class _LocalModelCard extends StatelessWidget {
               selected
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked,
-              color: selected ? AuroraColors.green : AuroraColors.muted,
+              color: selected
+                  ? AgentAwesomeColors.green
+                  : AgentAwesomeColors.muted,
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -933,7 +941,7 @@ class _LocalModelCard extends StatelessWidget {
                   Text(
                     model.detail,
                     style: const TextStyle(
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       fontSize: 13,
                     ),
                   ),
@@ -985,11 +993,11 @@ class _ModelMetadataChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(icon, size: 15, color: AuroraColors.muted),
+        Icon(icon, size: 15, color: AgentAwesomeColors.muted),
         const SizedBox(width: 5),
         Text(
           label,
-          style: const TextStyle(color: AuroraColors.muted, fontSize: 12),
+          style: const TextStyle(color: AgentAwesomeColors.muted, fontSize: 12),
         ),
       ],
     );
@@ -1047,7 +1055,7 @@ class _SetupButton extends StatelessWidget {
     ];
     final style = filled
         ? FilledButton.styleFrom(
-            backgroundColor: AuroraColors.green,
+            backgroundColor: AgentAwesomeColors.green,
             foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 17),
             shape: RoundedRectangleBorder(
@@ -1055,9 +1063,9 @@ class _SetupButton extends StatelessWidget {
             ),
           )
         : OutlinedButton.styleFrom(
-            foregroundColor: AuroraColors.green,
+            foregroundColor: AgentAwesomeColors.green,
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 17),
-            side: const BorderSide(color: AuroraColors.green),
+            side: const BorderSide(color: AgentAwesomeColors.green),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(999),
             ),
@@ -1091,7 +1099,7 @@ class _SetupFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: <Widget>[
-        const Divider(color: AuroraColors.border),
+        const Divider(color: AgentAwesomeColors.border),
         const SizedBox(height: 16),
         _InlineNote(icon: Icons.lock_outline, text: message),
       ],
@@ -1113,7 +1121,7 @@ class _SectionHeading extends StatelessWidget {
       children: <Widget>[
         Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
         const SizedBox(height: 4),
-        Text(subtitle, style: const TextStyle(color: AuroraColors.muted)),
+        Text(subtitle, style: const TextStyle(color: AgentAwesomeColors.muted)),
       ],
     );
   }
@@ -1131,10 +1139,13 @@ class _InlineNote extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Icon(icon, size: 18, color: AuroraColors.muted),
+        Icon(icon, size: 18, color: AgentAwesomeColors.muted),
         const SizedBox(width: 10),
         Flexible(
-          child: Text(text, style: const TextStyle(color: AuroraColors.muted)),
+          child: Text(
+            text,
+            style: const TextStyle(color: AgentAwesomeColors.muted),
+          ),
         ),
       ],
     );
@@ -1287,12 +1298,12 @@ class _LargeCircleIcon extends StatelessWidget {
       decoration: BoxDecoration(
         color: warning
             ? const Color(0xffffead6)
-            : AuroraColors.greenSoft.withValues(alpha: 0.82),
+            : AgentAwesomeColors.greenSoft.withValues(alpha: 0.82),
         shape: BoxShape.circle,
       ),
       child: Icon(
         icon,
-        color: warning ? const Color(0xffb85d00) : AuroraColors.green,
+        color: warning ? const Color(0xffb85d00) : AgentAwesomeColors.green,
       ),
     );
   }
@@ -1309,13 +1320,13 @@ class _SmallBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: AuroraColors.greenSoft,
+        color: AgentAwesomeColors.greenSoft,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: const TextStyle(
-          color: AuroraColors.green,
+          color: AgentAwesomeColors.green,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -1335,7 +1346,7 @@ class _SetupEyebrow extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: AuroraColors.coral,
+        color: AgentAwesomeColors.coral,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 6,
@@ -1349,18 +1360,18 @@ InputDecoration _setupInputDecoration(String label) {
   return InputDecoration(
     labelText: label,
     filled: true,
-    fillColor: AuroraColors.surface,
+    fillColor: AgentAwesomeColors.surface,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AuroraColors.border),
+      borderSide: const BorderSide(color: AgentAwesomeColors.border),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AuroraColors.border),
+      borderSide: const BorderSide(color: AgentAwesomeColors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AuroraColors.green),
+      borderSide: const BorderSide(color: AgentAwesomeColors.green),
     ),
   );
 }

@@ -13,16 +13,16 @@ class SetupWizardShell extends StatelessWidget {
   const SetupWizardShell({super.key, required this.controller});
 
   /// Shared app controller used to persist setup choices.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds the dedicated setup shell without workspace navigation.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AuroraColors.surface,
+      backgroundColor: AgentAwesomeColors.surface,
       body: SizedBox.expand(
         child: ColoredBox(
-          color: AuroraColors.surface,
+          color: AgentAwesomeColors.surface,
           child: Stack(
             children: <Widget>[
               Positioned.fill(

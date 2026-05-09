@@ -1,4 +1,4 @@
-/// Provides file-backed collections for editable Aurora configuration files.
+/// Provides file-backed collections for editable Agent Awesome configuration files.
 library;
 
 import 'dart:convert';

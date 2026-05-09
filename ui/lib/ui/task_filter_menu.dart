@@ -92,7 +92,7 @@ class TaskFilterMenuButton extends StatelessWidget {
           EdgeInsets.zero,
         ),
         backgroundColor: const WidgetStatePropertyAll<Color>(
-          AuroraColors.surface,
+          AgentAwesomeColors.surface,
         ),
         shape: WidgetStatePropertyAll<OutlinedBorder>(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -116,11 +116,15 @@ class TaskFilterMenuButton extends StatelessWidget {
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
               backgroundColor: active
-                  ? AuroraColors.green.withValues(alpha: 0.12)
-                  : AuroraColors.panel,
-              foregroundColor: active ? AuroraColors.green : AuroraColors.ink,
+                  ? AgentAwesomeColors.green.withValues(alpha: 0.12)
+                  : AgentAwesomeColors.panel,
+              foregroundColor: active
+                  ? AgentAwesomeColors.green
+                  : AgentAwesomeColors.ink,
               side: BorderSide(
-                color: active ? AuroraColors.green : AuroraColors.border,
+                color: active
+                    ? AgentAwesomeColors.green
+                    : AgentAwesomeColors.border,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -206,7 +210,7 @@ class _TaskFilterMenuPanelState extends State<_TaskFilterMenuPanel> {
                     widget.summary,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
@@ -224,7 +228,10 @@ class _TaskFilterMenuPanelState extends State<_TaskFilterMenuPanel> {
                   for (final section in visibleSections) ...<Widget>[
                     _TaskFilterSectionView(section: section),
                     if (section != visibleSections.last)
-                      const Divider(height: 18, color: AuroraColors.border),
+                      const Divider(
+                        height: 18,
+                        color: AgentAwesomeColors.border,
+                      ),
                   ],
               ],
             ),
@@ -284,24 +291,24 @@ class _TaskFilterSearchField extends StatelessWidget {
           prefixIcon: const Icon(
             Icons.search,
             size: 18,
-            color: AuroraColors.muted,
+            color: AgentAwesomeColors.muted,
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 36),
           hintText: 'Search filters...',
-          hintStyle: const TextStyle(color: AuroraColors.muted),
+          hintStyle: const TextStyle(color: AgentAwesomeColors.muted),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 9,
           ),
           filled: true,
-          fillColor: AuroraColors.panel,
+          fillColor: AgentAwesomeColors.panel,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AuroraColors.border),
+            borderSide: const BorderSide(color: AgentAwesomeColors.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AuroraColors.border),
+            borderSide: const BorderSide(color: AgentAwesomeColors.border),
           ),
         ),
       ),
@@ -320,7 +327,7 @@ class _TaskFilterNoMatches extends StatelessWidget {
       child: Text(
         'No matching filters',
         textAlign: TextAlign.center,
-        style: TextStyle(color: AuroraColors.muted),
+        style: TextStyle(color: AgentAwesomeColors.muted),
       ),
     );
   }
@@ -336,7 +343,7 @@ class _TaskFilterPanelTitle extends StatelessWidget {
       'FILTERS',
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
-        color: AuroraColors.muted,
+        color: AgentAwesomeColors.muted,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 2.4,
@@ -363,7 +370,7 @@ class _TaskFilterSectionView extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            Icon(source.icon, size: 16, color: AuroraColors.green),
+            Icon(source.icon, size: 16, color: AgentAwesomeColors.green),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -438,7 +445,9 @@ class _TaskFilterOptionRow extends StatelessWidget {
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
               size: 17,
-              color: selected ? AuroraColors.green : AuroraColors.muted,
+              color: selected
+                  ? AgentAwesomeColors.green
+                  : AgentAwesomeColors.muted,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -446,7 +455,9 @@ class _TaskFilterOptionRow extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected ? AuroraColors.green : AuroraColors.ink,
+                  color: selected
+                      ? AgentAwesomeColors.green
+                      : AgentAwesomeColors.ink,
                   fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
                 ),
               ),
@@ -459,7 +470,7 @@ class _TaskFilterOptionRow extends StatelessWidget {
                   detail,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: AuroraColors.muted,
+                    color: AgentAwesomeColors.muted,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),

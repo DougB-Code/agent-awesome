@@ -1,4 +1,4 @@
-/// Persists app-specific Aurora settings that are not runtime profile concerns.
+/// Persists app-specific Agent Awesome settings that are not runtime profile concerns.
 library;
 
 import 'dart:convert';
@@ -6,10 +6,10 @@ import 'dart:io';
 
 import 'runtime_profile.dart';
 
-/// AuroraAppSettings stores UI-owned defaults and app model choices.
-class AuroraAppSettings {
+/// AgentAwesomeAppSettings stores UI-owned defaults and app model choices.
+class AgentAwesomeAppSettings {
   /// Creates app settings for chat defaults and app-owned model work.
-  const AuroraAppSettings({
+  const AgentAwesomeAppSettings({
     this.defaultChatProfilePath = '',
     this.summaryModelConfigPath = '',
     this.summaryModelRef = '',
@@ -33,14 +33,14 @@ class AuroraAppSettings {
   final bool gettingStartedCompleted;
 
   /// Returns a copy with selected settings changed.
-  AuroraAppSettings copyWith({
+  AgentAwesomeAppSettings copyWith({
     String? defaultChatProfilePath,
     String? summaryModelConfigPath,
     String? summaryModelRef,
     bool? chatTitleSummariesEnabled,
     bool? gettingStartedCompleted,
   }) {
-    return AuroraAppSettings(
+    return AgentAwesomeAppSettings(
       defaultChatProfilePath:
           defaultChatProfilePath ?? this.defaultChatProfilePath,
       summaryModelConfigPath:
@@ -65,8 +65,8 @@ class AuroraAppSettings {
   }
 
   /// Parses settings from decoded JSON.
-  factory AuroraAppSettings.fromJson(Map<String, dynamic> json) {
-    return AuroraAppSettings(
+  factory AgentAwesomeAppSettings.fromJson(Map<String, dynamic> json) {
+    return AgentAwesomeAppSettings(
       defaultChatProfilePath: _stringValue(json['default_chat_profile']),
       summaryModelConfigPath: _stringValue(json['summary_model_config']),
       summaryModelRef: _stringValue(json['summary_model_ref']),
@@ -82,26 +82,26 @@ class AuroraAppSettings {
   }
 }
 
-/// AuroraAppSettingsStore reads and writes app-owned settings.
-class AuroraAppSettingsStore {
+/// AgentAwesomeAppSettingsStore reads and writes app-owned settings.
+class AgentAwesomeAppSettingsStore {
   /// Creates a settings store in the standard app config directory.
-  const AuroraAppSettingsStore();
+  const AgentAwesomeAppSettingsStore();
 
   /// Loads settings, returning defaults when no file exists yet.
-  Future<AuroraAppSettings> load() async {
+  Future<AgentAwesomeAppSettings> load() async {
     final file = File(appSettingsPath());
     if (!await file.exists()) {
-      return const AuroraAppSettings();
+      return const AgentAwesomeAppSettings();
     }
     final decoded = jsonDecode(await file.readAsString());
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('App settings must be a JSON object');
     }
-    return AuroraAppSettings.fromJson(decoded);
+    return AgentAwesomeAppSettings.fromJson(decoded);
   }
 
   /// Saves settings to disk.
-  Future<void> save(AuroraAppSettings settings) async {
+  Future<void> save(AgentAwesomeAppSettings settings) async {
     final file = File(appSettingsPath());
     await file.parent.create(recursive: true);
     const encoder = JsonEncoder.withIndent('  ');
@@ -111,7 +111,7 @@ class AuroraAppSettingsStore {
 
 /// Returns the app settings JSON path.
 String appSettingsPath() {
-  return '${auroraAppConfigDirectoryPath()}/app_settings.json';
+  return '${agentAwesomeAppConfigDirectoryPath()}/app_settings.json';
 }
 
 /// Converts a decoded setting value to a string.

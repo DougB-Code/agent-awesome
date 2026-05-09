@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"agentgateway/internal/config"
-	"agentgateway/internal/policy"
 	"agentgateway/internal/supervisor"
 )
 
@@ -315,8 +314,8 @@ func TestContextAPIProxyUsesConfiguredUpstreamToken(t *testing.T) {
 	}
 }
 
-// TestRunSSEProxyInjectsRuntimePolicy verifies gateway-owned policy injection.
-func TestRunSSEProxyInjectsRuntimePolicy(t *testing.T) {
+// TestRunSSEProxyDoesNotInjectRuntimePolicyByDefault verifies clean ADK runs.
+func TestRunSSEProxyDoesNotInjectRuntimePolicyByDefault(t *testing.T) {
 	harness := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/run_sse" {
 			t.Fatalf("harness path = %q, want /api/run_sse", r.URL.Path)
@@ -328,20 +327,19 @@ func TestRunSSEProxyInjectsRuntimePolicy(t *testing.T) {
 		message := decoded["newMessage"].(map[string]any)
 		parts := message["parts"].([]any)
 		text := parts[0].(map[string]any)["text"].(string)
-		if !strings.HasPrefix(text, policy.RuntimePolicyPrefix) {
-			t.Fatalf("text = %q, want Agent Awesome runtime policy prefix", text)
+		if text != "hello" {
+			t.Fatalf("text = %q, want gateway to leave user text unchanged", text)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer harness.Close()
 	server, err := NewServer(config.Config{
-		ListenAddress:     "127.0.0.1:0",
-		HarnessBaseURL:    harness.URL + "/api",
-		ContextBaseURL:    "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:      "http://127.0.0.1:2/mcp",
-		AppName:           "app",
-		UserID:            "user",
-		RuntimePolicyText: policy.DefaultRuntimePolicyText,
+		ListenAddress:  "127.0.0.1:0",
+		HarnessBaseURL: harness.URL + "/api",
+		ContextBaseURL: "http://127.0.0.1:3/api/context",
+		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
+		AppName:        "app",
+		UserID:         "user",
 	}, supervisor.New(0))
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)

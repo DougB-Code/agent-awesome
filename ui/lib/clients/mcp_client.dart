@@ -340,7 +340,7 @@ class MemoryClient {
   /// Saves a carefully reviewed memory candidate.
   Future<dynamic> saveMemoryCandidate({
     required MemoryCaptureDraft draft,
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
     String idempotencyKey = '',
   }) {
     return _rpc.callTool('save_memory_candidate', <String, dynamic>{
@@ -398,7 +398,7 @@ class MemoryClient {
     required String title,
     String entityId = '',
     String topic = '',
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final content = await _rpc
         .callTool('refresh_compiled_page', <String, dynamic>{
@@ -415,7 +415,7 @@ class MemoryClient {
   /// Applies explicit memory metadata repairs.
   Future<MemoryRecord> repairMemoryRecord({
     required MemoryRepairDraft draft,
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final arguments = <String, dynamic>{
       'actor': actor,
@@ -454,7 +454,7 @@ class MemoryClient {
     required String memoryId,
     required String text,
     required String scope,
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) {
     return _rpc.callTool('submit_memory_correction', <String, dynamic>{
       'actor': actor,
@@ -531,7 +531,7 @@ class TasksClient {
     TaskWorkBreakdown workBreakdown = const TaskWorkBreakdown(),
     double confidence = 0,
     List<TaskMemoryLinkDraft> memoryLinks = const <TaskMemoryLinkDraft>[],
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final arguments = <String, dynamic>{
       'actor': actor,
@@ -615,7 +615,7 @@ class TasksClient {
     String? source,
     TaskWorkBreakdown? workBreakdown,
     double? confidence,
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final arguments = <String, dynamic>{'task_id': taskId, 'actor': actor};
     if (title != null) {
@@ -682,7 +682,7 @@ class TasksClient {
   /// Marks an operational task complete.
   Future<WorkspaceTask> completeTask(
     String taskId, {
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final content = await _rpc.callTool('complete_task', <String, dynamic>{
       'task_id': taskId,
@@ -694,7 +694,7 @@ class TasksClient {
   /// Marks an operational task canceled.
   Future<WorkspaceTask> cancelTask(
     String taskId, {
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final content = await _rpc.callTool('cancel_task', <String, dynamic>{
       'task_id': taskId,
@@ -704,7 +704,10 @@ class TasksClient {
   }
 
   /// Permanently deletes an operational task.
-  Future<void> deleteTask(String taskId, {String actor = 'aurora-ui'}) async {
+  Future<void> deleteTask(
+    String taskId, {
+    String actor = 'agent_awesome_ui',
+  }) async {
     await _rpc.callTool('delete_task', <String, dynamic>{
       'task_id': taskId,
       'actor': actor,
@@ -748,7 +751,7 @@ class TasksClient {
     double confidence = 1,
     String source = 'explicit',
     String explanation = '',
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final content = await _rpc
         .callTool('upsert_task_relation', <String, dynamic>{
@@ -765,7 +768,7 @@ class TasksClient {
   /// Deletes one task relation.
   Future<void> deleteTaskRelation(
     String relationId, {
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     await _rpc.callTool('delete_task_relation', <String, dynamic>{
       'relation_id': relationId,
@@ -791,7 +794,7 @@ class TasksClient {
     String promiseSource = '',
     String hardness = '',
     String consequence = '',
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final arguments = <String, dynamic>{
       'task_id': taskId,
@@ -815,7 +818,7 @@ class TasksClient {
   /// Deletes one first-class task commitment.
   Future<void> deleteCommitment(
     String commitmentId, {
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     await _rpc.callTool('delete_commitment', <String, dynamic>{
       'commitment_id': commitmentId,
@@ -844,7 +847,7 @@ class TasksClient {
   /// Accepts one inferred task suggestion.
   Future<void> applyTaskSuggestion(
     String suggestionId, {
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     await _rpc.callTool('apply_task_suggestion', <String, dynamic>{
       'suggestion_id': suggestionId,
@@ -855,7 +858,7 @@ class TasksClient {
   /// Dismisses one inferred task suggestion.
   Future<void> dismissTaskSuggestion(
     String suggestionId, {
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     await _rpc.callTool('dismiss_task_suggestion', <String, dynamic>{
       'suggestion_id': suggestionId,

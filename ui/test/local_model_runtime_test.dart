@@ -194,7 +194,7 @@ void main() {
 if [ "\$1" = "--help" ]; then
   exit 0
 fi
-echo '<|tool_call>call:task_tool{action: "create", details: { "description": "Buy milk" }, idempotency_key: "personal_pilot:session:"}<tool_call|>'
+echo '<|tool_call>call:task_tool{action: "create", details: { "description": "Buy milk" }, idempotency_key: "agent_awesome:session:"}<tool_call|>'
 ''');
     await _makeExecutable(executable.path);
     final bytes = utf8.encode('installed local model');
@@ -257,7 +257,61 @@ echo '<|tool_call>call:task_tool{action: "create", details: { "description": "Bu
     expect(function['name'], 'create_task');
     final arguments = jsonDecode(function['arguments'].toString());
     expect(arguments['title'], 'Buy milk');
-    expect(arguments['idempotency_key'], 'personal_pilot:session:');
+    expect(arguments['idempotency_key'], 'agent_awesome:session:');
+
+    await executable.writeAsString('''
+#!/bin/sh
+if [ "\$1" = "--help" ]; then
+  exit 0
+fi
+echo '<|tool_call>call:tool_call{create_task{description:<|"|>Buy milk<|"|>,title:<|"|>Buy Milk<|"|>}}<tool_call|>'
+''');
+    await _makeExecutable(executable.path);
+
+    final nestedResponse = await http.post(
+      Uri.parse('http://127.0.0.1:$port/v1/chat/completions'),
+      headers: const <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'model': descriptor.modelName,
+        'messages': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'role': 'user',
+            'content': 'Make a reminder to buy milk',
+          },
+        ],
+        'tools': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'type': 'function',
+            'function': <String, dynamic>{
+              'name': 'create_task',
+              'description': 'Create a graph-backed task.',
+              'parameters': <String, dynamic>{
+                'type': 'object',
+                'properties': <String, dynamic>{
+                  'title': <String, dynamic>{'type': 'string'},
+                  'description': <String, dynamic>{'type': 'string'},
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(nestedResponse.statusCode, HttpStatus.ok);
+    final nestedDecoded =
+        jsonDecode(nestedResponse.body) as Map<String, dynamic>;
+    final nestedChoice =
+        (nestedDecoded['choices'] as List).single as Map<String, dynamic>;
+    expect(nestedChoice['finish_reason'], 'tool_calls');
+    final nestedMessage = nestedChoice['message'] as Map<String, dynamic>;
+    final nestedCalls = nestedMessage['tool_calls'] as List;
+    final nestedCall = nestedCalls.single as Map<String, dynamic>;
+    final nestedFunction = nestedCall['function'] as Map<String, dynamic>;
+    expect(nestedFunction['name'], 'create_task');
+    final nestedArguments = jsonDecode(nestedFunction['arguments'].toString());
+    expect(nestedArguments['title'], 'Buy Milk');
+    expect(nestedArguments['description'], 'Buy milk');
   });
 }
 

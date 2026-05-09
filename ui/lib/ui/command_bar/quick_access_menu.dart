@@ -75,8 +75,8 @@ class QuickAccessMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: AuroraColors.surface,
-        border: Border.all(color: AuroraColors.border),
+        color: AgentAwesomeColors.surface,
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
         boxShadow: const <BoxShadow>[
           BoxShadow(
@@ -116,7 +116,7 @@ class QuickAccessMenu extends StatelessWidget {
                 ),
               ),
             ),
-            const Divider(height: 1, color: AuroraColors.border),
+            const Divider(height: 1, color: AgentAwesomeColors.border),
             _QuickAccessFooter(onViewSettings: onViewSettings),
           ],
         ),
@@ -139,7 +139,7 @@ class _QuickAccessColumn extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            Icon(group.icon, size: 16, color: AuroraColors.green),
+            Icon(group.icon, size: 16, color: AgentAwesomeColors.green),
             const SizedBox(width: 8),
             Expanded(child: _QuickAccessLabel(group.title.toUpperCase())),
           ],
@@ -150,7 +150,10 @@ class _QuickAccessColumn extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
               group.emptyLabel,
-              style: const TextStyle(color: AuroraColors.muted, fontSize: 13),
+              style: const TextStyle(
+                color: AgentAwesomeColors.muted,
+                fontSize: 13,
+              ),
             ),
           )
         else
@@ -183,8 +186,8 @@ class _QuickAccessItem extends StatelessWidget {
               action.enabled ? action.icon : Icons.lock_outline,
               size: 18,
               color: action.enabled
-                  ? AuroraColors.muted
-                  : AuroraColors.muted.withValues(alpha: 0.52),
+                  ? AgentAwesomeColors.muted
+                  : AgentAwesomeColors.muted.withValues(alpha: 0.52),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -199,8 +202,8 @@ class _QuickAccessItem extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: action.enabled
-                          ? AuroraColors.ink
-                          : AuroraColors.muted.withValues(alpha: 0.62),
+                          ? AgentAwesomeColors.ink
+                          : AgentAwesomeColors.muted.withValues(alpha: 0.62),
                     ),
                   ),
                   if (action.detail.isNotEmpty)
@@ -209,7 +212,7 @@ class _QuickAccessItem extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        color: AuroraColors.muted,
+                        color: AgentAwesomeColors.muted,
                         fontSize: 12,
                       ),
                     ),
@@ -256,7 +259,7 @@ class _QuickAccessLabel extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        color: AuroraColors.green,
+        color: AgentAwesomeColors.green,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 4,

@@ -1,4 +1,4 @@
-/// Tests the primary Aurora workspace widgets.
+/// Tests the primary Agent Awesome workspace widgets.
 library;
 
 import 'package:agentawesome_ui/app/app_config.dart';
@@ -9,7 +9,7 @@ import 'package:agentawesome_ui/app/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:agentawesome_ui/domain/screen_command.dart';
-import 'package:agentawesome_ui/ui/aurora_shell.dart';
+import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +21,7 @@ void main() {
     final controller = _readyController();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
 
     expect(find.text('Live Workspace'), findsOneWidget);
@@ -36,7 +36,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final settingsStore = _MemoryAppSettingsStore();
-    final controller = AuroraAppController(
+    final controller = AgentAwesomeAppController(
       config: _testConfig(),
       appSettingsStore: settingsStore,
     );
@@ -91,10 +91,10 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final controller = _readyController();
-    controller.appSettings = const AuroraAppSettings();
+    controller.appSettings = const AgentAwesomeAppSettings();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
 
     expect(controller.hasConfiguredModel, isTrue);
@@ -149,7 +149,7 @@ void main() {
       ),
     ];
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.byTooltip('Settings'));
     await tester.pump();
@@ -322,7 +322,7 @@ void main() {
       ChatMessage(
         id: 'message-1',
         role: ChatRole.assistant,
-        author: 'Aurora',
+        author: 'Agent Awesome',
         text: 'Connected chat message. Done - created Follow up report.',
         createdAt: DateTime(2026, 4, 29, 9, 31),
       ),
@@ -336,14 +336,14 @@ void main() {
           title: 'Associated chat task',
           detail: 'Open',
           done: false,
-          idempotencyKey: 'personal_pilot:session-live:associated-chat-task',
+          idempotencyKey: 'agent_awesome:session-live:associated-chat-task',
         ),
         WorkspaceTask(
           id: 'task-unrelated',
           title: 'Unrelated chat task',
           detail: 'Open',
           done: false,
-          idempotencyKey: 'personal_pilot:other-session:unrelated-chat-task',
+          idempotencyKey: 'agent_awesome:other-session:unrelated-chat-task',
         ),
         WorkspaceTask(
           id: 'task-mentioned',
@@ -369,7 +369,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
@@ -389,7 +389,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byTooltip('Copy message'), findsOneWidget);
-    expect(find.text('Message Aurora in this chat...'), findsOneWidget);
+    expect(find.text('Message Agent Awesome in this chat...'), findsOneWidget);
     expect(
       find.text('Command current screen, Ctrl/Shift+Enter for chat...'),
       findsOneWidget,
@@ -454,7 +454,7 @@ void main() {
     final controller = _unconfiguredModelController();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
 
     expect(controller.hasConfiguredModel, isFalse);
@@ -488,7 +488,7 @@ void main() {
     controller.workspace = _memoryWorkspace();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Memory'));
     await tester.pumpAndSettle();
@@ -512,7 +512,7 @@ void main() {
         'Personal Memory: McpException: HTTP 401 from http://127.0.0.1:8070/api/context/tools/call';
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
 
     await tester.tap(find.text('Memory'));
@@ -546,7 +546,7 @@ void main() {
     final controller = _readyController();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
 
     await tester.tap(find.text('Files'));
@@ -627,7 +627,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Backlog').first);
     await tester.pumpAndSettle();
@@ -725,7 +725,7 @@ void main() {
       controller.backlogReviewPanelOpen = true;
 
       await tester.pumpWidget(
-        MaterialApp(home: AuroraShell(controller: controller)),
+        MaterialApp(home: AgentAwesomeShell(controller: controller)),
       );
       await tester.tap(find.text('Backlog').first);
       await tester.pumpAndSettle();
@@ -778,7 +778,7 @@ void main() {
     ];
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Backlog').first);
     await tester.pumpAndSettle();
@@ -819,7 +819,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Backlog').first);
     await tester.pumpAndSettle();
@@ -852,7 +852,7 @@ void main() {
     final controller = _readyController();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Workflows'));
     await tester.pumpAndSettle();
@@ -873,7 +873,7 @@ void main() {
     final controller = _readyController();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Workflows'));
     await tester.pumpAndSettle();
@@ -896,7 +896,7 @@ void main() {
     final controller = _readyController();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Workflows'));
     await tester.pumpAndSettle();
@@ -939,7 +939,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.text('Workflows'));
     await tester.pumpAndSettle();
@@ -962,7 +962,7 @@ void main() {
     final controller = _readyController();
 
     await tester.pumpWidget(
-      MaterialApp(home: AuroraShell(controller: controller)),
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     expect(tester.takeException(), isNull);
 
@@ -971,13 +971,13 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byIcon(Icons.menu), findsOneWidget);
-    expect(find.text('AURORA'), findsNothing);
+    expect(find.text('AGENT AWESOME'), findsNothing);
   });
 }
 
-AuroraAppController _readyController() {
-  final controller = AuroraAppController(config: _testConfig());
-  controller.appSettings = const AuroraAppSettings(
+AgentAwesomeAppController _readyController() {
+  final controller = AgentAwesomeAppController(config: _testConfig());
+  controller.appSettings = const AgentAwesomeAppSettings(
     gettingStartedCompleted: true,
   );
   controller.runtimeProfile = _settingsProfile();
@@ -1002,9 +1002,9 @@ AuroraAppController _readyController() {
   return controller;
 }
 
-AuroraAppController _unconfiguredModelController() {
-  final controller = AuroraAppController(config: _testConfig());
-  controller.appSettings = const AuroraAppSettings(
+AgentAwesomeAppController _unconfiguredModelController() {
+  final controller = AgentAwesomeAppController(config: _testConfig());
+  controller.appSettings = const AgentAwesomeAppSettings(
     gettingStartedCompleted: true,
   );
   controller.runtimeProfile = _settingsProfile();
@@ -1020,20 +1020,20 @@ AuroraAppController _unconfiguredModelController() {
   return controller;
 }
 
-class _MemoryAppSettingsStore extends AuroraAppSettingsStore {
+class _MemoryAppSettingsStore extends AgentAwesomeAppSettingsStore {
   _MemoryAppSettingsStore();
 
-  AuroraAppSettings saved = const AuroraAppSettings();
+  AgentAwesomeAppSettings saved = const AgentAwesomeAppSettings();
 
   /// Loads the latest in-memory app settings.
   @override
-  Future<AuroraAppSettings> load() async {
+  Future<AgentAwesomeAppSettings> load() async {
     return saved;
   }
 
   /// Saves app settings in memory for widget assertions.
   @override
-  Future<void> save(AuroraAppSettings settings) async {
+  Future<void> save(AgentAwesomeAppSettings settings) async {
     saved = settings;
   }
 }

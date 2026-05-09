@@ -129,7 +129,7 @@ cd /home/doug/dev/agentawesome/agent
   --harness-base-url http://127.0.0.1:8080/api \
   --context-base-url http://127.0.0.1:8081/api/context \
   --memory-mcp-url http://127.0.0.1:8090/mcp \
-  --app-name personal_pilot \
+  --app-name agent_awesome \
   --user-id doug
 ----
 

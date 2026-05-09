@@ -51,7 +51,7 @@ class BacklogQueuePanel extends StatelessWidget {
   });
 
   /// Shared app controller.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Reports the active backlog queue area to the app shell.
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
@@ -121,7 +121,7 @@ class BacklogInspectorPanel extends StatelessWidget {
   });
 
   /// Shared app controller.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Reports the active inspector area to the app shell.
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
@@ -180,7 +180,7 @@ class BacklogInspectorPanel extends StatelessWidget {
 class _BacklogReviewTitleControl extends StatelessWidget {
   const _BacklogReviewTitleControl({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds an inspector header action for returning to AI review.
   @override
@@ -205,7 +205,7 @@ class BacklogReviewPanel extends StatelessWidget {
   const BacklogReviewPanel({super.key, required this.controller});
 
   /// Shared app controller.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds the right-side AI change review surface.
   @override
@@ -262,7 +262,7 @@ class BacklogReviewPanel extends StatelessWidget {
 class _ScreenRunSummaryBlock extends StatelessWidget {
   const _ScreenRunSummaryBlock({required this.controller, required this.run});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ScreenCommandRun run;
 
   /// Builds summary counts for one screen-command run.
@@ -288,7 +288,7 @@ class _ScreenRunSummaryBlock extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             controller.screenCommandMessage,
-            style: const TextStyle(color: AuroraColors.muted),
+            style: const TextStyle(color: AgentAwesomeColors.muted),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -312,7 +312,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
     required this.change,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ScreenChange change;
 
   /// Builds one reviewable AI change card.
@@ -325,9 +325,13 @@ class _ScreenChangeReviewCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: focused ? AuroraColors.greenSoft : const Color(0xfffffcf8),
+          color: focused
+              ? AgentAwesomeColors.greenSoft
+              : const Color(0xfffffcf8),
           border: Border.all(
-            color: focused ? AuroraColors.green : AuroraColors.border,
+            color: focused
+                ? AgentAwesomeColors.green
+                : AgentAwesomeColors.border,
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -357,7 +361,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 change.reason,
-                style: const TextStyle(color: AuroraColors.muted),
+                style: const TextStyle(color: AgentAwesomeColors.muted),
               ),
             ],
             if (change.error.isNotEmpty) ...<Widget>[
@@ -365,7 +369,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
               Text(
                 change.error,
                 style: const TextStyle(
-                  color: AuroraColors.coral,
+                  color: AgentAwesomeColors.coral,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -446,7 +450,7 @@ class _ScreenChangeDiffList extends StatelessWidget {
     if (keys.isEmpty) {
       return Text(
         _screenChangeOperationLabel(change.operation),
-        style: const TextStyle(color: AuroraColors.muted),
+        style: const TextStyle(color: AgentAwesomeColors.muted),
       );
     }
     return Column(
@@ -463,7 +467,7 @@ class _ScreenChangeDiffList extends StatelessWidget {
                     _taskLabel(key.replaceAll('_', ' ')),
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -472,7 +476,7 @@ class _ScreenChangeDiffList extends StatelessWidget {
                   child: Text(
                     _screenValueLabel(change.beforeValues[key]),
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AuroraColors.muted),
+                    style: const TextStyle(color: AgentAwesomeColors.muted),
                   ),
                 ),
                 const Padding(
@@ -484,7 +488,7 @@ class _ScreenChangeDiffList extends StatelessWidget {
                     _screenValueLabel(change.afterValues[key]),
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AuroraColors.green,
+                      color: AgentAwesomeColors.green,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -545,7 +549,7 @@ class _TaskMemoryLinkScaffold extends StatelessWidget {
 class _BacklogQueueContent extends StatelessWidget {
   const _BacklogQueueContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   /// Builds the filtered operational backlog queue.
@@ -597,7 +601,7 @@ class _BacklogQueueContent extends StatelessWidget {
 class _TaskInsightPresetRow extends StatelessWidget {
   const _TaskInsightPresetRow({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds queue insight preset chips.
   @override
@@ -626,7 +630,7 @@ class _TaskInsightPresetRow extends StatelessWidget {
 
   /// Returns label with candidate count when the preset is semantic.
   String _presetLabel(
-    AuroraAppController controller,
+    AgentAwesomeAppController controller,
     TaskInsightPreset preset,
   ) {
     if (preset.id == TaskInsightIds.all) {
@@ -640,7 +644,7 @@ class _TaskInsightPresetRow extends StatelessWidget {
 class _TaskFilterBar extends StatelessWidget {
   const _TaskFilterBar({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Builds queue filter chips and context action controls.
   @override
@@ -822,16 +826,16 @@ class _TaskQueueTile extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected || focused
-              ? AuroraColors.greenSoft
+              ? AgentAwesomeColors.greenSoft
               : const Color(0xfffffcf8),
           border: Border.all(
             color: focused
-                ? AuroraColors.coral
+                ? AgentAwesomeColors.coral
                 : selected
-                ? AuroraColors.green
+                ? AgentAwesomeColors.green
                 : changes.isNotEmpty
                 ? const Color(0xffc98219)
-                : AuroraColors.border,
+                : AgentAwesomeColors.border,
             width: focused || changes.isNotEmpty ? 1.5 : 1,
           ),
           borderRadius: BorderRadius.circular(8),
@@ -878,7 +882,7 @@ class _TaskQueueTile extends StatelessWidget {
                           icon: const Icon(
                             Icons.delete_outline,
                             size: 17,
-                            color: AuroraColors.muted,
+                            color: AgentAwesomeColors.muted,
                           ),
                         ),
                       ),
@@ -890,7 +894,7 @@ class _TaskQueueTile extends StatelessWidget {
                       task.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AuroraColors.muted),
+                      style: const TextStyle(color: AgentAwesomeColors.muted),
                     ),
                   ],
                   const SizedBox(height: 10),
@@ -945,9 +949,9 @@ class _TaskPriorityBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: urgent ? const Color(0xffffefed) : AuroraColors.panel,
+        color: urgent ? const Color(0xffffefed) : AgentAwesomeColors.panel,
         border: Border.all(
-          color: urgent ? AuroraColors.coral : AuroraColors.border,
+          color: urgent ? AgentAwesomeColors.coral : AgentAwesomeColors.border,
         ),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -955,7 +959,7 @@ class _TaskPriorityBadge extends StatelessWidget {
         _taskLabel(priority),
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: urgent ? AuroraColors.coral : AuroraColors.green,
+          color: urgent ? AgentAwesomeColors.coral : AgentAwesomeColors.green,
           fontSize: 11,
           fontWeight: FontWeight.w900,
         ),
@@ -967,7 +971,7 @@ class _TaskPriorityBadge extends StatelessWidget {
 class _TaskCaptureContent extends StatefulWidget {
   const _TaskCaptureContent({required this.controller, required this.query});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String query;
 
   @override
@@ -1075,7 +1079,10 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
           ),
           if (_message.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
-            Text(_message, style: const TextStyle(color: AuroraColors.coral)),
+            Text(
+              _message,
+              style: const TextStyle(color: AgentAwesomeColors.coral),
+            ),
           ],
           const SizedBox(height: 14),
           FilledButton.icon(
@@ -1093,7 +1100,7 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
                 if (matches.isEmpty)
                   const Text(
                     'No nearby context',
-                    style: TextStyle(color: AuroraColors.muted),
+                    style: TextStyle(color: AgentAwesomeColors.muted),
                   )
                 else
                   for (final task in matches)
@@ -1169,7 +1176,7 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
 class _TaskDetailEditor extends StatefulWidget {
   const _TaskDetailEditor({required this.controller, required this.task});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   @override
@@ -1280,7 +1287,10 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
           ),
           if (_message.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
-            Text(_message, style: const TextStyle(color: AuroraColors.coral)),
+            Text(
+              _message,
+              style: const TextStyle(color: AgentAwesomeColors.coral),
+            ),
           ],
           const SizedBox(height: 14),
           Wrap(
@@ -1411,7 +1421,7 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
 class _TaskMetadataBlock extends StatelessWidget {
   const _TaskMetadataBlock({required this.controller, required this.task});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   /// Builds context metadata details.
@@ -1491,7 +1501,7 @@ class _TaskMetadataBlock extends StatelessWidget {
 class _TaskWbsBlock extends StatelessWidget {
   const _TaskWbsBlock({required this.controller, required this.task});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   /// Builds task WBS planning details.
@@ -1523,7 +1533,7 @@ class _TaskWbsBlock extends StatelessWidget {
           if (!hasContent)
             const Text(
               'No WBS metadata',
-              style: TextStyle(color: AuroraColors.muted),
+              style: TextStyle(color: AgentAwesomeColors.muted),
             )
           else ...<Widget>[
             _TaskMetadataRow(label: 'Code', value: workBreakdown.code),
@@ -1577,7 +1587,7 @@ class _TaskListRows extends StatelessWidget {
           Text(
             label,
             style: const TextStyle(
-              color: AuroraColors.muted,
+              color: AgentAwesomeColors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -1617,7 +1627,7 @@ class _TaskResourceRow extends StatelessWidget {
           const Icon(
             Icons.construction_outlined,
             size: 16,
-            color: AuroraColors.muted,
+            color: AgentAwesomeColors.muted,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -1632,7 +1642,7 @@ class _TaskResourceRow extends StatelessWidget {
                   Text(
                     details.join(' • '),
                     style: const TextStyle(
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       fontSize: 12,
                     ),
                   ),
@@ -1652,7 +1662,7 @@ class _TaskInsightDetailsBlock extends StatelessWidget {
     required this.task,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   /// Builds insight summary, unblock plan, handoff, and metadata gaps.
@@ -1677,7 +1687,7 @@ class _TaskInsightDetailsBlock extends StatelessWidget {
               scores: scores,
               candidates: candidates,
             ),
-            style: const TextStyle(color: AuroraColors.ink, height: 1.35),
+            style: const TextStyle(color: AgentAwesomeColors.ink, height: 1.35),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -1779,7 +1789,7 @@ class _TaskInsightDetailsBlock extends StatelessWidget {
 class _TaskGraphDetailsBlock extends StatelessWidget {
   const _TaskGraphDetailsBlock({required this.controller, required this.task});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   /// Builds relationship, suggestion, and commitment controls.
@@ -1912,7 +1922,10 @@ class _TaskGraphSubsection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         if (children.isEmpty)
-          Text(emptyLabel, style: const TextStyle(color: AuroraColors.muted))
+          Text(
+            emptyLabel,
+            style: const TextStyle(color: AgentAwesomeColors.muted),
+          )
         else
           ...children,
       ],
@@ -1926,7 +1939,7 @@ class _TaskMetadataSuggestionTile extends StatelessWidget {
     required this.suggestion,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final TaskMetadataSuggestion suggestion;
 
   /// Builds one inferred metadata suggestion row.
@@ -1973,7 +1986,7 @@ class _TaskCommitmentSuggestionTile extends StatelessWidget {
     required this.suggestion,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final TaskCommitmentSuggestion suggestion;
 
   /// Builds one inferred commitment suggestion row.
@@ -2025,7 +2038,7 @@ class _TaskConstellationEdgeInspector extends StatelessWidget {
     required this.edge,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final TaskConstellationEdge edge;
 
   /// Builds read-only details for a selected constellation edge.
@@ -2232,7 +2245,7 @@ class _TaskRelationSuggestionTile extends StatelessWidget {
     required this.suggestion,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
   final TaskRelationSuggestion suggestion;
 
@@ -2287,7 +2300,7 @@ class _TaskRelationTile extends StatelessWidget {
     required this.relation,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
   final TaskRelationRecord relation;
 
@@ -2342,7 +2355,7 @@ class _TaskCommitmentTile extends StatelessWidget {
     required this.commitment,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
   final TaskCommitment commitment;
 
@@ -2440,7 +2453,7 @@ class _TaskGraphRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(icon, size: 18, color: AuroraColors.green),
+          Icon(icon, size: 18, color: AgentAwesomeColors.green),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -2459,7 +2472,7 @@ class _TaskGraphRow extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       fontSize: 12,
                     ),
                   ),
@@ -2494,7 +2507,7 @@ class _TaskMemoryLinkPanel extends StatelessWidget {
     required this.query,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
   final String query;
 
@@ -2533,7 +2546,7 @@ class _TaskSelectedMemoryBlock extends StatelessWidget {
       child: record == null
           ? const Text(
               'No memory selected',
-              style: TextStyle(color: AuroraColors.muted),
+              style: TextStyle(color: AgentAwesomeColors.muted),
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -2543,7 +2556,7 @@ class _TaskSelectedMemoryBlock extends StatelessWidget {
                     const Icon(
                       Icons.chat_bubble_outline,
                       size: 17,
-                      color: AuroraColors.green,
+                      color: AgentAwesomeColors.green,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -2564,7 +2577,7 @@ class _TaskSelectedMemoryBlock extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       fontSize: 13,
                     ),
                   ),
@@ -2591,7 +2604,7 @@ class _TaskMemoryLinksBlock extends StatelessWidget {
           if (links.isEmpty)
             const Text(
               'No linked memory',
-              style: TextStyle(color: AuroraColors.muted),
+              style: TextStyle(color: AgentAwesomeColors.muted),
             )
           else
             for (final link in links)
@@ -2615,7 +2628,7 @@ class _TaskMemoryLinksBlock extends StatelessWidget {
                                 : link.memoryId,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: AuroraColors.muted,
+                              color: AgentAwesomeColors.muted,
                               fontSize: 12,
                             ),
                           ),
@@ -2653,7 +2666,7 @@ class _TaskPanelLabel extends StatelessWidget {
       label.toUpperCase(),
       overflow: TextOverflow.ellipsis,
       style: const TextStyle(
-        color: AuroraColors.muted,
+        color: AgentAwesomeColors.muted,
         fontSize: 11,
         fontWeight: FontWeight.w900,
         letterSpacing: 2.4,
@@ -2701,7 +2714,7 @@ class _TaskTileScreenChanges extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
-                            color: AuroraColors.green,
+                            color: AgentAwesomeColors.green,
                           ),
                         ),
                         if (change.afterValues.isNotEmpty)
@@ -2710,7 +2723,7 @@ class _TaskTileScreenChanges extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               fontSize: 12,
-                              color: AuroraColors.muted,
+                              color: AgentAwesomeColors.muted,
                             ),
                           ),
                       ],
@@ -2762,8 +2775,8 @@ class _TaskDropdown extends StatelessWidget {
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AuroraColors.surface,
-          border: Border.all(color: AuroraColors.border),
+          color: AgentAwesomeColors.surface,
+          border: Border.all(color: AgentAwesomeColors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
@@ -2818,14 +2831,14 @@ class _TaskTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: AuroraColors.surface,
+        fillColor: AgentAwesomeColors.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AuroraColors.border),
+          borderSide: const BorderSide(color: AgentAwesomeColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AuroraColors.border),
+          borderSide: const BorderSide(color: AgentAwesomeColors.border),
         ),
       ),
     );
@@ -2868,7 +2881,7 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
                 labelText: widget.label,
                 floatingLabelBehavior: FloatingLabelBehavior.always,
                 filled: true,
-                fillColor: AuroraColors.surface,
+                fillColor: AgentAwesomeColors.surface,
                 suffixIcon: IconButton(
                   tooltip: hasValue
                       ? 'Clear ${widget.label}'
@@ -2881,18 +2894,24 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AuroraColors.border),
+                  borderSide: const BorderSide(
+                    color: AgentAwesomeColors.border,
+                  ),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: AuroraColors.border),
+                  borderSide: const BorderSide(
+                    color: AgentAwesomeColors.border,
+                  ),
                 ),
               ),
               child: Text(
                 hasValue ? _datePickerFieldLabel(value) : 'Select date',
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: hasValue ? AuroraColors.ink : AuroraColors.muted,
+                  color: hasValue
+                      ? AgentAwesomeColors.ink
+                      : AgentAwesomeColors.muted,
                 ),
               ),
             ),
@@ -2969,7 +2988,7 @@ class _TaskMetadataRow extends StatelessWidget {
             child: Text(
               label,
               style: const TextStyle(
-                color: AuroraColors.muted,
+                color: AgentAwesomeColors.muted,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -2995,7 +3014,7 @@ class _TaskSelectionEmpty extends StatelessWidget {
     return const Center(
       child: Text(
         'Select a backlog item or list',
-        style: TextStyle(color: AuroraColors.muted),
+        style: TextStyle(color: AgentAwesomeColors.muted),
       ),
     );
   }
@@ -3004,7 +3023,7 @@ class _TaskSelectionEmpty extends StatelessWidget {
 /// Shows the graph metadata editing dialog.
 Future<void> _showTaskMetadataDialog(
   BuildContext context,
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
   WorkspaceTask task,
 ) async {
   await showDialog<void>(
@@ -3018,7 +3037,7 @@ Future<void> _showTaskMetadataDialog(
 class _TaskMetadataDialog extends StatefulWidget {
   const _TaskMetadataDialog({required this.controller, required this.task});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   @override
@@ -3156,7 +3175,7 @@ class _TaskMetadataDialogState extends State<_TaskMetadataDialog> {
                 const SizedBox(height: 10),
                 Text(
                   _message,
-                  style: const TextStyle(color: AuroraColors.coral),
+                  style: const TextStyle(color: AgentAwesomeColors.coral),
                 ),
               ],
             ],
@@ -3214,7 +3233,7 @@ class _TaskMetadataDialogState extends State<_TaskMetadataDialog> {
 /// Shows the WBS editing dialog.
 Future<void> _showTaskWbsDialog(
   BuildContext context,
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
   WorkspaceTask task,
 ) async {
   await showDialog<void>(
@@ -3228,7 +3247,7 @@ Future<void> _showTaskWbsDialog(
 class _TaskWbsDialog extends StatefulWidget {
   const _TaskWbsDialog({required this.controller, required this.task});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   @override
@@ -3353,7 +3372,7 @@ class _TaskWbsDialogState extends State<_TaskWbsDialog> {
                 const SizedBox(height: 10),
                 Text(
                   _message,
-                  style: const TextStyle(color: AuroraColors.coral),
+                  style: const TextStyle(color: AgentAwesomeColors.coral),
                 ),
               ],
             ],
@@ -3406,7 +3425,7 @@ class _TaskWbsDialogState extends State<_TaskWbsDialog> {
 /// Shows the backlog relation creation dialog.
 Future<void> _showTaskRelationDialog(
   BuildContext context,
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
   WorkspaceTask task,
 ) async {
   await showDialog<void>(
@@ -3420,7 +3439,7 @@ Future<void> _showTaskRelationDialog(
 class _TaskRelationDialog extends StatefulWidget {
   const _TaskRelationDialog({required this.controller, required this.task});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
   @override
@@ -3539,7 +3558,7 @@ class _TaskRelationDialogState extends State<_TaskRelationDialog> {
 /// Shows the commitment create or edit dialog.
 Future<void> _showTaskCommitmentDialog(
   BuildContext context,
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
   WorkspaceTask task, {
   TaskCommitment? commitment,
 }) async {
@@ -3562,7 +3581,7 @@ class _TaskCommitmentDialog extends StatefulWidget {
     this.commitment,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
   final TaskCommitment? commitment;
 
@@ -3690,7 +3709,7 @@ class _TaskCommitmentDialogState extends State<_TaskCommitmentDialog> {
 /// Shows the context creation dialog.
 Future<void> _showTaskCreateDialog(
   BuildContext context,
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
 ) async {
   await showDialog<void>(
     context: context,
@@ -3703,7 +3722,7 @@ Future<void> _showTaskCreateDialog(
 class _TaskCreateDialog extends StatefulWidget {
   const _TaskCreateDialog({required this.controller});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   @override
   State<_TaskCreateDialog> createState() => _TaskCreateDialogState();
@@ -3825,7 +3844,7 @@ bool _matchesTask(WorkspaceTask task, String query) {
 }
 
 /// Returns graph task ids for the active Queue insight preset.
-Set<String> _queuePresetTaskIds(AuroraAppController controller) {
+Set<String> _queuePresetTaskIds(AgentAwesomeAppController controller) {
   final presetId = controller.taskInsightPresetId;
   if (presetId == TaskInsightIds.all) {
     return const <String>{};
@@ -3838,7 +3857,7 @@ Set<String> _queuePresetTaskIds(AuroraAppController controller) {
 
 /// Returns compact insight badges for one queue backlog item.
 List<String> _insightBadgesForTask(
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
   WorkspaceTask task,
 ) {
   final taskId = task.id;
@@ -3983,20 +4002,20 @@ InputDecoration _taskDialogDecoration(String label) {
   return InputDecoration(
     labelText: label,
     filled: true,
-    fillColor: AuroraColors.surface,
+    fillColor: AgentAwesomeColors.surface,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AuroraColors.border),
+      borderSide: const BorderSide(color: AgentAwesomeColors.border),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AuroraColors.border),
+      borderSide: const BorderSide(color: AgentAwesomeColors.border),
     ),
   );
 }
 
 /// Resolves a task title for graph rows.
-String _taskTitleFor(AuroraAppController controller, String taskId) {
+String _taskTitleFor(AgentAwesomeAppController controller, String taskId) {
   final indexedTitle = controller.taskInsightIndex.titleForTaskId(taskId);
   if (indexedTitle != taskId) {
     return indexedTitle;
@@ -4016,7 +4035,7 @@ bool _isConstellationAnchorEndpoint(String id) {
 
 /// Resolves task and anchor endpoint labels for graph rows.
 String _constellationEndpointLabel(
-  AuroraAppController controller,
+  AgentAwesomeAppController controller,
   String endpointId,
 ) {
   if (_isConstellationAnchorEndpoint(endpointId)) {
@@ -4065,13 +4084,13 @@ IconData _screenChangeIcon(ScreenChange change) {
 /// Returns a color for one AI screen change status.
 Color _screenChangeColor(ScreenChange change) {
   return switch (change.status) {
-    ScreenChangeStatus.applied => AuroraColors.green,
+    ScreenChangeStatus.applied => AgentAwesomeColors.green,
     ScreenChangeStatus.rejected ||
-    ScreenChangeStatus.failed => AuroraColors.coral,
-    ScreenChangeStatus.undone => AuroraColors.muted,
+    ScreenChangeStatus.failed => AgentAwesomeColors.coral,
+    ScreenChangeStatus.undone => AgentAwesomeColors.muted,
     ScreenChangeStatus.proposed =>
       change.safety == ScreenChangeSafety.autoApply
-          ? AuroraColors.green
+          ? AgentAwesomeColors.green
           : const Color(0xffc98219),
   };
 }

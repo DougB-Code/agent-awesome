@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
 set(BINARY_NAME "agentawesome_ui")
-set(APPLICATION_ID "dev.agentawesome.aurora")
+set(APPLICATION_ID "dev.agentawesome.agent_awesome")
 
 cmake_policy(SET CMP0063 NEW)
 

@@ -201,11 +201,11 @@ ScreenChange _change({
 }
 
 /// Builds a controller with fake planner and task client dependencies.
-AuroraAppController _controller({
+AgentAwesomeAppController _controller({
   required ScreenCommandPlanner planner,
   required TasksClient tasksClient,
 }) {
-  final controller = AuroraAppController(
+  final controller = AgentAwesomeAppController(
     config: _testConfig(),
     screenCommandPlanner: planner,
     tasksClient: tasksClient,
@@ -411,7 +411,7 @@ class _FakeTasksClient extends TasksClient {
     String? source,
     TaskWorkBreakdown? workBreakdown,
     double? confidence,
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) async {
     final index = tasks.indexWhere((task) => task.id == taskId);
     if (index == -1) {
@@ -443,14 +443,17 @@ class _FakeTasksClient extends TasksClient {
   @override
   Future<WorkspaceTask> completeTask(
     String taskId, {
-    String actor = 'aurora-ui',
+    String actor = 'agent_awesome_ui',
   }) {
     return updateTask(taskId: taskId, status: 'done');
   }
 
   /// Deletes one fake task.
   @override
-  Future<void> deleteTask(String taskId, {String actor = 'aurora-ui'}) async {
+  Future<void> deleteTask(
+    String taskId, {
+    String actor = 'agent_awesome_ui',
+  }) async {
     tasks = tasks.where((task) => task.id != taskId).toList();
   }
 

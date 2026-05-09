@@ -32,7 +32,7 @@ enum CommandRouteKind {
   /// Send a screen-scoped command to structured AI planning.
   screenAi,
 
-  /// Send a screen-scoped instruction to Aurora.
+  /// Send a screen-scoped instruction to Agent Awesome.
   assistant,
 }
 

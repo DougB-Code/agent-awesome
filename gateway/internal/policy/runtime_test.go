@@ -9,7 +9,7 @@ import (
 
 // TestInjectAddsPolicyToTextRun verifies configured policy injection.
 func TestInjectAddsPolicyToTextRun(t *testing.T) {
-	injector := NewInjector(Config{Text: DefaultRuntimePolicyText})
+	injector := NewInjector(Config{Text: "Use the configured operator policy."})
 	body := []byte(`{"sessionId":"session-1","newMessage":{"role":"user","parts":[{"text":"remember deployment at 8pm"}]}}`)
 
 	next, changed, err := injector.Inject(body)
@@ -30,8 +30,8 @@ func TestInjectAddsPolicyToTextRun(t *testing.T) {
 	if !strings.HasPrefix(text, RuntimePolicyPrefix) {
 		t.Fatalf("text = %q, want runtime policy prefix", text)
 	}
-	if !strings.Contains(text, "agent_gateway:session-1:") {
-		t.Fatalf("text = %q, want gateway idempotency prefix", text)
+	if strings.Contains(text, "idempotency_key") {
+		t.Fatalf("text = %q, want no model-facing idempotency instructions", text)
 	}
 }
 
@@ -54,7 +54,7 @@ func TestInjectUsesConfiguredPolicyText(t *testing.T) {
 
 // TestInjectSkipsAlreadyInjectedPolicy verifies idempotent injection.
 func TestInjectSkipsAlreadyInjectedPolicy(t *testing.T) {
-	injector := NewInjector(Config{Text: DefaultRuntimePolicyText})
+	injector := NewInjector(Config{Text: "Use the configured operator policy."})
 	body := []byte(`{"newMessage":{"parts":[{"text":"[[AGENT_AWESOME_RUNTIME_POLICY: already here]]\n\nhello"}]}}`)
 
 	next, changed, err := injector.Inject(body)
@@ -71,7 +71,7 @@ func TestInjectSkipsAlreadyInjectedPolicy(t *testing.T) {
 
 // TestInjectLeavesConfirmationBodiesUntouched verifies non-text runs pass through.
 func TestInjectLeavesConfirmationBodiesUntouched(t *testing.T) {
-	injector := NewInjector(Config{Text: DefaultRuntimePolicyText})
+	injector := NewInjector(Config{Text: "Use the configured operator policy."})
 	body := []byte(`{"newMessage":{"parts":[{"functionResponse":{"name":"adk_request_confirmation"}}]}}`)
 
 	next, changed, err := injector.Inject(body)
@@ -100,5 +100,12 @@ func TestInjectDisabledWithoutPolicyText(t *testing.T) {
 	}
 	if string(next) != string(body) {
 		t.Fatalf("Inject() body changed")
+	}
+}
+
+// TestDefaultRuntimePolicyTextIsEmpty verifies policy injection is opt-in.
+func TestDefaultRuntimePolicyTextIsEmpty(t *testing.T) {
+	if DefaultRuntimePolicyText != "" {
+		t.Fatalf("DefaultRuntimePolicyText = %q, want empty", DefaultRuntimePolicyText)
 	}
 }

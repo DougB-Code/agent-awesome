@@ -573,8 +573,8 @@ class RuntimeProfileLoader {
     final contextApi = Uri.parse(config.agentContextApiBaseUrl);
     return <String, String>{
       'AGENTAWESOME_WORKSPACE_ROOT': config.workspaceRoot,
-      'AGENTAWESOME_CONFIG_DIR': auroraConfigDirectoryPath(),
-      'AGENTAWESOME_DATA_DIR': auroraDataDirectoryPath(),
+      'AGENTAWESOME_CONFIG_DIR': agentAwesomeConfigDirectoryPath(),
+      'AGENTAWESOME_DATA_DIR': agentAwesomeDataDirectoryPath(),
       'AGENT_API_BASE_URL': config.agentApiBaseUrl,
       'AGENT_API_PORT': _portString(agentApi, 8080),
       'AGENT_CONTEXT_API_BASE_URL': config.agentContextApiBaseUrl,
@@ -640,8 +640,8 @@ class RuntimeProfileLoader {
   }
 }
 
-/// Returns the Aurora app config directory for this operating system.
-String auroraAppConfigDirectoryPath() {
+/// Returns the Agent Awesome app config directory for this operating system.
+String agentAwesomeAppConfigDirectoryPath() {
   final override = Platform.environment['AGENTAWESOME_CONFIG_HOME']?.trim();
   if (override != null && override.isNotEmpty) {
     return override;
@@ -666,24 +666,24 @@ String auroraAppConfigDirectoryPath() {
   return '.agent-awesome';
 }
 
-/// Returns the directory where editable Aurora configuration files live.
-String auroraConfigDirectoryPath() {
-  return '${auroraAppConfigDirectoryPath()}/config';
+/// Returns the directory where editable Agent Awesome configuration files live.
+String agentAwesomeConfigDirectoryPath() {
+  return '${agentAwesomeAppConfigDirectoryPath()}/config';
 }
 
-/// Returns the directory where Aurora-owned data files live.
-String auroraDataDirectoryPath() {
-  return '${auroraAppConfigDirectoryPath()}/data';
+/// Returns the directory where Agent Awesome-owned data files live.
+String agentAwesomeDataDirectoryPath() {
+  return '${agentAwesomeAppConfigDirectoryPath()}/data';
 }
 
 /// Returns the directory where editable runtime profiles live.
 String runtimeProfilesDirectoryPath() {
-  return '${auroraConfigDirectoryPath()}/profiles';
+  return '${agentAwesomeConfigDirectoryPath()}/profiles';
 }
 
 /// Returns the directory where editable model config files live.
 String modelConfigsDirectoryPath() {
-  return '${auroraConfigDirectoryPath()}/models';
+  return '${agentAwesomeConfigDirectoryPath()}/models';
 }
 
 /// Returns the shared model config referenced by runtime profiles.
@@ -693,27 +693,27 @@ String defaultModelConfigPath() {
 
 /// Returns the directory where editable agent config files live.
 String agentConfigsDirectoryPath() {
-  return '${auroraConfigDirectoryPath()}/agents';
+  return '${agentAwesomeConfigDirectoryPath()}/agents';
 }
 
 /// Returns the directory where editable tool config files live.
 String toolConfigsDirectoryPath() {
-  return '${auroraConfigDirectoryPath()}/tools';
+  return '${agentAwesomeConfigDirectoryPath()}/tools';
 }
 
 /// Returns the directory where editable memory server config files live.
 String memoryServerConfigsDirectoryPath() {
-  return '${auroraConfigDirectoryPath()}/memory';
+  return '${agentAwesomeConfigDirectoryPath()}/memory';
 }
 
 /// Returns the default SQLite database path for local memory.
 String defaultMemoryDatabasePath() {
-  return '${auroraDataDirectoryPath()}/memory/memory.db';
+  return '${agentAwesomeDataDirectoryPath()}/memory/memory.db';
 }
 
 /// Returns the default sidecar data directory for local memory.
 String defaultMemoryDataDirectoryPath() {
-  return '${auroraDataDirectoryPath()}/memory/files';
+  return '${agentAwesomeDataDirectoryPath()}/memory/files';
 }
 
 /// Encodes a runtime profile as stable, human-editable JSON.

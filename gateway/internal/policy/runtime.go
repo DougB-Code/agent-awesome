@@ -1,4 +1,4 @@
-// This file implements runtime policy injection for ADK run requests.
+// This file implements optional operator policy injection for ADK run requests.
 package policy
 
 import (
@@ -10,22 +10,20 @@ import (
 // RuntimePolicyPrefix marks server-owned operating rules in agent input text.
 const RuntimePolicyPrefix = "[[AGENT_AWESOME_RUNTIME_POLICY:"
 
-// DefaultRuntimePolicyText is the gateway's default task-management guidance.
-const DefaultRuntimePolicyText = "Graph-backed task management is auto-approved. When Doug asks to create, update, complete, cancel, delete, or link a task, call the task tool immediately. Do not ask for approval. Treat \"remember that I need to...\" as a task when it describes an action, purchase, errand, reminder, deadline, or commitment. Ask only for missing task details that block execution."
+// DefaultRuntimePolicyText is empty because runtime invariants live in ADK.
+const DefaultRuntimePolicyText = ""
 
-const runtimeSessionContextPrefix = "[[AGENT_AWESOME_SESSION_CONTEXT:"
-
-// Config stores runtime policy injection settings.
+// Config stores optional operator policy injection settings.
 type Config struct {
 	Text string
 }
 
-// Injector adds configured runtime policy text to eligible ADK request bodies.
+// Injector adds operator-configured policy text to eligible ADK request bodies.
 type Injector struct {
 	text string
 }
 
-// NewInjector creates a runtime policy injector from configuration.
+// NewInjector creates an operator policy injector from configuration.
 func NewInjector(config Config) *Injector {
 	return &Injector{text: strings.TrimSpace(config.Text)}
 }
@@ -46,7 +44,6 @@ func (i *Injector) Inject(body []byte) ([]byte, bool, error) {
 	if err := decoder.Decode(&payload); err != nil {
 		return body, false, nil
 	}
-	sessionID, _ := payload["sessionId"].(string)
 	message, ok := payload["newMessage"].(map[string]any)
 	if !ok {
 		return body, false, nil
@@ -66,7 +63,7 @@ func (i *Injector) Inject(body []byte) ([]byte, bool, error) {
 		if !ok || text == "" || strings.HasPrefix(text, RuntimePolicyPrefix) {
 			continue
 		}
-		part["text"] = i.runtimePolicy(sessionID) + text
+		part["text"] = i.runtimePolicy() + text
 		changed = true
 	}
 	if !changed {
@@ -79,11 +76,7 @@ func (i *Injector) Inject(body []byte) ([]byte, bool, error) {
 	return next, true, nil
 }
 
-// runtimePolicy builds the complete policy prefix for one session.
-func (i *Injector) runtimePolicy(sessionID string) string {
-	policy := RuntimePolicyPrefix + " " + strings.TrimSpace(i.text) + "]]\n\n"
-	if strings.TrimSpace(sessionID) == "" {
-		return policy
-	}
-	return policy + runtimeSessionContextPrefix + " Current chat session id is \"" + sessionID + "\". For create_task calls made from this chat, include an idempotency_key beginning with \"agent_gateway:" + sessionID + ":\".]]\n\n"
+// runtimePolicy builds the complete operator policy prefix.
+func (i *Injector) runtimePolicy() string {
+	return RuntimePolicyPrefix + " " + strings.TrimSpace(i.text) + "]]\n\n"
 }

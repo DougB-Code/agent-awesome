@@ -237,9 +237,9 @@ func TestMCPCreateTaskRecoversMalformedGemmaKeys(t *testing.T) {
 		"params": map[string]any{
 			"name": "create_task",
 			"arguments": map[string]any{
-				`title:<|"|>Buy milk<|"|>`:                          nil,
-				`description:<|"|>Buy milk<|"|>`:                    nil,
-				`idempotency_key:<|"|>personal_pilot:session:<|"|>`: nil,
+				`title:<|"|>Buy milk<|"|>`:                         nil,
+				`description:<|"|>Buy milk<|"|>`:                   nil,
+				`idempotency_key:<|"|>agent_awesome:session:<|"|>`: nil,
 			},
 		},
 	})
@@ -251,7 +251,7 @@ func TestMCPCreateTaskRecoversMalformedGemmaKeys(t *testing.T) {
 	if task["title"] != "Buy milk" || task["description"] != "Buy milk" {
 		t.Fatalf("task = %#v, want recovered title and description", task)
 	}
-	if task["idempotency_key"] != "personal_pilot:session:" {
+	if task["idempotency_key"] != "agent_awesome:session:" {
 		t.Fatalf("task idempotency key = %#v, want recovered key", task["idempotency_key"])
 	}
 }

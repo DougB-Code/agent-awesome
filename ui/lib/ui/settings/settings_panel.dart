@@ -1,4 +1,4 @@
-/// Implements the settings workspace panels for Aurora configuration.
+/// Implements the settings workspace panels for Agent Awesome configuration.
 library;
 
 import 'dart:async';
@@ -93,7 +93,7 @@ class SettingsDetailsPanel extends StatelessWidget {
     required this.section,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String section;
 
   /// Builds the selected settings CRUD/details panel.
@@ -157,7 +157,7 @@ class SettingsDetailsPanel extends StatelessWidget {
 class _SettingsAppContent extends StatefulWidget {
   const _SettingsAppContent({required this.controller, required this.profile});
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final RuntimeProfile? profile;
 
   /// Creates state for app-specific settings edits.
@@ -375,7 +375,7 @@ class _SettingsProfilesCollection extends StatefulWidget {
     required this.profilePath,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final RuntimeProfile profile;
   final String profilePath;
 
@@ -469,7 +469,7 @@ class _SettingsProfileEditor extends StatefulWidget {
     required this.query,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final RuntimeProfile profile;
   final String profilePath;
   final String query;
@@ -612,7 +612,7 @@ class _SettingsModelProviderCollection extends StatefulWidget {
     required this.assignedPath,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String emptyLabel;
   final IconData icon;
   final List<ConfigFileEntry> entries;
@@ -1017,7 +1017,7 @@ class _SettingsToolConfigCollection extends StatefulWidget {
     required this.assignedPath,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String emptyLabel;
   final List<ConfigFileEntry> entries;
   final String assignedPath;
@@ -1241,7 +1241,7 @@ class _SettingsToolConfigEditor extends StatefulWidget {
     required this.onDeleteConfig,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ConfigFileEntry entry;
   final List<ConfigFileEntry> entries;
   final _ToolSettingsSurface surface;
@@ -2181,8 +2181,8 @@ class _SettingsToolYamlPreview extends StatelessWidget {
           constraints: const BoxConstraints(maxHeight: 320),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AuroraColors.surface,
-            border: Border.all(color: AuroraColors.border),
+            color: AgentAwesomeColors.surface,
+            border: Border.all(color: AgentAwesomeColors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: SingleChildScrollView(
@@ -2423,7 +2423,7 @@ class _SettingsConfigFileCollection extends StatefulWidget {
     required this.assignedPath,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String title;
   final String emptyLabel;
   final IconData icon;
@@ -2552,7 +2552,7 @@ class _SettingsConfigFileEditor extends StatefulWidget {
     required this.onRenamed,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final ConfigFileEntry entry;
   final String title;
   final String query;
@@ -2667,7 +2667,7 @@ class _SettingsServerContent extends StatefulWidget {
   });
 
   final RuntimeProfile profile;
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String title;
   final List<McpServerRuntime> servers;
 
@@ -2881,8 +2881,8 @@ class _SettingsModelProviderYamlPreview extends StatelessWidget {
           constraints: const BoxConstraints(maxHeight: 320),
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AuroraColors.surface,
-            border: Border.all(color: AuroraColors.border),
+            color: AgentAwesomeColors.surface,
+            border: Border.all(color: AgentAwesomeColors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: SingleChildScrollView(
@@ -3774,7 +3774,7 @@ class _SettingsTextFileEditor extends StatefulWidget {
     required this.path,
   });
 
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final String title;
   final String path;
 
@@ -3906,7 +3906,7 @@ class _SettingsServerTile extends StatefulWidget {
   });
 
   final RuntimeProfile profile;
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
   final McpServerRuntime server;
 
   @override

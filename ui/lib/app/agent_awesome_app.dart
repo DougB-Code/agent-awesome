@@ -1,4 +1,4 @@
-/// Builds the top-level Aurora Flutter application.
+/// Builds the top-level Agent Awesome Flutter application.
 library;
 
 import 'dart:async';
@@ -9,26 +9,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/models.dart';
-import '../ui/aurora_shell.dart';
+import '../ui/agent_awesome_shell.dart';
 import '../ui/onboarding/setup_wizard_shell.dart';
 import 'app_config.dart';
 import 'app_controller.dart';
 import 'theme.dart';
 
-/// AuroraApp owns app lifetime, theme, and controller creation.
-class AuroraApp extends StatefulWidget {
-  /// Creates the Aurora app.
-  const AuroraApp({super.key, required this.config});
+/// AgentAwesomeApp owns app lifetime, theme, and controller creation.
+class AgentAwesomeApp extends StatefulWidget {
+  /// Creates the Agent Awesome app.
+  const AgentAwesomeApp({super.key, required this.config});
 
   /// Runtime service configuration.
   final AppConfig config;
 
   @override
-  State<AuroraApp> createState() => _AuroraAppState();
+  State<AgentAwesomeApp> createState() => _AgentAwesomeAppState();
 }
 
-class _AuroraAppState extends State<AuroraApp> {
-  late final AuroraAppController controller;
+class _AgentAwesomeAppState extends State<AgentAwesomeApp> {
+  late final AgentAwesomeAppController controller;
   late final _ExitObserver _exitObserver;
   ConfirmationRequest? _shownConfirmation;
   StreamSubscription<ProcessSignal>? _sigIntSubscription;
@@ -41,7 +41,7 @@ class _AuroraAppState extends State<AuroraApp> {
   @override
   void initState() {
     super.initState();
-    controller = AuroraAppController(config: widget.config);
+    controller = AgentAwesomeAppController(config: widget.config);
     controller.addListener(_watchConfirmation);
     _exitObserver = _ExitObserver(onExitRequested: _requestAppExit);
     WidgetsBinding.instance.addObserver(_exitObserver);
@@ -67,8 +67,8 @@ class _AuroraAppState extends State<AuroraApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Aurora',
-      theme: buildAuroraTheme(),
+      title: 'Agent Awesome',
+      theme: buildAgentAwesomeTheme(),
       home: Stack(
         fit: StackFit.expand,
         children: <Widget>[
@@ -81,7 +81,7 @@ class _AuroraAppState extends State<AuroraApp> {
               if (!controller.gettingStartedCompleted) {
                 return SetupWizardShell(controller: controller);
               }
-              return AuroraShell(controller: controller);
+              return AgentAwesomeShell(controller: controller);
             },
           ),
           if (_shutdownVisible) _ShutdownOverlay(message: _shutdownMessage),
@@ -185,7 +185,7 @@ class _StartupShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: AuroraColors.surface,
+      backgroundColor: AgentAwesomeColors.surface,
       body: Center(
         child: SizedBox.square(
           dimension: 28,
@@ -212,8 +212,8 @@ class _ShutdownOverlay extends StatelessWidget {
       child: Center(
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AuroraColors.surface,
-            border: Border.all(color: AuroraColors.border),
+            color: AgentAwesomeColors.surface,
+            border: Border.all(color: AgentAwesomeColors.border),
             borderRadius: BorderRadius.circular(8),
             boxShadow: const <BoxShadow>[
               BoxShadow(
@@ -248,7 +248,7 @@ class _ShutdownOverlay extends StatelessWidget {
                         Text(
                           message,
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: AuroraColors.muted),
+                              ?.copyWith(color: AgentAwesomeColors.muted),
                         ),
                       ],
                     ),

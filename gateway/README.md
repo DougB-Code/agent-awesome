@@ -135,10 +135,10 @@ dependencies are still starting or failed, `/api/*`, `/api/context/*`, and
 `/mcp` return `503 dependency not ready` instead of leaking upstream connection
 errors. `GET /healthz` stays live for process liveness.
 
-`POST /api/run_sse` receives configurable server-owned runtime policy injection
-from `AGENTAWESOME_RUNTIME_POLICY_TEXT` before the request is forwarded. This
-lets local and cloud deployments enforce the same task-writing behavior without
-making Slack, SMS, email, Flutter, or the generic proxy own agent policy.
+`POST /api/run_sse` forwards user text unchanged by default. Operators can set
+`AGENTAWESOME_RUNTIME_POLICY_TEXT` for explicit deployment-specific guidance,
+but stable tool-call behavior lives in harness agent instructions and ADK
+callbacks instead of gateway prompt text.
 
 Gateway proxy request bodies are capped at 8 MiB. Oversized bodies return
 `413 Payload Too Large`.

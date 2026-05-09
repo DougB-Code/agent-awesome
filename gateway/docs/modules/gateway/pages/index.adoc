@@ -10,7 +10,7 @@ It is a small HTTP command plane that fronts the harness, memory service, and ch
 * Proxy ADK-compatible UI traffic to the harness.
 * Proxy harness context tool traffic through authenticated `/api/context/*` routes.
 * Proxy memory MCP traffic to the configured memory service.
-* Apply configured runtime policy to agent runs outside the generic proxy layer.
+* Optionally apply operator-provided runtime policy text to agent runs outside the generic proxy layer.
 * Receive Slack events through HTTP Events API or Socket Mode.
 * Optionally supervise sibling harness and memory processes for local deployments.
 
@@ -52,5 +52,6 @@ API is bound outside loopback, configure the same
 `AGENTAWESOME_CONTEXT_API_TOKEN` / `--context-api-token` value on the harness
 and gateway so the gateway can authenticate upstream requests.
 
-`AGENTAWESOME_RUNTIME_POLICY_TEXT` controls the text injected into `POST /api/run_sse` user message parts.
-The injected marker is `AGENT_AWESOME_RUNTIME_POLICY`.
+`AGENTAWESOME_RUNTIME_POLICY_TEXT` is empty by default.
+When explicitly configured by an operator, its text is injected into `POST /api/run_sse` user message parts with the `AGENT_AWESOME_RUNTIME_POLICY` marker.
+Stable tool-call behavior belongs in the harness agent instructions and ADK callbacks, not gateway prompt text.

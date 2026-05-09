@@ -1,12 +1,12 @@
-/// Starts the Aurora assistant workspace Flutter application.
+/// Starts the Agent Awesome assistant workspace Flutter application.
 library;
 
 import 'package:flutter/material.dart';
 
-import 'app/aurora_app.dart';
+import 'app/agent_awesome_app.dart';
 import 'app/app_config.dart';
 
-/// Runs the configured Aurora desktop application.
+/// Runs the configured Agent Awesome desktop application.
 void main() {
-  runApp(AuroraApp(config: AppConfig.fromEnvironment()));
+  runApp(AgentAwesomeApp(config: AppConfig.fromEnvironment()));
 }

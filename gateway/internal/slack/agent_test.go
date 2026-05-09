@@ -51,3 +51,14 @@ func TestRunBodyDisablesModelStreaming(t *testing.T) {
 		t.Fatalf("streaming = %#v, want false", decoded["streaming"])
 	}
 }
+
+// TestDecodeAgentEventSuppressesLocalToolMarkup keeps leaked tool tokens out of Slack.
+func TestDecodeAgentEventSuppressesLocalToolMarkup(t *testing.T) {
+	text, err := decodeAgentEvent("message", `{"author":"assistant","content":{"parts":[{"text":"<|tool_call>call:tool_call{create_task{title:<|\"|>Buy Milk<|\"|>}}<tool_call|>"}]}}`)
+	if err != nil {
+		t.Fatalf("decodeAgentEvent() error = %v", err)
+	}
+	if text != "" {
+		t.Fatalf("decodeAgentEvent() = %q, want empty text", text)
+	}
+}

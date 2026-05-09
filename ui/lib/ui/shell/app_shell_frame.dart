@@ -1,4 +1,4 @@
-/// Provides the top-level Aurora app frame and sidebar navigation.
+/// Provides the top-level Agent Awesome app frame and sidebar navigation.
 library;
 
 import 'package:flutter/material.dart';
@@ -38,7 +38,7 @@ class AppShellFrame extends StatelessWidget {
   final String selectedSection;
 
   /// Shared app controller for command-bar shortcuts.
-  final AuroraAppController controller;
+  final AgentAwesomeAppController controller;
 
   /// Text controller for the global command input.
   final TextEditingController commandController;
@@ -217,7 +217,7 @@ class _SidebarHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Expanded(child: _AuroraLogo(compact: false)),
+        const Expanded(child: _AgentAwesomeLogo(compact: false)),
         PanelCollapseButton(
           expanded: expanded,
           onPressed: onToggleExpanded,
@@ -229,16 +229,16 @@ class _SidebarHeader extends StatelessWidget {
   }
 }
 
-class _AuroraLogo extends StatelessWidget {
-  const _AuroraLogo({required this.compact});
+class _AgentAwesomeLogo extends StatelessWidget {
+  const _AgentAwesomeLogo({required this.compact});
 
   final bool compact;
 
-  /// Builds the Aurora mark and wordmark.
+  /// Builds the Agent Awesome mark and wordmark.
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: compact ? 'Aurora Personal Agent' : '',
+      message: compact ? 'Agent Awesome Personal Agent' : '',
       child: Row(
         mainAxisSize: compact ? MainAxisSize.min : MainAxisSize.max,
         children: <Widget>[
@@ -268,12 +268,12 @@ class _AuroraLogo extends StatelessWidget {
                   const Positioned(
                     right: -3,
                     top: 5,
-                    child: _LogoDot(color: AuroraColors.coral),
+                    child: _LogoDot(color: AgentAwesomeColors.coral),
                   ),
                   const Positioned(
                     left: -2,
                     bottom: 0,
-                    child: _LogoDot(color: AuroraColors.green),
+                    child: _LogoDot(color: AgentAwesomeColors.green),
                   ),
                 ],
               ),
@@ -286,12 +286,12 @@ class _AuroraLogo extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'AURORA',
+                    'AGENT AWESOME',
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 5,
+                      letterSpacing: 1.4,
                     ),
                   ),
                   Text(
@@ -299,7 +299,7 @@ class _AuroraLogo extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 10,
-                      color: AuroraColors.muted,
+                      color: AgentAwesomeColors.muted,
                       letterSpacing: 2.4,
                     ),
                   ),
@@ -346,7 +346,9 @@ class _NavButton extends StatelessWidget {
   /// Builds one navigation item.
   @override
   Widget build(BuildContext context) {
-    final foreground = selected ? AuroraColors.green : AuroraColors.muted;
+    final foreground = selected
+        ? AgentAwesomeColors.green
+        : AgentAwesomeColors.muted;
     return Tooltip(
       message: compact ? label : '',
       child: InkWell(
@@ -358,7 +360,7 @@ class _NavButton extends StatelessWidget {
             vertical: compact ? 13 : 15,
           ),
           decoration: BoxDecoration(
-            color: selected ? AuroraColors.greenSoft : Colors.transparent,
+            color: selected ? AgentAwesomeColors.greenSoft : Colors.transparent,
             borderRadius: BorderRadius.circular(18),
           ),
           child: Row(
@@ -376,7 +378,7 @@ class _NavButton extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: selected
-                          ? AuroraColors.ink
+                          ? AgentAwesomeColors.ink
                           : const Color(0xff514b43),
                     ),
                   ),
@@ -413,12 +415,15 @@ class _ProfileTile extends StatelessWidget {
                 Text('Doug', style: TextStyle(fontWeight: FontWeight.w800)),
                 Text(
                   'Local pilot',
-                  style: TextStyle(color: AuroraColors.muted, fontSize: 12),
+                  style: TextStyle(
+                    color: AgentAwesomeColors.muted,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
           ),
-          Icon(Icons.chevron_right, color: AuroraColors.muted),
+          Icon(Icons.chevron_right, color: AgentAwesomeColors.muted),
         ],
       ),
     );

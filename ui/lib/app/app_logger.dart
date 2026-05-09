@@ -1,4 +1,4 @@
-/// Writes timestamped Aurora UI diagnostics to the local UI log file.
+/// Writes timestamped Agent Awesome UI diagnostics to the local UI log file.
 library;
 
 import 'dart:io';

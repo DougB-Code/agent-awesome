@@ -101,7 +101,7 @@ void main() {
     'uses local OpenAI-compatible endpoint for litert title model',
     () async {
       final directory = await Directory.systemTemp.createTemp(
-        'aurora-title-litert-test-',
+        'agentawesome-title-litert-test-',
       );
       final file = File('${directory.path}/model.yaml');
       await file.writeAsString('''
@@ -186,7 +186,9 @@ providers:
 
 /// Writes a temporary model config matching the app harness schema.
 Future<File> _writeModelConfig() async {
-  final directory = await Directory.systemTemp.createTemp('aurora-title-test-');
+  final directory = await Directory.systemTemp.createTemp(
+    'agentawesome-title-test-',
+  );
   final file = File('${directory.path}/model.yaml');
   await file.writeAsString('''
 default: openai:gpt-mini

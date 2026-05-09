@@ -583,7 +583,7 @@ TaskStreamAxisBucket _statusBucket(String status) {
       id: 'open',
       title: 'Open',
       subtitle: 'Active work',
-      color: AuroraColors.green,
+      color: AgentAwesomeColors.green,
       icon: Icons.task_alt_outlined,
     ),
     'waiting' => const TaskStreamAxisBucket(
@@ -597,7 +597,7 @@ TaskStreamAxisBucket _statusBucket(String status) {
       id: 'blocked',
       title: 'Blocked',
       subtitle: 'Needs unblock',
-      color: AuroraColors.coral,
+      color: AgentAwesomeColors.coral,
       icon: Icons.lock_outline,
     ),
     'done' => const TaskStreamAxisBucket(
@@ -611,14 +611,14 @@ TaskStreamAxisBucket _statusBucket(String status) {
       id: 'canceled',
       title: 'Canceled',
       subtitle: 'Inactive',
-      color: AuroraColors.muted,
+      color: AgentAwesomeColors.muted,
       icon: Icons.cancel_outlined,
     ),
     _ => const TaskStreamAxisBucket(
       id: 'unknown-status',
       title: 'Other status',
       subtitle: 'Unmapped lifecycle',
-      color: AuroraColors.muted,
+      color: AgentAwesomeColors.muted,
       icon: Icons.radio_button_unchecked,
     ),
   };
@@ -651,7 +651,7 @@ TaskStreamAxisBucket _priorityBucket(String priority) {
       id: 'urgent',
       title: 'Urgent',
       subtitle: 'Needs attention',
-      color: AuroraColors.coral,
+      color: AgentAwesomeColors.coral,
       icon: Icons.priority_high,
     ),
     'high' => const TaskStreamAxisBucket(
@@ -665,14 +665,14 @@ TaskStreamAxisBucket _priorityBucket(String priority) {
       id: 'normal',
       title: 'Normal',
       subtitle: 'Standard',
-      color: AuroraColors.green,
+      color: AgentAwesomeColors.green,
       icon: Icons.remove,
     ),
     'low' => const TaskStreamAxisBucket(
       id: 'low',
       title: 'Low',
       subtitle: 'Flexible',
-      color: AuroraColors.muted,
+      color: AgentAwesomeColors.muted,
       icon: Icons.keyboard_arrow_down,
     ),
     _ => TaskStreamAxisBucket(
@@ -700,7 +700,7 @@ TaskStreamAxisBucket _dateWindowBucket({
       id: emptyId,
       title: emptyTitle,
       subtitle: subtitleFallback,
-      color: AuroraColors.muted,
+      color: AgentAwesomeColors.muted,
       icon: icon,
     );
   }
@@ -713,7 +713,7 @@ TaskStreamAxisBucket _dateWindowBucket({
       id: 'overdue',
       title: 'Overdue',
       subtitle: _dateSubtitle(value),
-      color: AuroraColors.coral,
+      color: AgentAwesomeColors.coral,
       icon: icon,
     );
   }
@@ -785,7 +785,7 @@ TaskStreamAxisBucket _effortBucket(int minutes) {
       id: 'unestimated',
       title: 'Unestimated',
       subtitle: 'No estimate',
-      color: AuroraColors.muted,
+      color: AgentAwesomeColors.muted,
       icon: Icons.help_outline,
     );
   }
@@ -843,7 +843,7 @@ TaskStreamAxisBucket _spendBucket(TaskStreamCard card) {
       id: 'no-spend-data',
       title: 'No spend data',
       subtitle: 'Not scored',
-      color: AuroraColors.muted,
+      color: AgentAwesomeColors.muted,
       icon: Icons.money_off_csred_outlined,
     );
   }
@@ -869,7 +869,7 @@ TaskStreamAxisBucket _spendBucket(TaskStreamCard card) {
     id: 'high-spend',
     title: 'High spend',
     subtitle: subtitle,
-    color: AuroraColors.coral,
+    color: AgentAwesomeColors.coral,
     icon: Icons.price_change_outlined,
   );
 }
@@ -881,7 +881,7 @@ TaskStreamAxisBucket _blockersBucket(TaskStreamCard card) {
       id: 'critical',
       title: 'Critical',
       subtitle: 'Blocked',
-      color: AuroraColors.coral,
+      color: AgentAwesomeColors.coral,
       icon: Icons.report_problem_outlined,
     );
   }

@@ -2,6 +2,7 @@
 package litert
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,9 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
-	"unicode"
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/model/adapter"
@@ -22,6 +23,8 @@ import (
 )
 
 const defaultExecutable = "litert-lm"
+
+var gemmaQuoteSpacing = regexp.MustCompile(`(^|[\{,\s])([A-Za-z_][A-Za-z0-9_]*):(["'])`)
 
 // Factory creates local LiteRT-LM runtime models.
 type Factory struct{}
@@ -104,9 +107,11 @@ func (m *model) generate(ctx context.Context, req *llmapi.LLMRequest) (*llmapi.L
 
 	cmd := exec.CommandContext(ctx, m.executable, "--min_log_level", "4", "run", m.modelPath, "--input_prompt_file", promptFile)
 	cmd.Env = localModelEnvironment(m.executable)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("provider %q model %q request failed: %w", m.provider, m.name, err)
+		return nil, localModelCommandError(m.provider, m.name, err, stderr.String())
 	}
 	text := assistantTextFromOutput(string(output))
 	if strings.TrimSpace(text) == "" {
@@ -116,83 +121,156 @@ func (m *model) generate(ctx context.Context, req *llmapi.LLMRequest) (*llmapi.L
 	return &llmapi.LLMResponse{Content: content, TurnComplete: true}, nil
 }
 
-// promptFromRequest builds a compact prompt for instruction-tuned local models.
+// localModelCommandError includes bounded LiteRT stderr in provider failures.
+func localModelCommandError(provider string, model string, cause error, stderr string) error {
+	details := strings.TrimSpace(stderr)
+	if details == "" {
+		return fmt.Errorf("provider %q model %q request failed: %w", provider, model, cause)
+	}
+	return fmt.Errorf("provider %q model %q request failed: %w: %s", provider, model, cause, clippedErrorDetail(details))
+}
+
+// clippedErrorDetail bounds subprocess stderr included in user-visible errors.
+func clippedErrorDetail(text string) string {
+	const limit = 1200
+	if len(text) <= limit {
+		return text
+	}
+	return text[:limit] + "...(truncated)"
+}
+
+// promptFromRequest builds a Gemma chat-template prompt for local models.
 func promptFromRequest(req *llmapi.LLMRequest) (string, error) {
 	if req == nil {
 		return "", fmt.Errorf("request is nil")
 	}
 	var buffer strings.Builder
-	if tools := toolPromptSection(req); tools != "" {
-		buffer.WriteString(tools)
-		buffer.WriteString("\n\n")
-	}
+	buffer.WriteString("<bos>")
+	systemText := ""
 	if req.Config != nil && req.Config.SystemInstruction != nil {
 		text, err := protocol.ContentText(req.Config.SystemInstruction)
 		if err != nil {
 			return "", fmt.Errorf("system instruction: %w", err)
 		}
-		if strings.TrimSpace(text) != "" {
-			buffer.WriteString("SYSTEM: ")
-			buffer.WriteString(strings.TrimSpace(text))
-			buffer.WriteString("\n")
-		}
+		systemText = strings.TrimSpace(text)
 	}
+	if err := appendGemmaSystemTurn(&buffer, systemText, gemmaFunctionDeclarationsForRequest(req)); err != nil {
+		return "", err
+	}
+	pendingToolResponse := false
 	for _, content := range req.Contents {
 		if content == nil {
 			continue
 		}
-		text, err := contentPromptText(content)
+		pending, err := appendGemmaContentTurn(&buffer, content, pendingToolResponse)
 		if err != nil {
 			return "", err
 		}
-		if strings.TrimSpace(text) == "" {
-			continue
-		}
-		role := strings.ToUpper(strings.TrimSpace(content.Role))
-		if role == "" {
-			role = "USER"
-		}
-		buffer.WriteString(role)
-		buffer.WriteString(": ")
-		buffer.WriteString(strings.TrimSpace(text))
-		buffer.WriteString("\n")
+		pendingToolResponse = pending
 	}
+	if pendingToolResponse {
+		buffer.WriteString("<tool_response|><turn|>\n")
+	}
+	buffer.WriteString("<|turn>model\n")
 	prompt := strings.TrimSpace(buffer.String())
-	if prompt == "" {
+	if prompt == "<bos><|turn>model" {
 		return "", fmt.Errorf("request has no supported prompt content")
 	}
 	return prompt, nil
 }
 
-// contentPromptText serializes text and tool result parts into prompt text.
-func contentPromptText(content *genai.Content) (string, error) {
-	parts := make([]string, 0, len(content.Parts))
+// appendGemmaSystemTurn writes system text and Gemma tool declarations.
+func appendGemmaSystemTurn(buffer *strings.Builder, systemText string, declarations []*genai.FunctionDeclaration) error {
+	if strings.TrimSpace(systemText) == "" && len(declarations) == 0 {
+		return nil
+	}
+	buffer.WriteString("<|turn>system\n")
+	if strings.TrimSpace(systemText) != "" {
+		buffer.WriteString(strings.TrimSpace(systemText))
+		if len(declarations) > 0 {
+			buffer.WriteString("\n")
+		}
+	}
+	for _, decl := range declarations {
+		if decl == nil || strings.TrimSpace(decl.Name) == "" {
+			continue
+		}
+		buffer.WriteString("<|tool>")
+		if err := appendGemmaToolDeclaration(buffer, decl); err != nil {
+			return err
+		}
+		buffer.WriteString("<tool|>")
+	}
+	buffer.WriteString("<turn|>\n")
+	return nil
+}
+
+// appendGemmaContentTurn serializes one ADK content item into Gemma turns.
+func appendGemmaContentTurn(buffer *strings.Builder, content *genai.Content, pendingToolResponse bool) (bool, error) {
+	textParts := make([]string, 0, len(content.Parts))
+	toolCalls := make([]*genai.FunctionCall, 0)
+	toolResponses := make([]*genai.FunctionResponse, 0)
 	for i, part := range content.Parts {
 		if part == nil {
 			continue
 		}
+		if unsupported := unsupportedLiteRTPartTypes(part); len(unsupported) > 0 {
+			return pendingToolResponse, fmt.Errorf("unsupported content part at index %d: %s", i, strings.Join(unsupported, ", "))
+		}
 		if part.Text != "" {
-			parts = append(parts, part.Text)
+			textParts = append(textParts, part.Text)
 		}
 		if part.FunctionCall != nil {
-			data, err := json.Marshal(part.FunctionCall.Args)
-			if err != nil {
-				return "", fmt.Errorf("marshal function call %q arguments: %w", part.FunctionCall.Name, err)
-			}
-			parts = append(parts, fmt.Sprintf("TOOL_CALL %s %s", part.FunctionCall.Name, data))
+			toolCalls = append(toolCalls, part.FunctionCall)
 		}
 		if part.FunctionResponse != nil {
-			data, err := json.Marshal(part.FunctionResponse.Response)
-			if err != nil {
-				return "", fmt.Errorf("marshal function response %q: %w", part.FunctionResponse.Name, err)
-			}
-			parts = append(parts, fmt.Sprintf("TOOL_RESULT %s %s", part.FunctionResponse.Name, data))
-		}
-		if unsupported := unsupportedLiteRTPartTypes(part); len(unsupported) > 0 {
-			return "", fmt.Errorf("unsupported content part at index %d: %s", i, strings.Join(unsupported, ", "))
+			toolResponses = append(toolResponses, part.FunctionResponse)
 		}
 	}
-	return strings.Join(parts, "\n"), nil
+	if len(toolResponses) > 0 {
+		if !pendingToolResponse {
+			buffer.WriteString("<|turn>model\n<|tool_response>")
+		}
+		for _, response := range toolResponses {
+			appendGemmaToolResponse(buffer, response)
+		}
+		buffer.WriteString("<tool_response|>")
+		if text := strings.TrimSpace(strings.Join(textParts, "\n")); text != "" {
+			buffer.WriteString(text)
+		}
+		buffer.WriteString("<turn|>\n")
+		return false, nil
+	}
+	text := strings.TrimSpace(strings.Join(textParts, "\n"))
+	if len(toolCalls) == 0 && text == "" {
+		return pendingToolResponse, nil
+	}
+	if pendingToolResponse {
+		buffer.WriteString("<tool_response|><turn|>\n")
+		pendingToolResponse = false
+	}
+	role, err := gemmaRole(content.Role)
+	if err != nil {
+		return false, err
+	}
+	if len(toolCalls) > 0 {
+		role = "model"
+	}
+	buffer.WriteString("<|turn>")
+	buffer.WriteString(role)
+	buffer.WriteString("\n")
+	if text != "" {
+		buffer.WriteString(text)
+	}
+	for _, call := range toolCalls {
+		appendGemmaToolCall(buffer, call.Name, call.Args)
+	}
+	if len(toolCalls) > 0 {
+		buffer.WriteString("<|tool_response>")
+		return true, nil
+	}
+	buffer.WriteString("<turn|>\n")
+	return false, nil
 }
 
 // unsupportedLiteRTPartTypes names parts LiteRT prompt serialization cannot use.
@@ -208,33 +286,159 @@ func unsupportedLiteRTPartTypes(part *genai.Part) []string {
 	return filtered
 }
 
-// toolPromptSection describes available function tools for the local model.
-func toolPromptSection(req *llmapi.LLMRequest) string {
-	declarations := protocol.FunctionDeclarations(req)
-	if len(declarations) == 0 {
-		return ""
+// gemmaRole maps ADK content roles onto Gemma chat-template role names.
+func gemmaRole(role string) (string, error) {
+	switch strings.TrimSpace(role) {
+	case "", "user":
+		return "user", nil
+	case "model", "assistant":
+		return "model", nil
+	case "system":
+		return "system", nil
+	default:
+		return "", fmt.Errorf("unsupported LiteRT role %q", role)
 	}
-	lines := []string{
-		"AVAILABLE TOOLS:",
-		"Use exact tool names only. To call a tool, reply with only <|tool_call>call:tool_name{json_arguments}<tool_call|>. ADK will execute the tool.",
-	}
-	for _, decl := range declarations {
-		if decl == nil || strings.TrimSpace(decl.Name) == "" {
-			continue
-		}
-		signature := decl.Name + "({" + strings.Join(parameterNames(decl), ", ") + "})"
-		if strings.TrimSpace(decl.Description) != "" {
-			signature += ": " + strings.TrimSpace(decl.Description)
-		}
-		lines = append(lines, "- "+signature)
-	}
-	if len(lines) == 2 {
-		return ""
-	}
-	return strings.Join(lines, "\n")
 }
 
-// contentFromLocalText parses local-model tool markup or returns plain text.
+// appendGemmaToolDeclaration writes one Gemma function declaration block.
+func appendGemmaToolDeclaration(buffer *strings.Builder, decl *genai.FunctionDeclaration) error {
+	buffer.WriteString("declaration:")
+	buffer.WriteString(strings.TrimSpace(decl.Name))
+	buffer.WriteString("{")
+	fields := []string{}
+	if description := strings.TrimSpace(decl.Description); description != "" {
+		fields = append(fields, "description:"+gemmaValue(description))
+	}
+	fields = append(fields, "parameters:"+gemmaSchemaValue(protocol.DeclarationParameters(decl)))
+	buffer.WriteString(strings.Join(fields, ","))
+	buffer.WriteString("}")
+	return nil
+}
+
+// appendGemmaToolCall writes a model tool-call history item.
+func appendGemmaToolCall(buffer *strings.Builder, name string, args map[string]any) {
+	buffer.WriteString("<|tool_call>call:")
+	buffer.WriteString(strings.TrimSpace(name))
+	buffer.WriteString(gemmaValue(args))
+	buffer.WriteString("<tool_call|>")
+}
+
+// appendGemmaToolResponse writes a tool response inside a Gemma response block.
+func appendGemmaToolResponse(buffer *strings.Builder, response *genai.FunctionResponse) {
+	if response == nil {
+		return
+	}
+	buffer.WriteString("response:")
+	buffer.WriteString(strings.TrimSpace(response.Name))
+	buffer.WriteString(gemmaValue(response.Response))
+}
+
+// gemmaSchemaValue writes JSON schema values in Gemma declaration syntax.
+func gemmaSchemaValue(value any) string {
+	switch typed := value.(type) {
+	case *genai.Schema:
+		data, err := json.Marshal(typed)
+		if err != nil {
+			return "{}"
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			return "{}"
+		}
+		return gemmaSchemaValue(decoded)
+	case map[string]any:
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		fields := make([]string, 0, len(keys))
+		for _, key := range keys {
+			next := typed[key]
+			if key == "type" {
+				if text := strings.TrimSpace(fmt.Sprint(next)); text != "" && text != "<nil>" {
+					next = strings.ToUpper(text)
+				}
+			}
+			fields = append(fields, key+":"+gemmaSchemaValue(next))
+		}
+		return "{" + strings.Join(fields, ",") + "}"
+	case map[string]string:
+		next := make(map[string]any, len(typed))
+		for key, value := range typed {
+			next[key] = value
+		}
+		return gemmaSchemaValue(next)
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			values = append(values, gemmaSchemaValue(item))
+		}
+		return "[" + strings.Join(values, ",") + "]"
+	case []string:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			values = append(values, gemmaValue(item))
+		}
+		return "[" + strings.Join(values, ",") + "]"
+	default:
+		return gemmaValue(typed)
+	}
+}
+
+// gemmaValue writes scalar and collection values in Gemma function syntax.
+func gemmaValue(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return "null"
+	case string:
+		return `<|"|>` + strings.ReplaceAll(typed, `<|"|>`, "") + `<|"|>`
+	case bool:
+		if typed {
+			return "true"
+		}
+		return "false"
+	case int:
+		return fmt.Sprint(typed)
+	case int32:
+		return fmt.Sprint(typed)
+	case int64:
+		return fmt.Sprint(typed)
+	case float32:
+		return fmt.Sprint(typed)
+	case float64:
+		return fmt.Sprint(typed)
+	case json.Number:
+		return typed.String()
+	case map[string]any:
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		fields := make([]string, 0, len(keys))
+		for _, key := range keys {
+			fields = append(fields, key+":"+gemmaValue(typed[key]))
+		}
+		return "{" + strings.Join(fields, ",") + "}"
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			values = append(values, gemmaValue(item))
+		}
+		return "[" + strings.Join(values, ",") + "]"
+	case []string:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			values = append(values, gemmaValue(item))
+		}
+		return "[" + strings.Join(values, ",") + "]"
+	default:
+		return gemmaValue(fmt.Sprint(typed))
+	}
+}
+
+// contentFromLocalText parses local-model tool markup or returns safe plain text.
 func contentFromLocalText(text string, req *llmapi.LLMRequest) *genai.Content {
 	if call := toolCallFromText(text, req); call != nil {
 		if reply := completedToolCallReply(call, req); reply != "" {
@@ -243,6 +447,12 @@ func contentFromLocalText(text string, req *llmapi.LLMRequest) *genai.Content {
 		part := genai.NewPartFromFunctionCall(call.Name, call.Args)
 		part.FunctionCall.ID = call.ID
 		return &genai.Content{Role: "model", Parts: []*genai.Part{part}}
+	}
+	if looksLikeToolMarkup(text) {
+		return genai.NewContentFromText(
+			"I tried to use a tool, but the local model emitted an invalid tool request. Please retry the request.",
+			"model",
+		)
 	}
 	return genai.NewContentFromText(text, "model")
 }
@@ -336,9 +546,21 @@ func balancedObjectEnd(text string) (int, bool) {
 	return 0, false
 }
 
-// parseToolPayload decodes call:name{...} payload text into a tool call.
+// parseToolPayload decodes supported local-model tool payload shapes.
 func parseToolPayload(payload string) (*toolCall, bool) {
-	body := strings.TrimPrefix(payload, "call:")
+	body := strings.TrimSpace(payload)
+	if strings.HasPrefix(body, "call:") {
+		body = strings.TrimSpace(strings.TrimPrefix(body, "call:"))
+	}
+	if call, ok := parseStandardToolPayload(body); ok {
+		return call, true
+	}
+	return parseWrappedToolPayload(body)
+}
+
+// parseStandardToolPayload decodes name{...} payload text into a tool call.
+func parseStandardToolPayload(body string) (*toolCall, bool) {
+	body = strings.TrimSpace(body)
 	argsStart := strings.Index(body, "{")
 	argsEnd := strings.LastIndex(body, "}")
 	if argsStart <= 0 || argsEnd <= argsStart {
@@ -352,14 +574,34 @@ func parseToolPayload(payload string) (*toolCall, bool) {
 	return &toolCall{ID: "call-local", Name: name, Args: args}, true
 }
 
-func normalizeToolCall(call *toolCall, available map[string]bool, req *llmapi.LLMRequest) *toolCall {
+// parseWrappedToolPayload decodes Gemma's nested tool_call{tool_name{...}} form.
+func parseWrappedToolPayload(body string) (*toolCall, bool) {
+	const wrapperPrefix = "tool_call{"
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, wrapperPrefix) || !strings.HasSuffix(body, "}") {
+		return nil, false
+	}
+	inner := strings.TrimSpace(body[len(wrapperPrefix) : len(body)-1])
+	if strings.HasPrefix(inner, "call:") {
+		inner = strings.TrimSpace(strings.TrimPrefix(inner, "call:"))
+	}
+	return parseStandardToolPayload(inner)
+}
+
+// looksLikeToolMarkup reports whether text contains local model control tokens.
+func looksLikeToolMarkup(text string) bool {
+	trimmed := strings.TrimSpace(text)
+	return strings.HasPrefix(trimmed, "<|tool_call>") ||
+		strings.Contains(trimmed, "<|tool_call>call:") ||
+		strings.Contains(trimmed, "<tool_call|>")
+}
+
+// normalizeToolCall maps local-model tool markup onto available ADK tools.
+func normalizeToolCall(call *toolCall, available map[string]bool, _ *llmapi.LLMRequest) *toolCall {
 	if call == nil {
 		return nil
 	}
 	if available[call.Name] {
-		if call.Name == "create_task" {
-			call.Args = withCreateTaskIdempotency(call.Args, req)
-		}
 		return call
 	}
 	if call.Name == "task_tool" && available["create_task"] && fmt.Sprint(call.Args["action"]) == "create" {
@@ -367,7 +609,6 @@ func normalizeToolCall(call *toolCall, available map[string]bool, req *llmapi.LL
 		if strings.TrimSpace(fmt.Sprint(args["title"])) == "" {
 			return nil
 		}
-		args = withCreateTaskIdempotency(args, req)
 		return &toolCall{ID: call.ID, Name: "create_task", Args: args}
 	}
 	return nil
@@ -407,72 +648,7 @@ func hasSuccessfulToolResult(req *llmapi.LLMRequest, name string) bool {
 	return false
 }
 
-// withCreateTaskIdempotency fills a stable chat-scoped key when the model omits it.
-func withCreateTaskIdempotency(args map[string]any, req *llmapi.LLMRequest) map[string]any {
-	if strings.TrimSpace(fmt.Sprint(args["idempotency_key"])) != "" &&
-		strings.TrimSpace(fmt.Sprint(args["idempotency_key"])) != "<nil>" {
-		return args
-	}
-	sessionID := sessionIDFromRequest(req)
-	title := strings.TrimSpace(fmt.Sprint(args["title"]))
-	if sessionID == "" || title == "" || title == "<nil>" {
-		return args
-	}
-	next := make(map[string]any, len(args)+1)
-	for key, value := range args {
-		next[key] = value
-	}
-	next["idempotency_key"] = "personal_pilot:" + sessionID + ":" + taskKeySlug(title)
-	return next
-}
-
-// sessionIDFromRequest extracts the UI-injected session id from prompt content.
-func sessionIDFromRequest(req *llmapi.LLMRequest) string {
-	if req == nil {
-		return ""
-	}
-	const marker = `Current chat session id is "`
-	for _, content := range req.Contents {
-		if content == nil {
-			continue
-		}
-		for _, part := range content.Parts {
-			if part == nil || !strings.Contains(part.Text, marker) {
-				continue
-			}
-			after := part.Text[strings.Index(part.Text, marker)+len(marker):]
-			end := strings.Index(after, `"`)
-			if end > 0 {
-				return strings.TrimSpace(after[:end])
-			}
-		}
-	}
-	return ""
-}
-
-// taskKeySlug returns a compact deterministic suffix for chat-created tasks.
-func taskKeySlug(value string) string {
-	parts := []string{}
-	var current strings.Builder
-	for _, r := range strings.ToLower(value) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			current.WriteRune(r)
-			continue
-		}
-		if current.Len() > 0 {
-			parts = append(parts, current.String())
-			current.Reset()
-		}
-	}
-	if current.Len() > 0 {
-		parts = append(parts, current.String())
-	}
-	if len(parts) == 0 {
-		return "task"
-	}
-	return strings.Join(parts, "_")
-}
-
+// createTaskArgs converts Gemma's generic task_tool shape into create_task.
 func createTaskArgs(args map[string]any) map[string]any {
 	details, _ := args["details"].(map[string]any)
 	if details == nil {
@@ -491,6 +667,7 @@ func createTaskArgs(args map[string]any) map[string]any {
 	return out
 }
 
+// decodeLooseObject accepts strict JSON and YAML-like object fragments.
 func decodeLooseObject(text string) (map[string]any, bool) {
 	text = normalizeGemmaToolQuotes(text)
 	var decoded map[string]any
@@ -509,44 +686,7 @@ func normalizeGemmaToolQuotes(text string) string {
 		`<|"|>`, `"`,
 		`<|'|>`, `'`,
 	).Replace(text)
-	for _, field := range toolArgumentFields {
-		normalized = strings.ReplaceAll(normalized, field+`:"`, field+`: "`)
-		normalized = strings.ReplaceAll(normalized, field+`:'`, field+`: '`)
-	}
-	return normalized
-}
-
-// toolArgumentFields lists known fields that Gemma may emit without colon space.
-var toolArgumentFields = []string{
-	"action",
-	"actor",
-	"assignee",
-	"confidence",
-	"context",
-	"description",
-	"due_at",
-	"effort",
-	"energy_required",
-	"estimate_minutes",
-	"follow_up_at",
-	"idempotency_key",
-	"location",
-	"note",
-	"owner",
-	"person",
-	"priority",
-	"project",
-	"risk",
-	"scheduled_at",
-	"source",
-	"status",
-	"task",
-	"text",
-	"title",
-	"topics",
-	"urgency",
-	"value",
-	"view",
+	return gemmaQuoteSpacing.ReplaceAllString(normalized, `${1}${2}: ${3}`)
 }
 
 func availableToolNames(req *llmapi.LLMRequest) map[string]bool {
@@ -556,23 +696,6 @@ func availableToolNames(req *llmapi.LLMRequest) map[string]bool {
 			names[decl.Name] = true
 		}
 	}
-	return names
-}
-
-func parameterNames(decl *genai.FunctionDeclaration) []string {
-	raw, ok := protocol.DeclarationParameters(decl).(map[string]any)
-	if !ok {
-		return nil
-	}
-	properties, ok := raw["properties"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	names := make([]string, 0, len(properties))
-	for name := range properties {
-		names = append(names, name)
-	}
-	sort.Strings(names)
 	return names
 }
 

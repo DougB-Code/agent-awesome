@@ -32,13 +32,13 @@ void main() {
         ],
       );
       final titleClient = _FakeChatTitleClient(title: 'UI Regression Fix');
-      final controller = AuroraAppController(
+      final controller = AgentAwesomeAppController(
         config: _testConfig(),
         assistantClient: _TranscriptAssistantClient(),
         chatHistoryStore: historyStore,
         titleClient: titleClient,
       );
-      controller.appSettings = const AuroraAppSettings(
+      controller.appSettings = const AgentAwesomeAppSettings(
         chatTitleSummariesEnabled: true,
       );
       controller.runtimeProfile = _testProfile('/tmp/general-model.yaml');
@@ -81,7 +81,7 @@ class _TranscriptAssistantClient extends AssistantClient {
       ),
       AssistantEvent(
         id: 'assistant-1',
-        author: 'personal_pilot',
+        author: 'agent_awesome',
         text: 'I will inspect the logs and fix the regression.',
         partial: false,
       ),
@@ -145,7 +145,7 @@ AppConfig _testConfig() {
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-    agentAppName: 'personal_pilot',
+    agentAppName: 'agent_awesome',
     agentUserId: 'doug',
     workspaceRoot: '/tmp/agentawesome-ui-test',
     autoStartLocalServices: false,

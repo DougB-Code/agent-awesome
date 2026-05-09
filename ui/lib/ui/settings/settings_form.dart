@@ -57,7 +57,7 @@ abstract final class SettingsInputDecoration {
       suffixIcon: suffixIcon,
       suffixIconConstraints: suffixIconConstraints,
       filled: true,
-      fillColor: AuroraColors.surface,
+      fillColor: AgentAwesomeColors.surface,
       border: border,
       enabledBorder: border,
       disabledBorder: border,
@@ -194,13 +194,13 @@ class SettingsSaveFeedback extends StatelessWidget {
           tween: ColorTween(end: _targetBorderColor(state)),
           child: child,
           builder: (context, color, child) {
-            final borderColor = color ?? AuroraColors.border;
+            final borderColor = color ?? AgentAwesomeColors.border;
             return _SettingsSaveFeedbackScope(
               borderColor: borderColor,
               active:
                   state == SettingsSaveFeedbackState.success ||
                   state == SettingsSaveFeedbackState.failure ||
-                  borderColor != AuroraColors.border,
+                  borderColor != AgentAwesomeColors.border,
               child: child!,
             );
           },
@@ -214,7 +214,7 @@ class SettingsSaveFeedback extends StatelessWidget {
     return context
             .dependOnInheritedWidgetOfExactType<_SettingsSaveFeedbackScope>()
             ?.borderColor ??
-        AuroraColors.border;
+        AgentAwesomeColors.border;
   }
 
   /// Returns whether feedback should temporarily own focused borders.
@@ -228,10 +228,10 @@ class SettingsSaveFeedback extends StatelessWidget {
   /// Maps feedback state to the target outline color.
   static Color _targetBorderColor(SettingsSaveFeedbackState state) {
     return switch (state) {
-      SettingsSaveFeedbackState.success => AuroraColors.green,
+      SettingsSaveFeedbackState.success => AgentAwesomeColors.green,
       SettingsSaveFeedbackState.failure => Colors.red.shade700,
-      SettingsSaveFeedbackState.saving => AuroraColors.border,
-      SettingsSaveFeedbackState.idle => AuroraColors.border,
+      SettingsSaveFeedbackState.saving => AgentAwesomeColors.border,
+      SettingsSaveFeedbackState.idle => AgentAwesomeColors.border,
     };
   }
 }
@@ -297,7 +297,7 @@ class FormSectionCard extends StatelessWidget {
       padding: SettingsFormMetrics.sectionPadding,
       decoration: BoxDecoration(
         color: const Color(0xfffffcf8),
-        border: Border.all(color: AuroraColors.border),
+        border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -455,7 +455,7 @@ class SettingsToggleField extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(color: AuroraColors.muted),
+                    style: const TextStyle(color: AgentAwesomeColors.muted),
                   ),
                 ],
               ],

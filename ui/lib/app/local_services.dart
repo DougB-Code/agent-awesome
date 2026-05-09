@@ -607,9 +607,12 @@ class LocalServiceSupervisor {
     _applyGatewayAuthorizationEnvironment(env);
     env.putIfAbsent(
       'AGENTAWESOME_CONFIG_DIR',
-      () => auroraConfigDirectoryPath(),
+      () => agentAwesomeConfigDirectoryPath(),
     );
-    env.putIfAbsent('AGENTAWESOME_DATA_DIR', () => auroraDataDirectoryPath());
+    env.putIfAbsent(
+      'AGENTAWESOME_DATA_DIR',
+      () => agentAwesomeDataDirectoryPath(),
+    );
     env['GOCACHE'] =
         env['GOCACHE'] ?? '${config.workspaceRoot}/harness/build/gocache';
     await Directory(env['GOCACHE']!).create(recursive: true);

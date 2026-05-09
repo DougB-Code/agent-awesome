@@ -1,4 +1,4 @@
-/// Tests ADK and MCP response parsing used by the Aurora UI.
+/// Tests ADK and MCP response parsing used by the Agent Awesome UI.
 library;
 
 import 'dart:convert';
@@ -194,9 +194,9 @@ void main() {
       expect(event.confirmation?.toolName, 'create_task');
     });
 
-    test('adds and hides runtime task policy text', () {
-      final outbound = messageTextWithRuntimePolicy('Remind me to buy milk.');
-      expect(outbound, startsWith(runtimePolicyPrefix));
+    test('keeps outbound text raw and hides persisted runtime policy text', () {
+      final outbound = messageTextForAgent('Remind me to buy milk.');
+      expect(outbound, 'Remind me to buy milk.');
 
       final visible = parseAssistantEvent(<String, dynamic>{
         'id': 'event-policy',
@@ -223,11 +223,11 @@ void main() {
       });
       expect(hidden.text, isEmpty);
 
-      final sessionScoped = messageTextWithRuntimePolicy(
+      final sessionScoped = messageTextForAgent(
         'Create a task.',
         sessionId: 'session-live',
       );
-      expect(sessionScoped, contains('personal_pilot:session-live:'));
+      expect(sessionScoped, 'Create a task.');
       final visibleSessionScoped = parseAssistantEvent(<String, dynamic>{
         'id': 'event-session-policy',
         'author': 'user',
@@ -238,6 +238,45 @@ void main() {
         },
       });
       expect(visibleSessionScoped.text, 'Create a task.');
+    });
+
+    test('hides persisted Agent Awesome runtime policy text', () {
+      // AURORA markers are intentional old-transcript migration fixtures.
+      final visible = parseAssistantEvent(<String, dynamic>{
+        'id': 'event-legacy-policy',
+        'author': 'user',
+        'content': <String, dynamic>{
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'text':
+                  '[[AURORA_RUNTIME_POLICY: legacy persisted policy.]]\n\n'
+                  '[[AURORA_SESSION_CONTEXT: Current chat session id is "session-live".]]\n\n'
+                  'Make a reminder to buy milk',
+            },
+          ],
+        },
+      });
+
+      expect(visible.text, 'Make a reminder to buy milk');
+    });
+
+    test('suppresses leaked local model tool markup', () {
+      final event = parseAssistantEvent(<String, dynamic>{
+        'id': 'event-local-tool-leak',
+        'author': 'assistant',
+        'content': <String, dynamic>{
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'text':
+                  '<|tool_call>call:tool_call{create_task{description:<|"|>Buy milk<|"|>,title:<|"|>Buy Milk<|"|>}}<tool_call|>',
+            },
+          ],
+        },
+      });
+
+      expect(event.text, isEmpty);
+      expect(event.toolActivity, isNull);
+      expect(event.confirmation, isNull);
     });
   });
 
@@ -327,7 +366,7 @@ void main() {
           'status': 'open',
           'priority': 'high',
           'follow_up_at': '2026-05-15T12:00:00Z',
-          'idempotency_key': 'personal_pilot:session-live:draft-brief',
+          'idempotency_key': 'agent_awesome:session-live:draft-brief',
           'topics': <String>['brief'],
           'estimate_minutes': 45,
           'energy_required': 'deep',

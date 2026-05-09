@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Runs app settings tests.
 void main() {
   test('serializes exact summary model selection', () {
-    const settings = AuroraAppSettings(
+    const settings = AgentAwesomeAppSettings(
       defaultChatProfilePath: '/tmp/profile.json',
       summaryModelConfigPath: '/tmp/models.yaml',
       summaryModelRef: 'openai:gpt-nano',
@@ -19,7 +19,7 @@ void main() {
     );
 
     final encoded = settings.toJson();
-    final decoded = AuroraAppSettings.fromJson(encoded);
+    final decoded = AgentAwesomeAppSettings.fromJson(encoded);
 
     expect(encoded['summary_model_ref'], 'openai:gpt-nano');
     expect(decoded.summaryModelConfigPath, '/tmp/models.yaml');
@@ -29,14 +29,14 @@ void main() {
   });
 
   test('defaults first launch guide to visible', () {
-    final decoded = AuroraAppSettings.fromJson(const <String, dynamic>{});
+    final decoded = AgentAwesomeAppSettings.fromJson(const <String, dynamic>{});
 
     expect(decoded.gettingStartedCompleted, isFalse);
   });
 
   test('chat title model falls back to active profile model config', () {
-    final controller = AuroraAppController(config: _testConfig());
-    controller.appSettings = const AuroraAppSettings(
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.appSettings = const AgentAwesomeAppSettings(
       chatTitleSummariesEnabled: true,
     );
     controller.runtimeProfile = _testProfile('/tmp/general-model.yaml');
@@ -53,7 +53,7 @@ AppConfig _testConfig() {
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-    agentAppName: 'personal_pilot',
+    agentAppName: 'agent_awesome',
     agentUserId: 'doug',
     workspaceRoot: '/tmp/agentawesome-ui-test',
     autoStartLocalServices: false,

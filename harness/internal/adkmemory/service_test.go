@@ -34,7 +34,7 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	})
 	chat := stubSession{
 		id:      "session-1234567890",
-		appName: "personal_pilot",
+		appName: "agent_awesome",
 		userID:  "doug",
 		events: []*session.Event{
 			{
@@ -81,7 +81,7 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	if got := calls[0].arguments["scope"]; got != userScope {
 		t.Fatalf("scope = %q, want user", got)
 	}
-	if got := calls[0].arguments["idempotency_key"]; got != "adk:personal_pilot:doug:session-1234567890:event-user" {
+	if got := calls[0].arguments["idempotency_key"]; got != "adk:agent_awesome:doug:session-1234567890:event-user" {
 		t.Fatalf("idempotency = %q, want ADK event key", got)
 	}
 	if got := calls[1].arguments["content"]; got != "Got it." {
@@ -104,7 +104,7 @@ func TestAddSessionToMemoryCapturesOnlyNewEvents(t *testing.T) {
 	}
 	chat := stubSession{
 		id:      "long-session",
-		appName: "personal_pilot",
+		appName: "agent_awesome",
 		userID:  "doug",
 		events:  events,
 	}
@@ -129,7 +129,7 @@ func TestAddSessionToMemoryCapturesOnlyNewEvents(t *testing.T) {
 		t.Fatalf("MCP calls after append = %d, want one new call", len(calls))
 	}
 	last := calls[len(calls)-1]
-	if got := last.arguments["idempotency_key"]; got != "adk:personal_pilot:doug:long-session:event-100" {
+	if got := last.arguments["idempotency_key"]; got != "adk:agent_awesome:doug:long-session:event-100" {
 		t.Fatalf("last idempotency = %q, want appended event key", got)
 	}
 	if got := last.arguments["content"]; got != "brand new detail" {

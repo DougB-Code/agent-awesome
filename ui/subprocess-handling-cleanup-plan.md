@@ -4,7 +4,7 @@
 
 - `lib/app/process_supervisor.dart` - new shared subprocess supervisor.
 - `lib/app/app_controller.dart` - inject and close the shared supervisor, add shutdown guards.
-- `lib/app/aurora_app.dart` - keep the existing signal/window-close path, but ensure it drives one shutdown coordinator.
+- `lib/app/agent_awesome_app.dart` - keep the existing signal/window-close path, but ensure it drives one shutdown coordinator.
 - `lib/app/local_services.dart` - remove embedded process lifecycle logic and delegate all launches/kills to `ProcessSupervisor`.
 - `lib/app/local_model_runtime.dart` - run LiteRT validation and inference through `ProcessSupervisor`; cancel in-flight inference on close.
 - `lib/app/credential_store.dart` - run keyring subprocesses through the shared command runner/supervisor instead of direct `Process.run`/`Process.start`.
@@ -27,7 +27,7 @@ The important invariant:
 
 > Production code outside `lib/app/process_supervisor.dart` must not call `Process.run`, `Process.runSync`, `Process.start`, or `Process.killPid`.
 
-`ProcessSignal` handling may remain in `lib/app/aurora_app.dart` because app-exit events are not subprocess launches.
+`ProcessSignal` handling may remain in `lib/app/agent_awesome_app.dart` because app-exit events are not subprocess launches.
 
 ## Current subprocess launch sites to clean up
 
@@ -241,7 +241,7 @@ The controller must create or receive exactly one `ProcessSupervisor` and pass t
 Recommended constructor shape:
 
 ```dart
-factory AuroraAppController({
+factory AgentAwesomeAppController({
   required AppConfig config,
   ProcessSupervisor? processSupervisor,
   AssistantClient? assistantClient,
@@ -250,7 +250,7 @@ factory AuroraAppController({
   LocalServiceSupervisor? localServices,
   LocalModelRuntime? localModels,
   ConfigFileStore? configFiles,
-  AuroraAppSettingsStore? appSettingsStore,
+  AgentAwesomeAppSettingsStore? appSettingsStore,
   ChatHistoryStore? chatHistoryStore,
   CredentialStore? credentialStore,
   ChatTitleClient? titleClient,
@@ -263,7 +263,7 @@ factory AuroraAppController({
     workspaceRoot: config.workspaceRoot,
   );
 
-  return AuroraAppController._(
+  return AgentAwesomeAppController._(
     config: config,
     logger: effectiveLogger,
     processSupervisor: effectiveProcessSupervisor,
@@ -279,7 +279,7 @@ factory AuroraAppController({
       processSupervisor: effectiveProcessSupervisor,
     ),
     configFiles: configFiles ?? const ConfigFileStore(),
-    appSettingsStore: appSettingsStore ?? const AuroraAppSettingsStore(),
+    appSettingsStore: appSettingsStore ?? const AgentAwesomeAppSettingsStore(),
     chatHistoryStore: chatHistoryStore ?? const ChatHistoryStore(),
     credentialStore: credentialStore ?? CredentialStore(
       commandRunner: ProcessSupervisorCommandRunner(effectiveProcessSupervisor),
@@ -290,7 +290,7 @@ factory AuroraAppController({
 }
 ```
 
-Then move the existing initializer-list logic into `AuroraAppController._(...)`. This avoids accidentally constructing separate supervisors for services, models, credentials, and probes.
+Then move the existing initializer-list logic into `AgentAwesomeAppController._(...)`. This avoids accidentally constructing separate supervisors for services, models, credentials, and probes.
 
 ### Add shutdown state
 
@@ -307,7 +307,7 @@ Add helper:
 ```dart
 void _throwIfClosing() {
   if (_closing || processSupervisor.isClosing) {
-    throw StateError('Aurora runtime is shutting down');
+    throw StateError('Agent Awesome runtime is shutting down');
   }
 }
 ```
@@ -349,7 +349,7 @@ Future<void> close({void Function(String message)? onStatus}) {
 
 Reason: setting `_closing` and `processSupervisor.beginClosing()` at the very start prevents a race where `initialize()` or `_ensureChatRuntimeReady()` starts a process while close is already in progress.
 
-## Step 3: Keep `lib/app/aurora_app.dart` as the app-exit entry point
+## Step 3: Keep `lib/app/agent_awesome_app.dart` as the app-exit entry point
 
 The existing structure is the right shape: Ctrl-C and window-close both call controller shutdown. Keep that centralization.
 
@@ -540,7 +540,7 @@ LiteRtLocalModelRuntime({
   LocalModelExecutableResolver? executableResolver,
 }) : _processSupervisor = processSupervisor,
      _http = httpClient ?? http.Client(),
-     _dataDirectory = dataDirectory ?? auroraDataDirectoryPath(),
+     _dataDirectory = dataDirectory ?? agentAwesomeDataDirectoryPath(),
      _executableResolver = executableResolver ?? const LocalModelExecutableResolver();
 ```
 
@@ -859,7 +859,7 @@ grep -RInE 'Process\.(run|runSync|start|killPid)' lib \
 
 Expected result: no output.
 
-A separate check may allow `ProcessSignal` only in `aurora_app.dart` and `process_supervisor.dart`.
+A separate check may allow `ProcessSignal` only in `agent_awesome_app.dart` and `process_supervisor.dart`.
 
 ## Step 10: Acceptance criteria
 

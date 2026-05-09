@@ -320,7 +320,7 @@ String _backlogPlannerPrompt({
 }
 
 const String _plannerSystemPrompt = '''
-You plan UI-local Backlog screen commands for Aurora.
+You plan UI-local Backlog screen commands for Agent Awesome.
 Return strict JSON only. Do not include Markdown, comments, or prose outside JSON.
 Never call tools. Never claim a change was applied.
 Classify informational requests as {"intent":"question"} and ambiguous mutation requests as {"intent":"clarification"}.
