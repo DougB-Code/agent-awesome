@@ -1,3 +1,4 @@
 * Development Docs
 ** xref:development:contributor-setup.adoc[Contributor Setup]
 ** xref:development:build-package.adoc[Build And Package]
+** xref:development:litert-gemma-tool-calls.adoc[LiteRT Gemma Tool Calls]
