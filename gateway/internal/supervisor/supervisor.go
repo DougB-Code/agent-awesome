@@ -1,3 +1,4 @@
+// This file supervises optional local dependency processes for the gateway.
 package supervisor
 
 import (
@@ -56,6 +57,8 @@ type processResult struct {
 	err error
 }
 
+const startupTerminationTimeout = 2 * time.Second
+
 // New creates a local service manager.
 func New(startTimeout time.Duration) *Manager {
 	if startTimeout <= 0 {
@@ -66,6 +69,17 @@ func New(startTimeout time.Duration) *Manager {
 		startTimeout: startTimeout,
 		processes:    make(map[string]processHandle),
 		statuses:     make(map[string]Status),
+	}
+}
+
+// Expect records dependencies that should become ready during startup.
+func (m *Manager) Expect(services ...Service) {
+	startedAt := time.Now().UTC()
+	for _, service := range services {
+		if service.Name == "" {
+			continue
+		}
+		m.remember(newStatus(service, "checking", "waiting for dependency startup", 0, startedAt))
 	}
 }
 
@@ -120,7 +134,12 @@ func (m *Manager) Close(ctx context.Context) error {
 		if process.command.Process == nil {
 			continue
 		}
-		_ = process.command.Process.Signal(os.Interrupt)
+		select {
+		case <-process.done:
+			continue
+		default:
+			_ = signalProcess(process, os.Interrupt)
+		}
 	}
 	done := make(chan struct{})
 	go func() {
@@ -133,7 +152,7 @@ func (m *Manager) Close(ctx context.Context) error {
 	case <-ctx.Done():
 		for _, process := range processes {
 			if process.command.Process != nil {
-				_ = process.command.Process.Kill()
+				_ = signalProcess(process, os.Kill)
 			}
 		}
 		return ctx.Err()
@@ -151,6 +170,7 @@ func (m *Manager) start(ctx context.Context, service Service) (processHandle, er
 	cmd.Dir = service.WorkingDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		return processHandle{}, err
 	}
@@ -170,14 +190,39 @@ func (m *Manager) waitForHealth(ctx context.Context, service Service, process pr
 	for {
 		select {
 		case <-process.done:
+			m.forgetProcess(service.Name)
 			return newStatus(service, "disconnected", processExitMessage(process.err()), process.command.Process.Pid, startedAt)
 		case <-deadline.Done():
-			return newStatus(service, "disconnected", "startup timed out", process.command.Process.Pid, startedAt)
+			reason := "startup timed out"
+			if deadline.Err() == context.Canceled {
+				reason = "startup canceled"
+			}
+			message := m.terminateFailedStartup(service.Name, process, reason)
+			return newStatus(service, "failed_startup", message, process.command.Process.Pid, startedAt)
 		case <-ticker.C:
 			if service.HealthURL != "" && m.isHealthy(deadline, service.HealthURL) {
 				return newStatus(service, "connected", "started", process.command.Process.Pid, startedAt)
 			}
 		}
+	}
+}
+
+// terminateFailedStartup stops an unhealthy startup process and forgets ownership.
+func (m *Manager) terminateFailedStartup(name string, process processHandle, reason string) string {
+	if process.command.Process == nil {
+		m.forgetProcess(name)
+		return reason + "; process missing"
+	}
+	_ = signalProcess(process, os.Interrupt)
+	select {
+	case <-process.done:
+		m.forgetProcess(name)
+		return reason + "; process terminated"
+	case <-time.After(startupTerminationTimeout):
+		_ = signalProcess(process, os.Kill)
+		<-process.done
+		m.forgetProcess(name)
+		return reason + "; process killed"
 	}
 }
 
@@ -190,6 +235,22 @@ func newProcessHandle(cmd *exec.Cmd) processHandle {
 		close(done)
 	}()
 	return processHandle{command: cmd, done: done, result: result}
+}
+
+// signalProcess sends a signal to the child process group when available.
+func signalProcess(process processHandle, signal os.Signal) error {
+	if process.command.Process == nil {
+		return nil
+	}
+	pid := process.command.Process.Pid
+	if pid > 0 {
+		if typed, ok := signal.(syscall.Signal); ok {
+			if err := syscall.Kill(-pid, typed); err == nil {
+				return nil
+			}
+		}
+	}
+	return process.command.Process.Signal(signal)
 }
 
 // err returns the stored wait result after process completion.
@@ -245,6 +306,13 @@ func (m *Manager) remember(status Status) Status {
 	defer m.mu.Unlock()
 	m.statuses[status.Name] = status
 	return status
+}
+
+// forgetProcess removes process ownership once the child has exited.
+func (m *Manager) forgetProcess(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.processes, name)
 }
 
 // newStatus builds one timestamped dependency status snapshot.

@@ -1,10 +1,11 @@
 // Package supervisor manages optional local service processes for the gateway.
 //
 // Intended use cases:
-//   - Check harness and memory readiness before the gateway begins serving.
+//   - Track harness and memory readiness while the gateway is serving.
 //   - Start configured sibling binaries for local personal deployments.
 //
 // High-level examples:
+//   - supervisor.Manager.Expect(...) records dependencies expected at startup.
 //   - supervisor.New(...).Ensure(ctx, service) verifies or starts a dependency.
 //   - supervisor.Manager.Close(...) stops only processes it started.
 //

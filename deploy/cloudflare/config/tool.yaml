@@ -1,9 +1,41 @@
 # This file configures harness tools for the Cloudflare pilot container.
 local-exec:
   enabled: false
+  allow-persistent-approvals: false
 mcp:
   enabled: true
   servers:
     - name: memory
       transport: streamable-http
       endpoint: http://127.0.0.1:8090/mcp
+      require-confirmation-tools:
+        - remember
+        - save_memory_candidate
+        - refresh_compiled_page
+        - repair_memory_record
+        - submit_memory_correction
+      tools:
+        allow:
+          - remember
+          - save_memory_candidate
+          - search_memory
+          - search_sources
+          - load_entity_page
+          - load_timeline
+          - refresh_compiled_page
+          - repair_memory_record
+          - submit_memory_correction
+          - query_context_graph
+          - create_task
+          - get_task
+          - list_tasks
+          - task_graph_projection
+          - update_task
+          - complete_task
+          - cancel_task
+          - delete_task
+          - link_task_memory
+          - list_task_relations
+          - traverse_task_relations
+          - upsert_task_relation
+          - delete_task_relation

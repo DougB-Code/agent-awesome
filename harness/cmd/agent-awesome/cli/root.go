@@ -23,6 +23,7 @@ func NewRootCommand(ctx context.Context) *cobra.Command {
 		},
 	}
 	root.AddCommand(newRunCommand(ctx))
+	root.AddCommand(newModelsCommand(ctx))
 	root.AddCommand(NewCredentialsCommand())
 	return root
 }

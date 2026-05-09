@@ -22,6 +22,7 @@ const (
 	propertyEffort          = "effort"
 	propertyEnergyRequired  = "energy_required"
 	propertyEstimateMinutes = "estimate_minutes"
+	propertyFollowUpAt      = "follow_up_at"
 	propertyLagMinutes      = "lag_minutes"
 	propertyLinkNote        = "note"
 	propertyPriority        = "priority"
@@ -461,6 +462,9 @@ func (r *Repository) writeTaskProperties(ctx context.Context, nodeID graph.NodeI
 	if req.ScheduledAt != nil {
 		properties = append(properties, taskTimeProperty(nodeID, propertyScheduledAt, req.ScheduledAt, req.Actor))
 	}
+	if req.FollowUpAt != nil {
+		properties = append(properties, taskTimeProperty(nodeID, propertyFollowUpAt, req.FollowUpAt, req.Actor))
+	}
 	if domain.TaskWorkBreakdownHasContent(req.WorkBreakdown) {
 		property, err := taskWorkBreakdownProperty(nodeID, req.WorkBreakdown, req.Actor)
 		if err != nil {
@@ -533,6 +537,11 @@ func (r *Repository) writeTaskPatchProperties(ctx context.Context, nodeID graph.
 	}
 	if req.ScheduledAt != nil || req.ClearScheduledAt {
 		if err := r.upsertTaskProperty(ctx, taskTimeProperty(nodeID, propertyScheduledAt, req.ScheduledAt, req.Actor)); err != nil {
+			return err
+		}
+	}
+	if req.FollowUpAt != nil || req.ClearFollowUpAt {
+		if err := r.upsertTaskProperty(ctx, taskTimeProperty(nodeID, propertyFollowUpAt, req.FollowUpAt, req.Actor)); err != nil {
 			return err
 		}
 	}
@@ -738,6 +747,7 @@ func (r *Repository) taskFromNode(ctx context.Context, node graph.Node, includeL
 		Priority:        domain.TaskPriority(propertyText(properties[propertyPriority], string(domain.TaskPriorityNormal))),
 		DueAt:           propertyTime(properties[propertyDueAt]),
 		ScheduledAt:     propertyTime(properties[propertyScheduledAt]),
+		FollowUpAt:      propertyTime(properties[propertyFollowUpAt]),
 		EstimateMinutes: int(propertyNumber(properties[propertyEstimateMinutes])),
 		EnergyRequired:  propertyText(properties[propertyEnergyRequired], ""),
 		Effort:          propertyNumber(properties[propertyEffort]),
@@ -875,6 +885,9 @@ func taskSortTime(task domain.Task) time.Time {
 	}
 	if task.ScheduledAt != nil {
 		return *task.ScheduledAt
+	}
+	if task.FollowUpAt != nil {
+		return *task.FollowUpAt
 	}
 	return task.CreatedAt
 }

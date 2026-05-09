@@ -11,25 +11,29 @@ Run commands from the repository root unless a step explicitly changes directori
 cd /home/doug/dev/agentawesome/agent
 
 npm install --cache ./build/npm-cache
-npm run docs:build
-
-cd harness && go test ./... && cd ..
-cd memory && go test ./... && cd ..
-cd gateway && go test ./... && cd ..
-cd provision && go test ./... && cd ..
-
-cd deploy/cloudflare/worker
-npm install --cache ../../../build/npm-cache
-npm run check
-cd ../../..
-
-cd ui
-flutter analyze
-cd ..
+npm --prefix deploy/cloudflare/worker install --cache ./build/npm-cache
+npm run check:beta
 ----
 
+The beta check runs whitespace validation, Go module tests, the Cloudflare Worker smoke test, Flutter analysis/tests, and the Antora documentation build.
+
 `npx wrangler` commands require Node 22 or newer.
-If `npm run check` passes but Wrangler refuses to start, update the active Node version before deploying Cloudflare resources.
+If the Worker smoke test passes but Wrangler refuses to start, update the active Node version before deploying Cloudflare resources.
+
+== Verify Model IDs
+
+Before beta packaging, run a live model smoke check with the provider
+credentials available in the harness keyring or environment:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/harness
+go run ./cmd/agent-awesome models check \
+  --model ../pilots/personal-assistant/model.yaml \
+  --provider openai \
+  --model-id gpt-mini
+cd ..
+----
 
 == Build Go Binaries
 

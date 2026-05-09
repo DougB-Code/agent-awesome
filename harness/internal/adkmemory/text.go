@@ -7,6 +7,15 @@ import (
 	"google.golang.org/genai"
 )
 
+var runtimeHiddenPrefixes = []string{
+	"[[AGENT_AWESOME_HIDDEN_RUNTIME_MESSAGE]]",
+}
+
+var runtimeControlPrefixes = []string{
+	"[[AGENT_AWESOME_RUNTIME_POLICY:",
+	"[[AGENT_AWESOME_SESSION_CONTEXT:",
+}
+
 // contentText extracts sanitized text from all textual content parts.
 func contentText(content *genai.Content) string {
 	if content == nil {
@@ -32,16 +41,24 @@ func cleanSessionText(text string) string {
 		switch {
 		case text == "":
 			return ""
-		case strings.HasPrefix(text, "[[AURORA_HIDDEN_RUNTIME_MESSAGE]]"):
+		case hasAnyPrefix(text, runtimeHiddenPrefixes):
 			return ""
-		case strings.HasPrefix(text, "[[AURORA_RUNTIME_POLICY:"):
-			text = trimLeadingControlBlock(text)
-		case strings.HasPrefix(text, "[[AURORA_SESSION_CONTEXT:"):
+		case hasAnyPrefix(text, runtimeControlPrefixes):
 			text = trimLeadingControlBlock(text)
 		default:
 			return strings.TrimSpace(text)
 		}
 	}
+}
+
+// hasAnyPrefix reports whether text starts with one of the given prefixes.
+func hasAnyPrefix(text string, prefixes []string) bool {
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(text, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // trimLeadingControlBlock removes one leading double-bracket control block.

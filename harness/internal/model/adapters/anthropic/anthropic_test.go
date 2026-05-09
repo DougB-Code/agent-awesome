@@ -133,6 +133,39 @@ func TestFactoryUsesInjectedDependencies(t *testing.T) {
 	}
 }
 
+// TestValidateProviderRejectsOptionalAuth verifies Anthropic always needs auth.
+func TestValidateProviderRejectsOptionalAuth(t *testing.T) {
+	err := (Factory{}).ValidateProvider("anthropic", schema.Provider{
+		Auth:      schema.ProviderAuthOptional,
+		APIKeyEnv: "ANTHROPIC_API_KEY",
+		URL:       "https://api.anthropic.com/v1/messages",
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not support auth: optional") {
+		t.Fatalf("ValidateProvider() error = %v, want optional auth rejection", err)
+	}
+}
+
+// TestValidateProviderRejectsStreamingCapability prevents unsupported model
+// capabilities from reaching runtime startup.
+func TestValidateProviderRejectsStreamingCapability(t *testing.T) {
+	err := (Factory{}).ValidateProvider("anthropic", schema.Provider{
+		APIKeyEnv: "ANTHROPIC_API_KEY",
+		URL:       "https://api.anthropic.com/v1/messages",
+		Models: []schema.Model{
+			{
+				ID:    "claude",
+				Model: "claude-example",
+				Capabilities: schema.ModelCapabilities{
+					Streaming: true,
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not support streaming") {
+		t.Fatalf("ValidateProvider() error = %v, want streaming capability rejection", err)
+	}
+}
+
 type staticCredentialResolver map[string]string
 
 func (r staticCredentialResolver) ResolveCredential(name string) (string, error) {

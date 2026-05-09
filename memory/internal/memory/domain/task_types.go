@@ -77,6 +77,7 @@ type Task struct {
 	Priority        TaskPriority      `json:"priority"`
 	DueAt           *time.Time        `json:"due_at,omitempty"`
 	ScheduledAt     *time.Time        `json:"scheduled_at,omitempty"`
+	FollowUpAt      *time.Time        `json:"follow_up_at,omitempty"`
 	Topics          []string          `json:"topics,omitempty"`
 	EstimateMinutes int               `json:"estimate_minutes,omitempty"`
 	EnergyRequired  string            `json:"energy_required,omitempty"`
@@ -171,6 +172,7 @@ type CreateTaskRequest struct {
 	Priority        TaskPriority        `json:"priority,omitempty"`
 	DueAt           *time.Time          `json:"due_at,omitempty"`
 	ScheduledAt     *time.Time          `json:"scheduled_at,omitempty"`
+	FollowUpAt      *time.Time          `json:"follow_up_at,omitempty"`
 	Topics          []string            `json:"topics,omitempty"`
 	EstimateMinutes int                 `json:"estimate_minutes,omitempty"`
 	EnergyRequired  string              `json:"energy_required,omitempty"`
@@ -202,6 +204,8 @@ type UpdateTaskRequest struct {
 	ClearDueAt       bool               `json:"clear_due_at,omitempty"`
 	ScheduledAt      *time.Time         `json:"scheduled_at,omitempty"`
 	ClearScheduledAt bool               `json:"clear_scheduled_at,omitempty"`
+	FollowUpAt       *time.Time         `json:"follow_up_at,omitempty"`
+	ClearFollowUpAt  bool               `json:"clear_follow_up_at,omitempty"`
 	Topics           []string           `json:"topics,omitempty"`
 	EstimateMinutes  *int               `json:"estimate_minutes,omitempty"`
 	EnergyRequired   *string            `json:"energy_required,omitempty"`

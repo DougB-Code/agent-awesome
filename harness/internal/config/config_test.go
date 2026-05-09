@@ -2,11 +2,13 @@
 package config
 
 import (
-	"agentawesome/internal/config/schema"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
+
+	"agentawesome/internal/config/schema"
 )
 
 func TestDefaultConfigPathsUseOSConfigDir(t *testing.T) {
@@ -135,6 +137,9 @@ providers:
 	if got, want := selection.Provider.Adapter, "openai"; got != want {
 		t.Fatalf("selection.Provider.Adapter = %q, want %q", got, want)
 	}
+	if got, want := selection.Provider.AuthMode(), ""; got != want {
+		t.Fatalf("selection.Provider.AuthMode() = %q, want %q", got, want)
+	}
 	if got, want := selection.Model.ID, "example"; got != want {
 		t.Fatalf("selection.Model.ID = %q, want %q", got, want)
 	}
@@ -143,6 +148,52 @@ providers:
 	}
 	if !selection.Model.Capabilities.Streaming {
 		t.Fatalf("selection.Model.Capabilities.Streaming = false, want true")
+	}
+}
+
+// TestLoadModelConfigAcceptsProviderAuth verifies the auth enum is decoded.
+func TestLoadModelConfigAcceptsProviderAuth(t *testing.T) {
+	path := writeTempFile(t, "model.yaml", `
+default: local:example
+providers:
+  local:
+    adapter: openai
+    auth: optional
+    url: http://127.0.0.1:11434/v1/chat/completions
+    models:
+      - id: example
+        model: local/model
+`)
+
+	cfg, err := LoadModel(path)
+	if err != nil {
+		t.Fatalf("LoadModel() error = %v", err)
+	}
+	selection, err := cfg.ResolveProvider("", "")
+	if err != nil {
+		t.Fatalf("ResolveProvider() error = %v", err)
+	}
+	if got, want := selection.Provider.AuthMode(), schema.ProviderAuthOptional; got != want {
+		t.Fatalf("AuthMode() = %q, want %q", got, want)
+	}
+}
+
+// TestLoadModelRejectsInvalidProviderAuth verifies invalid auth policy fails.
+func TestLoadModelRejectsInvalidProviderAuth(t *testing.T) {
+	path := writeTempFile(t, "model.yaml", `
+default: local:example
+providers:
+  local:
+    adapter: openai
+    auth: anonymous
+    url: http://127.0.0.1:11434/v1/chat/completions
+    models:
+      - id: example
+        model: local/model
+`)
+
+	if _, err := LoadModel(path); err == nil {
+		t.Fatalf("LoadModel() error = nil, want auth validation error")
 	}
 }
 
@@ -215,6 +266,7 @@ func TestLoadToolsConfig(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:
   enabled: true
+  allow-persistent-approvals: true
   default-timeout: 10s
   default-max-output-bytes: 1024
   allowed-workdirs:
@@ -241,6 +293,9 @@ local-exec:
 	}
 	if !cfg.LocalExec.Enabled {
 		t.Fatalf("LocalExec.Enabled = false, want true")
+	}
+	if !cfg.LocalExec.AllowPersistentApprovals {
+		t.Fatalf("AllowPersistentApprovals = false, want true")
 	}
 	if !cfg.LocalExec.Commands[0].Approval.AlwaysAllowWithinWorkspace {
 		t.Fatalf("AlwaysAllowWithinWorkspace = false, want true")
@@ -310,6 +365,78 @@ mcp:
 	}
 	if got, want := cfg.MCP.Servers[1].RequireConfirmationTools, []string{"delete_item"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("RequireConfirmationTools = %#v, want %#v", got, want)
+	}
+}
+
+// TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy keeps shipped
+// tool configs aligned with the UI-generated graph-backed memory config.
+func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T) {
+	expectedAllow := []string{
+		"remember",
+		"save_memory_candidate",
+		"search_memory",
+		"search_sources",
+		"load_entity_page",
+		"load_timeline",
+		"refresh_compiled_page",
+		"repair_memory_record",
+		"submit_memory_correction",
+		"query_context_graph",
+		"create_task",
+		"get_task",
+		"list_tasks",
+		"task_graph_projection",
+		"update_task",
+		"complete_task",
+		"cancel_task",
+		"delete_task",
+		"link_task_memory",
+		"list_task_relations",
+		"traverse_task_relations",
+		"upsert_task_relation",
+		"delete_task_relation",
+	}
+	expectedConfirmations := []string{
+		"remember",
+		"save_memory_candidate",
+		"refresh_compiled_page",
+		"repair_memory_record",
+		"submit_memory_correction",
+	}
+	root := repoRoot(t)
+	paths := []string{
+		filepath.Join(root, "harness", "tool.local.yaml"),
+		filepath.Join(root, "harness", "tool.cloudflare.yaml"),
+		filepath.Join(root, "pilots", "personal-assistant", "tool.yaml"),
+		filepath.Join(root, "deploy", "cloudflare", "config", "tool.yaml"),
+	}
+
+	for _, path := range paths {
+		t.Run(filepath.ToSlash(path), func(t *testing.T) {
+			cfg, err := LoadTools(path, true)
+			if err != nil {
+				t.Fatalf("LoadTools() error = %v", err)
+			}
+			if cfg.LocalExec.Enabled {
+				t.Fatalf("LocalExec.Enabled = true, want shipped configs disabled by default")
+			}
+			if cfg.LocalExec.AllowPersistentApprovals {
+				t.Fatalf("AllowPersistentApprovals = true, want shipped configs disabled by default")
+			}
+			server, ok := memoryMCPServer(cfg.MCP.Servers)
+			if !ok {
+				t.Fatalf("memory MCP server not configured")
+			}
+			if got := server.Tools.Allow; !reflect.DeepEqual(got, expectedAllow) {
+				t.Fatalf("Tools.Allow = %#v, want %#v", got, expectedAllow)
+			}
+			if got := server.RequireConfirmationTools; !reflect.DeepEqual(got, expectedConfirmations) {
+				t.Fatalf("RequireConfirmationTools = %#v, want %#v", got, expectedConfirmations)
+			}
+			if containsString(server.RequireConfirmationTools, "create_task") || containsString(server.RequireConfirmationTools, "update_task") {
+				t.Fatalf("task creation/update should remain auto-approved: %#v", server.RequireConfirmationTools)
+			}
+		})
 	}
 }
 
@@ -750,6 +877,36 @@ func writeTempFile(t *testing.T, name, content string) string {
 	path := filepath.Join(t.TempDir(), name)
 	writeFile(t, path, content)
 	return path
+}
+
+// repoRoot returns the repository root for static fixture tests.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller() failed")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", ".."))
+}
+
+// memoryMCPServer returns the memory MCP server from a config server list.
+func memoryMCPServer(servers []schema.MCPServer) (schema.MCPServer, bool) {
+	for _, server := range servers {
+		if server.Name == "memory" {
+			return server, true
+		}
+	}
+	return schema.MCPServer{}, false
+}
+
+// containsString reports whether values contains target.
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func writeFile(t *testing.T, path, content string) {

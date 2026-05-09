@@ -244,6 +244,8 @@ WorkspaceTask _copyTask(
   bool clearDueAt = false,
   DateTime? scheduledAt,
   bool clearScheduledAt = false,
+  DateTime? followUpAt,
+  bool clearFollowUpAt = false,
   List<String>? topics,
 }) {
   final nextStatus = status ?? task.status;
@@ -257,6 +259,7 @@ WorkspaceTask _copyTask(
     priority: priority ?? task.priority,
     dueAt: clearDueAt ? null : dueAt ?? task.dueAt,
     scheduledAt: clearScheduledAt ? null : scheduledAt ?? task.scheduledAt,
+    followUpAt: clearFollowUpAt ? null : followUpAt ?? task.followUpAt,
     topics: topics ?? task.topics,
     estimateMinutes: task.estimateMinutes,
     energyRequired: task.energyRequired,
@@ -386,6 +389,8 @@ class _FakeTasksClient extends TasksClient {
     bool clearDueAt = false,
     DateTime? scheduledAt,
     bool clearScheduledAt = false,
+    DateTime? followUpAt,
+    bool clearFollowUpAt = false,
     List<String>? topics,
     bool replaceTopics = false,
     int? estimateMinutes,
@@ -422,6 +427,8 @@ class _FakeTasksClient extends TasksClient {
       clearDueAt: clearDueAt,
       scheduledAt: scheduledAt,
       clearScheduledAt: clearScheduledAt,
+      followUpAt: followUpAt,
+      clearFollowUpAt: clearFollowUpAt,
       topics: replaceTopics ? topics : null,
     );
     tasks = <WorkspaceTask>[

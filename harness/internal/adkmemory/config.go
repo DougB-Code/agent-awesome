@@ -13,7 +13,7 @@ import (
 )
 
 // NewFromToolsConfig creates an ADK memory service from configured MCP servers.
-func NewFromToolsConfig(cfg *schema.Tools, sessionDatabasePath ...string) (*Service, bool, error) {
+func NewFromToolsConfig(cfg *schema.Tools) (*Service, bool, error) {
 	server, ok := selectMemoryServer(cfg)
 	if !ok {
 		return nil, false, nil
@@ -21,7 +21,7 @@ func NewFromToolsConfig(cfg *schema.Tools, sessionDatabasePath ...string) (*Serv
 	if _, err := mcptransport.New(server); err != nil {
 		return nil, true, fmt.Errorf("create memory MCP transport: %w", err)
 	}
-	return New(server, sessionDatabasePath...), true, nil
+	return New(server), true, nil
 }
 
 // RuntimeTools returns ADK tools that search and preload configured memory.

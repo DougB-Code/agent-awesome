@@ -36,6 +36,32 @@ Keeping those files separate preserves the boundary between provider selection, 
 go run ./cmd/agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- console
 ----
 
+== Model Providers
+
+Provider auth is explicit in `model.yaml`.
+Use `auth: required` with `api-key: ENV_NAME` for hosted providers such as
+OpenAI-compatible HTTPS APIs. Use `auth: optional` only for loopback local
+providers that intentionally accept anonymous requests.
+
+Before packaging or changing model IDs, run a smoke check against the selected
+provider:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome models check \
+  --model model.yaml \
+  --provider openai \
+  --model-id gpt-mini
+----
+
+== Local Exec
+
+Local OS command tools are disabled in shipped beta configs.
+To expose `local_exec` or `request_command`, set `local-exec.enabled: true` and configure explicit command aliases, allowed workdirs, timeouts, and output caps.
+
+Saved `request_command` approvals are disabled unless `local-exec.allow-persistent-approvals: true` is set.
+When enabled, review prompts display the workspace and global approval policy files that can be reused without another prompt.
+
 == MCP Tools
 
 MCP servers are configured under `mcp.servers`.

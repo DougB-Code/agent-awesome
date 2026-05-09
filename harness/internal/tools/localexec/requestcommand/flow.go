@@ -8,6 +8,8 @@ import (
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/localexec/execspec"
 	"agentawesome/internal/tools/localexec/workdir"
+
+	"github.com/rs/zerolog/log"
 )
 
 type commandExecutor interface {
@@ -49,7 +51,7 @@ func (f requestCommandFlow) run(ctx confirmationRequester, input RequestCommandI
 		return requestCommandError(proposal, nil, err)
 	}
 
-	allowed, err := f.policies.allows(base, proposal)
+	allowed, err := f.policies.allows(base, proposal, f.cfg.AllowPersistentApprovals)
 	if err != nil {
 		return requestCommandError(proposal, nil, err)
 	}
@@ -76,13 +78,20 @@ func (f requestCommandFlow) run(ctx confirmationRequester, input RequestCommandI
 
 // review requests or applies a user decision for a command proposal.
 func (f requestCommandFlow) review(ctx confirmationRequester, base string, proposal Proposal) (*RequestCommandOutput, error) {
+	persistentState := persistentApprovalState(base, f.cfg.AllowPersistentApprovals)
 	confirmation := ctx.ToolConfirmation()
 	if confirmation == nil {
+		log.Info().
+			Bool("persistent_approvals_enabled", persistentState.Enabled).
+			Str("command", proposal.CommandLine).
+			Str("cwd", proposal.CWD).
+			Msg("request_command review requested")
 		// Returning without executing lets the runtime pause and resume this tool
 		// call once the user has made a review decision.
-		if err := ctx.RequestConfirmation(proposalHint(proposal), ReviewRequestPayload{
-			Proposal: proposal,
-			Options:  approvalOptions(proposal),
+		if err := ctx.RequestConfirmation(proposalHint(proposal, persistentState), ReviewRequestPayload{
+			Proposal:            proposal,
+			Options:             approvalOptions(proposal, persistentState.Enabled),
+			PersistentApprovals: persistentState,
 		}); err != nil {
 			out, err := requestCommandError(proposal, nil, err)
 			return &out, err
@@ -104,11 +113,34 @@ func (f requestCommandFlow) review(ctx confirmationRequester, base string, propo
 	if decision.Action == "deny" {
 		return deniedRequestCommand(proposal), nil
 	}
+	if isPersistentReviewAction(decision.Action) && !f.cfg.AllowPersistentApprovals {
+		out, err := requestCommandError(proposal, nil, persistentApprovalsDisabledError())
+		return &out, err
+	}
 	if err := f.policies.apply(base, proposal, decision); err != nil {
 		out, err := requestCommandError(proposal, nil, err)
 		return &out, err
 	}
+	if isPersistentReviewAction(decision.Action) {
+		log.Info().
+			Str("action", decision.Action).
+			Str("command", proposal.CommandLine).
+			Str("workspace", base).
+			Msg("request_command persistent approval stored")
+	}
 	return nil, nil
+}
+
+// persistentApprovalsDisabledError explains how to enable saved approvals.
+func persistentApprovalsDisabledError() error {
+	return errPersistentApprovalsDisabled{}
+}
+
+type errPersistentApprovalsDisabled struct{}
+
+// Error renders a user-facing persistent approval configuration error.
+func (errPersistentApprovalsDisabled) Error() string {
+	return "persistent request_command approvals are disabled; set local-exec allow-persistent-approvals: true to save workspace/global approvals"
 }
 
 // deniedRequestCommand builds the output returned for denied proposals.

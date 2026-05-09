@@ -2,6 +2,7 @@ default: cloudflare:gemma-4
 providers:
   anthropic:
     adapter: anthropic
+    auth: required
     api-key: ANTHROPIC_API_KEY
     default: haiku
     url: https://api.anthropic.com/v1/messages
@@ -10,6 +11,7 @@ providers:
         model: claude-haiku-4-5
   cloudflare:
     adapter: openai
+    auth: required
     api-key: CLOUDFLARE_API_KEY
     default: kimi-k2
     url: ${CLOUDFLARE_GATEWAY_URL}
@@ -22,6 +24,7 @@ providers:
         model: workers-ai/@cf/nvidia/nemotron-3-120b-a12b
   google:
     adapter: google
+    auth: required
     api-key: GOOGLE_API_KEY
     default: gemini-flash-lite
     models:
@@ -35,6 +38,7 @@ providers:
           streaming: true
   huggingface:
     adapter: openai
+    auth: required
     api-key: HUGGINGFACE_API_KEY
     default: kimi-k2-thinking
     url: https://router.huggingface.co/v1/chat/completions
@@ -45,6 +49,7 @@ providers:
         model: moonshotai/Kimi-K2-Thinking
   local-fast:
     adapter: openai
+    auth: optional
     default: gemma
     url: http://127.0.0.1:8080/v1/chat/completions
     models:
@@ -52,6 +57,7 @@ providers:
         model: ggml-org/gemma-4-E2B-it-GGUF:Q8_0
   openai:
     adapter: openai
+    auth: required
     api-key: OPENAI_API_KEY
     default: gpt-mini
     url: https://api.openai.com/v1/chat/completions
@@ -60,6 +66,7 @@ providers:
         model: gpt-5.4-mini
   xai:
     adapter: openai
+    auth: required
     api-key: XAI_API_KEY
     default: grok
     url: https://api.x.ai/v1/chat/completions

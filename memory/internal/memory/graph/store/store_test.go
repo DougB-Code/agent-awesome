@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -243,6 +246,74 @@ func TestEvidenceBlobAuditAndFTSSearch(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].ID != evidence.ID {
 		t.Fatalf("results = %#v, want evidence node", results)
+	}
+}
+
+// TestUnitOfWorkRollsBackGraphWrites verifies failed transactions leave no nodes.
+func TestUnitOfWorkRollsBackGraphWrites(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+	sentinel := errors.New("rollback")
+
+	err := store.WithUnitOfWork(ctx, func(tx *Store) error {
+		if _, err := tx.UpsertNode(ctx, graph.UpsertNodeRequest{
+			Kind:      graph.KindMemory,
+			StableKey: "memory:rollback",
+			Title:     "Rolled back memory",
+			Actor:     "test",
+		}); err != nil {
+			return err
+		}
+		return sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("WithUnitOfWork() error = %v, want sentinel", err)
+	}
+	count, err := store.CountNodes(ctx, graph.KindMemory, graph.StatusActive)
+	if err != nil {
+		t.Fatalf("count nodes: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("count = %d, want rollback to remove node", count)
+	}
+}
+
+// TestUnitOfWorkRollsBackEvidenceFile verifies staged blobs are cleaned up.
+func TestUnitOfWorkRollsBackEvidenceFile(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	defer store.Close()
+	sentinel := errors.New("rollback")
+	var blob graph.EvidenceBlob
+
+	err := store.WithUnitOfWork(ctx, func(tx *Store) error {
+		evidence := mustNode(t, tx, graph.KindEvidence, "evidence:rollback", "Rollback evidence")
+		var err error
+		blob, err = tx.WriteEvidenceBlob(ctx, graph.WriteEvidenceBlobRequest{
+			NodeID:       evidence.ID,
+			Content:      "temporary evidence",
+			MediaType:    "text/plain",
+			SourceSystem: "test",
+			SourceID:     "source-rollback",
+			Actor:        "test",
+		})
+		if err != nil {
+			return err
+		}
+		if content, err := tx.ReadEvidenceBlobContent(ctx, evidence.ID); err != nil || content != "temporary evidence" {
+			return errors.New("staged evidence content was unreadable")
+		}
+		return sentinel
+	})
+	if !errors.Is(err, sentinel) {
+		t.Fatalf("WithUnitOfWork() error = %v, want sentinel", err)
+	}
+	if _, err := store.GetEvidenceBlob(ctx, blob.NodeID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("GetEvidenceBlob() error = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := os.Stat(filepath.Join(store.dataRoot, blob.Path)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("evidence file stat error = %v, want missing file", err)
 	}
 }
 

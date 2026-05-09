@@ -3,6 +3,8 @@ package contextapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,25 +20,43 @@ import (
 )
 
 const contextAPIPrefix = "/api/context"
+const maxContextAPIRequestBytes int64 = 1 << 20
 
 // Server exposes harness-owned context operations for the gateway.
 type Server struct {
-	tools *schema.Tools
-	http  *http.Server
+	tools     *schema.Tools
+	authToken string
+	http      *http.Server
+}
+
+// Config stores the direct context API listener and optional bearer token.
+type Config struct {
+	Addr      string
+	AuthToken string
 }
 
 // Start begins serving the context API on addr when addr is non-empty.
 func Start(ctx context.Context, addr string, tools *schema.Tools) (*Server, error) {
-	if strings.TrimSpace(addr) == "" {
+	return StartWithConfig(ctx, Config{Addr: addr}, tools)
+}
+
+// StartWithConfig begins serving the context API after validating bind safety.
+func StartWithConfig(ctx context.Context, cfg Config, tools *schema.Tools) (*Server, error) {
+	cfg.Addr = strings.TrimSpace(cfg.Addr)
+	cfg.AuthToken = strings.TrimSpace(cfg.AuthToken)
+	if cfg.Addr == "" {
 		return nil, nil
 	}
-	server := &Server{tools: tools}
+	if err := validateListenConfig(cfg); err != nil {
+		return nil, err
+	}
+	server := &Server{tools: tools, authToken: cfg.AuthToken}
 	server.http = &http.Server{
-		Addr:              addr,
+		Addr:              cfg.Addr,
 		Handler:           server.routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	listener, err := net.Listen("tcp", addr)
+	listener, err := net.Listen("tcp", cfg.Addr)
 	if err != nil {
 		return nil, fmt.Errorf("listen context api: %w", err)
 	}
@@ -60,8 +80,8 @@ func Start(ctx context.Context, addr string, tools *schema.Tools) (*Server, erro
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc(contextAPIPrefix+"/healthz", s.healthHandler)
-	mux.HandleFunc(contextAPIPrefix+"/tools/list", s.listToolsHandler)
-	mux.HandleFunc(contextAPIPrefix+"/tools/call", s.callToolHandler)
+	mux.HandleFunc(contextAPIPrefix+"/tools/list", s.authenticated(s.listToolsHandler))
+	mux.HandleFunc(contextAPIPrefix+"/tools/call", s.authenticated(s.callToolHandler))
 	return mux
 }
 
@@ -90,8 +110,15 @@ func (s *Server) callToolHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
+	body := http.MaxBytesReader(w, r.Body, maxContextAPIRequestBytes)
+	defer body.Close()
 	var req toolCallRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "payload too large"})
+			return
+		}
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "decode request: " + err.Error()})
 		return
 	}
@@ -158,6 +185,57 @@ func (s *Server) callTool(ctx context.Context, name string, arguments map[string
 		return result.StructuredContent, nil
 	}
 	return map[string]any{"content": result.Content}, nil
+}
+
+// authenticated protects context tool surfaces when a direct API token is set.
+func (s *Server) authenticated(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.authToken == "" {
+			next(w, r)
+			return
+		}
+		if !sameToken(r.Header.Get("Authorization"), "Bearer "+s.authToken) {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// validateListenConfig rejects public context API binds without bearer auth.
+func validateListenConfig(cfg Config) error {
+	if isLoopbackListenAddress(cfg.Addr) {
+		return nil
+	}
+	if cfg.AuthToken == "" {
+		return fmt.Errorf("context API token is required when listening on a non-loopback address")
+	}
+	return nil
+}
+
+// isLoopbackListenAddress reports whether a TCP listen address is loopback-only.
+func isLoopbackListenAddress(address string) bool {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return false
+	}
+	return isLoopbackHost(host)
+}
+
+// isLoopbackHost reports whether a host name or IP address is local-only.
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// sameToken compares bearer tokens without data-dependent early returns.
+func sameToken(actual string, expected string) bool {
+	actualHash := sha256.Sum256([]byte(actual))
+	expectedHash := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(actualHash[:], expectedHash[:]) == 1
 }
 
 // serverForTool finds the configured MCP server that exposes a tool.

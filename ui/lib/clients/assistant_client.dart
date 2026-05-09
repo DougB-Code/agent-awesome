@@ -324,6 +324,7 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
   var text = '';
   ToolActivity? toolActivity;
   ConfirmationRequest? confirmation;
+  var errorMessage = stringFrom(event['errorMessage']);
   if (parts is List) {
     for (final rawPart in parts.whereType<Map<String, dynamic>>()) {
       if (rawPart['text'] != null) {
@@ -350,6 +351,9 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
             ? response
             : <String, dynamic>{};
         final error = stringFrom(responseMap['error']);
+        if (error.isNotEmpty && errorMessage.isEmpty) {
+          errorMessage = 'Tool $name failed: $error';
+        }
         toolActivity = ToolActivity(
           name: name,
           status: error.isEmpty ? 'completed' : 'failed',
@@ -370,7 +374,7 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
     partial: event['partial'] == true,
     toolActivity: toolActivity,
     confirmation: confirmation,
-    errorMessage: stringFrom(event['errorMessage']),
+    errorMessage: errorMessage,
   );
 }
 
@@ -414,7 +418,7 @@ ConfirmationRequest parseConfirmation(Map<String, dynamic> functionCall) {
 
 /// Prefix that carries local UI policy to stale or long-running agents.
 const String runtimePolicyPrefix =
-    '[[AURORA_RUNTIME_POLICY: Graph-backed task management is auto-approved. '
+    '[[AGENT_AWESOME_RUNTIME_POLICY: Graph-backed task management is auto-approved. '
     'When Doug asks to create, update, complete, cancel, delete, or link a '
     'task, call the task tool immediately. Do not ask for '
     'approval. Treat "remember that I need to..." as a task when it describes '
@@ -422,10 +426,11 @@ const String runtimePolicyPrefix =
     'for missing task details that block execution.]]\n\n';
 
 /// Prefix for per-run session metadata hidden from the transcript.
-const String runtimeSessionContextPrefix = '[[AURORA_SESSION_CONTEXT:';
+const String runtimeSessionContextPrefix = '[[AGENT_AWESOME_SESSION_CONTEXT:';
 
 /// Prefix that marks UI-generated policy repair turns as non-display content.
-const String hiddenRuntimeMessagePrefix = '[[AURORA_HIDDEN_RUNTIME_MESSAGE]]\n';
+const String hiddenRuntimeMessagePrefix =
+    '[[AGENT_AWESOME_HIDDEN_RUNTIME_MESSAGE]]\n';
 
 /// Adds the runtime policy prefix to user messages sent to the agent.
 String messageTextWithRuntimePolicy(String text, {String sessionId = ''}) {
@@ -444,17 +449,38 @@ String messageTextWithRuntimePolicy(String text, {String sessionId = ''}) {
 
 /// Removes local runtime policy wrappers before messages are displayed.
 String displayTextFromRuntimePolicy(String text) {
-  var withoutPolicy = text.startsWith(runtimePolicyPrefix)
-      ? text.substring(runtimePolicyPrefix.length)
-      : text;
-  if (withoutPolicy.startsWith(runtimeSessionContextPrefix)) {
-    final end = withoutPolicy.indexOf(']]\n\n');
-    withoutPolicy = end == -1 ? '' : withoutPolicy.substring(end + 4);
+  var visible = text;
+  while (visible.isNotEmpty) {
+    if (visible.startsWith(hiddenRuntimeMessagePrefix)) {
+      return '';
+    }
+    final stripped = _stripLeadingControlBlock(visible, <String>[
+      '[[AGENT_AWESOME_RUNTIME_POLICY:',
+      runtimeSessionContextPrefix,
+    ]);
+    if (stripped == visible) {
+      break;
+    }
+    visible = stripped;
   }
-  if (withoutPolicy.startsWith(hiddenRuntimeMessagePrefix)) {
+  return visible;
+}
+
+/// Reports whether text starts with one of the supplied prefixes.
+bool _startsWithAny(String text, List<String> prefixes) {
+  return prefixes.any(text.startsWith);
+}
+
+/// Removes one leading double-bracket runtime control block.
+String _stripLeadingControlBlock(String text, List<String> prefixes) {
+  if (!_startsWithAny(text, prefixes)) {
+    return text;
+  }
+  final end = text.indexOf(']]');
+  if (end == -1) {
     return '';
   }
-  return withoutPolicy;
+  return text.substring(end + 2).trimLeft();
 }
 
 /// Converts a dynamic value to a string.

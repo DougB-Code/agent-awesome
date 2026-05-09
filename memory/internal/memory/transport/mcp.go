@@ -1,3 +1,4 @@
+// This file serves the memory MCP JSON-RPC transport over HTTP.
 package transport
 
 import (
@@ -6,10 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"memory/internal/memory/domain"
 	"memory/internal/memory/service"
 )
+
+const maxJSONRPCRequestBytes int64 = 2 << 20
 
 // MCPServer serves a small MCP-compatible JSON-RPC tool surface.
 type MCPServer struct {
@@ -27,9 +33,15 @@ func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	defer r.Body.Close()
+	body := http.MaxBytesReader(w, r.Body, maxJSONRPCRequestBytes)
+	defer body.Close()
 	var req rpcRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(body).Decode(&req); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, "payload too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		writeRPCError(w, nil, -32700, "parse error", err.Error())
 		return
 	}
@@ -90,6 +102,12 @@ func (s *MCPServer) handleToolCall(ctx context.Context, params json.RawMessage) 
 // callTool decodes tool arguments and calls the memory service.
 func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMessage) (any, error) {
 	switch name {
+	case "remember":
+		var req rememberArgs
+		if err := decodeArgs(args, &req); err != nil {
+			return nil, err
+		}
+		return s.service.Capture(ctx, req.captureRequest())
 	case "save_memory_candidate":
 		var req domain.CaptureRequest
 		if err := decodeArgs(args, &req); err != nil {
@@ -145,8 +163,8 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		}
 		return s.service.QueryContextGraph(ctx, req)
 	case "create_task":
-		var req domain.CreateTaskRequest
-		if err := decodeArgs(args, &req); err != nil {
+		req, err := decodeCreateTaskArgs(args)
+		if err != nil {
 			return nil, err
 		}
 		return s.service.CreateTask(ctx, req)
@@ -236,7 +254,8 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 // toolDefinitions returns the stable MCP tool schemas.
 func toolDefinitions() []map[string]any {
 	return []map[string]any{
-		tool("save_memory_candidate", "Capture raw evidence, create a minimal memory record, and enqueue enrichment.", map[string]any{
+		tool("remember", "Store one small memory nugget. Use this for user facts, preferences, notes, and things to recall later. Use create_task only for operational todos.", rememberSchema(), []string{"text"}),
+		tool("save_memory_candidate", "Advanced memory capture for raw evidence. Prefer remember for a single small fact, preference, or note.", map[string]any{
 			"content":         stringSchema("Raw text or serialized source content to preserve."),
 			"title":           stringSchema("Human-readable title."),
 			"media_type":      stringSchema("Media type for the source content."),
@@ -296,7 +315,7 @@ func toolDefinitions() []map[string]any {
 			"scope":                 enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
 			"allowed_sensitivities": arraySchema("Allowed sensitivity levels; restricted must be requested explicitly.", enumSchema("Sensitivity.", []string{"public", "internal", "private", "restricted"})),
 		}, []string{"query"}),
-		tool("create_task", "Create a graph-backed operational task.", taskCreateSchema(), []string{"title"}),
+		tool("create_task", "Create a graph-backed operational task or todo. Do not use for user facts, preferences, or notes to remember.", taskCreateSchema(), []string{"title"}),
 		tool("get_task", "Load one graph-backed task by id.", map[string]any{"task_id": stringSchema("Task id.")}, []string{"task_id"}),
 		tool("list_tasks", "List graph-backed tasks.", taskQuerySchema(), []string{}),
 		tool("task_graph_projection", "Read a graph-backed task node and edge projection.", taskGraphProjectionSchema(), []string{}),
@@ -312,8 +331,36 @@ func toolDefinitions() []map[string]any {
 	}
 }
 
-// taskCreateSchema returns graph-backed create_task input properties.
+// rememberSchema returns the small model-facing memory nugget schema.
+func rememberSchema() map[string]any {
+	return map[string]any{
+		"text":            stringSchema("The single memory nugget to preserve."),
+		"title":           stringSchema("Optional short display title."),
+		"topics":          arraySchema("Optional connective topic tags.", stringSchema("Topic.")),
+		"entities":        arraySchema("Optional people, projects, places, or things this memory mentions.", stringSchema("Entity name.")),
+		"scope":           enumSchema("Optional ownership scope; default is user.", []string{"session", "user", "household", "tenant", "project", "global"}),
+		"sensitivity":     enumSchema("Optional sensitivity; default is private.", []string{"public", "internal", "private", "restricted"}),
+		"idempotency_key": stringSchema("Optional stable key to avoid duplicate nuggets."),
+		"actor":           stringSchema("Optional calling agent or user."),
+	}
+}
+
+// taskCreateSchema returns a small model-facing create_task payload.
 func taskCreateSchema() map[string]any {
+	return map[string]any{
+		"actor":           stringSchema("Optional calling agent or user."),
+		"title":           stringSchema("Short task title, such as buy milk."),
+		"description":     stringSchema("Optional note only when the user provides one."),
+		"priority":        enumSchema("Optional task priority; default is normal.", taskPriorities()),
+		"due_at":          stringSchema("Optional RFC3339 due time when the user gave a deadline."),
+		"scheduled_at":    stringSchema("Optional RFC3339 scheduled time when the user gave a start or reminder time."),
+		"topics":          arraySchema("Optional task topics.", stringSchema("Topic.")),
+		"idempotency_key": stringSchema("Optional caller-provided idempotency key."),
+	}
+}
+
+// taskAdvancedSchema returns richer graph task metadata for clients and updates.
+func taskAdvancedSchema() map[string]any {
 	return map[string]any{
 		"actor":            stringSchema("Calling agent or user."),
 		"title":            stringSchema("Task title."),
@@ -322,6 +369,7 @@ func taskCreateSchema() map[string]any {
 		"priority":         enumSchema("Task priority.", taskPriorities()),
 		"due_at":           stringSchema("RFC3339 due time."),
 		"scheduled_at":     stringSchema("RFC3339 scheduled time."),
+		"follow_up_at":     stringSchema("RFC3339 stale-review time."),
 		"topics":           arraySchema("Task topics.", stringSchema("Topic.")),
 		"estimate_minutes": map[string]any{"type": "integer", "description": "Estimated minutes."},
 		"energy_required":  stringSchema("Required energy mode."),
@@ -395,10 +443,11 @@ func taskGraphProjectionSchema() map[string]any {
 
 // taskUpdateSchema returns graph-backed update_task input properties.
 func taskUpdateSchema() map[string]any {
-	schema := taskCreateSchema()
+	schema := taskAdvancedSchema()
 	schema["task_id"] = stringSchema("Task id.")
 	schema["clear_due_at"] = map[string]any{"type": "boolean", "description": "Clear due time."}
 	schema["clear_scheduled_at"] = map[string]any{"type": "boolean", "description": "Clear scheduled time."}
+	schema["clear_follow_up_at"] = map[string]any{"type": "boolean", "description": "Clear stale-review time."}
 	delete(schema, "memory_links")
 	delete(schema, "idempotency_key")
 	return schema
@@ -515,6 +564,338 @@ func arraySchema(description string, item any) map[string]any {
 	return map[string]any{"type": "array", "description": description, "items": item}
 }
 
+// decodeCreateTaskArgs accepts a tiny create_task payload plus legacy extras.
+func decodeCreateTaskArgs(args json.RawMessage) (domain.CreateTaskRequest, error) {
+	if len(args) == 0 || string(args) == "null" {
+		args = []byte("{}")
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(args, &raw); err != nil {
+		return domain.CreateTaskRequest{}, fmt.Errorf("invalid arguments: %w", err)
+	}
+	raw = normalizeCreateTaskArgs(raw)
+	req := domain.CreateTaskRequest{
+		Actor:           stringArg(raw["actor"]),
+		Title:           firstStringArg(raw, "title", "text", "task"),
+		Description:     firstStringArg(raw, "description", "note"),
+		Status:          taskStatusArg(raw["status"]),
+		Priority:        taskPriorityArg(raw["priority"]),
+		DueAt:           timeArg(raw["due_at"]),
+		ScheduledAt:     timeArg(raw["scheduled_at"]),
+		FollowUpAt:      timeArg(raw["follow_up_at"]),
+		Topics:          stringListArg(raw["topics"]),
+		EstimateMinutes: intArg(raw["estimate_minutes"]),
+		EnergyRequired:  stringArg(raw["energy_required"]),
+		Effort:          scoreArg(raw["effort"]),
+		Value:           scoreArg(raw["value"]),
+		Urgency:         scoreArg(raw["urgency"]),
+		Risk:            scoreArg(raw["risk"]),
+		Context:         stringArg(raw["context"]),
+		View:            stringArg(raw["view"]),
+		Project:         stringArg(raw["project"]),
+		Location:        stringArg(raw["location"]),
+		Person:          firstStringArg(raw, "person", "owner", "assignee"),
+		Source:          stringArg(raw["source"]),
+		Confidence:      scoreArg(raw["confidence"]),
+		IdempotencyKey:  stringArg(raw["idempotency_key"]),
+	}
+	if links, ok := memoryLinksArg(raw["memory_links"]); ok {
+		req.MemoryLinks = links
+	}
+	if workBreakdown, ok := taskWorkBreakdownArg(raw["work_breakdown"]); ok {
+		req.WorkBreakdown = workBreakdown
+	}
+	return req, nil
+}
+
+// normalizeCreateTaskArgs recovers model-emitted field:value keys.
+func normalizeCreateTaskArgs(raw map[string]any) map[string]any {
+	for key, value := range raw {
+		if value != nil {
+			continue
+		}
+		field, fieldValue, ok := splitMalformedCreateTaskKey(key)
+		if !ok {
+			continue
+		}
+		if _, exists := raw[field]; !exists {
+			raw[field] = fieldValue
+		}
+	}
+	return raw
+}
+
+// splitMalformedCreateTaskKey parses keys like title:<|"|>Buy milk<|"|>.
+func splitMalformedCreateTaskKey(key string) (string, string, bool) {
+	left, right, ok := strings.Cut(strings.TrimSpace(key), ":")
+	if !ok {
+		return "", "", false
+	}
+	field := strings.TrimSpace(left)
+	if !knownCreateTaskField(field) {
+		return "", "", false
+	}
+	value := strings.TrimSpace(right)
+	value = strings.NewReplacer(`<|"|>`, `"`, `<|'|>`, `'`).Replace(value)
+	value = strings.Trim(value, `"'`)
+	value = strings.TrimSpace(value)
+	if value == "" || strings.EqualFold(value, "null") {
+		return "", "", false
+	}
+	return field, value, true
+}
+
+// knownCreateTaskField reports whether a field belongs to create_task input.
+func knownCreateTaskField(field string) bool {
+	switch field {
+	case "actor", "title", "description", "status", "priority", "due_at", "scheduled_at", "follow_up_at", "topics", "estimate_minutes", "energy_required", "effort", "value", "urgency", "risk", "context", "view", "project", "location", "person", "owner", "assignee", "source", "confidence", "idempotency_key":
+		return true
+	default:
+		return false
+	}
+}
+
+// firstStringArg returns the first non-empty scalar string from named fields.
+func firstStringArg(raw map[string]any, keys ...string) string {
+	for _, key := range keys {
+		value := stringArg(raw[key])
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// stringArg returns a trimmed scalar value suitable for string task fields.
+func stringArg(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(typed)
+	case bool:
+		return strconv.FormatBool(typed)
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(typed), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(typed)
+	case int8:
+		return strconv.Itoa(int(typed))
+	case int16:
+		return strconv.Itoa(int(typed))
+	case int32:
+		return strconv.Itoa(int(typed))
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	case uint:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint64:
+		return strconv.FormatUint(typed, 10)
+	case json.Number:
+		return strings.TrimSpace(typed.String())
+	default:
+		return ""
+	}
+}
+
+// taskStatusArg maps loose model vocabulary onto supported task statuses.
+func taskStatusArg(value any) domain.TaskStatus {
+	switch tokenArg(value) {
+	case "blocked":
+		return domain.TaskStatusBlocked
+	case "canceled", "cancelled":
+		return domain.TaskStatusCanceled
+	case "complete", "completed", "done":
+		return domain.TaskStatusDone
+	case "open", "pending", "todo", "to_do", "new", "backlog", "in_progress", "doing":
+		return domain.TaskStatusOpen
+	case "waiting", "waiting_on":
+		return domain.TaskStatusWaiting
+	default:
+		return ""
+	}
+}
+
+// taskPriorityArg maps loose model vocabulary onto supported priorities.
+func taskPriorityArg(value any) domain.TaskPriority {
+	switch tokenArg(value) {
+	case "high":
+		return domain.TaskPriorityHigh
+	case "low":
+		return domain.TaskPriorityLow
+	case "normal", "medium", "default":
+		return domain.TaskPriorityNormal
+	case "urgent", "critical":
+		return domain.TaskPriorityUrgent
+	default:
+		return ""
+	}
+}
+
+// tokenArg normalizes a scalar value for controlled-vocabulary matching.
+func tokenArg(value any) string {
+	token := strings.ToLower(stringArg(value))
+	token = strings.ReplaceAll(token, "-", "_")
+	token = strings.ReplaceAll(token, " ", "_")
+	return token
+}
+
+// timeArg parses RFC3339 timestamps or YYYY-MM-DD dates from model fields.
+func timeArg(value any) *time.Time {
+	text := strings.TrimSpace(stringArg(value))
+	if text == "" || strings.EqualFold(text, "null") {
+		return nil
+	}
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
+		parsed, err := time.Parse(layout, text)
+		if err == nil {
+			value := parsed.UTC()
+			return &value
+		}
+	}
+	return nil
+}
+
+// stringListArg accepts arrays or comma-separated strings as task topics.
+func stringListArg(value any) []string {
+	values := []string{}
+	switch typed := value.(type) {
+	case []string:
+		values = append(values, typed...)
+	case []any:
+		for _, item := range typed {
+			if text := stringArg(item); text != "" {
+				values = append(values, text)
+			}
+		}
+	case string:
+		for _, item := range strings.Split(typed, ",") {
+			if text := strings.TrimSpace(item); text != "" {
+				values = append(values, text)
+			}
+		}
+	}
+	return domain.NormalizeStrings(values)
+}
+
+// intArg reads a non-negative integer-like model field.
+func intArg(value any) int {
+	number, ok := numberArg(value)
+	if !ok || number <= 0 {
+		return 0
+	}
+	return int(number)
+}
+
+// scoreArg reads numeric or qualitative 0..1 scores from legacy task fields.
+func scoreArg(value any) float64 {
+	if number, ok := numberArg(value); ok {
+		if number < 0 {
+			return 0
+		}
+		if number > 1 {
+			return 1
+		}
+		return number
+	}
+	switch tokenArg(value) {
+	case "low":
+		return 0.25
+	case "medium", "normal":
+		return 0.5
+	case "high":
+		return 0.75
+	case "urgent", "critical":
+		return 1
+	default:
+		return 0
+	}
+}
+
+// numberArg reads scalar numeric values from JSON-decoded arguments.
+func numberArg(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case int8:
+		return float64(typed), true
+	case int16:
+		return float64(typed), true
+	case int32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case uint:
+		return float64(typed), true
+	case uint8:
+		return float64(typed), true
+	case uint16:
+		return float64(typed), true
+	case uint32:
+		return float64(typed), true
+	case uint64:
+		return float64(typed), true
+	case json.Number:
+		number, err := typed.Float64()
+		return number, err == nil
+	case string:
+		number, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		return number, err == nil
+	default:
+		return 0, false
+	}
+}
+
+// memoryLinksArg decodes valid memory links and ignores unrelated shapes.
+func memoryLinksArg(value any) ([]domain.MemoryLinkRequest, bool) {
+	if value == nil {
+		return nil, false
+	}
+	if _, ok := value.([]any); !ok {
+		return nil, false
+	}
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		return nil, false
+	}
+	var links []domain.MemoryLinkRequest
+	if err := json.Unmarshal(bytes, &links); err != nil {
+		return nil, false
+	}
+	return links, true
+}
+
+// taskWorkBreakdownArg decodes object-shaped WBS metadata from advanced callers.
+func taskWorkBreakdownArg(value any) (domain.TaskWorkBreakdown, bool) {
+	if value == nil {
+		return domain.TaskWorkBreakdown{}, false
+	}
+	if _, ok := value.(map[string]any); !ok {
+		return domain.TaskWorkBreakdown{}, false
+	}
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		return domain.TaskWorkBreakdown{}, false
+	}
+	var workBreakdown domain.TaskWorkBreakdown
+	if err := json.Unmarshal(bytes, &workBreakdown); err != nil {
+		return domain.TaskWorkBreakdown{}, false
+	}
+	return workBreakdown, true
+}
+
 // decodeArgs decodes optional tool arguments into a request struct.
 func decodeArgs(args json.RawMessage, dest any) error {
 	if len(args) == 0 || string(args) == "null" {
@@ -585,6 +966,53 @@ type rpcError struct {
 type toolCallParams struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments"`
+}
+
+// rememberArgs contains the small model-facing memory nugget payload.
+type rememberArgs struct {
+	Actor          string             `json:"actor"`
+	Text           string             `json:"text"`
+	Title          string             `json:"title"`
+	Topics         []string           `json:"topics"`
+	Entities       []string           `json:"entities"`
+	Scope          domain.Scope       `json:"scope"`
+	Sensitivity    domain.Sensitivity `json:"sensitivity"`
+	IdempotencyKey string             `json:"idempotency_key"`
+}
+
+// captureRequest maps a memory nugget onto the durable graph memory model.
+func (args rememberArgs) captureRequest() domain.CaptureRequest {
+	return domain.CaptureRequest{
+		Actor:          args.Actor,
+		Content:        args.Text,
+		MediaType:      "text/plain; charset=utf-8",
+		Title:          rememberTitle(args.Title, args.Text),
+		Kind:           domain.KindProfileFact,
+		Scope:          args.Scope,
+		TrustLevel:     domain.TrustUserAsserted,
+		Sensitivity:    args.Sensitivity,
+		Topics:         args.Topics,
+		EntityNames:    args.Entities,
+		IdempotencyKey: args.IdempotencyKey,
+	}
+}
+
+// rememberTitle returns an explicit title or a compact excerpt of the nugget.
+func rememberTitle(title string, text string) string {
+	trimmedTitle := strings.TrimSpace(title)
+	if trimmedTitle != "" {
+		return trimmedTitle
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return ""
+	}
+	value := strings.Join(words, " ")
+	const limit = 64
+	if len(value) <= limit {
+		return value
+	}
+	return strings.TrimSpace(value[:limit])
 }
 
 // loadEntityPageArgs contains load_entity_page arguments.

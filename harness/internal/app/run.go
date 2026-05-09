@@ -32,6 +32,7 @@ type Options struct {
 	ProviderName    string
 	LogFilePath     string
 	ContextAPIAddr  string
+	ContextAPIToken string
 	SessionDatabase string
 }
 
@@ -54,7 +55,10 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if _, err := contextapi.Start(ctx, opts.ContextAPIAddr, toolsCfg); err != nil {
+	if _, err := contextapi.StartWithConfig(ctx, contextapi.Config{
+		Addr:      opts.ContextAPIAddr,
+		AuthToken: opts.ContextAPIToken,
+	}, toolsCfg); err != nil {
 		return err
 	}
 
@@ -103,8 +107,7 @@ func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCf
 	if err != nil {
 		return nil, err
 	}
-	sessionDatabasePath := sessionstore.ResolveDatabasePath(opts.SessionDatabase)
-	memoryService, memoryEnabled, err := adkmemory.NewFromToolsConfig(toolsCfg, sessionDatabasePath)
+	memoryService, memoryEnabled, err := adkmemory.NewFromToolsConfig(toolsCfg)
 	if err != nil {
 		return nil, err
 	}

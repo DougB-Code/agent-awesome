@@ -20,7 +20,7 @@ func NewSessionCapturePlugin() (*plugin.Plugin, error) {
 	})
 }
 
-// captureSessionAfterRun saves the completed ADK session to configured memory.
+// captureSessionAfterRun asks the configured memory service to save new events.
 func captureSessionAfterRun(invocation agent.InvocationContext) {
 	if invocation == nil || invocation.Memory() == nil || invocation.Session() == nil {
 		return

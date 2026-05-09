@@ -704,6 +704,7 @@ class WorkspaceTask {
     this.priority = 'normal',
     this.dueAt,
     this.scheduledAt,
+    this.followUpAt,
     this.topics = const <String>[],
     this.estimateMinutes = 0,
     this.energyRequired = '',
@@ -761,6 +762,9 @@ class WorkspaceTask {
 
   /// Optional scheduled timestamp.
   final DateTime? scheduledAt;
+
+  /// Optional stale-review timestamp.
+  final DateTime? followUpAt;
 
   /// Organization topics.
   final List<String> topics;
@@ -865,6 +869,7 @@ class WorkspaceTask {
       priority: priority,
       dueAt: dueAt,
       scheduledAt: scheduledAt,
+      followUpAt: followUpAt,
       topics: topics,
       estimateMinutes: estimateMinutes,
       energyRequired: energyRequired,

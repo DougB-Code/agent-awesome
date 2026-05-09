@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"agentawesome/internal/config/schema"
@@ -42,6 +44,9 @@ func NewFactory(credentials adapter.CredentialResolver, httpClients adapter.HTTP
 
 // Create builds an OpenAI-compatible runtime LLM from provider schema.
 func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection) (llmapi.LLM, error) {
+	if err := f.ValidateProvider(selection.Name, selection.Provider); err != nil {
+		return nil, err
+	}
 	url, err := selection.Provider.ResolvedURL()
 	if err != nil {
 		return nil, fmt.Errorf("provider %q url: %w", selection.Name, err)
@@ -73,7 +78,57 @@ func (Factory) ValidateProvider(name string, provider schema.Provider) error {
 	if strings.TrimSpace(provider.URL) == "" {
 		return fmt.Errorf("provider %q requires url", name)
 	}
-	return nil
+	if err := adapter.ValidateNoStreamingModels(name, provider, "OpenAI-compatible"); err != nil {
+		return err
+	}
+	if strings.TrimSpace(provider.APIKeyEnv) != "" {
+		return nil
+	}
+	if provider.AuthMode() == schema.ProviderAuthOptional && isLoopbackURL(provider.URL) {
+		return nil
+	}
+	if provider.AuthMode() == schema.ProviderAuthRequired {
+		return fmt.Errorf("provider %q auth is required and requires api-key", name)
+	}
+	if isKnownHostedURL(provider.URL) || !isLoopbackURL(provider.URL) {
+		return fmt.Errorf("provider %q remote OpenAI-compatible endpoint requires api-key", name)
+	}
+	return fmt.Errorf("provider %q loopback OpenAI-compatible endpoint without api-key must set auth: optional", name)
+}
+
+// isLoopbackURL reports whether a provider URL is local-only.
+func isLoopbackURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	host := parsed.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// isKnownHostedURL reports whether a URL belongs to a hosted OpenAI-compatible API.
+func isKnownHostedURL(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	switch {
+	case host == "api.openai.com":
+		return true
+	case host == "api.x.ai":
+		return true
+	case host == "router.huggingface.co":
+		return true
+	case strings.HasSuffix(host, ".ai.cloudflare.com"):
+		return true
+	default:
+		return false
+	}
 }
 
 // Name returns the selected model name exposed to the runtime.
@@ -86,7 +141,7 @@ func (m *openAICompatibleModel) Name() string {
 func (m *openAICompatibleModel) GenerateContent(ctx context.Context, req *llmapi.LLMRequest, stream bool) iter.Seq2[*llmapi.LLMResponse, error] {
 	return func(yield func(*llmapi.LLMResponse, error) bool) {
 		if stream {
-			yield(nil, fmt.Errorf("provider %q does not support streaming", m.provider))
+			yield(nil, adapter.NewStreamingUnsupportedError(m.provider))
 			return
 		}
 		resp, err := m.generate(ctx, req)

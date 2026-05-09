@@ -2,11 +2,11 @@
 //
 // Intended use cases:
 //   - Preserve ADK-compatible Flutter traffic through a stable gateway URL.
-//   - Inject server-owned runtime policy before agent runs reach the harness.
+//   - Apply caller-provided body transformers before upstream forwarding.
 //
 // High-level examples:
 //   - proxy.New(...) creates a handler mounted at /api/.
-//   - proxy.InjectRuntimePolicy(...) updates run_sse request bodies.
+//   - proxy.WithBodyTransformer(...) installs a generic request body rewrite hook.
 //
 // This package should not authenticate callers or start local services.
 package proxy

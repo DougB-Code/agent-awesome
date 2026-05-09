@@ -3101,6 +3101,7 @@ class AuroraAppController extends ChangeNotifier {
           priority: task.priority,
           dueAt: _screenDateValue(task.dueAt),
           scheduledAt: _screenDateValue(task.scheduledAt),
+          followUpAt: _screenDateValue(task.followUpAt),
           topics: task.topics,
           estimateMinutes: task.estimateMinutes,
           context: task.context,
@@ -3284,6 +3285,7 @@ class AuroraAppController extends ChangeNotifier {
       priority: _stringField(fields, 'priority', fallback: 'normal'),
       dueAt: _dateField(fields, 'due_at'),
       scheduledAt: _dateField(fields, 'scheduled_at'),
+      followUpAt: _dateField(fields, 'follow_up_at'),
       topics: _stringListField(fields, 'topics'),
       estimateMinutes: _intField(fields, 'estimate_minutes'),
       energyRequired: _stringField(fields, 'energy_required'),
@@ -3317,6 +3319,8 @@ class AuroraAppController extends ChangeNotifier {
       clearDueAt: _boolField(fields, 'clear_due_at'),
       scheduledAt: _dateField(fields, 'scheduled_at'),
       clearScheduledAt: _boolField(fields, 'clear_scheduled_at'),
+      followUpAt: _dateField(fields, 'follow_up_at'),
+      clearFollowUpAt: _boolField(fields, 'clear_follow_up_at'),
       topics: fields.containsKey('topics')
           ? _stringListField(fields, 'topics')
           : null,
@@ -3512,7 +3516,11 @@ class AuroraAppController extends ChangeNotifier {
     if (fields.containsKey('topics') && fields['topics'] is! List) {
       return 'topics must be a list';
     }
-    for (final key in const <String>['due_at', 'scheduled_at']) {
+    for (final key in const <String>[
+      'due_at',
+      'scheduled_at',
+      'follow_up_at',
+    ]) {
       if (_stringField(fields, key).isNotEmpty &&
           _dateField(fields, key) == null) {
         return '$key must be an ISO date or timestamp';
@@ -3541,6 +3549,7 @@ class AuroraAppController extends ChangeNotifier {
         'priority': task.priority,
         'due_at': _screenDateValue(task.dueAt),
         'scheduled_at': _screenDateValue(task.scheduledAt),
+        'follow_up_at': _screenDateValue(task.followUpAt),
       };
     }
     return <String, dynamic>{
@@ -3575,6 +3584,7 @@ class AuroraAppController extends ChangeNotifier {
       'priority' => task.priority,
       'due_at' => _screenDateValue(task.dueAt),
       'scheduled_at' => _screenDateValue(task.scheduledAt),
+      'follow_up_at' => _screenDateValue(task.followUpAt),
       'topics' => task.topics,
       'estimate_minutes' => task.estimateMinutes,
       'energy_required' => task.energyRequired,
@@ -3591,6 +3601,7 @@ class AuroraAppController extends ChangeNotifier {
       'confidence' => task.confidence,
       'clear_due_at' => task.dueAt == null,
       'clear_scheduled_at' => task.scheduledAt == null,
+      'clear_follow_up_at' => task.followUpAt == null,
       _ => '',
     };
   }
@@ -3616,6 +3627,9 @@ class AuroraAppController extends ChangeNotifier {
       } else if (entry.key == 'scheduled_at' &&
           entry.value.toString().isEmpty) {
         fields['clear_scheduled_at'] = true;
+      } else if (entry.key == 'follow_up_at' &&
+          entry.value.toString().isEmpty) {
+        fields['clear_follow_up_at'] = true;
       } else {
         fields[entry.key] = entry.value;
       }
@@ -4741,8 +4755,10 @@ const Set<String> _taskScreenChangeFields = <String>{
   'priority',
   'due_at',
   'scheduled_at',
+  'follow_up_at',
   'clear_due_at',
   'clear_scheduled_at',
+  'clear_follow_up_at',
   'topics',
   'estimate_minutes',
   'energy_required',
@@ -4860,8 +4876,8 @@ int _compareTasksForWorkQueue(WorkspaceTask left, WorkspaceTask right) {
   if (overdueCompare != 0) {
     return overdueCompare;
   }
-  final leftDue = left.dueAt ?? left.scheduledAt;
-  final rightDue = right.dueAt ?? right.scheduledAt;
+  final leftDue = left.dueAt ?? left.scheduledAt ?? left.followUpAt;
+  final rightDue = right.dueAt ?? right.scheduledAt ?? right.followUpAt;
   if (leftDue != null && rightDue != null) {
     final dueCompare = leftDue.compareTo(rightDue);
     if (dueCompare != 0) {

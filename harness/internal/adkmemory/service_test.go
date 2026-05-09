@@ -4,17 +4,15 @@ package adkmemory
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"iter"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"agentawesome/internal/config/schema"
-	"agentawesome/internal/sessionstore"
 	adkmemory "google.golang.org/adk/memory"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/session"
@@ -44,7 +42,7 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 				Timestamp: stamp,
 				Author:    "user",
 				LLMResponse: model.LLMResponse{Content: genai.NewContentFromText(
-					"[[AURORA_RUNTIME_POLICY:test policy]]\n[[AURORA_SESSION_CONTEXT:test context]]\nRemember that I like green tea.",
+					"[[AGENT_AWESOME_RUNTIME_POLICY:test policy]]\n[[AGENT_AWESOME_SESSION_CONTEXT:test context]]\nRemember that I like green tea.",
 					genai.RoleUser,
 				)},
 			},
@@ -91,6 +89,54 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	}
 }
 
+// TestAddSessionToMemoryCapturesOnlyNewEvents prevents full-session replays.
+func TestAddSessionToMemoryCapturesOnlyNewEvents(t *testing.T) {
+	stamp := time.Date(2026, 5, 8, 12, 0, 0, 0, time.UTC)
+	server := newMemoryMCPTestServer(t, nil)
+	service := New(schema.MCPServer{Name: "memory", Transport: "streamable-http", Endpoint: server.URL})
+	events := make([]*session.Event, 0, 101)
+	for index := 0; index < 100; index++ {
+		events = append(events, capturableEvent(
+			fmt.Sprintf("event-%03d", index),
+			fmt.Sprintf("remembered detail %03d", index),
+			stamp.Add(time.Duration(index)*time.Second),
+		))
+	}
+	chat := stubSession{
+		id:      "long-session",
+		appName: "personal_pilot",
+		userID:  "doug",
+		events:  events,
+	}
+
+	if err := service.AddSessionToMemory(context.Background(), chat); err != nil {
+		t.Fatalf("AddSessionToMemory() first error = %v", err)
+	}
+	if err := service.AddSessionToMemory(context.Background(), chat); err != nil {
+		t.Fatalf("AddSessionToMemory() replay error = %v", err)
+	}
+	if got := len(server.calls()); got != 100 {
+		t.Fatalf("MCP calls after replay = %d, want initial 100 only", got)
+	}
+
+	chat.events = append(chat.events, capturableEvent("event-100", "brand new detail", stamp.Add(100*time.Second)))
+	if err := service.AddSessionToMemory(context.Background(), chat); err != nil {
+		t.Fatalf("AddSessionToMemory() incremental error = %v", err)
+	}
+
+	calls := server.calls()
+	if len(calls) != 101 {
+		t.Fatalf("MCP calls after append = %d, want one new call", len(calls))
+	}
+	last := calls[len(calls)-1]
+	if got := last.arguments["idempotency_key"]; got != "adk:personal_pilot:doug:long-session:event-100" {
+		t.Fatalf("last idempotency = %q, want appended event key", got)
+	}
+	if got := last.arguments["content"]; got != "brand new detail" {
+		t.Fatalf("last content = %q, want appended event content", got)
+	}
+}
+
 // TestSearchMemoryMapsSourceRecords verifies ADK search response mapping.
 func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 	stamp := time.Date(2026, 5, 8, 11, 0, 0, 0, time.UTC)
@@ -117,7 +163,7 @@ func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 	service := New(schema.MCPServer{Name: "memory", Transport: "streamable-http", Endpoint: server.URL})
 
 	response, err := service.SearchMemory(context.Background(), &adkmemory.SearchRequest{
-		Query: "[[AURORA_RUNTIME_POLICY:test policy]]\ngreen tea",
+		Query: "[[AGENT_AWESOME_RUNTIME_POLICY:test policy]]\ngreen tea",
 	})
 	if err != nil {
 		t.Fatalf("SearchMemory() error = %v", err)
@@ -138,52 +184,6 @@ func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 	}
 	if got := calls[0].arguments["text"]; got != "green tea" {
 		t.Fatalf("search text = %q, want sanitized query", got)
-	}
-}
-
-// TestSearchMemoryIncludesExactSessionHistory verifies same-DB session fallback.
-func TestSearchMemoryIncludesExactSessionHistory(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "memory.db")
-	sessionService, err := sessionstore.Open(path)
-	if err != nil {
-		t.Fatalf("Open() session store error = %v", err)
-	}
-	created, err := sessionService.Create(ctx, &session.CreateRequest{
-		AppName:   "pilot",
-		UserID:    "doug",
-		SessionID: "chat-history",
-	})
-	if err != nil {
-		t.Fatalf("Create() error = %v", err)
-	}
-	event := session.NewEvent("turn-history")
-	event.Timestamp = time.Now().Add(-2 * time.Hour)
-	event.Author = "user"
-	event.Content = genai.NewContentFromText("The launch code phrase was glass harbor.", genai.RoleUser)
-	event.LLMResponse = model.LLMResponse{Content: event.Content, TurnComplete: true}
-	if err := sessionService.AppendEvent(ctx, created.Session, event); err != nil {
-		t.Fatalf("AppendEvent() error = %v", err)
-	}
-
-	server := newMemoryMCPTestServer(t, nil)
-	service := New(schema.MCPServer{Name: "memory", Transport: "streamable-http", Endpoint: server.URL}, path)
-	response, err := service.SearchMemory(ctx, &adkmemory.SearchRequest{
-		AppName: "pilot",
-		UserID:  "doug",
-		Query:   "glass harbor",
-	})
-	if err != nil {
-		t.Fatalf("SearchMemory() error = %v", err)
-	}
-	if len(response.Memories) != 1 {
-		t.Fatalf("memories = %d, want exact session memory", len(response.Memories))
-	}
-	if !strings.HasPrefix(response.Memories[0].ID, "adk_session:chat-history:") {
-		t.Fatalf("memory id = %q, want ADK session source", response.Memories[0].ID)
-	}
-	if got := response.Memories[0].Content.Parts[0].Text; got != "The launch code phrase was glass harbor." {
-		t.Fatalf("memory text = %q, want exact session text", got)
 	}
 }
 
@@ -311,6 +311,16 @@ func writeMCPResult(w http.ResponseWriter, id json.RawMessage, result any) {
 		"id":      id,
 		"result":  result,
 	})
+}
+
+// capturableEvent creates one complete chat event for memory capture tests.
+func capturableEvent(id string, text string, timestamp time.Time) *session.Event {
+	return &session.Event{
+		ID:          id,
+		Timestamp:   timestamp,
+		Author:      "user",
+		LLMResponse: model.LLMResponse{Content: genai.NewContentFromText(text, genai.RoleUser)},
+	}
 }
 
 // stubSession implements the ADK session interface for adapter tests.

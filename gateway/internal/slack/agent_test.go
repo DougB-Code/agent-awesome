@@ -2,6 +2,7 @@
 package slack
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,5 +30,24 @@ func TestEnsureSessionCreatesAfterADKMissingSession500(t *testing.T) {
 	}
 	if !created {
 		t.Fatalf("EnsureSession() did not create missing session")
+	}
+}
+
+// TestRunBodyDisablesModelStreaming verifies Slack never asks non-streaming
+// model adapters for streaming responses.
+func TestRunBodyDisablesModelStreaming(t *testing.T) {
+	client := NewAgentClient(nil, "http://127.0.0.1:8080", "app", "user")
+
+	body, err := client.runBody("slack-1", "hello")
+	if err != nil {
+		t.Fatalf("runBody() error = %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if got, ok := decoded["streaming"].(bool); !ok || got {
+		t.Fatalf("streaming = %#v, want false", decoded["streaming"])
 	}
 }

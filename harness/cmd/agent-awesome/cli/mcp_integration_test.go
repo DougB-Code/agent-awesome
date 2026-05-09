@@ -41,6 +41,7 @@ default: mock:test
 providers:
   mock:
     adapter: openai
+    auth: optional
     url: %s
     models:
       - id: test

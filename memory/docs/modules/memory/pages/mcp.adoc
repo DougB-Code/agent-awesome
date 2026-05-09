@@ -20,3 +20,35 @@ The UI and gateway profiles point to this endpoint when local memory is active.
 MCP code belongs in `internal/memory/transport`.
 Business behavior belongs in `internal/memory/service`.
 DTO validation belongs in `internal/memory/domain` or graph-specific domain packages.
+
+== Small Memory Nuggets
+
+Local micro models should use `remember` when the user asks the assistant to remember a fact, preference, note, or small piece of knowledge.
+`remember` intentionally accepts a tiny payload:
+
+* `text`: the memory nugget to preserve.
+* `title`: optional display title.
+* `topics`: optional topic tags for later connection.
+* `entities`: optional people, projects, places, or things mentioned.
+* `scope`, `sensitivity`, `idempotency_key`, and `actor`: optional control fields.
+
+The transport maps that small payload into the richer graph-backed memory model as user-asserted private memory by default.
+Use `create_task` only for operational todos, not for facts or preferences.
+
+== Low-Friction Tasks
+
+Local micro models should use `create_task` when the user asks for an operational todo, even if the user only provides a short phrase such as "buy milk".
+The model-facing payload is intentionally small:
+
+* `title`: the task to do.
+* `description`: optional note only when the user provides one.
+* `priority`: optional `low`, `normal`, `high`, or `urgent`; default is `normal`.
+* `due_at`: optional deadline timestamp when the user gives a due date.
+* `scheduled_at`: optional start or reminder timestamp when the user gives one.
+* `topics`, `idempotency_key`, and `actor`: optional control fields.
+
+The transport still tolerates legacy rich task metadata from older local-model prompts, but the schema no longer asks the model to fill planning fields such as effort, value, urgency, energy, project, location, memory links, or work-breakdown metadata during creation.
+Those richer fields belong to explicit task updates or UI editing flows.
+
+Created open tasks with no due or scheduled time receive a `follow_up_at` stale-review timestamp seven days later.
+That keeps an inbox-style task actionable immediately while giving the UI and task queries a concrete time to surface aging clutter.

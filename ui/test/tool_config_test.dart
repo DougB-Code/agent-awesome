@@ -11,6 +11,7 @@ void main() {
     final document = ToolConfigDocument.parse('''
 local-exec:
   enabled: true
+  allow-persistent-approvals: true
   default-timeout: 10s
   default-max-output-bytes: 65536
   allowed-workdirs:
@@ -44,6 +45,7 @@ mcp:
 ''');
 
     expect(document.localExec.enabled, isTrue);
+    expect(document.localExec.allowPersistentApprovals, isTrue);
     expect(document.localExec.defaultTimeout, '10s');
     expect(document.localExec.commands.single.name, 'git_status');
     expect(document.localExec.commands.single.args, <String>[
@@ -100,6 +102,7 @@ mcp:
     final encoded = document.toYaml();
 
     expect(encoded, contains('local-exec:'));
+    expect(encoded, isNot(contains('allow-persistent-approvals')));
     expect(encoded, contains('default-timeout: 5s'));
     expect(encoded, contains('name: git_status'));
     expect(encoded, contains('executable: git'));
@@ -143,12 +146,18 @@ mcp:
       'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
     });
     expect(document.mcp.servers.single.tools.allow, graphBackedMcpToolNames);
-    expect(document.mcp.servers.single.requireConfirmationTools, <String>[
-      'save_memory_candidate',
-      'refresh_compiled_page',
-      'repair_memory_record',
-      'submit_memory_correction',
-    ]);
+    expect(
+      document.mcp.servers.single.requireConfirmationTools,
+      graphBackedMcpConfirmationToolNames,
+    );
+    expect(
+      document.mcp.servers.single.requireConfirmationTools,
+      isNot(contains('create_task')),
+    );
+    expect(
+      document.mcp.servers.single.requireConfirmationTools,
+      isNot(contains('update_task')),
+    );
   });
 
   test('validates local execution command requirements', () {

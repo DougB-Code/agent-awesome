@@ -31,6 +31,18 @@ func TestFactoryValidateProviderRejectsURL(t *testing.T) {
 	}
 }
 
+// TestFactoryValidateProviderRequiresAPIKeyForRequiredAuth verifies explicit Google auth.
+func TestFactoryValidateProviderRequiresAPIKeyForRequiredAuth(t *testing.T) {
+	err := Factory{}.ValidateProvider("google", schema.Provider{
+		Adapter: "google",
+		Auth:    schema.ProviderAuthRequired,
+		Models:  []schema.Model{{ID: "test", Model: "gemini-test"}},
+	})
+	if err == nil {
+		t.Fatalf("ValidateProvider() error = nil, want required auth error")
+	}
+}
+
 type staticCredentialResolver map[string]string
 
 func (r staticCredentialResolver) ResolveCredential(name string) (string, error) {

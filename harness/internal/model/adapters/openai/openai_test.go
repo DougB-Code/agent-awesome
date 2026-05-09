@@ -132,6 +132,58 @@ func TestFactoryUsesInjectedDependencies(t *testing.T) {
 	}
 }
 
+// TestValidateProviderRejectsRemoteEndpointWithoutAPIKey protects hosted APIs.
+func TestValidateProviderRejectsRemoteEndpointWithoutAPIKey(t *testing.T) {
+	err := (Factory{}).ValidateProvider("openai", schema.Provider{
+		URL: "https://api.openai.com/v1/chat/completions",
+	})
+	if err == nil || !strings.Contains(err.Error(), "requires api-key") {
+		t.Fatalf("ValidateProvider() error = %v, want api-key requirement", err)
+	}
+}
+
+// TestValidateProviderRequiresExplicitOptionalAuthForLoopback avoids accidental anonymous providers.
+func TestValidateProviderRequiresExplicitOptionalAuthForLoopback(t *testing.T) {
+	err := (Factory{}).ValidateProvider("local", schema.Provider{
+		URL: "http://127.0.0.1:11434/v1/chat/completions",
+	})
+	if err == nil || !strings.Contains(err.Error(), "auth: optional") {
+		t.Fatalf("ValidateProvider() error = %v, want explicit optional auth", err)
+	}
+}
+
+// TestValidateProviderAllowsExplicitAnonymousLoopback keeps local model servers supported.
+func TestValidateProviderAllowsExplicitAnonymousLoopback(t *testing.T) {
+	err := (Factory{}).ValidateProvider("local", schema.Provider{
+		Auth: schema.ProviderAuthOptional,
+		URL:  "http://127.0.0.1:11434/v1/chat/completions",
+	})
+	if err != nil {
+		t.Fatalf("ValidateProvider() error = %v", err)
+	}
+}
+
+// TestValidateProviderRejectsStreamingCapability prevents unsupported model
+// capabilities from reaching runtime startup.
+func TestValidateProviderRejectsStreamingCapability(t *testing.T) {
+	err := (Factory{}).ValidateProvider("openai", schema.Provider{
+		APIKeyEnv: "OPENAI_API_KEY",
+		URL:       "https://api.openai.com/v1/chat/completions",
+		Models: []schema.Model{
+			{
+				ID:    "gpt",
+				Model: "gpt-example",
+				Capabilities: schema.ModelCapabilities{
+					Streaming: true,
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not support streaming") {
+		t.Fatalf("ValidateProvider() error = %v, want streaming capability rejection", err)
+	}
+}
+
 type staticCredentialResolver map[string]string
 
 func (r staticCredentialResolver) ResolveCredential(name string) (string, error) {

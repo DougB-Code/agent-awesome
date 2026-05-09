@@ -1,3 +1,4 @@
+// This file implements SQLite-backed context graph persistence.
 package store
 
 import (
@@ -18,6 +19,13 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// sqlRunner is the common SQL surface shared by database and transaction handles.
+type sqlRunner interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 // Config contains filesystem and SQLite settings for the graph store.
 type Config struct {
 	DBPath   string
@@ -26,9 +34,27 @@ type Config struct {
 
 // Store owns SQLite graph metadata and filesystem evidence blobs.
 type Store struct {
-	db       *sql.DB
-	dataRoot string
-	now      func() time.Time
+	db                   *sql.DB
+	runner               sqlRunner
+	dataRoot             string
+	now                  func() time.Time
+	inUnitOfWork         bool
+	stagedEvidenceFiles  []evidenceFileWrite
+	stagedEvidenceByNode map[graph.NodeID]string
+	evidenceRemovals     []string
+}
+
+// evidenceFileWrite tracks one filesystem write staged for transaction commit.
+type evidenceFileWrite struct {
+	nodeID    graph.NodeID
+	checksum  string
+	relPath   string
+	tmpPath   string
+	finalPath string
+	size      int64
+	created   bool
+	staged    bool
+	committed bool
 }
 
 // Open creates a graph store and applies SQLite schema.
@@ -48,7 +74,12 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	store := &Store{db: db, dataRoot: cfg.DataRoot, now: func() time.Time { return time.Now().UTC() }}
+	store := &Store{
+		db:       db,
+		runner:   db,
+		dataRoot: cfg.DataRoot,
+		now:      func() time.Time { return time.Now().UTC() },
+	}
 	if err := store.configure(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -66,6 +97,48 @@ func (s *Store) Close() error {
 		return nil
 	}
 	return s.db.Close()
+}
+
+// WithUnitOfWork runs graph operations in one SQLite transaction.
+func (s *Store) WithUnitOfWork(ctx context.Context, work func(*Store) error) error {
+	if s == nil || s.db == nil {
+		return errors.New("graph store is closed")
+	}
+	if s.inUnitOfWork {
+		return errors.New("nested graph unit of work is not supported")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin graph unit of work: %w", err)
+	}
+	txStore := &Store{
+		db:                   s.db,
+		runner:               tx,
+		dataRoot:             s.dataRoot,
+		now:                  s.now,
+		inUnitOfWork:         true,
+		stagedEvidenceByNode: map[graph.NodeID]string{},
+	}
+	finished := false
+	defer func() {
+		if !finished {
+			_ = tx.Rollback()
+			txStore.cleanupEvidenceFiles()
+		}
+	}()
+	if err := work(txStore); err != nil {
+		return err
+	}
+	if err := txStore.commitEvidenceFiles(); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		txStore.cleanupCommittedEvidenceFiles()
+		return fmt.Errorf("commit graph unit of work: %w", err)
+	}
+	finished = true
+	txStore.cleanupSupersededEvidenceFiles()
+	return nil
 }
 
 // UpsertNode creates or updates one graph node.
@@ -91,7 +164,7 @@ func (s *Store) UpsertNode(ctx context.Context, req graph.UpsertNodeRequest) (gr
 			return graph.Node{}, err
 		}
 		stamp := timeString(now)
-		if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_nodes
+		if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_nodes
 			(id, kind, stable_key, title, summary, status, scope, sensitivity, trust_level, confidence, source_node_id, actor, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			nodeID, req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Scope, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
@@ -99,7 +172,7 @@ func (s *Store) UpsertNode(ctx context.Context, req graph.UpsertNodeRequest) (gr
 		}
 		return s.GetNode(ctx, nodeID)
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE graph_nodes
+	result, err := s.runner.ExecContext(ctx, `UPDATE graph_nodes
 		SET kind = ?, stable_key = ?, title = ?, summary = ?, status = ?, scope = ?, sensitivity = ?, trust_level = ?, confidence = ?, source_node_id = ?, actor = ?, updated_at = ?
 		WHERE id = ?`,
 		req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Scope, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, timeString(now), nodeID)
@@ -110,7 +183,7 @@ func (s *Store) UpsertNode(ctx context.Context, req graph.UpsertNodeRequest) (gr
 		return graph.Node{}, fmt.Errorf("update graph node rows: %w", err)
 	} else if rows == 0 {
 		stamp := timeString(now)
-		if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_nodes
+		if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_nodes
 			(id, kind, stable_key, title, summary, status, scope, sensitivity, trust_level, confidence, source_node_id, actor, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			nodeID, req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Scope, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
@@ -124,7 +197,7 @@ func (s *Store) UpsertNode(ctx context.Context, req graph.UpsertNodeRequest) (gr
 func (s *Store) GetNode(ctx context.Context, nodeID graph.NodeID) (graph.Node, error) {
 	var node graph.Node
 	var sourceNodeID, stableKey, createdAt, updatedAt string
-	row := s.db.QueryRowContext(ctx, `SELECT id, kind, COALESCE(stable_key, ''), title, summary, status, scope, sensitivity, trust_level, confidence, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_nodes WHERE id = ?`, nodeID)
+	row := s.runner.QueryRowContext(ctx, `SELECT id, kind, COALESCE(stable_key, ''), title, summary, status, scope, sensitivity, trust_level, confidence, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_nodes WHERE id = ?`, nodeID)
 	if err := row.Scan(&node.ID, &node.Kind, &stableKey, &node.Title, &node.Summary, &node.Status, &node.Scope, &node.Sensitivity, &node.TrustLevel, &node.Confidence, &sourceNodeID, &node.Actor, &createdAt, &updatedAt); err != nil {
 		return graph.Node{}, fmt.Errorf("load graph node: %w", err)
 	}
@@ -164,7 +237,7 @@ func (s *Store) SetNodeStatus(ctx context.Context, nodeID graph.NodeID, status g
 		return graph.Node{}, fmt.Errorf("invalid node status %q", status)
 	}
 	actor = defaultString(actor, "agent")
-	result, err := s.db.ExecContext(ctx, `UPDATE graph_nodes SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), nodeID)
+	result, err := s.runner.ExecContext(ctx, `UPDATE graph_nodes SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), nodeID)
 	if err != nil {
 		return graph.Node{}, fmt.Errorf("set graph node status: %w", err)
 	}
@@ -191,7 +264,7 @@ func (s *Store) CountNodes(ctx context.Context, kind graph.NodeKind, status grap
 		args = append(args, status)
 	}
 	var count int64
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM graph_nodes WHERE kind = ?`+statusClause, args...).Scan(&count); err != nil {
+	if err := s.runner.QueryRowContext(ctx, `SELECT COUNT(*) FROM graph_nodes WHERE kind = ?`+statusClause, args...).Scan(&count); err != nil {
 		return 0, fmt.Errorf("count graph nodes: %w", err)
 	}
 	return count, nil
@@ -220,7 +293,7 @@ func (s *Store) UpsertEdge(ctx context.Context, req graph.UpsertEdgeRequest) (gr
 			return graph.Edge{}, err
 		}
 		stamp := timeString(now)
-		if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_edges
+		if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_edges
 			(id, from_node_id, relation_type, to_node_id, status, confidence, trust_level, source_node_id, actor, valid_from, valid_to, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			edgeID, req.FromNodeID, req.Type, req.ToNodeID, req.Status, req.Confidence, req.TrustLevel, nullableNodeID(req.SourceNodeID), req.Actor, nullableTime(req.ValidFrom), nullableTime(req.ValidTo), stamp, stamp); err != nil {
@@ -228,7 +301,7 @@ func (s *Store) UpsertEdge(ctx context.Context, req graph.UpsertEdgeRequest) (gr
 		}
 		return s.GetEdge(ctx, edgeID)
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE graph_edges
+	result, err := s.runner.ExecContext(ctx, `UPDATE graph_edges
 		SET from_node_id = ?, relation_type = ?, to_node_id = ?, status = ?, confidence = ?, trust_level = ?, source_node_id = ?, actor = ?, valid_from = ?, valid_to = ?, updated_at = ?
 		WHERE id = ?`,
 		req.FromNodeID, req.Type, req.ToNodeID, req.Status, req.Confidence, req.TrustLevel, nullableNodeID(req.SourceNodeID), req.Actor, nullableTime(req.ValidFrom), nullableTime(req.ValidTo), timeString(now), edgeID)
@@ -239,7 +312,7 @@ func (s *Store) UpsertEdge(ctx context.Context, req graph.UpsertEdgeRequest) (gr
 		return graph.Edge{}, fmt.Errorf("update graph edge rows: %w", err)
 	} else if rows == 0 {
 		stamp := timeString(now)
-		if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_edges
+		if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_edges
 			(id, from_node_id, relation_type, to_node_id, status, confidence, trust_level, source_node_id, actor, valid_from, valid_to, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			edgeID, req.FromNodeID, req.Type, req.ToNodeID, req.Status, req.Confidence, req.TrustLevel, nullableNodeID(req.SourceNodeID), req.Actor, nullableTime(req.ValidFrom), nullableTime(req.ValidTo), stamp, stamp); err != nil {
@@ -258,7 +331,7 @@ func (s *Store) SetEdgeStatus(ctx context.Context, edgeID graph.EdgeID, status g
 		return graph.Edge{}, fmt.Errorf("invalid edge status %q", status)
 	}
 	actor = defaultString(actor, "agent")
-	result, err := s.db.ExecContext(ctx, `UPDATE graph_edges SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), edgeID)
+	result, err := s.runner.ExecContext(ctx, `UPDATE graph_edges SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), edgeID)
 	if err != nil {
 		return graph.Edge{}, fmt.Errorf("set graph edge status: %w", err)
 	}
@@ -272,7 +345,7 @@ func (s *Store) SetEdgeStatus(ctx context.Context, edgeID graph.EdgeID, status g
 
 // GetEdge loads one directed graph edge by id.
 func (s *Store) GetEdge(ctx context.Context, edgeID graph.EdgeID) (graph.Edge, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, from_node_id, relation_type, to_node_id, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, COALESCE(valid_from, ''), COALESCE(valid_to, ''), created_at, updated_at FROM graph_edges WHERE id = ?`, edgeID)
+	row := s.runner.QueryRowContext(ctx, `SELECT id, from_node_id, relation_type, to_node_id, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, COALESCE(valid_from, ''), COALESCE(valid_to, ''), created_at, updated_at FROM graph_edges WHERE id = ?`, edgeID)
 	return scanEdge(row)
 }
 
@@ -304,7 +377,7 @@ func (s *Store) ListEdges(ctx context.Context, types []graph.RelationType, limit
 	}
 	args = append(args, limit)
 	query := fmt.Sprintf(`SELECT id, from_node_id, relation_type, to_node_id, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, COALESCE(valid_from, ''), COALESCE(valid_to, ''), created_at, updated_at FROM graph_edges WHERE %s ORDER BY created_at, id LIMIT ?`, strings.Join(clauses, " AND "))
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.runner.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list graph edges: %w", err)
 	}
@@ -360,13 +433,13 @@ func (s *Store) UpsertNodeProperty(ctx context.Context, req graph.UpsertNodeProp
 
 // GetNodeProperty loads one node property by id.
 func (s *Store) GetNodeProperty(ctx context.Context, propertyID graph.PropertyID) (graph.NodeProperty, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, node_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_properties WHERE id = ?`, propertyID)
+	row := s.runner.QueryRowContext(ctx, `SELECT id, node_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_properties WHERE id = ?`, propertyID)
 	return scanNodeProperty(row)
 }
 
 // ListNodeProperties returns active properties attached to one node.
 func (s *Store) ListNodeProperties(ctx context.Context, nodeID graph.NodeID) ([]graph.NodeProperty, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, node_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_properties WHERE node_id = ? AND status = ? ORDER BY property_key, position, id`, nodeID, graph.StatusActive)
+	rows, err := s.runner.QueryContext(ctx, `SELECT id, node_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_properties WHERE node_id = ? AND status = ? ORDER BY property_key, position, id`, nodeID, graph.StatusActive)
 	if err != nil {
 		return nil, fmt.Errorf("list node properties: %w", err)
 	}
@@ -422,13 +495,13 @@ func (s *Store) UpsertEdgeProperty(ctx context.Context, req graph.UpsertEdgeProp
 
 // GetEdgeProperty loads one edge property by id.
 func (s *Store) GetEdgeProperty(ctx context.Context, propertyID graph.PropertyID) (graph.EdgeProperty, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, edge_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_edge_properties WHERE id = ?`, propertyID)
+	row := s.runner.QueryRowContext(ctx, `SELECT id, edge_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_edge_properties WHERE id = ?`, propertyID)
 	return scanEdgeProperty(row)
 }
 
 // ListEdgeProperties returns active properties attached to one edge.
 func (s *Store) ListEdgeProperties(ctx context.Context, edgeID graph.EdgeID) ([]graph.EdgeProperty, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, edge_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_edge_properties WHERE edge_id = ? AND status = ? ORDER BY property_key, position, id`, edgeID, graph.StatusActive)
+	rows, err := s.runner.QueryContext(ctx, `SELECT id, edge_id, property_key, value_type, value_text, COALESCE(value_number, 0), COALESCE(value_time, ''), value_json, position, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_edge_properties WHERE edge_id = ? AND status = ? ORDER BY property_key, position, id`, edgeID, graph.StatusActive)
 	if err != nil {
 		return nil, fmt.Errorf("list edge properties: %w", err)
 	}
@@ -451,7 +524,7 @@ func (s *Store) UpsertAlias(ctx context.Context, req graph.UpsertAliasRequest) (
 		return graph.Alias{}, err
 	}
 	stamp := timeString(s.now())
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_aliases (node_id, locale, alias, alias_kind, created_at)
+	if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_aliases (node_id, locale, alias, alias_kind, created_at)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(node_id, locale, alias) DO UPDATE SET alias_kind = excluded.alias_kind`,
 		req.NodeID, req.Locale, req.Alias, req.Kind, stamp); err != nil {
@@ -466,24 +539,21 @@ func (s *Store) WriteEvidenceBlob(ctx context.Context, req graph.WriteEvidenceBl
 	if err != nil {
 		return graph.EvidenceBlob{}, err
 	}
-	checksum, relPath, size, err := s.writeEvidenceFile(req.NodeID, req.Content)
+	existingPath, hadExisting, lookupErr := s.evidenceBlobExists(ctx, req.NodeID)
+	if lookupErr != nil {
+		return graph.EvidenceBlob{}, lookupErr
+	}
+	write, err := s.writeEvidenceFile(req.NodeID, req.Content)
 	if err != nil {
 		return graph.EvidenceBlob{}, err
 	}
 	now := s.now()
-	_, hadExisting, lookupErr := s.evidenceBlobExists(ctx, req.NodeID)
-	if lookupErr != nil {
-		_ = s.removeEvidenceFile(relPath)
-		return graph.EvidenceBlob{}, lookupErr
-	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_evidence_blobs
+	if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_evidence_blobs
 		(node_id, checksum, path, media_type, source_system, source_id, size_bytes, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(node_id) DO UPDATE SET checksum = excluded.checksum, path = excluded.path, media_type = excluded.media_type, source_system = excluded.source_system, source_id = excluded.source_id, size_bytes = excluded.size_bytes`,
-		req.NodeID, checksum, relPath, req.MediaType, req.SourceSystem, req.SourceID, size, timeString(now)); err != nil {
-		if !hadExisting {
-			_ = s.removeEvidenceFile(relPath)
-		}
+		req.NodeID, write.checksum, write.relPath, req.MediaType, req.SourceSystem, req.SourceID, write.size, timeString(now)); err != nil {
+		s.discardEvidenceFile(write)
 		return graph.EvidenceBlob{}, fmt.Errorf("write graph evidence blob: %w", err)
 	}
 	if _, err := s.AppendAudit(ctx, graph.AppendAuditRequest{
@@ -492,9 +562,13 @@ func (s *Store) WriteEvidenceBlob(ctx context.Context, req graph.WriteEvidenceBl
 		SubjectNodeID: req.NodeID,
 		SourceNodeID:  req.SourceNodeID,
 		Message:       "wrote graph evidence content",
-		DetailsJSON:   evidenceBlobAuditDetails(req, checksum, size),
+		DetailsJSON:   evidenceBlobAuditDetails(req, write.checksum, write.size),
 	}); err != nil {
+		s.discardEvidenceFile(write)
 		return graph.EvidenceBlob{}, err
+	}
+	if hadExisting && existingPath != write.relPath {
+		s.removeSupersededEvidenceFile(existingPath)
 	}
 	return s.GetEvidenceBlob(ctx, req.NodeID)
 }
@@ -519,7 +593,7 @@ func evidenceBlobAuditDetails(req graph.WriteEvidenceBlobRequest, checksum strin
 func (s *Store) GetEvidenceBlob(ctx context.Context, nodeID graph.NodeID) (graph.EvidenceBlob, error) {
 	var blob graph.EvidenceBlob
 	var createdAt string
-	if err := s.db.QueryRowContext(ctx, `SELECT node_id, checksum, path, media_type, source_system, source_id, size_bytes, created_at FROM graph_evidence_blobs WHERE node_id = ?`, nodeID).
+	if err := s.runner.QueryRowContext(ctx, `SELECT node_id, checksum, path, media_type, source_system, source_id, size_bytes, created_at FROM graph_evidence_blobs WHERE node_id = ?`, nodeID).
 		Scan(&blob.NodeID, &blob.Checksum, &blob.Path, &blob.MediaType, &blob.SourceSystem, &blob.SourceID, &blob.SizeBytes, &createdAt); err != nil {
 		return graph.EvidenceBlob{}, fmt.Errorf("load graph evidence blob: %w", err)
 	}
@@ -536,6 +610,15 @@ func (s *Store) ReadEvidenceBlobContent(ctx context.Context, nodeID graph.NodeID
 	blob, err := s.GetEvidenceBlob(ctx, nodeID)
 	if err != nil {
 		return "", err
+	}
+	if s.stagedEvidenceByNode != nil {
+		if stagedPath := s.stagedEvidenceByNode[nodeID]; stagedPath != "" {
+			bytes, err := os.ReadFile(stagedPath)
+			if err != nil {
+				return "", fmt.Errorf("read staged graph evidence file: %w", err)
+			}
+			return string(bytes), nil
+		}
 	}
 	bytes, err := os.ReadFile(s.safePath(blob.Path))
 	if err != nil {
@@ -558,7 +641,7 @@ func (s *Store) AppendAudit(ctx context.Context, req graph.AppendAuditRequest) (
 		}
 	}
 	now := s.now()
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_audit_events
+	if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_audit_events
 		(id, event_kind, actor, subject_node_id, subject_edge_id, source_node_id, message, details_json, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		auditID, req.Kind, req.Actor, nullableNodeID(req.SubjectNodeID), nullableEdgeID(req.SubjectEdgeID), nullableNodeID(req.SourceNodeID), req.Message, req.DetailsJSON, timeString(now)); err != nil {
@@ -572,7 +655,7 @@ func (s *Store) ListAuditEvents(ctx context.Context, limit int) ([]graph.AuditEv
 	if limit <= 0 || limit > 1000 {
 		limit = 100
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, event_kind, actor, COALESCE(subject_node_id, ''), COALESCE(subject_edge_id, ''), COALESCE(source_node_id, ''), message, details_json, created_at FROM graph_audit_events ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
+	rows, err := s.runner.QueryContext(ctx, `SELECT id, event_kind, actor, COALESCE(subject_node_id, ''), COALESCE(subject_edge_id, ''), COALESCE(source_node_id, ''), message, details_json, created_at FROM graph_audit_events ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, fmt.Errorf("list graph audit events: %w", err)
 	}
@@ -606,10 +689,10 @@ func (s *Store) ReindexNode(ctx context.Context, nodeID graph.NodeID) error {
 	if err != nil {
 		return err
 	}
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM graph_text_fts WHERE node_id = ?`, nodeID); err != nil {
+	if _, err := s.runner.ExecContext(ctx, `DELETE FROM graph_text_fts WHERE node_id = ?`, nodeID); err != nil {
 		return fmt.Errorf("delete graph fts row: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_text_fts (node_id, title, summary, aliases, properties, evidence_text) VALUES (?, ?, ?, ?, ?, ?)`,
+	if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_text_fts (node_id, title, summary, aliases, properties, evidence_text) VALUES (?, ?, ?, ?, ?, ?)`,
 		node.ID, node.Title, node.Summary, aliases, properties, evidence); err != nil {
 		return fmt.Errorf("insert graph fts row: %w", err)
 	}
@@ -644,7 +727,7 @@ func (s *Store) SearchNodes(ctx context.Context, q graph.SearchNodesQuery) ([]gr
 	}
 	args = append(args, q.Limit)
 	query := fmt.Sprintf(`SELECT n.id FROM graph_nodes n %s WHERE %s %s LIMIT ?`, join, strings.Join(clauses, " AND "), order)
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.runner.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("search graph nodes: %w", err)
 	}
@@ -680,7 +763,7 @@ func (s *Store) configure(ctx context.Context) error {
 		"PRAGMA synchronous = NORMAL",
 	}
 	for _, pragma := range pragmas {
-		if _, err := s.db.ExecContext(ctx, pragma); err != nil {
+		if _, err := s.runner.ExecContext(ctx, pragma); err != nil {
 			return fmt.Errorf("configure graph sqlite %q: %w", pragma, err)
 		}
 	}
@@ -690,7 +773,7 @@ func (s *Store) configure(ctx context.Context) error {
 // nodeIDByStableKey returns an existing node id by kind and stable key.
 func (s *Store) nodeIDByStableKey(ctx context.Context, kind graph.NodeKind, stableKey string) (graph.NodeID, bool, error) {
 	var value string
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM graph_nodes WHERE kind = ? AND stable_key = ?`, kind, stableKey).Scan(&value)
+	err := s.runner.QueryRowContext(ctx, `SELECT id FROM graph_nodes WHERE kind = ? AND stable_key = ?`, kind, stableKey).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -704,7 +787,7 @@ func (s *Store) nodeIDByStableKey(ctx context.Context, kind graph.NodeKind, stab
 func (s *Store) edgeIDByIdentity(ctx context.Context, from graph.NodeID, relation graph.RelationType, to graph.NodeID, source graph.NodeID) (graph.EdgeID, bool, error) {
 	var value string
 	sourceValue := string(source)
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM graph_edges
+	err := s.runner.QueryRowContext(ctx, `SELECT id FROM graph_edges
 		WHERE from_node_id = ? AND relation_type = ? AND to_node_id = ?
 		  AND ((source_node_id IS NULL AND ? = '') OR source_node_id = ?)`,
 		from, relation, to, sourceValue, sourceValue).Scan(&value)
@@ -721,7 +804,7 @@ func (s *Store) edgeIDByIdentity(ctx context.Context, from graph.NodeID, relatio
 func (s *Store) nodePropertyIDByIdentity(ctx context.Context, nodeID graph.NodeID, key string, position int, source graph.NodeID) (graph.PropertyID, bool, error) {
 	var value string
 	sourceValue := string(source)
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM graph_properties
+	err := s.runner.QueryRowContext(ctx, `SELECT id FROM graph_properties
 		WHERE node_id = ? AND property_key = ? AND position = ?
 		  AND ((source_node_id IS NULL AND ? = '') OR source_node_id = ?)`,
 		nodeID, key, position, sourceValue, sourceValue).Scan(&value)
@@ -738,7 +821,7 @@ func (s *Store) nodePropertyIDByIdentity(ctx context.Context, nodeID graph.NodeI
 func (s *Store) edgePropertyIDByIdentity(ctx context.Context, edgeID graph.EdgeID, key string, position int, source graph.NodeID) (graph.PropertyID, bool, error) {
 	var value string
 	sourceValue := string(source)
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM graph_edge_properties
+	err := s.runner.QueryRowContext(ctx, `SELECT id FROM graph_edge_properties
 		WHERE edge_id = ? AND property_key = ? AND position = ?
 		  AND ((source_node_id IS NULL AND ? = '') OR source_node_id = ?)`,
 		edgeID, key, position, sourceValue, sourceValue).Scan(&value)
@@ -754,7 +837,7 @@ func (s *Store) edgePropertyIDByIdentity(ctx context.Context, edgeID graph.EdgeI
 // evidenceBlobExists reports whether an evidence blob row already exists.
 func (s *Store) evidenceBlobExists(ctx context.Context, nodeID graph.NodeID) (string, bool, error) {
 	var path string
-	err := s.db.QueryRowContext(ctx, `SELECT path FROM graph_evidence_blobs WHERE node_id = ?`, nodeID).Scan(&path)
+	err := s.runner.QueryRowContext(ctx, `SELECT path FROM graph_evidence_blobs WHERE node_id = ?`, nodeID).Scan(&path)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -768,7 +851,7 @@ func (s *Store) evidenceBlobExists(ctx context.Context, nodeID graph.NodeID) (st
 func (s *Store) insertNodeProperty(ctx context.Context, propertyID graph.PropertyID, req graph.UpsertNodePropertyRequest) error {
 	now := s.now()
 	stamp := timeString(now)
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_properties
+	if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_properties
 		(id, node_id, property_key, value_type, value_text, value_number, value_time, value_json, position, status, confidence, trust_level, source_node_id, actor, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		propertyID, req.NodeID, req.Key, req.Value.Type, req.Value.Text, nullableNumber(req.Value), nullableValueTime(req.Value), req.Value.JSON, req.Position, req.Status, req.Confidence, req.TrustLevel, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
@@ -779,7 +862,7 @@ func (s *Store) insertNodeProperty(ctx context.Context, propertyID graph.Propert
 
 // updateNodeProperty updates an existing node property.
 func (s *Store) updateNodeProperty(ctx context.Context, propertyID graph.PropertyID, req graph.UpsertNodePropertyRequest) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE graph_properties
+	result, err := s.runner.ExecContext(ctx, `UPDATE graph_properties
 		SET node_id = ?, property_key = ?, value_type = ?, value_text = ?, value_number = ?, value_time = ?, value_json = ?, position = ?, status = ?, confidence = ?, trust_level = ?, source_node_id = ?, actor = ?, updated_at = ?
 		WHERE id = ?`,
 		req.NodeID, req.Key, req.Value.Type, req.Value.Text, nullableNumber(req.Value), nullableValueTime(req.Value), req.Value.JSON, req.Position, req.Status, req.Confidence, req.TrustLevel, nullableNodeID(req.SourceNodeID), req.Actor, timeString(s.now()), propertyID)
@@ -798,7 +881,7 @@ func (s *Store) updateNodeProperty(ctx context.Context, propertyID graph.Propert
 func (s *Store) insertEdgeProperty(ctx context.Context, propertyID graph.PropertyID, req graph.UpsertEdgePropertyRequest) error {
 	now := s.now()
 	stamp := timeString(now)
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO graph_edge_properties
+	if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_edge_properties
 		(id, edge_id, property_key, value_type, value_text, value_number, value_time, value_json, position, status, confidence, trust_level, source_node_id, actor, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		propertyID, req.EdgeID, req.Key, req.Value.Type, req.Value.Text, nullableNumber(req.Value), nullableValueTime(req.Value), req.Value.JSON, req.Position, req.Status, req.Confidence, req.TrustLevel, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
@@ -809,7 +892,7 @@ func (s *Store) insertEdgeProperty(ctx context.Context, propertyID graph.Propert
 
 // updateEdgeProperty updates an existing edge property.
 func (s *Store) updateEdgeProperty(ctx context.Context, propertyID graph.PropertyID, req graph.UpsertEdgePropertyRequest) error {
-	result, err := s.db.ExecContext(ctx, `UPDATE graph_edge_properties
+	result, err := s.runner.ExecContext(ctx, `UPDATE graph_edge_properties
 		SET edge_id = ?, property_key = ?, value_type = ?, value_text = ?, value_number = ?, value_time = ?, value_json = ?, position = ?, status = ?, confidence = ?, trust_level = ?, source_node_id = ?, actor = ?, updated_at = ?
 		WHERE id = ?`,
 		req.EdgeID, req.Key, req.Value.Type, req.Value.Text, nullableNumber(req.Value), nullableValueTime(req.Value), req.Value.JSON, req.Position, req.Status, req.Confidence, req.TrustLevel, nullableNodeID(req.SourceNodeID), req.Actor, timeString(s.now()), propertyID)
@@ -841,7 +924,7 @@ func (s *Store) listEdges(ctx context.Context, endpointColumn string, nodeID gra
 		}
 	}
 	query := fmt.Sprintf(`SELECT id, from_node_id, relation_type, to_node_id, status, confidence, trust_level, COALESCE(source_node_id, ''), actor, COALESCE(valid_from, ''), COALESCE(valid_to, ''), created_at, updated_at FROM graph_edges WHERE %s ORDER BY created_at, id`, strings.Join(clauses, " AND "))
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.runner.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list graph edges: %w", err)
 	}
@@ -859,7 +942,7 @@ func (s *Store) listEdges(ctx context.Context, endpointColumn string, nodeID gra
 
 // aliasText returns space-joined aliases for FTS indexing.
 func (s *Store) aliasText(ctx context.Context, nodeID graph.NodeID) (string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT alias FROM graph_aliases WHERE node_id = ? ORDER BY alias`, nodeID)
+	rows, err := s.runner.QueryContext(ctx, `SELECT alias FROM graph_aliases WHERE node_id = ? ORDER BY alias`, nodeID)
 	if err != nil {
 		return "", fmt.Errorf("load graph aliases: %w", err)
 	}
@@ -897,27 +980,178 @@ func (s *Store) evidenceText(ctx context.Context, nodeID graph.NodeID) (string, 
 	return content, err
 }
 
-// writeEvidenceFile writes content to a stable evidence path.
-func (s *Store) writeEvidenceFile(nodeID graph.NodeID, content string) (string, string, int64, error) {
+// writeEvidenceFile writes or stages content for a stable evidence path.
+func (s *Store) writeEvidenceFile(nodeID graph.NodeID, content string) (evidenceFileWrite, error) {
 	bytes := []byte(content)
 	sum := sha256.Sum256(bytes)
 	checksum := fmt.Sprintf("%x", sum[:])
-	relPath := filepath.Join("evidence", string(nodeID)+".txt")
+	relPath := filepath.Join("evidence", string(nodeID)+"-"+checksum+".txt")
 	fullPath := s.safePath(relPath)
-	tmpPath := fullPath + ".tmp"
-	if err := os.WriteFile(tmpPath, bytes, 0o600); err != nil {
-		return "", "", 0, fmt.Errorf("write graph evidence temp file: %w", err)
+	dir := filepath.Dir(fullPath)
+	write := evidenceFileWrite{
+		nodeID:    nodeID,
+		checksum:  checksum,
+		relPath:   relPath,
+		finalPath: fullPath,
+		size:      int64(len(bytes)),
+	}
+	if _, err := os.Stat(fullPath); err == nil {
+		return write, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return evidenceFileWrite{}, fmt.Errorf("stat graph evidence file: %w", err)
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return evidenceFileWrite{}, fmt.Errorf("create graph evidence directory: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".evidence-*.tmp")
+	if err != nil {
+		return evidenceFileWrite{}, fmt.Errorf("create graph evidence temp file: %w", err)
+	}
+	tmpPath := tmp.Name()
+	cleanupTemp := true
+	defer func() {
+		if cleanupTemp {
+			_ = removePathIfExists(tmpPath)
+		}
+	}()
+	if _, err := tmp.Write(bytes); err != nil {
+		_ = tmp.Close()
+		return evidenceFileWrite{}, fmt.Errorf("write graph evidence temp file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return evidenceFileWrite{}, fmt.Errorf("sync graph evidence temp file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return evidenceFileWrite{}, fmt.Errorf("close graph evidence temp file: %w", err)
+	}
+	write.tmpPath = tmpPath
+	write.created = true
+	if s.inUnitOfWork {
+		write.staged = true
+		s.stagedEvidenceFiles = append(s.stagedEvidenceFiles, write)
+		if s.stagedEvidenceByNode == nil {
+			s.stagedEvidenceByNode = map[graph.NodeID]string{}
+		}
+		s.stagedEvidenceByNode[nodeID] = tmpPath
+		cleanupTemp = false
+		return write, nil
 	}
 	if err := os.Rename(tmpPath, fullPath); err != nil {
-		_ = os.Remove(tmpPath)
-		return "", "", 0, fmt.Errorf("commit graph evidence file: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("commit graph evidence file: %w", err)
 	}
-	return checksum, relPath, int64(len(bytes)), nil
+	cleanupTemp = false
+	write.committed = true
+	if err := syncDirectory(dir); err != nil {
+		_ = removePathIfExists(fullPath)
+		return evidenceFileWrite{}, fmt.Errorf("sync graph evidence directory: %w", err)
+	}
+	return write, nil
 }
 
-// removeEvidenceFile deletes a partially committed evidence file.
+// discardEvidenceFile removes a write that did not reach database metadata.
+func (s *Store) discardEvidenceFile(write evidenceFileWrite) {
+	if !write.created {
+		return
+	}
+	if write.staged {
+		_ = removePathIfExists(write.tmpPath)
+		if s.stagedEvidenceByNode != nil {
+			delete(s.stagedEvidenceByNode, write.nodeID)
+		}
+		return
+	}
+	_ = removePathIfExists(write.finalPath)
+}
+
+// removeSupersededEvidenceFile schedules or removes an obsolete evidence path.
+func (s *Store) removeSupersededEvidenceFile(relPath string) {
+	if strings.TrimSpace(relPath) == "" {
+		return
+	}
+	if s.inUnitOfWork {
+		s.evidenceRemovals = append(s.evidenceRemovals, relPath)
+		return
+	}
+	_ = s.removeEvidenceFile(relPath)
+}
+
+// commitEvidenceFiles atomically publishes staged evidence files before commit.
+func (s *Store) commitEvidenceFiles() error {
+	for index := range s.stagedEvidenceFiles {
+		write := &s.stagedEvidenceFiles[index]
+		if !write.created || !write.staged {
+			continue
+		}
+		if _, err := os.Stat(write.finalPath); err == nil {
+			_ = removePathIfExists(write.tmpPath)
+			write.created = false
+			continue
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("stat staged graph evidence file: %w", err)
+		}
+		if err := os.Rename(write.tmpPath, write.finalPath); err != nil {
+			return fmt.Errorf("commit staged graph evidence file: %w", err)
+		}
+		write.committed = true
+		if err := syncDirectory(filepath.Dir(write.finalPath)); err != nil {
+			return fmt.Errorf("sync graph evidence directory: %w", err)
+		}
+	}
+	return nil
+}
+
+// cleanupEvidenceFiles removes staged and committed files after rollback.
+func (s *Store) cleanupEvidenceFiles() {
+	for _, write := range s.stagedEvidenceFiles {
+		if !write.created {
+			continue
+		}
+		if write.committed {
+			_ = removePathIfExists(write.finalPath)
+			continue
+		}
+		_ = removePathIfExists(write.tmpPath)
+	}
+}
+
+// cleanupCommittedEvidenceFiles removes files published before a failed commit.
+func (s *Store) cleanupCommittedEvidenceFiles() {
+	s.cleanupEvidenceFiles()
+}
+
+// cleanupSupersededEvidenceFiles removes old evidence files after commit.
+func (s *Store) cleanupSupersededEvidenceFiles() {
+	for _, relPath := range s.evidenceRemovals {
+		_ = s.removeEvidenceFile(relPath)
+	}
+}
+
+// removeEvidenceFile deletes a committed evidence file when it is safe to do so.
 func (s *Store) removeEvidenceFile(relPath string) error {
-	return os.Remove(s.safePath(relPath))
+	return removePathIfExists(s.safePath(relPath))
+}
+
+// removePathIfExists deletes a path and ignores missing files.
+func removePathIfExists(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
+}
+
+// syncDirectory flushes directory metadata after atomic file renames.
+func syncDirectory(path string) error {
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }
 
 // safePath constrains stored relative paths under the data root.

@@ -63,14 +63,64 @@ func TestRequestCommandRequestsReviewWithoutExecuting(t *testing.T) {
 		"deny",
 		"approve_once",
 		"always_exact_session",
-		"always_exact_workspace",
 		"always_prefix_session",
-		"always_prefix_workspace",
 		"always_tool_session",
+	}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("option actions = %#v, want %#v", got, want)
+	}
+	if payload.PersistentApprovals.Enabled {
+		t.Fatalf("PersistentApprovals.Enabled = true, want false")
+	}
+	if !strings.Contains(ctx.hint, "Persistent approvals") || !strings.Contains(ctx.hint, "disabled") {
+		t.Fatalf("confirmation hint = %q, want disabled persistent approval state", ctx.hint)
+	}
+}
+
+func TestRequestCommandPersistentOptionsRequireExplicitConfig(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	requestTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
+	ctx := newFakeToolContext(nil)
+
+	got, err := requestTool.runWithConfirmation(ctx, RequestCommandInput{
+		Executable: "printf",
+		Args:       []string{"hello"},
+		CWD:        ".",
+		Reason:     "Print a test value.",
+		Risk:       "read_only",
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if got.Status != "pending_review" {
+		t.Fatalf("status = %q, want pending_review", got.Status)
+	}
+
+	payload, ok := ctx.payload.(ReviewRequestPayload)
+	if !ok {
+		t.Fatalf("confirmation payload = %T, want ReviewRequestPayload", ctx.payload)
+	}
+	if !payload.PersistentApprovals.Enabled {
+		t.Fatalf("PersistentApprovals.Enabled = false, want true")
+	}
+	if payload.PersistentApprovals.WorkspacePolicyPath == "" {
+		t.Fatalf("WorkspacePolicyPath = empty, want policy path")
+	}
+	if got, want := optionActions(payload.Options), []string{
+		"deny",
+		"approve_once",
+		"always_exact_session",
+		"always_prefix_session",
+		"always_tool_session",
+		"always_exact_workspace",
+		"always_prefix_workspace",
 		"always_tool_workspace",
 		"always_tool",
 	}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Fatalf("option actions = %#v, want %#v", got, want)
+	}
+	if !strings.Contains(ctx.hint, "enabled") || !strings.Contains(ctx.hint, "Workspace policy file") {
+		t.Fatalf("confirmation hint = %q, want enabled persistent approval state", ctx.hint)
 	}
 }
 
@@ -195,7 +245,7 @@ func TestRequestCommandAlwaysExactWorkspaceSkipsLaterReview(t *testing.T) {
 		Risk:       "read_only",
 	}
 
-	firstTool := newRequestCommandToolForTest()
+	firstTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
 	first, err := firstTool.runWithConfirmation(newFakeToolContext(&toolconfirmation.ToolConfirmation{
 		Confirmed: true,
 		Payload:   ReviewDecision{Action: "always_exact_workspace"},
@@ -218,7 +268,7 @@ func TestRequestCommandAlwaysExactWorkspaceSkipsLaterReview(t *testing.T) {
 		t.Fatalf("workspace approval = %#v, want stored command details", approval)
 	}
 
-	secondTool := newRequestCommandToolForTest()
+	secondTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
 	ctx := newFakeToolContext(nil)
 	second, err := secondTool.runWithConfirmation(ctx, input)
 	if err != nil {
@@ -229,6 +279,72 @@ func TestRequestCommandAlwaysExactWorkspaceSkipsLaterReview(t *testing.T) {
 	}
 	if ctx.requestCount != 0 {
 		t.Fatalf("RequestConfirmation count = %d, want 0 after workspace approval", ctx.requestCount)
+	}
+}
+
+func TestRequestCommandRejectsPersistentDecisionWhenDisabled(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	requestTool := newRequestCommandToolForTest()
+
+	got, err := requestTool.runWithConfirmation(newFakeToolContext(&toolconfirmation.ToolConfirmation{
+		Confirmed: true,
+		Payload:   ReviewDecision{Action: "always_exact_workspace"},
+	}), RequestCommandInput{
+		Executable: "printf",
+		Args:       []string{"hello"},
+		CWD:        ".",
+		Reason:     "Print a test value.",
+		Risk:       "read_only",
+	})
+	if err == nil || !strings.Contains(err.Error(), "allow-persistent-approvals") {
+		t.Fatalf("run() error = %v, want persistent approval config error", err)
+	}
+	if got.Status != "error" {
+		t.Fatalf("status = %q, want error", got.Status)
+	}
+	policies, err := loadWorkspacePolicies(root)
+	if err != nil {
+		t.Fatalf("loadWorkspacePolicies() error = %v", err)
+	}
+	if len(policies.Exact) != 0 {
+		t.Fatalf("workspace exact approvals = %#v, want none", policies.Exact)
+	}
+}
+
+func TestRequestCommandPersistentApprovalIgnoredWhenDisabled(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	err := updateWorkspacePolicies(root, func(policies *workspacePolicies) {
+		policies.Exact = appendUniqueExact(policies.Exact, newProposal(RequestCommandInput{
+			Executable: "printf",
+			Args:       []string{"stored"},
+			CWD:        ".",
+			Reason:     "Print stored.",
+			Risk:       "read_only",
+		}))
+	})
+	if err != nil {
+		t.Fatalf("updateWorkspacePolicies() error = %v", err)
+	}
+
+	requestTool := newRequestCommandToolForTest()
+	ctx := newFakeToolContext(nil)
+	got, err := requestTool.runWithConfirmation(ctx, RequestCommandInput{
+		Executable: "printf",
+		Args:       []string{"stored"},
+		CWD:        ".",
+		Reason:     "Print stored.",
+		Risk:       "read_only",
+	})
+	if err != nil {
+		t.Fatalf("run() error = %v", err)
+	}
+	if got.Status != "pending_review" {
+		t.Fatalf("status = %q, want pending_review", got.Status)
+	}
+	if ctx.requestCount != 1 {
+		t.Fatalf("RequestConfirmation count = %d, want review when persistent approvals are disabled", ctx.requestCount)
 	}
 }
 
@@ -247,7 +363,7 @@ func TestRequestCommandWorkspaceExactApprovalCanBeEdited(t *testing.T) {
 		t.Fatalf("updateWorkspacePolicies() error = %v", err)
 	}
 
-	requestTool := newRequestCommandToolForTest()
+	requestTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
 	ctx := newFakeToolContext(nil)
 	got, err := requestTool.runWithConfirmation(ctx, RequestCommandInput{
 		Executable: "printf",
@@ -274,12 +390,9 @@ func TestRequestCommandAlwaysPrefixSessionSkipsMatchingLaterReview(t *testing.T)
 
 	first, err := requestTool.runWithConfirmation(newFakeToolContext(&toolconfirmation.ToolConfirmation{
 		Confirmed: true,
-		Payload: ReviewDecision{
-			Action: "always_prefix_session",
-			Prefix: "printf",
-		},
+		Payload:   ReviewDecision{Action: "always_prefix_session"},
 	}), RequestCommandInput{
-		Executable: "printf",
+		Executable: "echo",
 		Args:       []string{"first"},
 		CWD:        ".",
 		Reason:     "Print a test value.",
@@ -294,8 +407,8 @@ func TestRequestCommandAlwaysPrefixSessionSkipsMatchingLaterReview(t *testing.T)
 
 	ctx := newFakeToolContext(nil)
 	second, err := requestTool.runWithConfirmation(ctx, RequestCommandInput{
-		Executable: "printf",
-		Args:       []string{"second"},
+		Executable: "echo",
+		Args:       []string{"first", "again"},
 		CWD:        ".",
 		Reason:     "Print another value.",
 		Risk:       "read_only",
@@ -303,11 +416,37 @@ func TestRequestCommandAlwaysPrefixSessionSkipsMatchingLaterReview(t *testing.T)
 	if err != nil {
 		t.Fatalf("second run() error = %v", err)
 	}
-	if second.Status != "executed" || second.Result == nil || second.Result.Stdout != "second" {
+	if second.Status != "executed" || second.Result == nil || strings.TrimSpace(second.Result.Stdout) != "first again" {
 		t.Fatalf("second run() = %#v, want prefix-approved execution", second)
 	}
 	if ctx.requestCount != 0 {
 		t.Fatalf("RequestConfirmation count = %d, want 0 after prefix approval", ctx.requestCount)
+	}
+}
+
+func TestRequestCommandRejectsBroadenedPrefixDecision(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	requestTool := newRequestCommandToolForTest()
+
+	got, err := requestTool.runWithConfirmation(newFakeToolContext(&toolconfirmation.ToolConfirmation{
+		Confirmed: true,
+		Payload: ReviewDecision{
+			Action: "always_prefix_session",
+			Prefix: "echo",
+		},
+	}), RequestCommandInput{
+		Executable: "echo",
+		Args:       []string{"first"},
+		CWD:        ".",
+		Reason:     "Print a test value.",
+		Risk:       "read_only",
+	})
+	if err == nil || !strings.Contains(err.Error(), "must match the reviewed command line") {
+		t.Fatalf("run() error = %v, want broadened prefix rejection", err)
+	}
+	if got.Status != "error" {
+		t.Fatalf("status = %q, want error", got.Status)
 	}
 }
 
@@ -398,7 +537,7 @@ func TestRequestCommandAlwaysToolWorkspaceSkipsLaterReview(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 
-	firstTool := newRequestCommandToolForTest()
+	firstTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
 	first, err := firstTool.runWithConfirmation(newFakeToolContext(&toolconfirmation.ToolConfirmation{
 		Confirmed: true,
 		Payload:   ReviewDecision{Action: "always_tool_workspace"},
@@ -416,7 +555,7 @@ func TestRequestCommandAlwaysToolWorkspaceSkipsLaterReview(t *testing.T) {
 		t.Fatalf("first status = %q, want executed", first.Status)
 	}
 
-	secondTool := newRequestCommandToolForTest()
+	secondTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
 	ctx := newFakeToolContext(nil)
 	second, err := secondTool.runWithConfirmation(ctx, RequestCommandInput{
 		Executable: "printf",
@@ -445,7 +584,7 @@ func TestRequestCommandAlwaysToolGlobalSkipsLaterReview(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 
-	firstTool := newRequestCommandToolForTest()
+	firstTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
 	first, err := firstTool.runWithConfirmation(newFakeToolContext(&toolconfirmation.ToolConfirmation{
 		Confirmed: true,
 		Payload:   ReviewDecision{Action: "always_tool"},
@@ -465,7 +604,7 @@ func TestRequestCommandAlwaysToolGlobalSkipsLaterReview(t *testing.T) {
 
 	otherRoot := t.TempDir()
 	t.Chdir(otherRoot)
-	secondTool := newRequestCommandToolForTest()
+	secondTool := newRequestCommandToolForTestWithConfig(requestCommandTestConfig(true))
 	ctx := newFakeToolContext(nil)
 	second, err := secondTool.runWithConfirmation(ctx, RequestCommandInput{
 		Executable: "printf",
@@ -533,16 +672,28 @@ func TestRequestCommandPassesStdin(t *testing.T) {
 	}
 }
 
+// newRequestCommandToolForTest creates a test tool with persistent approvals disabled.
 func newRequestCommandToolForTest() *requestCommandTool {
+	return newRequestCommandToolForTestWithConfig(requestCommandTestConfig(false))
+}
+
+// newRequestCommandToolForTestWithConfig creates a test tool with custom config.
+func newRequestCommandToolForTestWithConfig(cfg schema.LocalExec) *requestCommandTool {
 	return &requestCommandTool{
-		cfg: schema.LocalExec{
-			Enabled:               true,
-			DefaultTimeout:        "1s",
-			DefaultMaxOutputBytes: 1024,
-			AllowedWorkdirs:       []string{"."},
-		},
+		cfg:      cfg,
 		policies: newReviewPolicies(),
 		executor: testProcessExecutor{},
+	}
+}
+
+// requestCommandTestConfig returns baseline local-exec config for request tests.
+func requestCommandTestConfig(allowPersistentApprovals bool) schema.LocalExec {
+	return schema.LocalExec{
+		Enabled:                  true,
+		AllowPersistentApprovals: allowPersistentApprovals,
+		DefaultTimeout:           "1s",
+		DefaultMaxOutputBytes:    1024,
+		AllowedWorkdirs:          []string{"."},
 	}
 }
 

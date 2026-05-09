@@ -18,6 +18,17 @@ go run ./cmd/agent-awesome credentials set OPENAI_API_KEY
 You may also export `OPENAI_API_KEY` in the shell that starts the harness.
 Keyring values take precedence over environment variables.
 
+Verify the configured model ID and credential before starting the pilot:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/harness
+go run ./cmd/agent-awesome models check \
+  --model ../pilots/personal-assistant/model.yaml \
+  --provider openai \
+  --model-id gpt-mini
+----
+
 == UI-Managed Local Run
 
 This is the normal desktop pilot path.
@@ -48,6 +59,11 @@ The default profile uses:
 |Gateway API
 |`http://127.0.0.1:8070/api`
 |===
+
+The harness context API is a gateway dependency, not a browser-facing service.
+Keep it on loopback for local pilots. If you intentionally bind it to a
+non-loopback address, set `AGENTAWESOME_CONTEXT_API_TOKEN` on both the harness
+and gateway, or pass the matching `--context-api-token` flag to each process.
 
 Verify the managed services from another terminal:
 
@@ -85,6 +101,10 @@ mkdir -p "$APP_DATA_DIR/memory" build/local/logs
   --log-file build/local/logs/memory.log
 ----
 
+Memory binds to loopback by default. A non-loopback memory bind requires the
+explicit `--allow-public-bind` flag and should only be used behind an
+authenticated gateway or another trusted network boundary.
+
 Terminal 2, harness:
 
 [source,sh]
@@ -112,6 +132,16 @@ cd /home/doug/dev/agentawesome/agent
   --app-name personal_pilot \
   --user-id doug
 ----
+
+The gateway can omit `--auth-token` only for loopback binds such as
+`127.0.0.1:8070`. Set `--auth-token` or `AGENTAWESOME_GATEWAY_TOKEN` before
+using a non-loopback bind or non-local CORS origin. Add
+`--allow-unauthenticated-loopback-only=false` when you want to require bearer
+auth even on loopback.
+
+Beta users should reach context tools through `/api/context/*` on the gateway.
+Direct harness context API access is limited to loopback unless protected by
+`--context-api-token` / `AGENTAWESOME_CONTEXT_API_TOKEN`.
 
 Terminal 4, UI against the already running services:
 

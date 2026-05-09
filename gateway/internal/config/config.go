@@ -1,30 +1,38 @@
+// This file parses and validates gateway runtime configuration.
 package config
 
 import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
+
+	"agentgateway/internal/policy"
 )
 
 // Config stores all runtime settings for one personal gateway process.
 type Config struct {
-	ListenAddress       string
-	HarnessBaseURL      string
-	ContextBaseURL      string
-	MemoryMCPURL        string
-	AppName             string
-	UserID              string
-	AuthToken           string
-	AllowedOrigin       string
-	RequestTimeout      time.Duration
-	ServiceStartTimeout time.Duration
-	HarnessService      ServiceConfig
-	MemoryService       ServiceConfig
-	Slack               SlackConfig
+	ListenAddress                    string
+	HarnessBaseURL                   string
+	ContextBaseURL                   string
+	ContextAPIToken                  string
+	MemoryMCPURL                     string
+	AppName                          string
+	UserID                           string
+	AuthToken                        string
+	AllowedOrigin                    string
+	AllowUnauthenticatedLoopbackOnly bool
+	RuntimePolicyText                string
+	RequestTimeout                   time.Duration
+	ServiceStartTimeout              time.Duration
+	HarnessService                   ServiceConfig
+	MemoryService                    ServiceConfig
+	Slack                            SlackConfig
 }
 
 // ServiceConfig stores local process supervision settings for one dependency.
@@ -52,16 +60,19 @@ type SlackConfig struct {
 // FromFlags parses gateway configuration from CLI flags and environment values.
 func FromFlags(args []string) (Config, error) {
 	cfg := Config{
-		ListenAddress:       envString("AGENTAWESOME_GATEWAY_ADDR", "127.0.0.1:8070"),
-		HarnessBaseURL:      envString("AGENTAWESOME_HARNESS_API_BASE_URL", "http://127.0.0.1:8080/api"),
-		ContextBaseURL:      envString("AGENTAWESOME_CONTEXT_API_BASE_URL", "http://127.0.0.1:8081/api/context"),
-		MemoryMCPURL:        envString("AGENTAWESOME_MEMORY_MCP_URL", "http://127.0.0.1:8090/mcp"),
-		AppName:             envString("AGENTAWESOME_APP_NAME", "personal_pilot"),
-		UserID:              envString("AGENTAWESOME_USER_ID", "doug"),
-		AuthToken:           envString("AGENTAWESOME_GATEWAY_TOKEN", ""),
-		AllowedOrigin:       envString("AGENTAWESOME_ALLOWED_ORIGIN", ""),
-		RequestTimeout:      envDuration("AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT", 10*time.Minute),
-		ServiceStartTimeout: envDuration("AGENTAWESOME_SERVICE_START_TIMEOUT", 30*time.Second),
+		ListenAddress:                    envString("AGENTAWESOME_GATEWAY_ADDR", "127.0.0.1:8070"),
+		HarnessBaseURL:                   envString("AGENTAWESOME_HARNESS_API_BASE_URL", "http://127.0.0.1:8080/api"),
+		ContextBaseURL:                   envString("AGENTAWESOME_CONTEXT_API_BASE_URL", "http://127.0.0.1:8081/api/context"),
+		ContextAPIToken:                  envString("AGENTAWESOME_CONTEXT_API_TOKEN", ""),
+		MemoryMCPURL:                     envString("AGENTAWESOME_MEMORY_MCP_URL", "http://127.0.0.1:8090/mcp"),
+		AppName:                          envString("AGENTAWESOME_APP_NAME", "personal_pilot"),
+		UserID:                           envString("AGENTAWESOME_USER_ID", "doug"),
+		AuthToken:                        envString("AGENTAWESOME_GATEWAY_TOKEN", ""),
+		AllowedOrigin:                    envString("AGENTAWESOME_ALLOWED_ORIGIN", ""),
+		AllowUnauthenticatedLoopbackOnly: envBool("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", true),
+		RuntimePolicyText:                envString("AGENTAWESOME_RUNTIME_POLICY_TEXT", policy.DefaultRuntimePolicyText),
+		RequestTimeout:                   envDuration("AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT", 10*time.Minute),
+		ServiceStartTimeout:              envDuration("AGENTAWESOME_SERVICE_START_TIMEOUT", 30*time.Second),
 	}
 	cfg.Slack = SlackConfig{
 		Enabled:          envBool("SLACK_ENABLED", false),
@@ -96,11 +107,14 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, "gateway listen address")
 	fs.StringVar(&cfg.HarnessBaseURL, "harness-base-url", cfg.HarnessBaseURL, "upstream harness API base URL")
 	fs.StringVar(&cfg.ContextBaseURL, "context-base-url", cfg.ContextBaseURL, "upstream harness context API base URL")
+	fs.StringVar(&cfg.ContextAPIToken, "context-api-token", cfg.ContextAPIToken, "optional bearer token for upstream context API requests")
 	fs.StringVar(&cfg.MemoryMCPURL, "memory-mcp-url", cfg.MemoryMCPURL, "memory MCP endpoint exposed in gateway status")
 	fs.StringVar(&cfg.AppName, "app-name", cfg.AppName, "default ADK app name")
 	fs.StringVar(&cfg.UserID, "user-id", cfg.UserID, "default ADK user id")
 	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "optional bearer token required for gateway API requests")
 	fs.StringVar(&cfg.AllowedOrigin, "allowed-origin", cfg.AllowedOrigin, "optional CORS origin for browser clients")
+	fs.BoolVar(&cfg.AllowUnauthenticatedLoopbackOnly, "allow-unauthenticated-loopback-only", cfg.AllowUnauthenticatedLoopbackOnly, "allow tokenless protected routes only when the gateway bind and CORS origin are loopback-only")
+	fs.StringVar(&cfg.RuntimePolicyText, "runtime-policy-text", cfg.RuntimePolicyText, "runtime policy text injected into ADK run requests")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "maximum upstream request duration")
 	fs.DurationVar(&cfg.ServiceStartTimeout, "service-start-timeout", cfg.ServiceStartTimeout, "maximum local service readiness wait")
 	fs.BoolVar(&cfg.Slack.Enabled, "slack-enabled", cfg.Slack.Enabled, "enable Slack channel adapter")
@@ -143,6 +157,20 @@ func FromFlags(args []string) (Config, error) {
 func (c Config) Validate() error {
 	if c.ListenAddress == "" {
 		return fmt.Errorf("listen address is required")
+	}
+	if c.AllowedOrigin != "" && !isHTTPOrigin(c.AllowedOrigin) {
+		return fmt.Errorf("allowed origin must be an HTTP origin")
+	}
+	if c.AuthToken == "" {
+		if !c.AllowUnauthenticatedLoopbackOnly {
+			return fmt.Errorf("auth token is required when unauthenticated loopback mode is disabled")
+		}
+		if !isLoopbackListenAddress(c.ListenAddress) {
+			return fmt.Errorf("auth token is required when gateway listens on a non-loopback address")
+		}
+		if c.AllowedOrigin != "" && !isLoopbackOrigin(c.AllowedOrigin) {
+			return fmt.Errorf("auth token is required when allowed origin is non-local")
+		}
 	}
 	if _, err := url.ParseRequestURI(c.HarnessBaseURL); err != nil {
 		return fmt.Errorf("harness base URL: %w", err)
@@ -207,16 +235,19 @@ func (s SlackConfig) Validate() error {
 // StatusView returns a sanitized representation safe for API responses.
 func (c Config) StatusView() map[string]any {
 	return map[string]any{
-		"listen_address":   c.ListenAddress,
-		"harness_base_url": c.HarnessBaseURL,
-		"context_base_url": c.ContextBaseURL,
-		"memory_mcp_url":   c.MemoryMCPURL,
-		"app_name":         c.AppName,
-		"user_id":          c.UserID,
-		"auth_required":    c.AuthToken != "",
-		"harness_service":  c.HarnessService.StatusView(),
-		"memory_service":   c.MemoryService.StatusView(),
-		"slack":            c.Slack.StatusView(),
+		"listen_address":                      c.ListenAddress,
+		"harness_base_url":                    c.HarnessBaseURL,
+		"context_base_url":                    c.ContextBaseURL,
+		"has_context_api_token":               strings.TrimSpace(c.ContextAPIToken) != "",
+		"memory_mcp_url":                      c.MemoryMCPURL,
+		"app_name":                            c.AppName,
+		"user_id":                             c.UserID,
+		"auth_required":                       c.AuthToken != "",
+		"allow_unauthenticated_loopback_only": c.AllowUnauthenticatedLoopbackOnly,
+		"has_runtime_policy":                  strings.TrimSpace(c.RuntimePolicyText) != "",
+		"harness_service":                     c.HarnessService.StatusView(),
+		"memory_service":                      c.MemoryService.StatusView(),
+		"slack":                               c.Slack.StatusView(),
 	}
 }
 
@@ -330,4 +361,45 @@ func trimTrailingSlash(value string) string {
 		value = value[:len(value)-1]
 	}
 	return value
+}
+
+// isLoopbackListenAddress reports whether an HTTP bind address is loopback-only.
+func isLoopbackListenAddress(address string) bool {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return false
+	}
+	return isLoopbackHost(host)
+}
+
+// isHTTPOrigin reports whether a CORS origin is an HTTP(S) origin without path data.
+func isHTTPOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return (parsed.Scheme == "http" || parsed.Scheme == "https") &&
+		parsed.Host != "" &&
+		parsed.Path == "" &&
+		parsed.RawQuery == "" &&
+		parsed.Fragment == ""
+}
+
+// isLoopbackOrigin reports whether a CORS origin resolves to local development.
+func isLoopbackOrigin(origin string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	host := parsed.Hostname()
+	return isLoopbackHost(host)
+}
+
+// isLoopbackHost reports whether a host name or IP address is loopback-only.
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

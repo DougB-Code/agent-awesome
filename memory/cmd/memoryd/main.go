@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"net/http"
 	"os"
 	"os/signal"
@@ -23,16 +22,11 @@ import (
 
 // main parses configuration, starts workers, and serves MCP plus health routes.
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8090", "HTTP listen address")
-	dbPath := flag.String("db", "memory.db", "SQLite database path")
-	dataRoot := flag.String("data", "data", "filesystem artifact root")
-	logFile := flag.String("log-file", "", "log file path")
-	workers := flag.Int("workers", 2, "background worker count")
-	snapshotURL := flag.String("snapshot-url", "", "optional authenticated HTTP snapshot endpoint")
-	snapshotToken := flag.String("snapshot-token", "", "bearer token for the snapshot endpoint")
-	snapshotTimeout := flag.Duration("snapshot-timeout", 30*time.Second, "snapshot restore and save timeout")
-	flag.Parse()
-	closeLog, err := logging.Configure(*logFile)
+	cfg, err := parseConfig(os.Args[1:])
+	if err != nil {
+		log.Fatal().Err(err).Msg("load config")
+	}
+	closeLog, err := logging.Configure(cfg.LogFile)
 	if err != nil {
 		log.Fatal().Err(err).Msg("configure logging")
 	}
@@ -42,19 +36,19 @@ func main() {
 	defer stopSignals()
 
 	snapshotStore := persistence.HTTPStore{
-		URL:     *snapshotURL,
-		Token:   *snapshotToken,
-		Timeout: *snapshotTimeout,
+		URL:     cfg.SnapshotURL,
+		Token:   cfg.SnapshotToken,
+		Timeout: cfg.SnapshotTimeout,
 	}
-	if err := snapshotStore.Restore(ctx, *dbPath, *dataRoot); err != nil {
+	if err := snapshotStore.Restore(ctx, cfg.DBPath, cfg.DataRoot); err != nil {
 		log.Fatal().Err(err).Msg("restore memory snapshot")
 	}
 
-	repo, err := graphrepo.Open(ctx, graphrepo.Config{DBPath: *dbPath, DataRoot: *dataRoot})
+	repo, err := graphrepo.Open(ctx, graphrepo.Config{DBPath: cfg.DBPath, DataRoot: cfg.DataRoot})
 	if err != nil {
 		log.Fatal().Err(err).Msg("open graph memory store")
 	}
-	memoryService := service.New(repo, nil, service.Config{WorkerCount: *workers})
+	memoryService := service.New(repo, nil, service.Config{WorkerCount: cfg.WorkerCount})
 	memoryService.Start(ctx)
 	defer func() {
 		closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)
@@ -62,9 +56,9 @@ func main() {
 		if err := memoryService.Close(closeCtx); err != nil {
 			log.Error().Err(err).Msg("close memory service")
 		}
-		snapshotCtx, cancelSnapshot := context.WithTimeout(context.Background(), *snapshotTimeout)
+		snapshotCtx, cancelSnapshot := context.WithTimeout(context.Background(), cfg.SnapshotTimeout)
 		defer cancelSnapshot()
-		if err := snapshotStore.Save(snapshotCtx, *dbPath, *dataRoot); err != nil {
+		if err := snapshotStore.Save(snapshotCtx, cfg.DBPath, cfg.DataRoot); err != nil {
 			log.Error().Err(err).Msg("save memory snapshot")
 		}
 	}()
@@ -75,7 +69,7 @@ func main() {
 	mux.HandleFunc("/metrics", metricsHandler(memoryService))
 
 	server := &http.Server{
-		Addr:              *addr,
+		Addr:              cfg.ListenAddress,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -88,7 +82,7 @@ func main() {
 		}
 	}()
 
-	log.Info().Str("addr", *addr).Msg("memoryd listening")
+	log.Info().Str("addr", cfg.ListenAddress).Msg("memoryd listening")
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().Err(err).Msg("serve memoryd")
 	}

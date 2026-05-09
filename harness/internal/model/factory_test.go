@@ -4,6 +4,7 @@ package model
 import (
 	"context"
 	"iter"
+	"strings"
 	"testing"
 
 	"agentawesome/internal/config/schema"
@@ -77,6 +78,34 @@ func TestFactoryValidateConfigUsesProviderValidation(t *testing.T) {
 
 	if err := NewFactory().ValidateConfig(cfg); err == nil {
 		t.Fatalf("ValidateConfig() error = nil, want provider validation error")
+	}
+}
+
+// TestFactoryValidateConfigRejectsUnsupportedStreamingCapability verifies
+// startup validation catches unsupported streaming declarations.
+func TestFactoryValidateConfigRejectsUnsupportedStreamingCapability(t *testing.T) {
+	cfg := &schema.ModelConfig{
+		Providers: map[string]schema.Provider{
+			"openai": {
+				Adapter:   "openai",
+				APIKeyEnv: "OPENAI_API_KEY",
+				URL:       "https://api.openai.com/v1/chat/completions",
+				Models: []schema.Model{
+					{
+						ID:    "gpt",
+						Model: "gpt-example",
+						Capabilities: schema.ModelCapabilities{
+							Streaming: true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	err := NewFactory().ValidateConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "does not support streaming") {
+		t.Fatalf("ValidateConfig() error = %v, want streaming validation error", err)
 	}
 }
 

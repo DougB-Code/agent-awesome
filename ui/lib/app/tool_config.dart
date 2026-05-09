@@ -9,6 +9,7 @@ import 'runtime_profile.dart';
 
 /// Tools currently exposed by the graph-backed memory MCP endpoint.
 const List<String> graphBackedMcpToolNames = <String>[
+  'remember',
   'save_memory_candidate',
   'search_memory',
   'search_sources',
@@ -31,6 +32,15 @@ const List<String> graphBackedMcpToolNames = <String>[
   'traverse_task_relations',
   'upsert_task_relation',
   'delete_task_relation',
+];
+
+/// Graph-backed memory tools that should pause for human confirmation.
+const List<String> graphBackedMcpConfirmationToolNames = <String>[
+  'remember',
+  'save_memory_candidate',
+  'refresh_compiled_page',
+  'repair_memory_record',
+  'submit_memory_correction',
 ];
 
 /// ToolConfigDocument represents one harness tool config YAML file.
@@ -104,6 +114,7 @@ class LocalExecToolConfig {
   const LocalExecToolConfig({
     required this.enabled,
     required this.requireConfirmation,
+    required this.allowPersistentApprovals,
     required this.defaultTimeout,
     required this.defaultMaxOutputBytes,
     required this.allowedWorkdirs,
@@ -116,6 +127,9 @@ class LocalExecToolConfig {
 
   /// Optional schema value; when present the harness only accepts true.
   final bool? requireConfirmation;
+
+  /// Whether request_command may save workspace/global approvals.
+  final bool allowPersistentApprovals;
 
   /// Default Go-style duration for command execution.
   final String defaultTimeout;
@@ -138,6 +152,8 @@ class LocalExecToolConfig {
       ..remove('enabled')
       ..remove('require-confirmation')
       ..remove('require_confirmation')
+      ..remove('allow-persistent-approvals')
+      ..remove('allow_persistent_approvals')
       ..remove('default-timeout')
       ..remove('default_timeout')
       ..remove('default-max-output-bytes')
@@ -149,6 +165,9 @@ class LocalExecToolConfig {
       enabled: _configBool(map['enabled']),
       requireConfirmation: _nullableBool(
         map['require-confirmation'] ?? map['require_confirmation'],
+      ),
+      allowPersistentApprovals: _configBool(
+        map['allow-persistent-approvals'] ?? map['allow_persistent_approvals'],
       ),
       defaultTimeout: _configString(
         map['default-timeout'] ?? map['default_timeout'],
@@ -170,6 +189,7 @@ class LocalExecToolConfig {
   LocalExecToolConfig copyWith({
     bool? enabled,
     Object? requireConfirmation = _unset,
+    bool? allowPersistentApprovals,
     String? defaultTimeout,
     int? defaultMaxOutputBytes,
     List<String>? allowedWorkdirs,
@@ -181,6 +201,8 @@ class LocalExecToolConfig {
       requireConfirmation: identical(requireConfirmation, _unset)
           ? this.requireConfirmation
           : requireConfirmation as bool?,
+      allowPersistentApprovals:
+          allowPersistentApprovals ?? this.allowPersistentApprovals,
       defaultTimeout: defaultTimeout ?? this.defaultTimeout,
       defaultMaxOutputBytes:
           defaultMaxOutputBytes ?? this.defaultMaxOutputBytes,
@@ -197,6 +219,8 @@ class LocalExecToolConfig {
       'enabled': enabled,
       if (requireConfirmation != null)
         'require-confirmation': requireConfirmation,
+      if (allowPersistentApprovals)
+        'allow-persistent-approvals': allowPersistentApprovals,
       if (defaultTimeout.isNotEmpty) 'default-timeout': defaultTimeout,
       if (defaultMaxOutputBytes != 0)
         'default-max-output-bytes': defaultMaxOutputBytes,
@@ -626,6 +650,7 @@ ToolConfigDocument emptyToolConfigDocument() {
     localExec: LocalExecToolConfig(
       enabled: false,
       requireConfirmation: null,
+      allowPersistentApprovals: false,
       defaultTimeout: '',
       defaultMaxOutputBytes: 0,
       allowedWorkdirs: <String>[],
@@ -694,12 +719,7 @@ ToolConfigDocument graphBackedMemoryToolConfig({
           endpoint: server.endpoint,
           headersFromEnv: headersFromEnv,
         ).copyWith(
-          requireConfirmationTools: const <String>[
-            'save_memory_candidate',
-            'refresh_compiled_page',
-            'repair_memory_record',
-            'submit_memory_correction',
-          ],
+          requireConfirmationTools: graphBackedMcpConfirmationToolNames,
           tools: const McpToolFilterConfig(allow: graphBackedMcpToolNames),
         ),
       ],

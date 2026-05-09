@@ -1715,6 +1715,13 @@ class _SettingsLocalExecCard extends StatelessWidget {
           value: config.enabled,
           onChanged: (enabled) => onChanged(config.copyWith(enabled: enabled)),
         ),
+        SettingsToggleField(
+          title: 'Persistent approvals',
+          subtitle: 'Allow saved request_command approvals',
+          value: config.allowPersistentApprovals,
+          onChanged: (value) =>
+              onChanged(config.copyWith(allowPersistentApprovals: value)),
+        ),
         _SettingsInlineField(
           label: 'Default timeout',
           value: config.defaultTimeout,

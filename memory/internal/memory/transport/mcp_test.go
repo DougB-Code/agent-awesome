@@ -1,3 +1,4 @@
+// This file tests the memory MCP JSON-RPC transport behavior.
 package transport
 
 import (
@@ -7,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	graphrepo "memory/internal/memory/graph/repository"
 	"memory/internal/memory/service"
@@ -19,8 +22,8 @@ func TestMCPToolsList(t *testing.T) {
 	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
 	result := body["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 22 {
-		t.Fatalf("tool count = %d, want 22", len(tools))
+	if len(tools) != 23 {
+		t.Fatalf("tool count = %d, want 23", len(tools))
 	}
 }
 
@@ -28,7 +31,7 @@ func TestMCPToolsList(t *testing.T) {
 func TestMCPTaskResourceSchemaIsJSONObject(t *testing.T) {
 	server := newTestMCPServer(t)
 	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
-	tool := mcpToolDefinition(t, body, "create_task")
+	tool := mcpToolDefinition(t, body, "update_task")
 	schema := tool["inputSchema"].(map[string]any)
 	properties := schema["properties"].(map[string]any)
 	workBreakdown := properties["work_breakdown"].(map[string]any)
@@ -40,6 +43,25 @@ func TestMCPTaskResourceSchemaIsJSONObject(t *testing.T) {
 	}
 	if _, ok := items["properties"].(map[string]any); !ok {
 		t.Fatalf("resources.items.properties = %#v, want object properties", items["properties"])
+	}
+}
+
+// TestMCPCreateTaskSchemaIsLowFriction verifies create_task stays micro-model friendly.
+func TestMCPCreateTaskSchemaIsLowFriction(t *testing.T) {
+	server := newTestMCPServer(t)
+	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+	tool := mcpToolDefinition(t, body, "create_task")
+	schema := tool["inputSchema"].(map[string]any)
+	properties := schema["properties"].(map[string]any)
+	for _, key := range []string{"title", "description", "priority", "due_at", "scheduled_at", "topics"} {
+		if _, ok := properties[key]; !ok {
+			t.Fatalf("create_task properties missing %q: %#v", key, properties)
+		}
+	}
+	for _, key := range []string{"status", "energy_required", "effort", "value", "urgency", "risk", "work_breakdown", "memory_links"} {
+		if _, ok := properties[key]; ok {
+			t.Fatalf("create_task exposes advanced field %q in %#v", key, properties)
+		}
 	}
 }
 
@@ -84,6 +106,153 @@ func TestMCPSaveAndSearch(t *testing.T) {
 	primary := structured["primary_memory"].([]any)
 	if len(primary) != 1 {
 		t.Fatalf("primary evidence count = %d, want 1", len(primary))
+	}
+}
+
+// TestMCPRememberStoresMemoryNugget verifies the small memory write surface.
+func TestMCPRememberStoresMemoryNugget(t *testing.T) {
+	server := newTestMCPServer(t)
+	remember := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "remember",
+			"arguments": map[string]any{
+				"text":            "Doug prefers memory to be stored as small connected nuggets.",
+				"topics":          []string{"memory", "preference"},
+				"entities":        []string{"Doug", "Agent Awesome"},
+				"idempotency_key": "remember-nugget",
+			},
+		},
+	})
+	rememberResult := remember["result"].(map[string]any)
+	if rememberResult["isError"].(bool) {
+		t.Fatalf("remember returned tool error: %#v", rememberResult)
+	}
+	search := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "search_memory",
+			"arguments": map[string]any{
+				"scope": "user",
+				"text":  "connected nuggets",
+			},
+		},
+	})
+	searchResult := search["result"].(map[string]any)
+	if searchResult["isError"].(bool) {
+		t.Fatalf("search returned tool error: %#v", searchResult)
+	}
+	primary := searchResult["structuredContent"].(map[string]any)["primary_memory"].([]any)
+	if len(primary) != 1 {
+		t.Fatalf("primary memory count = %d, want 1", len(primary))
+	}
+	record := primary[0].(map[string]any)
+	if record["kind"] != "profile_fact" || record["trust_level"] != "user_asserted" {
+		t.Fatalf("record = %#v, want user-asserted profile fact", record)
+	}
+}
+
+// TestMCPCreateTaskAcceptsMinimalTodo verifies a one-line user todo is enough.
+func TestMCPCreateTaskAcceptsMinimalTodo(t *testing.T) {
+	server := newTestMCPServer(t)
+	before := time.Now().UTC()
+	create := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "create_task",
+			"arguments": map[string]any{"title": "Buy milk"},
+		},
+	})
+	after := time.Now().UTC()
+	createResult := create["result"].(map[string]any)
+	if createResult["isError"].(bool) {
+		t.Fatalf("create task returned tool error: %#v", createResult)
+	}
+	task := createResult["structuredContent"].(map[string]any)
+	if task["title"] != "Buy milk" || task["status"] != "open" || task["priority"] != "normal" {
+		t.Fatalf("task = %#v, want low-friction open normal task", task)
+	}
+	followUpAt, err := time.Parse(time.RFC3339Nano, task["follow_up_at"].(string))
+	if err != nil {
+		t.Fatalf("follow_up_at = %#v, want RFC3339 timestamp: %v", task["follow_up_at"], err)
+	}
+	minFollowUp := before.Add(7*24*time.Hour - time.Second)
+	maxFollowUp := after.Add(7*24*time.Hour + time.Second)
+	if followUpAt.Before(minFollowUp) || followUpAt.After(maxFollowUp) {
+		t.Fatalf("follow_up_at = %s, want between %s and %s", followUpAt, minFollowUp, maxFollowUp)
+	}
+}
+
+// TestMCPCreateTaskCoercesLegacyModelMetadata verifies stale local-model calls survive.
+func TestMCPCreateTaskCoercesLegacyModelMetadata(t *testing.T) {
+	server := newTestMCPServer(t)
+	create := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_task",
+			"arguments": map[string]any{
+				"title":            "Buy Milk",
+				"description":      "Purchase milk.",
+				"status":           "pending",
+				"priority":         "medium",
+				"energy_required":  1,
+				"effort":           5,
+				"urgency":          "low",
+				"value":            10,
+				"memory_links":     []any{},
+				"work_breakdown":   []string{"Go to store", "Select milk", "Pay"},
+				"idempotency_key":  "buy-milk-legacy",
+				"estimate_minutes": 10,
+			},
+		},
+	})
+	createResult := create["result"].(map[string]any)
+	if createResult["isError"].(bool) {
+		t.Fatalf("create task returned tool error: %#v", createResult)
+	}
+	task := createResult["structuredContent"].(map[string]any)
+	if task["status"] != "open" || task["priority"] != "normal" {
+		t.Fatalf("task status/priority = %#v/%#v, want coerced open/normal", task["status"], task["priority"])
+	}
+	if task["energy_required"] != "1" || task["urgency"] != 0.25 || task["value"] != 1.0 {
+		t.Fatalf("task metadata = %#v, want tolerant scalar coercion", task)
+	}
+}
+
+// TestMCPCreateTaskRecoversMalformedGemmaKeys verifies memory accepts bad keys.
+func TestMCPCreateTaskRecoversMalformedGemmaKeys(t *testing.T) {
+	server := newTestMCPServer(t)
+	create := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_task",
+			"arguments": map[string]any{
+				`title:<|"|>Buy milk<|"|>`:                          nil,
+				`description:<|"|>Buy milk<|"|>`:                    nil,
+				`idempotency_key:<|"|>personal_pilot:session:<|"|>`: nil,
+			},
+		},
+	})
+	createResult := create["result"].(map[string]any)
+	if createResult["isError"].(bool) {
+		t.Fatalf("create task returned tool error: %#v", createResult)
+	}
+	task := createResult["structuredContent"].(map[string]any)
+	if task["title"] != "Buy milk" || task["description"] != "Buy milk" {
+		t.Fatalf("task = %#v, want recovered title and description", task)
+	}
+	if task["idempotency_key"] != "personal_pilot:session:" {
+		t.Fatalf("task idempotency key = %#v, want recovered key", task["idempotency_key"])
 	}
 }
 
@@ -210,6 +379,20 @@ func TestMCPGraphTaskTools(t *testing.T) {
 	rows := queryResult["structuredContent"].(map[string]any)["rows"].([]any)
 	if len(rows) != 2 {
 		t.Fatalf("query rows = %#v, want two open tasks", rows)
+	}
+}
+
+// TestMCPRejectsOversizedJSONRPCRequest verifies MCP requests have a hard cap.
+func TestMCPRejectsOversizedJSONRPCRequest(t *testing.T) {
+	server := NewMCPServer(nil)
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list","padding":"` + strings.Repeat("x", int(maxJSONRPCRequestBytes)) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	server.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", rec.Code)
 	}
 }
 

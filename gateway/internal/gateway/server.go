@@ -1,3 +1,4 @@
+// This file wires gateway routes, proxy handlers, and channel adapters.
 package gateway
 
 import (
@@ -6,9 +7,11 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"agentgateway/internal/config"
+	"agentgateway/internal/policy"
 	"agentgateway/internal/proxy"
 	"agentgateway/internal/slack"
 	"agentgateway/internal/supervisor"
@@ -25,13 +28,26 @@ type Server struct {
 	httpServer   *http.Server
 }
 
+// readinessView summarizes whether proxied dependency routes should accept traffic.
+type readinessView struct {
+	Ready   bool   `json:"ready"`
+	State   string `json:"state"`
+	Message string `json:"message"`
+}
+
 // NewServer creates a configured gateway server.
 func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) {
-	apiProxy, err := proxy.New(cfg.HarnessBaseURL, "/api", cfg.RequestTimeout)
+	runtimePolicy := policy.NewInjector(policy.Config{Text: cfg.RuntimePolicyText})
+	apiProxy, err := proxy.New(
+		cfg.HarnessBaseURL,
+		"/api",
+		cfg.RequestTimeout,
+		proxy.WithBodyTransformer(runSSEBodyTransformer(runtimePolicy)),
+	)
 	if err != nil {
 		return nil, err
 	}
-	contextProxy, err := proxy.New(cfg.ContextBaseURL, "/api/context", cfg.RequestTimeout)
+	contextProxy, err := proxy.New(cfg.ContextBaseURL, "/api/context", cfg.RequestTimeout, contextProxyOptions(cfg)...)
 	if err != nil {
 		return nil, err
 	}
@@ -55,6 +71,26 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 	return server, nil
 }
 
+// contextProxyOptions returns gateway-owned headers for the harness context API.
+func contextProxyOptions(cfg config.Config) []proxy.Option {
+	token := strings.TrimSpace(cfg.ContextAPIToken)
+	if token == "" {
+		return nil
+	}
+	return []proxy.Option{proxy.WithUpstreamHeader("Authorization", "Bearer "+token)}
+}
+
+// runSSEBodyTransformer applies runtime policy only to ADK run_sse requests.
+func runSSEBodyTransformer(injector *policy.Injector) proxy.BodyTransformer {
+	return func(r *http.Request, body []byte) ([]byte, error) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/run_sse") {
+			return body, nil
+		}
+		next, _, err := injector.Inject(body)
+		return next, err
+	}
+}
+
 // HTTPServer returns the configured net/http server.
 func (s *Server) HTTPServer() *http.Server {
 	return s.httpServer
@@ -67,9 +103,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/gateway/status", s.authenticated(s.statusHandler))
 	mux.HandleFunc("/api/gateway/channels", s.authenticated(s.channelsHandler))
 	mux.HandleFunc("/slack/events", s.slack.EventsHandler)
-	mux.HandleFunc("/mcp", s.authenticated(s.memoryProxy.ServeHTTP))
-	mux.Handle("/api/context/", s.authenticated(s.contextProxy.ServeHTTP))
-	mux.Handle("/api/", s.authenticated(s.apiProxy.ServeHTTP))
+	mux.HandleFunc("/mcp", s.authenticated(s.requireServiceReady(s.config.MemoryService.Name, s.memoryProxy.ServeHTTP)))
+	mux.Handle("/api/context/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.contextProxy.ServeHTTP)))
+	mux.Handle("/api/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.apiProxy.ServeHTTP)))
 	return s.cors(mux)
 }
 
@@ -81,8 +117,9 @@ func (s *Server) healthHandler(w http.ResponseWriter, _ *http.Request) {
 // statusHandler returns sanitized gateway and dependency status.
 func (s *Server) statusHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"gateway":  s.config.StatusView(),
-		"services": s.manager.Statuses(),
+		"gateway":   s.config.StatusView(),
+		"readiness": s.readiness(),
+		"services":  s.manager.Statuses(),
 	})
 }
 
@@ -116,21 +153,76 @@ func (s *Server) slackState() string {
 	return "planned"
 }
 
+// requireServiceReady blocks proxied routes until their dependency is ready.
+func (s *Server) requireServiceReady(serviceName string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.serviceReady(serviceName) {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+				"error":     "dependency not ready",
+				"readiness": s.readiness(),
+				"services":  s.manager.Statuses(),
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// serviceReady reports whether one known dependency is connected.
+func (s *Server) serviceReady(serviceName string) bool {
+	if strings.TrimSpace(serviceName) == "" {
+		return true
+	}
+	for _, status := range s.manager.Statuses() {
+		if status.Name == serviceName {
+			return status.State == "connected"
+		}
+	}
+	return true
+}
+
+// readiness reports aggregate dependency readiness for status responses.
+func (s *Server) readiness() readinessView {
+	statuses := s.manager.Statuses()
+	if len(statuses) == 0 {
+		return readinessView{Ready: true, State: "ready", Message: "no dependencies are pending"}
+	}
+	starting := false
+	degraded := false
+	for _, status := range statuses {
+		switch status.State {
+		case "connected":
+		case "checking", "starting":
+			starting = true
+		default:
+			degraded = true
+		}
+	}
+	if degraded {
+		return readinessView{Ready: false, State: "degraded", Message: "one or more dependencies are unavailable"}
+	}
+	if starting {
+		return readinessView{Ready: false, State: "starting", Message: "dependencies are starting"}
+	}
+	return readinessView{Ready: true, State: "ready", Message: "dependencies are ready"}
+}
+
 // slackConfig maps gateway config into the Slack adapter config.
 func slackConfig(cfg config.Config) slack.Config {
 	return slack.Config{
-		Enabled:          cfg.Slack.Enabled,
-		SocketMode:       cfg.Slack.SocketMode,
-		SigningSecret:    cfg.Slack.SigningSecret,
-		BotToken:         cfg.Slack.BotToken,
-		AppToken:         cfg.Slack.AppToken,
-		AllowedTeamID:    cfg.Slack.AllowedTeamID,
-		AllowedUserID:    cfg.Slack.AllowedUserID,
-		AllowedChannelID: cfg.Slack.AllowedChannelID,
-		HarnessBaseURL:   cfg.HarnessBaseURL,
-		AppName:          cfg.AppName,
-		AgentUserID:      cfg.UserID,
-		RequestTimeout:   cfg.RequestTimeout,
+		Enabled:           cfg.Slack.Enabled,
+		SocketMode:        cfg.Slack.SocketMode,
+		SigningSecret:     cfg.Slack.SigningSecret,
+		BotToken:          cfg.Slack.BotToken,
+		AppToken:          cfg.Slack.AppToken,
+		AllowedTeamID:     cfg.Slack.AllowedTeamID,
+		AllowedUserID:     cfg.Slack.AllowedUserID,
+		AllowedChannelID:  cfg.Slack.AllowedChannelID,
+		HarnessBaseURL:    cfg.HarnessBaseURL,
+		AppName:           cfg.AppName,
+		AgentUserID:       cfg.UserID,
+		RuntimePolicyText: cfg.RuntimePolicyText,
+		RequestTimeout:    cfg.RequestTimeout,
 	}
 }
 

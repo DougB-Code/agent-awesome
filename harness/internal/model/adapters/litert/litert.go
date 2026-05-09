@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"agentawesome/internal/config/schema"
+	"agentawesome/internal/model/adapter"
 	"agentawesome/internal/model/protocol"
 	llmapi "google.golang.org/adk/model"
 	"google.golang.org/genai"
@@ -52,6 +54,9 @@ func (Factory) ValidateProvider(name string, provider schema.Provider) error {
 	if strings.TrimSpace(provider.URL) != "" {
 		return fmt.Errorf("provider %q does not support url", name)
 	}
+	if err := adapter.ValidateNoStreamingModels(name, provider, "LiteRT"); err != nil {
+		return err
+	}
 	for _, model := range provider.Models {
 		if strings.TrimSpace(model.Path) == "" {
 			return fmt.Errorf("provider %q model id %q requires path", name, model.ID)
@@ -78,7 +83,7 @@ func (m *model) Name() string {
 func (m *model) GenerateContent(ctx context.Context, req *llmapi.LLMRequest, stream bool) iter.Seq2[*llmapi.LLMResponse, error] {
 	return func(yield func(*llmapi.LLMResponse, error) bool) {
 		if stream {
-			yield(nil, fmt.Errorf("provider %q does not support streaming", m.provider))
+			yield(nil, adapter.NewStreamingUnsupportedError(m.provider))
 			return
 		}
 		resp, err := m.generate(ctx, req)
@@ -232,6 +237,9 @@ func toolPromptSection(req *llmapi.LLMRequest) string {
 // contentFromLocalText parses local-model tool markup or returns plain text.
 func contentFromLocalText(text string, req *llmapi.LLMRequest) *genai.Content {
 	if call := toolCallFromText(text, req); call != nil {
+		if reply := completedToolCallReply(call, req); reply != "" {
+			return genai.NewContentFromText(reply, "model")
+		}
 		part := genai.NewPartFromFunctionCall(call.Name, call.Args)
 		part.FunctionCall.ID = call.ID
 		return &genai.Content{Role: "model", Parts: []*genai.Part{part}}
@@ -255,7 +263,7 @@ func toolCallFromText(text string, req *llmapi.LLMRequest) *toolCall {
 	if !ok {
 		return nil
 	}
-	return normalizeToolCall(call, availableToolNames(req))
+	return normalizeToolCall(call, availableToolNames(req), req)
 }
 
 // toolPayload extracts the model-emitted call payload from LiteRT text output.
@@ -344,11 +352,14 @@ func parseToolPayload(payload string) (*toolCall, bool) {
 	return &toolCall{ID: "call-local", Name: name, Args: args}, true
 }
 
-func normalizeToolCall(call *toolCall, available map[string]bool) *toolCall {
+func normalizeToolCall(call *toolCall, available map[string]bool, req *llmapi.LLMRequest) *toolCall {
 	if call == nil {
 		return nil
 	}
 	if available[call.Name] {
+		if call.Name == "create_task" {
+			call.Args = withCreateTaskIdempotency(call.Args, req)
+		}
 		return call
 	}
 	if call.Name == "task_tool" && available["create_task"] && fmt.Sprint(call.Args["action"]) == "create" {
@@ -356,9 +367,110 @@ func normalizeToolCall(call *toolCall, available map[string]bool) *toolCall {
 		if strings.TrimSpace(fmt.Sprint(args["title"])) == "" {
 			return nil
 		}
+		args = withCreateTaskIdempotency(args, req)
 		return &toolCall{ID: call.ID, Name: "create_task", Args: args}
 	}
 	return nil
+}
+
+// completedToolCallReply converts repeated post-success tool calls into text.
+func completedToolCallReply(call *toolCall, req *llmapi.LLMRequest) string {
+	if call == nil || call.Name != "create_task" || !hasSuccessfulToolResult(req, "create_task") {
+		return ""
+	}
+	title := strings.TrimSpace(fmt.Sprint(call.Args["title"]))
+	if title == "" || title == "<nil>" {
+		return "Done. I created the task."
+	}
+	return "Done. I created the task: " + title + "."
+}
+
+// hasSuccessfulToolResult reports whether ADK already returned a good tool result.
+func hasSuccessfulToolResult(req *llmapi.LLMRequest, name string) bool {
+	if req == nil {
+		return false
+	}
+	for _, content := range req.Contents {
+		if content == nil {
+			continue
+		}
+		for _, part := range content.Parts {
+			if part == nil || part.FunctionResponse == nil || part.FunctionResponse.Name != name {
+				continue
+			}
+			if _, failed := part.FunctionResponse.Response["error"]; failed {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// withCreateTaskIdempotency fills a stable chat-scoped key when the model omits it.
+func withCreateTaskIdempotency(args map[string]any, req *llmapi.LLMRequest) map[string]any {
+	if strings.TrimSpace(fmt.Sprint(args["idempotency_key"])) != "" &&
+		strings.TrimSpace(fmt.Sprint(args["idempotency_key"])) != "<nil>" {
+		return args
+	}
+	sessionID := sessionIDFromRequest(req)
+	title := strings.TrimSpace(fmt.Sprint(args["title"]))
+	if sessionID == "" || title == "" || title == "<nil>" {
+		return args
+	}
+	next := make(map[string]any, len(args)+1)
+	for key, value := range args {
+		next[key] = value
+	}
+	next["idempotency_key"] = "personal_pilot:" + sessionID + ":" + taskKeySlug(title)
+	return next
+}
+
+// sessionIDFromRequest extracts the UI-injected session id from prompt content.
+func sessionIDFromRequest(req *llmapi.LLMRequest) string {
+	if req == nil {
+		return ""
+	}
+	const marker = `Current chat session id is "`
+	for _, content := range req.Contents {
+		if content == nil {
+			continue
+		}
+		for _, part := range content.Parts {
+			if part == nil || !strings.Contains(part.Text, marker) {
+				continue
+			}
+			after := part.Text[strings.Index(part.Text, marker)+len(marker):]
+			end := strings.Index(after, `"`)
+			if end > 0 {
+				return strings.TrimSpace(after[:end])
+			}
+		}
+	}
+	return ""
+}
+
+// taskKeySlug returns a compact deterministic suffix for chat-created tasks.
+func taskKeySlug(value string) string {
+	parts := []string{}
+	var current strings.Builder
+	for _, r := range strings.ToLower(value) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			current.WriteRune(r)
+			continue
+		}
+		if current.Len() > 0 {
+			parts = append(parts, current.String())
+			current.Reset()
+		}
+	}
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+	if len(parts) == 0 {
+		return "task"
+	}
+	return strings.Join(parts, "_")
 }
 
 func createTaskArgs(args map[string]any) map[string]any {
@@ -380,6 +492,7 @@ func createTaskArgs(args map[string]any) map[string]any {
 }
 
 func decodeLooseObject(text string) (map[string]any, bool) {
+	text = normalizeGemmaToolQuotes(text)
 	var decoded map[string]any
 	if err := json.Unmarshal([]byte(text), &decoded); err == nil {
 		return decoded, true
@@ -388,6 +501,52 @@ func decodeLooseObject(text string) (map[string]any, bool) {
 		return nil, false
 	}
 	return decoded, true
+}
+
+// normalizeGemmaToolQuotes converts Gemma quote sentinels into parseable quotes.
+func normalizeGemmaToolQuotes(text string) string {
+	normalized := strings.NewReplacer(
+		`<|"|>`, `"`,
+		`<|'|>`, `'`,
+	).Replace(text)
+	for _, field := range toolArgumentFields {
+		normalized = strings.ReplaceAll(normalized, field+`:"`, field+`: "`)
+		normalized = strings.ReplaceAll(normalized, field+`:'`, field+`: '`)
+	}
+	return normalized
+}
+
+// toolArgumentFields lists known fields that Gemma may emit without colon space.
+var toolArgumentFields = []string{
+	"action",
+	"actor",
+	"assignee",
+	"confidence",
+	"context",
+	"description",
+	"due_at",
+	"effort",
+	"energy_required",
+	"estimate_minutes",
+	"follow_up_at",
+	"idempotency_key",
+	"location",
+	"note",
+	"owner",
+	"person",
+	"priority",
+	"project",
+	"risk",
+	"scheduled_at",
+	"source",
+	"status",
+	"task",
+	"text",
+	"title",
+	"topics",
+	"urgency",
+	"value",
+	"view",
 }
 
 func availableToolNames(req *llmapi.LLMRequest) map[string]bool {

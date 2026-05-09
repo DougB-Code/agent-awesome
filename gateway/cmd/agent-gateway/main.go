@@ -34,12 +34,14 @@ func main() {
 	defer stop()
 
 	manager := supervisor.New(cfg.ServiceStartTimeout)
+	services := dependencyServices(cfg)
+	manager.Expect(services...)
 
 	server, err := gateway.NewServer(cfg, manager)
 	if err != nil {
 		log.Fatal().Err(err).Msg("create gateway")
 	}
-	go ensureServices(ctx, cfg, manager)
+	go ensureServices(ctx, manager, services)
 	if server.SlackSocketModeEnabled() {
 		go func() {
 			if err := server.RunSlackSocketMode(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -65,40 +67,42 @@ func main() {
 	}
 }
 
+// dependencyServices maps gateway config to supervised dependency declarations.
+func dependencyServices(cfg config.Config) []supervisor.Service {
+	return []supervisor.Service{
+		{
+			Name:       cfg.HarnessService.Name,
+			HealthURL:  cfg.HarnessService.HealthURL,
+			Command:    cfg.HarnessService.Command,
+			Arguments:  cfg.HarnessService.Arguments,
+			WorkingDir: cfg.HarnessService.WorkingDir,
+			AutoStart:  cfg.HarnessService.AutoStart,
+		},
+		{
+			Name:       cfg.MemoryService.Name,
+			HealthURL:  cfg.MemoryService.HealthURL,
+			Command:    cfg.MemoryService.Command,
+			Arguments:  cfg.MemoryService.Arguments,
+			WorkingDir: cfg.MemoryService.WorkingDir,
+			AutoStart:  cfg.MemoryService.AutoStart,
+		},
+	}
+}
+
 // ensureServices checks or starts dependencies declared in gateway config.
-func ensureServices(ctx context.Context, cfg config.Config, manager *supervisor.Manager) {
+func ensureServices(ctx context.Context, manager *supervisor.Manager, services []supervisor.Service) {
 	started := time.Now()
 	log.Info().Msg("dependency startup begin")
-	harness := supervisor.Service{
-		Name:       cfg.HarnessService.Name,
-		HealthURL:  cfg.HarnessService.HealthURL,
-		Command:    cfg.HarnessService.Command,
-		Arguments:  cfg.HarnessService.Arguments,
-		WorkingDir: cfg.HarnessService.WorkingDir,
-		AutoStart:  cfg.HarnessService.AutoStart,
+	for _, service := range services {
+		serviceStarted := time.Now()
+		log.Info().Str("service", service.Name).Msg("dependency startup begin")
+		status := manager.Ensure(ctx, service)
+		log.Info().
+			Str("service", service.Name).
+			Dur("duration", time.Since(serviceStarted).Round(time.Millisecond)).
+			Any("status", status).
+			Msg("dependency startup complete")
 	}
-	memory := supervisor.Service{
-		Name:       cfg.MemoryService.Name,
-		HealthURL:  cfg.MemoryService.HealthURL,
-		Command:    cfg.MemoryService.Command,
-		Arguments:  cfg.MemoryService.Arguments,
-		WorkingDir: cfg.MemoryService.WorkingDir,
-		AutoStart:  cfg.MemoryService.AutoStart,
-	}
-	harnessStarted := time.Now()
-	log.Info().Msg("harness startup begin")
-	harnessStatus := manager.Ensure(ctx, harness)
-	log.Info().
-		Dur("duration", time.Since(harnessStarted).Round(time.Millisecond)).
-		Any("status", harnessStatus).
-		Msg("harness startup complete")
-	memoryStarted := time.Now()
-	log.Info().Msg("memory startup begin")
-	memoryStatus := manager.Ensure(ctx, memory)
-	log.Info().
-		Dur("duration", time.Since(memoryStarted).Round(time.Millisecond)).
-		Any("status", memoryStatus).
-		Msg("memory startup complete")
 	log.Info().
 		Dur("duration", time.Since(started).Round(time.Millisecond)).
 		Msg("dependency startup complete")

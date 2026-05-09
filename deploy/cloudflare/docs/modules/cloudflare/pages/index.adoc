@@ -7,7 +7,9 @@ It hosts the personal Slack pilot using one Worker in front of one Container.
 == Responsibilities
 
 * Route Slack-signed event requests to the gateway.
+* Route public liveness checks to `/healthz`.
 * Reject unrelated public requests at the Worker boundary.
+* Require bearer auth for `/api/*` and `/mcp` before traffic reaches the container.
 * Run the gateway, harness, and memory binaries inside the container.
 * Restore and save memory snapshots through a private Worker endpoint.
 * Keep deployment configuration separate from local harness and UI behavior.

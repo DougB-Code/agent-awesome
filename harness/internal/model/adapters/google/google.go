@@ -40,6 +40,12 @@ func (Factory) ValidateProvider(name string, provider schema.Provider) error {
 	if strings.TrimSpace(provider.URL) != "" {
 		return fmt.Errorf("provider %q does not support url", name)
 	}
+	if provider.AuthMode() == schema.ProviderAuthOptional {
+		return fmt.Errorf("provider %q does not support auth: optional", name)
+	}
+	if provider.AuthMode() == schema.ProviderAuthRequired && strings.TrimSpace(provider.APIKeyEnv) == "" {
+		return fmt.Errorf("provider %q auth is required and requires api-key", name)
+	}
 	return nil
 }
 

@@ -510,6 +510,7 @@ class TasksClient {
     String priority = 'normal',
     DateTime? dueAt,
     DateTime? scheduledAt,
+    DateTime? followUpAt,
     List<String> topics = const <String>[],
     int estimateMinutes = 0,
     String energyRequired = '',
@@ -544,6 +545,9 @@ class TasksClient {
     }
     if (scheduledAt != null) {
       arguments['scheduled_at'] = _dateArgument(scheduledAt);
+    }
+    if (followUpAt != null) {
+      arguments['follow_up_at'] = _dateArgument(followUpAt);
     }
     if (topics.isNotEmpty) {
       arguments['topics'] = topics;
@@ -589,6 +593,8 @@ class TasksClient {
     bool clearDueAt = false,
     DateTime? scheduledAt,
     bool clearScheduledAt = false,
+    DateTime? followUpAt,
+    bool clearFollowUpAt = false,
     List<String>? topics,
     bool replaceTopics = false,
     int? estimateMinutes,
@@ -635,6 +641,12 @@ class TasksClient {
     }
     if (clearScheduledAt) {
       arguments['clear_scheduled_at'] = true;
+    }
+    if (followUpAt != null) {
+      arguments['follow_up_at'] = _dateArgument(followUpAt);
+    }
+    if (clearFollowUpAt) {
+      arguments['clear_follow_up_at'] = true;
     }
     if (topics != null) {
       arguments['topics'] = topics;
@@ -996,6 +1008,7 @@ WorkspaceTask parseWorkspaceTask(dynamic content) {
   final priority = stringValue(task['priority'], fallback: 'normal');
   final dueAt = parseOptionalDateTime(task['due_at']);
   final scheduledAt = parseOptionalDateTime(task['scheduled_at']);
+  final followUpAt = parseOptionalDateTime(task['follow_up_at']);
   final detailParts = <String>[statusLabel(status)];
   if (priority.isNotEmpty && priority != 'normal') {
     detailParts.add(priorityLabel(priority));
@@ -1004,6 +1017,8 @@ WorkspaceTask parseWorkspaceTask(dynamic content) {
     detailParts.add('Due ${dateOnlyLabel(dueAt)}');
   } else if (scheduledAt != null) {
     detailParts.add('Scheduled ${dateOnlyLabel(scheduledAt)}');
+  } else if (followUpAt != null) {
+    detailParts.add('Review ${dateOnlyLabel(followUpAt)}');
   }
   return WorkspaceTask(
     id: stringValue(task['id']),
@@ -1015,6 +1030,7 @@ WorkspaceTask parseWorkspaceTask(dynamic content) {
     priority: priority,
     dueAt: dueAt,
     scheduledAt: scheduledAt,
+    followUpAt: followUpAt,
     topics: stringList(task['topics']),
     overdue: boolValue(task['overdue']),
     memoryLinks: parseTaskMemoryLinks(task['memory_links']),

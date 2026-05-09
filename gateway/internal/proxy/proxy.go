@@ -1,8 +1,10 @@
+// This file forwards gateway HTTP traffic to upstream services with body caps.
 package proxy
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,16 +13,49 @@ import (
 	"time"
 )
 
+const maxRequestBodyBytes int64 = 8 << 20
+
+var errRequestBodyTooLarge = errors.New("request body too large")
+
 // Proxy forwards ADK-compatible API traffic to the configured harness.
 type Proxy struct {
-	upstream       *url.URL
-	client         *http.Client
-	mountPrefix    string
-	requestTimeout time.Duration
+	upstream        *url.URL
+	client          *http.Client
+	mountPrefix     string
+	requestTimeout  time.Duration
+	upstreamHeaders http.Header
+	transformBody   BodyTransformer
 }
 
-// New creates a proxy for one harness API base URL.
-func New(upstreamBaseURL string, mountPrefix string, timeout time.Duration) (*Proxy, error) {
+// BodyTransformer rewrites a request body before it is forwarded upstream.
+type BodyTransformer func(*http.Request, []byte) ([]byte, error)
+
+// Option customizes proxy request forwarding.
+type Option func(*Proxy)
+
+// WithBodyTransformer installs one generic request body transformer.
+func WithBodyTransformer(transformer BodyTransformer) Option {
+	return func(p *Proxy) {
+		p.transformBody = transformer
+	}
+}
+
+// WithUpstreamHeader sets one trusted header after caller headers are copied.
+func WithUpstreamHeader(key string, value string) Option {
+	return func(p *Proxy) {
+		key = http.CanonicalHeaderKey(strings.TrimSpace(key))
+		if key == "" || value == "" {
+			return
+		}
+		if p.upstreamHeaders == nil {
+			p.upstreamHeaders = make(http.Header)
+		}
+		p.upstreamHeaders.Set(key, value)
+	}
+}
+
+// New creates a proxy for one upstream API base URL.
+func New(upstreamBaseURL string, mountPrefix string, timeout time.Duration, options ...Option) (*Proxy, error) {
 	upstream, err := url.Parse(upstreamBaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse upstream URL: %w", err)
@@ -28,12 +63,16 @@ func New(upstreamBaseURL string, mountPrefix string, timeout time.Duration) (*Pr
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
 	}
-	return &Proxy{
+	proxy := &Proxy{
 		upstream:       upstream,
 		client:         &http.Client{},
 		mountPrefix:    strings.TrimRight(mountPrefix, "/"),
 		requestTimeout: timeout,
-	}, nil
+	}
+	for _, option := range options {
+		option(proxy)
+	}
+	return proxy, nil
 }
 
 // ServeHTTP proxies one request and preserves streaming response bodies.
@@ -41,8 +80,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), p.requestTimeout)
 	defer cancel()
 
-	body, err := p.requestBody(r)
+	body, err := p.requestBody(w, r)
 	if err != nil {
+		if errors.Is(err, errRequestBodyTooLarge) {
+			http.Error(w, "payload too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -53,6 +96,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	copyRequestHeaders(req.Header, r.Header)
+	copyUpstreamHeaders(req.Header, p.upstreamHeaders)
 	req.Host = p.upstream.Host
 
 	resp, err := p.client.Do(req)
@@ -67,19 +111,24 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // requestBody returns a possibly rewritten request body for upstream forwarding.
-func (p *Proxy) requestBody(r *http.Request) (io.Reader, error) {
+func (p *Proxy) requestBody(w http.ResponseWriter, r *http.Request) (io.Reader, error) {
 	if r.Body == nil {
 		return nil, nil
 	}
-	defer r.Body.Close()
-	body, err := io.ReadAll(r.Body)
+	bodyReader := http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	defer bodyReader.Close()
+	body, err := io.ReadAll(bodyReader)
 	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, errRequestBodyTooLarge
+		}
 		return nil, fmt.Errorf("read request body: %w", err)
 	}
-	if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/run_sse") {
-		next, _, err := InjectRuntimePolicy(body)
+	if p.transformBody != nil {
+		next, err := p.transformBody(r, body)
 		if err != nil {
-			return nil, fmt.Errorf("inject runtime policy: %w", err)
+			return nil, fmt.Errorf("transform request body: %w", err)
 		}
 		body = next
 	}
@@ -101,6 +150,16 @@ func copyRequestHeaders(dst http.Header, src http.Header) {
 		if isHopByHopHeader(key) || strings.EqualFold(key, "authorization") {
 			continue
 		}
+		for _, value := range values {
+			dst.Add(key, value)
+		}
+	}
+}
+
+// copyUpstreamHeaders adds gateway-owned headers to the upstream request.
+func copyUpstreamHeaders(dst http.Header, src http.Header) {
+	for key, values := range src {
+		dst.Del(key)
 		for _, value := range values {
 			dst.Add(key, value)
 		}

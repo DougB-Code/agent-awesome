@@ -245,6 +245,7 @@ class BacklogScreenTaskSnapshot {
     this.priority = '',
     this.dueAt = '',
     this.scheduledAt = '',
+    this.followUpAt = '',
     this.topics = const <String>[],
     this.estimateMinutes = 0,
     this.context = '',
@@ -272,6 +273,9 @@ class BacklogScreenTaskSnapshot {
   /// ISO scheduled timestamp or date.
   final String scheduledAt;
 
+  /// ISO stale-review timestamp or date.
+  final String followUpAt;
+
   /// Topic tags.
   final List<String> topics;
 
@@ -294,6 +298,7 @@ class BacklogScreenTaskSnapshot {
       if (priority.isNotEmpty) 'priority': priority,
       if (dueAt.isNotEmpty) 'due_at': dueAt,
       if (scheduledAt.isNotEmpty) 'scheduled_at': scheduledAt,
+      if (followUpAt.isNotEmpty) 'follow_up_at': followUpAt,
       if (topics.isNotEmpty) 'topics': topics,
       if (estimateMinutes > 0) 'estimate_minutes': estimateMinutes,
       if (context.isNotEmpty) 'context': context,

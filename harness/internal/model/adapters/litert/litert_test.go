@@ -85,6 +85,25 @@ echo '<|tool_call>call:task_tool{action: "create", details: { "description": "Bu
 	}
 }
 
+// TestValidateProviderRejectsStreamingCapability prevents unsupported local
+// model streaming declarations from passing startup validation.
+func TestValidateProviderRejectsStreamingCapability(t *testing.T) {
+	err := NewFactory().ValidateProvider("local", schema.Provider{
+		Models: []schema.Model{
+			{
+				ID:   "gemma",
+				Path: "/tmp/model.litertlm",
+				Capabilities: schema.ModelCapabilities{
+					Streaming: true,
+				},
+			},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "does not support streaming") {
+		t.Fatalf("ValidateProvider() error = %v, want streaming capability rejection", err)
+	}
+}
+
 // TestToolCallFromTextAcceptsUnterminatedGemmaCreateTaskMarkup covers leaked Gemma calls.
 func TestToolCallFromTextAcceptsUnterminatedGemmaCreateTaskMarkup(t *testing.T) {
 	req := &llmapi.LLMRequest{
@@ -118,6 +137,77 @@ func TestToolCallFromTextAcceptsUnterminatedGemmaCreateTaskMarkup(t *testing.T) 
 	}
 }
 
+// TestToolCallFromTextNormalizesGemmaQuoteMarkers covers LiteRT quote sentinels.
+func TestToolCallFromTextNormalizesGemmaQuoteMarkers(t *testing.T) {
+	req := &llmapi.LLMRequest{
+		Config: &genai.GenerateContentConfig{
+			Tools: []*genai.Tool{
+				{
+					FunctionDeclarations: []*genai.FunctionDeclaration{
+						{Name: "create_task", Description: "Create a task."},
+					},
+				},
+			},
+		},
+	}
+	text := `<|tool_call>call:create_task{title:<|"|>Buy milk<|"|>, description:<|"|>Buy milk<|"|>, idempotency_key:<|"|>personal_pilot:session:<|"|>}<tool_call|>`
+
+	call := toolCallFromText(text, req)
+	if call == nil {
+		t.Fatalf("toolCallFromText() = nil, want create_task call")
+	}
+	if call.Args["title"] != "Buy milk" {
+		t.Fatalf("call.Args[title] = %#v, want Buy milk", call.Args["title"])
+	}
+	if call.Args["description"] != "Buy milk" {
+		t.Fatalf("call.Args[description] = %#v, want Buy milk", call.Args["description"])
+	}
+	if call.Args["idempotency_key"] != "personal_pilot:session:" {
+		t.Fatalf("call.Args[idempotency_key] = %#v, want personal_pilot:session:", call.Args["idempotency_key"])
+	}
+}
+
+func TestToolCallFromTextAddsCreateTaskIdempotency(t *testing.T) {
+	req := createTaskRequestWithSession("session-123")
+	text := `<|tool_call>call:create_task{title: "Buy milk", description: "Buy milk"}<tool_call|>`
+
+	call := toolCallFromText(text, req)
+	if call == nil {
+		t.Fatalf("toolCallFromText() = nil, want create_task call")
+	}
+	if call.Args["idempotency_key"] != "personal_pilot:session-123:buy_milk" {
+		t.Fatalf("call.Args[idempotency_key] = %#v", call.Args["idempotency_key"])
+	}
+}
+
+func TestContentFromLocalTextStopsRepeatedCreateTaskAfterSuccess(t *testing.T) {
+	req := createTaskRequestWithSession("session-123")
+	req.Contents = append(req.Contents, &genai.Content{
+		Role: genai.RoleUser,
+		Parts: []*genai.Part{
+			{
+				FunctionResponse: &genai.FunctionResponse{
+					ID:       "call-local",
+					Name:     "create_task",
+					Response: map[string]any{"output": map[string]any{"title": "Buy milk"}},
+				},
+			},
+		},
+	})
+	text := `<|tool_call>call:create_task{title: "Buy milk", description: "Buy milk"}<tool_call|>`
+
+	content := contentFromLocalText(text, req)
+	if content == nil || len(content.Parts) != 1 || content.Parts[0].Text == "" {
+		t.Fatalf("content = %#v, want final text", content)
+	}
+	if content.Parts[0].FunctionCall != nil {
+		t.Fatalf("content part = %#v, want no repeated function call", content.Parts[0])
+	}
+	if !strings.Contains(content.Parts[0].Text, "Buy milk") {
+		t.Fatalf("content text = %q, want task title", content.Parts[0].Text)
+	}
+}
+
 func TestPromptIncludesAvailableToolNames(t *testing.T) {
 	prompt, err := promptFromRequest(&llmapi.LLMRequest{
 		Contents: []*genai.Content{
@@ -138,6 +228,26 @@ func TestPromptIncludesAvailableToolNames(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "create_task") {
 		t.Fatalf("prompt = %q, want tool name", prompt)
+	}
+}
+
+func createTaskRequestWithSession(sessionID string) *llmapi.LLMRequest {
+	return &llmapi.LLMRequest{
+		Contents: []*genai.Content{
+			genai.NewContentFromText(
+				`[[AGENT_AWESOME_SESSION_CONTEXT: Current chat session id is "`+sessionID+`".]]`+"\nMake a reminder to buy milk",
+				"user",
+			),
+		},
+		Config: &genai.GenerateContentConfig{
+			Tools: []*genai.Tool{
+				{
+					FunctionDeclarations: []*genai.FunctionDeclaration{
+						{Name: "create_task", Description: "Create a task."},
+					},
+				},
+			},
+		},
 	}
 }
 

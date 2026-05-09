@@ -4,7 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
+
+// defaultTaskFollowUpDelay keeps inbox tasks from aging silently forever.
+const defaultTaskFollowUpDelay = 7 * 24 * time.Hour
 
 // NormalizeCreateTaskRequest fills defaults and validates task creation.
 func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error) {
@@ -25,6 +29,10 @@ func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error
 	}
 	if !ValidTaskPriority(req.Priority) {
 		return req, fmt.Errorf("invalid task priority %q", req.Priority)
+	}
+	if req.FollowUpAt == nil && req.DueAt == nil && req.ScheduledAt == nil && !TerminalTaskStatus(req.Status) {
+		followUpAt := time.Now().UTC().Add(defaultTaskFollowUpDelay)
+		req.FollowUpAt = &followUpAt
 	}
 	req.Topics = NormalizeStrings(req.Topics)
 	req.EnergyRequired = strings.TrimSpace(req.EnergyRequired)
@@ -338,6 +346,8 @@ func taskUpdateHasChanges(req UpdateTaskRequest) bool {
 		req.ClearDueAt ||
 		req.ScheduledAt != nil ||
 		req.ClearScheduledAt ||
+		req.FollowUpAt != nil ||
+		req.ClearFollowUpAt ||
 		req.Topics != nil ||
 		req.EstimateMinutes != nil ||
 		req.EnergyRequired != nil ||

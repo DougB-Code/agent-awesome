@@ -13,16 +13,20 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"agentgateway/internal/policy"
 )
 
 const maxSlackRequestBytes = 1 << 20
 
 // Adapter owns the Slack channel behavior for one gateway process.
 type Adapter struct {
-	config Config
-	slack  *WebAPI
-	agent  *AgentClient
-	client *http.Client
+	config          Config
+	slack           *WebAPI
+	agent           *AgentClient
+	client          *http.Client
+	deduper         *eventDeduper
+	dispatchMessage func(context.Context, string, MessageEvent)
 }
 
 // NewAdapter creates a Slack adapter from gateway runtime settings.
@@ -32,12 +36,21 @@ func NewAdapter(config Config) *Adapter {
 		timeout = config.RequestTimeout
 	}
 	client := &http.Client{Timeout: timeout}
-	return &Adapter{
+	adapter := &Adapter{
 		config: config,
 		slack:  NewWebAPI(client, config.BotToken, config.AppToken),
-		agent:  NewAgentClient(client, config.HarnessBaseURL, config.AppName, config.AgentUserID),
-		client: client,
+		agent: NewAgentClientWithPolicy(
+			client,
+			config.HarnessBaseURL,
+			config.AppName,
+			config.AgentUserID,
+			policy.NewInjector(policy.Config{Text: config.RuntimePolicyText}),
+		),
+		client:  client,
+		deduper: newEventDeduper(config.EventDedupTTL),
 	}
+	adapter.dispatchMessage = adapter.dispatch
+	return adapter
 }
 
 // Enabled reports whether Slack channel handling is configured.
@@ -71,7 +84,7 @@ func (a *Adapter) EventsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid Slack signature", http.StatusUnauthorized)
 		return
 	}
-	challenge, err := a.AcceptEnvelope(body)
+	challenge, err := a.AcceptEnvelopeWithDelivery(body, deliveryInfoFromHeaders(r.Header))
 	if err != nil {
 		log.Warn().Err(err).Msg("slack envelope rejected by gateway")
 		http.Error(w, "invalid Slack event", http.StatusBadRequest)
@@ -87,6 +100,11 @@ func (a *Adapter) EventsHandler(w http.ResponseWriter, r *http.Request) {
 
 // AcceptEnvelope validates and dispatches one Slack Events API envelope.
 func (a *Adapter) AcceptEnvelope(body []byte) (string, error) {
+	return a.AcceptEnvelopeWithDelivery(body, DeliveryInfo{})
+}
+
+// AcceptEnvelopeWithDelivery validates and dispatches one Slack delivery attempt.
+func (a *Adapter) AcceptEnvelopeWithDelivery(body []byte, delivery DeliveryInfo) (string, error) {
 	var envelope EventEnvelope
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		return "", err
@@ -101,6 +119,9 @@ func (a *Adapter) AcceptEnvelope(body []byte) (string, error) {
 			Str("subtype", envelope.Event.Subtype).
 			Str("channel", envelope.Event.Channel).
 			Str("user", envelope.Event.User).
+			Str("event_id", envelope.EventID).
+			Str("retry_num", delivery.RetryNum).
+			Str("retry_reason", delivery.RetryReason).
 			Bool("bot", envelope.Event.BotID != "").
 			Msg("slack event callback received")
 		event, reason, ok := a.acceptedMessage(envelope)
@@ -108,11 +129,42 @@ func (a *Adapter) AcceptEnvelope(body []byte) (string, error) {
 			log.Info().Str("reason", reason).Msg("slack event ignored")
 			return "", nil
 		}
-		go a.dispatch(context.Background(), envelope.TeamID, event)
+		dedupeKey := eventDedupKey(envelope)
+		if !a.deduper.accept(dedupeKey) {
+			log.Info().
+				Str("event_id", envelope.EventID).
+				Str("dedupe_key", dedupeKey).
+				Str("retry_num", delivery.RetryNum).
+				Str("retry_reason", delivery.RetryReason).
+				Msg("slack duplicate event ignored")
+			return "", nil
+		}
+		dispatch := a.dispatchMessage
+		if dispatch == nil {
+			dispatch = a.dispatch
+		}
+		go dispatch(context.Background(), envelope.TeamID, event)
 		return "", nil
 	default:
 		return "", nil
 	}
+}
+
+// deliveryInfoFromHeaders extracts Slack retry headers from HTTP requests.
+func deliveryInfoFromHeaders(headers http.Header) DeliveryInfo {
+	return DeliveryInfo{
+		RetryNum:    headers.Get("X-Slack-Retry-Num"),
+		RetryReason: headers.Get("X-Slack-Retry-Reason"),
+	}
+}
+
+// eventDedupKey returns the strongest available duplicate-detection key.
+func eventDedupKey(envelope EventEnvelope) string {
+	if strings.TrimSpace(envelope.EventID) != "" {
+		return "event_id:" + strings.TrimSpace(envelope.EventID)
+	}
+	event := envelope.Event
+	return "fallback:" + envelope.TeamID + ":" + event.Channel + ":" + event.User + ":" + event.TS
 }
 
 // acceptedMessage filters Slack events to the configured personal pilot scope.

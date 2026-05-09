@@ -2,7 +2,7 @@
 //
 // Intended use cases:
 //   - Expose a tool that lets models propose local commands for user review.
-//   - Persist user approval policies for exact commands, prefixes, or the tool.
+//   - Persist user approval policies only when local-exec opts in explicitly.
 //   - Execute approved proposals through the local execution backend.
 //
 // High-level examples:

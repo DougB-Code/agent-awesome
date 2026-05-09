@@ -1,3 +1,4 @@
+// This file projects memory service operations onto the context graph store.
 package repository
 
 import (
@@ -73,6 +74,34 @@ func (r *Repository) Capture(ctx context.Context, req domain.CaptureRequest) (do
 			return result, err
 		}
 	}
+	var result domain.CaptureResult
+	if err := r.graph.WithUnitOfWork(ctx, func(graphStore *graphstore.Store) error {
+		txRepo := *r
+		txRepo.graph = graphStore
+		if req.IdempotencyKey != "" {
+			duplicate, ok, err := txRepo.captureByIdempotency(ctx, req.IdempotencyKey)
+			if err != nil {
+				return err
+			}
+			if ok {
+				result = duplicate
+				return nil
+			}
+		}
+		captured, err := txRepo.captureNormalized(ctx, req)
+		if err != nil {
+			return err
+		}
+		result = captured
+		return nil
+	}); err != nil {
+		return domain.CaptureResult{}, err
+	}
+	return result, nil
+}
+
+// captureNormalized writes a normalized capture request into the active graph store.
+func (r *Repository) captureNormalized(ctx context.Context, req domain.CaptureRequest) (domain.CaptureResult, error) {
 	summary := excerpt(req.Content, 280)
 	evidence, err := r.graph.UpsertNode(ctx, graph.UpsertNodeRequest{
 		Kind:        graph.KindEvidence,

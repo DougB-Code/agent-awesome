@@ -3,6 +3,7 @@ default: openai:gpt-mini
 providers:
   openai:
     adapter: openai
+    auth: required
     api-key: OPENAI_API_KEY
     default: gpt-mini
     url: https://api.openai.com/v1/chat/completions

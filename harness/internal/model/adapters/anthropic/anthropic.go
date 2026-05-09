@@ -32,11 +32,10 @@ func NewFactory(credentials adapter.CredentialResolver, httpClients adapter.HTTP
 
 // Create builds an Anthropic-backed runtime LLM from provider schema.
 func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection) (llmapi.LLM, error) {
-	apiKeyEnv := strings.TrimSpace(selection.Provider.APIKeyEnv)
-	if apiKeyEnv == "" {
-		return nil, fmt.Errorf("provider %q requires api-key", selection.Name)
+	if err := f.ValidateProvider(selection.Name, selection.Provider); err != nil {
+		return nil, err
 	}
-
+	apiKeyEnv := strings.TrimSpace(selection.Provider.APIKeyEnv)
 	apiKey, err := adapter.ResolveCredential(f.credentials, apiKeyEnv)
 	if err != nil {
 		return nil, fmt.Errorf("provider %q API key %q: %w", selection.Name, apiKeyEnv, err)
@@ -61,11 +60,17 @@ func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection)
 
 // ValidateProvider checks Anthropic provider-specific schema.
 func (Factory) ValidateProvider(name string, provider schema.Provider) error {
+	if provider.AuthMode() == schema.ProviderAuthOptional {
+		return fmt.Errorf("provider %q does not support auth: optional", name)
+	}
 	if strings.TrimSpace(provider.APIKeyEnv) == "" {
 		return fmt.Errorf("provider %q requires api-key", name)
 	}
 	if strings.TrimSpace(provider.URL) == "" {
 		return fmt.Errorf("provider %q requires url", name)
+	}
+	if err := adapter.ValidateNoStreamingModels(name, provider, "Anthropic"); err != nil {
+		return err
 	}
 	return nil
 }
@@ -90,7 +95,7 @@ func (m *anthropicModel) Name() string {
 func (m *anthropicModel) GenerateContent(ctx context.Context, req *llmapi.LLMRequest, stream bool) iter.Seq2[*llmapi.LLMResponse, error] {
 	return func(yield func(*llmapi.LLMResponse, error) bool) {
 		if stream {
-			yield(nil, fmt.Errorf("provider %q does not support streaming", m.provider))
+			yield(nil, adapter.NewStreamingUnsupportedError(m.provider))
 			return
 		}
 		resp, err := m.generate(ctx, req)

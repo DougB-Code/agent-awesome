@@ -64,6 +64,29 @@ func NewProviderError(provider, model string, statusCode int, status string) *Pr
 	}
 }
 
+// NewStreamingUnsupportedError explains that the selected provider cannot
+// serve streaming model responses.
+func NewStreamingUnsupportedError(provider string) error {
+	if provider == "" {
+		return fmt.Errorf("configured model provider does not support streaming responses; disable streaming or select a streaming-capable provider")
+	}
+	return fmt.Errorf("provider %q does not support streaming responses; disable streaming or select a streaming-capable provider", provider)
+}
+
+// ValidateNoStreamingModels rejects streaming capability declarations for
+// adapters that only implement non-streaming completions.
+func ValidateNoStreamingModels(providerName string, provider schema.Provider, adapterName string) error {
+	if adapterName == "" {
+		adapterName = "selected"
+	}
+	for _, model := range provider.Models {
+		if model.Capabilities.Streaming {
+			return fmt.Errorf("provider %q model %q declares capabilities.streaming, but the %s adapter does not support streaming; remove capabilities.streaming or choose a streaming-capable provider", providerName, model.ID, adapterName)
+		}
+	}
+	return nil
+}
+
 // ResolveCredential resolves a named credential through the provided resolver.
 func ResolveCredential(resolver CredentialResolver, name string) (string, error) {
 	if resolver == nil {

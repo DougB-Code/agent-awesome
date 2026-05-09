@@ -12,7 +12,7 @@ import (
 	"net/url"
 	"strings"
 
-	"agentgateway/internal/proxy"
+	"agentgateway/internal/policy"
 )
 
 // AgentClient forwards normalized Slack text into the harness REST API.
@@ -21,10 +21,22 @@ type AgentClient struct {
 	baseURL string
 	appName string
 	userID  string
+	policy  *policy.Injector
 }
 
-// NewAgentClient creates an ADK REST client for one gateway harness upstream.
+// NewAgentClient creates an ADK REST client with the default runtime policy.
 func NewAgentClient(client *http.Client, baseURL string, appName string, userID string) *AgentClient {
+	return NewAgentClientWithPolicy(
+		client,
+		baseURL,
+		appName,
+		userID,
+		policy.NewInjector(policy.Config{Text: policy.DefaultRuntimePolicyText}),
+	)
+}
+
+// NewAgentClientWithPolicy creates an ADK REST client with configured policy.
+func NewAgentClientWithPolicy(client *http.Client, baseURL string, appName string, userID string, injector *policy.Injector) *AgentClient {
 	if client == nil {
 		client = &http.Client{}
 	}
@@ -33,6 +45,7 @@ func NewAgentClient(client *http.Client, baseURL string, appName string, userID 
 		baseURL: strings.TrimRight(baseURL, "/"),
 		appName: appName,
 		userID:  userID,
+		policy:  injector,
 	}
 }
 
@@ -76,7 +89,7 @@ func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string
 	if err != nil {
 		return "", err
 	}
-	body, _, err = proxy.InjectRuntimePolicy(body)
+	body, _, err = c.policy.Inject(body)
 	if err != nil {
 		return "", err
 	}

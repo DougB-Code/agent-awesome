@@ -20,6 +20,11 @@ const (
 
 	defaultLocalExecTimeout        = 10 * time.Second
 	defaultLocalExecMaxOutputBytes = 65536
+
+	// ProviderAuthRequired means provider startup requires a configured API key.
+	ProviderAuthRequired = "required"
+	// ProviderAuthOptional means a loopback provider may be used without a key.
+	ProviderAuthOptional = "optional"
 )
 
 // ModelConfig describes provider and model selection configuration.
@@ -70,12 +75,13 @@ type MCPToolFilter struct {
 
 // LocalExec describes configured local command execution.
 type LocalExec struct {
-	Enabled               bool               `koanf:"enabled"`
-	RequireConfirmation   *bool              `koanf:"require-confirmation"`
-	DefaultTimeout        string             `koanf:"default-timeout"`
-	DefaultMaxOutputBytes int                `koanf:"default-max-output-bytes"`
-	AllowedWorkdirs       []string           `koanf:"allowed-workdirs"`
-	Commands              []LocalExecCommand `koanf:"commands"`
+	Enabled                  bool               `koanf:"enabled"`
+	RequireConfirmation      *bool              `koanf:"require-confirmation"`
+	AllowPersistentApprovals bool               `koanf:"allow-persistent-approvals"`
+	DefaultTimeout           string             `koanf:"default-timeout"`
+	DefaultMaxOutputBytes    int                `koanf:"default-max-output-bytes"`
+	AllowedWorkdirs          []string           `koanf:"allowed-workdirs"`
+	Commands                 []LocalExecCommand `koanf:"commands"`
 }
 
 // LocalExecApproval describes approval shortcuts for a configured command.
@@ -100,6 +106,7 @@ type LocalExecCommand struct {
 type Provider struct {
 	Name       string  `koanf:"name"`
 	Adapter    string  `koanf:"adapter"`
+	Auth       string  `koanf:"auth"`
 	APIKeyEnv  string  `koanf:"api-key"`
 	Default    string  `koanf:"default"`
 	URL        string  `koanf:"url"`

@@ -1,3 +1,4 @@
+// This file saves and restores local memory snapshots.
 package persistence
 
 import (
@@ -10,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,6 +22,30 @@ const (
 	dbEntryName    = "memory.db"
 	dataPrefix     = "data"
 )
+
+// snapshotStaging stores extracted snapshot files before promotion.
+type snapshotStaging struct {
+	dbStageDir string
+	dbPath     string
+	walPath    string
+	shmPath    string
+	dataRoot   string
+}
+
+// restoreMove describes one staged path that replaces a live path.
+type restoreMove struct {
+	source   string
+	target   string
+	required bool
+}
+
+// restoreBackup tracks one live path moved out of the way during promotion.
+type restoreBackup struct {
+	target    string
+	path      string
+	parentDir string
+	existed   bool
+}
 
 // HTTPStore saves memory snapshots through an authenticated HTTP endpoint.
 type HTTPStore struct {
@@ -212,30 +238,33 @@ func extractSnapshot(reader io.Reader, dbPath string, dataRoot string) error {
 		return err
 	}
 	defer gzipReader.Close()
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+	staging, err := newSnapshotStaging(dbPath, dataRoot)
+	if err != nil {
 		return err
 	}
-	if err := os.RemoveAll(dataRoot); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dataRoot, 0o700); err != nil {
-		return err
-	}
+	defer staging.cleanup()
+
 	tarReader := tar.NewReader(gzipReader)
 	for {
 		header, err := tarReader.Next()
 		if errors.Is(err, io.EOF) {
-			return nil
+			break
 		}
 		if err != nil {
 			return err
 		}
+		target, ok, err := snapshotTarget(header.Name, staging.dbPath, staging.dataRoot)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			continue
+		}
 		if header.FileInfo().IsDir() {
 			continue
 		}
-		target, ok := snapshotTarget(header.Name, dbPath, dataRoot)
-		if !ok {
-			continue
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			return fmt.Errorf("unsupported snapshot entry %q", header.Name)
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 			return err
@@ -253,25 +282,211 @@ func extractSnapshot(reader io.Reader, dbPath string, dataRoot string) error {
 			return closeErr
 		}
 	}
+	if err := staging.validate(); err != nil {
+		return err
+	}
+	if err := promoteSnapshot(staging, dbPath, dataRoot); err != nil {
+		return err
+	}
+	return nil
 }
 
 // snapshotTarget maps safe archive entries to local filesystem targets.
-func snapshotTarget(name string, dbPath string, dataRoot string) (string, bool) {
-	clean := filepath.ToSlash(filepath.Clean(name))
+func snapshotTarget(name string, dbPath string, dataRoot string) (string, bool, error) {
+	clean, err := cleanSnapshotEntryName(name)
+	if err != nil {
+		return "", false, err
+	}
 	switch clean {
 	case dbEntryName:
-		return dbPath, true
+		return dbPath, true, nil
 	case dbEntryName + "-wal":
-		return dbPath + "-wal", true
+		return dbPath + "-wal", true, nil
 	case dbEntryName + "-shm":
-		return dbPath + "-shm", true
+		return dbPath + "-shm", true, nil
 	}
 	if strings.HasPrefix(clean, dataPrefix+"/") {
 		rel := strings.TrimPrefix(clean, dataPrefix+"/")
-		if rel == "" || strings.HasPrefix(rel, "../") || filepath.IsAbs(rel) {
-			return "", false
+		if rel == "" {
+			return "", false, nil
 		}
-		return filepath.Join(dataRoot, filepath.FromSlash(rel)), true
+		return filepath.Join(dataRoot, filepath.FromSlash(rel)), true, nil
 	}
-	return "", false
+	return "", false, nil
+}
+
+// cleanSnapshotEntryName returns a normalized archive path or rejects traversal.
+func cleanSnapshotEntryName(name string) (string, error) {
+	raw := filepath.ToSlash(strings.TrimSpace(name))
+	if raw == "" || raw == "." || path.IsAbs(raw) || filepath.IsAbs(name) || filepath.VolumeName(name) != "" {
+		return "", fmt.Errorf("unsafe snapshot entry %q", name)
+	}
+	for _, segment := range strings.Split(raw, "/") {
+		if segment == ".." {
+			return "", fmt.Errorf("unsafe snapshot entry %q", name)
+		}
+	}
+	clean := path.Clean(raw)
+	if clean == "." {
+		return "", fmt.Errorf("unsafe snapshot entry %q", name)
+	}
+	return clean, nil
+}
+
+// newSnapshotStaging creates restore temp paths beside their final locations.
+func newSnapshotStaging(dbPath string, dataRoot string) (*snapshotStaging, error) {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o700); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(dataRoot), 0o700); err != nil {
+		return nil, err
+	}
+	dbStageDir, err := os.MkdirTemp(filepath.Dir(dbPath), ".agentawesome-snapshot-db-*")
+	if err != nil {
+		return nil, err
+	}
+	dataStageRoot, err := os.MkdirTemp(filepath.Dir(dataRoot), ".agentawesome-snapshot-data-*")
+	if err != nil {
+		_ = os.RemoveAll(dbStageDir)
+		return nil, err
+	}
+	return &snapshotStaging{
+		dbStageDir: dbStageDir,
+		dbPath:     filepath.Join(dbStageDir, dbEntryName),
+		walPath:    filepath.Join(dbStageDir, dbEntryName+"-wal"),
+		shmPath:    filepath.Join(dbStageDir, dbEntryName+"-shm"),
+		dataRoot:   dataStageRoot,
+	}, nil
+}
+
+// cleanup removes temporary staging paths after restore success or failure.
+func (s *snapshotStaging) cleanup() {
+	if s == nil {
+		return
+	}
+	_ = os.RemoveAll(s.dbStageDir)
+	_ = os.RemoveAll(s.dataRoot)
+}
+
+// validate verifies required extracted snapshot files before touching live data.
+func (s *snapshotStaging) validate() error {
+	info, err := os.Stat(s.dbPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return errors.New("snapshot missing memory database")
+	}
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return errors.New("snapshot memory database is not a regular file")
+	}
+	return nil
+}
+
+// promoteSnapshot replaces live snapshot paths and rolls back on failure.
+func promoteSnapshot(staging *snapshotStaging, dbPath string, dataRoot string) error {
+	moves := []restoreMove{
+		{source: staging.dbPath, target: dbPath, required: true},
+		{source: staging.walPath, target: dbPath + "-wal"},
+		{source: staging.shmPath, target: dbPath + "-shm"},
+		{source: staging.dataRoot, target: dataRoot, required: true},
+	}
+	backups := []restoreBackup{}
+	promoted := []string{}
+	rollback := func() {
+		for i := len(promoted) - 1; i >= 0; i-- {
+			_ = os.RemoveAll(promoted[i])
+		}
+		for i := len(backups) - 1; i >= 0; i-- {
+			_ = backups[i].restore()
+		}
+	}
+	for _, move := range moves {
+		sourceExists, err := pathExists(move.source)
+		if err != nil {
+			rollback()
+			return err
+		}
+		if !sourceExists && move.required {
+			rollback()
+			return fmt.Errorf("snapshot missing required path %s", filepath.Base(move.source))
+		}
+		backup, err := backupRestoreTarget(move.target)
+		if err != nil {
+			rollback()
+			return err
+		}
+		if backup.existed {
+			backups = append(backups, backup)
+		}
+		if !sourceExists {
+			continue
+		}
+		if err := os.Rename(move.source, move.target); err != nil {
+			rollback()
+			return err
+		}
+		promoted = append(promoted, move.target)
+		if err := syncDirectory(filepath.Dir(move.target)); err != nil {
+			rollback()
+			return err
+		}
+	}
+	for _, backup := range backups {
+		_ = os.RemoveAll(backup.parentDir)
+	}
+	return nil
+}
+
+// backupRestoreTarget moves an existing live path aside before promotion.
+func backupRestoreTarget(target string) (restoreBackup, error) {
+	exists, err := pathExists(target)
+	if err != nil {
+		return restoreBackup{}, err
+	}
+	if !exists {
+		return restoreBackup{target: target}, nil
+	}
+	parentDir, err := os.MkdirTemp(filepath.Dir(target), ".agentawesome-restore-backup-*")
+	if err != nil {
+		return restoreBackup{}, err
+	}
+	backupPath := filepath.Join(parentDir, filepath.Base(target))
+	if err := os.Rename(target, backupPath); err != nil {
+		_ = os.RemoveAll(parentDir)
+		return restoreBackup{}, err
+	}
+	return restoreBackup{target: target, path: backupPath, parentDir: parentDir, existed: true}, nil
+}
+
+// restore moves one backup path back to its live location.
+func (b restoreBackup) restore() error {
+	if !b.existed {
+		return nil
+	}
+	_ = os.RemoveAll(b.target)
+	if err := os.MkdirAll(filepath.Dir(b.target), 0o700); err != nil {
+		return err
+	}
+	return os.Rename(b.path, b.target)
+}
+
+// pathExists reports whether a filesystem path exists.
+func pathExists(path string) (bool, error) {
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// syncDirectory flushes directory metadata after restore renames.
+func syncDirectory(path string) error {
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }

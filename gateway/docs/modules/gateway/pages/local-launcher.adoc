@@ -33,11 +33,23 @@ Arguments are repeatable so launchers do not need to invoke a shell.
 |`AGENTAWESOME_HARNESS_API_BASE_URL`
 |Harness API dependency URL.
 
+|`AGENTAWESOME_CONTEXT_API_BASE_URL`
+|Harness context API dependency URL.
+
+|`AGENTAWESOME_CONTEXT_API_TOKEN`
+|Bearer token forwarded to a protected harness context API.
+
 |`AGENTAWESOME_MEMORY_MCP_URL`
 |Memory MCP dependency URL.
 
 |`AGENTAWESOME_GATEWAY_TOKEN`
 |Bearer token required by protected gateway routes.
+
+|`AGENTAWESOME_ALLOWED_ORIGIN`
+|Optional CORS origin for browser clients.
+
+|`AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY`
+|Keeps tokenless protected routes limited to loopback-only development.
 
 |`AGENTAWESOME_HARNESS_AUTO_START`
 |Enables harness supervision.
@@ -45,3 +57,10 @@ Arguments are repeatable so launchers do not need to invoke a shell.
 |`AGENTAWESOME_MEMORY_AUTO_START`
 |Enables memory supervision.
 |===
+
+The gateway accepts tokenless binds only on loopback addresses.
+Set `AGENTAWESOME_GATEWAY_TOKEN` or `--auth-token` before using a non-loopback bind such as `0.0.0.0:8070` or a non-local CORS origin.
+Set `AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY=false` to require bearer auth even on loopback.
+Access context through gateway `/api/context/*` routes; direct harness context
+API binds should stay on loopback unless protected by
+`AGENTAWESOME_CONTEXT_API_TOKEN`.

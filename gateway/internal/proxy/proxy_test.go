@@ -1,3 +1,4 @@
+// This file tests gateway proxy forwarding, rewriting, and request limits.
 package proxy
 
 import (
@@ -34,19 +35,75 @@ func TestProxyForwardsMountedAPIPath(t *testing.T) {
 	}
 }
 
-// TestProxyInjectsPolicyForRunSSE verifies run bodies are rewritten before forwarding.
-func TestProxyInjectsPolicyForRunSSE(t *testing.T) {
+// TestProxyAppliesBodyTransformer verifies configured body rewrites are forwarded.
+func TestProxyAppliesBodyTransformer(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var decoded map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
 			t.Fatalf("decode upstream body: %v", err)
 		}
-		message := decoded["newMessage"].(map[string]any)
-		parts := message["parts"].([]any)
-		text := parts[0].(map[string]any)["text"].(string)
-		if !strings.HasPrefix(text, RuntimePolicyPrefix) {
-			t.Fatalf("text = %q, want policy prefix", text)
+		if decoded["rewritten"] != true {
+			t.Fatalf("decoded = %#v, want transformed body", decoded)
 		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	proxy, err := New(upstream.URL+"/api", "/api", 0, WithBodyTransformer(func(_ *http.Request, body []byte) ([]byte, error) {
+		var decoded map[string]any
+		if err := json.Unmarshal(body, &decoded); err != nil {
+			return nil, err
+		}
+		decoded["rewritten"] = true
+		return json.Marshal(decoded)
+	}))
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	body := strings.NewReader(`{"message":"hello"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/run_sse", body)
+	recorder := httptest.NewRecorder()
+	proxy.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+}
+
+// TestProxySetsTrustedUpstreamHeader verifies caller auth is not forwarded.
+func TestProxySetsTrustedUpstreamHeader(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer upstream-secret" {
+			t.Fatalf("Authorization = %q, want trusted upstream token", got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+	proxy, err := New(
+		upstream.URL+"/api",
+		"/api",
+		0,
+		WithUpstreamHeader("Authorization", "Bearer upstream-secret"),
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/context/tools/list", nil)
+	req.Header.Set("Authorization", "Bearer caller-secret")
+	recorder := httptest.NewRecorder()
+	proxy.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+}
+
+// TestProxyRejectsOversizedRequestBody verifies body caps protect proxy memory.
+func TestProxyRejectsOversizedRequestBody(t *testing.T) {
+	upstreamCalled := false
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer upstream.Close()
@@ -55,12 +112,15 @@ func TestProxyInjectsPolicyForRunSSE(t *testing.T) {
 		t.Fatalf("New() error = %v", err)
 	}
 
-	body := strings.NewReader(`{"sessionId":"s1","newMessage":{"parts":[{"text":"hello"}]}}`)
+	body := strings.NewReader(strings.Repeat("x", int(maxRequestBodyBytes)+1))
 	req := httptest.NewRequest(http.MethodPost, "/api/run_sse", body)
 	recorder := httptest.NewRecorder()
 	proxy.ServeHTTP(recorder, req)
 
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", recorder.Code)
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", recorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("upstream was called for an oversized body")
 	}
 }

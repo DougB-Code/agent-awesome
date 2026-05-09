@@ -1,6 +1,8 @@
 /// Tests ADK and MCP response parsing used by the Aurora UI.
 library;
 
+import 'dart:convert';
+
 import 'package:agentawesome_ui/clients/assistant_client.dart';
 import 'package:agentawesome_ui/clients/mcp_client.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,6 +57,33 @@ void main() {
 
       expect(event.author, 'Runtime');
       expect(event.errorMessage, 'provider does not support streaming');
+    });
+
+    test('requests non-streaming agent runs', () async {
+      final client = AssistantClient(
+        baseUrl: 'http://127.0.0.1:1',
+        appName: 'test-app',
+        userId: 'user-1',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          expect(request.url.path, '/run_sse');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['streaming'], isFalse);
+          return http.Response(
+            'data: {"id":"event-1","author":"assistant","content":{"parts":[{"text":"ok"}]}}\n\n',
+            200,
+            headers: const <String, String>{
+              'content-type': 'text/event-stream',
+            },
+          );
+        }),
+      );
+
+      final events = await client
+          .sendMessage(sessionId: 'session-1', text: 'hello')
+          .toList();
+
+      expect(events.single.text, 'ok');
     });
 
     test('creates sessions with gateway auth headers', () async {
@@ -122,6 +151,7 @@ void main() {
       expect(event.toolActivity?.name, 'create_task');
       expect(event.toolActivity?.status, 'failed');
       expect(event.toolActivity?.summary, contains('requires confirmation'));
+      expect(event.errorMessage, contains('requires confirmation'));
     });
 
     test('parses confirmation events', () {
@@ -296,6 +326,7 @@ void main() {
           'title': 'Draft brief',
           'status': 'open',
           'priority': 'high',
+          'follow_up_at': '2026-05-15T12:00:00Z',
           'idempotency_key': 'personal_pilot:session-live:draft-brief',
           'topics': <String>['brief'],
           'estimate_minutes': 45,
@@ -348,6 +379,7 @@ void main() {
       expect(tasks.length, 2);
       expect(tasks.first.active, isTrue);
       expect(tasks.first.priority, 'high');
+      expect(tasks.first.followUpAt?.toUtc(), DateTime.utc(2026, 5, 15, 12));
       expect(tasks.first.estimateMinutes, 45);
       expect(tasks.first.context, 'Focus');
       expect(tasks.first.confidence, 0.9);

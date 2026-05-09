@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 // This file owns review decisions. Persisted policy storage lives behind
@@ -24,18 +26,35 @@ type ReviewDecision struct {
 	Prefix string `json:"prefix,omitempty"`
 }
 
-// approvalOptions lists the review actions supported for a proposal.
-func approvalOptions(proposal Proposal) []ApprovalOption {
-	return []ApprovalOption{
+// approvalOptions lists the review actions supported for a proposal and the
+// current persistent-approval mode.
+func approvalOptions(proposal Proposal, persistentEnabled bool) []ApprovalOption {
+	options := []ApprovalOption{
 		{Action: "deny", Label: "Deny", Description: "Do not run this proposed command."},
 		{Action: "approve_once", Label: "Approve exact command one time", Description: "Run only this proposed command now."},
 		{Action: "always_exact_session", Label: "Always approve exact command for this session", Description: "Remember this exact command until the harness exits."},
-		{Action: "always_exact_workspace", Label: "Always approve exact command for this workspace", Description: "Persist this exact command approval under .agentawesome."},
 		{Action: "always_prefix_session", Label: "Always approve starts with for this session", Description: fmt.Sprintf("Remember command prefix %q until the harness exits.", proposal.CommandLine)},
-		{Action: "always_prefix_workspace", Label: "Always approve starts with for this workspace", Description: fmt.Sprintf("Persist command prefix %q under .agentawesome.", proposal.CommandLine)},
 		{Action: "always_tool_session", Label: "Always approve tool for this session", Description: "Approve all future request_command proposals until the harness exits."},
-		{Action: "always_tool_workspace", Label: "Always approve tool for this workspace", Description: "Persist approval for all request_command proposals in this workspace."},
-		{Action: "always_tool", Label: "(DANGEROUS) Always approve tool", Description: "Persist approval for all request_command proposals in every workspace for this user."},
+	}
+	if persistentEnabled {
+		options = append(options,
+			ApprovalOption{Action: "always_exact_workspace", Label: "Always approve exact command for this workspace", Description: "Persist this exact command approval under .agentawesome."},
+			ApprovalOption{Action: "always_prefix_workspace", Label: "Always approve starts with for this workspace", Description: fmt.Sprintf("Persist command prefix %q under .agentawesome.", proposal.CommandLine)},
+			ApprovalOption{Action: "always_tool_workspace", Label: "Always approve tool for this workspace", Description: "Persist approval for all request_command proposals in this workspace."},
+			ApprovalOption{Action: "always_tool", Label: "(DANGEROUS) Always approve tool", Description: "Persist approval for all request_command proposals in every workspace for this user."},
+		)
+	}
+	return options
+}
+
+// isPersistentReviewAction reports whether an action stores a workspace/global
+// approval policy beyond the current process.
+func isPersistentReviewAction(action string) bool {
+	switch action {
+	case "always_exact_workspace", "always_prefix_workspace", "always_tool_workspace", "always_tool":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -89,19 +108,22 @@ func newReviewPoliciesWithStore(store reviewPolicyStore) *reviewPolicies {
 
 // allows checks session, workspace, and global policy stores to decide whether
 // a proposal can execute without asking the user again.
-func (p *reviewPolicies) allows(base string, proposal Proposal) (bool, error) {
+func (p *reviewPolicies) allows(base string, proposal Proposal, persistentEnabled bool) (bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if _, ok := p.sessionExact[proposal.Signature]; ok {
 		return true, nil
 	}
-	allowed, err := p.store.allowsExact(base, proposal)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
+	if persistentEnabled {
+		allowed, err := p.store.allowsExact(base, proposal)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			log.Info().Str("policy", "workspace_exact").Str("command", proposal.CommandLine).Msg("request_command allowed by persistent approval")
+			return true, nil
+		}
 	}
 	// Stdin-bearing proposals require explicit review each time unless they have
 	// an exact approval, because stdin can change the effect of the same command
@@ -112,24 +134,38 @@ func (p *reviewPolicies) allows(base string, proposal Proposal) (bool, error) {
 	if p.sessionTool {
 		return true, nil
 	}
-	allowed, err = p.store.allowsGlobalTool()
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
+	if persistentEnabled {
+		allowed, err := p.store.allowsGlobalTool()
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			log.Info().Str("policy", "global_tool").Str("command", proposal.CommandLine).Msg("request_command allowed by persistent approval")
+			return true, nil
+		}
 	}
 	if prefixAllows(p.sessionPrefixes, proposal.CommandLine) {
 		return true, nil
 	}
-	allowed, err = p.store.allowsWorkspaceTool(base)
-	if err != nil {
-		return false, err
+	if persistentEnabled {
+		allowed, err := p.store.allowsWorkspaceTool(base)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			log.Info().Str("policy", "workspace_tool").Str("command", proposal.CommandLine).Msg("request_command allowed by persistent approval")
+			return true, nil
+		}
+		allowed, err = p.store.allowsWorkspacePrefix(base, proposal.CommandLine)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			log.Info().Str("policy", "workspace_prefix").Str("command", proposal.CommandLine).Msg("request_command allowed by persistent approval")
+			return true, nil
+		}
 	}
-	if allowed {
-		return true, nil
-	}
-	return p.store.allowsWorkspacePrefix(base, proposal.CommandLine)
+	return false, nil
 }
 
 // apply records the selected policy decision in memory, the workspace file, or
@@ -147,11 +183,17 @@ func (p *reviewPolicies) apply(base string, proposal Proposal, decision ReviewDe
 	case "always_exact_workspace":
 		return p.store.approveWorkspaceExact(base, proposal)
 	case "always_prefix_session":
-		prefix := decisionPrefix(decision, proposal)
+		prefix, err := decisionPrefix(decision, proposal)
+		if err != nil {
+			return err
+		}
 		p.sessionPrefixes[prefix] = struct{}{}
 		return nil
 	case "always_prefix_workspace":
-		prefix := decisionPrefix(decision, proposal)
+		prefix, err := decisionPrefix(decision, proposal)
+		if err != nil {
+			return err
+		}
 		return p.store.approveWorkspacePrefix(base, prefix)
 	case "always_tool_session":
 		p.sessionTool = true
@@ -167,18 +209,22 @@ func (p *reviewPolicies) apply(base string, proposal Proposal, decision ReviewDe
 
 // decisionPrefix chooses an explicit reviewed prefix, falling back to the full
 // command line shown in the prompt.
-func decisionPrefix(decision ReviewDecision, proposal Proposal) string {
-	if strings.TrimSpace(decision.Prefix) != "" {
-		return strings.TrimSpace(decision.Prefix)
+func decisionPrefix(decision ReviewDecision, proposal Proposal) (string, error) {
+	prefix := strings.TrimSpace(decision.Prefix)
+	if prefix == "" {
+		return proposal.CommandLine, nil
 	}
-	return proposal.CommandLine
+	if prefix != proposal.CommandLine {
+		return "", fmt.Errorf("review decision prefix %q must match the reviewed command line %q", prefix, proposal.CommandLine)
+	}
+	return prefix, nil
 }
 
 // prefixAllows reports whether any saved prefix matches the proposed command
 // line.
 func prefixAllows(prefixes map[string]struct{}, commandLine string) bool {
 	for prefix := range prefixes {
-		if strings.HasPrefix(commandLine, prefix) {
+		if commandLine == prefix || strings.HasPrefix(commandLine, prefix+" ") {
 			return true
 		}
 	}

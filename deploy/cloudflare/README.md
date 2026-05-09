@@ -7,7 +7,9 @@ The deployment runs one Cloudflare Container behind a Worker. Inside the
 container, `agent-gateway` listens on port `8070` and supervises the local
 harness on `8080` plus memory MCP on `8090`. Slack uses the HTTP Events API at
 `/slack/events`; Socket Mode remains for local testing only. The Worker rejects
-all public requests except Slack-signed `POST /slack/events` requests.
+all public requests except unauthenticated `GET` or `HEAD /healthz`, bearer
+authenticated gateway control-plane requests, and Slack-signed
+`POST /slack/events` requests.
 
 Memory context is restored from and saved to the `agent-awesome-context` R2
 bucket through a private Worker endpoint. The endpoint requires
@@ -35,6 +37,7 @@ Run these commands from `deploy/cloudflare/worker`:
 
 ```sh
 npm install --cache ../../../build/npm-cache
+npm test
 npx wrangler r2 bucket create agent-awesome-context
 npx wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
 npx wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
@@ -67,7 +70,8 @@ Slack-signed Events API requests.
 
 Set `AGENTAWESOME_GATEWAY_TOKEN` before deployment. Slack requests are verified
 with Slack signatures by the gateway, while `/api/*`, `/mcp`, and gateway status
-routes use the bearer token.
+routes use the bearer token. The public `/healthz` route only returns the
+gateway liveness response.
 
 Keep `SLACK_ALLOWED_USER_ID` populated in `worker/wrangler.jsonc` for a
 single-user pilot. Add `SLACK_ALLOWED_TEAM_ID` or `SLACK_ALLOWED_CHANNEL_ID`

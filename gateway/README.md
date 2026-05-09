@@ -56,8 +56,13 @@ For packaged pilots, the same values can be supplied with environment variables:
 
 - `AGENTAWESOME_GATEWAY_ADDR`
 - `AGENTAWESOME_HARNESS_API_BASE_URL`
+- `AGENTAWESOME_CONTEXT_API_BASE_URL`
+- `AGENTAWESOME_CONTEXT_API_TOKEN`
 - `AGENTAWESOME_MEMORY_MCP_URL`
 - `AGENTAWESOME_GATEWAY_TOKEN`
+- `AGENTAWESOME_ALLOWED_ORIGIN`
+- `AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY`
+- `AGENTAWESOME_RUNTIME_POLICY_TEXT`
 - `AGENTAWESOME_HARNESS_AUTO_START`
 - `AGENTAWESOME_HARNESS_COMMAND`
 - `AGENTAWESOME_HARNESS_ARGS`, as a JSON string array
@@ -72,6 +77,18 @@ For packaged pilots, the same values can be supplied with environment variables:
 - `SLACK_ALLOWED_TEAM_ID`
 - `SLACK_ALLOWED_USER_ID`
 - `SLACK_ALLOWED_CHANNEL_ID`
+
+The gateway may run without `AGENTAWESOME_GATEWAY_TOKEN` only when it listens on
+a loopback address such as `127.0.0.1:8070` or `localhost:8070`. Non-loopback
+binds such as `0.0.0.0:8070` and `:8070` require `AGENTAWESOME_GATEWAY_TOKEN`
+or `--auth-token`. Non-local `AGENTAWESOME_ALLOWED_ORIGIN` values also require
+the gateway token. Set `AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY=false`
+when you want to force bearer auth even for local loopback development.
+
+The harness context API should normally be reached through gateway
+`/api/context/*` routes only. Keep the harness context listener on loopback; if
+it must bind outside loopback, set the same `AGENTAWESOME_CONTEXT_API_TOKEN` on
+the harness and gateway, or pass `--context-api-token` to both.
 
 ## Slack Pilot
 
@@ -110,9 +127,18 @@ request signatures before accepting events.
 - `GET /api/gateway/channels` lists active and planned channel adapters.
 - `POST /slack/events` receives Slack Events API webhooks.
 - `POST /mcp` proxies UI-facing memory MCP traffic to the configured memory service.
+- `/api/context/*` proxies harness context tool traffic.
 - `/api/*` proxies ADK-compatible API traffic to the configured harness.
 
-`POST /api/run_sse` receives server-owned runtime policy injection before the
-request is forwarded. This lets local and cloud deployments enforce the same
-task-writing behavior without making Slack, SMS, email, or Flutter own agent
-policy.
+`GET /api/gateway/status` includes dependency readiness. While supervised
+dependencies are still starting or failed, `/api/*`, `/api/context/*`, and
+`/mcp` return `503 dependency not ready` instead of leaking upstream connection
+errors. `GET /healthz` stays live for process liveness.
+
+`POST /api/run_sse` receives configurable server-owned runtime policy injection
+from `AGENTAWESOME_RUNTIME_POLICY_TEXT` before the request is forwarded. This
+lets local and cloud deployments enforce the same task-writing behavior without
+making Slack, SMS, email, Flutter, or the generic proxy own agent policy.
+
+Gateway proxy request bodies are capped at 8 MiB. Oversized bodies return
+`413 Payload Too Large`.

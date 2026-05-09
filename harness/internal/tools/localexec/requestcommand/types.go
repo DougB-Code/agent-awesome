@@ -37,6 +37,16 @@ type Proposal struct {
 
 // ReviewRequestPayload is the structured payload passed to confirmation UIs.
 type ReviewRequestPayload struct {
-	Proposal Proposal         `json:"proposal"`
-	Options  []ApprovalOption `json:"options"`
+	Proposal            Proposal                `json:"proposal"`
+	Options             []ApprovalOption        `json:"options"`
+	PersistentApprovals PersistentApprovalState `json:"persistent_approvals"`
+}
+
+// PersistentApprovalState reports whether review decisions may be saved beyond
+// the current harness process.
+type PersistentApprovalState struct {
+	Enabled             bool   `json:"enabled"`
+	Message             string `json:"message"`
+	WorkspacePolicyPath string `json:"workspace_policy_path,omitempty"`
+	GlobalPolicyPath    string `json:"global_policy_path,omitempty"`
 }
