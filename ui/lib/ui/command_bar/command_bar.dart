@@ -77,7 +77,7 @@ class _CommandBarState extends State<CommandBar> {
   static const double _fieldHeight = 42;
   static const double _buttonSize = 42;
   static const double _quickAccessGap = 8;
-  static const double _rightPadding = 24;
+  static const double _horizontalPadding = 24;
 
   final FocusNode _focusNode = FocusNode();
   final GlobalKey _fieldKey = GlobalKey();
@@ -116,7 +116,9 @@ class _CommandBarState extends State<CommandBar> {
           final actionCompact = constraints.maxWidth < 980;
           final roomy = constraints.maxWidth >= 1400;
           return Padding(
-            padding: EdgeInsets.fromLTRB(compact ? 12 : 50, 0, 24, 0),
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 12 : _horizontalPadding,
+            ),
             child: Row(
               children: <Widget>[
                 Expanded(
@@ -307,7 +309,7 @@ class _CommandBarState extends State<CommandBar> {
     if (renderObject is RenderBox && renderObject.hasSize) {
       final screenWidth = MediaQuery.sizeOf(context).width;
       final fieldLeft = renderObject.localToGlobal(Offset.zero).dx;
-      final availableWidth = screenWidth - fieldLeft - _rightPadding;
+      final availableWidth = screenWidth - fieldLeft - _horizontalPadding;
       return availableWidth
           .clamp(renderObject.size.width, screenWidth)
           .toDouble();

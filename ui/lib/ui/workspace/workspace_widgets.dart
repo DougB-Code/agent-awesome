@@ -32,7 +32,7 @@ class HomeWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(40, 32, 40, 34),
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 34),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
