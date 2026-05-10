@@ -6,6 +6,7 @@ import (
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/review"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 )
@@ -48,7 +49,7 @@ func (t *requestCommandTool) run(ctx tool.Context, input RequestCommandInput) (R
 
 // runWithConfirmation exposes the workflow behind the narrow confirmation
 // interface used by tests and the ADK adapter.
-func (t *requestCommandTool) runWithConfirmation(ctx confirmationRequester, input RequestCommandInput) (RequestCommandOutput, error) {
+func (t *requestCommandTool) runWithConfirmation(ctx review.ConfirmationRequester, input RequestCommandInput) (RequestCommandOutput, error) {
 	return t.flow().run(ctx, input)
 }
 

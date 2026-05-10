@@ -1,7 +1,11 @@
 // This file builds request_command review prompt text.
 package requestcommand
 
-import "strings"
+import (
+	"strings"
+
+	"agentawesome/internal/tools/localexec/review"
+)
 
 // proposalHint builds the human-readable review text shown to the user.
 func proposalHint(proposal Proposal, state PersistentApprovalState) string {
@@ -14,7 +18,7 @@ func proposalHint(proposal Proposal, state PersistentApprovalState) string {
 	b.WriteString(proposal.CWD)
 	b.WriteString("\n\nRisk:\n  ")
 	b.WriteString(proposal.Risk)
-	appendStdinReview(&b, proposal.Stdin)
+	review.AppendStdinPromptSection(&b, proposal.Stdin)
 	b.WriteString("\n\nPersistent approvals:\n  ")
 	b.WriteString(persistentApprovalPromptText(state))
 	if state.Enabled {

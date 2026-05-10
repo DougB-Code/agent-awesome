@@ -12,6 +12,7 @@ import (
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/review"
 	"google.golang.org/adk/tool/toolconfirmation"
 )
 
@@ -746,7 +747,7 @@ func isExitError(err error) bool {
 	return errors.As(err, &exitErr)
 }
 
-func optionActions(options []ApprovalOption) []string {
+func optionActions(options []review.Option) []string {
 	actions := make([]string, 0, len(options))
 	for _, option := range options {
 		actions = append(actions, option.Action)

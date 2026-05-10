@@ -7,18 +7,12 @@ import (
 	"strings"
 	"sync"
 
+	"agentawesome/internal/tools/localexec/review"
 	"github.com/rs/zerolog/log"
 )
 
 // This file owns review decisions. Persisted policy storage lives behind
 // reviewPolicyStore so approval rules stay separate from JSON and filesystem IO.
-
-// ApprovalOption describes one action the user can choose during review.
-type ApprovalOption struct {
-	Action      string `json:"action"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-}
 
 // ReviewDecision is the selected review action returned by the confirmation UI.
 type ReviewDecision struct {
@@ -28,8 +22,8 @@ type ReviewDecision struct {
 
 // approvalOptions lists the review actions supported for a proposal and the
 // current persistent-approval mode.
-func approvalOptions(proposal Proposal, persistentEnabled bool) []ApprovalOption {
-	options := []ApprovalOption{
+func approvalOptions(proposal Proposal, persistentEnabled bool) []review.Option {
+	options := []review.Option{
 		{Action: "deny", Label: "Deny", Description: "Do not run this proposed command."},
 		{Action: "approve_once", Label: "Approve exact command one time", Description: "Run only this proposed command now."},
 		{Action: "always_exact_session", Label: "Always approve exact command for this session", Description: "Remember this exact command until the harness exits."},
@@ -38,10 +32,10 @@ func approvalOptions(proposal Proposal, persistentEnabled bool) []ApprovalOption
 	}
 	if persistentEnabled {
 		options = append(options,
-			ApprovalOption{Action: "always_exact_workspace", Label: "Always approve exact command for this workspace", Description: "Persist this exact command approval under .agentawesome."},
-			ApprovalOption{Action: "always_prefix_workspace", Label: "Always approve starts with for this workspace", Description: fmt.Sprintf("Persist command prefix %q under .agentawesome.", proposal.CommandLine)},
-			ApprovalOption{Action: "always_tool_workspace", Label: "Always approve tool for this workspace", Description: "Persist approval for all request_command proposals in this workspace."},
-			ApprovalOption{Action: "always_tool", Label: "(DANGEROUS) Always approve tool", Description: "Persist approval for all request_command proposals in every workspace for this user."},
+			review.Option{Action: "always_exact_workspace", Label: "Always approve exact command for this workspace", Description: "Persist this exact command approval under .agentawesome."},
+			review.Option{Action: "always_prefix_workspace", Label: "Always approve starts with for this workspace", Description: fmt.Sprintf("Persist command prefix %q under .agentawesome.", proposal.CommandLine)},
+			review.Option{Action: "always_tool_workspace", Label: "Always approve tool for this workspace", Description: "Persist approval for all request_command proposals in this workspace."},
+			review.Option{Action: "always_tool", Label: "(DANGEROUS) Always approve tool", Description: "Persist approval for all request_command proposals in every workspace for this user."},
 		)
 	}
 	return options

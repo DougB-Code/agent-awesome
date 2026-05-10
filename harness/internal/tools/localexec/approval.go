@@ -2,11 +2,11 @@
 package localexec
 
 import (
-	"fmt"
 	"strings"
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/localexec/commandline"
+	"agentawesome/internal/tools/localexec/review"
 	"agentawesome/internal/tools/localexec/workdir"
 )
 
@@ -14,34 +14,18 @@ import (
 // tools. It decides whether a tool request may run; executor.go performs the
 // actual process execution after approval.
 
-const stdinPreviewLimit = 4096
-
 // LocalExecConfirmationPayload is shown to the user when local_exec needs
 // explicit approval.
 type LocalExecConfirmationPayload struct {
-	Tool        string           `json:"tool"`
-	Command     string           `json:"command"`
-	Description string           `json:"description"`
-	Executable  string           `json:"executable"`
-	Args        []string         `json:"args"`
-	CommandLine string           `json:"command_line"`
-	CWD         string           `json:"cwd"`
-	Stdin       *StdinReview     `json:"stdin,omitempty"`
-	Options     []ApprovalOption `json:"options"`
-}
-
-// ApprovalOption describes one action the user can choose during review.
-type ApprovalOption struct {
-	Action      string `json:"action"`
-	Label       string `json:"label"`
-	Description string `json:"description"`
-}
-
-// StdinReview describes stdin without forcing the UI to render unbounded input.
-type StdinReview struct {
-	Bytes     int    `json:"bytes"`
-	Preview   string `json:"preview"`
-	Truncated bool   `json:"truncated"`
+	Tool        string               `json:"tool"`
+	Command     string               `json:"command"`
+	Description string               `json:"description"`
+	Executable  string               `json:"executable"`
+	Args        []string             `json:"args"`
+	CommandLine string               `json:"command_line"`
+	CWD         string               `json:"cwd"`
+	Stdin       *review.StdinPreview `json:"stdin,omitempty"`
+	Options     []review.Option      `json:"options"`
 }
 
 // confirmationPayload returns the structured review payload for a configured
@@ -61,8 +45,8 @@ func (r *runner) confirmationPayload(input Input) LocalExecConfirmationPayload {
 		Args:        append([]string(nil), command.Args...),
 		CommandLine: commandline.ReviewedCommandLine(command.Executable, command.Args),
 		CWD:         cwd,
-		Stdin:       newStdinReview(input.Stdin),
-		Options: []ApprovalOption{
+		Stdin:       review.NewStdinPreview(input.Stdin),
+		Options: []review.Option{
 			{Action: "deny", Label: "Deny", Description: "Do not run this configured command."},
 			{Action: "approve_once", Label: "Approve exact command one time", Description: "Run only this configured command now."},
 		},
@@ -84,7 +68,7 @@ func (r *runner) confirmationHint(input Input) string {
 	}
 	b.WriteString("\n\nWorking directory:\n  ")
 	b.WriteString(payload.CWD)
-	appendStdinReview(&b, input.Stdin)
+	review.AppendStdinPromptSection(&b, input.Stdin)
 	return b.String()
 }
 
@@ -142,48 +126,4 @@ func commandLine(command schema.LocalExecCommand) string {
 	parts = append(parts, strings.TrimSpace(command.Executable))
 	parts = append(parts, command.Args...)
 	return strings.Join(parts, " ")
-}
-
-// newStdinReview creates a bounded stdin preview for approval prompts.
-func newStdinReview(stdin string) *StdinReview {
-	if stdin == "" {
-		return nil
-	}
-	review := &StdinReview{
-		Bytes:   len(stdin),
-		Preview: stdin,
-	}
-	if len(review.Preview) > stdinPreviewLimit {
-		review.Preview = review.Preview[:stdinPreviewLimit]
-		review.Truncated = true
-	}
-	return review
-}
-
-// appendStdinReview adds a bounded stdin preview to a human-readable prompt.
-func appendStdinReview(b *strings.Builder, stdin string) {
-	review := newStdinReview(stdin)
-	if review == nil {
-		return
-	}
-	b.WriteString("\n\nStdin")
-	if review.Truncated {
-		fmt.Fprintf(b, " preview (%d bytes, truncated)", review.Bytes)
-	} else {
-		fmt.Fprintf(b, " (%d bytes)", review.Bytes)
-	}
-	b.WriteString(":\n")
-	b.WriteString(indentBlock(review.Preview))
-	if review.Truncated {
-		b.WriteString("\n  ... truncated ...")
-	}
-}
-
-// indentBlock indents each line of a multi-line prompt section.
-func indentBlock(value string) string {
-	lines := strings.Split(value, "\n")
-	for i, line := range lines {
-		lines[i] = "  " + line
-	}
-	return strings.Join(lines, "\n")
 }

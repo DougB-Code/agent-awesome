@@ -1,7 +1,10 @@
 // This file defines request_command input, output, and review payloads.
 package requestcommand
 
-import "agentawesome/internal/tools/localexec/execspec"
+import (
+	"agentawesome/internal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/review"
+)
 
 // RequestCommandInput is the model-proposed arbitrary command that must be
 // reviewed before execution unless a saved policy already allows it.
@@ -38,7 +41,7 @@ type Proposal struct {
 // ReviewRequestPayload is the structured payload passed to confirmation UIs.
 type ReviewRequestPayload struct {
 	Proposal            Proposal                `json:"proposal"`
-	Options             []ApprovalOption        `json:"options"`
+	Options             []review.Option         `json:"options"`
 	PersistentApprovals PersistentApprovalState `json:"persistent_approvals"`
 }
 

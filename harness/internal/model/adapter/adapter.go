@@ -95,11 +95,16 @@ func ResolveCredential(resolver CredentialResolver, name string) (string, error)
 	return resolver.ResolveCredential(name)
 }
 
+// NewDefaultHTTPClient returns a provider HTTP client with the standard timeout.
+func NewDefaultHTTPClient() *http.Client {
+	return &http.Client{Timeout: defaultHTTPTimeout}
+}
+
 // NewProviderHTTPClient returns an injected HTTP client or a default timed
 // client.
 func NewProviderHTTPClient(factory HTTPClientFactory) *http.Client {
 	if factory == nil {
-		return &http.Client{Timeout: defaultHTTPTimeout}
+		return NewDefaultHTTPClient()
 	}
 	return factory.NewHTTPClient()
 }

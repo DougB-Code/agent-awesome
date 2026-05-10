@@ -115,5 +115,5 @@ type defaultHTTPClientFactory struct{}
 
 // NewHTTPClient returns the default provider HTTP client.
 func (defaultHTTPClientFactory) NewHTTPClient() *http.Client {
-	return defaultHTTPClient()
+	return adapter.NewDefaultHTTPClient()
 }

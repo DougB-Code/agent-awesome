@@ -10,6 +10,7 @@ import (
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/localexec/execspec"
 	"agentawesome/internal/tools/localexec/requestcommand"
+	"agentawesome/internal/tools/localexec/review"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
 )
@@ -97,7 +98,7 @@ func (r *runner) run(ctx tool.Context, input Input) (execspec.Output, error) {
 
 // runWithConfirmation contains the local_exec workflow behind the narrow
 // confirmation interface used by the ADK adapter.
-func (r *runner) runWithConfirmation(ctx confirmationRequester, input Input) (execspec.Output, error) {
+func (r *runner) runWithConfirmation(ctx review.ConfirmationRequester, input Input) (execspec.Output, error) {
 	if r.requiresConfirmation(input) {
 		confirmation := ctx.ToolConfirmation()
 		if confirmation == nil {

@@ -7,6 +7,7 @@ import (
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/localexec/execspec"
+	"agentawesome/internal/tools/localexec/review"
 	"agentawesome/internal/tools/localexec/workdir"
 
 	"github.com/rs/zerolog/log"
@@ -40,7 +41,7 @@ func newRequestCommandFlow(cfg schema.LocalExec, policies *reviewPolicies, execu
 }
 
 // run processes one request_command proposal from review through execution.
-func (f requestCommandFlow) run(ctx confirmationRequester, input RequestCommandInput) (RequestCommandOutput, error) {
+func (f requestCommandFlow) run(ctx review.ConfirmationRequester, input RequestCommandInput) (RequestCommandOutput, error) {
 	proposal := f.proposals.Build(input)
 	base, err := workdir.ExecutionBase()
 	if err != nil {
@@ -77,7 +78,7 @@ func (f requestCommandFlow) run(ctx confirmationRequester, input RequestCommandI
 }
 
 // review requests or applies a user decision for a command proposal.
-func (f requestCommandFlow) review(ctx confirmationRequester, base string, proposal Proposal) (*RequestCommandOutput, error) {
+func (f requestCommandFlow) review(ctx review.ConfirmationRequester, base string, proposal Proposal) (*RequestCommandOutput, error) {
 	persistentState := persistentApprovalState(base, f.cfg.AllowPersistentApprovals)
 	confirmation := ctx.ToolConfirmation()
 	if confirmation == nil {
