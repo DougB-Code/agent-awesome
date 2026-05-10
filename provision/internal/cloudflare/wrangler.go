@@ -120,9 +120,9 @@ func (d Deployment) vars() map[string]string {
 		"AGENTAWESOME_SERVICE_START_TIMEOUT":   defaultStartTimeout,
 		"SLACK_ENABLED":                        boolString(d.SlackEnabled),
 		"SLACK_SOCKET_MODE":                    "false",
-		"SLACK_ALLOWED_TEAM_ID":                "",
-		"SLACK_ALLOWED_USER_ID":                "",
-		"SLACK_ALLOWED_CHANNEL_ID":             "",
+		"SLACK_ALLOWED_TEAM_ID":                d.SlackAllowedTeamID,
+		"SLACK_ALLOWED_USER_ID":                d.SlackAllowedUserID,
+		"SLACK_ALLOWED_CHANNEL_ID":             d.SlackAllowedChannelID,
 	}
 }
 

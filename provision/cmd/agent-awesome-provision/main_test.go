@@ -2,6 +2,8 @@ package main
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"agentprovision/internal/cloudflare"
@@ -12,7 +14,7 @@ import (
 
 // TestDeploymentInputUsesPlatformDefaults verifies one-click apply flag reduction.
 func TestDeploymentInputUsesPlatformDefaults(t *testing.T) {
-	input, err := deploymentInput("Sister Agent", "", "", "", false, platform.Config{
+	input, err := deploymentInput("Sister Agent", "", "", "", false, "", "", "", platform.Config{
 		ZoneName:            "agent-awesome.com",
 		AgentHostnameSuffix: "agent-awesome.com",
 	}, true)
@@ -27,6 +29,32 @@ func TestDeploymentInputUsesPlatformDefaults(t *testing.T) {
 	}
 	if input.ZoneName != "agent-awesome.com" {
 		t.Fatalf("ZoneName = %q, want platform zone", input.ZoneName)
+	}
+}
+
+// TestHasCloudflareAssetsRequiresWorkerSmokeTest verifies repo discovery catches deploy gaps.
+func TestHasCloudflareAssetsRequiresWorkerSmokeTest(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "Dockerfile.cloudflare"), "FROM scratch\n")
+	writeTestFile(t, filepath.Join(root, "deploy", "cloudflare", "worker", "src", "index.ts"), "// worker\n")
+	if hasCloudflareAssets(root) {
+		t.Fatalf("hasCloudflareAssets() = true without smoke test")
+	}
+
+	writeTestFile(t, filepath.Join(root, "deploy", "cloudflare", "worker", "scripts", "smoke-test.mjs"), "// smoke\n")
+	if !hasCloudflareAssets(root) {
+		t.Fatalf("hasCloudflareAssets() = false with required assets")
+	}
+}
+
+// writeTestFile creates one test fixture file and its parent directories.
+func writeTestFile(t *testing.T, path string, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
 	}
 }
 

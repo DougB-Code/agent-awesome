@@ -31,7 +31,7 @@ Do not paste Slack secrets into chat, documentation, or shell history.
 
 == Update Allow Lists
 
-Set optional non-secret allow-list values in `deploy/cloudflare/worker/wrangler.jsonc`:
+Set the required non-secret allow-list values in `deploy/cloudflare/worker/wrangler.jsonc`:
 
 [source,json]
 ----
@@ -40,8 +40,8 @@ Set optional non-secret allow-list values in `deploy/cloudflare/worker/wrangler.
 "SLACK_ALLOWED_CHANNEL_ID": ""
 ----
 
-For a single-user pilot, set at least the team id and user id.
-Leave the channel id empty when direct messages from the allowed user should work from any permitted app surface.
+Set all three ids before redeploying a Slack beta pilot.
+The gateway refuses to start Slack ingress without a team, user, and channel allow-list.
 
 == Redeploy And Verify
 
@@ -52,5 +52,5 @@ npx wrangler deploy --dry-run
 npx wrangler deploy
 ----
 
-After deployment, verify the Slack request URL and send a direct message to the bot.
+After deployment, verify the Slack request URL and send a message in the allow-listed channel.
 If Slack accepts events but the gateway ignores messages, check the allow-list values first.

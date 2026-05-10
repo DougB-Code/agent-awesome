@@ -66,6 +66,15 @@ func commandsText(deployment Deployment) string {
 	builder.WriteString(deployment.Hostname)
 	builder.WriteString(" --zone-name ")
 	builder.WriteString(deployment.ZoneName)
+	if deployment.SlackEnabled {
+		builder.WriteString(" --slack")
+		builder.WriteString(" --slack-allowed-team-id ")
+		builder.WriteString(deployment.SlackAllowedTeamID)
+		builder.WriteString(" --slack-allowed-user-id ")
+		builder.WriteString(deployment.SlackAllowedUserID)
+		builder.WriteString(" --slack-allowed-channel-id ")
+		builder.WriteString(deployment.SlackAllowedChannelID)
+	}
 	builder.WriteString("\n")
 	return builder.String()
 }

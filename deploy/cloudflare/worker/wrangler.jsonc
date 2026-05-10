@@ -22,14 +22,15 @@
 	},
 	"vars": {
 		"AGENTAWESOME_APP_NAME": "agent_awesome",
-		"AGENTAWESOME_USER_ID": "doug",
+		"AGENTAWESOME_USER_ID": "beta",
 		"AGENTAWESOME_CONTEXT_API_BASE_URL": "http://127.0.0.1:8081/api/context",
 		"AGENTAWESOME_MEMORY_SNAPSHOT_URL": "https://agent-awesome.com/internal/context-snapshot",
-		"AGENTAWESOME_MEMORY_SNAPSHOT_KEY": "personal-pilot/context-snapshot.tar.gz",
+		"AGENTAWESOME_MEMORY_SNAPSHOT_KEY": "beta-pilot/context-snapshot.tar.gz",
 		"AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT": "10m",
 		"AGENTAWESOME_SERVICE_START_TIMEOUT": "45s",
 		"SLACK_ENABLED": "true",
 		"SLACK_SOCKET_MODE": "false",
+		// Fill all three Slack allow-list ids before deploying a beta Worker.
 		"SLACK_ALLOWED_TEAM_ID": "",
 		"SLACK_ALLOWED_USER_ID": "",
 		"SLACK_ALLOWED_CHANNEL_ID": ""
@@ -46,7 +47,7 @@
 	"r2_buckets": [
 		{
 			"binding": "CONTEXT_SNAPSHOTS",
-			"bucket_name": "agent-awesome-context"
+			"bucket_name": "agent-awesome-beta-context"
 		}
 	],
 	"containers": [

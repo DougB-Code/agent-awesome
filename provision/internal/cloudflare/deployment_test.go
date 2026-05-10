@@ -31,10 +31,13 @@ func TestNewDeploymentUsesDedicatedBucket(t *testing.T) {
 // TestWranglerIncludesSlackSecretsWhenEnabled verifies Slack remains optional.
 func TestWranglerIncludesSlackSecretsWhenEnabled(t *testing.T) {
 	deployment, err := NewDeployment(DeploymentInput{
-		AgentID:      "sister",
-		UserID:       "sister",
-		Hostname:     "sister.agent-awesome.com",
-		SlackEnabled: true,
+		AgentID:               "sister",
+		UserID:                "sister",
+		Hostname:              "sister.agent-awesome.com",
+		SlackEnabled:          true,
+		SlackAllowedTeamID:    "T1",
+		SlackAllowedUserID:    "U1",
+		SlackAllowedChannelID: "C1",
 	})
 	if err != nil {
 		t.Fatalf("NewDeployment() error = %v", err)
@@ -44,11 +47,27 @@ func TestWranglerIncludesSlackSecretsWhenEnabled(t *testing.T) {
 	if wrangler.Vars["SLACK_ENABLED"] != "true" {
 		t.Fatalf("SLACK_ENABLED = %q, want true", wrangler.Vars["SLACK_ENABLED"])
 	}
+	if wrangler.Vars["SLACK_ALLOWED_TEAM_ID"] != "T1" || wrangler.Vars["SLACK_ALLOWED_USER_ID"] != "U1" || wrangler.Vars["SLACK_ALLOWED_CHANNEL_ID"] != "C1" {
+		t.Fatalf("Slack allow-list vars = %#v", wrangler.Vars)
+	}
 	if !contains(wrangler.Secrets.Required, "SLACK_SIGNING_SECRET") {
 		t.Fatalf("required secrets missing Slack signing secret: %v", wrangler.Secrets.Required)
 	}
 	if got := wrangler.R2Buckets[0].BucketName; got != "agent-awesome-sister-memory" {
 		t.Fatalf("bucket = %q, want agent-awesome-sister-memory", got)
+	}
+}
+
+// TestNewDeploymentRequiresSlackAllowLists verifies Slack beta deployments are scoped.
+func TestNewDeploymentRequiresSlackAllowLists(t *testing.T) {
+	_, err := NewDeployment(DeploymentInput{
+		AgentID:      "sister",
+		UserID:       "sister",
+		Hostname:     "sister.agent-awesome.com",
+		SlackEnabled: true,
+	})
+	if err == nil {
+		t.Fatalf("NewDeployment() error = nil, want Slack allow-list validation error")
 	}
 }
 

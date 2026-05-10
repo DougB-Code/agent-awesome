@@ -404,6 +404,14 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		"refresh_compiled_page",
 		"repair_memory_record",
 		"submit_memory_correction",
+		"create_task",
+		"update_task",
+		"complete_task",
+		"cancel_task",
+		"delete_task",
+		"link_task_memory",
+		"upsert_task_relation",
+		"delete_task_relation",
 	}
 	root := repoRoot(t)
 	paths := []string{
@@ -434,9 +442,6 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 			}
 			if got := server.RequireConfirmationTools; !reflect.DeepEqual(got, expectedConfirmations) {
 				t.Fatalf("RequireConfirmationTools = %#v, want %#v", got, expectedConfirmations)
-			}
-			if containsString(server.RequireConfirmationTools, "create_task") || containsString(server.RequireConfirmationTools, "update_task") {
-				t.Fatalf("task creation/update should remain auto-approved: %#v", server.RequireConfirmationTools)
 			}
 		})
 	}

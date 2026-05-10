@@ -31,6 +31,14 @@ mcp:
         - refresh_compiled_page
         - repair_memory_record
         - submit_memory_correction
+        - create_task
+        - update_task
+        - complete_task
+        - cancel_task
+        - delete_task
+        - link_task_memory
+        - upsert_task_relation
+        - delete_task_relation
       tools:
         allow:
           - remember

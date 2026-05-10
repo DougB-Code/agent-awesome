@@ -100,15 +100,17 @@ SLACK_ENABLED=true \
 SLACK_SOCKET_MODE=true \
 SLACK_APP_TOKEN=xapp-... \
 SLACK_BOT_TOKEN=xoxb-... \
+SLACK_ALLOWED_TEAM_ID=T... \
 SLACK_ALLOWED_USER_ID=U... \
+SLACK_ALLOWED_CHANNEL_ID=C... \
 go run ./cmd/agent-gateway
 ```
 
 The Slack app needs Socket Mode enabled, an app-level token with
 `connections:write`, a bot token with `chat:write`, and message event
-subscriptions such as `message.im` for direct-message pilots. Add
-`SLACK_ALLOWED_TEAM_ID` or `SLACK_ALLOWED_CHANNEL_ID` to narrow the pilot
-further.
+subscriptions such as `message.channels` for channel pilots. Slack startup now
+requires team, user, and channel allow-list ids so beta traffic stays scoped to
+one known workspace, tester, and channel.
 
 For cloud deployments, turn Socket Mode off and configure Slack's Events API
 Request URL to:

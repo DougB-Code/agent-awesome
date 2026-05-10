@@ -13,10 +13,13 @@ import (
 // TestApplyDryRunBuildsCommands verifies dry runs render without reading secrets.
 func TestApplyDryRunBuildsCommands(t *testing.T) {
 	deployment, err := NewDeployment(DeploymentInput{
-		AgentID:      "sister",
-		UserID:       "sister",
-		Hostname:     "sister.agent-awesome.com",
-		SlackEnabled: true,
+		AgentID:               "sister",
+		UserID:                "sister",
+		Hostname:              "sister.agent-awesome.com",
+		SlackEnabled:          true,
+		SlackAllowedTeamID:    "T1",
+		SlackAllowedUserID:    "U1",
+		SlackAllowedChannelID: "C1",
 	})
 	if err != nil {
 		t.Fatalf("NewDeployment() error = %v", err)
@@ -185,10 +188,13 @@ func TestCommandFailureDiagnosesNodeVersion(t *testing.T) {
 // TestBuildSecretsRequiresSlackSecretsWhenEnabled verifies optional Slack setup gates secret prompts.
 func TestBuildSecretsRequiresSlackSecretsWhenEnabled(t *testing.T) {
 	deployment, err := NewDeployment(DeploymentInput{
-		AgentID:      "sister",
-		UserID:       "sister",
-		Hostname:     "sister.agent-awesome.com",
-		SlackEnabled: true,
+		AgentID:               "sister",
+		UserID:                "sister",
+		Hostname:              "sister.agent-awesome.com",
+		SlackEnabled:          true,
+		SlackAllowedTeamID:    "T1",
+		SlackAllowedUserID:    "U1",
+		SlackAllowedChannelID: "C1",
 	})
 	if err != nil {
 		t.Fatalf("NewDeployment() error = %v", err)

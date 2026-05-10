@@ -16,26 +16,32 @@ const (
 
 // DeploymentInput stores the user-selected values for one cloud agent.
 type DeploymentInput struct {
-	AgentID      string
-	UserID       string
-	Hostname     string
-	ZoneName     string
-	SlackEnabled bool
+	AgentID               string
+	UserID                string
+	Hostname              string
+	ZoneName              string
+	SlackEnabled          bool
+	SlackAllowedTeamID    string
+	SlackAllowedUserID    string
+	SlackAllowedChannelID string
 }
 
 // Deployment stores the derived Cloudflare desired state for one cloud agent.
 type Deployment struct {
-	AgentID          string
-	UserID           string
-	Hostname         string
-	ZoneName         string
-	WorkerName       string
-	BucketName       string
-	SnapshotURL      string
-	SnapshotKey      string
-	SlackEnabled     bool
-	RequiredSecrets  []string
-	GeneratedSecrets []string
+	AgentID               string
+	UserID                string
+	Hostname              string
+	ZoneName              string
+	WorkerName            string
+	BucketName            string
+	SnapshotURL           string
+	SnapshotKey           string
+	SlackEnabled          bool
+	SlackAllowedTeamID    string
+	SlackAllowedUserID    string
+	SlackAllowedChannelID string
+	RequiredSecrets       []string
+	GeneratedSecrets      []string
 }
 
 // NewDeployment validates input and derives one per-agent Cloudflare deployment.
@@ -64,20 +70,46 @@ func NewDeployment(input DeploymentInput) (Deployment, error) {
 	if err != nil {
 		return Deployment{}, err
 	}
+	slackAllowedTeamID := strings.TrimSpace(input.SlackAllowedTeamID)
+	slackAllowedUserID := strings.TrimSpace(input.SlackAllowedUserID)
+	slackAllowedChannelID := strings.TrimSpace(input.SlackAllowedChannelID)
+	if err := validateSlackAllowLists(input.SlackEnabled, slackAllowedTeamID, slackAllowedUserID, slackAllowedChannelID); err != nil {
+		return Deployment{}, err
+	}
 	deployment := Deployment{
-		AgentID:          agentID,
-		UserID:           userID,
-		Hostname:         hostname,
-		ZoneName:         zone,
-		WorkerName:       workerName,
-		BucketName:       bucketName,
-		SnapshotURL:      "https://" + hostname + "/internal/context-snapshot",
-		SnapshotKey:      defaultSnapshotKey,
-		SlackEnabled:     input.SlackEnabled,
-		RequiredSecrets:  requiredSecrets(input.SlackEnabled),
-		GeneratedSecrets: generatedSecrets(),
+		AgentID:               agentID,
+		UserID:                userID,
+		Hostname:              hostname,
+		ZoneName:              zone,
+		WorkerName:            workerName,
+		BucketName:            bucketName,
+		SnapshotURL:           "https://" + hostname + "/internal/context-snapshot",
+		SnapshotKey:           defaultSnapshotKey,
+		SlackEnabled:          input.SlackEnabled,
+		SlackAllowedTeamID:    slackAllowedTeamID,
+		SlackAllowedUserID:    slackAllowedUserID,
+		SlackAllowedChannelID: slackAllowedChannelID,
+		RequiredSecrets:       requiredSecrets(input.SlackEnabled),
+		GeneratedSecrets:      generatedSecrets(),
 	}
 	return deployment, nil
+}
+
+// validateSlackAllowLists requires explicit Slack beta scope when Slack is enabled.
+func validateSlackAllowLists(slackEnabled bool, teamID string, userID string, channelID string) error {
+	if !slackEnabled {
+		return nil
+	}
+	if teamID == "" {
+		return fmt.Errorf("slack allowed team id is required when Slack is enabled")
+	}
+	if userID == "" {
+		return fmt.Errorf("slack allowed user id is required when Slack is enabled")
+	}
+	if channelID == "" {
+		return fmt.Errorf("slack allowed channel id is required when Slack is enabled")
+	}
+	return nil
 }
 
 // normalizedHostname returns a bare HTTPS hostname from a hostname or URL.

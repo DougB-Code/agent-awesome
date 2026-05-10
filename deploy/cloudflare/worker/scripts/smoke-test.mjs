@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { webcrypto } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -19,6 +19,7 @@ if (globalThis.crypto === undefined) {
 /** main runs the build, configuration, and routing smoke checks. */
 async function main() {
   mkdirSync(buildDir, { recursive: true });
+  assertRequiredDeploymentAssets();
   runLocalBin("tsc", ["--noEmit"]);
   runLocalBin("esbuild", [
     "src/index.ts",
@@ -46,6 +47,17 @@ async function main() {
   await assertMCPAuthBoundary(app);
   await assertSlackIngressReachesGateway(app);
   console.log("Cloudflare Worker smoke test passed.");
+}
+
+/** assertRequiredDeploymentAssets verifies the Worker and Container files ship together. */
+function assertRequiredDeploymentAssets() {
+  for (const path of [
+    resolve(workerRoot, "src/index.ts"),
+    resolve(workerRoot, "scripts/smoke-test.mjs"),
+    resolve(workerRoot, "../../../Dockerfile.cloudflare"),
+  ]) {
+    assert.ok(existsSync(path), `${path} must exist`);
+  }
 }
 
 /** runLocalBin executes one package binary and fails on nonzero exit status. */
@@ -101,7 +113,7 @@ function assertContainerConfiguration(config) {
 
   const r2 = exactlyOne(config.r2_buckets, "R2 bucket binding");
   assert.equal(r2.binding, "CONTEXT_SNAPSHOTS");
-  assert.equal(r2.bucket_name, "agent-awesome-context");
+  assert.equal(r2.bucket_name, "agent-awesome-beta-context");
   for (const secret of [
     "AGENTAWESOME_GATEWAY_TOKEN",
     "AGENTAWESOME_PERSISTENCE_TOKEN",
@@ -121,6 +133,9 @@ function assertContainerEnvironment(app) {
   assert.equal(mapped.SLACK_SIGNING_SECRET, "slack-secret");
   assert.equal(mapped.SLACK_ENABLED, "true");
   assert.equal(mapped.SLACK_SOCKET_MODE, "false");
+  assert.equal(mapped.SLACK_ALLOWED_TEAM_ID, "T1");
+  assert.equal(mapped.SLACK_ALLOWED_USER_ID, "U1");
+  assert.equal(mapped.SLACK_ALLOWED_CHANNEL_ID, "C1");
 }
 
 /** assertHealthzWorks proves unauthenticated liveness reaches the gateway only. */
@@ -262,6 +277,9 @@ function createEnv(overrides = {}) {
     AGENTAWESOME_GATEWAY_TOKEN: "gateway-token",
     AGENTAWESOME_PERSISTENCE_TOKEN: "persistence-token",
     SLACK_SIGNING_SECRET: "slack-secret",
+    SLACK_ALLOWED_TEAM_ID: "T1",
+    SLACK_ALLOWED_USER_ID: "U1",
+    SLACK_ALLOWED_CHANNEL_ID: "C1",
     CONTEXT_SNAPSHOTS: {
       async get() {
         return null;

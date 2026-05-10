@@ -26,7 +26,9 @@ SLACK_ENABLED=true \
 SLACK_SOCKET_MODE=true \
 SLACK_APP_TOKEN=xapp-... \
 SLACK_BOT_TOKEN=xoxb-... \
+SLACK_ALLOWED_TEAM_ID=T... \
 SLACK_ALLOWED_USER_ID=U... \
+SLACK_ALLOWED_CHANNEL_ID=C... \
 go run ./cmd/agent-gateway
 ----
 

@@ -164,6 +164,14 @@ func clearGatewayAuthEnv(t *testing.T) {
 	t.Setenv("AGENTAWESOME_ALLOWED_ORIGIN", "")
 	t.Setenv("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", "true")
 	t.Setenv("AGENTAWESOME_RUNTIME_POLICY_TEXT", "")
+	t.Setenv("SLACK_ENABLED", "")
+	t.Setenv("SLACK_SOCKET_MODE", "")
+	t.Setenv("SLACK_SIGNING_SECRET", "")
+	t.Setenv("SLACK_APP_TOKEN", "")
+	t.Setenv("SLACK_BOT_TOKEN", "")
+	t.Setenv("SLACK_ALLOWED_TEAM_ID", "")
+	t.Setenv("SLACK_ALLOWED_USER_ID", "")
+	t.Setenv("SLACK_ALLOWED_CHANNEL_ID", "")
 }
 
 // TestSlackSocketModeRequiresAppToken verifies local Socket Mode config safety.
@@ -173,6 +181,9 @@ func TestSlackSocketModeRequiresAppToken(t *testing.T) {
 		"--slack-enabled",
 		"--slack-socket-mode",
 		"--slack-bot-token", "xoxb-test",
+		"--slack-allowed-team-id", "T1",
+		"--slack-allowed-user-id", "U1",
+		"--slack-allowed-channel-id", "C1",
 	})
 	if err == nil {
 		t.Fatalf("FromFlags() error = nil, want app token validation error")
@@ -185,6 +196,9 @@ func TestSlackHTTPModeRequiresSigningSecret(t *testing.T) {
 	_, err := FromFlags([]string{
 		"--slack-enabled",
 		"--slack-bot-token", "xoxb-test",
+		"--slack-allowed-team-id", "T1",
+		"--slack-allowed-user-id", "U1",
+		"--slack-allowed-channel-id", "C1",
 	})
 	if err == nil {
 		t.Fatalf("FromFlags() error = nil, want signing secret validation error")
@@ -198,6 +212,9 @@ func TestSlackEnvUsesPlainSlackNames(t *testing.T) {
 	t.Setenv("SLACK_SOCKET_MODE", "true")
 	t.Setenv("SLACK_APP_TOKEN", "xapp-test")
 	t.Setenv("SLACK_BOT_TOKEN", "xoxb-test")
+	t.Setenv("SLACK_ALLOWED_TEAM_ID", "T1")
+	t.Setenv("SLACK_ALLOWED_USER_ID", "U1")
+	t.Setenv("SLACK_ALLOWED_CHANNEL_ID", "C1")
 
 	cfg, err := FromFlags(nil)
 	if err != nil {
@@ -208,5 +225,33 @@ func TestSlackEnvUsesPlainSlackNames(t *testing.T) {
 	}
 	if cfg.Slack.AppToken != "xapp-test" || cfg.Slack.BotToken != "xoxb-test" {
 		t.Fatalf("slack tokens = app:%q bot:%q", cfg.Slack.AppToken, cfg.Slack.BotToken)
+	}
+}
+
+// TestSlackRequiresAllowLists verifies beta Slack ingress cannot start broadly scoped.
+func TestSlackRequiresAllowLists(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--slack-enabled",
+		"--slack-signing-secret", "secret",
+		"--slack-bot-token", "xoxb-test",
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want Slack allow-list validation error")
+	}
+
+	cfg, err := FromFlags([]string{
+		"--slack-enabled",
+		"--slack-signing-secret", "secret",
+		"--slack-bot-token", "xoxb-test",
+		"--slack-allowed-team-id", "T1",
+		"--slack-allowed-user-id", "U1",
+		"--slack-allowed-channel-id", "C1",
+	})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if cfg.Slack.AllowedTeamID != "T1" || cfg.Slack.AllowedUserID != "U1" || cfg.Slack.AllowedChannelID != "C1" {
+		t.Fatalf("Slack allow-lists = %#v", cfg.Slack)
 	}
 }

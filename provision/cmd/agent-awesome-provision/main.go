@@ -173,6 +173,9 @@ func renderCloudflare(args []string) error {
 	outputDir := fs.String("output-dir", "", "output directory under build/")
 	configPath := fs.String("platform-config", "", "platform config path; defaults to user config dir")
 	slackEnabled := fs.Bool("slack", false, "include Slack webhook secrets in the rendered deployment")
+	slackAllowedTeamID := fs.String("slack-allowed-team-id", "", "Slack team id allowed to use this beta agent")
+	slackAllowedUserID := fs.String("slack-allowed-user-id", "", "Slack user id allowed to use this beta agent")
+	slackAllowedChannelID := fs.String("slack-allowed-channel-id", "", "Slack channel id allowed to use this beta agent")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -180,7 +183,7 @@ func renderCloudflare(args []string) error {
 	if err != nil {
 		return err
 	}
-	input, err := deploymentInput(*agentID, *userID, *hostname, *zoneName, *slackEnabled, config, hasConfig)
+	input, err := deploymentInput(*agentID, *userID, *hostname, *zoneName, *slackEnabled, *slackAllowedTeamID, *slackAllowedUserID, *slackAllowedChannelID, config, hasConfig)
 	if err != nil {
 		return err
 	}
@@ -222,6 +225,9 @@ func applyCloudflare(args []string) error {
 	stateDirFlag := fs.String("state-dir", "", "provisioning state directory; defaults to user config dir")
 	configPath := fs.String("platform-config", "", "platform config path; defaults to user config dir")
 	slackEnabled := fs.Bool("slack", false, "include Slack webhook secrets in the deployment")
+	slackAllowedTeamID := fs.String("slack-allowed-team-id", "", "Slack team id allowed to use this beta agent")
+	slackAllowedUserID := fs.String("slack-allowed-user-id", "", "Slack user id allowed to use this beta agent")
+	slackAllowedChannelID := fs.String("slack-allowed-channel-id", "", "Slack channel id allowed to use this beta agent")
 	dryRun := fs.Bool("dry-run", false, "render and list actions without calling Cloudflare")
 	healthTimeout := fs.Duration("health-timeout", 2*time.Minute, "maximum deployed gateway health-check wait")
 	jsonOutput := fs.Bool("json", false, "write structured JSON output")
@@ -240,7 +246,7 @@ func applyCloudflare(args []string) error {
 	if err != nil {
 		return err
 	}
-	input, err := deploymentInput(*agentID, *userID, *hostname, *zoneName, *slackEnabled, config, hasConfig)
+	input, err := deploymentInput(*agentID, *userID, *hostname, *zoneName, *slackEnabled, *slackAllowedTeamID, *slackAllowedUserID, *slackAllowedChannelID, config, hasConfig)
 	if err != nil {
 		return err
 	}
@@ -686,7 +692,7 @@ type cloudflareRuntime struct {
 }
 
 // deploymentInput merges command flags with optional platform defaults.
-func deploymentInput(agentID string, userID string, hostname string, zoneName string, slackEnabled bool, config platform.Config, hasConfig bool) (cloudflare.DeploymentInput, error) {
+func deploymentInput(agentID string, userID string, hostname string, zoneName string, slackEnabled bool, slackAllowedTeamID string, slackAllowedUserID string, slackAllowedChannelID string, config platform.Config, hasConfig bool) (cloudflare.DeploymentInput, error) {
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
 		return cloudflare.DeploymentInput{}, fmt.Errorf("agent id is required")
@@ -708,11 +714,14 @@ func deploymentInput(agentID string, userID string, hostname string, zoneName st
 		zoneName = config.ZoneName
 	}
 	return cloudflare.DeploymentInput{
-		AgentID:      agentID,
-		UserID:       userID,
-		Hostname:     hostname,
-		ZoneName:     zoneName,
-		SlackEnabled: slackEnabled,
+		AgentID:               agentID,
+		UserID:                userID,
+		Hostname:              hostname,
+		ZoneName:              zoneName,
+		SlackEnabled:          slackEnabled,
+		SlackAllowedTeamID:    slackAllowedTeamID,
+		SlackAllowedUserID:    slackAllowedUserID,
+		SlackAllowedChannelID: slackAllowedChannelID,
 	}, nil
 }
 
@@ -738,6 +747,9 @@ func updateRecord(record state.AgentRecord, deployment cloudflare.Deployment) st
 	record.SnapshotURL = deployment.SnapshotURL
 	record.SnapshotKey = deployment.SnapshotKey
 	record.SlackEnabled = deployment.SlackEnabled
+	record.SlackAllowedTeamID = deployment.SlackAllowedTeamID
+	record.SlackAllowedUserID = deployment.SlackAllowedUserID
+	record.SlackAllowedChannelID = deployment.SlackAllowedChannelID
 	record.GatewayTokenCredential = state.CredentialName(deployment.AgentID, "AGENTAWESOME_GATEWAY_TOKEN")
 	record.PersistenceTokenCredential = state.CredentialName(deployment.AgentID, "AGENTAWESOME_PERSISTENCE_TOKEN")
 	return record
@@ -750,11 +762,14 @@ func deploymentFromRecord(record state.AgentRecord) (cloudflare.Deployment, erro
 		userID = record.AgentID
 	}
 	deployment, err := cloudflare.NewDeployment(cloudflare.DeploymentInput{
-		AgentID:      record.AgentID,
-		UserID:       userID,
-		Hostname:     record.Hostname,
-		ZoneName:     record.ZoneName,
-		SlackEnabled: record.SlackEnabled,
+		AgentID:               record.AgentID,
+		UserID:                userID,
+		Hostname:              record.Hostname,
+		ZoneName:              record.ZoneName,
+		SlackEnabled:          record.SlackEnabled,
+		SlackAllowedTeamID:    record.SlackAllowedTeamID,
+		SlackAllowedUserID:    record.SlackAllowedUserID,
+		SlackAllowedChannelID: record.SlackAllowedChannelID,
 	})
 	if err != nil {
 		return cloudflare.Deployment{}, err
@@ -942,13 +957,15 @@ func repoRoot(explicit string) (string, error) {
 
 // hasCloudflareAssets reports whether a directory looks like the repo root.
 func hasCloudflareAssets(directory string) bool {
-	dockerfile := filepath.Join(directory, "Dockerfile.cloudflare")
-	worker := filepath.Join(directory, "deploy", "cloudflare", "worker", "src", "index.ts")
-	if _, err := os.Stat(dockerfile); err != nil {
-		return false
+	required := []string{
+		filepath.Join(directory, "Dockerfile.cloudflare"),
+		filepath.Join(directory, "deploy", "cloudflare", "worker", "src", "index.ts"),
+		filepath.Join(directory, "deploy", "cloudflare", "worker", "scripts", "smoke-test.mjs"),
 	}
-	if _, err := os.Stat(worker); err != nil {
-		return false
+	for _, path := range required {
+		if _, err := os.Stat(path); err != nil {
+			return false
+		}
 	}
 	return true
 }

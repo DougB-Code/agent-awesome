@@ -21,15 +21,18 @@ func writeJSONOutput(value any) error {
 
 // deploymentSummary stores public deployment metadata for command output.
 type deploymentSummary struct {
-	AgentID      string `json:"agent_id"`
-	UserID       string `json:"user_id,omitempty"`
-	Hostname     string `json:"hostname"`
-	ZoneName     string `json:"zone_name"`
-	WorkerName   string `json:"worker_name"`
-	BucketName   string `json:"bucket_name"`
-	SnapshotURL  string `json:"snapshot_url,omitempty"`
-	SnapshotKey  string `json:"snapshot_key,omitempty"`
-	SlackEnabled bool   `json:"slack_enabled"`
+	AgentID               string `json:"agent_id"`
+	UserID                string `json:"user_id,omitempty"`
+	Hostname              string `json:"hostname"`
+	ZoneName              string `json:"zone_name"`
+	WorkerName            string `json:"worker_name"`
+	BucketName            string `json:"bucket_name"`
+	SnapshotURL           string `json:"snapshot_url,omitempty"`
+	SnapshotKey           string `json:"snapshot_key,omitempty"`
+	SlackEnabled          bool   `json:"slack_enabled"`
+	SlackAllowedTeamID    string `json:"slack_allowed_team_id,omitempty"`
+	SlackAllowedUserID    string `json:"slack_allowed_user_id,omitempty"`
+	SlackAllowedChannelID string `json:"slack_allowed_channel_id,omitempty"`
 }
 
 // applyOutput stores the structured Cloudflare apply result.
@@ -84,29 +87,35 @@ type bundleSummary struct {
 
 // provisionedAgentJSONSummary stores non-secret saved agent metadata.
 type provisionedAgentJSONSummary struct {
-	AgentID      string `json:"agent_id"`
-	UserID       string `json:"user_id,omitempty"`
-	Hostname     string `json:"hostname"`
-	ZoneName     string `json:"zone_name,omitempty"`
-	WorkerName   string `json:"worker_name"`
-	BucketName   string `json:"bucket_name"`
-	SnapshotURL  string `json:"snapshot_url,omitempty"`
-	SnapshotKey  string `json:"snapshot_key,omitempty"`
-	SlackEnabled bool   `json:"slack_enabled"`
+	AgentID               string `json:"agent_id"`
+	UserID                string `json:"user_id,omitempty"`
+	Hostname              string `json:"hostname"`
+	ZoneName              string `json:"zone_name,omitempty"`
+	WorkerName            string `json:"worker_name"`
+	BucketName            string `json:"bucket_name"`
+	SnapshotURL           string `json:"snapshot_url,omitempty"`
+	SnapshotKey           string `json:"snapshot_key,omitempty"`
+	SlackEnabled          bool   `json:"slack_enabled"`
+	SlackAllowedTeamID    string `json:"slack_allowed_team_id,omitempty"`
+	SlackAllowedUserID    string `json:"slack_allowed_user_id,omitempty"`
+	SlackAllowedChannelID string `json:"slack_allowed_channel_id,omitempty"`
 }
 
 // deploymentJSONSummary maps deployment metadata into output.
 func deploymentJSONSummary(deployment cloudflare.Deployment) deploymentSummary {
 	return deploymentSummary{
-		AgentID:      deployment.AgentID,
-		UserID:       deployment.UserID,
-		Hostname:     deployment.Hostname,
-		ZoneName:     deployment.ZoneName,
-		WorkerName:   deployment.WorkerName,
-		BucketName:   deployment.BucketName,
-		SnapshotURL:  deployment.SnapshotURL,
-		SnapshotKey:  deployment.SnapshotKey,
-		SlackEnabled: deployment.SlackEnabled,
+		AgentID:               deployment.AgentID,
+		UserID:                deployment.UserID,
+		Hostname:              deployment.Hostname,
+		ZoneName:              deployment.ZoneName,
+		WorkerName:            deployment.WorkerName,
+		BucketName:            deployment.BucketName,
+		SnapshotURL:           deployment.SnapshotURL,
+		SnapshotKey:           deployment.SnapshotKey,
+		SlackEnabled:          deployment.SlackEnabled,
+		SlackAllowedTeamID:    deployment.SlackAllowedTeamID,
+		SlackAllowedUserID:    deployment.SlackAllowedUserID,
+		SlackAllowedChannelID: deployment.SlackAllowedChannelID,
 	}
 }
 
@@ -123,15 +132,18 @@ func bundleJSONSummary(bundle cloudflare.BundlePaths) bundleSummary {
 // recordJSONSummary maps saved agent metadata into output.
 func recordJSONSummary(record state.AgentRecord) provisionedAgentJSONSummary {
 	return provisionedAgentJSONSummary{
-		AgentID:      record.AgentID,
-		UserID:       record.UserID,
-		Hostname:     record.Hostname,
-		ZoneName:     record.ZoneName,
-		WorkerName:   record.WorkerName,
-		BucketName:   record.BucketName,
-		SnapshotURL:  record.SnapshotURL,
-		SnapshotKey:  record.SnapshotKey,
-		SlackEnabled: record.SlackEnabled,
+		AgentID:               record.AgentID,
+		UserID:                record.UserID,
+		Hostname:              record.Hostname,
+		ZoneName:              record.ZoneName,
+		WorkerName:            record.WorkerName,
+		BucketName:            record.BucketName,
+		SnapshotURL:           record.SnapshotURL,
+		SnapshotKey:           record.SnapshotKey,
+		SlackEnabled:          record.SlackEnabled,
+		SlackAllowedTeamID:    record.SlackAllowedTeamID,
+		SlackAllowedUserID:    record.SlackAllowedUserID,
+		SlackAllowedChannelID: record.SlackAllowedChannelID,
 	}
 }
 

@@ -6,8 +6,8 @@ const slackTimestampWindowSeconds = 60 * 5;
 /** gatewayPort is the container port served by agent-gateway. */
 export const gatewayPort = 8070;
 
-/** containerName is the stable Durable Object instance for the personal pilot. */
-export const containerName = "personal-pilot";
+/** containerName is the stable Durable Object instance for the beta pilot. */
+export const containerName = "beta-pilot";
 
 /** containerPortReadyTimeoutMS is the maximum Worker wait for gateway readiness. */
 export const containerPortReadyTimeoutMS = 90_000;
@@ -230,7 +230,7 @@ async function writeContextSnapshot(
 function contextSnapshotKey(env: Env): string {
   return (
     env.AGENTAWESOME_MEMORY_SNAPSHOT_KEY ??
-    "personal-pilot/context-snapshot.tar.gz"
+    "beta-pilot/context-snapshot.tar.gz"
   );
 }
 

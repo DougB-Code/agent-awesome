@@ -65,9 +65,9 @@ AGENTAWESOME_PERSISTENCE_TOKEN
 OPENAI_API_KEY
 ```
 
-## Update Optional Allow-Lists
+## Update Required Allow-Lists
 
-The Cloudflare Worker config supports these non-secret Slack allow-list values:
+The Cloudflare Worker config requires these non-secret Slack allow-list values for Slack beta ingress:
 
 ```json
 "SLACK_ALLOWED_TEAM_ID": "",
@@ -75,11 +75,8 @@ The Cloudflare Worker config supports these non-secret Slack allow-list values:
 "SLACK_ALLOWED_CHANNEL_ID": ""
 ```
 
-For a private single-user pilot, set at least `SLACK_ALLOWED_TEAM_ID` and
-`SLACK_ALLOWED_USER_ID` in `deploy/cloudflare/worker/wrangler.jsonc`.
-
-Leave `SLACK_ALLOWED_CHANNEL_ID` empty if you want to chat with the agent from
-any direct message or allowed app surface in the new workspace.
+Set all three values in `deploy/cloudflare/worker/wrangler.jsonc`.
+The gateway refuses to start Slack ingress without a team, user, and channel allow-list.
 
 ## Redeploy
 
@@ -116,12 +113,13 @@ If Slack URL verification fails, check:
 - The Event Request URL is exactly `https://agent-awesome.com/slack/events`.
 - The Worker is deployed after the secret rotation.
 - Socket Mode is disabled for the Cloudflare app path.
+- All three Slack allow-list ids are populated before gateway startup.
 
 If messages are accepted but ignored, check:
 
 - `SLACK_ALLOWED_TEAM_ID` matches the new workspace team ID.
 - `SLACK_ALLOWED_USER_ID` matches your new workspace user ID.
-- `SLACK_ALLOWED_CHANNEL_ID` is empty or matches the channel where you tested.
+- `SLACK_ALLOWED_CHANNEL_ID` matches the channel where you tested.
 
 ## Operational Notes
 

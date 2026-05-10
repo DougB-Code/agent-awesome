@@ -120,9 +120,9 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.Slack.SigningSecret, "slack-signing-secret", cfg.Slack.SigningSecret, "Slack signing secret for HTTP Events API")
 	fs.StringVar(&cfg.Slack.BotToken, "slack-bot-token", cfg.Slack.BotToken, "Slack bot token used to post replies")
 	fs.StringVar(&cfg.Slack.AppToken, "slack-app-token", cfg.Slack.AppToken, "Slack app-level token used for Socket Mode")
-	fs.StringVar(&cfg.Slack.AllowedTeamID, "slack-allowed-team-id", cfg.Slack.AllowedTeamID, "optional Slack team id allow-list")
-	fs.StringVar(&cfg.Slack.AllowedUserID, "slack-allowed-user-id", cfg.Slack.AllowedUserID, "optional Slack user id allow-list")
-	fs.StringVar(&cfg.Slack.AllowedChannelID, "slack-allowed-channel-id", cfg.Slack.AllowedChannelID, "optional Slack channel id allow-list")
+	fs.StringVar(&cfg.Slack.AllowedTeamID, "slack-allowed-team-id", cfg.Slack.AllowedTeamID, "required Slack team id allow-list when Slack is enabled")
+	fs.StringVar(&cfg.Slack.AllowedUserID, "slack-allowed-user-id", cfg.Slack.AllowedUserID, "required Slack user id allow-list when Slack is enabled")
+	fs.StringVar(&cfg.Slack.AllowedChannelID, "slack-allowed-channel-id", cfg.Slack.AllowedChannelID, "required Slack channel id allow-list when Slack is enabled")
 	fs.StringVar(&cfg.HarnessService.HealthURL, "harness-health-url", cfg.HarnessService.HealthURL, "harness readiness URL")
 	fs.StringVar(&cfg.HarnessService.Command, "harness-command", cfg.HarnessService.Command, "harness command to start when auto-start is enabled")
 	fs.Var(&harnessArgs, "harness-arg", "repeatable harness command argument")
@@ -226,6 +226,15 @@ func (s SlackConfig) Validate() error {
 	}
 	if !s.SocketMode && s.SigningSecret == "" {
 		return fmt.Errorf("signing secret is required when Slack HTTP Events API is enabled")
+	}
+	if strings.TrimSpace(s.AllowedTeamID) == "" {
+		return fmt.Errorf("allowed team id is required when Slack is enabled")
+	}
+	if strings.TrimSpace(s.AllowedUserID) == "" {
+		return fmt.Errorf("allowed user id is required when Slack is enabled")
+	}
+	if strings.TrimSpace(s.AllowedChannelID) == "" {
+		return fmt.Errorf("allowed channel id is required when Slack is enabled")
 	}
 	return nil
 }

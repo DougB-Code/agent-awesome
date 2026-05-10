@@ -1,6 +1,6 @@
 # Cloudflare Pilot Deployment
 
-This folder contains the Cloudflare Worker and Container scaffold for a personal
+This folder contains the Cloudflare Worker and Container scaffold for a beta
 Agent Awesome Slack pilot.
 
 The deployment runs one Cloudflare Container behind a Worker. Inside the
@@ -11,7 +11,7 @@ all public requests except unauthenticated `GET` or `HEAD /healthz`, bearer
 authenticated gateway control-plane requests, and Slack-signed
 `POST /slack/events` requests.
 
-Memory context is restored from and saved to the `agent-awesome-context` R2
+Memory context is restored from and saved to the `agent-awesome-beta-context` R2
 bucket through a private Worker endpoint. The endpoint requires
 `AGENTAWESOME_PERSISTENCE_TOKEN` and is only intended for the colocated
 container.
@@ -38,7 +38,7 @@ Run these commands from `deploy/cloudflare/worker`:
 ```sh
 npm install --cache ../../../build/npm-cache
 npm test
-npx wrangler r2 bucket create agent-awesome-context
+npx wrangler r2 bucket create agent-awesome-beta-context
 npx wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
 npx wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
 npx wrangler secret put SLACK_SIGNING_SECRET
@@ -73,13 +73,16 @@ with Slack signatures by the gateway, while `/api/*`, `/mcp`, and gateway status
 routes use the bearer token. The public `/healthz` route only returns the
 gateway liveness response.
 
-Keep `SLACK_ALLOWED_USER_ID` populated in `worker/wrangler.jsonc` for a
-single-user pilot. Add `SLACK_ALLOWED_TEAM_ID` or `SLACK_ALLOWED_CHANNEL_ID`
-when you want tighter Slack routing.
+Keep `SLACK_ALLOWED_TEAM_ID`, `SLACK_ALLOWED_USER_ID`, and
+`SLACK_ALLOWED_CHANNEL_ID` populated in `worker/wrangler.jsonc` before any Slack
+beta deployment. The gateway refuses to start Slack ingress without all three
+allow-list ids.
 
 ## Persistence Note
 
 The bundled memory database lives under `/app/data` inside the container. This
 is enough for an HTTP pilot while the container stays alive, but Cloudflare
-Container disk is ephemeral after the instance sleeps. Plan a persistent memory
-backend before relying on this deployment for durable personal memory.
+Container disk is ephemeral after the instance sleeps. The checked-in Worker
+config points at a beta sandbox R2 bucket; use provisioner-generated per-agent
+buckets for tester deployments and keep personal memory buckets out of the beta
+path.

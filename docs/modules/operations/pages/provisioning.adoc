@@ -19,7 +19,12 @@ The Cloudflare token must have enough access to reconcile Workers, routes, DNS p
 
 [source,sh]
 ----
-agent-awesome-provision cloudflare apply --agent-id sister
+agent-awesome-provision cloudflare apply \
+  --agent-id sister \
+  --slack \
+  --slack-allowed-team-id T... \
+  --slack-allowed-user-id U... \
+  --slack-allowed-channel-id C...
 agent-awesome-provision agent status sister
 ----
 
