@@ -73,6 +73,46 @@ func TestSearchSourcesHydratesRawText(t *testing.T) {
 	}
 }
 
+// TestBetaMemoryFlowRemembersSearchesAndLoadsContext verifies the core beta memory path.
+func TestBetaMemoryFlowRemembersSearchesAndLoadsContext(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	captured, err := service.Capture(ctx, domain.CaptureRequest{
+		Content:        "Beta memory flow prefers concise status updates.",
+		Title:          "Beta status preference",
+		Scope:          domain.ScopeUser,
+		Kind:           domain.KindProfileFact,
+		TrustLevel:     domain.TrustUserAsserted,
+		EntityNames:    []string{"Beta User"},
+		Topics:         []string{"status"},
+		IdempotencyKey: "beta-memory-flow",
+	})
+	if err != nil {
+		t.Fatalf("capture beta memory: %v", err)
+	}
+	bundle, err := service.SearchSources(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Text: "concise status", Limit: 10})
+	if err != nil {
+		t.Fatalf("search beta memory: %v", err)
+	}
+	if len(bundle.Primary) != 1 || bundle.Primary[0].ID != captured.MemoryID {
+		t.Fatalf("primary memory = %#v, want %s", bundle.Primary, captured.MemoryID)
+	}
+	if bundle.Primary[0].Raw == nil || !strings.Contains(bundle.Primary[0].Raw.ContentText, "concise status") {
+		t.Fatalf("raw memory = %#v, want source text", bundle.Primary[0].Raw)
+	}
+	entityPage, err := service.LoadEntityPage(ctx, domain.ScopeUser, domain.EntityID("entity:beta-user"), "Beta User")
+	if err != nil {
+		t.Fatalf("load entity page: %v", err)
+	}
+	timeline, err := service.LoadTimeline(ctx, domain.ScopeUser, "status", domain.EntityID("entity:beta-user"))
+	if err != nil {
+		t.Fatalf("load timeline: %v", err)
+	}
+	if entityPage.ID == "" || timeline.ID == "" {
+		t.Fatalf("context pages = %#v %#v, want created pages", entityPage, timeline)
+	}
+}
+
 // TestStewardDisabledWorkersComplete verifies the service works without a steward.
 func TestStewardDisabledWorkersComplete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -105,6 +145,53 @@ func TestStewardDisabledWorkersComplete(t *testing.T) {
 	}
 	metrics, _ := service.Metrics(ctx)
 	t.Fatalf("workers did not drain jobs: %#v", metrics)
+}
+
+// TestBetaTaskFlowUpdatesCompletesListsAndProjects verifies the core beta task path.
+func TestBetaTaskFlowUpdatesCompletesListsAndProjects(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	created, err := service.CreateTask(ctx, domain.CreateTaskRequest{
+		Title:  "Send beta welcome note",
+		Topics: []string{"beta"},
+		Value:  0.7,
+	})
+	if err != nil {
+		t.Fatalf("create beta task: %v", err)
+	}
+	priority := domain.TaskPriorityHigh
+	updated, err := service.UpdateTask(ctx, domain.UpdateTaskRequest{
+		TaskID:   created.ID,
+		Priority: &priority,
+		Topics:   []string{"beta", "welcome"},
+	})
+	if err != nil {
+		t.Fatalf("update beta task: %v", err)
+	}
+	if updated.Priority != domain.TaskPriorityHigh {
+		t.Fatalf("updated priority = %q, want high", updated.Priority)
+	}
+	completed, err := service.CompleteTask(ctx, domain.TaskIDRequest{TaskID: created.ID})
+	if err != nil {
+		t.Fatalf("complete beta task: %v", err)
+	}
+	if completed.Status != domain.TaskStatusDone {
+		t.Fatalf("completed status = %q, want done", completed.Status)
+	}
+	tasks, err := service.ListTasks(ctx, domain.TaskQuery{Topics: []string{"welcome"}, IncludeDone: true, Limit: 10})
+	if err != nil {
+		t.Fatalf("list beta tasks: %v", err)
+	}
+	if len(tasks) != 1 || tasks[0].ID != created.ID {
+		t.Fatalf("listed tasks = %#v, want %s", tasks, created.ID)
+	}
+	summary, err := service.ProjectExecutiveSummary(ctx, domain.ExecutiveSummaryQuery{Now: timePtr(time.Date(2026, 5, 9, 9, 24, 0, 0, time.UTC))})
+	if err != nil {
+		t.Fatalf("project beta summary: %v", err)
+	}
+	if len(summary.Metrics) != 5 {
+		t.Fatalf("summary metrics = %#v, want beta projection metrics", summary.Metrics)
+	}
 }
 
 // TestProjectExecutiveSummaryReturnsEmptyUsefulProjection verifies empty graphs stay explicit.
@@ -248,4 +335,9 @@ func delegationBucket(summary domain.ExecutiveSummaryProjection, id string) int 
 		}
 	}
 	return 0
+}
+
+// timePtr returns a pointer to one test timestamp.
+func timePtr(value time.Time) *time.Time {
+	return &value
 }

@@ -22,8 +22,8 @@ func TestMCPToolsList(t *testing.T) {
 	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
 	result := body["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 25 {
-		t.Fatalf("tool count = %d, want 25", len(tools))
+	if len(tools) != 26 {
+		t.Fatalf("tool count = %d, want 26", len(tools))
 	}
 }
 
@@ -62,6 +62,48 @@ func TestMCPCreateTaskSchemaIsLowFriction(t *testing.T) {
 		if _, ok := properties[key]; ok {
 			t.Fatalf("create_task exposes advanced field %q in %#v", key, properties)
 		}
+	}
+}
+
+// TestMCPQueryContextGraphRejectsMutation verifies the read tool cannot write.
+func TestMCPQueryContextGraphRejectsMutation(t *testing.T) {
+	server := newTestMCPServer(t)
+	body := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "query_context_graph",
+			"arguments": map[string]any{
+				"query":          `INSERT NODE task SET title = "needs review"`,
+				"actor":          "transport-test",
+				"source_node_id": "source:test",
+			},
+		},
+	})
+	message := toolErrorMessage(t, body)
+	if !strings.Contains(message, "read-only") || !strings.Contains(message, "mutate_context_graph") {
+		t.Fatalf("error = %q, want read-only mutate_context_graph guidance", message)
+	}
+}
+
+// TestMCPMutateContextGraphRejectsReadOnlyQuery verifies the mutation tool cannot read.
+func TestMCPMutateContextGraphRejectsReadOnlyQuery(t *testing.T) {
+	server := newTestMCPServer(t)
+	body := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "mutate_context_graph",
+			"arguments": map[string]any{
+				"query": `FIND task RETURN id LIMIT 1`,
+			},
+		},
+	})
+	message := toolErrorMessage(t, body)
+	if !strings.Contains(message, "INSERT, SET, or DELETE") || !strings.Contains(message, "query_context_graph") {
+		t.Fatalf("error = %q, want mutation query_context_graph guidance", message)
 	}
 }
 
@@ -487,4 +529,19 @@ func postRPC(t *testing.T, server *MCPServer, payload map[string]any) map[string
 		t.Fatalf("rpc error: %#v", body)
 	}
 	return body
+}
+
+// toolErrorMessage extracts one tool-level error message from a JSON-RPC body.
+func toolErrorMessage(t *testing.T, body map[string]any) string {
+	t.Helper()
+	result := body["result"].(map[string]any)
+	if !result["isError"].(bool) {
+		t.Fatalf("isError = false, want tool error in %#v", result)
+	}
+	structured := result["structuredContent"].(map[string]any)
+	message, ok := structured["error"].(string)
+	if !ok || message == "" {
+		t.Fatalf("structuredContent.error = %#v, want non-empty string", structured["error"])
+	}
+	return message
 }

@@ -23,6 +23,8 @@ export interface Env {
   AGENTAWESOME_PERSISTENCE_TOKEN?: string;
   AGENTAWESOME_MEMORY_SNAPSHOT_URL?: string;
   AGENTAWESOME_MEMORY_SNAPSHOT_KEY?: string;
+  AGENTAWESOME_MODEL_PROVIDER_ID?: string;
+  AGENTAWESOME_MODEL_ID?: string;
   AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT?: string;
   AGENTAWESOME_SERVICE_START_TIMEOUT?: string;
   SLACK_ENABLED?: string;
@@ -55,6 +57,8 @@ export function buildContainerEnv(env: Env): Record<string, string> {
     AGENTAWESOME_MEMORY_SNAPSHOT_URL:
       env.AGENTAWESOME_MEMORY_SNAPSHOT_URL ??
       "https://agent-awesome.com/internal/context-snapshot",
+    AGENTAWESOME_MODEL_PROVIDER_ID: env.AGENTAWESOME_MODEL_PROVIDER_ID ?? "openai",
+    AGENTAWESOME_MODEL_ID: env.AGENTAWESOME_MODEL_ID ?? "gpt-mini",
     AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT:
       env.AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT ?? "10m",
     AGENTAWESOME_SERVICE_START_TIMEOUT:
@@ -180,6 +184,8 @@ async function handlePersistenceRequest(
   switch (request.method) {
     case "GET":
       return readContextSnapshot(env);
+    case "HEAD":
+      return headContextSnapshot(env);
     case "PUT":
       return writeContextSnapshot(request, env);
     default:
@@ -206,11 +212,17 @@ async function readContextSnapshot(env: Env): Promise<Response> {
     return new Response("Not found\n", { status: 404 });
   }
   return new Response(object.body, {
-    headers: {
-      "Content-Type": object.httpMetadata?.contentType ?? "application/gzip",
-      ETag: object.etag,
-    },
+    headers: snapshotHeaders(object),
   });
+}
+
+/** headContextSnapshot returns latest snapshot metadata without the archive body. */
+async function headContextSnapshot(env: Env): Promise<Response> {
+  const object = await env.CONTEXT_SNAPSHOTS.head(contextSnapshotKey(env));
+  if (object === null) {
+    return new Response(null, { status: 404 });
+  }
+  return new Response(null, { headers: snapshotHeaders(object) });
 }
 
 /** writeContextSnapshot stores one memory snapshot in R2. */
@@ -232,6 +244,19 @@ function contextSnapshotKey(env: Env): string {
     env.AGENTAWESOME_MEMORY_SNAPSHOT_KEY ??
     "beta-pilot/context-snapshot.tar.gz"
   );
+}
+
+/** snapshotHeaders returns safe operator metadata for a persisted snapshot. */
+function snapshotHeaders(object: R2Object | R2ObjectBody): Headers {
+  const headers = new Headers();
+  headers.set(
+    "Content-Type",
+    object.httpMetadata?.contentType ?? "application/gzip",
+  );
+  headers.set("ETag", object.etag);
+  headers.set("Content-Length", object.size.toString());
+  headers.set("Last-Modified", object.uploaded.toUTCString());
+  return headers;
 }
 
 /** rebuildRequest restores the raw Slack body after signature verification reads it. */

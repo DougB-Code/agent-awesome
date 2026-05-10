@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 const maxRequestBodyBytes int64 = 8 << 20
@@ -25,6 +27,7 @@ type Proxy struct {
 	requestTimeout  time.Duration
 	upstreamHeaders http.Header
 	transformBody   BodyTransformer
+	routeGroup      string
 }
 
 // BodyTransformer rewrites a request body before it is forwarded upstream.
@@ -51,6 +54,13 @@ func WithUpstreamHeader(key string, value string) Option {
 			p.upstreamHeaders = make(http.Header)
 		}
 		p.upstreamHeaders.Set(key, value)
+	}
+}
+
+// WithRouteGroup sets the safe route-group name used for proxy diagnostics.
+func WithRouteGroup(routeGroup string) Option {
+	return func(p *Proxy) {
+		p.routeGroup = strings.TrimSpace(routeGroup)
 	}
 }
 
@@ -101,13 +111,35 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := p.client.Do(req)
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("route_group", p.routeGroupName()).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Msg("upstream request failed")
 		http.Error(w, "upstream harness unavailable: "+err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		log.Warn().
+			Int("status", resp.StatusCode).
+			Str("route_group", p.routeGroupName()).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Msg("upstream returned server error")
+	}
 	copyResponseHeaders(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
 	_, _ = io.Copy(flushingWriter{writer: w}, resp.Body)
+}
+
+// routeGroupName returns a stable log group for this proxy.
+func (p *Proxy) routeGroupName() string {
+	if strings.TrimSpace(p.routeGroup) == "" {
+		return "unknown"
+	}
+	return p.routeGroup
 }
 
 // requestBody returns a possibly rewritten request body for upstream forwarding.

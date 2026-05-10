@@ -5,20 +5,21 @@ import "time"
 
 // Config stores the dependencies and policy needed by the Slack adapter.
 type Config struct {
-	Enabled           bool
-	SocketMode        bool
-	SigningSecret     string
-	BotToken          string
-	AppToken          string
-	AllowedTeamID     string
-	AllowedUserID     string
-	AllowedChannelID  string
-	HarnessBaseURL    string
-	AppName           string
-	AgentUserID       string
-	RuntimePolicyText string
-	RequestTimeout    time.Duration
-	EventDedupTTL     time.Duration
+	Enabled                 bool
+	SocketMode              bool
+	SigningSecret           string
+	BotToken                string
+	AppToken                string
+	AllowedTeamID           string
+	AllowedUserID           string
+	AllowedChannelID        string
+	HarnessBaseURL          string
+	AppName                 string
+	AgentUserID             string
+	RuntimePolicyText       string
+	RequestTimeout          time.Duration
+	EventDedupTTL           time.Duration
+	MaxConcurrentDispatches int
 }
 
 // EventEnvelope is the outer Slack Events API payload.

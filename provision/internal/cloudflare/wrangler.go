@@ -116,6 +116,8 @@ func (d Deployment) vars() map[string]string {
 		"AGENTAWESOME_CONTEXT_API_BASE_URL":    defaultContextAPIBaseURL,
 		"AGENTAWESOME_MEMORY_SNAPSHOT_URL":     d.SnapshotURL,
 		"AGENTAWESOME_MEMORY_SNAPSHOT_KEY":     d.SnapshotKey,
+		"AGENTAWESOME_MODEL_PROVIDER_ID":       defaultModelProviderID,
+		"AGENTAWESOME_MODEL_ID":                defaultModelID,
 		"AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT": defaultRequestTimeout,
 		"AGENTAWESOME_SERVICE_START_TIMEOUT":   defaultStartTimeout,
 		"SLACK_ENABLED":                        boolString(d.SlackEnabled),

@@ -160,11 +160,11 @@ mcp:
     );
     expect(
       document.mcp.servers.single.requireConfirmationTools,
-      isNot(contains('create_task')),
+      contains('create_task'),
     );
     expect(
       document.mcp.servers.single.requireConfirmationTools,
-      isNot(contains('update_task')),
+      contains('update_task'),
     );
   });
 

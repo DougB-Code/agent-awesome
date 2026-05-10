@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { webcrypto } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,6 +20,8 @@ if (globalThis.crypto === undefined) {
 async function main() {
   mkdirSync(buildDir, { recursive: true });
   assertRequiredDeploymentAssets();
+  assertPackageScripts();
+  assertTypeScriptCoverage(parseTSConfig());
   runLocalBin("tsc", ["--noEmit"]);
   runLocalBin("esbuild", [
     "src/index.ts",
@@ -45,6 +47,7 @@ async function main() {
   assertContainerEnvironment(app);
   await assertHealthzWorks(app);
   await assertMCPAuthBoundary(app);
+  await assertSnapshotHeadMetadata(app);
   await assertSlackIngressReachesGateway(app);
   console.log("Cloudflare Worker smoke test passed.");
 }
@@ -53,11 +56,46 @@ async function main() {
 function assertRequiredDeploymentAssets() {
   for (const path of [
     resolve(workerRoot, "src/index.ts"),
+    resolve(workerRoot, "src/app.ts"),
     resolve(workerRoot, "scripts/smoke-test.mjs"),
     resolve(workerRoot, "../../../Dockerfile.cloudflare"),
   ]) {
     assert.ok(existsSync(path), `${path} must exist`);
   }
+}
+
+/** assertPackageScripts verifies package.json points to shipped check files. */
+function assertPackageScripts() {
+  const packageJSON = JSON.parse(readFileSync(resolve(workerRoot, "package.json"), "utf8"));
+  assert.equal(packageJSON.scripts?.smoke, "node scripts/smoke-test.mjs");
+  assert.equal(packageJSON.scripts?.test, "npm run smoke");
+  assert.equal(packageJSON.scripts?.check, "tsc --noEmit");
+  assert.ok(
+    existsSync(resolve(workerRoot, packageJSON.scripts.smoke.replace("node ", ""))),
+    "smoke script must point to an existing file",
+  );
+}
+
+/** assertTypeScriptCoverage verifies tsconfig includes all Worker source files. */
+function assertTypeScriptCoverage(config) {
+  assert.deepEqual(config.include, ["src/**/*.ts"]);
+  const sourceFiles = sourceTSFiles(resolve(workerRoot, "src"));
+  assert.ok(sourceFiles.includes(resolve(workerRoot, "src/index.ts")), "src/index.ts must be covered");
+  assert.ok(sourceFiles.includes(resolve(workerRoot, "src/app.ts")), "src/app.ts must be covered");
+}
+
+/** sourceTSFiles recursively lists Worker TypeScript source files. */
+function sourceTSFiles(root) {
+  const files = [];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    const path = resolve(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...sourceTSFiles(path));
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      files.push(path);
+    }
+  }
+  return files;
 }
 
 /** runLocalBin executes one package binary and fails on nonzero exit status. */
@@ -79,6 +117,17 @@ function runLocalBin(name, args) {
 /** parseWranglerConfig reads wrangler.jsonc with TypeScript's JSONC parser. */
 function parseWranglerConfig() {
   const configPath = resolve(workerRoot, "wrangler.jsonc");
+  const source = readFileSync(configPath, "utf8");
+  const parsed = ts.parseConfigFileTextToJson(configPath, source);
+  if (parsed.error !== undefined) {
+    throw new Error(ts.flattenDiagnosticMessageText(parsed.error.messageText, "\n"));
+  }
+  return parsed.config;
+}
+
+/** parseTSConfig reads tsconfig.json with TypeScript's JSONC parser. */
+function parseTSConfig() {
+  const configPath = resolve(workerRoot, "tsconfig.json");
   const source = readFileSync(configPath, "utf8");
   const parsed = ts.parseConfigFileTextToJson(configPath, source);
   if (parsed.error !== undefined) {
@@ -114,6 +163,8 @@ function assertContainerConfiguration(config) {
   const r2 = exactlyOne(config.r2_buckets, "R2 bucket binding");
   assert.equal(r2.binding, "CONTEXT_SNAPSHOTS");
   assert.equal(r2.bucket_name, "agent-awesome-beta-context");
+  assert.equal(config.vars?.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
+  assert.equal(config.vars?.AGENTAWESOME_MODEL_ID, "gpt-mini");
   for (const secret of [
     "AGENTAWESOME_GATEWAY_TOKEN",
     "AGENTAWESOME_PERSISTENCE_TOKEN",
@@ -130,6 +181,8 @@ function assertContainerEnvironment(app) {
   const mapped = app.buildContainerEnv(createEnv());
   assert.equal(mapped.AGENTAWESOME_GATEWAY_TOKEN, "gateway-token");
   assert.equal(mapped.AGENTAWESOME_PERSISTENCE_TOKEN, "persistence-token");
+  assert.equal(mapped.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
+  assert.equal(mapped.AGENTAWESOME_MODEL_ID, "gpt-mini");
   assert.equal(mapped.SLACK_SIGNING_SECRET, "slack-secret");
   assert.equal(mapped.SLACK_ENABLED, "true");
   assert.equal(mapped.SLACK_SOCKET_MODE, "false");
@@ -188,6 +241,39 @@ async function assertMCPAuthBoundary(app) {
   assert.equal(allowed.status, 200);
   assert.equal(authenticated.calls.length, 1);
   assert.equal(authenticated.calls[0].pathname, "/mcp");
+}
+
+/** assertSnapshotHeadMetadata proves snapshot freshness is visible without archive download. */
+async function assertSnapshotHeadMetadata(app) {
+  const recorder = createGatewayRecorder();
+  const response = await app.routeRequest(
+    new Request("https://agent-awesome.com/internal/context-snapshot", {
+      headers: { authorization: "Bearer persistence-token" },
+      method: "HEAD",
+    }),
+    createEnv({
+      CONTEXT_SNAPSHOTS: {
+        async get() {
+          return null;
+        },
+        async head() {
+          return {
+            etag: "snapshot-etag",
+            httpMetadata: { contentType: "application/gzip" },
+            size: 128,
+            uploaded: new Date("2026-05-10T12:00:00Z"),
+          };
+        },
+        async put() {},
+      },
+    }),
+    recorder.dependencies,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("etag"), "snapshot-etag");
+  assert.equal(response.headers.get("last-modified"), "Sun, 10 May 2026 12:00:00 GMT");
+  assert.equal(response.headers.get("content-length"), "128");
+  assert.equal(recorder.calls.length, 0);
 }
 
 /** assertSlackIngressReachesGateway proves only signed Slack events are forwarded. */
@@ -282,6 +368,9 @@ function createEnv(overrides = {}) {
     SLACK_ALLOWED_CHANNEL_ID: "C1",
     CONTEXT_SNAPSHOTS: {
       async get() {
+        return null;
+      },
+      async head() {
         return null;
       },
       async put() {},

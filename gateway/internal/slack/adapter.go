@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -18,6 +20,9 @@ import (
 )
 
 const maxSlackRequestBytes = 1 << 20
+const defaultMaxConcurrentDispatches = 4
+
+var errSlackDispatchThrottled = errors.New("slack dispatch throttled")
 
 // Adapter owns the Slack channel behavior for one gateway process.
 type Adapter struct {
@@ -26,7 +31,15 @@ type Adapter struct {
 	agent           *AgentClient
 	client          *http.Client
 	deduper         *eventDeduper
+	limiter         *dispatchLimiter
 	dispatchMessage func(context.Context, string, MessageEvent)
+}
+
+// dispatchLimiter enforces beta-friendly Slack fan-out limits.
+type dispatchLimiter struct {
+	mu     sync.Mutex
+	slots  chan struct{}
+	active map[string]struct{}
 }
 
 // NewAdapter creates a Slack adapter from gateway runtime settings.
@@ -48,6 +61,7 @@ func NewAdapter(config Config) *Adapter {
 		),
 		client:  client,
 		deduper: newEventDeduper(config.EventDedupTTL),
+		limiter: newDispatchLimiter(config.MaxConcurrentDispatches),
 	}
 	adapter.dispatchMessage = adapter.dispatch
 	return adapter
@@ -86,6 +100,11 @@ func (a *Adapter) EventsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	challenge, err := a.AcceptEnvelopeWithDelivery(body, deliveryInfoFromHeaders(r.Header))
 	if err != nil {
+		if errors.Is(err, errSlackDispatchThrottled) {
+			log.Warn().Err(err).Msg("slack event throttled by gateway")
+			http.Error(w, "Slack dispatch throttled", http.StatusTooManyRequests)
+			return
+		}
 		log.Warn().Err(err).Msg("slack envelope rejected by gateway")
 		http.Error(w, "invalid Slack event", http.StatusBadRequest)
 		return
@@ -143,11 +162,62 @@ func (a *Adapter) AcceptEnvelopeWithDelivery(body []byte, delivery DeliveryInfo)
 		if dispatch == nil {
 			dispatch = a.dispatch
 		}
-		go dispatch(context.Background(), envelope.TeamID, event)
+		release, err := a.limiter.begin(event)
+		if err != nil {
+			log.Warn().Err(err).Msg("slack dispatch rejected by limiter")
+			return "", err
+		}
+		go func() {
+			defer release()
+			dispatch(context.Background(), envelope.TeamID, event)
+		}()
 		return "", nil
 	default:
 		return "", nil
 	}
+}
+
+// newDispatchLimiter creates a bounded Slack dispatch limiter.
+func newDispatchLimiter(maxConcurrent int) *dispatchLimiter {
+	if maxConcurrent <= 0 {
+		maxConcurrent = defaultMaxConcurrentDispatches
+	}
+	return &dispatchLimiter{
+		slots:  make(chan struct{}, maxConcurrent),
+		active: make(map[string]struct{}),
+	}
+}
+
+// begin reserves global and per user/channel dispatch capacity.
+func (l *dispatchLimiter) begin(event MessageEvent) (func(), error) {
+	if l == nil {
+		return func() {}, nil
+	}
+	select {
+	case l.slots <- struct{}{}:
+	default:
+		return nil, errSlackDispatchThrottled
+	}
+	key := dispatchScopeKey(event)
+	l.mu.Lock()
+	if _, ok := l.active[key]; ok {
+		l.mu.Unlock()
+		<-l.slots
+		return nil, errSlackDispatchThrottled
+	}
+	l.active[key] = struct{}{}
+	l.mu.Unlock()
+	return func() {
+		l.mu.Lock()
+		delete(l.active, key)
+		l.mu.Unlock()
+		<-l.slots
+	}, nil
+}
+
+// dispatchScopeKey returns the throttling key for one beta Slack sender.
+func dispatchScopeKey(event MessageEvent) string {
+	return event.Channel + ":" + event.User
 }
 
 // deliveryInfoFromHeaders extracts Slack retry headers from HTTP requests.

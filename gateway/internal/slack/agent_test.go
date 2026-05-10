@@ -2,10 +2,14 @@
 package slack
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	"agentgateway/internal/policy"
 )
 
 // TestEnsureSessionCreatesAfterADKMissingSession500 verifies ADK missing-session behavior.
@@ -49,6 +53,46 @@ func TestRunBodyDisablesModelStreaming(t *testing.T) {
 	}
 	if got, ok := decoded["streaming"].(bool); !ok || got {
 		t.Fatalf("streaming = %#v, want false", decoded["streaming"])
+	}
+}
+
+// TestRunTextInjectsConfiguredRuntimePolicy verifies Slack uses gateway policy behavior.
+func TestRunTextInjectsConfiguredRuntimePolicy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/run_sse" {
+			t.Fatalf("path = %q, want /run_sse", r.URL.Path)
+		}
+		var decoded map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+			t.Fatalf("decode run body: %v", err)
+		}
+		message := decoded["newMessage"].(map[string]any)
+		parts := message["parts"].([]any)
+		text := parts[0].(map[string]any)["text"].(string)
+		if !strings.HasPrefix(text, policy.RuntimePolicyPrefix) || !strings.Contains(text, "Configured Slack policy.") {
+			t.Fatalf("text = %q, want configured runtime policy", text)
+		}
+		if strings.Contains(text, "idempotency_key") {
+			t.Fatalf("text = %q, want no model-facing idempotency instructions", text)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"author\":\"assistant\",\"content\":{\"parts\":[{\"text\":\"ok\"}]}}\n\n"))
+	}))
+	defer server.Close()
+	client := NewAgentClientWithPolicy(
+		server.Client(),
+		server.URL,
+		"app",
+		"user",
+		policy.NewInjector(policy.Config{Text: "Configured Slack policy."}),
+	)
+
+	reply, err := client.RunText(context.Background(), "slack-1", "hello")
+	if err != nil {
+		t.Fatalf("RunText() error = %v", err)
+	}
+	if reply != "ok" {
+		t.Fatalf("reply = %q, want ok", reply)
 	}
 }
 

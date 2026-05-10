@@ -25,6 +25,7 @@ var liteRTToolHints = map[string][]string{
 	"repair_memory_record":           {"repair memory", "fix memory", "correct memory"},
 	"submit_memory_correction":       {"memory correction", "correction", "wrong memory"},
 	"query_context_graph":            {"context graph", "graph query", "sql", "query graph"},
+	"mutate_context_graph":           {"context graph mutation", "graph mutation", "insert graph", "set graph", "delete graph"},
 	"create_task":                    {"reminder", "remind", "todo", "to do", "task", "need to", "buy", "purchase", "pick up", "errand", "deadline", "due", "schedule", "add task", "make a reminder"},
 	"get_task":                       {"get task", "task detail", "open task", "show task"},
 	"list_tasks":                     {"list tasks", "show tasks", "what tasks", "tasks", "todos", "to dos"},

@@ -141,6 +141,18 @@ func TestRuntimePolicyTextDefaultsEmpty(t *testing.T) {
 	}
 }
 
+// TestCheckConfigFlagParses verifies preflight mode is a config-only concern.
+func TestCheckConfigFlagParses(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	cfg, err := FromFlags([]string{"--check-config"})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if !cfg.CheckConfig {
+		t.Fatalf("CheckConfig = false, want true")
+	}
+}
+
 // TestContextAPITokenCanBeConfigured verifies gateway-to-harness context auth.
 func TestContextAPITokenCanBeConfigured(t *testing.T) {
 	clearGatewayAuthEnv(t)

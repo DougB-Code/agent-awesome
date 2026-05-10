@@ -7,3 +7,4 @@
 ** xref:provision:index.adoc[Provisioning]
 ** xref:ui:index.adoc[UI]
 ** xref:cloudflare:index.adoc[Cloudflare Deployment]
+** xref:ROOT:private-beta-deploy.adoc[Private Beta Deploy]

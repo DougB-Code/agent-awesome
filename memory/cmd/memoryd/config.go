@@ -21,6 +21,7 @@ type Config struct {
 	SnapshotToken   string
 	SnapshotTimeout time.Duration
 	AllowPublicBind bool
+	CheckConfig     bool
 }
 
 // parseConfig loads memoryd settings from CLI arguments.
@@ -43,6 +44,7 @@ func parseConfig(args []string) (Config, error) {
 	fs.StringVar(&cfg.SnapshotToken, "snapshot-token", cfg.SnapshotToken, "bearer token for the snapshot endpoint")
 	fs.DurationVar(&cfg.SnapshotTimeout, "snapshot-timeout", cfg.SnapshotTimeout, "snapshot restore and save timeout")
 	fs.BoolVar(&cfg.AllowPublicBind, "allow-public-bind", cfg.AllowPublicBind, "allow memoryd to listen on a non-loopback address")
+	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit without starting memoryd")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -59,6 +61,12 @@ func (c Config) Validate() error {
 	}
 	if !c.AllowPublicBind && !isLoopbackListenAddress(c.ListenAddress) {
 		return fmt.Errorf("memoryd public bind requires --allow-public-bind")
+	}
+	if strings.TrimSpace(c.SnapshotURL) == "" && strings.TrimSpace(c.SnapshotToken) != "" {
+		return fmt.Errorf("snapshot-url is required when snapshot-token is set")
+	}
+	if strings.TrimSpace(c.SnapshotURL) != "" && strings.TrimSpace(c.SnapshotToken) == "" {
+		return fmt.Errorf("snapshot-token is required when snapshot-url is set")
 	}
 	return nil
 }

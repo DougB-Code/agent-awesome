@@ -29,6 +29,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("load config")
 	}
+	if cfg.CheckConfig {
+		log.Info().Msg("gateway config ok")
+		return
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

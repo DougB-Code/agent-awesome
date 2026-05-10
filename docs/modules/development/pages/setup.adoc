@@ -1,0 +1,61 @@
+= Development Setup
+:description: Reproducible workstation setup for Agent Awesome development and beta checks.
+
+Use the pinned tool versions before running build or beta-readiness commands.
+The repository declares them in `.tool-versions` so `asdf` and compatible tool managers can install the same Go and Node.js versions used by the modules.
+
+== Toolchain
+
+[cols="1,2,2",options="header"]
+|===
+|Tool |Pinned version |Why
+
+|Go
+|`1.26.0`
+|Matches the Go module requirements for `gateway`, `harness`, `memory`, and `provision`.
+
+|Node.js
+|`22.15.0`
+|Satisfies the Cloudflare Worker package engine requirement of Node `>=22.0.0`.
+|===
+
+Install with a `.tool-versions` aware manager:
+
+[source,sh]
+----
+asdf install
+----
+
+Or install equivalent versions through your normal package manager.
+
+Verify the active tools:
+
+[source,sh]
+----
+go version
+node --version
+npm --version
+----
+
+== Dependencies
+
+Install root documentation dependencies and Worker dependencies separately:
+
+[source,sh]
+----
+npm install --cache ./build/npm-cache
+cd deploy/cloudflare/worker
+npm install --cache ../../../build/npm-cache
+cd ../../..
+----
+
+== Beta Check
+
+Run the full private beta gate from the repository root:
+
+[source,sh]
+----
+npm test
+----
+
+The gate verifies the toolchain, required Cloudflare deploy assets, docs build, Go test suites, Worker smoke/type checks, the provisioning dry run, and the desktop UI when Flutter is available.

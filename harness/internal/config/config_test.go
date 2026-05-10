@@ -382,6 +382,7 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		"repair_memory_record",
 		"submit_memory_correction",
 		"query_context_graph",
+		"mutate_context_graph",
 		"create_task",
 		"get_task",
 		"list_tasks",
@@ -404,6 +405,8 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		"refresh_compiled_page",
 		"repair_memory_record",
 		"submit_memory_correction",
+		"query_context_graph",
+		"mutate_context_graph",
 		"create_task",
 		"update_task",
 		"complete_task",
@@ -442,6 +445,12 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 			}
 			if got := server.RequireConfirmationTools; !reflect.DeepEqual(got, expectedConfirmations) {
 				t.Fatalf("RequireConfirmationTools = %#v, want %#v", got, expectedConfirmations)
+			}
+			if allowsTool(server, "query_context_graph") && !requiresConfirmation(server, "query_context_graph") {
+				t.Fatalf("query_context_graph is allowed without confirmation")
+			}
+			if allowsTool(server, "mutate_context_graph") && !requiresConfirmation(server, "mutate_context_graph") {
+				t.Fatalf("mutate_context_graph is allowed without confirmation")
 			}
 		})
 	}
@@ -904,6 +913,16 @@ func memoryMCPServer(servers []schema.MCPServer) (schema.MCPServer, bool) {
 		}
 	}
 	return schema.MCPServer{}, false
+}
+
+// allowsTool reports whether an MCP server allowlist includes a tool.
+func allowsTool(server schema.MCPServer, tool string) bool {
+	return containsString(server.Tools.Allow, tool)
+}
+
+// requiresConfirmation reports whether an MCP server confirmation list includes a tool.
+func requiresConfirmation(server schema.MCPServer, tool string) bool {
+	return containsString(server.RequireConfirmationTools, tool)
 }
 
 // containsString reports whether values contains target.

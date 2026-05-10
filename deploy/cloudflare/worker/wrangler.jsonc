@@ -26,6 +26,8 @@
 		"AGENTAWESOME_CONTEXT_API_BASE_URL": "http://127.0.0.1:8081/api/context",
 		"AGENTAWESOME_MEMORY_SNAPSHOT_URL": "https://agent-awesome.com/internal/context-snapshot",
 		"AGENTAWESOME_MEMORY_SNAPSHOT_KEY": "beta-pilot/context-snapshot.tar.gz",
+		"AGENTAWESOME_MODEL_PROVIDER_ID": "openai",
+		"AGENTAWESOME_MODEL_ID": "gpt-mini",
 		"AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT": "10m",
 		"AGENTAWESOME_SERVICE_START_TIMEOUT": "45s",
 		"SLACK_ENABLED": "true",

@@ -31,6 +31,8 @@ mcp:
         - refresh_compiled_page
         - repair_memory_record
         - submit_memory_correction
+        - query_context_graph
+        - mutate_context_graph
         - create_task
         - update_task
         - complete_task
@@ -51,6 +53,7 @@ mcp:
           - repair_memory_record
           - submit_memory_correction
           - query_context_graph
+          - mutate_context_graph
           - create_task
           - get_task
           - list_tasks

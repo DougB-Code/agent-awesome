@@ -28,6 +28,10 @@ void main() {
     expect(profile.gateway?.enabled, isTrue);
     expect(profile.gateway?.apiBaseUrl, 'http://127.0.0.1:8070/api');
     expect(
+      profile.gateway?.effectiveStatusUrl,
+      'http://127.0.0.1:8070/api/gateway/beta-status',
+    );
+    expect(
       profile.gateway?.arguments,
       containsAllInOrder(<String>[
         '--harness-base-url',
@@ -36,6 +40,10 @@ void main() {
         'http://127.0.0.1:8081/api/context',
         '--memory-mcp-url',
         'http://127.0.0.1:8090/mcp',
+        '--model-provider-id',
+        'openai',
+        '--model-id',
+        'gpt-mini',
       ]),
     );
     expect(profile.memoryServers.single.label, 'Personal Memory');

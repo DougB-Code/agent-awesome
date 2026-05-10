@@ -1,2 +1,5 @@
 name: agent-awesome
 version: '0.1'
+title: Agent Awesome UI
+nav:
+  - modules/ui/nav.adoc

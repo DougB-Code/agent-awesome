@@ -12,6 +12,8 @@ const (
 	defaultContextAPIBaseURL = "http://127.0.0.1:8081/api/context"
 	defaultRequestTimeout    = "10m"
 	defaultStartTimeout      = "45s"
+	defaultModelProviderID   = "openai"
+	defaultModelID           = "gpt-mini"
 )
 
 // DeploymentInput stores the user-selected values for one cloud agent.

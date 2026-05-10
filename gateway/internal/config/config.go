@@ -26,6 +26,11 @@ type Config struct {
 	AllowedOrigin                    string
 	AllowUnauthenticatedLoopbackOnly bool
 	RuntimePolicyText                string
+	SnapshotStatusURL                string
+	SnapshotStatusToken              string
+	ModelProviderID                  string
+	ModelID                          string
+	CheckConfig                      bool
 	RequestTimeout                   time.Duration
 	ServiceStartTimeout              time.Duration
 	HarnessService                   ServiceConfig
@@ -69,6 +74,10 @@ func FromFlags(args []string) (Config, error) {
 		AllowedOrigin:                    envString("AGENTAWESOME_ALLOWED_ORIGIN", ""),
 		AllowUnauthenticatedLoopbackOnly: envBool("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", true),
 		RuntimePolicyText:                envString("AGENTAWESOME_RUNTIME_POLICY_TEXT", ""),
+		SnapshotStatusURL:                envString("AGENTAWESOME_MEMORY_SNAPSHOT_URL", ""),
+		SnapshotStatusToken:              envString("AGENTAWESOME_PERSISTENCE_TOKEN", ""),
+		ModelProviderID:                  envString("AGENTAWESOME_MODEL_PROVIDER_ID", ""),
+		ModelID:                          envString("AGENTAWESOME_MODEL_ID", ""),
 		RequestTimeout:                   envDuration("AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT", 10*time.Minute),
 		ServiceStartTimeout:              envDuration("AGENTAWESOME_SERVICE_START_TIMEOUT", 30*time.Second),
 	}
@@ -113,6 +122,11 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.AllowedOrigin, "allowed-origin", cfg.AllowedOrigin, "optional CORS origin for browser clients")
 	fs.BoolVar(&cfg.AllowUnauthenticatedLoopbackOnly, "allow-unauthenticated-loopback-only", cfg.AllowUnauthenticatedLoopbackOnly, "allow tokenless protected routes only when the gateway bind and CORS origin are loopback-only")
 	fs.StringVar(&cfg.RuntimePolicyText, "runtime-policy-text", cfg.RuntimePolicyText, "optional operator policy text injected into ADK run requests")
+	fs.StringVar(&cfg.SnapshotStatusURL, "snapshot-status-url", cfg.SnapshotStatusURL, "optional authenticated snapshot endpoint used for beta status freshness")
+	fs.StringVar(&cfg.SnapshotStatusToken, "snapshot-status-token", cfg.SnapshotStatusToken, "bearer token for the beta status snapshot endpoint")
+	fs.StringVar(&cfg.ModelProviderID, "model-provider-id", cfg.ModelProviderID, "current non-secret model provider identifier for beta status")
+	fs.StringVar(&cfg.ModelID, "model-id", cfg.ModelID, "current non-secret model identifier for beta status")
+	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit without starting the gateway")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "maximum upstream request duration")
 	fs.DurationVar(&cfg.ServiceStartTimeout, "service-start-timeout", cfg.ServiceStartTimeout, "maximum local service readiness wait")
 	fs.BoolVar(&cfg.Slack.Enabled, "slack-enabled", cfg.Slack.Enabled, "enable Slack channel adapter")
@@ -185,6 +199,11 @@ func (c Config) Validate() error {
 	if c.UserID == "" {
 		return fmt.Errorf("user id is required")
 	}
+	if strings.TrimSpace(c.SnapshotStatusURL) != "" {
+		if _, err := url.ParseRequestURI(c.SnapshotStatusURL); err != nil {
+			return fmt.Errorf("snapshot status URL: %w", err)
+		}
+	}
 	if err := c.Slack.Validate(); err != nil {
 		return fmt.Errorf("slack: %w", err)
 	}
@@ -252,9 +271,18 @@ func (c Config) StatusView() map[string]any {
 		"auth_required":                       c.AuthToken != "",
 		"allow_unauthenticated_loopback_only": c.AllowUnauthenticatedLoopbackOnly,
 		"has_runtime_policy":                  strings.TrimSpace(c.RuntimePolicyText) != "",
-		"harness_service":                     c.HarnessService.StatusView(),
-		"memory_service":                      c.MemoryService.StatusView(),
-		"slack":                               c.Slack.StatusView(),
+		"snapshot_status": map[string]any{
+			"url":       c.SnapshotStatusURL,
+			"has_token": strings.TrimSpace(c.SnapshotStatusToken) != "",
+		},
+		"model": map[string]any{
+			"provider_id": c.ModelProviderID,
+			"model_id":    c.ModelID,
+		},
+		"check_config":    c.CheckConfig,
+		"harness_service": c.HarnessService.StatusView(),
+		"memory_service":  c.MemoryService.StatusView(),
+		"slack":           c.Slack.StatusView(),
 	}
 }
 

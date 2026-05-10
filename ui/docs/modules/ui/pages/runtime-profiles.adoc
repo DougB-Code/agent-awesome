@@ -4,6 +4,7 @@
 Runtime profiles describe the services the UI should use.
 Managed services include a working directory, package path, and argument list.
 External services set auto-start to false and provide only connection details.
+Gateway profiles also name the beta status endpoint and the non-secret model/provider identifier shown to operators.
 
 == Shipped Profiles
 
@@ -28,3 +29,4 @@ Use profiles to change service topology without mixing deployment policy into wi
 
 The default profile reads model, agent, and tool config from `pilots/personal-assistant`.
 Keep that pilot bundle present when packaging or distributing the desktop app.
+The gateway status URL resolves to `/api/gateway/beta-status`, which returns authenticated health, Slack scope, snapshot freshness, and model identity without exposing secrets.

@@ -4,6 +4,8 @@
 This page is the note to future-us for joining the project, finding the right code, and proving a workstation can build Agent Awesome.
 It is operational documentation because it covers repository access, build tooling, generated artifacts, and contributor workflow.
 
+For pinned Go and Node.js versions, start with xref:development:setup.adoc[].
+
 == Repository
 
 The canonical repository is:
@@ -45,10 +47,10 @@ Install these before the first build:
 |Git
 |Clone the repository and manage contribution branches.
 
-|Go `1.26`
+|Go `1.26.0`
 |Build and test the harness, memory service, gateway, and provisioning CLI.
 
-|Node.js `22` or newer
+|Node.js `22.15.0` or compatible
 |Build the Antora docs site and run Cloudflare Wrangler checks.
 
 |npm

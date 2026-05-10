@@ -1,0 +1,192 @@
+= Private Beta Runbook
+:description: Operator workflow for launching, verifying, rolling back, and recovering private beta agents.
+
+Use this runbook before inviting any private beta user.
+Run commands from the repository root unless a step says otherwise.
+
+== Required Secrets
+
+[cols="1,2",options="header"]
+|===
+|Secret |Storage
+
+|`CLOUDFLARE_API_TOKEN`
+|Provisioner credential store, set with `agent-awesome-provision credentials set CLOUDFLARE_API_TOKEN`.
+
+|`OPENAI_API_KEY`
+|Provisioner credential store, set with `agent-awesome-provision credentials set OPENAI_API_KEY`.
+
+|`SLACK_SIGNING_SECRET`
+|Provisioner credential store for Slack HTTP Events API agents.
+
+|`SLACK_BOT_TOKEN`
+|Provisioner credential store for Slack replies.
+
+|`AGENTAWESOME_GATEWAY_TOKEN`
+|Generated per agent by `cloudflare apply`; do not set it manually.
+
+|`AGENTAWESOME_PERSISTENCE_TOKEN`
+|Generated per agent by `cloudflare apply`; do not set it manually.
+|===
+
+== Slack Allow List
+
+Every Slack beta agent must set all three IDs:
+
+[source,sh]
+----
+--slack-allowed-team-id T...
+--slack-allowed-user-id U...
+--slack-allowed-channel-id C...
+----
+
+The gateway refuses to start Slack ingress without the allow list.
+Use one private channel and one allowed user for the first beta wave.
+
+== Cloudflare Access
+
+Protect operator-facing routes and dashboards with Cloudflare Access.
+Keep `/slack/events` reachable by Slack; Slack requests are authenticated by signature before the gateway accepts them.
+The Worker hides `/mcp` and `/api/*` unless the gateway bearer token is present.
+
+== Preflight
+
+[source,sh]
+----
+npm test
+----
+
+This runs the beta check script, including Go tests, Worker smoke/type checks, config preflights, and the provisioner dry run.
+
+== Tool Safety
+
+Keep graph reads and writes on separate MCP tools.
+`query_context_graph` accepts only read-only `FIND` and `MATCH` statements.
+`mutate_context_graph` accepts only `INSERT`, `SET`, and `DELETE` statements and must stay listed in `require-confirmation-tools` for every shipped beta tool config.
+
+== Deploy
+
+[source,sh]
+----
+cd provision
+go run ./cmd/agent-awesome-provision platform init \
+  --zone-name agent-awesome.com \
+  --agent-hostname-suffix agent-awesome.com \
+  --cloudflare-account-id <account-id> \
+  --worker-source-dir /home/doug/dev/agentawesome/agent
+
+go run ./cmd/agent-awesome-provision cloudflare apply \
+  --agent-id <agent-id> \
+  --user-id <user-id> \
+  --slack \
+  --slack-allowed-team-id T... \
+  --slack-allowed-user-id U... \
+  --slack-allowed-channel-id C...
+----
+
+Set the Slack Events API request URL to:
+
+[source,text]
+----
+https://<agent-id>.agent-awesome.com/slack/events
+----
+
+== Smoke Test
+
+[source,sh]
+----
+cd provision
+go run ./cmd/agent-awesome-provision agent status <agent-id>
+----
+
+Then send a Slack message from the allow-listed user in the allow-listed channel.
+Confirm exactly one threaded reply is posted.
+Open the authenticated beta status endpoint and verify gateway, harness, memory, snapshot, Slack, and model sections are healthy:
+
+[source,sh]
+----
+curl -fsS \
+  -H "Authorization: Bearer <gateway-token>" \
+  https://<agent-id>.agent-awesome.com/api/gateway/beta-status
+----
+
+== Snapshot Verification
+
+Before deploy and before rollback, verify that the latest context snapshot exists and is a valid gzip tar archive:
+
+[source,sh]
+----
+mkdir -p build/ai
+SNAPSHOT_URL="https://<agent-id>.agent-awesome.com/internal/context-snapshot"
+PERSISTENCE_TOKEN="<look up generated persistence token from the operator keyring>"
+curl -fsS \
+  -H "Authorization: Bearer ${PERSISTENCE_TOKEN}" \
+  "$SNAPSHOT_URL" \
+  -o build/ai/latest-context-snapshot.tar.gz
+test -s build/ai/latest-context-snapshot.tar.gz
+gzip -t build/ai/latest-context-snapshot.tar.gz
+tar -tzf build/ai/latest-context-snapshot.tar.gz | grep '^memory.db$'
+----
+
+If the snapshot is missing or corrupt, pause the deploy.
+Do not invite or migrate beta users until memory restore/save has passed.
+
+== Rollback
+
+Redeploy the last known good commit with the same agent ID and allow list:
+
+[source,sh]
+----
+git switch main
+git pull --ff-only
+cd provision
+go run ./cmd/agent-awesome-provision cloudflare apply \
+  --agent-id <agent-id> \
+  --user-id <user-id> \
+  --slack \
+  --slack-allowed-team-id T... \
+  --slack-allowed-user-id U... \
+  --slack-allowed-channel-id C...
+----
+
+After rollback, run `agent status` and repeat the snapshot verification.
+
+== Remove A Beta User
+
+For a per-agent beta, delete the agent:
+
+[source,sh]
+----
+cd provision
+go run ./cmd/agent-awesome-provision agent delete <agent-id>
+----
+
+For a shared pilot Worker, remove the Slack user or channel ID from the allow list and redeploy immediately.
+
+== Rotate After An Incident
+
+Rotate provider and Slack credentials first:
+
+[source,sh]
+----
+cd provision
+go run ./cmd/agent-awesome-provision credentials set OPENAI_API_KEY
+go run ./cmd/agent-awesome-provision credentials set SLACK_SIGNING_SECRET
+go run ./cmd/agent-awesome-provision credentials set SLACK_BOT_TOKEN
+----
+
+To rotate generated gateway and persistence tokens, remove local generated state and reapply the same agent:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome-provision agent delete <agent-id> --local-only --force
+go run ./cmd/agent-awesome-provision cloudflare apply \
+  --agent-id <agent-id> \
+  --user-id <user-id> \
+  --slack \
+  --slack-allowed-team-id T... \
+  --slack-allowed-user-id U... \
+  --slack-allowed-channel-id C...
+----
+
+Verify status, Slack reply behavior, and snapshot restore after rotation.

@@ -47,6 +47,20 @@ func TestHasCloudflareAssetsRequiresWorkerSmokeTest(t *testing.T) {
 	}
 }
 
+// TestRunCheckValidatesCloudflareAssets verifies preflight mode avoids credentials.
+func TestRunCheckValidatesCloudflareAssets(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "Dockerfile.cloudflare"), "FROM scratch\n")
+	writeTestFile(t, filepath.Join(root, "deploy", "cloudflare", "worker", "src", "index.ts"), "// worker\n")
+	if err := run([]string{"check", "--repo-root", root}); err == nil {
+		t.Fatalf("run(check) error = nil, want missing smoke test error")
+	}
+	writeTestFile(t, filepath.Join(root, "deploy", "cloudflare", "worker", "scripts", "smoke-test.mjs"), "// smoke\n")
+	if err := run([]string{"check", "--repo-root", root}); err != nil {
+		t.Fatalf("run(check) error = %v", err)
+	}
+}
+
 // writeTestFile creates one test fixture file and its parent directories.
 func writeTestFile(t *testing.T, path string, content string) {
 	t.Helper()

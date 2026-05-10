@@ -10,6 +10,7 @@ import (
 	"agentawesome/internal/tools/localexec"
 	"agentawesome/internal/tools/mcptransport"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/mcptoolset"
 )
@@ -97,6 +98,10 @@ func confirmationProvider(toolNames []string) tool.ConfirmationProvider {
 
 	return func(toolName string, toolInput any) bool {
 		_, ok := require[toolName]
+		log.Info().
+			Str("tool", toolName).
+			Bool("require_confirmation", ok).
+			Msg("mcp tool confirmation decision")
 		return ok
 	}
 }

@@ -19,6 +19,7 @@ const List<String> graphBackedMcpToolNames = <String>[
   'repair_memory_record',
   'submit_memory_correction',
   'query_context_graph',
+  'mutate_context_graph',
   'create_task',
   'get_task',
   'list_tasks',
@@ -43,6 +44,16 @@ const List<String> graphBackedMcpConfirmationToolNames = <String>[
   'refresh_compiled_page',
   'repair_memory_record',
   'submit_memory_correction',
+  'query_context_graph',
+  'mutate_context_graph',
+  'create_task',
+  'update_task',
+  'complete_task',
+  'cancel_task',
+  'delete_task',
+  'link_task_memory',
+  'upsert_task_relation',
+  'delete_task_relation',
 ];
 
 /// ToolConfigDocument represents one harness tool config YAML file.

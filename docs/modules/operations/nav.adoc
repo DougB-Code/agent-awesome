@@ -4,4 +4,5 @@
 ** xref:operations:local-deployment.adoc[Local Deployment]
 ** xref:operations:provisioning.adoc[Provisioning]
 ** xref:operations:cloud-agents.adoc[Cloud Agents]
+** xref:operations:private-beta-runbook.adoc[Private Beta Runbook]
 ** xref:operations:slack-migration.adoc[Slack Migration]

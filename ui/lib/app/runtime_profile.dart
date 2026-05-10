@@ -95,6 +95,7 @@ class GatewayRuntime {
     required this.label,
     required this.apiBaseUrl,
     required this.healthUrl,
+    this.statusUrl = '',
     required this.workingDirectory,
     required this.packagePath,
     required this.harnessBaseUrl,
@@ -102,6 +103,8 @@ class GatewayRuntime {
     required this.memoryMcpUrl,
     required this.appName,
     required this.userId,
+    this.modelProviderId = '',
+    this.modelId = '',
     required this.port,
     required this.autoStart,
     required this.enabled,
@@ -118,6 +121,9 @@ class GatewayRuntime {
 
   /// Gateway health URL used before and after launching.
   final String healthUrl;
+
+  /// Gateway beta status URL for operator checks.
+  final String statusUrl;
 
   /// Directory where the Go gateway package is built and run.
   final String workingDirectory;
@@ -140,6 +146,12 @@ class GatewayRuntime {
   /// ADK user id passed through gateway status and policy.
   final String userId;
 
+  /// Non-secret model provider id shown in beta status.
+  final String modelProviderId;
+
+  /// Non-secret model id shown in beta status.
+  final String modelId;
+
   /// Gateway listen port.
   final int port;
 
@@ -147,6 +159,17 @@ class GatewayRuntime {
   String get mcpUrl {
     final uri = Uri.parse(apiBaseUrl);
     return uri.replace(path: '/mcp', query: null).toString();
+  }
+
+  /// Effective beta status URL for this gateway.
+  String get effectiveStatusUrl {
+    if (statusUrl.trim().isNotEmpty) {
+      return statusUrl;
+    }
+    final uri = Uri.parse(apiBaseUrl);
+    return uri
+        .replace(path: '/api/gateway/beta-status', query: null)
+        .toString();
   }
 
   /// Whether the UI should start this gateway.
@@ -170,6 +193,11 @@ class GatewayRuntime {
       appName,
       '--user-id',
       userId,
+      if (modelProviderId.trim().isNotEmpty) ...<String>[
+        '--model-provider-id',
+        modelProviderId,
+      ],
+      if (modelId.trim().isNotEmpty) ...<String>['--model-id', modelId],
     ];
   }
 
@@ -180,6 +208,7 @@ class GatewayRuntime {
       'label': label,
       'api_base_url': apiBaseUrl,
       'health_url': healthUrl,
+      if (statusUrl.isNotEmpty) 'status_url': statusUrl,
       'working_directory': workingDirectory,
       'package_path': packagePath,
       'harness_base_url': harnessBaseUrl,
@@ -187,6 +216,8 @@ class GatewayRuntime {
       'memory_mcp_url': memoryMcpUrl,
       'app_name': appName,
       'user_id': userId,
+      if (modelProviderId.isNotEmpty) 'model_provider_id': modelProviderId,
+      if (modelId.isNotEmpty) 'model_id': modelId,
       'port': port,
       'auto_start': autoStart,
       'enabled': enabled,
@@ -202,6 +233,7 @@ class GatewayRuntime {
       label: _requiredString(json, 'label'),
       apiBaseUrl: _requiredString(json, 'api_base_url'),
       healthUrl: _requiredString(json, 'health_url'),
+      statusUrl: _optionalString(json['status_url']),
       workingDirectory: _requiredString(json, 'working_directory'),
       packagePath: _requiredString(json, 'package_path'),
       harnessBaseUrl: harnessBaseUrl,
@@ -211,6 +243,8 @@ class GatewayRuntime {
       memoryMcpUrl: _requiredString(json, 'memory_mcp_url'),
       appName: _requiredString(json, 'app_name'),
       userId: _requiredString(json, 'user_id'),
+      modelProviderId: _optionalString(json['model_provider_id']),
+      modelId: _optionalString(json['model_id']),
       port: _requiredInt(json, 'port'),
       autoStart: _requiredBool(json, 'auto_start'),
       enabled: _requiredBool(json, 'enabled'),
@@ -584,6 +618,7 @@ class RuntimeProfileLoader {
       'AGENT_GATEWAY_MCP_URL': config.agentGatewayMcpUrl,
       'AGENT_GATEWAY_PORT': _portString(gatewayApi, 8070),
       'AGENT_GATEWAY_HEALTH_URL': _healthUrl(config.agentGatewayBaseUrl),
+      'AGENT_GATEWAY_STATUS_URL': _betaStatusUrl(config.agentGatewayBaseUrl),
       'AGENT_APP_NAME': config.agentAppName,
       'AGENT_USER_ID': config.agentUserId,
       'MEMORY_MCP_URL': config.memoryMcpUrl,
@@ -731,6 +766,11 @@ String encodeMcpServerRuntimeJson(McpServerRuntime server) {
 String _healthUrl(String endpoint) {
   final uri = Uri.parse(endpoint);
   return uri.replace(path: '/healthz', query: '').toString();
+}
+
+String _betaStatusUrl(String endpoint) {
+  final uri = Uri.parse(endpoint);
+  return uri.replace(path: '/api/gateway/beta-status', query: null).toString();
 }
 
 String _portString(Uri uri, int fallback) {

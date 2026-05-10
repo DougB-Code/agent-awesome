@@ -11,7 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"memory/internal/memory/domain"
+	graphquery "memory/internal/memory/graph/query"
 	"memory/internal/memory/service"
 )
 
@@ -92,10 +95,13 @@ func (s *MCPServer) handleToolCall(ctx context.Context, params json.RawMessage) 
 	if call.Name == "" {
 		return nil, &rpcError{Code: -32602, Message: "tool name is required"}
 	}
+	log.Info().Str("tool", call.Name).Msg("memory mcp tool call begin")
 	result, err := s.callTool(ctx, call.Name, call.Arguments)
 	if err != nil {
+		log.Warn().Str("tool", call.Name).Err(err).Msg("memory mcp tool call failed")
 		return toolResult(map[string]string{"error": err.Error()}, true), nil
 	}
+	log.Info().Str("tool", call.Name).Msg("memory mcp tool call complete")
 	return toolResult(result, false), nil
 }
 
@@ -159,6 +165,18 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 	case "query_context_graph":
 		var req domain.GraphQueryRequest
 		if err := decodeArgs(args, &req); err != nil {
+			return nil, err
+		}
+		if err := ensureReadOnlyGraphQuery(req); err != nil {
+			return nil, err
+		}
+		return s.service.QueryContextGraph(ctx, req)
+	case "mutate_context_graph":
+		var req domain.GraphQueryRequest
+		if err := decodeArgs(args, &req); err != nil {
+			return nil, err
+		}
+		if err := ensureMutatingGraphQuery(req); err != nil {
 			return nil, err
 		}
 		return s.service.QueryContextGraph(ctx, req)
@@ -263,6 +281,43 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 	}
 }
 
+// ensureReadOnlyGraphQuery rejects mutation grammar on the read-only graph tool.
+func ensureReadOnlyGraphQuery(req domain.GraphQueryRequest) error {
+	mutating, err := graphQueryMutates(req)
+	if err != nil {
+		return err
+	}
+	if mutating {
+		return errors.New("query_context_graph only accepts read-only FIND or MATCH statements; use mutate_context_graph for graph mutations")
+	}
+	return nil
+}
+
+// ensureMutatingGraphQuery rejects read grammar on the graph mutation tool.
+func ensureMutatingGraphQuery(req domain.GraphQueryRequest) error {
+	mutating, err := graphQueryMutates(req)
+	if err != nil {
+		return err
+	}
+	if !mutating {
+		return errors.New("mutate_context_graph only accepts INSERT, SET, or DELETE statements; use query_context_graph for graph reads")
+	}
+	return nil
+}
+
+// graphQueryMutates parses a graph query request and reports whether it writes.
+func graphQueryMutates(req domain.GraphQueryRequest) (bool, error) {
+	req, err := domain.NormalizeGraphQueryRequest(req)
+	if err != nil {
+		return false, err
+	}
+	stmt, err := graphquery.Parse(req.Query)
+	if err != nil {
+		return false, err
+	}
+	return stmt.Mutating(), nil
+}
+
 // toolDefinitions returns the stable MCP tool schemas.
 func toolDefinitions() []map[string]any {
 	return []map[string]any{
@@ -320,13 +375,8 @@ func toolDefinitions() []map[string]any {
 			"scope":     enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
 			"text":      stringSchema("Correction text."),
 		}, []string{"memory_id", "text"}),
-		tool("query_context_graph", "Execute a SQL-like graph query or audited mutation.", map[string]any{
-			"actor":                 stringSchema("Calling agent or user."),
-			"source_node_id":        stringSchema("Source graph node id required for mutations."),
-			"query":                 stringSchema("Graph query, such as FIND task WHERE status != \"done\" AND risk_score >= 6 RETURN id, title LIMIT 10, FIND task GROUP BY status RETURN status, count ORDER BY count DESC LIMIT 10, MATCH task -[depends_on]-> task RETURN from.title, edge.type, to.title LIMIT 10, MATCH task -[depends_on*1..3]-> task WHERE path.depth >= 2 RETURN from.title, path.depth, to.title LIMIT 10, INSERT NODE task SET title = \"New task\" RETURN id, title, or INSERT EDGE node_1 -[depends_on]-> node_2 SET note = \"blocked\" RETURN edge.id, note."),
-			"scope":                 enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
-			"allowed_sensitivities": arraySchema("Allowed sensitivity levels; restricted must be requested explicitly.", enumSchema("Sensitivity.", []string{"public", "internal", "private", "restricted"})),
-		}, []string{"query"}),
+		tool("query_context_graph", "Execute a read-only SQL-like graph query.", graphQuerySchema("Read-only graph query, such as FIND task WHERE status != \"done\" AND risk_score >= 6 RETURN id, title LIMIT 10, FIND task GROUP BY status RETURN status, count ORDER BY count DESC LIMIT 10, MATCH task -[depends_on]-> task RETURN from.title, edge.type, to.title LIMIT 10, or MATCH task -[depends_on*1..3]-> task WHERE path.depth >= 2 RETURN from.title, path.depth, to.title LIMIT 10."), []string{"query"}),
+		tool("mutate_context_graph", "Execute an audited SQL-like graph mutation.", graphQuerySchema("Graph mutation, such as INSERT NODE task SET title = \"New task\" RETURN id, title, SET NODE node_1 SET title = \"Updated\" RETURN id, title, DELETE EDGE edge_1 RETURN edge.id, or INSERT EDGE node_1 -[depends_on]-> node_2 SET note = \"blocked\" RETURN edge.id, note."), []string{"query"}),
 		tool("create_task", "Create a graph-backed operational task or todo. Do not use for user facts, preferences, or notes to remember.", taskCreateSchema(), []string{"title"}),
 		tool("get_task", "Load one graph-backed task by id.", map[string]any{"task_id": stringSchema("Task id.")}, []string{"task_id"}),
 		tool("list_tasks", "List graph-backed tasks.", taskQuerySchema(), []string{}),
@@ -342,6 +392,17 @@ func toolDefinitions() []map[string]any {
 		tool("traverse_task_relations", "Traverse bounded paths through directed task-to-task graph relations.", taskRelationTraversalSchema(), []string{"root_task_id"}),
 		tool("upsert_task_relation", "Create or update a directed task-to-task graph relation.", taskRelationUpsertSchema(), []string{"from_task_id", "to_task_id"}),
 		tool("delete_task_relation", "Lifecycle-delete a directed task-to-task graph relation.", map[string]any{"relation_id": stringSchema("Task relation id."), "actor": stringSchema("Calling agent or user.")}, []string{"relation_id"}),
+	}
+}
+
+// graphQuerySchema returns the shared graph query and mutation input schema.
+func graphQuerySchema(queryDescription string) map[string]any {
+	return map[string]any{
+		"actor":                 stringSchema("Calling agent or user."),
+		"source_node_id":        stringSchema("Source graph node id required for mutations."),
+		"query":                 stringSchema(queryDescription),
+		"scope":                 enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
+		"allowed_sensitivities": arraySchema("Allowed sensitivity levels; restricted must be requested explicitly.", enumSchema("Sensitivity.", []string{"public", "internal", "private", "restricted"})),
 	}
 }
 

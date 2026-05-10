@@ -3,6 +3,7 @@ package slack
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -83,6 +84,40 @@ func TestAcceptedMessageAcceptsAppMentions(t *testing.T) {
 	}
 }
 
+// TestAcceptedMessageEnforcesAllowLists verifies beta Slack scope stays explicit.
+func TestAcceptedMessageEnforcesAllowLists(t *testing.T) {
+	adapter := NewAdapter(Config{
+		Enabled:          true,
+		AllowedTeamID:    "T1",
+		AllowedUserID:    "U1",
+		AllowedChannelID: "C1",
+	})
+	base := EventEnvelope{
+		Type:   "event_callback",
+		TeamID: "T1",
+		Event: MessageEvent{
+			Type:    "message",
+			Channel: "C1",
+			User:    "U1",
+			Text:    "hello",
+			TS:      "1.0",
+		},
+	}
+	if _, _, ok := adapter.acceptedMessage(base); !ok {
+		t.Fatalf("acceptedMessage() rejected allow-listed event")
+	}
+	disallowedUser := base
+	disallowedUser.Event.User = "U2"
+	if _, reason, ok := adapter.acceptedMessage(disallowedUser); ok || !strings.Contains(reason, "user") {
+		t.Fatalf("disallowed user ok=%v reason=%q, want user rejection", ok, reason)
+	}
+	disallowedChannel := base
+	disallowedChannel.Event.Channel = "C2"
+	if _, reason, ok := adapter.acceptedMessage(disallowedChannel); ok || !strings.Contains(reason, "channel") {
+		t.Fatalf("disallowed channel ok=%v reason=%q, want channel rejection", ok, reason)
+	}
+}
+
 // TestSessionIDForMessageUsesThreadRoot verifies Slack threads map to one session.
 func TestSessionIDForMessageUsesThreadRoot(t *testing.T) {
 	root := MessageEvent{Channel: "C1", TS: "1.0", ThreadTS: "0.5"}
@@ -133,6 +168,44 @@ func TestEventsHandlerIgnoresRetryAfterFirstAcceptance(t *testing.T) {
 	assertNoDispatch(t, dispatched)
 }
 
+// TestAcceptEnvelopeThrottlesConcurrentUserChannelDispatch verifies per-sender limits.
+func TestAcceptEnvelopeThrottlesConcurrentUserChannelDispatch(t *testing.T) {
+	adapter := NewAdapter(Config{MaxConcurrentDispatches: 2})
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	adapter.dispatchMessage = func(_ context.Context, _ string, _ MessageEvent) {
+		started <- struct{}{}
+		<-release
+	}
+	if _, err := adapter.AcceptEnvelope(slackEventBody("EvThrottleFirst", "1.0", "first")); err != nil {
+		t.Fatalf("AcceptEnvelope() first error = %v", err)
+	}
+	<-started
+	if _, err := adapter.AcceptEnvelope(slackEventBody("EvThrottleSecond", "2.0", "second")); !errors.Is(err, errSlackDispatchThrottled) {
+		t.Fatalf("AcceptEnvelope() second error = %v, want dispatch throttled", err)
+	}
+	close(release)
+}
+
+// TestAcceptEnvelopeThrottlesGlobalConcurrentDispatch verifies fan-out stays bounded.
+func TestAcceptEnvelopeThrottlesGlobalConcurrentDispatch(t *testing.T) {
+	adapter := NewAdapter(Config{MaxConcurrentDispatches: 1})
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	adapter.dispatchMessage = func(_ context.Context, _ string, _ MessageEvent) {
+		started <- struct{}{}
+		<-release
+	}
+	if _, err := adapter.AcceptEnvelope(slackEventBody("EvGlobalFirst", "1.0", "first")); err != nil {
+		t.Fatalf("AcceptEnvelope() first error = %v", err)
+	}
+	<-started
+	if _, err := adapter.AcceptEnvelope(slackEventBodyWithSender("EvGlobalSecond", "2.0", "C2", "U2", "second")); !errors.Is(err, errSlackDispatchThrottled) {
+		t.Fatalf("AcceptEnvelope() second error = %v, want dispatch throttled", err)
+	}
+	close(release)
+}
+
 // TestDistinctThreadRepliesAcceptedWithoutEventID verifies fallback keys preserve replies.
 func TestDistinctThreadRepliesAcceptedWithoutEventID(t *testing.T) {
 	adapter, dispatched := newDispatchCaptureAdapter(Config{})
@@ -140,11 +213,11 @@ func TestDistinctThreadRepliesAcceptedWithoutEventID(t *testing.T) {
 	if _, err := adapter.AcceptEnvelope(slackEventBody("", "1.0", "first")); err != nil {
 		t.Fatalf("AcceptEnvelope() first error = %v", err)
 	}
+	first := waitDispatch(t, dispatched)
 	if _, err := adapter.AcceptEnvelope(slackEventBody("", "2.0", "reply")); err != nil {
 		t.Fatalf("AcceptEnvelope() reply error = %v", err)
 	}
 
-	first := waitDispatch(t, dispatched)
 	second := waitDispatch(t, dispatched)
 	if first.TS == second.TS {
 		t.Fatalf("fallback dedupe collapsed distinct replies: first=%#v second=%#v", first, second)
@@ -163,11 +236,16 @@ func newDispatchCaptureAdapter(config Config) (*Adapter, <-chan MessageEvent) {
 
 // slackEventBody builds one Slack Events API message callback body.
 func slackEventBody(eventID string, ts string, text string) []byte {
+	return slackEventBodyWithSender(eventID, ts, "C1", "U1", text)
+}
+
+// slackEventBodyWithSender builds one Slack message callback for a sender.
+func slackEventBodyWithSender(eventID string, ts string, channel string, user string, text string) []byte {
 	eventIDField := ""
 	if eventID != "" {
 		eventIDField = fmt.Sprintf(`,"event_id":%q`, eventID)
 	}
-	return []byte(fmt.Sprintf(`{"type":"event_callback","team_id":"T1"%s,"event":{"type":"message","channel":"C1","user":"U1","text":%q,"ts":%q}}`, eventIDField, text, ts))
+	return []byte(fmt.Sprintf(`{"type":"event_callback","team_id":"T1"%s,"event":{"type":"message","channel":%q,"user":%q,"text":%q,"ts":%q}}`, eventIDField, channel, user, text, ts))
 }
 
 // postSlackEvent sends one signed Slack HTTP delivery to the adapter.
