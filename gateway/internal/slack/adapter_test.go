@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"agentgateway/internal/adk"
 )
 
 // TestEventsHandlerRespondsToURLVerification verifies Slack challenge handling.
@@ -383,7 +385,7 @@ type dispatchFailureTransport struct {
 func (t *dispatchFailureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch req.URL.Host {
 	case "agent.test":
-		if req.URL.Path == "/run_sse" {
+		if req.URL.Path == adk.RunSSEPath() {
 			<-req.Context().Done()
 			return nil, req.Context().Err()
 		}

@@ -43,7 +43,7 @@ func TestEnsureReportsStartingStatusWhileWaiting(t *testing.T) {
 		})
 	}()
 
-	status := waitForServiceStatus(t, manager, "slow-service", "starting")
+	status := waitForServiceStatus(t, manager, "slow-service", StateStarting)
 	if status.PID == 0 {
 		t.Fatalf("starting status PID = 0, want process PID")
 	}
@@ -82,7 +82,7 @@ func TestEnsureReportsProcessExitBeforeHealth(t *testing.T) {
 		Arguments: []string{"-c", "exit 7"},
 	})
 
-	if status.State != "disconnected" {
+	if status.State != StateDisconnected {
 		t.Fatalf("State = %q, want disconnected", status.State)
 	}
 	if status.Message != "process exited before health: exit code 7" {
@@ -105,14 +105,14 @@ func TestEnsureStartupTimeoutTerminatesProcess(t *testing.T) {
 		Arguments: []string{"5"},
 	})
 
-	if status.State != "failed_startup" {
+	if status.State != StateFailedStartup {
 		t.Fatalf("State = %q, want failed_startup", status.State)
 	}
 	if !strings.Contains(status.Message, "startup timed out") || !strings.Contains(status.Message, "process") {
 		t.Fatalf("Message = %q, want timeout termination reason", status.Message)
 	}
 	stored := statusByName(t, manager, "hung-service")
-	if stored.State != "failed_startup" || stored.Message != status.Message {
+	if stored.State != StateFailedStartup || stored.Message != status.Message {
 		t.Fatalf("stored status = %#v, want failed startup reason %q", stored, status.Message)
 	}
 	if status.PID == 0 {
@@ -134,7 +134,7 @@ func TestCloseAfterFailedStartupDoesNotDoubleKill(t *testing.T) {
 		Command:   commandPath(t, "sleep"),
 		Arguments: []string{"5"},
 	})
-	if status.State != "failed_startup" {
+	if status.State != StateFailedStartup {
 		t.Fatalf("State = %q, want failed_startup", status.State)
 	}
 
@@ -163,7 +163,7 @@ func TestEnsureHealthyAlreadyRunningServiceIsNotStarted(t *testing.T) {
 		Arguments: []string{"-c", "touch " + marker},
 	})
 
-	if status.State != "connected" || status.PID != 0 {
+	if status.State != StateConnected || status.PID != 0 {
 		t.Fatalf("status = %#v, want already-running connected status without PID", status)
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {

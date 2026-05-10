@@ -74,22 +74,20 @@ func main() {
 // dependencyServices maps gateway config to supervised dependency declarations.
 func dependencyServices(cfg config.Config) []supervisor.Service {
 	return []supervisor.Service{
-		{
-			Name:       cfg.HarnessService.Name,
-			HealthURL:  cfg.HarnessService.HealthURL,
-			Command:    cfg.HarnessService.Command,
-			Arguments:  cfg.HarnessService.Arguments,
-			WorkingDir: cfg.HarnessService.WorkingDir,
-			AutoStart:  cfg.HarnessService.AutoStart,
-		},
-		{
-			Name:       cfg.MemoryService.Name,
-			HealthURL:  cfg.MemoryService.HealthURL,
-			Command:    cfg.MemoryService.Command,
-			Arguments:  cfg.MemoryService.Arguments,
-			WorkingDir: cfg.MemoryService.WorkingDir,
-			AutoStart:  cfg.MemoryService.AutoStart,
-		},
+		dependencyService(cfg.HarnessService),
+		dependencyService(cfg.MemoryService),
+	}
+}
+
+// dependencyService maps parsed config to one supervisor declaration.
+func dependencyService(cfg config.ServiceConfig) supervisor.Service {
+	return supervisor.Service{
+		Name:       cfg.Name,
+		HealthURL:  cfg.HealthURL,
+		Command:    cfg.Command,
+		Arguments:  cfg.Arguments,
+		WorkingDir: cfg.WorkingDir,
+		AutoStart:  cfg.AutoStart,
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"agentgateway/internal/adk"
 	"agentgateway/internal/config"
 	"agentgateway/internal/policy"
 	"agentgateway/internal/proxy"
@@ -204,7 +205,7 @@ func contextProxyOptions(cfg config.Config) []proxy.Option {
 // runSSEBodyTransformer applies optional operator policy to ADK run_sse requests.
 func runSSEBodyTransformer(injector *policy.Injector) proxy.BodyTransformer {
 	return func(r *http.Request, body []byte) ([]byte, error) {
-		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/run_sse") {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, adk.RunSSEPath()) {
 			return body, nil
 		}
 		next, _, err := injector.Inject(body)
@@ -298,8 +299,8 @@ func (s *Server) betaStatus(ctx context.Context) betaStatusView {
 			Ready:   true,
 			Message: "gateway process is serving",
 		},
-		Harness:  s.dependencyStatus(s.config.HarnessService.Name, "harness"),
-		Memory:   s.dependencyStatus(s.config.MemoryService.Name, "memory"),
+		Harness:  s.dependencyStatus(s.config.HarnessService.Name, config.DefaultHarnessServiceName),
+		Memory:   s.dependencyStatus(s.config.MemoryService.Name, config.DefaultMemoryServiceName),
 		Snapshot: s.snapshotStatus(ctx, s.memoryHealth(ctx)),
 		Slack:    s.betaSlackStatus(),
 		Model:    s.betaModelStatus(),
@@ -312,14 +313,11 @@ func (s *Server) dependencyStatus(serviceName string, fallbackName string) betaC
 	if name == "" {
 		name = fallbackName
 	}
-	for _, status := range s.manager.Statuses() {
-		if status.Name != name {
-			continue
-		}
+	if status, ok := s.statusForService(name); ok {
 		return betaComponentView{
 			Name:      name,
 			State:     status.State,
-			Ready:     status.State == "connected",
+			Ready:     status.State == supervisor.StateConnected,
 			Message:   status.Message,
 			URL:       status.URL,
 			UpdatedAt: status.UpdatedAt.UTC().Format(time.RFC3339),
@@ -462,12 +460,24 @@ func (s *Server) serviceReady(serviceName string) bool {
 	if strings.TrimSpace(serviceName) == "" {
 		return true
 	}
-	for _, status := range s.manager.Statuses() {
-		if status.Name == serviceName {
-			return status.State == "connected"
-		}
+	if status, ok := s.statusForService(serviceName); ok {
+		return status.State == supervisor.StateConnected
 	}
 	return true
+}
+
+// statusForService returns the latest supervisor status by service name.
+func (s *Server) statusForService(serviceName string) (supervisor.Status, bool) {
+	name := strings.TrimSpace(serviceName)
+	if name == "" {
+		return supervisor.Status{}, false
+	}
+	for _, status := range s.manager.Statuses() {
+		if status.Name == name {
+			return status, true
+		}
+	}
+	return supervisor.Status{}, false
 }
 
 // readiness reports aggregate dependency readiness for status responses.
@@ -480,8 +490,8 @@ func (s *Server) readiness() readinessView {
 	degraded := false
 	for _, status := range statuses {
 		switch status.State {
-		case "connected":
-		case "checking", "starting":
+		case supervisor.StateConnected:
+		case supervisor.StateChecking, supervisor.StateStarting:
 			starting = true
 		default:
 			degraded = true
@@ -491,7 +501,7 @@ func (s *Server) readiness() readinessView {
 		return readinessView{Ready: false, State: "degraded", Message: "one or more dependencies are unavailable"}
 	}
 	if starting {
-		return readinessView{Ready: false, State: "starting", Message: "dependencies are starting"}
+		return readinessView{Ready: false, State: supervisor.StateStarting, Message: "dependencies are starting"}
 	}
 	return readinessView{Ready: true, State: "ready", Message: "dependencies are ready"}
 }

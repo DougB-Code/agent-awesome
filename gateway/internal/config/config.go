@@ -11,6 +11,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"agentgateway/internal/adk"
+)
+
+const (
+	// DefaultHarnessServiceName is the supervisor name for the ADK harness.
+	DefaultHarnessServiceName = "harness"
+	// DefaultMemoryServiceName is the supervisor name for memoryd.
+	DefaultMemoryServiceName = "memory"
 )
 
 // Config stores all runtime settings for one personal gateway process.
@@ -91,22 +100,22 @@ func FromFlags(args []string) (Config, error) {
 		AllowedUserID:    envString("SLACK_ALLOWED_USER_ID", ""),
 		AllowedChannelID: envString("SLACK_ALLOWED_CHANNEL_ID", ""),
 	}
-	cfg.HarnessService = ServiceConfig{
-		Name:       "harness",
-		HealthURL:  envString("AGENTAWESOME_HARNESS_HEALTH_URL", ""),
-		Command:    envString("AGENTAWESOME_HARNESS_COMMAND", ""),
-		Arguments:  envStringList("AGENTAWESOME_HARNESS_ARGS"),
-		WorkingDir: envString("AGENTAWESOME_HARNESS_WORKDIR", ""),
-		AutoStart:  envBool("AGENTAWESOME_HARNESS_AUTO_START", false),
-	}
-	cfg.MemoryService = ServiceConfig{
-		Name:       "memory",
-		HealthURL:  envString("AGENTAWESOME_MEMORY_HEALTH_URL", ""),
-		Command:    envString("AGENTAWESOME_MEMORY_COMMAND", ""),
-		Arguments:  envStringList("AGENTAWESOME_MEMORY_ARGS"),
-		WorkingDir: envString("AGENTAWESOME_MEMORY_WORKDIR", ""),
-		AutoStart:  envBool("AGENTAWESOME_MEMORY_AUTO_START", false),
-	}
+	cfg.HarnessService = envServiceConfig(
+		DefaultHarnessServiceName,
+		"AGENTAWESOME_HARNESS_HEALTH_URL",
+		"AGENTAWESOME_HARNESS_COMMAND",
+		"AGENTAWESOME_HARNESS_ARGS",
+		"AGENTAWESOME_HARNESS_WORKDIR",
+		"AGENTAWESOME_HARNESS_AUTO_START",
+	)
+	cfg.MemoryService = envServiceConfig(
+		DefaultMemoryServiceName,
+		"AGENTAWESOME_MEMORY_HEALTH_URL",
+		"AGENTAWESOME_MEMORY_COMMAND",
+		"AGENTAWESOME_MEMORY_ARGS",
+		"AGENTAWESOME_MEMORY_WORKDIR",
+		"AGENTAWESOME_MEMORY_AUTO_START",
+	)
 
 	harnessArgs := repeatedStrings(cfg.HarnessService.Arguments)
 	memoryArgs := repeatedStrings(cfg.MemoryService.Arguments)
@@ -137,16 +146,8 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.Slack.AllowedTeamID, "slack-allowed-team-id", cfg.Slack.AllowedTeamID, "required Slack team id allow-list when Slack is enabled")
 	fs.StringVar(&cfg.Slack.AllowedUserID, "slack-allowed-user-id", cfg.Slack.AllowedUserID, "required Slack user id allow-list when Slack is enabled")
 	fs.StringVar(&cfg.Slack.AllowedChannelID, "slack-allowed-channel-id", cfg.Slack.AllowedChannelID, "required Slack channel id allow-list when Slack is enabled")
-	fs.StringVar(&cfg.HarnessService.HealthURL, "harness-health-url", cfg.HarnessService.HealthURL, "harness readiness URL")
-	fs.StringVar(&cfg.HarnessService.Command, "harness-command", cfg.HarnessService.Command, "harness command to start when auto-start is enabled")
-	fs.Var(&harnessArgs, "harness-arg", "repeatable harness command argument")
-	fs.StringVar(&cfg.HarnessService.WorkingDir, "harness-workdir", cfg.HarnessService.WorkingDir, "harness command working directory")
-	fs.BoolVar(&cfg.HarnessService.AutoStart, "harness-auto-start", cfg.HarnessService.AutoStart, "start the harness when it is not healthy")
-	fs.StringVar(&cfg.MemoryService.HealthURL, "memory-health-url", cfg.MemoryService.HealthURL, "memory readiness URL")
-	fs.StringVar(&cfg.MemoryService.Command, "memory-command", cfg.MemoryService.Command, "memory command to start when auto-start is enabled")
-	fs.Var(&memoryArgs, "memory-arg", "repeatable memory command argument")
-	fs.StringVar(&cfg.MemoryService.WorkingDir, "memory-workdir", cfg.MemoryService.WorkingDir, "memory command working directory")
-	fs.BoolVar(&cfg.MemoryService.AutoStart, "memory-auto-start", cfg.MemoryService.AutoStart, "start memory when it is not healthy")
+	bindServiceFlags(fs, &cfg.HarnessService, &harnessArgs, DefaultHarnessServiceName)
+	bindServiceFlags(fs, &cfg.MemoryService, &memoryArgs, DefaultMemoryServiceName)
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -154,7 +155,7 @@ func FromFlags(args []string) (Config, error) {
 	cfg.HarnessService.Arguments = harnessArgs
 	cfg.MemoryService.Arguments = memoryArgs
 	if cfg.HarnessService.HealthURL == "" {
-		cfg.HarnessService.HealthURL = harnessSessionsURL(cfg.HarnessBaseURL, cfg.AppName, cfg.UserID)
+		cfg.HarnessService.HealthURL = adk.SessionsURL(cfg.HarnessBaseURL, cfg.AppName, cfg.UserID)
 	}
 	if cfg.MemoryService.HealthURL == "" {
 		cfg.MemoryService.HealthURL = memoryHealthURL(cfg.MemoryMCPURL)
@@ -184,14 +185,14 @@ func (c Config) Validate() error {
 			return fmt.Errorf("auth token is required when allowed origin is non-local")
 		}
 	}
-	if _, err := url.ParseRequestURI(c.HarnessBaseURL); err != nil {
-		return fmt.Errorf("harness base URL: %w", err)
+	if err := validateRequestURL("harness base URL", c.HarnessBaseURL); err != nil {
+		return err
 	}
-	if _, err := url.ParseRequestURI(c.ContextBaseURL); err != nil {
-		return fmt.Errorf("context base URL: %w", err)
+	if err := validateRequestURL("context base URL", c.ContextBaseURL); err != nil {
+		return err
 	}
-	if _, err := url.ParseRequestURI(c.MemoryMCPURL); err != nil {
-		return fmt.Errorf("memory MCP URL: %w", err)
+	if err := validateRequestURL("memory MCP URL", c.MemoryMCPURL); err != nil {
+		return err
 	}
 	if c.AppName == "" {
 		return fmt.Errorf("app name is required")
@@ -199,10 +200,8 @@ func (c Config) Validate() error {
 	if c.UserID == "" {
 		return fmt.Errorf("user id is required")
 	}
-	if strings.TrimSpace(c.SnapshotStatusURL) != "" {
-		if _, err := url.ParseRequestURI(c.SnapshotStatusURL); err != nil {
-			return fmt.Errorf("snapshot status URL: %w", err)
-		}
+	if err := validateOptionalTrimmedRequestURL("snapshot status URL", c.SnapshotStatusURL); err != nil {
+		return err
 	}
 	if err := c.Slack.Validate(); err != nil {
 		return fmt.Errorf("slack: %w", err)
@@ -221,10 +220,8 @@ func (s ServiceConfig) Validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("name is required")
 	}
-	if s.HealthURL != "" {
-		if _, err := url.ParseRequestURI(s.HealthURL); err != nil {
-			return fmt.Errorf("health URL: %w", err)
-		}
+	if err := validateOptionalRequestURL("health URL", s.HealthURL); err != nil {
+		return err
 	}
 	if s.AutoStart && s.Command == "" {
 		return fmt.Errorf("command is required when auto-start is enabled")
@@ -246,14 +243,17 @@ func (s SlackConfig) Validate() error {
 	if !s.SocketMode && s.SigningSecret == "" {
 		return fmt.Errorf("signing secret is required when Slack HTTP Events API is enabled")
 	}
-	if strings.TrimSpace(s.AllowedTeamID) == "" {
-		return fmt.Errorf("allowed team id is required when Slack is enabled")
-	}
-	if strings.TrimSpace(s.AllowedUserID) == "" {
-		return fmt.Errorf("allowed user id is required when Slack is enabled")
-	}
-	if strings.TrimSpace(s.AllowedChannelID) == "" {
-		return fmt.Errorf("allowed channel id is required when Slack is enabled")
+	for _, required := range []struct {
+		name  string
+		value string
+	}{
+		{name: "allowed team id", value: s.AllowedTeamID},
+		{name: "allowed user id", value: s.AllowedUserID},
+		{name: "allowed channel id", value: s.AllowedChannelID},
+	} {
+		if err := validateSlackRequired(required.name, required.value); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -373,9 +373,57 @@ func envStringList(key string) []string {
 	return values
 }
 
-// harnessSessionsURL derives the ADK sessions endpoint used for readiness.
-func harnessSessionsURL(baseURL string, appName string, userID string) string {
-	return trimTrailingSlash(baseURL) + "/apps/" + url.PathEscape(appName) + "/users/" + url.PathEscape(userID) + "/sessions"
+// validateRequestURL reports a labeled invalid HTTP request URI.
+func validateRequestURL(label string, value string) error {
+	if _, err := url.ParseRequestURI(value); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	return nil
+}
+
+// validateOptionalRequestURL skips empty URL fields and validates configured ones.
+func validateOptionalRequestURL(label string, value string) error {
+	if value == "" {
+		return nil
+	}
+	return validateRequestURL(label, value)
+}
+
+// validateOptionalTrimmedRequestURL treats blank URL fields as unset.
+func validateOptionalTrimmedRequestURL(label string, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return validateRequestURL(label, value)
+}
+
+// validateSlackRequired reports one missing Slack setting with shared wording.
+func validateSlackRequired(name string, value string) error {
+	if strings.TrimSpace(value) == "" {
+		return fmt.Errorf("%s is required when Slack is enabled", name)
+	}
+	return nil
+}
+
+// envServiceConfig builds dependency supervision settings from environment keys.
+func envServiceConfig(name string, healthKey string, commandKey string, argsKey string, workingDirKey string, autoStartKey string) ServiceConfig {
+	return ServiceConfig{
+		Name:       name,
+		HealthURL:  envString(healthKey, ""),
+		Command:    envString(commandKey, ""),
+		Arguments:  envStringList(argsKey),
+		WorkingDir: envString(workingDirKey, ""),
+		AutoStart:  envBool(autoStartKey, false),
+	}
+}
+
+// bindServiceFlags registers common dependency supervision flags.
+func bindServiceFlags(fs *flag.FlagSet, service *ServiceConfig, args *repeatedStrings, prefix string) {
+	fs.StringVar(&service.HealthURL, prefix+"-health-url", service.HealthURL, prefix+" readiness URL")
+	fs.StringVar(&service.Command, prefix+"-command", service.Command, prefix+" command to start when auto-start is enabled")
+	fs.Var(args, prefix+"-arg", "repeatable "+prefix+" command argument")
+	fs.StringVar(&service.WorkingDir, prefix+"-workdir", service.WorkingDir, prefix+" command working directory")
+	fs.BoolVar(&service.AutoStart, prefix+"-auto-start", service.AutoStart, "start "+prefix+" when it is not healthy")
 }
 
 // memoryHealthURL derives the memory process health endpoint from the MCP URL.
@@ -388,14 +436,6 @@ func memoryHealthURL(mcpURL string) string {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String()
-}
-
-// trimTrailingSlash removes one trailing slash from a URL string.
-func trimTrailingSlash(value string) string {
-	for len(value) > 0 && value[len(value)-1] == '/' {
-		value = value[:len(value)-1]
-	}
-	return value
 }
 
 // isLoopbackListenAddress reports whether an HTTP bind address is loopback-only.

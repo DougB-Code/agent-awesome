@@ -19,6 +19,28 @@ type WebAPI struct {
 	appToken string
 }
 
+// slackAPIRequest stores one outbound Slack Web API request description.
+type slackAPIRequest struct {
+	method      string
+	token       string
+	contentType string
+	body        io.Reader
+	response    any
+	decodeLabel string
+}
+
+// slackAPIStatus stores the common Slack Web API success envelope.
+type slackAPIStatus struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error"`
+}
+
+// openSocketResponse stores Slack's Socket Mode URL response.
+type openSocketResponse struct {
+	slackAPIStatus
+	URL string `json:"url"`
+}
+
 // NewWebAPI creates a Slack Web API client.
 func NewWebAPI(client *http.Client, botToken string, appToken string) *WebAPI {
 	if client == nil {
@@ -27,28 +49,41 @@ func NewWebAPI(client *http.Client, botToken string, appToken string) *WebAPI {
 	return &WebAPI{client: client, botToken: botToken, appToken: appToken}
 }
 
-// OpenSocketURL requests a temporary Socket Mode WebSocket URL from Slack.
-func (a *WebAPI) OpenSocketURL(ctx context.Context) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, slackAPIBaseURL+"/apps.connections.open", nil)
+// post sends one Slack Web API request and decodes the JSON response.
+func (a *WebAPI) post(ctx context.Context, request slackAPIRequest) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, slackAPIBaseURL+"/"+request.method, request.body)
 	if err != nil {
-		return "", err
+		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+a.appToken)
+	req.Header.Set("Authorization", "Bearer "+request.token)
+	if request.contentType != "" {
+		req.Header.Set("Content-Type", request.contentType)
+	}
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer resp.Body.Close()
-	var decoded struct {
-		OK    bool   `json:"ok"`
-		URL   string `json:"url"`
-		Error string `json:"error"`
+	if err := json.NewDecoder(resp.Body).Decode(request.response); err != nil {
+		return fmt.Errorf("decode %s: %w", request.decodeLabel, err)
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return "", fmt.Errorf("decode Slack socket response: %w", err)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return nil
+}
+
+// OpenSocketURL requests a temporary Socket Mode WebSocket URL from Slack.
+func (a *WebAPI) OpenSocketURL(ctx context.Context) (string, error) {
+	var decoded openSocketResponse
+	if err := a.post(ctx, slackAPIRequest{
+		method:      "apps.connections.open",
+		token:       a.appToken,
+		response:    &decoded,
+		decodeLabel: "Slack socket response",
+	}); err != nil {
+		return "", err
 	}
 	if !decoded.OK || decoded.URL == "" {
-		return "", fmt.Errorf("open Slack socket: %s", decoded.Error)
+		return "", decoded.err("open Slack socket")
 	}
 	return decoded.URL, nil
 }
@@ -66,27 +101,24 @@ func (a *WebAPI) PostMessage(ctx context.Context, channel string, threadTS strin
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, slackAPIBaseURL+"/chat.postMessage", bytes.NewReader(data))
-	if err != nil {
+	var decoded slackAPIStatus
+	if err := a.post(ctx, slackAPIRequest{
+		method:      "chat.postMessage",
+		token:       a.botToken,
+		contentType: "application/json",
+		body:        bytes.NewReader(data),
+		response:    &decoded,
+		decodeLabel: "Slack post response",
+	}); err != nil {
 		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+a.botToken)
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	var decoded struct {
-		OK    bool   `json:"ok"`
-		Error string `json:"error"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return fmt.Errorf("decode Slack post response: %w", err)
 	}
 	if !decoded.OK {
-		return fmt.Errorf("post Slack message: %s", decoded.Error)
+		return decoded.err("post Slack message")
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
 	return nil
+}
+
+// err formats one Slack Web API failure response.
+func (s slackAPIStatus) err(operation string) error {
+	return fmt.Errorf("%s: %s", operation, s.Error)
 }

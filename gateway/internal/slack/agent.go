@@ -10,13 +10,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
+	"agentgateway/internal/adk"
 	"agentgateway/internal/policy"
 )
 
 const confirmationFunctionName = "adk_request_confirmation"
+const agentSessionErrorBodyLimit int64 = 1024
+const agentRunErrorBodyLimit int64 = 2048
 
 var errSlackConfirmationUnsupported = errors.New("slack tool confirmation is unsupported")
 
@@ -63,15 +65,14 @@ func (c *AgentClient) EnsureSession(ctx context.Context, sessionID string) error
 	if exists {
 		return nil
 	}
-	body, err := json.Marshal(map[string]any{"state": map[string]any{}})
+	body, err := adk.SessionCreateBody()
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.sessionURL(sessionID), bytes.NewReader(body))
+	req, err := newJSONRequest(ctx, c.sessionURL(sessionID), body)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return err
@@ -84,8 +85,7 @@ func (c *AgentClient) EnsureSession(ctx context.Context, sessionID string) error
 	if exists {
 		return nil
 	}
-	data, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-	return fmt.Errorf("create agent session: HTTP %d %s", resp.StatusCode, strings.TrimSpace(string(data)))
+	return agentResponseError("create agent session", resp, agentSessionErrorBodyLimit)
 }
 
 // RunText sends one message to the agent and returns final assistant text.
@@ -98,19 +98,17 @@ func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string
 	if err != nil {
 		return "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/run_sse", bytes.NewReader(body))
+	req, err := newJSONRequest(ctx, adk.RunSSEURL(c.baseURL), body)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-		return "", fmt.Errorf("run agent: HTTP %d %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return "", agentResponseError("run agent", resp, agentRunErrorBodyLimit)
 	}
 	return decodeAgentSSE(resp.Body)
 }
@@ -133,34 +131,33 @@ func (c *AgentClient) sessionExists(ctx context.Context, sessionID string) (bool
 		return false, nil
 	}
 	if resp.StatusCode == http.StatusInternalServerError {
-		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, agentSessionErrorBodyLimit))
 		if strings.Contains(strings.ToLower(string(data)), "not found") {
 			return false, nil
 		}
-		return false, fmt.Errorf("get agent session: HTTP %d %s", resp.StatusCode, strings.TrimSpace(string(data)))
+		return false, agentStatusError("get agent session", resp.StatusCode, string(data))
 	}
 	return false, fmt.Errorf("get agent session: HTTP %d", resp.StatusCode)
 }
 
 // sessionURL builds the ADK REST session URL for one session id.
 func (c *AgentClient) sessionURL(sessionID string) string {
-	return c.baseURL + "/apps/" + url.PathEscape(c.appName) + "/users/" + url.PathEscape(c.userID) + "/sessions/" + url.PathEscape(sessionID)
+	return adk.SessionURL(c.baseURL, c.appName, c.userID, sessionID)
 }
 
 // runBody builds the ADK REST run_sse request body.
 func (c *AgentClient) runBody(sessionID string, text string) ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"appName":   c.appName,
-		"userId":    c.userID,
-		"sessionId": sessionID,
-		"streaming": false,
-		"newMessage": map[string]any{
-			"role": "user",
-			"parts": []map[string]any{
-				{"text": text},
-			},
-		},
-	})
+	return adk.RunRequestBody(c.appName, c.userID, sessionID, text)
+}
+
+// newJSONRequest builds one ADK POST request with a JSON body.
+func newJSONRequest(ctx context.Context, targetURL string, body []byte) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
 }
 
 // decodeAgentSSE extracts final assistant text from an ADK SSE response.
@@ -170,6 +167,21 @@ func decodeAgentSSE(reader io.Reader) (string, error) {
 	eventType := "message"
 	var data strings.Builder
 	var texts []string
+	flushEvent := func() error {
+		if data.Len() == 0 {
+			return nil
+		}
+		text, err := decodeAgentEvent(eventType, data.String())
+		if err != nil {
+			return err
+		}
+		if text != "" {
+			texts = append(texts, text)
+		}
+		eventType = "message"
+		data.Reset()
+		return nil
+	}
 	for scanner.Scan() {
 		line := scanner.Text()
 		switch {
@@ -181,30 +193,33 @@ func decodeAgentSSE(reader io.Reader) (string, error) {
 			}
 			data.WriteString(strings.TrimLeft(strings.TrimPrefix(line, "data:"), " "))
 		case line == "" && data.Len() > 0:
-			text, err := decodeAgentEvent(eventType, data.String())
-			if err != nil {
+			if err := flushEvent(); err != nil {
 				return "", err
 			}
-			if text != "" {
-				texts = append(texts, text)
-			}
-			eventType = "message"
-			data.Reset()
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
-	if data.Len() > 0 {
-		text, err := decodeAgentEvent(eventType, data.String())
-		if err != nil {
-			return "", err
-		}
-		if text != "" {
-			texts = append(texts, text)
-		}
+	if err := flushEvent(); err != nil {
+		return "", err
 	}
 	return strings.TrimSpace(strings.Join(texts, "\n")), nil
+}
+
+// agentResponseError formats one non-success ADK HTTP response with a body sample.
+func agentResponseError(operation string, resp *http.Response, limit int64) error {
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
+	return agentStatusError(operation, resp.StatusCode, string(data))
+}
+
+// agentStatusError formats one ADK HTTP status without leaking unlimited body data.
+func agentStatusError(operation string, statusCode int, body string) error {
+	detail := strings.TrimSpace(body)
+	if detail == "" {
+		return fmt.Errorf("%s: HTTP %d", operation, statusCode)
+	}
+	return fmt.Errorf("%s: HTTP %d %s", operation, statusCode, detail)
 }
 
 // decodeAgentEvent returns display text from one ADK event payload.

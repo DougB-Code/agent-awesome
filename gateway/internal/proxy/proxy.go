@@ -178,35 +178,40 @@ func (p *Proxy) targetURL(r *http.Request) *url.URL {
 
 // copyRequestHeaders forwards caller headers except hop-by-hop transport headers.
 func copyRequestHeaders(dst http.Header, src http.Header) {
-	for key, values := range src {
-		if isHopByHopHeader(key) || strings.EqualFold(key, "authorization") {
-			continue
-		}
-		for _, value := range values {
-			dst.Add(key, value)
-		}
-	}
+	copyHeaders(dst, src, func(key string) bool {
+		return !isHopByHopHeader(key) && !strings.EqualFold(key, "authorization")
+	})
 }
 
 // copyUpstreamHeaders adds gateway-owned headers to the upstream request.
 func copyUpstreamHeaders(dst http.Header, src http.Header) {
 	for key, values := range src {
 		dst.Del(key)
-		for _, value := range values {
-			dst.Add(key, value)
-		}
+		addHeaderValues(dst, key, values)
 	}
 }
 
 // copyResponseHeaders forwards upstream response headers.
 func copyResponseHeaders(dst http.Header, src http.Header) {
+	copyHeaders(dst, src, func(key string) bool {
+		return !isHopByHopHeader(key)
+	})
+}
+
+// copyHeaders forwards allowed header values without replacing existing values.
+func copyHeaders(dst http.Header, src http.Header, include func(string) bool) {
 	for key, values := range src {
-		if isHopByHopHeader(key) {
+		if include != nil && !include(key) {
 			continue
 		}
-		for _, value := range values {
-			dst.Add(key, value)
-		}
+		addHeaderValues(dst, key, values)
+	}
+}
+
+// addHeaderValues appends all values for one header key.
+func addHeaderValues(dst http.Header, key string, values []string) {
+	for _, value := range values {
+		dst.Add(key, value)
 	}
 }
 

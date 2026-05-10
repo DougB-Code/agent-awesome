@@ -14,20 +14,37 @@ import (
 	"agentgateway/internal/supervisor"
 )
 
-// TestStatusRequiresBearerToken verifies optional personal cloud auth.
-func TestStatusRequiresBearerToken(t *testing.T) {
-	server, err := NewServer(config.Config{
+// newTestServer creates a gateway server from the shared minimal test config.
+func newTestServer(t *testing.T, manager *supervisor.Manager, configure func(*config.Config)) *Server {
+	t.Helper()
+	server, err := NewServer(testConfig(configure), manager)
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+	return server
+}
+
+// testConfig returns the minimal valid gateway config used by route tests.
+func testConfig(configure func(*config.Config)) config.Config {
+	cfg := config.Config{
 		ListenAddress:  "127.0.0.1:0",
 		HarnessBaseURL: "http://127.0.0.1:1/api",
 		ContextBaseURL: "http://127.0.0.1:3/api/context",
 		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
 		AppName:        "app",
 		UserID:         "user",
-		AuthToken:      "secret",
-	}, supervisor.New(0))
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
 	}
+	if configure != nil {
+		configure(&cfg)
+	}
+	return cfg
+}
+
+// TestStatusRequiresBearerToken verifies optional personal cloud auth.
+func TestStatusRequiresBearerToken(t *testing.T) {
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.AuthToken = "secret"
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/gateway/status", nil)
 	recorder := httptest.NewRecorder()
@@ -40,18 +57,9 @@ func TestStatusRequiresBearerToken(t *testing.T) {
 
 // TestStatusReturnsSanitizedGatewayConfig verifies the status response hides secrets.
 func TestStatusReturnsSanitizedGatewayConfig(t *testing.T) {
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: "http://127.0.0.1:1/api",
-		ContextBaseURL: "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
-		AppName:        "app",
-		UserID:         "user",
-		AuthToken:      "secret",
-	}, supervisor.New(0))
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.AuthToken = "secret"
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/gateway/status", nil)
 	req.Header.Set("Authorization", "Bearer secret")
@@ -77,19 +85,10 @@ func TestStatusReturnsSanitizedGatewayConfig(t *testing.T) {
 // TestStatusIncludesReadiness verifies status exposes dependency readiness.
 func TestStatusIncludesReadiness(t *testing.T) {
 	manager := supervisor.New(0)
-	manager.Expect(supervisor.Service{Name: "harness", HealthURL: "http://127.0.0.1:1/healthz"})
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: "http://127.0.0.1:1/api",
-		ContextBaseURL: "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
-		AppName:        "app",
-		UserID:         "user",
-		HarnessService: config.ServiceConfig{Name: "harness"},
-	}, manager)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	manager.Expect(supervisor.Service{Name: config.DefaultHarnessServiceName, HealthURL: "http://127.0.0.1:1/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.HarnessService = config.ServiceConfig{Name: config.DefaultHarnessServiceName}
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/gateway/status", nil)
 	recorder := httptest.NewRecorder()
@@ -103,7 +102,7 @@ func TestStatusIncludesReadiness(t *testing.T) {
 		t.Fatalf("json.Unmarshal() error = %v", err)
 	}
 	readiness := decoded["readiness"].(map[string]any)
-	if readiness["state"] != "starting" || readiness["ready"] != false {
+	if readiness["state"] != supervisor.StateStarting || readiness["ready"] != false {
 		t.Fatalf("readiness = %#v, want starting and not ready", readiness)
 	}
 }
@@ -133,34 +132,25 @@ func TestBetaStatusReturnsSafeOperatorView(t *testing.T) {
 	}))
 	defer memory.Close()
 	manager := supervisor.New(0)
-	manager.Ensure(context.Background(), supervisor.Service{Name: "harness", HealthURL: harness.URL + "/healthz"})
-	manager.Ensure(context.Background(), supervisor.Service{Name: "memory", HealthURL: memory.URL + "/healthz"})
-	server, err := NewServer(config.Config{
-		ListenAddress:       "127.0.0.1:0",
-		HarnessBaseURL:      "http://127.0.0.1:1/api",
-		ContextBaseURL:      "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:        "http://127.0.0.1:2/mcp",
-		AppName:             "app",
-		UserID:              "user",
-		AuthToken:           "gateway-secret",
-		SnapshotStatusURL:   snapshot.URL + "/internal/context-snapshot",
-		SnapshotStatusToken: "snapshot-secret",
-		ModelProviderID:     "openai",
-		ModelID:             "gpt-mini",
-		HarnessService:      config.ServiceConfig{Name: "harness", HealthURL: harness.URL + "/healthz"},
-		MemoryService:       config.ServiceConfig{Name: "memory", HealthURL: memory.URL + "/healthz"},
-		Slack: config.SlackConfig{
+	manager.Ensure(context.Background(), supervisor.Service{Name: config.DefaultHarnessServiceName, HealthURL: harness.URL + "/healthz"})
+	manager.Ensure(context.Background(), supervisor.Service{Name: config.DefaultMemoryServiceName, HealthURL: memory.URL + "/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.AuthToken = "gateway-secret"
+		cfg.SnapshotStatusURL = snapshot.URL + "/internal/context-snapshot"
+		cfg.SnapshotStatusToken = "snapshot-secret"
+		cfg.ModelProviderID = "openai"
+		cfg.ModelID = "gpt-mini"
+		cfg.HarnessService = config.ServiceConfig{Name: config.DefaultHarnessServiceName, HealthURL: harness.URL + "/healthz"}
+		cfg.MemoryService = config.ServiceConfig{Name: config.DefaultMemoryServiceName, HealthURL: memory.URL + "/healthz"}
+		cfg.Slack = config.SlackConfig{
 			Enabled:          true,
 			SigningSecret:    "slack-secret",
 			BotToken:         "xoxb-secret",
 			AllowedTeamID:    "T1",
 			AllowedUserID:    "U1",
 			AllowedChannelID: "C1",
-		},
-	}, manager)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+		}
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/gateway/beta-status", nil)
 	req.Header.Set("Authorization", "Bearer gateway-secret")
@@ -200,19 +190,10 @@ func TestBetaStatusReturnsSafeOperatorView(t *testing.T) {
 // TestHealthzStaysLiveWhileDependenciesStart verifies liveness is not gated.
 func TestHealthzStaysLiveWhileDependenciesStart(t *testing.T) {
 	manager := supervisor.New(0)
-	manager.Expect(supervisor.Service{Name: "harness", HealthURL: "http://127.0.0.1:1/healthz"})
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: "http://127.0.0.1:1/api",
-		ContextBaseURL: "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
-		AppName:        "app",
-		UserID:         "user",
-		HarnessService: config.ServiceConfig{Name: "harness"},
-	}, manager)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	manager.Expect(supervisor.Service{Name: config.DefaultHarnessServiceName, HealthURL: "http://127.0.0.1:1/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.HarnessService = config.ServiceConfig{Name: config.DefaultHarnessServiceName}
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	recorder := httptest.NewRecorder()
@@ -232,19 +213,11 @@ func TestAPIProxyWaitsForHarnessReadiness(t *testing.T) {
 	}))
 	defer harness.Close()
 	manager := supervisor.New(0)
-	manager.Expect(supervisor.Service{Name: "harness", HealthURL: harness.URL + "/healthz"})
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: harness.URL + "/api",
-		ContextBaseURL: "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
-		AppName:        "app",
-		UserID:         "user",
-		HarnessService: config.ServiceConfig{Name: "harness"},
-	}, manager)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	manager.Expect(supervisor.Service{Name: config.DefaultHarnessServiceName, HealthURL: harness.URL + "/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.HarnessBaseURL = harness.URL + "/api"
+		cfg.HarnessService = config.ServiceConfig{Name: config.DefaultHarnessServiceName}
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/run_sse", strings.NewReader(`{}`))
 	recorder := httptest.NewRecorder()
@@ -270,20 +243,12 @@ func TestContextAPIProxyWaitsForHarnessReadiness(t *testing.T) {
 	}))
 	defer contextAPI.Close()
 	manager := supervisor.New(0)
-	manager.Expect(supervisor.Service{Name: "harness", HealthURL: contextAPI.URL + "/healthz"})
-	server, err := NewServer(config.Config{
-		ListenAddress:   "127.0.0.1:0",
-		HarnessBaseURL:  "http://127.0.0.1:1/api",
-		ContextBaseURL:  contextAPI.URL + "/api/context",
-		MemoryMCPURL:    "http://127.0.0.1:2/mcp",
-		AppName:         "app",
-		UserID:          "user",
-		HarnessService:  config.ServiceConfig{Name: "harness"},
-		ContextAPIToken: "context-token",
-	}, manager)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	manager.Expect(supervisor.Service{Name: config.DefaultHarnessServiceName, HealthURL: contextAPI.URL + "/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+		cfg.ContextAPIToken = "context-token"
+		cfg.HarnessService = config.ServiceConfig{Name: config.DefaultHarnessServiceName}
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/context/tools/list", nil)
 	recorder := httptest.NewRecorder()
@@ -309,19 +274,11 @@ func TestMCPProxyWaitsForMemoryReadiness(t *testing.T) {
 	}))
 	defer memory.Close()
 	manager := supervisor.New(0)
-	manager.Expect(supervisor.Service{Name: "memory", HealthURL: memory.URL + "/healthz"})
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: "http://127.0.0.1:1/api",
-		ContextBaseURL: "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:   memory.URL + "/mcp",
-		AppName:        "app",
-		UserID:         "user",
-		MemoryService:  config.ServiceConfig{Name: "memory"},
-	}, manager)
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	manager.Expect(supervisor.Service{Name: config.DefaultMemoryServiceName, HealthURL: memory.URL + "/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.MemoryMCPURL = memory.URL + "/mcp"
+		cfg.MemoryService = config.ServiceConfig{Name: config.DefaultMemoryServiceName}
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0"}`))
 	recorder := httptest.NewRecorder()
@@ -352,17 +309,9 @@ func TestMemoryMCPProxyForwardsThroughGateway(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer memory.Close()
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: "http://127.0.0.1:1/api",
-		ContextBaseURL: "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:   memory.URL + "/mcp",
-		AppName:        "app",
-		UserID:         "user",
-	}, supervisor.New(0))
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.MemoryMCPURL = memory.URL + "/mcp"
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0"}`))
 	recorder := httptest.NewRecorder()
@@ -386,17 +335,9 @@ func TestContextAPIProxyForwardsThroughGateway(t *testing.T) {
 		_, _ = w.Write([]byte(`{"tools":["search_memory"]}`))
 	}))
 	defer contextAPI.Close()
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: "http://127.0.0.1:1/api",
-		ContextBaseURL: contextAPI.URL + "/api/context",
-		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
-		AppName:        "app",
-		UserID:         "user",
-	}, supervisor.New(0))
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/context/tools/list", nil)
 	recorder := httptest.NewRecorder()
@@ -419,19 +360,11 @@ func TestContextAPIProxyUsesConfiguredUpstreamToken(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer contextAPI.Close()
-	server, err := NewServer(config.Config{
-		ListenAddress:   "127.0.0.1:0",
-		HarnessBaseURL:  "http://127.0.0.1:1/api",
-		ContextBaseURL:  contextAPI.URL + "/api/context",
-		ContextAPIToken: "context-secret",
-		MemoryMCPURL:    "http://127.0.0.1:2/mcp",
-		AppName:         "app",
-		UserID:          "user",
-		AuthToken:       "gateway-secret",
-	}, supervisor.New(0))
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+		cfg.ContextAPIToken = "context-secret"
+		cfg.AuthToken = "gateway-secret"
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/context/tools/list", nil)
 	req.Header.Set("Authorization", "Bearer gateway-secret")
@@ -462,17 +395,9 @@ func TestRunSSEProxyDoesNotInjectRuntimePolicyByDefault(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer harness.Close()
-	server, err := NewServer(config.Config{
-		ListenAddress:  "127.0.0.1:0",
-		HarnessBaseURL: harness.URL + "/api",
-		ContextBaseURL: "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
-		AppName:        "app",
-		UserID:         "user",
-	}, supervisor.New(0))
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.HarnessBaseURL = harness.URL + "/api"
+	})
 
 	body := strings.NewReader(`{"sessionId":"s1","newMessage":{"parts":[{"text":"hello"}]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/run_sse", body)
@@ -503,20 +428,12 @@ func TestRunSSEProxyInjectsConfiguredRuntimePolicy(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer harness.Close()
-	server, err := NewServer(config.Config{
-		ListenAddress:       "127.0.0.1:0",
-		HarnessBaseURL:      harness.URL + "/api",
-		ContextBaseURL:      "http://127.0.0.1:3/api/context",
-		MemoryMCPURL:        "http://127.0.0.1:2/mcp",
-		AppName:             "app",
-		UserID:              "user",
-		RuntimePolicyText:   "Configured gateway policy.",
-		RequestTimeout:      0,
-		ServiceStartTimeout: 0,
-	}, supervisor.New(0))
-	if err != nil {
-		t.Fatalf("NewServer() error = %v", err)
-	}
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.HarnessBaseURL = harness.URL + "/api"
+		cfg.RuntimePolicyText = "Configured gateway policy."
+		cfg.RequestTimeout = 0
+		cfg.ServiceStartTimeout = 0
+	})
 
 	body := strings.NewReader(`{"sessionId":"s1","newMessage":{"parts":[{"text":"hello"}]}}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/run_sse", body)

@@ -59,6 +59,19 @@ type processResult struct {
 
 const startupTerminationTimeout = 2 * time.Second
 
+const (
+	// StateChecking means a dependency readiness check is in progress.
+	StateChecking = "checking"
+	// StateConnected means a dependency is reachable and ready.
+	StateConnected = "connected"
+	// StateDisconnected means a dependency is not reachable.
+	StateDisconnected = "disconnected"
+	// StateStarting means a managed dependency process is starting.
+	StateStarting = "starting"
+	// StateFailedStartup means a managed dependency failed to become ready.
+	StateFailedStartup = "failed_startup"
+)
+
 // New creates a local service manager.
 func New(startTimeout time.Duration) *Manager {
 	if startTimeout <= 0 {
@@ -79,25 +92,25 @@ func (m *Manager) Expect(services ...Service) {
 		if service.Name == "" {
 			continue
 		}
-		m.remember(newStatus(service, "checking", "waiting for dependency startup", 0, startedAt))
+		m.remember(newStatus(service, StateChecking, "waiting for dependency startup", 0, startedAt))
 	}
 }
 
 // Ensure verifies a dependency and starts it when configured.
 func (m *Manager) Ensure(ctx context.Context, service Service) Status {
 	startedAt := time.Now().UTC()
-	m.remember(newStatus(service, "checking", "checking health", 0, startedAt))
+	m.remember(newStatus(service, StateChecking, "checking health", 0, startedAt))
 	if service.HealthURL != "" && m.isHealthy(ctx, service.HealthURL) {
-		return m.remember(newStatus(service, "connected", "already running", 0, startedAt))
+		return m.remember(newStatus(service, StateConnected, "already running", 0, startedAt))
 	}
 	if !service.AutoStart {
-		return m.remember(newStatus(service, "disconnected", "external service is not reachable", 0, startedAt))
+		return m.remember(newStatus(service, StateDisconnected, "external service is not reachable", 0, startedAt))
 	}
 	process, err := m.start(ctx, service)
 	if err != nil {
-		return m.remember(newStatus(service, "disconnected", "startup failed: "+err.Error(), 0, startedAt))
+		return m.remember(newStatus(service, StateDisconnected, "startup failed: "+err.Error(), 0, startedAt))
 	}
-	m.remember(newStatus(service, "starting", "process started; waiting for health", process.command.Process.Pid, startedAt))
+	m.remember(newStatus(service, StateStarting, "process started; waiting for health", process.command.Process.Pid, startedAt))
 	status := m.waitForHealth(ctx, service, process, startedAt)
 	return m.remember(status)
 }
@@ -109,7 +122,7 @@ func (m *Manager) Statuses() []Status {
 	now := time.Now().UTC()
 	statuses := make([]Status, 0, len(m.statuses))
 	for _, status := range m.statuses {
-		if status.State == "checking" || status.State == "starting" {
+		if status.State == StateChecking || status.State == StateStarting {
 			status.UpdatedAt = now
 			status.ElapsedMS = elapsedMilliseconds(status.StartedAt, now)
 		}
@@ -191,17 +204,17 @@ func (m *Manager) waitForHealth(ctx context.Context, service Service, process pr
 		select {
 		case <-process.done:
 			m.forgetProcess(service.Name)
-			return newStatus(service, "disconnected", processExitMessage(process.err()), process.command.Process.Pid, startedAt)
+			return newStatus(service, StateDisconnected, processExitMessage(process.err()), process.command.Process.Pid, startedAt)
 		case <-deadline.Done():
 			reason := "startup timed out"
 			if deadline.Err() == context.Canceled {
 				reason = "startup canceled"
 			}
 			message := m.terminateFailedStartup(service.Name, process, reason)
-			return newStatus(service, "failed_startup", message, process.command.Process.Pid, startedAt)
+			return newStatus(service, StateFailedStartup, message, process.command.Process.Pid, startedAt)
 		case <-ticker.C:
 			if service.HealthURL != "" && m.isHealthy(deadline, service.HealthURL) {
-				return newStatus(service, "connected", "started", process.command.Process.Pid, startedAt)
+				return newStatus(service, StateConnected, "started", process.command.Process.Pid, startedAt)
 			}
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"agentgateway/internal/adk"
 	"agentgateway/internal/policy"
 )
 
@@ -60,7 +61,7 @@ func TestRunBodyDisablesModelStreaming(t *testing.T) {
 // TestRunTextInjectsConfiguredRuntimePolicy verifies Slack uses gateway policy behavior.
 func TestRunTextInjectsConfiguredRuntimePolicy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/run_sse" {
+		if r.URL.Path != adk.RunSSEPath() {
 			t.Fatalf("path = %q, want /run_sse", r.URL.Path)
 		}
 		var decoded map[string]any

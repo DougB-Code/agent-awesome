@@ -151,12 +151,7 @@ func (a *Adapter) AcceptEnvelopeWithDelivery(body []byte, delivery DeliveryInfo)
 		}
 		dedupeKey := eventDedupKey(envelope)
 		if a.deduper.contains(dedupeKey) {
-			log.Info().
-				Str("event_id", envelope.EventID).
-				Str("dedupe_key", dedupeKey).
-				Str("retry_num", delivery.RetryNum).
-				Str("retry_reason", delivery.RetryReason).
-				Msg("slack duplicate event ignored")
+			logDuplicateEventIgnored(envelope, delivery, dedupeKey, "slack duplicate event ignored")
 			return "", nil
 		}
 		dispatch := a.dispatchMessage
@@ -170,12 +165,7 @@ func (a *Adapter) AcceptEnvelopeWithDelivery(body []byte, delivery DeliveryInfo)
 		}
 		if !a.deduper.accept(dedupeKey) {
 			release()
-			log.Info().
-				Str("event_id", envelope.EventID).
-				Str("dedupe_key", dedupeKey).
-				Str("retry_num", delivery.RetryNum).
-				Str("retry_reason", delivery.RetryReason).
-				Msg("slack duplicate event ignored after admission")
+			logDuplicateEventIgnored(envelope, delivery, dedupeKey, "slack duplicate event ignored after admission")
 			return "", nil
 		}
 		go func() {
@@ -248,6 +238,16 @@ func eventDedupKey(envelope EventEnvelope) string {
 	return "fallback:" + envelope.TeamID + ":" + event.Channel + ":" + event.User + ":" + event.TS
 }
 
+// logDuplicateEventIgnored records one ignored Slack duplicate delivery.
+func logDuplicateEventIgnored(envelope EventEnvelope, delivery DeliveryInfo, dedupeKey string, message string) {
+	log.Info().
+		Str("event_id", envelope.EventID).
+		Str("dedupe_key", dedupeKey).
+		Str("retry_num", delivery.RetryNum).
+		Str("retry_reason", delivery.RetryReason).
+		Msg(message)
+}
+
 // acceptedMessage filters Slack events to the configured personal pilot scope.
 func (a *Adapter) acceptedMessage(envelope EventEnvelope) (MessageEvent, string, bool) {
 	event := envelope.Event
@@ -263,16 +263,28 @@ func (a *Adapter) acceptedMessage(envelope EventEnvelope) (MessageEvent, string,
 	if strings.TrimSpace(event.Text) == "" || event.Channel == "" || event.User == "" || event.TS == "" {
 		return MessageEvent{}, "message is missing required text, channel, user, or timestamp", false
 	}
-	if a.config.AllowedTeamID != "" && envelope.TeamID != a.config.AllowedTeamID {
-		return MessageEvent{}, "team is not allow-listed", false
-	}
-	if a.config.AllowedUserID != "" && event.User != a.config.AllowedUserID {
-		return MessageEvent{}, "user is not allow-listed", false
-	}
-	if a.config.AllowedChannelID != "" && event.Channel != a.config.AllowedChannelID {
-		return MessageEvent{}, "channel is not allow-listed", false
+	for _, scope := range []struct {
+		name    string
+		allowed string
+		actual  string
+	}{
+		{name: "team", allowed: a.config.AllowedTeamID, actual: envelope.TeamID},
+		{name: "user", allowed: a.config.AllowedUserID, actual: event.User},
+		{name: "channel", allowed: a.config.AllowedChannelID, actual: event.Channel},
+	} {
+		if reason, ok := allowListedSlackValue(scope.name, scope.allowed, scope.actual); !ok {
+			return MessageEvent{}, reason, false
+		}
 	}
 	return event, "", true
+}
+
+// allowListedSlackValue reports whether one Slack identifier matches its scope.
+func allowListedSlackValue(name string, allowed string, actual string) (string, bool) {
+	if allowed != "" && actual != allowed {
+		return name + " is not allow-listed", false
+	}
+	return "", true
 }
 
 // dispatch runs the agent for one Slack message and posts a threaded reply.
@@ -300,7 +312,7 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 	if reply == "" {
 		reply = "Done."
 	}
-	if err := a.slack.PostMessage(ctx, event.Channel, ReplyThreadTS(event), reply); err != nil {
+	if err := a.slack.PostMessage(ctx, event.Channel, threadTS, reply); err != nil {
 		log.Error().Err(err).Msg("slack post reply")
 		return
 	}
