@@ -32,7 +32,7 @@ type Config struct {
 	DataRoot string
 }
 
-// Store owns SQLite graph metadata and filesystem evidence blobs.
+// Store owns SQLite graph metadata and filesystem source blobs.
 type Store struct {
 	db                   *sql.DB
 	runner               sqlRunner
@@ -65,8 +65,8 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 	if strings.TrimSpace(cfg.DataRoot) == "" {
 		cfg.DataRoot = "data"
 	}
-	if err := os.MkdirAll(filepath.Join(cfg.DataRoot, "evidence"), 0o700); err != nil {
-		return nil, fmt.Errorf("create graph evidence directory: %w", err)
+	if err := os.MkdirAll(filepath.Join(cfg.DataRoot, "sources"), 0o700); err != nil {
+		return nil, fmt.Errorf("create graph sources directory: %w", err)
 	}
 	db, err := sql.Open("sqlite", cfg.DBPath)
 	if err != nil {
@@ -554,14 +554,14 @@ func (s *Store) WriteEvidenceBlob(ctx context.Context, req graph.WriteEvidenceBl
 		ON CONFLICT(node_id) DO UPDATE SET checksum = excluded.checksum, path = excluded.path, media_type = excluded.media_type, source_system = excluded.source_system, source_id = excluded.source_id, size_bytes = excluded.size_bytes`,
 		req.NodeID, write.checksum, write.relPath, req.MediaType, req.SourceSystem, req.SourceID, write.size, timeString(now)); err != nil {
 		s.discardEvidenceFile(write)
-		return graph.EvidenceBlob{}, fmt.Errorf("write graph evidence blob: %w", err)
+		return graph.EvidenceBlob{}, fmt.Errorf("write graph source blob: %w", err)
 	}
 	if _, err := s.AppendAudit(ctx, graph.AppendAuditRequest{
 		Kind:          "write_evidence_blob",
 		Actor:         req.Actor,
 		SubjectNodeID: req.NodeID,
 		SourceNodeID:  req.SourceNodeID,
-		Message:       "wrote graph evidence content",
+		Message:       "wrote graph source content",
 		DetailsJSON:   evidenceBlobAuditDetails(req, write.checksum, write.size),
 	}); err != nil {
 		s.discardEvidenceFile(write)
@@ -573,7 +573,7 @@ func (s *Store) WriteEvidenceBlob(ctx context.Context, req graph.WriteEvidenceBl
 	return s.GetEvidenceBlob(ctx, req.NodeID)
 }
 
-// evidenceBlobAuditDetails serializes evidence write metadata for auditing.
+// evidenceBlobAuditDetails serializes source write metadata for auditing.
 func evidenceBlobAuditDetails(req graph.WriteEvidenceBlobRequest, checksum string, size int64) string {
 	details := map[string]any{
 		"checksum":      checksum,
@@ -595,7 +595,7 @@ func (s *Store) GetEvidenceBlob(ctx context.Context, nodeID graph.NodeID) (graph
 	var createdAt string
 	if err := s.runner.QueryRowContext(ctx, `SELECT node_id, checksum, path, media_type, source_system, source_id, size_bytes, created_at FROM graph_evidence_blobs WHERE node_id = ?`, nodeID).
 		Scan(&blob.NodeID, &blob.Checksum, &blob.Path, &blob.MediaType, &blob.SourceSystem, &blob.SourceID, &blob.SizeBytes, &createdAt); err != nil {
-		return graph.EvidenceBlob{}, fmt.Errorf("load graph evidence blob: %w", err)
+		return graph.EvidenceBlob{}, fmt.Errorf("load graph source blob: %w", err)
 	}
 	created, err := parseTime(createdAt)
 	if err != nil {
@@ -605,7 +605,7 @@ func (s *Store) GetEvidenceBlob(ctx context.Context, nodeID graph.NodeID) (graph
 	return blob, nil
 }
 
-// ReadEvidenceBlobContent reads evidence content from disk.
+// ReadEvidenceBlobContent reads source content from disk.
 func (s *Store) ReadEvidenceBlobContent(ctx context.Context, nodeID graph.NodeID) (string, error) {
 	blob, err := s.GetEvidenceBlob(ctx, nodeID)
 	if err != nil {
@@ -615,14 +615,14 @@ func (s *Store) ReadEvidenceBlobContent(ctx context.Context, nodeID graph.NodeID
 		if stagedPath := s.stagedEvidenceByNode[nodeID]; stagedPath != "" {
 			bytes, err := os.ReadFile(stagedPath)
 			if err != nil {
-				return "", fmt.Errorf("read staged graph evidence file: %w", err)
+				return "", fmt.Errorf("read staged graph source file: %w", err)
 			}
 			return string(bytes), nil
 		}
 	}
 	bytes, err := os.ReadFile(s.safePath(blob.Path))
 	if err != nil {
-		return "", fmt.Errorf("read graph evidence file: %w", err)
+		return "", fmt.Errorf("read graph source file: %w", err)
 	}
 	return string(bytes), nil
 }
@@ -834,7 +834,7 @@ func (s *Store) edgePropertyIDByIdentity(ctx context.Context, edgeID graph.EdgeI
 	return graph.PropertyID(value), true, nil
 }
 
-// evidenceBlobExists reports whether an evidence blob row already exists.
+// evidenceBlobExists reports whether a source blob row already exists.
 func (s *Store) evidenceBlobExists(ctx context.Context, nodeID graph.NodeID) (string, bool, error) {
 	var path string
 	err := s.runner.QueryRowContext(ctx, `SELECT path FROM graph_evidence_blobs WHERE node_id = ?`, nodeID).Scan(&path)
@@ -842,7 +842,7 @@ func (s *Store) evidenceBlobExists(ctx context.Context, nodeID graph.NodeID) (st
 		return "", false, nil
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("lookup graph evidence blob: %w", err)
+		return "", false, fmt.Errorf("lookup graph source blob: %w", err)
 	}
 	return path, true, nil
 }
@@ -971,7 +971,7 @@ func (s *Store) propertyText(ctx context.Context, nodeID graph.NodeID) (string, 
 	return strings.Join(values, " "), nil
 }
 
-// evidenceText returns evidence content for FTS indexing when present.
+// evidenceText returns source content for FTS indexing when present.
 func (s *Store) evidenceText(ctx context.Context, nodeID graph.NodeID) (string, error) {
 	content, err := s.ReadEvidenceBlobContent(ctx, nodeID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -980,12 +980,12 @@ func (s *Store) evidenceText(ctx context.Context, nodeID graph.NodeID) (string, 
 	return content, err
 }
 
-// writeEvidenceFile writes or stages content for a stable evidence path.
+// writeEvidenceFile writes or stages content for a stable source path.
 func (s *Store) writeEvidenceFile(nodeID graph.NodeID, content string) (evidenceFileWrite, error) {
 	bytes := []byte(content)
 	sum := sha256.Sum256(bytes)
 	checksum := fmt.Sprintf("%x", sum[:])
-	relPath := filepath.Join("evidence", string(nodeID)+"-"+checksum+".txt")
+	relPath := filepath.Join("sources", string(nodeID)+"-"+checksum+".txt")
 	fullPath := s.safePath(relPath)
 	dir := filepath.Dir(fullPath)
 	write := evidenceFileWrite{
@@ -998,14 +998,14 @@ func (s *Store) writeEvidenceFile(nodeID graph.NodeID, content string) (evidence
 	if _, err := os.Stat(fullPath); err == nil {
 		return write, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return evidenceFileWrite{}, fmt.Errorf("stat graph evidence file: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("stat graph source file: %w", err)
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return evidenceFileWrite{}, fmt.Errorf("create graph evidence directory: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("create graph source directory: %w", err)
 	}
-	tmp, err := os.CreateTemp(dir, ".evidence-*.tmp")
+	tmp, err := os.CreateTemp(dir, ".source-*.tmp")
 	if err != nil {
-		return evidenceFileWrite{}, fmt.Errorf("create graph evidence temp file: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("create graph source temp file: %w", err)
 	}
 	tmpPath := tmp.Name()
 	cleanupTemp := true
@@ -1016,14 +1016,14 @@ func (s *Store) writeEvidenceFile(nodeID graph.NodeID, content string) (evidence
 	}()
 	if _, err := tmp.Write(bytes); err != nil {
 		_ = tmp.Close()
-		return evidenceFileWrite{}, fmt.Errorf("write graph evidence temp file: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("write graph source temp file: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
-		return evidenceFileWrite{}, fmt.Errorf("sync graph evidence temp file: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("sync graph source temp file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		return evidenceFileWrite{}, fmt.Errorf("close graph evidence temp file: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("close graph source temp file: %w", err)
 	}
 	write.tmpPath = tmpPath
 	write.created = true
@@ -1038,13 +1038,13 @@ func (s *Store) writeEvidenceFile(nodeID graph.NodeID, content string) (evidence
 		return write, nil
 	}
 	if err := os.Rename(tmpPath, fullPath); err != nil {
-		return evidenceFileWrite{}, fmt.Errorf("commit graph evidence file: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("commit graph source file: %w", err)
 	}
 	cleanupTemp = false
 	write.committed = true
 	if err := syncDirectory(dir); err != nil {
 		_ = removePathIfExists(fullPath)
-		return evidenceFileWrite{}, fmt.Errorf("sync graph evidence directory: %w", err)
+		return evidenceFileWrite{}, fmt.Errorf("sync graph source directory: %w", err)
 	}
 	return write, nil
 }
@@ -1064,7 +1064,7 @@ func (s *Store) discardEvidenceFile(write evidenceFileWrite) {
 	_ = removePathIfExists(write.finalPath)
 }
 
-// removeSupersededEvidenceFile schedules or removes an obsolete evidence path.
+// removeSupersededEvidenceFile schedules or removes an obsolete source path.
 func (s *Store) removeSupersededEvidenceFile(relPath string) {
 	if strings.TrimSpace(relPath) == "" {
 		return
@@ -1076,7 +1076,7 @@ func (s *Store) removeSupersededEvidenceFile(relPath string) {
 	_ = s.removeEvidenceFile(relPath)
 }
 
-// commitEvidenceFiles atomically publishes staged evidence files before commit.
+// commitEvidenceFiles atomically publishes staged source files before commit.
 func (s *Store) commitEvidenceFiles() error {
 	for index := range s.stagedEvidenceFiles {
 		write := &s.stagedEvidenceFiles[index]
@@ -1088,14 +1088,14 @@ func (s *Store) commitEvidenceFiles() error {
 			write.created = false
 			continue
 		} else if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("stat staged graph evidence file: %w", err)
+			return fmt.Errorf("stat staged graph source file: %w", err)
 		}
 		if err := os.Rename(write.tmpPath, write.finalPath); err != nil {
-			return fmt.Errorf("commit staged graph evidence file: %w", err)
+			return fmt.Errorf("commit staged graph source file: %w", err)
 		}
 		write.committed = true
 		if err := syncDirectory(filepath.Dir(write.finalPath)); err != nil {
-			return fmt.Errorf("sync graph evidence directory: %w", err)
+			return fmt.Errorf("sync graph source directory: %w", err)
 		}
 	}
 	return nil
@@ -1120,14 +1120,14 @@ func (s *Store) cleanupCommittedEvidenceFiles() {
 	s.cleanupEvidenceFiles()
 }
 
-// cleanupSupersededEvidenceFiles removes old evidence files after commit.
+// cleanupSupersededEvidenceFiles removes old source files after commit.
 func (s *Store) cleanupSupersededEvidenceFiles() {
 	for _, relPath := range s.evidenceRemovals {
 		_ = s.removeEvidenceFile(relPath)
 	}
 }
 
-// removeEvidenceFile deletes a committed evidence file when it is safe to do so.
+// removeEvidenceFile deletes a committed source file when it is safe to do so.
 func (s *Store) removeEvidenceFile(relPath string) error {
 	return removePathIfExists(s.safePath(relPath))
 }

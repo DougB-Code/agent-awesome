@@ -147,6 +147,14 @@ mcp:
     });
     expect(document.mcp.servers.single.tools.allow, graphBackedMcpToolNames);
     expect(
+      document.mcp.servers.single.tools.allow,
+      contains('project_executive_summary'),
+    );
+    expect(
+      document.mcp.servers.single.tools.allow,
+      contains('explain_executive_summary_item'),
+    );
+    expect(
       document.mcp.servers.single.requireConfirmationTools,
       graphBackedMcpConfirmationToolNames,
     );

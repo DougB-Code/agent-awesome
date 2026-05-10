@@ -50,6 +50,33 @@ void main() {
     expect(route.assistantText, isEmpty);
   });
 
+  test('routes official command panel commands through the task path', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.backlog,
+        area: 'Queue',
+        text: 'show high waiting',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.taskFilter);
+    expect(route.taskFilters?.statuses, <String>['waiting']);
+    expect(route.taskFilters?.priorities, <String>['high']);
+  });
+
+  test('routes command panel navigation aliases to Backlog', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.backlog,
+        area: 'Queue',
+        text: 'open pilot',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.navigateSection);
+    expect(route.section, AppSections.backlog);
+  });
+
   test('wraps unknown non-Backlog commands with current UI context', () {
     final route = _router().route(
       const CommandContext(

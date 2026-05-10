@@ -8,10 +8,14 @@ import 'package:flutter/material.dart';
 import '../app/app_controller.dart';
 import '../app/theme.dart';
 import '../domain/models.dart';
+import '../features/today/attention_screen.dart';
+import '../features/today/today_screen.dart';
 import 'command_bar/command_context.dart';
 import 'command_bar/command_router.dart';
 import 'backlog_section.dart';
+import 'files_section.dart';
 import 'panels/panels.dart';
+import 'people_section.dart';
 import 'settings/settings_panel.dart';
 import 'shell/app_sections.dart';
 import 'shell/app_shell_frame.dart';
@@ -32,6 +36,7 @@ class AgentAwesomeShell extends StatefulWidget {
 class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   final TextEditingController _commandController = TextEditingController();
   String _section = AppSections.today;
+  String _todayRoute = '';
   String _settingsSection = 'App';
   bool _sidebarExpanded = true;
   final Map<String, String> _activeAreas = <String, String>{};
@@ -51,8 +56,11 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
       animation: widget.controller,
       builder: (context, _) {
         return Scaffold(
-          body: ColoredBox(
-            color: colors.surface,
+          body: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.surface,
+              gradient: context.agentAwesomeWorkspaceGradient,
+            ),
             child: AppShellFrame(
               selectedSection: _section,
               controller: widget.controller,
@@ -108,14 +116,52 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
       );
     }
     switch (_section) {
+      case AppSections.today:
+        if (_todayRoute.startsWith('/attention')) {
+          return TodayAttentionScreen(
+            controller: widget.controller,
+            route: _todayRoute,
+            onOpenToday: () => _selectSection(AppSections.today),
+            onOpenBacklogTask: _openBacklogTask,
+          );
+        }
+        return TodayScreen(
+          controller: widget.controller,
+          onOpenRoute: _openProjectionRoute,
+        );
+      case AppSections.chat:
+        return _ChatCommandSubShell(
+          controller: widget.controller,
+          onAreaChanged: _rememberArea(AppSections.chat),
+        );
+      case AppSections.memory:
+        return _MemoryCommandSubShell(
+          controller: widget.controller,
+          onAreaChanged: _rememberArea(AppSections.memory),
+        );
+      case AppSections.backlog:
+        final backlogPanel = BacklogCommandPanel(
+          controller: widget.controller,
+          onAreaChanged: _rememberArea(AppSections.backlog),
+        );
+        if (widget.controller.backlogChatPanelOpen) {
+          return SplitPanelShell(
+            split: const PanelSplit(left: 0.74, min: 0.52, max: 0.86),
+            left: backlogPanel,
+            right: _ChatCommandPanel(controller: widget.controller),
+          );
+        }
+        return backlogPanel;
       case AppSections.files:
-        return _SourcesPage(workspace: widget.controller.workspace);
-      case 'Calendar':
-        return _MemoryTimelineRoute(controller: widget.controller);
-      case AppSections.timeline:
-        return _MemoryTimelineRoute(controller: widget.controller);
+        return FilesCommandSubShell(
+          controller: widget.controller,
+          onAreaChanged: _rememberArea(AppSections.files),
+        );
       case AppSections.people:
-        return _MemoryPeopleRoute(controller: widget.controller);
+        return PeopleCommandSubShell(
+          controller: widget.controller,
+          onAreaChanged: _rememberArea(AppSections.people),
+        );
       default:
         return HomeWorkspace(
           controller: widget.controller,
@@ -127,58 +173,6 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   /// Builds the reusable two-panel layout for sections that use command panels.
   SectionLayout? _buildPanelLayout() {
     switch (_section) {
-      case AppSections.chat:
-        return SectionLayout(
-          split: const PanelSplit(left: 0.62),
-          left: _ChatCommandPanel(controller: widget.controller),
-          right: _ChatUtilitiesPanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea('Chat'),
-          ),
-        );
-      case AppSections.workflows:
-        return SectionLayout(
-          split: const PanelSplit(left: 0.5),
-          left: _WorkflowCommandPanel(
-            controller: widget.controller,
-            onBackHome: () => _selectSection(AppSections.today),
-            onAreaChanged: _rememberArea('Workflows'),
-          ),
-          right: _MemoryCommandPanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea('Memory'),
-          ),
-        );
-      case AppSections.memory:
-        return SectionLayout(
-          split: const PanelSplit(left: 0.5),
-          left: _MemoryLibraryPanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea('Memory'),
-          ),
-          right: _MemoryStewardshipPanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea('Memory'),
-          ),
-        );
-      case AppSections.backlog:
-        return SectionLayout(
-          split: const PanelSplit(left: 0.68, min: 0.42, max: 0.82),
-          left: BacklogQueuePanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea(AppSections.backlog),
-          ),
-          right: widget.controller.backlogReviewPanelOpen
-              ? BacklogReviewPanel(controller: widget.controller)
-              : BacklogInspectorPanel(
-                  controller: widget.controller,
-                  onAreaChanged: _rememberArea('Backlog Inspector'),
-                ),
-          third: widget.controller.backlogChatPanelOpen
-              ? _ChatCommandPanel(controller: widget.controller)
-              : null,
-          outerSplit: const PanelSplit(left: 0.74, min: 0.52, max: 0.86),
-        );
       case AppSections.settings:
         return SectionLayout(
           split: const PanelSplit(left: 0.25, min: 0.2, max: 0.45),
@@ -203,14 +197,46 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   void _selectSection(String section) {
     setState(() {
       _section = section;
+      _todayRoute = '';
     });
     if (section == AppSections.chat) {
       widget.controller.openHome();
-    } else if (section == AppSections.workflows) {
-      widget.controller.openWorkspace();
     } else if (section == AppSections.today) {
       widget.controller.openHome();
     }
+  }
+
+  /// Opens a reserved route emitted by a projection-backed Today card.
+  void _openProjectionRoute(String route) {
+    if (route.startsWith('/attention')) {
+      setState(() {
+        _section = AppSections.today;
+        _todayRoute = route;
+      });
+      widget.controller.openHome();
+      return;
+    }
+    final uri = Uri.tryParse(route);
+    if (uri != null && uri.path == '/backlog') {
+      final insightId = uri.queryParameters['insight'] ?? '';
+      if (insightId.isNotEmpty) {
+        unawaited(widget.controller.applyTaskInsightPreset(insightId));
+      }
+      _selectSection(AppSections.backlog);
+      return;
+    }
+    final section = _sectionForProjectionRoute(route);
+    if (section.isNotEmpty) {
+      _selectSection(section);
+    }
+  }
+
+  /// Opens one backing task in the Backlog inspector.
+  void _openBacklogTask(String taskId) {
+    if (taskId.isNotEmpty) {
+      widget.controller.inspectBacklogTask(taskId);
+    }
+    _selectSection(AppSections.backlog);
   }
 
   /// Starts a new chat from the global command input.
@@ -232,12 +258,20 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   CommandContext _commandContext(String text, {String profilePath = ''}) {
     return CommandContext(
       section: _section,
-      area: _activeAreas[_section] ?? '',
+      area: _commandAreaForSection(),
       text: text,
       selectedTaskId: widget.controller.selectedGraphTaskId,
       selectedMemoryId: widget.controller.selectedMemory?.id ?? '',
       profilePath: profilePath,
     );
+  }
+
+  /// Returns the active command area for the current shell route.
+  String _commandAreaForSection() {
+    if (_section == AppSections.today && _todayRoute.startsWith('/attention')) {
+      return 'Attention';
+    }
+    return _activeAreas[_section] ?? '';
   }
 
   /// Applies top-bar text to the current screen instead of starting a chat.
@@ -329,9 +363,24 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
 /// Reports whether a top-level route depends on the memory service.
 bool _memoryBackedSectionUnavailable(String section) {
   return section == AppSections.memory ||
-      section == AppSections.timeline ||
       section == AppSections.people ||
       section == 'Calendar';
+}
+
+/// Maps non-Today projection routes onto existing top-level sections.
+String _sectionForProjectionRoute(String route) {
+  if (route.startsWith('/timeline')) {
+    return '';
+  }
+  if (route.startsWith('/memory')) {
+    return AppSections.memory;
+  }
+  if (route.startsWith('/open-loops') ||
+      route.startsWith('/delegation') ||
+      route.startsWith('/risks')) {
+    return AppSections.backlog;
+  }
+  return '';
 }
 
 /// Returns whether a value matches a query using ordered fuzzy characters.
@@ -362,6 +411,210 @@ String _chatTimestamp(DateTime timestamp) {
   return '$month/$day $hour:$minute';
 }
 
+const String _chatMemoryDetailId = 'memory';
+const String _chatTasksDetailId = 'tasks';
+const String _chatFilesDetailId = 'files';
+const String _chatPeopleDetailId = 'people';
+const String _chatRuntimeDetailId = 'runtime';
+
+/// _ChatCommandSubShell renders chat in the official command-panel subshell.
+class _ChatCommandSubShell extends StatefulWidget {
+  const _ChatCommandSubShell({required this.controller, this.onAreaChanged});
+
+  final AgentAwesomeAppController controller;
+  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
+
+  @override
+  State<_ChatCommandSubShell> createState() => _ChatCommandSubShellState();
+}
+
+class _ChatCommandSubShellState extends State<_ChatCommandSubShell> {
+  String _detailModeId = _chatMemoryDetailId;
+
+  /// Builds conversation and context in the shared command subshell.
+  @override
+  Widget build(BuildContext context) {
+    return CommandPanelSubShell(
+      areas: <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          title: 'Conversation',
+          icon: Icons.forum_outlined,
+          builder: (query) => _ChatConversationContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+      ],
+      detailTitle: 'Overview',
+      detailModes: const <CommandPanelDetailMode>[
+        CommandPanelDetailMode(
+          id: _chatMemoryDetailId,
+          label: 'Memory',
+          icon: Icons.auto_awesome_mosaic_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _chatTasksDetailId,
+          label: 'Tasks',
+          icon: Icons.checklist_rtl_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _chatFilesDetailId,
+          label: 'Files',
+          icon: Icons.folder_copy_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _chatPeopleDetailId,
+          label: 'People',
+          icon: Icons.people_alt_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _chatRuntimeDetailId,
+          label: 'Runtime',
+          icon: Icons.bolt_outlined,
+        ),
+      ],
+      selectedDetailModeId: _detailModeId,
+      onDetailModeSelected: _selectDetailMode,
+      detailBuilder: _buildDetailContent,
+      onAreaChanged: widget.onAreaChanged,
+      areaActionsBuilder: (context, area) =>
+          _ChatSessionPicker(controller: widget.controller),
+      filterHint: 'Filter...',
+      split: const PanelSplit(left: 0.64, min: 0.48, max: 0.82),
+    );
+  }
+
+  /// Selects the active chat detail mode.
+  void _selectDetailMode(String modeId) {
+    setState(() => _detailModeId = modeId);
+  }
+
+  /// Builds the selected right-side chat utility surface.
+  Widget _buildDetailContent(String modeId) {
+    return switch (modeId) {
+      _chatTasksDetailId => _buildTasksContent(),
+      _chatFilesDetailId => _buildFilesContent(),
+      _chatPeopleDetailId => _buildPeopleContent(),
+      _chatRuntimeDetailId => _buildRuntimeContent(),
+      _ => _buildMemoryContent(),
+    };
+  }
+
+  /// Builds non-transcript memory used by the selected chat.
+  Widget _buildMemoryContent() {
+    final memories = _chatMemoryRecords(widget.controller);
+    if (memories.isEmpty) {
+      return const _ChatContextEmpty(label: 'No memory used in this chat');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        const _MemoryPanelLabel('Memory'),
+        const SizedBox(height: 10),
+        for (final record in memories.take(12))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ChatMemoryContextTile(record: record),
+          ),
+      ],
+    );
+  }
+
+  /// Builds task context associated with the selected chat.
+  Widget _buildTasksContent() {
+    final tasks = widget.controller.selectedChatTasks.toList();
+    if (tasks.isEmpty) {
+      return const _ChatContextEmpty(label: 'No tasks linked to this chat');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        const _MemoryPanelLabel('Tasks'),
+        const SizedBox(height: 10),
+        for (final task in tasks.take(12))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ChatTaskContextTile(task: task),
+          ),
+      ],
+    );
+  }
+
+  /// Builds file context associated with the selected chat.
+  Widget _buildFilesContent() {
+    final fileRecords = _chatFileRecords(widget.controller);
+    final sources = _chatSourceItems(widget.controller).where((source) {
+      return !_sourceItemRepresentedByFileRecord(source, fileRecords);
+    }).toList();
+    if (fileRecords.isEmpty && sources.isEmpty) {
+      return const _ChatContextEmpty(label: 'No files used in this chat');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        const _MemoryPanelLabel('Files'),
+        const SizedBox(height: 10),
+        for (final record in fileRecords.take(12))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ChatMemoryContextTile(record: record),
+          ),
+        for (final source in sources.take(12))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ChatSourceContextTile(source: source),
+          ),
+      ],
+    );
+  }
+
+  /// Builds people and entities mentioned by the selected chat context.
+  Widget _buildPeopleContent() {
+    final people = _chatPeopleRows(widget.controller);
+    if (people.isEmpty) {
+      return const _ChatContextEmpty(label: 'No people linked to this chat');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        const _MemoryPanelLabel('People'),
+        const SizedBox(height: 10),
+        for (final person in people.take(16))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _ChatPersonContextTile(person: person),
+          ),
+      ],
+    );
+  }
+
+  /// Builds runtime status and pending tool approval utilities.
+  Widget _buildRuntimeContent() {
+    final summaries = _chatRuntimeSummaries(widget.controller);
+    if (summaries.isEmpty && widget.controller.pendingConfirmation == null) {
+      return const _ChatContextEmpty(label: 'No runtime activity right now');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (widget.controller.pendingConfirmation != null)
+          _ChatConfirmationUtility(
+            confirmation: widget.controller.pendingConfirmation!,
+            onAnswer: (option) =>
+                unawaited(widget.controller.answerConfirmation(option)),
+          ),
+        if (summaries.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 12),
+          const _MemoryPanelLabel('Runtime'),
+          const SizedBox(height: 10),
+          for (final summary in summaries)
+            _ChatRuntimeSummaryTile(summary: summary),
+        ],
+      ],
+    );
+  }
+}
+
 class _ChatCommandPanel extends StatefulWidget {
   const _ChatCommandPanel({required this.controller});
 
@@ -372,15 +625,6 @@ class _ChatCommandPanel extends StatefulWidget {
 }
 
 class _ChatCommandPanelState extends State<_ChatCommandPanel> {
-  final TextEditingController _replyController = TextEditingController();
-
-  /// Cleans up the persistent chat composer.
-  @override
-  void dispose() {
-    _replyController.dispose();
-    super.dispose();
-  }
-
   /// Builds the dedicated chat command panel with conversation and chat areas.
   @override
   Widget build(BuildContext context) {
@@ -391,12 +635,41 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
         SwitcherPanelArea(
           title: 'Conversation',
           icon: Icons.forum_outlined,
-          builder: _buildConversationContent,
+          builder: (query) => _ChatConversationContent(
+            controller: widget.controller,
+            query: query,
+          ),
         ),
       ],
     );
   }
+}
 
+class _ChatConversationContent extends StatefulWidget {
+  const _ChatConversationContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  @override
+  State<_ChatConversationContent> createState() =>
+      _ChatConversationContentState();
+}
+
+class _ChatConversationContentState extends State<_ChatConversationContent> {
+  final TextEditingController _replyController = TextEditingController();
+
+  /// Cleans up the persistent chat composer.
+  @override
+  void dispose() {
+    _replyController.dispose();
+    super.dispose();
+  }
+
+  /// Builds the selected conversation body and composer.
   Widget _buildConversationContent(String query) {
     final messages = widget.controller.messages.where((message) {
       return _matchesFuzzyQuery('${message.author} ${message.text}', query);
@@ -425,6 +698,12 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
         ),
       ],
     );
+  }
+
+  /// Builds the conversation content for the current fuzzy query.
+  @override
+  Widget build(BuildContext context) {
+    return _buildConversationContent(widget.query);
   }
 
   /// Sends the composer text into the selected chat thread.
@@ -619,129 +898,6 @@ class _ChatComposer extends StatelessWidget {
   }
 }
 
-class _ChatUtilitiesPanel extends StatelessWidget {
-  const _ChatUtilitiesPanel({required this.controller, this.onAreaChanged});
-
-  final AgentAwesomeAppController controller;
-  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
-
-  /// Builds live chat utilities for context, chats, and runtime state.
-  @override
-  Widget build(BuildContext context) {
-    return SwitcherPanel(
-      onAreaChanged: onAreaChanged,
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: 'Context',
-          icon: Icons.account_tree_outlined,
-          builder: _buildContextContent,
-        ),
-        SwitcherPanelArea(
-          title: 'Runtime',
-          icon: Icons.bolt_outlined,
-          builder: _buildRuntimeContent,
-        ),
-      ],
-    );
-  }
-
-  /// Builds memory and context items for the selected chat.
-  Widget _buildContextContent(String query) {
-    final memories = controller.workspace.memoryRecords.where((record) {
-      return _matchesFuzzyQuery(
-        '${record.title} ${record.summary} ${record.topics.join(' ')}',
-        query,
-      );
-    }).toList();
-    final tasks = controller.selectedChatTasks.where((task) {
-      return _matchesFuzzyQuery('${task.title} ${task.detail}', query);
-    }).toList();
-    if (memories.isEmpty && tasks.isEmpty) {
-      return PanelEmptyState(query: query);
-    }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        if (memories.isNotEmpty) ...<Widget>[
-          const _MemoryPanelLabel('Memory in scope'),
-          const SizedBox(height: 10),
-          for (final record in memories.take(8))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _ChatMemoryContextTile(record: record),
-            ),
-        ],
-        if (tasks.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 12),
-          const _MemoryPanelLabel('Associated context'),
-          const SizedBox(height: 10),
-          for (final task in tasks.take(8))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _ChatTaskContextTile(task: task),
-            ),
-        ],
-      ],
-    );
-  }
-
-  /// Builds runtime status and pending tool approval utilities.
-  Widget _buildRuntimeContent(String query) {
-    final endpointStatuses = controller.endpointStatuses.where((status) {
-      return _matchesFuzzyQuery(
-        '${status.name} ${status.url} ${status.message}',
-        query,
-      );
-    }).toList();
-    final localStatuses = controller.localProcessStatuses.where((status) {
-      return _matchesFuzzyQuery(
-        '${status.name} ${status.url} ${status.message}',
-        query,
-      );
-    }).toList();
-    if (endpointStatuses.isEmpty &&
-        localStatuses.isEmpty &&
-        controller.pendingConfirmation == null) {
-      return PanelEmptyState(query: query);
-    }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        if (controller.pendingConfirmation != null)
-          _ChatConfirmationUtility(
-            confirmation: controller.pendingConfirmation!,
-            onAnswer: (option) =>
-                unawaited(controller.answerConfirmation(option)),
-          ),
-        if (localStatuses.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 12),
-          const _MemoryPanelLabel('Local processes'),
-          const SizedBox(height: 10),
-          for (final status in localStatuses)
-            _ChatStatusTile(
-              name: status.name,
-              detail: status.url,
-              state: status.state,
-              message: status.message,
-            ),
-        ],
-        if (endpointStatuses.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 12),
-          const _MemoryPanelLabel('Service endpoints'),
-          const SizedBox(height: 10),
-          for (final status in endpointStatuses)
-            _ChatStatusTile(
-              name: status.name,
-              detail: status.url,
-              state: status.state,
-              message: status.message,
-            ),
-        ],
-      ],
-    );
-  }
-}
-
 class _ChatRuntimeNotice extends StatelessWidget {
   const _ChatRuntimeNotice({required this.icon, required this.label});
 
@@ -790,7 +946,7 @@ class _ChatMemoryContextTile extends StatelessWidget {
           if (record.summary.isNotEmpty) ...<Widget>[
             const SizedBox(height: 6),
             Text(
-              record.summary,
+              _chatContextDisplayText(record.summary),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(color: colors.muted),
@@ -836,24 +992,138 @@ class _ChatTaskContextTile extends StatelessWidget {
   }
 }
 
-class _ChatStatusTile extends StatelessWidget {
-  const _ChatStatusTile({
-    required this.name,
-    required this.detail,
-    required this.state,
-    required this.message,
-  });
+/// _ChatSourceContextTile renders one source file referenced by the chat.
+class _ChatSourceContextTile extends StatelessWidget {
+  const _ChatSourceContextTile({required this.source});
 
-  final String name;
-  final String detail;
-  final ConnectionStateKind state;
-  final String message;
+  final SourceItem source;
 
-  /// Builds one runtime status tile for chat utilities.
+  /// Builds a compact source tile for the chat files panel.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    final color = switch (state) {
+    return PanelSectionBlock(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.insert_drive_file_outlined, color: colors.green),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  source.title,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                if (source.detail.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Text(
+                    source.detail,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.muted),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _ChatPersonContextTile renders one person or entity tied to chat context.
+class _ChatPersonContextTile extends StatelessWidget {
+  const _ChatPersonContextTile({required this.person});
+
+  final _ChatPersonContext person;
+
+  /// Builds a person overview row for the chat people panel.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return PanelSectionBlock(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(Icons.person_outline, color: colors.green),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  person.name,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: <Widget>[
+                    _MemoryBadge(label: '${person.memoryCount} memories'),
+                    _MemoryBadge(label: '${person.taskCount} tasks'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _ChatContextEmpty renders a specific empty state for chat overview modes.
+class _ChatContextEmpty extends StatelessWidget {
+  const _ChatContextEmpty({required this.label});
+
+  final String label;
+
+  /// Builds the centered empty-state message.
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        label,
+        style: TextStyle(color: context.agentAwesomeColors.muted),
+      ),
+    );
+  }
+}
+
+/// _ChatRuntimeSummary stores one user-facing runtime fact.
+class _ChatRuntimeSummary {
+  const _ChatRuntimeSummary({
+    required this.title,
+    required this.detail,
+    required this.state,
+    required this.icon,
+    this.message = '',
+  });
+
+  final String title;
+  final String detail;
+  final ConnectionStateKind state;
+  final IconData icon;
+  final String message;
+}
+
+/// _ChatRuntimeSummaryTile renders one simplified runtime status.
+class _ChatRuntimeSummaryTile extends StatelessWidget {
+  const _ChatRuntimeSummaryTile({required this.summary});
+
+  final _ChatRuntimeSummary summary;
+
+  /// Builds one runtime fact without exposing internal service URLs.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final color = switch (summary.state) {
       ConnectionStateKind.connected => colors.green,
       ConnectionStateKind.disconnected => colors.coral,
       ConnectionStateKind.unknown => colors.muted,
@@ -864,26 +1134,26 @@ class _ChatStatusTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Icon(Icons.circle, size: 12, color: color),
+            Icon(summary.icon, size: 20, color: color),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    name,
+                    summary.title,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    detail,
+                    summary.detail,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: colors.muted),
                   ),
-                  if (message.isNotEmpty) ...<Widget>[
+                  if (summary.message.isNotEmpty) ...<Widget>[
                     const SizedBox(height: 4),
-                    Text(message, overflow: TextOverflow.ellipsis),
+                    Text(summary.message, overflow: TextOverflow.ellipsis),
                   ],
                 ],
               ),
@@ -932,157 +1202,420 @@ class _ChatConfirmationUtility extends StatelessWidget {
   }
 }
 
-class _WorkflowCommandPanel extends StatelessWidget {
-  const _WorkflowCommandPanel({
-    required this.controller,
-    required this.onBackHome,
-    this.onAreaChanged,
+/// _ChatPersonContext stores aggregate person context for one chat.
+class _ChatPersonContext {
+  const _ChatPersonContext({
+    required this.name,
+    required this.memoryCount,
+    required this.taskCount,
   });
 
-  final AgentAwesomeAppController controller;
-  final VoidCallback onBackHome;
-  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
-
-  /// Builds the workflow command panel with switchable dense content areas.
-  @override
-  Widget build(BuildContext context) {
-    return SwitcherPanel(
-      onAreaChanged: onAreaChanged,
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: controller.workspace.title,
-          icon: Icons.auto_awesome,
-          builder: (query) => _buildOverviewContent(context, query),
-        ),
-        SwitcherPanelArea(
-          title: 'Research Plan',
-          icon: Icons.checklist,
-          builder: _buildPlanContent,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOverviewContent(BuildContext context, String query) {
-    final colors = context.agentAwesomeColors;
-    final filteredMessages = controller.messages.where((message) {
-      return _matchesFuzzyQuery('${message.author} ${message.text}', query);
-    }).toList();
-    final hasResults = filteredMessages.isNotEmpty;
-    if (!hasResults) {
-      return PanelEmptyState(query: query);
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Flexible(
-                child: TextButton.icon(
-                  onPressed: onBackHome,
-                  icon: const Icon(Icons.chevron_left),
-                  label: const Text(
-                    'Back to Home',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          Text(
-            controller.workspace.title,
-            style: Theme.of(context).textTheme.displayLarge,
-          ),
-          const SizedBox(height: 10),
-          Text(
-            controller.workspace.subtitle,
-            style: TextStyle(color: colors.muted, fontSize: 17),
-          ),
-          for (final message in filteredMessages) ChatRow(message: message),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlanContent(String query) {
-    final filteredTasks = controller.workspace.tasks.where((task) {
-      return _matchesFuzzyQuery('${task.title} ${task.detail}', query);
-    }).toList();
-    if (filteredTasks.isEmpty) {
-      return PanelEmptyState(query: query);
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-      child: _ResearchPlanCard(controller: controller, tasks: filteredTasks),
-    );
-  }
+  final String name;
+  final int memoryCount;
+  final int taskCount;
 }
 
-class _ResearchPlanCard extends StatelessWidget {
-  const _ResearchPlanCard({required this.controller, this.tasks});
+/// Builds the simplified runtime facts users expect from chat.
+List<_ChatRuntimeSummary> _chatRuntimeSummaries(
+  AgentAwesomeAppController controller,
+) {
+  return <_ChatRuntimeSummary>[
+    _chatModelRuntimeSummary(controller),
+    _chatMemoryRuntimeSummary(controller),
+    _chatSessionRuntimeSummary(controller),
+  ];
+}
 
-  final AgentAwesomeAppController controller;
-  final List<WorkspaceTask>? tasks;
+/// Returns the chat model selected by the active runtime profile.
+_ChatRuntimeSummary _chatModelRuntimeSummary(
+  AgentAwesomeAppController controller,
+) {
+  final entry = _activeModelConfigEntry(controller);
+  final choice = _defaultModelChoice(entry);
+  final label = choice == null ? 'No model configured' : choice.label;
+  final modelName = choice?.modelName.trim() ?? '';
+  final detail = modelName.isEmpty || modelName == choice?.modelId
+      ? label
+      : '$label - $modelName';
+  return _ChatRuntimeSummary(
+    title: 'Chat model',
+    detail: detail,
+    state: choice == null
+        ? ConnectionStateKind.disconnected
+        : ConnectionStateKind.connected,
+    icon: Icons.memory_outlined,
+    message: entry == null ? 'Select a model in Settings.' : '',
+  );
+}
 
-  /// Builds the workspace context card with confirmable actions.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    final visibleTasks = tasks ?? controller.workspace.tasks;
-    final done = visibleTasks.where((task) => task.done).length;
-    return Container(
-      constraints: const BoxConstraints(maxWidth: 720),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Column(
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Expanded(
-                child: Text(
-                  'Research Plan',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
-                ),
-              ),
-              Flexible(
-                child: Text(
-                  'In progress - $done/${visibleTasks.length}',
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: TextStyle(color: colors.muted),
-                ),
-              ),
-              const SizedBox(width: 12),
-              IconButton.outlined(
-                tooltip: 'Add context',
-                onPressed: () => _confirmCreateTask(context, controller),
-                icon: const Icon(Icons.add),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          for (final task in visibleTasks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 14),
-              child: TaskLine(
-                task: task,
-                onComplete: task.done
-                    ? null
-                    : () => _confirmCompleteTask(context, controller, task),
-              ),
-            ),
-        ],
-      ),
-    );
+/// Returns the default model choice from a config entry.
+dynamic _defaultModelChoice(dynamic entry) {
+  if (entry == null || entry.modelChoices.isEmpty) {
+    return null;
   }
+  for (final choice in entry.modelChoices) {
+    if (choice.isDefault) {
+      return choice;
+    }
+  }
+  return entry.modelChoices.first;
+}
+
+/// Returns the memory source configured for the active runtime profile.
+_ChatRuntimeSummary _chatMemoryRuntimeSummary(
+  AgentAwesomeAppController controller,
+) {
+  final memoryServer = _activeMemoryServer(controller);
+  final name = memoryServer?.label ?? 'Memory';
+  final endpoint = _statusNamed(controller.endpointStatuses, name);
+  final process = _statusNamed(controller.localProcessStatuses, name);
+  final state = _combinedRuntimeState(endpoint?.state, process?.state);
+  final message = endpoint?.message.isNotEmpty == true
+      ? endpoint!.message
+      : process?.message ?? '';
+  return _ChatRuntimeSummary(
+    title: 'Memory',
+    detail: name,
+    state: state,
+    icon: Icons.auto_awesome_mosaic_outlined,
+    message: message,
+  );
+}
+
+/// Returns the first enabled memory server from the active runtime profile.
+dynamic _activeMemoryServer(AgentAwesomeAppController controller) {
+  final profile = controller.runtimeProfile;
+  if (profile == null) {
+    return null;
+  }
+  for (final server in profile.mcpServers) {
+    if (server.enabled && server.kind == 'memory') {
+      return server;
+    }
+  }
+  return null;
+}
+
+/// Returns the active chat session runtime without exposing API plumbing names.
+_ChatRuntimeSummary _chatSessionRuntimeSummary(
+  AgentAwesomeAppController controller,
+) {
+  final gateway = controller.runtimeProfile?.gateway;
+  final profile = controller.runtimeProfile;
+  final label = profile?.label ?? 'No profile selected';
+  final serviceLabel = gateway != null && gateway.enabled
+      ? gateway.label
+      : profile?.harness.label ?? '';
+  final endpoint = _statusNamed(controller.endpointStatuses, 'Agent API');
+  final process = _statusNamed(controller.localProcessStatuses, serviceLabel);
+  final state = _combinedRuntimeState(endpoint?.state, process?.state);
+  final message = endpoint?.message.isNotEmpty == true
+      ? endpoint!.message
+      : process?.message ?? '';
+  return _ChatRuntimeSummary(
+    title: 'Profile',
+    detail: label,
+    state: state,
+    icon: Icons.forum_outlined,
+    message: message,
+  );
+}
+
+/// Returns the model config entry assigned to the active runtime profile.
+dynamic _activeModelConfigEntry(AgentAwesomeAppController controller) {
+  final path = controller.runtimeProfile?.harness.modelConfigPath.trim() ?? '';
+  for (final entry in controller.availableModelConfigs) {
+    if (entry.path == path || entry.assigned) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+/// Returns a status by display name.
+dynamic _statusNamed(Iterable<dynamic> statuses, String name) {
+  for (final status in statuses) {
+    if (status.name == name) {
+      return status;
+    }
+  }
+  return null;
+}
+
+/// Combines process and endpoint availability into one user-facing state.
+ConnectionStateKind _combinedRuntimeState(
+  ConnectionStateKind? endpoint,
+  ConnectionStateKind? process,
+) {
+  if (endpoint == ConnectionStateKind.connected ||
+      process == ConnectionStateKind.connected) {
+    return ConnectionStateKind.connected;
+  }
+  if (endpoint == ConnectionStateKind.disconnected ||
+      process == ConnectionStateKind.disconnected) {
+    return ConnectionStateKind.disconnected;
+  }
+  return ConnectionStateKind.unknown;
+}
+
+/// Returns non-file memory records associated with the selected chat.
+List<MemoryRecord> _chatMemoryRecords(AgentAwesomeAppController controller) {
+  final records = _chatRelevantMemoryRecords(controller).where((record) {
+    return !_chatContextRecordIsFile(record);
+  }).toList();
+  records.sort((left, right) => left.title.compareTo(right.title));
+  return records;
+}
+
+/// Returns file-like memory records associated with the selected chat.
+List<MemoryRecord> _chatFileRecords(AgentAwesomeAppController controller) {
+  final records = _chatRelevantMemoryRecords(controller).where((record) {
+    return _chatContextRecordIsFile(record);
+  }).toList();
+  records.sort((left, right) => left.title.compareTo(right.title));
+  return records;
+}
+
+/// Returns source items associated with the selected chat transcript.
+List<SourceItem> _chatSourceItems(AgentAwesomeAppController controller) {
+  final transcript = _chatTranscript(controller);
+  final sources = controller.workspace.sources.where((source) {
+    return _sourceItemBelongsToChat(source, transcript);
+  }).toList();
+  sources.sort((left, right) => left.title.compareTo(right.title));
+  return sources;
+}
+
+/// Returns memory records associated with the selected chat, excluding messages.
+List<MemoryRecord> _chatRelevantMemoryRecords(
+  AgentAwesomeAppController controller,
+) {
+  final sessionId = controller.selectedSessionId ?? '';
+  final transcript = _chatTranscript(controller);
+  return controller.workspace.memoryRecords.where((record) {
+    return !_chatContextRecordIsChatMessage(record) &&
+        _memoryRecordBelongsToChat(record, sessionId, transcript);
+  }).toList();
+}
+
+/// Builds aggregate people rows from chat memory and task context.
+List<_ChatPersonContext> _chatPeopleRows(AgentAwesomeAppController controller) {
+  final memoryCounts = <String, int>{};
+  final taskCounts = <String, int>{};
+  for (final record in _chatRelevantMemoryRecords(controller)) {
+    if (_chatContextRecordIsFile(record)) {
+      continue;
+    }
+    for (final name in record.entityNames) {
+      final normalized = name.trim();
+      if (normalized.isNotEmpty) {
+        memoryCounts[normalized] = (memoryCounts[normalized] ?? 0) + 1;
+      }
+    }
+  }
+  for (final task in controller.selectedChatTasks) {
+    final owner = task.owner.trim();
+    if (owner.isNotEmpty) {
+      taskCounts[owner] = (taskCounts[owner] ?? 0) + 1;
+    }
+  }
+  final names = <String>{...memoryCounts.keys, ...taskCounts.keys}.toList()
+    ..sort();
+  return <_ChatPersonContext>[
+    for (final name in names)
+      _ChatPersonContext(
+        name: name,
+        memoryCount: memoryCounts[name] ?? 0,
+        taskCount: taskCounts[name] ?? 0,
+      ),
+  ];
+}
+
+/// Returns the selected chat transcript as searchable lowercase text.
+String _chatTranscript(AgentAwesomeAppController controller) {
+  return controller.messages
+      .map((message) => '${message.author} ${message.text}')
+      .join('\n')
+      .toLowerCase();
+}
+
+/// Reports whether a memory record belongs to the selected chat.
+bool _memoryRecordBelongsToChat(
+  MemoryRecord record,
+  String sessionId,
+  String transcript,
+) {
+  final sessionNeedle = sessionId.trim().toLowerCase();
+  final metadata = <String>[
+    record.id,
+    record.title,
+    record.summary,
+    record.sourceLabel,
+    record.sourceSystem,
+    record.sourceId,
+    record.rawPath,
+    record.rawMediaType,
+    ...record.topics,
+    ...record.subjects,
+    ...record.entityNames,
+  ].join(' ').toLowerCase();
+  if (sessionNeedle.isNotEmpty && metadata.contains(sessionNeedle)) {
+    return true;
+  }
+  return _anyMeaningfulTokenAppears(transcript, <String>[
+    record.title,
+    record.sourceLabel,
+    record.sourceId,
+    _lastPathSegment(record.rawPath),
+    _lastPathSegment(record.sourceId),
+    ...record.entityNames,
+    ...record.subjects,
+  ]);
+}
+
+/// Reports whether a source item appears in the selected chat transcript.
+bool _sourceItemBelongsToChat(SourceItem source, String transcript) {
+  return _anyMeaningfulTokenAppears(transcript, <String>[
+    source.id,
+    source.title,
+    source.detail,
+    _lastPathSegment(source.id),
+    _lastPathSegment(source.detail),
+  ]);
+}
+
+/// Reports whether a source row is already represented by a file memory record.
+bool _sourceItemRepresentedByFileRecord(
+  SourceItem source,
+  List<MemoryRecord> fileRecords,
+) {
+  final sourceTokens =
+      <String>[
+        source.id,
+        source.title,
+        source.detail,
+        _lastPathSegment(source.id),
+        _lastPathSegment(source.title),
+        _lastPathSegment(source.detail),
+      ].map((value) => value.trim().toLowerCase()).where((value) {
+        return value.isNotEmpty;
+      }).toSet();
+  for (final record in fileRecords) {
+    final recordTokens =
+        <String>[
+          record.id,
+          record.evidenceId,
+          record.title,
+          record.sourceLabel,
+          record.sourceId,
+          record.rawPath,
+          _lastPathSegment(record.title),
+          _lastPathSegment(record.sourceId),
+          _lastPathSegment(record.rawPath),
+        ].map((value) => value.trim().toLowerCase()).where((value) {
+          return value.isNotEmpty;
+        });
+    if (recordTokens.any(sourceTokens.contains)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Removes storage/provenance jargon from chat overview display text.
+String _chatContextDisplayText(String value) {
+  return value
+      .replaceAll(
+        RegExp(r'\bAgent Awesome file evidence\b', caseSensitive: false),
+        'Agent Awesome file',
+      )
+      .replaceAll(RegExp(r'\bfile evidence\b', caseSensitive: false), 'file')
+      .replaceAll(
+        RegExp(r'\bsource evidence\b', caseSensitive: false),
+        'source content',
+      )
+      .replaceAll(
+        RegExp(r'\braw evidence\b', caseSensitive: false),
+        'source content',
+      )
+      .replaceAll(
+        RegExp(r'\bevidence\b', caseSensitive: false),
+        'source material',
+      );
+}
+
+/// Reports whether any meaningful candidate appears in normalized text.
+bool _anyMeaningfulTokenAppears(
+  String normalizedText,
+  Iterable<String> tokens,
+) {
+  for (final token in tokens) {
+    final normalized = token.trim().toLowerCase();
+    if (normalized.length >= 4 && normalizedText.contains(normalized)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Reports whether a memory record is a chat transcript row.
+bool _chatContextRecordIsChatMessage(MemoryRecord record) {
+  final kind = record.kind.toLowerCase();
+  final title = record.title.toLowerCase();
+  final source = '${record.sourceSystem} ${record.sourceId}'.toLowerCase();
+  return kind == 'conversation' ||
+      kind == 'chat' ||
+      kind == 'chat_message' ||
+      title.startsWith('chat message from ') ||
+      source.contains('google_adk_session');
+}
+
+/// Reports whether a memory record represents a file context item.
+bool _chatContextRecordIsFile(MemoryRecord record) {
+  final mediaType = record.rawMediaType.toLowerCase();
+  final path = record.rawPath.toLowerCase();
+  final title = record.title.toLowerCase();
+  final source = '${record.sourceSystem} ${record.sourceId}'.toLowerCase();
+  final kind = record.kind.toLowerCase();
+  return mediaType.startsWith('image/') ||
+      mediaType.contains('pdf') ||
+      mediaType.contains('spreadsheet') ||
+      mediaType.contains('excel') ||
+      mediaType.contains('word') ||
+      mediaType.contains('presentation') ||
+      mediaType.contains('csv') ||
+      _chatTextHasKnownFileExtension(path) ||
+      _chatTextHasKnownFileExtension(title) ||
+      _chatTextHasKnownFileExtension(source) ||
+      kind == 'file' ||
+      kind == 'document' ||
+      kind == 'source_file' ||
+      kind == 'pdf' ||
+      kind == 'spreadsheet' ||
+      kind == 'image' ||
+      source.contains('filesystem') ||
+      source.contains('file_upload') ||
+      source.contains('google_drive');
+}
+
+/// Reports whether text contains a known file extension.
+bool _chatTextHasKnownFileExtension(String value) {
+  return RegExp(
+    r'\.(pdf|doc|docx|xls|xlsx|csv|ods|png|jpe?g|gif|webp|heic|ppt|pptx|zip|txt|md)\b',
+  ).hasMatch(value);
+}
+
+/// Returns the last path segment from a path-like value.
+String _lastPathSegment(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  final parts = trimmed
+      .split(RegExp(r'[/\\]'))
+      .where((part) => part.trim().isNotEmpty)
+      .toList();
+  return parts.isEmpty ? trimmed : parts.last.trim();
 }
 
 const List<String> _memoryKinds = <String>[
@@ -1127,50 +1660,147 @@ const List<String> _memoryStatuses = <String>[
   'archived',
 ];
 
-class _MemoryLibraryPanel extends StatelessWidget {
-  const _MemoryLibraryPanel({required this.controller, this.onAreaChanged});
+const String _memoryOverviewDetailId = 'overview';
+const String _memorySourceDetailId = 'source';
+const String _memoryRelationsDetailId = 'relations';
+const String _memoryMetadataDetailId = 'metadata';
+const String _memoryCorrectionsDetailId = 'corrections';
+const String _memoryPagesDetailId = 'pages';
+
+/// Builds the memory discovery areas used by the command subshell.
+List<SwitcherPanelArea> _memoryCommandAreas(
+  AgentAwesomeAppController controller,
+) {
+  return <SwitcherPanelArea>[
+    SwitcherPanelArea(
+      title: 'Search',
+      icon: Icons.manage_search,
+      builder: (query) =>
+          _MemorySearchContent(controller: controller, query: query),
+    ),
+    SwitcherPanelArea(
+      title: 'Browse',
+      icon: Icons.filter_alt_outlined,
+      builder: (query) =>
+          _MemoryBrowseContent(controller: controller, query: query),
+    ),
+    SwitcherPanelArea(
+      title: 'Review',
+      icon: Icons.rule_folder_outlined,
+      builder: (query) =>
+          _MemoryReviewContent(controller: controller, query: query),
+    ),
+    SwitcherPanelArea(
+      title: 'Map',
+      icon: Icons.account_tree_outlined,
+      builder: (query) =>
+          _MemoryMapContent(controller: controller, query: query),
+    ),
+    SwitcherPanelArea(
+      title: 'Capture',
+      icon: Icons.add_box_outlined,
+      builder: (query) =>
+          _MemoryCaptureContent(controller: controller, query: query),
+    ),
+  ];
+}
+
+/// Returns the selected-memory detail modes for the memory subshell.
+List<CommandPanelDetailMode> _memoryDetailModes() {
+  return const <CommandPanelDetailMode>[
+    CommandPanelDetailMode(
+      id: _memoryOverviewDetailId,
+      label: 'Overview',
+      icon: Icons.info_outline,
+    ),
+    CommandPanelDetailMode(
+      id: _memorySourceDetailId,
+      label: 'Source',
+      icon: Icons.article_outlined,
+    ),
+    CommandPanelDetailMode(
+      id: _memoryRelationsDetailId,
+      label: 'Relations',
+      icon: Icons.hub_outlined,
+    ),
+    CommandPanelDetailMode(
+      id: _memoryMetadataDetailId,
+      label: 'Metadata',
+      icon: Icons.edit_note,
+    ),
+    CommandPanelDetailMode(
+      id: _memoryCorrectionsDetailId,
+      label: 'Corrections',
+      icon: Icons.fact_check_outlined,
+    ),
+    CommandPanelDetailMode(
+      id: _memoryPagesDetailId,
+      label: 'Pages',
+      icon: Icons.view_timeline_outlined,
+    ),
+  ];
+}
+
+/// _MemoryCommandSubShell renders memory in the official command subshell.
+class _MemoryCommandSubShell extends StatefulWidget {
+  const _MemoryCommandSubShell({required this.controller, this.onAreaChanged});
 
   final AgentAwesomeAppController controller;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
-  /// Builds the memory discovery command panel.
+  @override
+  State<_MemoryCommandSubShell> createState() => _MemoryCommandSubShellState();
+}
+
+class _MemoryCommandSubShellState extends State<_MemoryCommandSubShell> {
+  String _detailModeId = _memoryOverviewDetailId;
+
+  /// Builds memory discovery and inspection inside the shared subshell.
   @override
   Widget build(BuildContext context) {
-    return SwitcherPanel(
-      onAreaChanged: onAreaChanged,
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: 'Search',
-          icon: Icons.manage_search,
-          builder: (query) =>
-              _MemorySearchContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Browse',
-          icon: Icons.filter_alt_outlined,
-          builder: (query) =>
-              _MemoryBrowseContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Review',
-          icon: Icons.rule_folder_outlined,
-          builder: (query) =>
-              _MemoryReviewContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Map',
-          icon: Icons.account_tree_outlined,
-          builder: (query) =>
-              _MemoryMapContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Capture',
-          icon: Icons.add_box_outlined,
-          builder: (query) =>
-              _MemoryCaptureContent(controller: controller, query: query),
-        ),
-      ],
+    return CommandPanelSubShell(
+      areas: _memoryCommandAreas(widget.controller),
+      detailTitle: 'Memory Inspector',
+      detailModes: _memoryDetailModes(),
+      selectedDetailModeId: _detailModeId,
+      onDetailModeSelected: _selectDetailMode,
+      detailBuilder: _buildDetailContent,
+      onAreaChanged: widget.onAreaChanged,
+      filterHint: 'Filter...',
+      split: const PanelSplit(left: 0.58, min: 0.44, max: 0.82),
     );
+  }
+
+  /// Selects the right-side memory detail mode.
+  void _selectDetailMode(String modeId) {
+    setState(() => _detailModeId = modeId);
+  }
+
+  /// Builds one selected-memory detail mode.
+  Widget _buildDetailContent(String modeId) {
+    return switch (modeId) {
+      _memorySourceDetailId => _MemorySourceContent(
+        controller: widget.controller,
+        query: '',
+      ),
+      _memoryRelationsDetailId => _MemoryRelationsContent(
+        controller: widget.controller,
+        query: '',
+      ),
+      _memoryMetadataDetailId => _MemoryMetadataContent(
+        controller: widget.controller,
+        query: '',
+      ),
+      _memoryCorrectionsDetailId => _MemoryCorrectionsContent(
+        controller: widget.controller,
+        query: '',
+      ),
+      _memoryPagesDetailId => _MemoryPagesContent(
+        controller: widget.controller,
+        query: '',
+      ),
+      _ => _MemoryOverviewContent(controller: widget.controller, query: ''),
+    };
   }
 }
 
@@ -1282,19 +1912,37 @@ class _MemoryFilterBar extends StatelessWidget {
             runSpacing: 8,
             children: <Widget>[
               for (final sensitivity in _memorySensitivities)
-                FilterChip(
-                  label: Text(_memoryLabel(sensitivity)),
-                  selected: filters.allowedSensitivities.contains(sensitivity),
-                  onSelected: (_) {
-                    unawaited(
-                      controller.applyMemoryFilters(
-                        filters.copyWith(
-                          allowedSensitivities: _toggleString(
-                            filters.allowedSensitivities,
-                            sensitivity,
-                          ),
-                        ),
+                Builder(
+                  builder: (context) {
+                    final selected = filters.allowedSensitivities.contains(
+                      sensitivity,
+                    );
+                    return FilterChip(
+                      label: Text(_memoryLabel(sensitivity)),
+                      selected: selected,
+                      showCheckmark: true,
+                      backgroundColor: colors.surface,
+                      selectedColor: colors.panelStrong,
+                      checkmarkColor: colors.green,
+                      side: BorderSide(
+                        color: selected ? colors.borderStrong : colors.border,
                       ),
+                      labelStyle: TextStyle(
+                        color: selected ? colors.ink : colors.muted,
+                        fontWeight: FontWeight.w800,
+                      ),
+                      onSelected: (_) {
+                        unawaited(
+                          controller.applyMemoryFilters(
+                            filters.copyWith(
+                              allowedSensitivities: _toggleString(
+                                filters.allowedSensitivities,
+                                sensitivity,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -1464,81 +2112,186 @@ class _MemoryRecordTile extends StatelessWidget {
   /// Builds one selectable memory search result.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final accentColor = _memoryRecordAccentColor(context, record);
+    final borderColor = selected ? colors.borderStrong : colors.border;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected
-              ? AgentAwesomeColors.greenSoft
-              : AgentAwesomeColors.surface,
-          border: Border.all(
-            color: selected
-                ? AgentAwesomeColors.green
-                : AgentAwesomeColors.border,
-          ),
+          color: colors.surface,
+          gradient: context.agentAwesomeCardGradient,
+          border: Border.all(color: borderColor),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(
-                  child: Text(
-                    record.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w900,
-                      fontSize: 15,
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Container(width: 4, color: accentColor),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _MemoryKindBadge(record: record),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  record.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: colors.ink,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                if (record.summary.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    record.summary,
+                                    maxLines: 3,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: colors.muted),
+                                  ),
+                                ],
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: <Widget>[
+                                    _MemoryBadge(label: record.scope),
+                                    _MemoryBadge(label: record.sensitivity),
+                                    _MemoryBadge(
+                                      label: _memoryLabel(record.trustLevel),
+                                    ),
+                                    if (record.status != 'active')
+                                      _MemoryBadge(label: record.status),
+                                    for (final topic in record.topics.take(3))
+                                      _MemoryBadge(label: topic),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                    Divider(height: 1, color: colors.border),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.link_outlined,
+                            size: 15,
+                            color: colors.muted,
+                          ),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              record.sourceLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.muted,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                _MemoryBadge(label: _memoryLabel(record.kind)),
-              ],
-            ),
-            if (record.summary.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                record.summary,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: AgentAwesomeColors.muted),
               ),
             ],
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: <Widget>[
-                _MemoryBadge(label: record.scope),
-                _MemoryBadge(label: record.sensitivity),
-                _MemoryBadge(label: _memoryLabel(record.trustLevel)),
-                if (record.status != 'active')
-                  _MemoryBadge(label: record.status),
-                for (final topic in record.topics.take(3))
-                  _MemoryBadge(label: topic),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              record.sourceLabel,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AgentAwesomeColors.green,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _MemoryKindBadge extends StatelessWidget {
+  const _MemoryKindBadge({required this.record});
+
+  final MemoryRecord record;
+
+  /// Builds the compact record-kind badge for memory cards.
+  @override
+  Widget build(BuildContext context) {
+    final accent = _memoryRecordAccentColor(context, record);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(_memoryRecordIcon(record), size: 16, color: accent),
+          const SizedBox(width: 5),
+          Text(
+            _memoryLabel(record.kind),
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Returns the accent color used by a memory card.
+Color _memoryRecordAccentColor(BuildContext context, MemoryRecord record) {
+  final colors = context.agentAwesomeColors;
+  if (record.status != 'active') {
+    return colors.coral;
+  }
+  if (record.sensitivity == 'restricted') {
+    return colors.coral;
+  }
+  if (record.sensitivity == 'private') {
+    return context.agentAwesomeWarningAccent;
+  }
+  if (record.trustLevel == 'low') {
+    return context.agentAwesomeWarningAccent;
+  }
+  return context.agentAwesomeLowAccent;
+}
+
+/// Returns the icon that represents one memory record kind.
+IconData _memoryRecordIcon(MemoryRecord record) {
+  if (record.kind == 'profile_fact') {
+    return Icons.person_outline;
+  }
+  if (record.kind == 'source_original') {
+    return Icons.article_outlined;
+  }
+  if (record.kind == 'relationship') {
+    return Icons.hub_outlined;
+  }
+  if (record.kind == 'task') {
+    return Icons.task_alt_outlined;
+  }
+  return Icons.chat_bubble_outline;
 }
 
 class _MemoryBrowseContent extends StatelessWidget {
@@ -1674,6 +2427,7 @@ class _MemoryFacetGroup extends StatelessWidget {
   /// Builds one group of browse facets.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final entries = values.entries.where((entry) {
       return _matchesFuzzyQuery('${entry.key} $title', query);
     }).toList();
@@ -1694,16 +2448,19 @@ class _MemoryFacetGroup extends StatelessWidget {
               for (final entry in entries)
                 ActionChip(
                   avatar: CircleAvatar(
-                    backgroundColor: AgentAwesomeColors.greenSoft,
+                    backgroundColor: colors.greenSoft,
                     child: Text(
                       '${entry.value}',
-                      style: const TextStyle(
-                        color: AgentAwesomeColors.green,
-                        fontSize: 11,
-                      ),
+                      style: TextStyle(color: colors.green, fontSize: 11),
                     ),
                   ),
                   label: Text(_memoryLabel(entry.key)),
+                  labelStyle: TextStyle(
+                    color: colors.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  backgroundColor: colors.surface,
+                  side: BorderSide(color: colors.border),
                   onPressed: () => onSelected(entry.key),
                 ),
             ],
@@ -1779,9 +2536,9 @@ class _MemoryMapContent extends StatelessWidget {
                 _MemoryPanelLabel('Relationships'),
                 const SizedBox(height: 10),
                 if (memory.relationships.isEmpty)
-                  const Text(
+                  Text(
                     'No relationship edges',
-                    style: TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: context.agentAwesomeColors.muted),
                   )
                 else
                   for (final relationship in memory.relationships)
@@ -1797,9 +2554,9 @@ class _MemoryMapContent extends StatelessWidget {
                 _MemoryPanelLabel('Related Records'),
                 const SizedBox(height: 10),
                 if (related.isEmpty)
-                  const Text(
+                  Text(
                     'No related records in the current result set',
-                    style: TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: context.agentAwesomeColors.muted),
                   )
                 else
                   for (final record in related)
@@ -1974,9 +2731,9 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                 _MemoryPanelLabel('Nearby Records'),
                 const SizedBox(height: 10),
                 if (duplicates.isEmpty)
-                  const Text(
+                  Text(
                     'No nearby records',
-                    style: TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: context.agentAwesomeColors.muted),
                   )
                 else
                   for (final record in duplicates)
@@ -2046,59 +2803,6 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
   }
 }
 
-class _MemoryStewardshipPanel extends StatelessWidget {
-  const _MemoryStewardshipPanel({required this.controller, this.onAreaChanged});
-
-  final AgentAwesomeAppController controller;
-  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
-
-  /// Builds the selected-memory stewardship command panel.
-  @override
-  Widget build(BuildContext context) {
-    return SwitcherPanel(
-      onAreaChanged: onAreaChanged,
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: 'Overview',
-          icon: Icons.info_outline,
-          builder: (query) =>
-              _MemoryOverviewContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Source',
-          icon: Icons.article_outlined,
-          builder: (query) =>
-              _MemorySourceContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Relations',
-          icon: Icons.hub_outlined,
-          builder: (query) =>
-              _MemoryRelationsContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Metadata',
-          icon: Icons.edit_note,
-          builder: (query) =>
-              _MemoryMetadataContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Corrections',
-          icon: Icons.fact_check_outlined,
-          builder: (query) =>
-              _MemoryCorrectionsContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Pages',
-          icon: Icons.view_timeline_outlined,
-          builder: (query) =>
-              _MemoryPagesContent(controller: controller, query: query),
-        ),
-      ],
-    );
-  }
-}
-
 class _MemoryOverviewContent extends StatelessWidget {
   const _MemoryOverviewContent({required this.controller, required this.query});
 
@@ -2145,7 +2849,7 @@ class _MemoryOverviewContent extends StatelessWidget {
                 const SizedBox(height: 10),
                 Text(
                   memory.summary,
-                  style: const TextStyle(color: AgentAwesomeColors.muted),
+                  style: TextStyle(color: context.agentAwesomeColors.muted),
                 ),
                 const SizedBox(height: 14),
                 Wrap(
@@ -2171,7 +2875,7 @@ class _MemoryOverviewContent extends StatelessWidget {
                 const SizedBox(height: 10),
                 _MemoryMetadataRow(label: 'Memory id', value: memory.id),
                 _MemoryMetadataRow(
-                  label: 'Evidence id',
+                  label: 'Source record id',
                   value: memory.evidenceId,
                 ),
                 _MemoryMetadataRow(label: 'Source', value: memory.sourceLabel),
@@ -2224,7 +2928,7 @@ class _MemorySourceContent extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
-  /// Builds immutable raw evidence preview for the selected memory.
+  /// Builds immutable raw source preview for the selected memory.
   @override
   Widget build(BuildContext context) {
     final memory = controller.selectedMemory;
@@ -2246,10 +2950,10 @@ class _MemorySourceContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _MemoryPanelLabel('Evidence'),
+                _MemoryPanelLabel('Source'),
                 const SizedBox(height: 10),
                 _MemoryMetadataRow(
-                  label: 'Evidence id',
+                  label: 'Source record id',
                   value: memory.evidenceId,
                 ),
                 _MemoryMetadataRow(label: 'Path', value: memory.rawPath),
@@ -2278,15 +2982,19 @@ class _MemorySourceContent extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 260),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xfffffcf8),
-              border: Border.all(color: AgentAwesomeColors.border),
+              color: context.agentAwesomeColors.surface,
+              gradient: context.agentAwesomeCardGradient,
+              border: Border.all(color: context.agentAwesomeColors.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: SelectableText(
               memory.rawContent.isEmpty
                   ? 'Source not loaded'
                   : memory.rawContent,
-              style: const TextStyle(height: 1.5),
+              style: TextStyle(
+                color: context.agentAwesomeColors.ink,
+                height: 1.5,
+              ),
             ),
           ),
         ],
@@ -2329,9 +3037,9 @@ class _MemoryRelationsContent extends StatelessWidget {
                 _MemoryPanelLabel('Outgoing Edges'),
                 const SizedBox(height: 10),
                 if (relationships.isEmpty)
-                  const Text(
+                  Text(
                     'No matching relationship edges',
-                    style: TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: context.agentAwesomeColors.muted),
                   )
                 else
                   for (final relationship in relationships)
@@ -2607,9 +3315,9 @@ class _MemoryCorrectionsContentState extends State<_MemoryCorrectionsContent> {
                 _MemoryPanelLabel('Existing Corrections'),
                 const SizedBox(height: 10),
                 if (corrections.isEmpty)
-                  const Text(
+                  Text(
                     'No corrections in current results',
-                    style: TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: context.agentAwesomeColors.muted),
                   )
                 else
                   for (final correction in corrections)
@@ -2757,11 +3465,12 @@ class _MemoryPanelLabel extends StatelessWidget {
   /// Builds an uppercase memory panel label.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Text(
       label.toUpperCase(),
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        color: AgentAwesomeColors.muted,
+      style: TextStyle(
+        color: colors.subtle,
         fontSize: 11,
         fontWeight: FontWeight.w900,
         letterSpacing: 2.4,
@@ -2815,6 +3524,7 @@ class _MemoryDropdown extends StatelessWidget {
   /// Builds a compact dropdown for controlled memory vocabulary.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final dropdownValue = _coerceDropdownValue(values, value, values.first);
     return Tooltip(
       message: tooltip,
@@ -2822,8 +3532,9 @@ class _MemoryDropdown extends StatelessWidget {
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.surface,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
@@ -2831,7 +3542,9 @@ class _MemoryDropdown extends StatelessWidget {
             value: dropdownValue,
             isDense: true,
             isExpanded: true,
-            icon: const Icon(Icons.expand_more, size: 18),
+            dropdownColor: colors.surface,
+            icon: Icon(Icons.expand_more, size: 18, color: colors.muted),
+            style: TextStyle(color: colors.ink),
             items: <DropdownMenuItem<String>>[
               for (final item in values)
                 DropdownMenuItem<String>(
@@ -2868,25 +3581,39 @@ class _MemoryTextField extends StatelessWidget {
   /// Builds a compact text field for memory forms.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return TextField(
       controller: controller,
       minLines: maxLines == 1 ? 1 : 3,
       maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: AgentAwesomeColors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AgentAwesomeColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AgentAwesomeColors.border),
-        ),
-      ),
+      style: TextStyle(color: colors.ink),
+      decoration: _memoryInputDecoration(context, label),
     );
   }
+}
+
+/// Builds the shared themed decoration for memory text fields.
+InputDecoration _memoryInputDecoration(BuildContext context, String label) {
+  final colors = context.agentAwesomeColors;
+  return InputDecoration(
+    labelText: label,
+    labelStyle: TextStyle(color: colors.muted),
+    floatingLabelStyle: TextStyle(color: colors.green),
+    filled: true,
+    fillColor: colors.surface,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: colors.border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: colors.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: colors.searchBorder),
+    ),
+  );
 }
 
 class _MemoryMetadataRow extends StatelessWidget {
@@ -2898,6 +3625,7 @@ class _MemoryMetadataRow extends StatelessWidget {
   /// Builds one key/value metadata row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -2907,8 +3635,8 @@ class _MemoryMetadataRow extends StatelessWidget {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AgentAwesomeColors.muted,
+              style: TextStyle(
+                color: colors.subtle,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -2916,7 +3644,7 @@ class _MemoryMetadataRow extends StatelessWidget {
           Expanded(
             child: SelectableText(
               value.isEmpty ? '-' : value,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(color: colors.ink, fontWeight: FontWeight.w600),
             ),
           ),
         ],
@@ -2933,19 +3661,16 @@ class _MemoryRelationshipLine extends StatelessWidget {
   /// Builds one relationship review row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final isConflict = relationship.type == 'contradicts';
+    final accent = isConflict ? colors.coral : context.agentAwesomeLowAccent;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isConflict
-            ? const Color(0xffffefed)
-            : AgentAwesomeColors.surface,
-        border: Border.all(
-          color: isConflict
-              ? AgentAwesomeColors.coral
-              : AgentAwesomeColors.border,
-        ),
+        color: isConflict ? colors.warningSoft : colors.surface,
+        gradient: isConflict ? null : context.agentAwesomeCardGradient,
+        border: Border.all(color: isConflict ? colors.coral : colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -2956,15 +3681,16 @@ class _MemoryRelationshipLine extends StatelessWidget {
               Icon(
                 isConflict ? Icons.warning_amber : Icons.link,
                 size: 18,
-                color: isConflict
-                    ? AgentAwesomeColors.coral
-                    : AgentAwesomeColors.green,
+                color: accent,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   _memoryLabel(relationship.type),
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: colors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
               _MemoryBadge(label: _memoryLabel(relationship.trustLevel)),
@@ -2986,70 +3712,13 @@ class _MemorySelectionEmpty extends StatelessWidget {
   /// Builds the no-selection state for the stewardship panel.
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Text(
         'Select a memory',
-        style: TextStyle(color: AgentAwesomeColors.muted),
+        style: TextStyle(color: context.agentAwesomeColors.muted),
       ),
     );
   }
-}
-
-class _MemoryEntityRow {
-  const _MemoryEntityRow({
-    required this.name,
-    required this.primary,
-    required this.count,
-    required this.topics,
-  });
-
-  final String name;
-  final MemoryRecord primary;
-  final int count;
-  final List<String> topics;
-}
-
-class _MemoryTopicRow {
-  const _MemoryTopicRow({required this.name, required this.count});
-
-  final String name;
-  final int count;
-}
-
-/// Groups memory records into entity rows for the People route.
-List<_MemoryEntityRow> _memoryEntityRows(List<MemoryRecord> records) {
-  final grouped = <String, List<MemoryRecord>>{};
-  for (final record in records) {
-    for (final entity in record.entityNames) {
-      if (entity.trim().isEmpty) {
-        continue;
-      }
-      grouped.putIfAbsent(entity, () => <MemoryRecord>[]).add(record);
-    }
-  }
-  final rows =
-      grouped.entries.map((entry) {
-        final topics = _counts(
-          entry.value.expand((record) => record.topics),
-        ).keys.toList();
-        return _MemoryEntityRow(
-          name: entry.key,
-          primary: entry.value.first,
-          count: entry.value.length,
-          topics: topics,
-        );
-      }).toList()..sort((a, b) {
-        final countCompare = b.count.compareTo(a.count);
-        return countCompare == 0 ? a.name.compareTo(b.name) : countCompare;
-      });
-  return rows;
-}
-
-/// Groups memory records into topic timeline rows.
-List<_MemoryTopicRow> _memoryTopicRows(List<MemoryRecord> records) {
-  return _counts(records.expand((record) => record.topics)).entries
-      .map((entry) => _MemoryTopicRow(name: entry.key, count: entry.value))
-      .toList();
 }
 
 /// Returns whether a memory record matches a command filter query.
@@ -3071,7 +3740,7 @@ bool _memoryMessageIsError(AgentAwesomeAppController controller) {
   }
   if (message.startsWith('no memory records') ||
       message.startsWith('loaded ') ||
-      message == 'source evidence loaded' ||
+      message == 'source content loaded' ||
       message.startsWith('searching memory')) {
     return false;
   }
@@ -3210,579 +3879,6 @@ String _memoryLabel(String value) {
             : '${part[0].toUpperCase()}${part.substring(1)}',
       )
       .join(' ');
-}
-
-class _MemoryCommandPanel extends StatelessWidget {
-  const _MemoryCommandPanel({required this.controller, this.onAreaChanged});
-
-  final AgentAwesomeAppController controller;
-  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
-
-  /// Builds the memory command panel with switchable dense content areas.
-  @override
-  Widget build(BuildContext context) {
-    return SwitcherPanel(
-      onAreaChanged: onAreaChanged,
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: 'Memory & Context',
-          icon: Icons.account_tree_outlined,
-          builder: _buildKnowledgeContent,
-        ),
-        SwitcherPanelArea(
-          title: 'Backlog',
-          icon: Icons.check_circle_outline,
-          builder: _buildTasksContent,
-        ),
-        SwitcherPanelArea(
-          title: 'Stewardship',
-          icon: Icons.bolt_outlined,
-          builder: _buildStewardshipContent,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildKnowledgeContent(String query) {
-    final filteredRecords = controller.filteredMemoryRecords.where((record) {
-      return _matchesMemoryRecord(record, query);
-    }).toList();
-    if (filteredRecords.isEmpty) {
-      return PanelEmptyState(query: query);
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          for (final record in filteredRecords)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _MemoryRecordTile(
-                record: record,
-                selected: controller.selectedMemory?.id == record.id,
-                onTap: () => unawaited(controller.selectMemory(record.id)),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTasksContent(String query) {
-    final filteredTasks = controller.workspace.tasks.where((task) {
-      return _matchesFuzzyQuery('${task.title} ${task.detail}', query);
-    }).toList();
-    if (filteredTasks.isEmpty) {
-      return PanelEmptyState(query: query);
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-      child: Column(
-        children: <Widget>[
-          for (final task in filteredTasks)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 13),
-              child: TaskLine(task: task),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStewardshipContent(String query) {
-    final memory = controller.selectedMemory;
-    if (memory == null) {
-      return const _MemorySelectionEmpty();
-    }
-    if (!_matchesMemoryRecord(memory, query)) {
-      return PanelEmptyState(query: query);
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          _MemoryPanelLabel('Selected Memory'),
-          const SizedBox(height: 10),
-          Text(
-            memory.title,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              OutlinedButton.icon(
-                onPressed: controller.memoryBusy
-                    ? null
-                    : () => unawaited(controller.hydrateSelectedMemorySource()),
-                icon: const Icon(Icons.article_outlined),
-                label: const Text('Load Source'),
-              ),
-              OutlinedButton.icon(
-                onPressed: controller.memoryBusy
-                    ? null
-                    : () => unawaited(controller.loadEntityPageFromUi(memory)),
-                icon: const Icon(Icons.person_search_outlined),
-                label: const Text('Entity Page'),
-              ),
-              for (final topic in memory.topics.take(2))
-                OutlinedButton.icon(
-                  onPressed: controller.memoryBusy
-                      ? null
-                      : () => unawaited(controller.loadTimelineFromUi(topic)),
-                  icon: const Icon(Icons.timeline_outlined),
-                  label: Text(topic),
-                ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          for (final reason in _memoryReviewReasons(memory))
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _MemoryBadge(label: reason),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemoryPeopleRoute extends StatelessWidget {
-  const _MemoryPeopleRoute({required this.controller});
-
-  final AgentAwesomeAppController controller;
-
-  /// Builds the entity page route from live memory records.
-  @override
-  Widget build(BuildContext context) {
-    final entityRows = _memoryEntityRows(controller.workspace.memoryRecords);
-    final showStatus =
-        controller.memoryBusy || _memoryMessageIsError(controller);
-    return _PaddedRoute(
-      title: 'People',
-      subtitle: 'Entity pages compiled from source-backed memory.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (showStatus) ...<Widget>[
-            _MemoryStatusStrip(controller: controller),
-            const SizedBox(height: 18),
-          ],
-          if (entityRows.isEmpty)
-            const PanelEmptyBlock(label: 'No entities in memory')
-          else
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: <Widget>[
-                for (final entity in entityRows)
-                  SizedBox(
-                    width: 360,
-                    child: PanelSectionBlock(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text(
-                            entity.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 18,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '${entity.count} source-backed records',
-                            style: const TextStyle(
-                              color: AgentAwesomeColors.muted,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: <Widget>[
-                              for (final topic in entity.topics.take(4))
-                                _MemoryBadge(label: topic),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          OutlinedButton.icon(
-                            onPressed: controller.memoryBusy
-                                ? null
-                                : () => unawaited(
-                                    controller.loadEntityPageFromUi(
-                                      entity.primary,
-                                    ),
-                                  ),
-                            icon: const Icon(Icons.person_search_outlined),
-                            label: const Text('Load Entity Page'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          if (controller.selectedMemoryPage != null) ...<Widget>[
-            const SizedBox(height: 28),
-            _CompiledPagePreview(page: controller.selectedMemoryPage!),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MemoryTimelineRoute extends StatelessWidget {
-  const _MemoryTimelineRoute({required this.controller});
-
-  final AgentAwesomeAppController controller;
-
-  /// Builds topic and event timelines from live memory records.
-  @override
-  Widget build(BuildContext context) {
-    final topicRows = _memoryTopicRows(controller.workspace.memoryRecords);
-    final showStatus =
-        controller.memoryBusy || _memoryMessageIsError(controller);
-    final datedRecords =
-        controller.workspace.memoryRecords
-            .where(
-              (record) => record.eventTime != null || record.createdAt != null,
-            )
-            .toList()
-          ..sort((a, b) {
-            final left =
-                a.eventTime ??
-                a.createdAt ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-            final right =
-                b.eventTime ??
-                b.createdAt ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-            return right.compareTo(left);
-          });
-    return _PaddedRoute(
-      title: 'Timeline',
-      subtitle: 'Source-backed memory timelines by topic and event time.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (showStatus) ...<Widget>[
-            _MemoryStatusStrip(controller: controller),
-            const SizedBox(height: 18),
-          ],
-          _MemoryPanelLabel('Topic Timelines'),
-          const SizedBox(height: 12),
-          if (topicRows.isEmpty)
-            const PanelEmptyBlock(label: 'No topics in memory')
-          else
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                for (final topic in topicRows)
-                  ActionChip(
-                    avatar: CircleAvatar(
-                      backgroundColor: AgentAwesomeColors.greenSoft,
-                      child: Text(
-                        '${topic.count}',
-                        style: const TextStyle(
-                          color: AgentAwesomeColors.green,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    label: Text(topic.name),
-                    onPressed: controller.memoryBusy
-                        ? null
-                        : () => unawaited(
-                            controller.loadTimelineFromUi(topic.name),
-                          ),
-                  ),
-              ],
-            ),
-          const SizedBox(height: 28),
-          _MemoryPanelLabel('Dated Records'),
-          const SizedBox(height: 12),
-          if (datedRecords.isEmpty)
-            const PanelEmptyBlock(label: 'No dated memory records')
-          else
-            Column(
-              children: <Widget>[
-                for (final record in datedRecords)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: PanelSectionBlock(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          SizedBox(
-                            width: 142,
-                            child: Text(
-                              _formatDate(record.eventTime ?? record.createdAt),
-                              style: const TextStyle(
-                                color: AgentAwesomeColors.muted,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  record.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  record.summary,
-                                  style: const TextStyle(
-                                    color: AgentAwesomeColors.muted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          if (controller.selectedMemoryPage != null) ...<Widget>[
-            const SizedBox(height: 28),
-            _CompiledPagePreview(page: controller.selectedMemoryPage!),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CompiledPagePreview extends StatelessWidget {
-  const _CompiledPagePreview({required this.page});
-
-  final CompiledMemoryPage page;
-
-  /// Builds a source-backed compiled page preview.
-  @override
-  Widget build(BuildContext context) {
-    return PanelSectionBlock(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            page.title,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              _MemoryBadge(label: page.kind),
-              _MemoryBadge(label: page.scope),
-              _MemoryBadge(label: '${page.sourceIds.length} sources'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SelectableText(page.content),
-        ],
-      ),
-    );
-  }
-}
-
-class _SourcesPage extends StatelessWidget {
-  const _SourcesPage({required this.workspace});
-
-  final ProjectWorkspace workspace;
-
-  /// Builds the sources and files route.
-  @override
-  Widget build(BuildContext context) {
-    final files = workspace.sources;
-    return _PaddedRoute(
-      title: 'Files',
-      subtitle: 'Files for your agent.',
-      child: files.isEmpty
-          ? const _FilesEmptyState()
-          : Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: files.map((file) {
-                return SizedBox(
-                  width: 360,
-                  child: PanelSectionBlock(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          file.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          file.detail,
-                          style: const TextStyle(
-                            color: AgentAwesomeColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-    );
-  }
-}
-
-class _FilesEmptyState extends StatelessWidget {
-  const _FilesEmptyState();
-
-  /// Builds the empty files state with an explicit add-file action.
-  @override
-  Widget build(BuildContext context) {
-    return PanelSectionBlock(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 34),
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: AgentAwesomeColors.green,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-            ),
-            onPressed: () => _showFileImportUnavailable(context),
-            icon: const Icon(Icons.add),
-            label: const Text('Add file'),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Shows a clear dialog when file import has not been wired to storage yet.
-void _showFileImportUnavailable(BuildContext context) {
-  showDialog<void>(
-    context: context,
-    builder: (context) {
-      return AlertDialog(
-        title: const Text('File import is not connected yet'),
-        content: const Text(
-          'The file picker and file-ingest backend are not wired up in this build.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      );
-    },
-  );
-}
-
-class _PaddedRoute extends StatelessWidget {
-  const _PaddedRoute({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  /// Builds a standard sidebar route layout.
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(40),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.displayLarge),
-          const SizedBox(height: 10),
-          Text(
-            subtitle,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
-              fontSize: 17,
-            ),
-          ),
-          const SizedBox(height: 32),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-Future<void> _confirmCreateTask(
-  BuildContext context,
-  AgentAwesomeAppController controller,
-) async {
-  final input = TextEditingController();
-  final title = await showDialog<String>(
-    context: context,
-    builder: (dialogContext) {
-      return AlertDialog(
-        title: const Text('Create Backlog Item'),
-        content: TextField(
-          controller: input,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Backlog title'),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(input.text),
-            child: const Text('Create'),
-          ),
-        ],
-      );
-    },
-  );
-  input.dispose();
-  if (title == null || title.trim().isEmpty || !context.mounted) {
-    return;
-  }
-  final approved = await _confirmWrite(
-    context,
-    'Create backlog item "$title"?',
-  );
-  if (approved) {
-    await controller.createTaskFromUi(title.trim());
-  }
-}
-
-Future<void> _confirmCompleteTask(
-  BuildContext context,
-  AgentAwesomeAppController controller,
-  WorkspaceTask task,
-) async {
-  final approved = await _confirmWrite(
-    context,
-    'Complete backlog item "${task.title}"?',
-  );
-  if (approved) {
-    await controller.completeTaskFromUi(task.id);
-  }
 }
 
 Future<bool> _confirmWrite(BuildContext context, String message) async {

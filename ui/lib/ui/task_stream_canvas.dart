@@ -73,6 +73,7 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
   /// Builds the stream canvas and positioned task overlays.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return LayoutBuilder(
       builder: (context, constraints) {
         final layout = TaskStreamCanvasLayout.build(
@@ -88,8 +89,9 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
           borderRadius: BorderRadius.circular(8),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: const Color(0xfffffcf8),
-              border: Border.all(color: AgentAwesomeColors.border),
+              color: colors.surface,
+              gradient: context.agentAwesomeCardGradient,
+              border: Border.all(color: colors.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -125,7 +127,7 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
                     ],
                   ),
                 ),
-                const Divider(height: 1, color: AgentAwesomeColors.border),
+                Divider(height: 1, color: colors.border),
                 Expanded(child: _buildScrollableBody(layout)),
               ],
             ),
@@ -164,7 +166,7 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
                 ),
               ),
             ),
-            const VerticalDivider(width: 1, color: AgentAwesomeColors.border),
+            VerticalDivider(width: 1, color: context.agentAwesomeColors.border),
             Expanded(
               child: Scrollbar(
                 controller: _bodyHorizontal,
@@ -184,6 +186,7 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
                               painter: TaskStreamCanvasPainter(
                                 layout: layout,
                                 focus: _focus,
+                                colors: context.agentAwesomeColors,
                               ),
                             ),
                           ),
@@ -1194,10 +1197,17 @@ class TaskStreamLinkPlacement {
 /// TaskStreamCanvasPainter paints stream bands and timeline guides.
 class TaskStreamCanvasPainter extends CustomPainter {
   /// Creates the stream canvas painter.
-  const TaskStreamCanvasPainter({required this.layout, this.focus});
+  const TaskStreamCanvasPainter({
+    required this.layout,
+    required this.colors,
+    this.focus,
+  });
 
   /// Computed stream layout.
   final TaskStreamCanvasLayout layout;
+
+  /// Active app palette for canvas guide colors.
+  final AgentAwesomePalette colors;
 
   /// Optional focus target used to fade unrelated stream content.
   final TaskStreamFocus? focus;
@@ -1214,7 +1224,7 @@ class TaskStreamCanvasPainter extends CustomPainter {
   /// Paints vertical timeline dividers.
   void _paintColumnGuides(Canvas canvas) {
     final paint = Paint()
-      ..color = AgentAwesomeColors.border.withValues(alpha: 0.56)
+      ..color = colors.border.withValues(alpha: 0.56)
       ..strokeWidth = 1;
     for (final column in layout.columns) {
       canvas.drawLine(
@@ -1319,7 +1329,7 @@ class TaskStreamCanvasPainter extends CustomPainter {
   /// Returns the semantic color for one relation curve.
   Color _linkColor(TaskStreamLinkPlacement link) {
     if (link.link.transitionType == 'blocks') {
-      return AgentAwesomeColors.coral;
+      return colors.coral;
     }
     if (link.link.streamId.isNotEmpty) {
       return _streamRouteColor(link.link.streamId, link.from.row.color);
@@ -1416,7 +1426,9 @@ class TaskStreamCanvasPainter extends CustomPainter {
   /// Reports whether this painter needs repainting.
   @override
   bool shouldRepaint(covariant TaskStreamCanvasPainter oldDelegate) {
-    return oldDelegate.layout != layout || oldDelegate.focus != focus;
+    return oldDelegate.layout != layout ||
+        oldDelegate.colors != colors ||
+        oldDelegate.focus != focus;
   }
 }
 
@@ -1429,6 +1441,7 @@ class _StreamRowLabel extends StatelessWidget {
   /// Builds the label and icon for one stream row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final tooltip = row.subtitle.isEmpty
         ? row.title
         : '${row.title}\n${row.subtitle}';
@@ -1450,16 +1463,16 @@ class _StreamRowLabel extends StatelessWidget {
                 Text(
                   row.title,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: colors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 if (row.subtitle.isNotEmpty)
                   Text(
                     row.subtitle,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.muted,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: colors.muted, fontSize: 11),
                   ),
               ],
             ),
@@ -1479,14 +1492,15 @@ class _StreamColumnHeader extends StatelessWidget {
   /// Builds a timeline column heading.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
           column.title.toUpperCase(),
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: AgentAwesomeColors.muted,
+          style: TextStyle(
+            color: colors.subtle,
             fontSize: 12,
             fontWeight: FontWeight.w900,
             letterSpacing: 1.6,
@@ -1496,10 +1510,7 @@ class _StreamColumnHeader extends StatelessWidget {
           Text(
             column.subtitle,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: colors.muted, fontSize: 11),
           ),
       ],
     );
@@ -1526,16 +1537,17 @@ class _StreamFocusControls extends StatelessWidget {
   /// Builds a small canvas-local toolbar for focused stream inspection.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xfffffcf8).withValues(alpha: 0.92),
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface.withValues(alpha: 0.94),
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
         boxShadow: <BoxShadow>[
           BoxShadow(
             blurRadius: 16,
             offset: const Offset(0, 6),
-            color: Colors.black.withValues(alpha: 0.07),
+            color: colors.shadow,
           ),
         ],
       ),
@@ -1587,6 +1599,7 @@ class _StreamFocusButton extends StatelessWidget {
   /// Builds one compact icon action.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -1597,16 +1610,16 @@ class _StreamFocusButton extends StatelessWidget {
           height: 30,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           decoration: BoxDecoration(
-            color: selected ? AgentAwesomeColors.greenSoft : Colors.transparent,
+            color: selected ? colors.greenSoft : Colors.transparent,
             border: Border.all(
-              color: selected ? AgentAwesomeColors.green : Colors.transparent,
+              color: selected ? colors.green : Colors.transparent,
             ),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Icon(
             icon,
             size: 17,
-            color: selected ? AgentAwesomeColors.green : AgentAwesomeColors.ink,
+            color: selected ? colors.green : colors.ink,
           ),
         ),
       ),
@@ -1637,8 +1650,9 @@ class _StreamTaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final card = placement.card;
     final row = placement.row;
+    final colors = context.agentAwesomeColors;
     final emphasized = selected || focused;
-    final borderColor = emphasized ? AgentAwesomeColors.green : row.color;
+    final borderColor = emphasized ? colors.borderStrong : row.color;
     return Tooltip(
       message: card.explanation,
       child: AnimatedOpacity(
@@ -1653,9 +1667,8 @@ class _StreamTaskCard extends StatelessWidget {
               vertical: compact ? 6 : 8,
             ),
             decoration: BoxDecoration(
-              color: emphasized
-                  ? AgentAwesomeColors.greenSoft
-                  : AgentAwesomeColors.surface,
+              color: emphasized ? colors.panelStrong : colors.surface,
+              gradient: context.agentAwesomeCardGradient,
               border: Border.all(color: borderColor, width: emphasized ? 2 : 1),
               borderRadius: BorderRadius.circular(8),
               boxShadow: <BoxShadow>[
@@ -1689,10 +1702,7 @@ class _StreamTaskCard extends StatelessWidget {
                         _cardSubtitle(card),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AgentAwesomeColors.muted,
-                          fontSize: 11,
-                        ),
+                        style: TextStyle(color: colors.muted, fontSize: 11),
                       ),
                     ],
                   ),
@@ -1736,12 +1746,12 @@ class _StreamUrgentDot extends StatelessWidget {
   /// Builds a small urgency indicator.
   @override
   Widget build(BuildContext context) {
-    return const DecoratedBox(
+    return DecoratedBox(
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.coral,
+        color: context.agentAwesomeColors.coral,
         shape: BoxShape.circle,
       ),
-      child: SizedBox.square(dimension: 8),
+      child: const SizedBox.square(dimension: 8),
     );
   }
 }

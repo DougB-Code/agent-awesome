@@ -140,7 +140,7 @@ func (s HTTPStore) client() *http.Client {
 	return &http.Client{Timeout: s.timeout()}
 }
 
-// buildSnapshot archives the SQLite database plus evidence data directory.
+// buildSnapshot archives the SQLite database plus source data directory.
 func buildSnapshot(dbPath string, dataRoot string) ([]byte, error) {
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)
@@ -231,7 +231,7 @@ func addDirectory(writer *tar.Writer, root string, prefix string) error {
 	})
 }
 
-// extractSnapshot extracts a snapshot into the SQLite and evidence paths.
+// extractSnapshot extracts a snapshot into the SQLite and source paths.
 func extractSnapshot(reader io.Reader, dbPath string, dataRoot string) error {
 	gzipReader, err := gzip.NewReader(reader)
 	if err != nil {

@@ -110,7 +110,7 @@ func NormalizeUpsertAliasRequest(req UpsertAliasRequest) (UpsertAliasRequest, er
 	return req, nil
 }
 
-// NormalizeWriteEvidenceBlobRequest validates and defaults an evidence blob write.
+// NormalizeWriteEvidenceBlobRequest validates and defaults a source blob write.
 func NormalizeWriteEvidenceBlobRequest(req WriteEvidenceBlobRequest) (WriteEvidenceBlobRequest, error) {
 	if req.NodeID == "" {
 		return req, errors.New("node_id is required")

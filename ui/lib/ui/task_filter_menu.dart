@@ -86,14 +86,13 @@ class TaskFilterMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final active = activeCount > 0;
+    final colors = context.agentAwesomeColors;
     return MenuAnchor(
       style: MenuStyle(
         padding: const WidgetStatePropertyAll<EdgeInsetsGeometry>(
           EdgeInsets.zero,
         ),
-        backgroundColor: const WidgetStatePropertyAll<Color>(
-          AgentAwesomeColors.surface,
-        ),
+        backgroundColor: WidgetStatePropertyAll<Color>(colors.surface),
         shape: WidgetStatePropertyAll<OutlinedBorder>(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
@@ -115,17 +114,9 @@ class TaskFilterMenuButton extends StatelessWidget {
               fixedSize: const Size.square(34),
               padding: EdgeInsets.zero,
               visualDensity: VisualDensity.compact,
-              backgroundColor: active
-                  ? AgentAwesomeColors.green.withValues(alpha: 0.12)
-                  : AgentAwesomeColors.panel,
-              foregroundColor: active
-                  ? AgentAwesomeColors.green
-                  : AgentAwesomeColors.ink,
-              side: BorderSide(
-                color: active
-                    ? AgentAwesomeColors.green
-                    : AgentAwesomeColors.border,
-              ),
+              backgroundColor: active ? colors.greenSoft : colors.surface,
+              foregroundColor: active ? colors.green : colors.ink,
+              side: BorderSide(color: active ? colors.green : colors.border),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -180,6 +171,7 @@ class _TaskFilterMenuPanelState extends State<_TaskFilterMenuPanel> {
   /// Builds the large dropdown panel body.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final visibleSections = <_VisibleTaskFilterSection>[
       for (final section in widget.sections) _visibleSection(section, _query),
     ].where((section) => section.hasVisibleRows).toList();
@@ -209,8 +201,8 @@ class _TaskFilterMenuPanelState extends State<_TaskFilterMenuPanel> {
                   Text(
                     widget.summary,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.muted,
+                    style: TextStyle(
+                      color: colors.muted,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
@@ -228,10 +220,7 @@ class _TaskFilterMenuPanelState extends State<_TaskFilterMenuPanel> {
                   for (final section in visibleSections) ...<Widget>[
                     _TaskFilterSectionView(section: section),
                     if (section != visibleSections.last)
-                      const Divider(
-                        height: 18,
-                        color: AgentAwesomeColors.border,
-                      ),
+                      Divider(height: 18, color: colors.border),
                   ],
               ],
             ),
@@ -280,35 +269,37 @@ class _TaskFilterSearchField extends StatelessWidget {
   /// Builds the fuzzy-search input for the menu.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return SizedBox(
       height: 36,
       child: TextField(
         controller: controller,
         autofocus: true,
         onChanged: onChanged,
+        style: TextStyle(color: colors.ink),
         decoration: InputDecoration(
           isDense: true,
-          prefixIcon: const Icon(
-            Icons.search,
-            size: 18,
-            color: AgentAwesomeColors.muted,
-          ),
+          prefixIcon: Icon(Icons.search, size: 18, color: colors.muted),
           prefixIconConstraints: const BoxConstraints(minWidth: 36),
           hintText: 'Search filters...',
-          hintStyle: const TextStyle(color: AgentAwesomeColors.muted),
+          hintStyle: TextStyle(color: colors.muted),
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 12,
             vertical: 9,
           ),
           filled: true,
-          fillColor: AgentAwesomeColors.panel,
+          fillColor: colors.surface,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AgentAwesomeColors.border),
+            borderSide: BorderSide(color: colors.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: AgentAwesomeColors.border),
+            borderSide: BorderSide(color: colors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: colors.searchBorder),
           ),
         ),
       ),
@@ -322,12 +313,12 @@ class _TaskFilterNoMatches extends StatelessWidget {
   /// Builds the empty search result state.
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 18),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 18),
       child: Text(
         'No matching filters',
         textAlign: TextAlign.center,
-        style: TextStyle(color: AgentAwesomeColors.muted),
+        style: TextStyle(color: context.agentAwesomeColors.muted),
       ),
     );
   }
@@ -339,11 +330,11 @@ class _TaskFilterPanelTitle extends StatelessWidget {
   /// Builds the dropdown title.
   @override
   Widget build(BuildContext context) {
-    return const Text(
+    return Text(
       'FILTERS',
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
-        color: AgentAwesomeColors.muted,
+        color: context.agentAwesomeColors.subtle,
         fontSize: 12,
         fontWeight: FontWeight.w900,
         letterSpacing: 2.4,
@@ -360,6 +351,7 @@ class _TaskFilterSectionView extends StatelessWidget {
   /// Builds one section of selectable filter values.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final source = section.source;
     final selected =
         source.options.any((option) => option.value == source.selectedValue)
@@ -370,13 +362,14 @@ class _TaskFilterSectionView extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            Icon(source.icon, size: 16, color: AgentAwesomeColors.green),
+            Icon(source.icon, size: 16, color: colors.green),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 source.title,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
+                style: TextStyle(
+                  color: colors.ink,
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
                 ),
@@ -435,6 +428,7 @@ class _TaskFilterOptionRow extends StatelessWidget {
   /// Builds one dropdown option row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
@@ -445,9 +439,7 @@ class _TaskFilterOptionRow extends StatelessWidget {
             Icon(
               selected ? Icons.radio_button_checked : Icons.radio_button_off,
               size: 17,
-              color: selected
-                  ? AgentAwesomeColors.green
-                  : AgentAwesomeColors.muted,
+              color: selected ? colors.green : colors.muted,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -455,9 +447,7 @@ class _TaskFilterOptionRow extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected
-                      ? AgentAwesomeColors.green
-                      : AgentAwesomeColors.ink,
+                  color: selected ? colors.green : colors.ink,
                   fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
                 ),
               ),
@@ -469,8 +459,8 @@ class _TaskFilterOptionRow extends StatelessWidget {
                 child: Text(
                   detail,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AgentAwesomeColors.muted,
+                  style: TextStyle(
+                    color: colors.muted,
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
                   ),

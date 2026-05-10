@@ -74,6 +74,9 @@ class TaskInsightExplanations {
   }) {
     final matched = candidates.map((candidate) {
       return switch (candidate.insightId) {
+        TaskInsightIds.todayActions => 'execute',
+        TaskInsightIds.todayDecisions => 'decision',
+        TaskInsightIds.todayRelationships => 'follow-up',
         TaskInsightIds.agentHandoff => 'agent handoff',
         TaskInsightIds.nextWeekHighValue => 'next-week value',
         TaskInsightIds.quickUnblocks => 'quick unblock',
@@ -82,7 +85,7 @@ class TaskInsightExplanations {
       };
     }).toSet();
     if (matched.isNotEmpty) {
-      return 'This task is showing up for ${matched.join(', ')} because its scores or relationships need attention.';
+      return 'This task is showing up for ${matched.join(', ')} because its scores or follow-up signals need attention.';
     }
     if (scores != null && scores.pressure >= 0.68) {
       return 'This task has meaningful pressure and is worth sequencing deliberately.';

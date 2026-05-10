@@ -49,7 +49,7 @@ func TestSearchMemoryBuildsRetrievalBundle(t *testing.T) {
 	}
 }
 
-// TestSearchSourcesHydratesRawText verifies source search includes evidence content.
+// TestSearchSourcesHydratesRawText verifies source search includes raw content.
 func TestSearchSourcesHydratesRawText(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
@@ -66,7 +66,7 @@ func TestSearchSourcesHydratesRawText(t *testing.T) {
 		t.Fatalf("search sources: %v", err)
 	}
 	if len(bundle.Primary) != 1 || bundle.Primary[0].Raw == nil {
-		t.Fatalf("primary source = %#v, want hydrated raw evidence", bundle.Primary)
+		t.Fatalf("primary source = %#v, want hydrated raw source", bundle.Primary)
 	}
 	if !strings.Contains(bundle.Primary[0].Raw.ContentText, "raw source text") {
 		t.Fatalf("raw content = %q, want source text", bundle.Primary[0].Raw.ContentText)
@@ -107,6 +107,104 @@ func TestStewardDisabledWorkersComplete(t *testing.T) {
 	t.Fatalf("workers did not drain jobs: %#v", metrics)
 }
 
+// TestProjectExecutiveSummaryReturnsEmptyUsefulProjection verifies empty graphs stay explicit.
+func TestProjectExecutiveSummaryReturnsEmptyUsefulProjection(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	now := time.Date(2026, 5, 9, 9, 24, 0, 0, time.UTC)
+
+	summary, err := service.ProjectExecutiveSummary(ctx, domain.ExecutiveSummaryQuery{Now: &now})
+	if err != nil {
+		t.Fatalf("project executive summary: %v", err)
+	}
+	if summary.SchemaVersion != domain.ExecutiveSummarySchemaVersion || summary.Title != "Today" {
+		t.Fatalf("summary identity = %q/%q, want Today schema", summary.SchemaVersion, summary.Title)
+	}
+	if len(summary.Metrics) != 5 || len(summary.OpenLoops.Categories) == 0 || len(summary.TimeHorizon.Buckets) != 5 {
+		t.Fatalf("summary sections missing: metrics=%d open_loops=%d horizon=%d", len(summary.Metrics), len(summary.OpenLoops.Categories), len(summary.TimeHorizon.Buckets))
+	}
+	if summary.Quality.Label != "Sparse" || !containsTestString(summary.Coverage.NotConnected, "Calendar") {
+		t.Fatalf("quality/coverage = %#v %#v, want sparse unknown integrations", summary.Quality, summary.Coverage)
+	}
+}
+
+// TestProjectExecutiveSummaryClassifiesTaskGraph verifies core Today policies.
+func TestProjectExecutiveSummaryClassifiesTaskGraph(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	now := time.Date(2026, 5, 9, 9, 24, 0, 0, time.UTC)
+	yesterday := now.Add(-24 * time.Hour)
+	decision, err := service.CreateTask(ctx, domain.CreateTaskRequest{
+		Title:   "Approve vendor payment prep",
+		Context: "Financial decision needs approval",
+		Risk:    0.9,
+		Value:   0.7,
+	})
+	if err != nil {
+		t.Fatalf("create decision: %v", err)
+	}
+	if _, err := service.CreateTask(ctx, domain.CreateTaskRequest{
+		Title:   "Draft Jordan follow-up",
+		Context: "Draft a safe note for review",
+		Project: "Relationships",
+	}); err != nil {
+		t.Fatalf("create delegation: %v", err)
+	}
+	if _, err := service.CreateTask(ctx, domain.CreateTaskRequest{
+		Title:      "Reply to Sarah",
+		Context:    "Promise follow up",
+		Person:     "Sarah",
+		FollowUpAt: &yesterday,
+	}); err != nil {
+		t.Fatalf("create follow-up: %v", err)
+	}
+	blocker, err := service.CreateTask(ctx, domain.CreateTaskRequest{
+		Title:           "Collect forecast inputs",
+		EstimateMinutes: 15,
+		Person:          "Alex",
+	})
+	if err != nil {
+		t.Fatalf("create blocker: %v", err)
+	}
+	blockedStatus := domain.TaskStatusBlocked
+	blocked, err := service.CreateTask(ctx, domain.CreateTaskRequest{
+		Title:  "Budget decision",
+		Status: blockedStatus,
+		Risk:   0.7,
+		Value:  0.8,
+	})
+	if err != nil {
+		t.Fatalf("create blocked: %v", err)
+	}
+	if _, err := service.UpsertTaskRelation(ctx, domain.UpsertTaskRelationRequest{
+		FromTaskID: blocker.ID,
+		Type:       domain.TaskRelationBlocks,
+		ToTaskID:   blocked.ID,
+	}); err != nil {
+		t.Fatalf("upsert blocker relation: %v", err)
+	}
+
+	summary, err := service.ProjectExecutiveSummary(ctx, domain.ExecutiveSummaryQuery{Now: &now, MaxItems: 12})
+	if err != nil {
+		t.Fatalf("project executive summary: %v", err)
+	}
+	if !summaryHasLane(summary, "decide") || !summaryHasLane(summary, "follow_up") || !summaryHasLane(summary, "delegate") {
+		t.Fatalf("attention lanes = %#v, want decide/follow_up/delegate", summary.Attention.Items)
+	}
+	if delegationBucket(summary, "can_do_now") == 0 || len(summary.RiskUnblocks.Chains) == 0 {
+		t.Fatalf("delegation/risk = %#v %#v, want safe delegation and unblock chain", summary.Delegation, summary.RiskUnblocks)
+	}
+	explanation, err := service.ExplainExecutiveSummaryItem(ctx, domain.ExplainExecutiveSummaryItemQuery{
+		ItemID: "attention:decide:" + string(decision.ID),
+	})
+	if err != nil {
+		t.Fatalf("explain executive summary item: %v", err)
+	}
+	if explanation.Title != decision.Title || len(explanation.Evidence) == 0 {
+		t.Fatalf("explanation = %#v, want decision sources", explanation)
+	}
+}
+
 // newTestService creates an isolated service with local durable storage.
 func newTestService(t *testing.T) *Service {
 	t.Helper()
@@ -120,4 +218,34 @@ func newTestService(t *testing.T) *Service {
 	}
 	t.Cleanup(func() { _ = repo.Close() })
 	return New(repo, nil, Config{})
+}
+
+// containsTestString reports whether a test slice contains a value.
+func containsTestString(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
+// summaryHasLane reports whether a projection includes one attention lane.
+func summaryHasLane(summary domain.ExecutiveSummaryProjection, lane string) bool {
+	for _, item := range summary.Attention.Items {
+		if item.Lane == lane {
+			return true
+		}
+	}
+	return false
+}
+
+// delegationBucket returns one delegation bucket count by id.
+func delegationBucket(summary domain.ExecutiveSummaryProjection, id string) int {
+	for _, bucket := range summary.Delegation.Buckets {
+		if bucket.ID == id {
+			return bucket.Count
+		}
+	}
+	return 0
 }

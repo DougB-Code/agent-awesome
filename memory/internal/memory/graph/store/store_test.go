@@ -186,7 +186,7 @@ func TestLifecycleDeletionExcludesSearch(t *testing.T) {
 	}
 }
 
-// TestEvidenceBlobAuditAndFTSSearch verifies evidence IO, audit, and FTS search.
+// TestEvidenceBlobAuditAndFTSSearch verifies source IO, audit, and FTS search.
 func TestEvidenceBlobAuditAndFTSSearch(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
@@ -202,14 +202,17 @@ func TestEvidenceBlobAuditAndFTSSearch(t *testing.T) {
 		Actor:        "test",
 	})
 	if err != nil {
-		t.Fatalf("write evidence: %v", err)
+		t.Fatalf("write source content: %v", err)
 	}
 	content, err := store.ReadEvidenceBlobContent(ctx, evidence.ID)
 	if err != nil {
-		t.Fatalf("read evidence: %v", err)
+		t.Fatalf("read source content: %v", err)
 	}
 	if content != "OAuth browser automation reporting notes" || blob.SizeBytes == 0 || blob.Checksum == "" {
-		t.Fatalf("blob = %#v content = %q, want persisted evidence", blob, content)
+		t.Fatalf("blob = %#v content = %q, want persisted source content", blob, content)
+	}
+	if filepath.Dir(blob.Path) != "sources" {
+		t.Fatalf("blob path = %q, want sources directory", blob.Path)
 	}
 	events, err := store.ListAuditEvents(ctx, 10)
 	if err != nil {
@@ -279,8 +282,8 @@ func TestUnitOfWorkRollsBackGraphWrites(t *testing.T) {
 	}
 }
 
-// TestUnitOfWorkRollsBackEvidenceFile verifies staged blobs are cleaned up.
-func TestUnitOfWorkRollsBackEvidenceFile(t *testing.T) {
+// TestUnitOfWorkRollsBackSourceFile verifies staged blobs are cleaned up.
+func TestUnitOfWorkRollsBackSourceFile(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
 	defer store.Close()
@@ -288,11 +291,11 @@ func TestUnitOfWorkRollsBackEvidenceFile(t *testing.T) {
 	var blob graph.EvidenceBlob
 
 	err := store.WithUnitOfWork(ctx, func(tx *Store) error {
-		evidence := mustNode(t, tx, graph.KindEvidence, "evidence:rollback", "Rollback evidence")
+		evidence := mustNode(t, tx, graph.KindEvidence, "source:rollback", "Rollback source")
 		var err error
 		blob, err = tx.WriteEvidenceBlob(ctx, graph.WriteEvidenceBlobRequest{
 			NodeID:       evidence.ID,
-			Content:      "temporary evidence",
+			Content:      "temporary source content",
 			MediaType:    "text/plain",
 			SourceSystem: "test",
 			SourceID:     "source-rollback",
@@ -301,8 +304,8 @@ func TestUnitOfWorkRollsBackEvidenceFile(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if content, err := tx.ReadEvidenceBlobContent(ctx, evidence.ID); err != nil || content != "temporary evidence" {
-			return errors.New("staged evidence content was unreadable")
+		if content, err := tx.ReadEvidenceBlobContent(ctx, evidence.ID); err != nil || content != "temporary source content" {
+			return errors.New("staged source content was unreadable")
 		}
 		return sentinel
 	})
@@ -313,7 +316,7 @@ func TestUnitOfWorkRollsBackEvidenceFile(t *testing.T) {
 		t.Fatalf("GetEvidenceBlob() error = %v, want sql.ErrNoRows", err)
 	}
 	if _, err := os.Stat(filepath.Join(store.dataRoot, blob.Path)); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("evidence file stat error = %v, want missing file", err)
+		t.Fatalf("source file stat error = %v, want missing file", err)
 	}
 }
 

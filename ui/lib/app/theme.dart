@@ -112,32 +112,32 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
 
   /// Documentation-inspired dark palette for the Flutter UI.
   static const AgentAwesomePalette dark = AgentAwesomePalette(
-    page: Color(0xff070c12),
-    surface: Color(0xff0d141d),
-    panel: Color(0xff111a25),
-    panelStrong: Color(0xff172232),
-    border: Color(0xff263443),
-    borderStrong: Color(0xff35475b),
-    green: Color(0xff5bd777),
-    greenSoft: Color(0xff193425),
+    page: Color(0xff060a12),
+    surface: Color(0xff0b121c),
+    panel: Color(0xff111827),
+    panelStrong: Color(0xff17213a),
+    border: Color(0xff25364d),
+    borderStrong: Color(0xff405879),
+    green: Color(0xff8ca7c7),
+    greenSoft: Color(0xff111a31),
     coral: Color(0xffa871ff),
     ink: Color(0xfff7f9ff),
-    muted: Color(0xffc4cad7),
+    muted: Color(0xffc2cadc),
     subtle: Color(0xff8793a6),
-    chrome: Color(0xff0d141d),
-    sidebar: Color(0xff0a1119),
-    searchBorder: Color(0xff2c5f9d),
+    chrome: Color(0xff0b121c),
+    sidebar: Color(0xff08111c),
+    searchBorder: Color(0xff3b587a),
     kbdBackground: Color(0xff162232),
     heroEnd: Color(0xff0b1017),
-    cardIconBackground: Color(0xff182a43),
-    cardIcon: Color(0xff4ea3ff),
-    orbit: Color(0xff37564d),
+    cardIconBackground: Color(0xff181d34),
+    cardIcon: Color(0xffa871ff),
+    orbit: Color(0xff5f49a8),
     layerFill: Color(0xff172232),
-    layerBorder: Color(0xff355b4d),
+    layerBorder: Color(0xff4c5f89),
     shadow: Color(0x66000000),
-    softShadow: Color(0x12a871ff),
-    warningSoft: Color(0xff251d17),
-    warningBorder: Color(0xff5b4231),
+    softShadow: Color(0x1c8b5cf6),
+    warningSoft: Color(0xff221a12),
+    warningBorder: Color(0xff725022),
     warningText: Color(0xfff0ad37),
   );
 
@@ -159,7 +159,7 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
   /// Strong border color.
   final Color borderStrong;
 
-  /// Primary positive and brand action color.
+  /// Primary brand action color; light mode keeps the original forest green.
   final Color green;
 
   /// Selected or active soft background.
@@ -333,6 +333,121 @@ extension AgentAwesomeThemeLookup on BuildContext {
   AgentAwesomePalette get agentAwesomeColors {
     return Theme.of(this).extension<AgentAwesomePalette>() ??
         AgentAwesomePalette.light;
+  }
+
+  /// Whether the active Agent Awesome theme is dark.
+  bool get agentAwesomeIsDark => Theme.of(this).brightness == Brightness.dark;
+
+  /// Dark-mode page gradient borrowed from the documentation shell.
+  LinearGradient? get agentAwesomeWorkspaceGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff0d1421), Color(0xff060a12)],
+    );
+  }
+
+  /// Dark-mode top chrome gradient for the global command bar.
+  LinearGradient? get agentAwesomeChromeGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff101720), Color(0xff0b121c)],
+    );
+  }
+
+  /// Dark-mode sidebar gradient matching the docs navigation rail.
+  LinearGradient? get agentAwesomeSidebarGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: <Color>[Color(0xff0b1725), Color(0xff07101a)],
+    );
+  }
+
+  /// Dark-mode panel gradient for primary bordered surfaces.
+  LinearGradient? get agentAwesomeSurfaceGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff101827), Color(0xff0b121c)],
+    );
+  }
+
+  /// Dark-mode card gradient for repeated work items.
+  LinearGradient? get agentAwesomeCardGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff0f1826), Color(0xff0a111b)],
+    );
+  }
+
+  /// Dark-mode control gradient for buttons, tabs, and filter triggers.
+  LinearGradient? get agentAwesomeControlGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff121d2c), Color(0xff0d1521)],
+    );
+  }
+
+  /// Dark-mode selected gradient for active controls without a green wash.
+  LinearGradient? get agentAwesomeSelectedGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: <Color>[Color(0x2a8b5cf6), Color(0x1f8ca7c7)],
+    );
+  }
+
+  /// Dark-mode primary gradient for compact brand marks and main actions.
+  LinearGradient? get agentAwesomePrimaryGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff9a7ddb), Color(0xff8ca7c7)],
+    );
+  }
+
+  /// Semantic low-positive accent, cooler in dark mode than success green.
+  Color get agentAwesomeLowAccent {
+    if (agentAwesomeIsDark) {
+      return const Color(0xff7fa9b0);
+    }
+    return agentAwesomeColors.green;
+  }
+
+  /// Semantic warning accent, matched to the documentation amber.
+  Color get agentAwesomeWarningAccent {
+    if (agentAwesomeIsDark) {
+      return agentAwesomeColors.warningText;
+    }
+    return const Color(0xffa87312);
   }
 }
 

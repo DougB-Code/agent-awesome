@@ -36,7 +36,7 @@ class _AgentAwesomeAppState extends State<AgentAwesomeApp> {
   Future<void>? _closeFuture;
   bool _shutdownVisible = false;
   String _shutdownMessage = 'Preparing to shut down';
-  ThemeMode _themeMode = ThemeMode.light;
+  ThemeMode _themeMode = ThemeMode.dark;
 
   /// Initializes the app controller.
   @override

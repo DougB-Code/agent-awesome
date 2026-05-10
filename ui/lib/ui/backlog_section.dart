@@ -41,10 +41,147 @@ const List<String> _taskRelationTypes = <String>[
   'enables',
 ];
 
-/// BacklogQueuePanel renders backlog navigation, graph projections, and capture.
-class BacklogQueuePanel extends StatelessWidget {
-  /// Creates a backlog queue panel.
-  const BacklogQueuePanel({
+/// _TaskFilterView identifies bundled queue filter modes.
+enum _TaskFilterView {
+  /// Open, waiting, and blocked backlog items.
+  active,
+
+  /// Every backlog item status.
+  all,
+}
+
+/// _BacklogDetailMode identifies the right-side backlog details view.
+enum _BacklogDetailMode {
+  /// Task and relation inspector.
+  inspector,
+
+  /// Selected task memory linking tools.
+  memoryLinks,
+
+  /// Screen-command review queue.
+  aiReview,
+}
+
+/// Builds the canonical backlog command areas used by the command subshell.
+List<SwitcherPanelArea> _backlogCommandAreas(
+  AgentAwesomeAppController controller,
+) {
+  return <SwitcherPanelArea>[
+    SwitcherPanelArea(
+      title: 'Queue',
+      icon: Icons.task_alt_outlined,
+      builder: (query) =>
+          _BacklogQueueContent(controller: controller, query: query),
+    ),
+    SwitcherPanelArea(
+      title: 'Stream',
+      icon: Icons.waves_outlined,
+      builder: (query) => TaskConceptProjectionPanel(
+        controller: controller,
+        kind: TaskConceptKind.stream,
+      ),
+    ),
+    SwitcherPanelArea(
+      title: 'Terrain',
+      icon: Icons.terrain_outlined,
+      builder: (query) => TaskConceptProjectionPanel(
+        controller: controller,
+        kind: TaskConceptKind.terrain,
+      ),
+    ),
+    SwitcherPanelArea(
+      title: 'WBS',
+      icon: Icons.account_tree_outlined,
+      builder: (query) => TaskConceptProjectionPanel(
+        controller: controller,
+        kind: TaskConceptKind.wbs,
+      ),
+    ),
+    SwitcherPanelArea(
+      title: 'Constellation',
+      icon: Icons.hub_outlined,
+      builder: (query) => TaskConceptProjectionPanel(
+        controller: controller,
+        kind: TaskConceptKind.constellation,
+      ),
+    ),
+    SwitcherPanelArea(
+      title: 'Capture',
+      icon: Icons.add_task_outlined,
+      builder: (query) =>
+          _TaskCaptureContent(controller: controller, query: query),
+    ),
+  ];
+}
+
+/// Returns the details modes available for the current backlog state.
+List<CommandPanelDetailMode> _visibleBacklogDetailModes(
+  AgentAwesomeAppController controller,
+) {
+  return <CommandPanelDetailMode>[
+    _backlogDetailMode(_BacklogDetailMode.inspector),
+    _backlogDetailMode(_BacklogDetailMode.memoryLinks),
+    if (_backlogReviewAvailable(controller))
+      _backlogDetailMode(_BacklogDetailMode.aiReview),
+  ];
+}
+
+/// Reports whether there is an AI screen-command run worth reviewing.
+bool _backlogReviewAvailable(AgentAwesomeAppController controller) {
+  return controller.activeScreenCommandRun?.changes.isNotEmpty ?? false;
+}
+
+/// Returns the stable id for a backlog detail mode.
+String _backlogDetailModeId(_BacklogDetailMode mode) {
+  return switch (mode) {
+    _BacklogDetailMode.inspector => 'inspector',
+    _BacklogDetailMode.memoryLinks => 'memory_links',
+    _BacklogDetailMode.aiReview => 'ai_review',
+  };
+}
+
+/// Converts a stable detail mode id into a backlog detail mode.
+_BacklogDetailMode _backlogDetailModeForId(String id) {
+  if (id == _backlogDetailModeId(_BacklogDetailMode.memoryLinks)) {
+    return _BacklogDetailMode.memoryLinks;
+  }
+  if (id == _backlogDetailModeId(_BacklogDetailMode.aiReview)) {
+    return _BacklogDetailMode.aiReview;
+  }
+  return _BacklogDetailMode.inspector;
+}
+
+/// Creates a reusable command-panel detail mode for one backlog mode.
+CommandPanelDetailMode _backlogDetailMode(_BacklogDetailMode mode) {
+  return CommandPanelDetailMode(
+    id: _backlogDetailModeId(mode),
+    label: _backlogDetailLabel(mode),
+    icon: _backlogDetailIcon(mode),
+  );
+}
+
+/// Returns the visible label for a backlog detail mode.
+String _backlogDetailLabel(_BacklogDetailMode mode) {
+  return switch (mode) {
+    _BacklogDetailMode.inspector => 'Inspector',
+    _BacklogDetailMode.memoryLinks => 'Memory',
+    _BacklogDetailMode.aiReview => 'AI review',
+  };
+}
+
+/// Returns the icon for a backlog detail mode.
+IconData _backlogDetailIcon(_BacklogDetailMode mode) {
+  return switch (mode) {
+    _BacklogDetailMode.inspector => Icons.edit_note_outlined,
+    _BacklogDetailMode.memoryLinks => Icons.link_outlined,
+    _BacklogDetailMode.aiReview => Icons.auto_awesome_outlined,
+  };
+}
+
+/// BacklogCommandPanel renders backlog work in the official command subshell.
+class BacklogCommandPanel extends StatefulWidget {
+  /// Creates the backlog command panel.
+  const BacklogCommandPanel({
     super.key,
     required this.controller,
     this.onAreaChanged,
@@ -53,208 +190,151 @@ class BacklogQueuePanel extends StatelessWidget {
   /// Shared app controller.
   final AgentAwesomeAppController controller;
 
-  /// Reports the active backlog queue area to the app shell.
+  /// Reports the active command area to the app shell.
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
-  /// Builds the left backlog command surface.
   @override
-  Widget build(BuildContext context) {
-    return SwitcherPanel(
-      onAreaChanged: onAreaChanged,
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: 'Queue',
-          icon: Icons.task_alt_outlined,
-          builder: (query) =>
-              _BacklogQueueContent(controller: controller, query: query),
-        ),
-        SwitcherPanelArea(
-          title: 'Stream',
-          icon: Icons.waves_outlined,
-          builder: (query) => TaskConceptProjectionPanel(
-            controller: controller,
-            kind: TaskConceptKind.stream,
-          ),
-        ),
-        SwitcherPanelArea(
-          title: 'Terrain',
-          icon: Icons.terrain_outlined,
-          builder: (query) => TaskConceptProjectionPanel(
-            controller: controller,
-            kind: TaskConceptKind.terrain,
-          ),
-        ),
-        SwitcherPanelArea(
-          title: 'WBS',
-          icon: Icons.account_tree_outlined,
-          builder: (query) => TaskConceptProjectionPanel(
-            controller: controller,
-            kind: TaskConceptKind.wbs,
-          ),
-        ),
-        SwitcherPanelArea(
-          title: 'Constellation',
-          icon: Icons.hub_outlined,
-          builder: (query) => TaskConceptProjectionPanel(
-            controller: controller,
-            kind: TaskConceptKind.constellation,
-          ),
-        ),
-        SwitcherPanelArea(
-          title: 'Capture',
-          icon: Icons.add_task_outlined,
-          builder: (query) =>
-              _TaskCaptureContent(controller: controller, query: query),
-        ),
-      ],
-    );
-  }
+  State<BacklogCommandPanel> createState() => _BacklogCommandPanelState();
 }
 
-/// BacklogInspectorPanel renders the selected backlog item or list editor.
-class BacklogInspectorPanel extends StatelessWidget {
-  /// Creates a backlog inspector panel.
-  const BacklogInspectorPanel({
-    super.key,
-    required this.controller,
-    this.onAreaChanged,
-  });
+/// _BacklogCommandPanelState stores the selected backlog detail mode.
+class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
+  _BacklogDetailMode _detailMode = _BacklogDetailMode.inspector;
 
-  /// Shared app controller.
-  final AgentAwesomeAppController controller;
-
-  /// Reports the active inspector area to the app shell.
-  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
-
-  /// Builds the right backlog inspector surface.
+  /// Builds backlog areas and details inside the reusable command subshell.
   @override
   Widget build(BuildContext context) {
-    return SwitcherPanel(
-      onAreaChanged: onAreaChanged,
-      titleControl: _BacklogReviewTitleControl(controller: controller),
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: 'Backlog Inspector',
-          icon: Icons.edit_note_outlined,
-          builder: _buildInspectorArea,
-        ),
-        SwitcherPanelArea(
-          title: 'Memory Links',
-          icon: Icons.link_outlined,
-          builder: _buildMemoryLinksArea,
-        ),
-      ],
+    final selectedMode = _effectiveDetailMode();
+    return CommandPanelSubShell(
+      areas: _backlogCommandAreas(widget.controller),
+      detailTitle: 'Backlog Inspector',
+      detailModes: _visibleBacklogDetailModes(widget.controller),
+      selectedDetailModeId: _backlogDetailModeId(selectedMode),
+      onDetailModeSelected: _selectDetailMode,
+      detailBuilder: _buildDetailBody,
+      onAreaChanged: widget.onAreaChanged,
+      areaActionsBuilder: _buildAreaActions,
+      filterHint: 'Filter...',
     );
   }
 
-  /// Builds the right-side inspector area for the selected backlog item or edge.
-  Widget _buildInspectorArea(String query) {
-    final edge = controller.selectedConstellationEdge;
-    final task = controller.selectedTask;
-    if (edge != null) {
-      return _TaskConstellationEdgeInspector(
-        controller: controller,
-        edge: edge,
-      );
+  /// Builds header actions for the active command area.
+  Widget? _buildAreaActions(BuildContext context, SwitcherPanelArea area) {
+    if (area.title != 'Queue') {
+      return null;
     }
-    if (task != null) {
-      return _TaskDetailEditor(controller: controller, task: task);
-    }
-    return const _TaskSelectionEmpty();
+    return _BacklogQueueHeaderActions(controller: widget.controller);
   }
 
-  /// Builds the right-side memory-link area for the selected backlog item.
-  Widget _buildMemoryLinksArea(String query) {
-    final task = controller.selectedTask;
-    if (task != null) {
-      return _TaskMemoryLinkPanel(
-        controller: controller,
-        task: task,
-        query: query,
-      );
+  /// Selects the right-side details mode and mirrors review state to controller.
+  void _selectDetailMode(String modeId) {
+    final mode = _backlogDetailModeForId(modeId);
+    if (mode == _BacklogDetailMode.aiReview) {
+      widget.controller.openBacklogReviewPanel();
+    } else {
+      widget.controller.openBacklogInspectorPanel();
     }
-    return const _TaskSelectionEmpty();
+    setState(() {
+      _detailMode = mode;
+    });
   }
-}
 
-class _BacklogReviewTitleControl extends StatelessWidget {
-  const _BacklogReviewTitleControl({required this.controller});
-
-  final AgentAwesomeAppController controller;
-
-  /// Builds an inspector header action for returning to AI review.
-  @override
-  Widget build(BuildContext context) {
-    final run = controller.activeScreenCommandRun;
-    if (run == null || run.changes.isEmpty) {
-      return const SizedBox.shrink();
+  /// Returns the visible details mode, honoring controller-owned AI review state.
+  _BacklogDetailMode _effectiveDetailMode() {
+    final hasReview = _backlogReviewAvailable(widget.controller);
+    if (widget.controller.backlogReviewPanelOpen && hasReview) {
+      return _BacklogDetailMode.aiReview;
     }
-    return Tooltip(
-      message: 'Review AI changes',
-      child: IconButton(
-        onPressed: controller.openBacklogReviewPanel,
-        icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-      ),
-    );
+    return _detailMode == _BacklogDetailMode.aiReview
+        ? _BacklogDetailMode.inspector
+        : _detailMode;
   }
-}
 
-/// BacklogReviewPanel renders AI-proposed screen changes for review.
-class BacklogReviewPanel extends StatelessWidget {
-  /// Creates the Backlog AI change review panel.
-  const BacklogReviewPanel({super.key, required this.controller});
-
-  /// Shared app controller.
-  final AgentAwesomeAppController controller;
-
-  /// Builds the right-side AI change review surface.
-  @override
-  Widget build(BuildContext context) {
-    final run = controller.activeScreenCommandRun;
-    return SwitcherPanel(
-      showAreaQuickSelect: false,
-      titleControl: Tooltip(
-        message: 'Show inspector',
-        child: IconButton(
-          onPressed: controller.openBacklogInspectorPanel,
-          icon: const Icon(Icons.close, size: 18),
-        ),
-      ),
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          title: 'Review Changes',
-          icon: Icons.auto_awesome_outlined,
-          builder: (query) {
-            if (run == null) {
-              return const PanelEmptyBlock(label: 'No AI changes to review');
-            }
-            final changes = run.changes.where((change) {
-              return _matchesTaskChange(change, query);
-            }).toList();
-            return SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  _ScreenRunSummaryBlock(controller: controller, run: run),
-                  const SizedBox(height: 12),
-                  if (changes.isEmpty)
-                    const PanelEmptyBlock(label: 'No changes match this view')
-                  else
-                    for (final change in changes)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _ScreenChangeReviewCard(
-                          controller: controller,
-                          change: change,
-                        ),
-                      ),
-                ],
+  /// Builds the content for the current detail mode id.
+  Widget _buildDetailBody(String modeId) {
+    final mode = _backlogDetailModeForId(modeId);
+    final edge = widget.controller.selectedConstellationEdge;
+    final task = widget.controller.selectedTask;
+    return switch (mode) {
+      _BacklogDetailMode.memoryLinks =>
+        task == null
+            ? const _TaskSelectionEmpty()
+            : _TaskMemoryLinkPanel(
+                controller: widget.controller,
+                task: task,
+                query: '',
               ),
-            );
-          },
-        ),
-      ],
+      _BacklogDetailMode.aiReview => _BacklogReviewContent(
+        controller: widget.controller,
+      ),
+      _BacklogDetailMode.inspector =>
+        edge != null
+            ? _TaskConstellationEdgeInspector(
+                controller: widget.controller,
+                edge: edge,
+              )
+            : task == null
+            ? const _TaskSelectionEmpty()
+            : _TaskDetailEditor(controller: widget.controller, task: task),
+    };
+  }
+}
+
+/// _BacklogReviewContent renders screen-command changes in the detail panel.
+class _BacklogReviewContent extends StatelessWidget {
+  /// Creates the backlog review detail content.
+  const _BacklogReviewContent({required this.controller});
+
+  /// Shared app controller.
+  final AgentAwesomeAppController controller;
+
+  /// Builds the current screen-command review list.
+  @override
+  Widget build(BuildContext context) {
+    final run = controller.activeScreenCommandRun;
+    if (run == null) {
+      return const PanelEmptyBlock(label: 'No AI changes to review');
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  'Review Changes',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Tooltip(
+                message: 'Show inspector',
+                child: IconButton(
+                  onPressed: controller.openBacklogInspectorPanel,
+                  icon: const Icon(Icons.close, size: 18),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _ScreenRunSummaryBlock(controller: controller, run: run),
+          const SizedBox(height: 12),
+          if (run.changes.isEmpty)
+            const PanelEmptyBlock(label: 'No changes match this view')
+          else
+            for (final change in run.changes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _ScreenChangeReviewCard(
+                  controller: controller,
+                  change: change,
+                ),
+              ),
+        ],
+      ),
     );
   }
 }
@@ -288,7 +368,7 @@ class _ScreenRunSummaryBlock extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             controller.screenCommandMessage,
-            style: const TextStyle(color: AgentAwesomeColors.muted),
+            style: TextStyle(color: context.agentAwesomeColors.muted),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -318,6 +398,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
   /// Builds one reviewable AI change card.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final focused = controller.focusedScreenChangeId == change.id;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
@@ -325,14 +406,11 @@ class _ScreenChangeReviewCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: focused
-              ? AgentAwesomeColors.greenSoft
-              : const Color(0xfffffcf8),
-          border: Border.all(
-            color: focused
-                ? AgentAwesomeColors.green
-                : AgentAwesomeColors.border,
-          ),
+          color: focused ? colors.greenSoft : colors.surface,
+          gradient: focused
+              ? context.agentAwesomeSelectedGradient
+              : context.agentAwesomeCardGradient,
+          border: Border.all(color: focused ? colors.green : colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Column(
@@ -344,7 +422,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
                 Icon(
                   _screenChangeIcon(change),
                   size: 18,
-                  color: _screenChangeColor(change),
+                  color: _screenChangeColor(context, change),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -359,10 +437,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
             ),
             if (change.reason.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-              Text(
-                change.reason,
-                style: const TextStyle(color: AgentAwesomeColors.muted),
-              ),
+              Text(change.reason, style: TextStyle(color: colors.muted)),
             ],
             if (change.error.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
@@ -448,11 +523,13 @@ class _ScreenChangeDiffList extends StatelessWidget {
       ...change.afterValues.keys,
     }.toList();
     if (keys.isEmpty) {
+      final colors = context.agentAwesomeColors;
       return Text(
         _screenChangeOperationLabel(change.operation),
-        style: const TextStyle(color: AgentAwesomeColors.muted),
+        style: TextStyle(color: colors.muted),
       );
     }
+    final colors = context.agentAwesomeColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -466,8 +543,8 @@ class _ScreenChangeDiffList extends StatelessWidget {
                   child: Text(
                     _taskLabel(key.replaceAll('_', ' ')),
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.muted,
+                    style: TextStyle(
+                      color: colors.muted,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -476,7 +553,7 @@ class _ScreenChangeDiffList extends StatelessWidget {
                   child: Text(
                     _screenValueLabel(change.beforeValues[key]),
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: colors.muted),
                   ),
                 ),
                 const Padding(
@@ -487,8 +564,8 @@ class _ScreenChangeDiffList extends StatelessWidget {
                   child: Text(
                     _screenValueLabel(change.afterValues[key]),
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.green,
+                    style: TextStyle(
+                      color: colors.green,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -567,9 +644,7 @@ class _BacklogQueueContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _TaskInsightPresetRow(controller: controller),
-          const SizedBox(height: 10),
-          _TaskFilterBar(controller: controller),
+          _TaskQueueFilterStrip(controller: controller),
           const SizedBox(height: 14),
           if (tasks.isEmpty)
             const PanelEmptyBlock(label: 'No backlog items match this view')
@@ -583,6 +658,18 @@ class _BacklogQueueContent extends StatelessWidget {
                   focused: controller.focusedBacklogTaskId == task.id,
                   changes: controller.screenChangesForTask(task.id),
                   onTap: () => controller.inspectBacklogTask(task.id),
+                  onScheduleToday: () => unawaited(
+                    controller.updateTaskFromUi(
+                      taskId: task.id,
+                      scheduledAt: _todayDate(),
+                    ),
+                  ),
+                  onSnooze: () => unawaited(
+                    controller.updateTaskFromUi(
+                      taskId: task.id,
+                      scheduledAt: _todayDate().add(const Duration(days: 1)),
+                    ),
+                  ),
                   onComplete: task.done || task.status == 'canceled'
                       ? null
                       : () => unawaited(controller.completeTaskFromUi(task.id)),
@@ -597,200 +684,384 @@ class _BacklogQueueContent extends StatelessWidget {
   }
 }
 
-/// _TaskInsightPresetRow renders one-click semantic task query presets.
-class _TaskInsightPresetRow extends StatelessWidget {
-  const _TaskInsightPresetRow({required this.controller});
+/// _BacklogQueueHeaderActions renders Queue commands in the subshell header.
+class _BacklogQueueHeaderActions extends StatelessWidget {
+  const _BacklogQueueHeaderActions({required this.controller});
 
   final AgentAwesomeAppController controller;
 
-  /// Builds queue insight preset chips.
+  /// Builds create controls beside the command-area icons.
   @override
   Widget build(BuildContext context) {
-    return PanelSectionBlock(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Tooltip(
+          message: 'New backlog item',
+          child: IconButton.filled(
+            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
+            padding: EdgeInsets.zero,
+            onPressed: controller.tasksBusy
+                ? null
+                : () => unawaited(_showTaskCreateDialog(context, controller)),
+            icon: const Icon(Icons.add, size: 20),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// _TaskQueueFilterStrip consolidates queue filters into compact menus.
+class _TaskQueueFilterStrip extends StatelessWidget {
+  const _TaskQueueFilterStrip({required this.controller});
+
+  final AgentAwesomeAppController controller;
+
+  /// Builds a one-row dropdown filter surface for the backlog queue.
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
       child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+        spacing: 10,
+        runSpacing: 10,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: <Widget>[
-          for (final preset in TaskInsightPresetRegistry.queuePresets)
-            ChoiceChip(
-              avatar: Icon(
-                TaskInsightPresetRegistry.iconFor(preset.iconName),
-                size: 17,
-              ),
-              label: Text(_presetLabel(controller, preset)),
-              selected: controller.taskInsightPresetId == preset.id,
-              onSelected: (_) {
-                unawaited(controller.applyTaskInsightPreset(preset.id));
-              },
-            ),
+          _TaskInsightPresetMenu(controller: controller),
+          _TaskViewMenu(controller: controller),
+          _TaskStatusFilterMenu(controller: controller),
+          _TaskPriorityFilterMenu(controller: controller),
+          _TaskTopicFilterMenu(controller: controller),
         ],
       ),
     );
   }
-
-  /// Returns label with candidate count when the preset is semantic.
-  String _presetLabel(
-    AgentAwesomeAppController controller,
-    TaskInsightPreset preset,
-  ) {
-    if (preset.id == TaskInsightIds.all) {
-      return preset.label;
-    }
-    final count = controller.taskInsightIndex.tasksForInsight(preset.id).length;
-    return '${preset.label} $count';
-  }
 }
 
-class _TaskFilterBar extends StatelessWidget {
-  const _TaskFilterBar({required this.controller});
+/// _TaskInsightPresetMenu renders semantic Queue presets as one dropdown.
+class _TaskInsightPresetMenu extends StatelessWidget {
+  const _TaskInsightPresetMenu({required this.controller});
 
   final AgentAwesomeAppController controller;
 
-  /// Builds queue filter chips and context action controls.
+  /// Builds the preset dropdown.
+  @override
+  Widget build(BuildContext context) {
+    final selected = _selectedTaskInsightPreset(controller);
+    return PopupMenuButton<String>(
+      tooltip: 'Insight preset',
+      onSelected: (presetId) {
+        unawaited(controller.applyTaskInsightPreset(presetId));
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final preset in TaskInsightPresetRegistry.queuePresets)
+          CheckedPopupMenuItem<String>(
+            value: preset.id,
+            checked: controller.taskInsightPresetId == preset.id,
+            child: _TaskFilterMenuItem(
+              icon: TaskInsightPresetRegistry.iconFor(preset.iconName),
+              label: _presetLabel(controller, preset),
+            ),
+          ),
+      ],
+      child: _TaskFilterMenuButton(
+        icon: TaskInsightPresetRegistry.iconFor(selected.iconName),
+        label: _presetButtonLabel(controller, selected),
+        selected: true,
+      ),
+    );
+  }
+}
+
+/// _TaskViewMenu renders bundled active/all queue filter choices.
+class _TaskViewMenu extends StatelessWidget {
+  const _TaskViewMenu({required this.controller});
+
+  final AgentAwesomeAppController controller;
+
+  /// Builds the view dropdown.
   @override
   Widget build(BuildContext context) {
     final filters = controller.taskFilters;
-    return PanelSectionBlock(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    ActionChip(
-                      avatar: const Icon(Icons.playlist_play, size: 18),
-                      label: const Text('Active'),
-                      onPressed: () {
-                        unawaited(
-                          controller.applyTaskFilters(
-                            filters.copyWith(
-                              statuses: _activeTaskStatuses,
-                              includeDone: true,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    ActionChip(
-                      avatar: const Icon(Icons.all_inbox, size: 18),
-                      label: const Text('All'),
-                      onPressed: () {
-                        unawaited(
-                          controller.applyTaskFilters(
-                            filters.copyWith(
-                              statuses: const <String>[],
-                              includeDone: true,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Tooltip(
-                message: 'Refresh context',
-                child: IconButton.outlined(
-                  onPressed: controller.tasksBusy
-                      ? null
-                      : () => unawaited(controller.refreshTasksFromUi()),
-                  icon: const Icon(Icons.refresh),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: 'New backlog item',
-                child: IconButton.filled(
-                  onPressed: controller.tasksBusy
-                      ? null
-                      : () => unawaited(
-                          _showTaskCreateDialog(context, controller),
-                        ),
-                  icon: const Icon(Icons.add),
-                ),
-              ),
-            ],
+    return PopupMenuButton<_TaskFilterView>(
+      tooltip: 'Task view',
+      onSelected: (view) {
+        unawaited(
+          controller.applyTaskFilters(switch (view) {
+            _TaskFilterView.active => filters.copyWith(
+              statuses: _activeTaskStatuses,
+              includeDone: true,
+            ),
+            _TaskFilterView.all => filters.copyWith(
+              statuses: const <String>[],
+              includeDone: true,
+            ),
+          }),
+        );
+      },
+      itemBuilder: (context) => <PopupMenuEntry<_TaskFilterView>>[
+        CheckedPopupMenuItem<_TaskFilterView>(
+          value: _TaskFilterView.active,
+          checked: _isActiveTaskView(filters),
+          child: const _TaskFilterMenuItem(
+            icon: Icons.playlist_play,
+            label: 'Active',
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              for (final status in _taskStatuses)
-                FilterChip(
-                  label: Text(_taskLabel(status)),
-                  selected: filters.statuses.contains(status),
-                  onSelected: (_) {
-                    unawaited(
-                      controller.applyTaskFilters(
-                        filters.copyWith(
-                          statuses: _toggleFilterValue(
-                            filters.statuses,
-                            status,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              FilterChip(
-                label: const Text('Overdue'),
-                selected: filters.overdueOnly,
-                onSelected: (selected) {
-                  unawaited(
-                    controller.applyTaskFilters(
-                      filters.copyWith(overdueOnly: selected),
-                    ),
-                  );
-                },
-              ),
-            ],
+        ),
+        CheckedPopupMenuItem<_TaskFilterView>(
+          value: _TaskFilterView.all,
+          checked: filters.statuses.isEmpty,
+          child: const _TaskFilterMenuItem(
+            icon: Icons.all_inbox_outlined,
+            label: 'All tasks',
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              for (final priority in _taskPriorities)
-                FilterChip(
-                  label: Text(_taskLabel(priority)),
-                  selected: filters.priorities.contains(priority),
-                  onSelected: (_) {
-                    unawaited(
-                      controller.applyTaskFilters(
-                        filters.copyWith(
-                          priorities: _toggleFilterValue(
-                            filters.priorities,
-                            priority,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              for (final topic in controller.taskTopics.take(8))
-                FilterChip(
-                  label: Text(topic),
-                  selected: filters.topics.contains(topic),
-                  onSelected: (_) {
-                    unawaited(
-                      controller.applyTaskFilters(
-                        filters.copyWith(
-                          topics: _toggleFilterValue(filters.topics, topic),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
-        ],
+        ),
+      ],
+      child: _TaskFilterMenuButton(
+        icon: _taskViewIcon(filters),
+        label: _taskViewLabel(filters),
+        selected: true,
       ),
+    );
+  }
+}
+
+/// _TaskStatusFilterMenu renders status and overdue filters as one dropdown.
+class _TaskStatusFilterMenu extends StatelessWidget {
+  const _TaskStatusFilterMenu({required this.controller});
+
+  final AgentAwesomeAppController controller;
+
+  /// Builds the status dropdown.
+  @override
+  Widget build(BuildContext context) {
+    final filters = controller.taskFilters;
+    return PopupMenuButton<String>(
+      tooltip: 'Status filters',
+      onSelected: (value) {
+        final next = switch (value) {
+          '__any_status' => filters.copyWith(
+            statuses: const <String>[],
+            overdueOnly: false,
+          ),
+          '__overdue' => filters.copyWith(overdueOnly: !filters.overdueOnly),
+          _ => filters.copyWith(
+            statuses: _toggleFilterValue(filters.statuses, value),
+          ),
+        };
+        unawaited(controller.applyTaskFilters(next));
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        CheckedPopupMenuItem<String>(
+          value: '__any_status',
+          checked: filters.statuses.isEmpty && !filters.overdueOnly,
+          child: const _TaskFilterMenuItem(
+            icon: Icons.clear_all,
+            label: 'Any status',
+          ),
+        ),
+        const PopupMenuDivider(),
+        for (final status in _taskStatuses)
+          CheckedPopupMenuItem<String>(
+            value: status,
+            checked: filters.statuses.contains(status),
+            child: _TaskFilterMenuItem(
+              icon: Icons.task_alt_outlined,
+              label: _taskLabel(status),
+            ),
+          ),
+        const PopupMenuDivider(),
+        CheckedPopupMenuItem<String>(
+          value: '__overdue',
+          checked: filters.overdueOnly,
+          child: const _TaskFilterMenuItem(
+            icon: Icons.warning_amber_outlined,
+            label: 'Overdue',
+          ),
+        ),
+      ],
+      child: _TaskFilterMenuButton(
+        icon: Icons.task_alt_outlined,
+        label: _statusFilterLabel(filters),
+        selected:
+            (!_isActiveTaskView(filters) && filters.statuses.isNotEmpty) ||
+            filters.overdueOnly,
+      ),
+    );
+  }
+}
+
+/// _TaskPriorityFilterMenu renders priority filters as one dropdown.
+class _TaskPriorityFilterMenu extends StatelessWidget {
+  const _TaskPriorityFilterMenu({required this.controller});
+
+  final AgentAwesomeAppController controller;
+
+  /// Builds the priority dropdown.
+  @override
+  Widget build(BuildContext context) {
+    final filters = controller.taskFilters;
+    return PopupMenuButton<String>(
+      tooltip: 'Priority filters',
+      onSelected: (value) {
+        final next = value == '__any_priority'
+            ? filters.copyWith(priorities: const <String>[])
+            : filters.copyWith(
+                priorities: _toggleFilterValue(filters.priorities, value),
+              );
+        unawaited(controller.applyTaskFilters(next));
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        CheckedPopupMenuItem<String>(
+          value: '__any_priority',
+          checked: filters.priorities.isEmpty,
+          child: const _TaskFilterMenuItem(
+            icon: Icons.clear_all,
+            label: 'Any priority',
+          ),
+        ),
+        const PopupMenuDivider(),
+        for (final priority in _taskPriorities)
+          CheckedPopupMenuItem<String>(
+            value: priority,
+            checked: filters.priorities.contains(priority),
+            child: _TaskFilterMenuItem(
+              icon: Icons.flag_outlined,
+              label: _taskLabel(priority),
+            ),
+          ),
+      ],
+      child: _TaskFilterMenuButton(
+        icon: Icons.flag_outlined,
+        label: _priorityFilterLabel(filters),
+        selected: filters.priorities.isNotEmpty,
+      ),
+    );
+  }
+}
+
+/// _TaskTopicFilterMenu renders topic filters as one dropdown.
+class _TaskTopicFilterMenu extends StatelessWidget {
+  const _TaskTopicFilterMenu({required this.controller});
+
+  final AgentAwesomeAppController controller;
+
+  /// Builds the topic dropdown.
+  @override
+  Widget build(BuildContext context) {
+    final filters = controller.taskFilters;
+    final topics = _topicFilterOptions(filters, controller.taskTopics);
+    return PopupMenuButton<String>(
+      enabled: topics.isNotEmpty,
+      tooltip: 'Topic filters',
+      onSelected: (value) {
+        final next = value == '__any_topic'
+            ? filters.copyWith(topics: const <String>[])
+            : filters.copyWith(
+                topics: _toggleFilterValue(filters.topics, value),
+              );
+        unawaited(controller.applyTaskFilters(next));
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        CheckedPopupMenuItem<String>(
+          value: '__any_topic',
+          checked: filters.topics.isEmpty,
+          child: const _TaskFilterMenuItem(
+            icon: Icons.clear_all,
+            label: 'Any topic',
+          ),
+        ),
+        const PopupMenuDivider(),
+        for (final topic in topics)
+          CheckedPopupMenuItem<String>(
+            value: topic,
+            checked: filters.topics.contains(topic),
+            child: _TaskFilterMenuItem(icon: Icons.sell_outlined, label: topic),
+          ),
+      ],
+      child: _TaskFilterMenuButton(
+        icon: Icons.sell_outlined,
+        label: _topicFilterLabel(filters),
+        selected: filters.topics.isNotEmpty,
+        enabled: topics.isNotEmpty,
+      ),
+    );
+  }
+}
+
+/// _TaskFilterMenuButton renders the compact visible dropdown trigger.
+class _TaskFilterMenuButton extends StatelessWidget {
+  const _TaskFilterMenuButton({
+    required this.icon,
+    required this.label,
+    this.selected = false,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final bool enabled;
+
+  /// Builds the dropdown trigger surface.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final foreground = enabled ? colors.ink : colors.subtle;
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 220),
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: colors.panel,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(icon, size: 17, color: foreground),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: foreground,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.expand_more, size: 17, color: foreground),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// _TaskFilterMenuItem renders one icon-labeled dropdown item.
+class _TaskFilterMenuItem extends StatelessWidget {
+  const _TaskFilterMenuItem({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  /// Builds an item row used inside popup menus.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Row(
+      children: <Widget>[
+        Icon(icon, size: 18, color: colors.muted),
+        const SizedBox(width: 8),
+        Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+      ],
     );
   }
 }
@@ -802,6 +1073,8 @@ class _TaskQueueTile extends StatelessWidget {
     required this.focused,
     required this.changes,
     required this.onTap,
+    required this.onScheduleToday,
+    required this.onSnooze,
     required this.onComplete,
     required this.onDelete,
     required this.insightBadges,
@@ -812,6 +1085,8 @@ class _TaskQueueTile extends StatelessWidget {
   final bool focused;
   final List<ScreenChange> changes;
   final VoidCallback onTap;
+  final VoidCallback onScheduleToday;
+  final VoidCallback onSnooze;
   final VoidCallback? onComplete;
   final VoidCallback onDelete;
   final List<String> insightBadges;
@@ -819,151 +1094,316 @@ class _TaskQueueTile extends StatelessWidget {
   /// Builds one selectable context row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final accentColor = _taskQueueAccentColor(context, task);
+    final description = _taskQueueDescription(task);
+    final suggestedAction = _taskSuggestedAction(task);
+    final borderColor = selected
+        ? colors.borderStrong
+        : focused
+        ? colors.borderStrong
+        : changes.isNotEmpty
+        ? colors.warningText
+        : colors.border;
+    final borderWidth = focused || changes.isNotEmpty ? 1.25 : 1.0;
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: selected || focused
-              ? AgentAwesomeColors.greenSoft
-              : const Color(0xfffffcf8),
-          border: Border.all(
-            color: focused
-                ? AgentAwesomeColors.coral
-                : selected
-                ? AgentAwesomeColors.green
-                : changes.isNotEmpty
-                ? const Color(0xffc98219)
-                : AgentAwesomeColors.border,
-            width: focused || changes.isNotEmpty ? 1.5 : 1,
-          ),
+          color: colors.surface,
+          gradient: context.agentAwesomeCardGradient,
+          border: Border.all(color: borderColor, width: borderWidth),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Checkbox(
-              value: task.done,
-              onChanged: onComplete == null ? null : (_) => onComplete!(),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          task.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            fontSize: 15,
+        clipBehavior: Clip.antiAlias,
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Container(width: 4, color: accentColor),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          _TaskActionTypeBadge(task: task),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  task.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                if (description.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    description,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: colors.muted),
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                _TaskSuggestedActionLine(
+                                  label: suggestedAction,
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: <Widget>[
+                                    _TaskBadge(label: _taskLabel(task.status)),
+                                    if (task.overdue)
+                                      const _TaskBadge(label: 'Overdue'),
+                                    if (task.dueAt == null)
+                                      const _TaskBadge(label: 'No due date')
+                                    else
+                                      _TaskBadge(
+                                        label:
+                                            'Due ${_formatTaskDate(task.dueAt)}',
+                                      ),
+                                    if (task.scheduledAt != null)
+                                      _TaskBadge(
+                                        label:
+                                            'Scheduled ${_formatTaskDate(task.scheduledAt)}',
+                                      ),
+                                    if (task.estimateMinutes > 0)
+                                      _TaskBadge(
+                                        label: '${task.estimateMinutes} min',
+                                      ),
+                                    if (task.project.isEmpty)
+                                      const _TaskBadge(label: 'No project'),
+                                    if (task.memoryLinks.isNotEmpty)
+                                      _TaskBadge(
+                                        label:
+                                            '${task.memoryLinks.length} memories',
+                                      ),
+                                    if (task.sourceLabel.isNotEmpty)
+                                      _TaskBadge(label: task.sourceLabel),
+                                    for (final badge in insightBadges)
+                                      _TaskBadge(label: badge),
+                                    for (final topic in task.topics.take(3))
+                                      _TaskBadge(label: topic),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 12),
+                          _TaskQueueScoreBlock(task: task),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      _TaskPriorityBadge(priority: task.priority),
-                      const SizedBox(width: 4),
-                      Tooltip(
-                        message: 'Delete backlog item',
-                        child: IconButton(
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints.tightFor(
-                            width: 32,
-                            height: 32,
-                          ),
-                          padding: EdgeInsets.zero,
-                          onPressed: onDelete,
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            size: 17,
-                            color: AgentAwesomeColors.muted,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (task.description.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 6),
-                    Text(
-                      task.description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AgentAwesomeColors.muted),
                     ),
-                  ],
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: <Widget>[
-                      _TaskBadge(label: _taskLabel(task.status)),
-                      if (task.overdue) const _TaskBadge(label: 'Overdue'),
-                      if (task.dueAt != null)
-                        _TaskBadge(label: 'Due ${_formatTaskDate(task.dueAt)}'),
-                      if (task.scheduledAt != null)
-                        _TaskBadge(
-                          label:
-                              'Scheduled ${_formatTaskDate(task.scheduledAt)}',
-                        ),
-                      if (task.memoryLinks.isNotEmpty)
-                        _TaskBadge(
-                          label: '${task.memoryLinks.length} memories',
-                        ),
-                      if (task.sourceLabel.isNotEmpty)
-                        _TaskBadge(label: task.sourceLabel),
-                      for (final badge in insightBadges)
-                        _TaskBadge(label: badge),
-                      for (final topic in task.topics.take(3))
-                        _TaskBadge(label: topic),
+                    Divider(height: 1, color: colors.border),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                      child: Row(
+                        children: <Widget>[
+                          _TaskQuickActionButton(
+                            label: 'Schedule',
+                            icon: Icons.today_outlined,
+                            filled: task.scheduledAt == null,
+                            onPressed: onScheduleToday,
+                          ),
+                          const SizedBox(width: 8),
+                          _TaskQuickActionButton(
+                            label: 'Mark done',
+                            icon: Icons.check,
+                            onPressed: onComplete,
+                          ),
+                          const SizedBox(width: 8),
+                          _TaskQuickActionButton(
+                            label: 'Snooze',
+                            icon: Icons.schedule_outlined,
+                            onPressed: onSnooze,
+                          ),
+                          const Spacer(),
+                          Tooltip(
+                            message: 'Delete backlog item',
+                            child: TextButton.icon(
+                              onPressed: onDelete,
+                              icon: const Icon(Icons.delete_outline, size: 17),
+                              label: const Text('Dismiss'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (changes.isNotEmpty) ...<Widget>[
+                      Divider(height: 1, color: colors.border),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                        child: _TaskTileScreenChanges(changes: changes),
+                      ),
                     ],
-                  ),
-                  if (changes.isNotEmpty) ...<Widget>[
-                    const SizedBox(height: 10),
-                    _TaskTileScreenChanges(changes: changes),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _TaskPriorityBadge extends StatelessWidget {
-  const _TaskPriorityBadge({required this.priority});
+/// _TaskActionTypeBadge renders the queue action category for one task.
+class _TaskActionTypeBadge extends StatelessWidget {
+  const _TaskActionTypeBadge({required this.task});
 
-  final String priority;
+  final WorkspaceTask task;
 
-  /// Builds a priority badge with urgency-aware color.
+  /// Builds the compact action-type badge.
   @override
   Widget build(BuildContext context) {
-    final urgent = priority == 'urgent' || priority == 'high';
+    final label = _taskActionTypeLabel(task);
+    final icon = _taskActionTypeIcon(task);
+    final accent = _taskQueueAccentColor(context, task);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: urgent ? const Color(0xffffefed) : AgentAwesomeColors.panel,
-        border: Border.all(
-          color: urgent ? AgentAwesomeColors.coral : AgentAwesomeColors.border,
-        ),
+        color: accent.withValues(alpha: 0.12),
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        _taskLabel(priority),
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: urgent ? AgentAwesomeColors.coral : AgentAwesomeColors.green,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16, color: accent),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: accent,
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// _TaskSuggestedActionLine renders the recommended next action text.
+class _TaskSuggestedActionLine extends StatelessWidget {
+  const _TaskSuggestedActionLine({required this.label});
+
+  final String label;
+
+  /// Builds the suggested-action copy.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return RichText(
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: DefaultTextStyle.of(
+          context,
+        ).style.copyWith(color: colors.ink, fontWeight: FontWeight.w800),
+        children: <InlineSpan>[
+          const TextSpan(text: 'Suggested next action: '),
+          TextSpan(
+            text: label,
+            style: TextStyle(color: colors.green, fontWeight: FontWeight.w900),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _TaskQueueScoreBlock renders a compact attention-style queue score.
+class _TaskQueueScoreBlock extends StatelessWidget {
+  const _TaskQueueScoreBlock({required this.task});
+
+  final WorkspaceTask task;
+
+  /// Builds a score and urgency label for the queue tile.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final score = _taskQueueScore(task);
+    final label = _taskQueueScoreLabel(score);
+    final labelColor = _taskQueueScoreColor(context, score);
+    return SizedBox(
+      width: 86,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: <Widget>[
+          Text(
+            'Queue score',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: colors.ink,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            score.toString(),
+            style: TextStyle(
+              color: colors.ink,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(
+              color: labelColor,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _TaskQuickActionButton renders one queue-row quick action.
+class _TaskQuickActionButton extends StatelessWidget {
+  const _TaskQuickActionButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.filled = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool filled;
+
+  /// Builds a compact action button for queue items.
+  @override
+  Widget build(BuildContext context) {
+    if (filled) {
+      return FilledButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+      );
+    }
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(label),
     );
   }
 }
@@ -1098,9 +1538,9 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
                 _TaskPanelLabel('Nearby Backlog'),
                 const SizedBox(height: 10),
                 if (matches.isEmpty)
-                  const Text(
+                  Text(
                     'No nearby context',
-                    style: TextStyle(color: AgentAwesomeColors.muted),
+                    style: TextStyle(color: context.agentAwesomeColors.muted),
                   )
                 else
                   for (final task in matches)
@@ -1113,6 +1553,20 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
                         changes: const <ScreenChange>[],
                         onTap: () =>
                             widget.controller.inspectBacklogTask(task.id),
+                        onScheduleToday: () => unawaited(
+                          widget.controller.updateTaskFromUi(
+                            taskId: task.id,
+                            scheduledAt: _todayDate(),
+                          ),
+                        ),
+                        onSnooze: () => unawaited(
+                          widget.controller.updateTaskFromUi(
+                            taskId: task.id,
+                            scheduledAt: _todayDate().add(
+                              const Duration(days: 1),
+                            ),
+                          ),
+                        ),
                         onComplete: null,
                         onDelete: () => unawaited(
                           widget.controller.deleteTaskFromUi(task.id),
@@ -1531,9 +1985,9 @@ class _TaskWbsBlock extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           if (!hasContent)
-            const Text(
+            Text(
               'No WBS metadata',
-              style: TextStyle(color: AgentAwesomeColors.muted),
+              style: TextStyle(color: context.agentAwesomeColors.muted),
             )
           else ...<Widget>[
             _TaskMetadataRow(label: 'Code', value: workBreakdown.code),
@@ -1576,6 +2030,7 @@ class _TaskListRows extends StatelessWidget {
   /// Builds an ordered list of WBS metadata values.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     if (values.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -1586,8 +2041,8 @@ class _TaskListRows extends StatelessWidget {
         children: <Widget>[
           Text(
             label,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
+            style: TextStyle(
+              color: colors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -1612,6 +2067,7 @@ class _TaskResourceRow extends StatelessWidget {
   /// Builds one compact WBS resource row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final details = <String>[
       if (resource.type.isNotEmpty) resource.type,
       if (resource.quantity > 0)
@@ -1624,11 +2080,7 @@ class _TaskResourceRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Icon(
-            Icons.construction_outlined,
-            size: 16,
-            color: AgentAwesomeColors.muted,
-          ),
+          Icon(Icons.construction_outlined, size: 16, color: colors.muted),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -1641,10 +2093,7 @@ class _TaskResourceRow extends StatelessWidget {
                 if (details.isNotEmpty)
                   Text(
                     details.join(' • '),
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.muted,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: colors.muted, fontSize: 12),
                   ),
               ],
             ),
@@ -1687,7 +2136,10 @@ class _TaskInsightDetailsBlock extends StatelessWidget {
               scores: scores,
               candidates: candidates,
             ),
-            style: const TextStyle(color: AgentAwesomeColors.ink, height: 1.35),
+            style: TextStyle(
+              color: context.agentAwesomeColors.ink,
+              height: 1.35,
+            ),
           ),
           const SizedBox(height: 10),
           Wrap(
@@ -1775,6 +2227,9 @@ class _TaskInsightDetailsBlock extends StatelessWidget {
   /// Returns a compact badge label for one insight candidate.
   String _insightCandidateLabel(TaskInsightCandidate candidate) {
     final label = switch (candidate.insightId) {
+      TaskInsightIds.todayActions => 'Execute',
+      TaskInsightIds.todayDecisions => 'Decide',
+      TaskInsightIds.todayRelationships => 'Follow-up',
       TaskInsightIds.agentHandoff => 'Agent handoff',
       TaskInsightIds.nextWeekHighValue => 'Next week value',
       TaskInsightIds.quickUnblocks => 'Quick unblock',
@@ -1924,7 +2379,7 @@ class _TaskGraphSubsection extends StatelessWidget {
         if (children.isEmpty)
           Text(
             emptyLabel,
-            style: const TextStyle(color: AgentAwesomeColors.muted),
+            style: TextStyle(color: context.agentAwesomeColors.muted),
           )
         else
           ...children,
@@ -2151,7 +2606,7 @@ class _TaskConstellationEdgeInspector extends StatelessWidget {
     }
     if (edge.evidenceIds.isNotEmpty) {
       rows.add(
-        _TaskMetadataRow(label: 'Evidence', value: edge.evidenceIds.join(', ')),
+        _TaskMetadataRow(label: 'Sources', value: edge.evidenceIds.join(', ')),
       );
     }
     if (actor.isNotEmpty) {
@@ -2448,12 +2903,13 @@ class _TaskGraphRow extends StatelessWidget {
   /// Builds a compact graph metadata row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(icon, size: 18, color: AgentAwesomeColors.green),
+          Icon(icon, size: 18, color: colors.green),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -2471,10 +2927,7 @@ class _TaskGraphRow extends StatelessWidget {
                     subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.muted,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: colors.muted, fontSize: 12),
                   ),
                 ],
                 if (badges.where((badge) => badge.isNotEmpty).isNotEmpty)
@@ -2542,21 +2995,19 @@ class _TaskSelectedMemoryBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final record = memory;
+    final colors = context.agentAwesomeColors;
     return PanelSectionBlock(
       child: record == null
-          ? const Text(
-              'No memory selected',
-              style: TextStyle(color: AgentAwesomeColors.muted),
-            )
+          ? Text('No memory selected', style: TextStyle(color: colors.muted))
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    const Icon(
+                    Icon(
                       Icons.chat_bubble_outline,
                       size: 17,
-                      color: AgentAwesomeColors.green,
+                      color: colors.green,
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -2576,10 +3027,7 @@ class _TaskSelectedMemoryBlock extends StatelessWidget {
                     record.summary,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AgentAwesomeColors.muted,
-                      fontSize: 13,
-                    ),
+                    style: TextStyle(color: colors.muted, fontSize: 13),
                   ),
                 ],
               ],
@@ -2597,15 +3045,13 @@ class _TaskMemoryLinksBlock extends StatelessWidget {
   /// Builds memory link rows for context objects.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return PanelSectionBlock(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           if (links.isEmpty)
-            const Text(
-              'No linked memory',
-              style: TextStyle(color: AgentAwesomeColors.muted),
-            )
+            Text('No linked memory', style: TextStyle(color: colors.muted))
           else
             for (final link in links)
               Padding(
@@ -2627,10 +3073,7 @@ class _TaskMemoryLinksBlock extends StatelessWidget {
                                 ? link.memoryEvidenceId
                                 : link.memoryId,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: AgentAwesomeColors.muted,
-                              fontSize: 12,
-                            ),
+                            style: TextStyle(color: colors.muted, fontSize: 12),
                           ),
                         ],
                       ),
@@ -2662,11 +3105,12 @@ class _TaskPanelLabel extends StatelessWidget {
   /// Builds an uppercase context panel label.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Text(
       label.toUpperCase(),
       overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        color: AgentAwesomeColors.muted,
+      style: TextStyle(
+        color: colors.muted,
         fontSize: 11,
         fontWeight: FontWeight.w900,
         letterSpacing: 2.4,
@@ -2683,11 +3127,12 @@ class _TaskTileScreenChanges extends StatelessWidget {
   /// Builds inline AI annotations for a queue tile.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xfffffbf1),
-        border: Border.all(color: const Color(0xffeed7ad)),
+        color: colors.warningSoft,
+        border: Border.all(color: colors.warningBorder),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -2702,7 +3147,7 @@ class _TaskTileScreenChanges extends StatelessWidget {
                   Icon(
                     _screenChangeIcon(change),
                     size: 16,
-                    color: _screenChangeColor(change),
+                    color: _screenChangeColor(context, change),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -2711,20 +3156,17 @@ class _TaskTileScreenChanges extends StatelessWidget {
                       children: <Widget>[
                         Text(
                           change.summary,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w900,
-                            color: AgentAwesomeColors.green,
+                            color: colors.green,
                           ),
                         ),
                         if (change.afterValues.isNotEmpty)
                           Text(
                             _inlineScreenChangeDiff(change),
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AgentAwesomeColors.muted,
-                            ),
+                            style: TextStyle(fontSize: 12, color: colors.muted),
                           ),
                       ],
                     ),
@@ -2768,6 +3210,7 @@ class _TaskDropdown extends StatelessWidget {
   /// Builds a compact dropdown for context controlled vocabulary.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final dropdownValue = values.contains(value) ? value : values.first;
     return Tooltip(
       message: tooltip,
@@ -2775,8 +3218,9 @@ class _TaskDropdown extends StatelessWidget {
         height: 44,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.surface,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
@@ -2784,7 +3228,9 @@ class _TaskDropdown extends StatelessWidget {
             value: dropdownValue,
             isDense: true,
             isExpanded: true,
-            icon: const Icon(Icons.expand_more, size: 18),
+            dropdownColor: colors.surface,
+            icon: Icon(Icons.expand_more, size: 18, color: colors.muted),
+            style: TextStyle(color: colors.ink),
             items: <DropdownMenuItem<String>>[
               for (final item in values)
                 DropdownMenuItem<String>(
@@ -2823,6 +3269,7 @@ class _TaskTextField extends StatelessWidget {
   /// Builds a compact context form field.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
@@ -2831,14 +3278,18 @@ class _TaskTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: AgentAwesomeColors.surface,
+        fillColor: colors.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AgentAwesomeColors.border),
+          borderSide: BorderSide(color: colors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AgentAwesomeColors.border),
+          borderSide: BorderSide(color: colors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: colors.searchBorder),
         ),
       ),
     );
@@ -2868,6 +3319,7 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
     return AnimatedBuilder(
       animation: widget.controller,
       builder: (context, _) {
+        final colors = context.agentAwesomeColors;
         final value = widget.controller.text.trim();
         final hasValue = value.isNotEmpty;
         return Material(
@@ -2881,7 +3333,7 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
                 labelText: widget.label,
                 floatingLabelBehavior: FloatingLabelBehavior.always,
                 filled: true,
-                fillColor: AgentAwesomeColors.surface,
+                fillColor: colors.surface,
                 suffixIcon: IconButton(
                   tooltip: hasValue
                       ? 'Clear ${widget.label}'
@@ -2894,25 +3346,21 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AgentAwesomeColors.border,
-                  ),
+                  borderSide: BorderSide(color: colors.border),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(
-                    color: AgentAwesomeColors.border,
-                  ),
+                  borderSide: BorderSide(color: colors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: colors.searchBorder),
                 ),
               ),
               child: Text(
                 hasValue ? _datePickerFieldLabel(value) : 'Select date',
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: hasValue
-                      ? AgentAwesomeColors.ink
-                      : AgentAwesomeColors.muted,
-                ),
+                style: TextStyle(color: hasValue ? colors.ink : colors.muted),
               ),
             ),
           ),
@@ -2978,6 +3426,7 @@ class _TaskMetadataRow extends StatelessWidget {
   /// Builds one key/value metadata row.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -2987,8 +3436,8 @@ class _TaskMetadataRow extends StatelessWidget {
             width: 110,
             child: Text(
               label,
-              style: const TextStyle(
-                color: AgentAwesomeColors.muted,
+              style: TextStyle(
+                color: colors.muted,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -3011,10 +3460,11 @@ class _TaskSelectionEmpty extends StatelessWidget {
   /// Builds the context inspector no-selection state.
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final colors = context.agentAwesomeColors;
+    return Center(
       child: Text(
         'Select a backlog item or list',
-        style: TextStyle(color: AgentAwesomeColors.muted),
+        style: TextStyle(color: colors.muted),
       ),
     );
   }
@@ -3491,7 +3941,10 @@ class _TaskRelationDialogState extends State<_TaskRelationDialog> {
                 children: <Widget>[
                   DropdownButtonFormField<String>(
                     initialValue: _targetTaskId.isEmpty ? null : _targetTaskId,
-                    decoration: _taskDialogDecoration('Related backlog item'),
+                    decoration: _taskDialogDecoration(
+                      context,
+                      'Related backlog item',
+                    ),
                     isExpanded: true,
                     items: <DropdownMenuItem<String>>[
                       for (final target in targets)
@@ -3886,6 +4339,118 @@ List<String> _insightBadgesForTask(
   return badges.take(3).toList();
 }
 
+/// Returns the local date used by queue quick actions.
+DateTime _todayDate() {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day);
+}
+
+/// Returns the task card accent color from the displayed score band.
+Color _taskQueueAccentColor(BuildContext context, WorkspaceTask task) {
+  return _taskQueueScoreColor(context, _taskQueueScore(task));
+}
+
+/// Returns a compact task description for queue cards.
+String _taskQueueDescription(WorkspaceTask task) {
+  if (task.description.trim().isNotEmpty) {
+    return task.description.trim();
+  }
+  if (task.detail.trim().isNotEmpty) {
+    return task.detail.trim();
+  }
+  if (task.dueAt == null && task.scheduledAt == null) {
+    return 'No date is attached yet.';
+  }
+  return '';
+}
+
+/// Returns the suggested next action for a queue card.
+String _taskSuggestedAction(WorkspaceTask task) {
+  if (task.done) {
+    return 'Already complete';
+  }
+  if (task.status == 'blocked') {
+    return 'Clarify the blocker';
+  }
+  if (task.status == 'waiting') {
+    return 'Follow up or snooze';
+  }
+  if (task.scheduledAt == null) {
+    return 'Schedule for today';
+  }
+  return 'Mark done when finished';
+}
+
+/// Returns the action category label for a queue card.
+String _taskActionTypeLabel(WorkspaceTask task) {
+  if (task.status == 'blocked' || task.description.trim().isEmpty) {
+    return 'Clarify';
+  }
+  if (task.scheduledAt == null) {
+    return 'Schedule';
+  }
+  return 'Do';
+}
+
+/// Returns the action category icon for a queue card.
+IconData _taskActionTypeIcon(WorkspaceTask task) {
+  if (task.status == 'blocked' || task.description.trim().isEmpty) {
+    return Icons.format_list_bulleted_add;
+  }
+  if (task.scheduledAt == null) {
+    return Icons.calendar_today_outlined;
+  }
+  return Icons.task_alt_outlined;
+}
+
+/// Returns a simple queue priority score for attention-style display.
+int _taskQueueScore(WorkspaceTask task) {
+  var score = 48;
+  if (task.overdue) {
+    score += 22;
+  }
+  if (task.dueAt == null && task.scheduledAt == null) {
+    score += 10;
+  }
+  if (task.priority == 'urgent') {
+    score += 22;
+  } else if (task.priority == 'high') {
+    score += 15;
+  } else if (task.priority == 'low') {
+    score -= 8;
+  }
+  if (task.status == 'blocked') {
+    score += 12;
+  }
+  if (task.description.trim().isEmpty) {
+    score += 8;
+  }
+  return score.clamp(0, 99);
+}
+
+/// Returns the queue score band label.
+String _taskQueueScoreLabel(int score) {
+  if (score >= 75) {
+    return 'High';
+  }
+  if (score >= 55) {
+    return 'Medium';
+  }
+  return 'Low';
+}
+
+/// Returns the queue score band color.
+Color _taskQueueScoreColor(BuildContext context, int score) {
+  final colors = context.agentAwesomeColors;
+  if (score >= 75) {
+    return colors.coral;
+  }
+  if (score >= 55) {
+    return context.agentAwesomeWarningAccent;
+  }
+  return context.agentAwesomeLowAccent;
+}
+
 /// Returns memory links filtered by the panel query.
 List<TaskMemoryLink> _filteredLinks(List<TaskMemoryLink> links, String query) {
   return links.where((link) {
@@ -3913,6 +4478,129 @@ bool _matchesText(String value, String query) {
     cursor++;
   }
   return true;
+}
+
+/// Returns the selected semantic Queue preset, falling back to All.
+TaskInsightPreset _selectedTaskInsightPreset(
+  AgentAwesomeAppController controller,
+) {
+  for (final preset in TaskInsightPresetRegistry.queuePresets) {
+    if (preset.id == controller.taskInsightPresetId) {
+      return preset;
+    }
+  }
+  return TaskInsightPresetRegistry.queuePresets.first;
+}
+
+/// Returns a preset label with candidate count when the preset is semantic.
+String _presetLabel(
+  AgentAwesomeAppController controller,
+  TaskInsightPreset preset,
+) {
+  if (preset.id == TaskInsightIds.all) {
+    return preset.label;
+  }
+  final count = controller.taskInsightIndex.tasksForInsight(preset.id).length;
+  return '${preset.label} $count';
+}
+
+/// Returns the visible insight dropdown label.
+String _presetButtonLabel(
+  AgentAwesomeAppController controller,
+  TaskInsightPreset preset,
+) {
+  if (preset.id == TaskInsightIds.all) {
+    return preset.label;
+  }
+  return _presetLabel(controller, preset);
+}
+
+/// Reports whether the filter state matches the bundled Active view.
+bool _isActiveTaskView(TaskFilterState filters) {
+  return _sameFilterValues(filters.statuses, _activeTaskStatuses);
+}
+
+/// Returns the visible icon for the bundled task view control.
+IconData _taskViewIcon(TaskFilterState filters) {
+  if (_isActiveTaskView(filters)) {
+    return Icons.playlist_play;
+  }
+  if (filters.statuses.isEmpty) {
+    return Icons.all_inbox_outlined;
+  }
+  return Icons.tune;
+}
+
+/// Returns the visible label for the bundled task view control.
+String _taskViewLabel(TaskFilterState filters) {
+  if (_isActiveTaskView(filters)) {
+    return 'Active tasks';
+  }
+  if (filters.statuses.isEmpty) {
+    return 'All tasks';
+  }
+  return 'Custom tasks';
+}
+
+/// Returns the compact status filter summary.
+String _statusFilterLabel(TaskFilterState filters) {
+  if (filters.statuses.isEmpty || _isActiveTaskView(filters)) {
+    return filters.overdueOnly ? 'Overdue' : 'Status';
+  }
+  final statusLabel = filters.statuses.length == 1
+      ? _taskLabel(filters.statuses.first)
+      : 'Status ${filters.statuses.length}';
+  return filters.overdueOnly ? '$statusLabel + overdue' : statusLabel;
+}
+
+/// Returns the compact priority filter summary.
+String _priorityFilterLabel(TaskFilterState filters) {
+  if (filters.priorities.isEmpty) {
+    return 'Priority';
+  }
+  if (filters.priorities.length == 1) {
+    return _taskLabel(filters.priorities.first);
+  }
+  return 'Priority ${filters.priorities.length}';
+}
+
+/// Returns the compact topic filter summary.
+String _topicFilterLabel(TaskFilterState filters) {
+  if (filters.topics.isEmpty) {
+    return 'Topics';
+  }
+  if (filters.topics.length == 1) {
+    return filters.topics.first;
+  }
+  return 'Topics ${filters.topics.length}';
+}
+
+/// Returns topic filter choices with selected topics kept visible.
+List<String> _topicFilterOptions(
+  TaskFilterState filters,
+  Iterable<String> availableTopics,
+) {
+  final seen = <String>{};
+  final topics = <String>[];
+  for (final topic in <String>[
+    ...filters.topics,
+    ...availableTopics.take(16),
+  ]) {
+    final trimmed = topic.trim();
+    if (trimmed.isNotEmpty && seen.add(trimmed)) {
+      topics.add(trimmed);
+    }
+  }
+  return topics;
+}
+
+/// Reports whether two filter value lists contain the same values.
+bool _sameFilterValues(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  final rightValues = right.toSet();
+  return left.every(rightValues.contains);
 }
 
 /// Toggles one filter value.
@@ -3998,18 +4686,23 @@ double? _parseDialogScore(String value) {
 }
 
 /// Builds dialog field decoration consistent with context text fields.
-InputDecoration _taskDialogDecoration(String label) {
+InputDecoration _taskDialogDecoration(BuildContext context, String label) {
+  final colors = context.agentAwesomeColors;
   return InputDecoration(
     labelText: label,
     filled: true,
-    fillColor: AgentAwesomeColors.surface,
+    fillColor: colors.surface,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AgentAwesomeColors.border),
+      borderSide: BorderSide(color: colors.border),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AgentAwesomeColors.border),
+      borderSide: BorderSide(color: colors.border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide(color: colors.searchBorder),
     ),
   );
 }
@@ -4044,20 +4737,6 @@ String _constellationEndpointLabel(
   return _taskTitleFor(controller, endpointId);
 }
 
-/// Reports whether one screen change matches a review filter query.
-bool _matchesTaskChange(ScreenChange change, String query) {
-  final text = <String>[
-    change.summary,
-    change.reason,
-    change.error,
-    change.target.taskId,
-    change.target.taskTitle,
-    _screenChangeOperationLabel(change.operation),
-    _screenChangeStatusLabel(change),
-  ].join(' ');
-  return _matchesText(text, query);
-}
-
 /// Returns an icon for one AI screen change.
 IconData _screenChangeIcon(ScreenChange change) {
   if (change.status == ScreenChangeStatus.rejected) {
@@ -4082,16 +4761,16 @@ IconData _screenChangeIcon(ScreenChange change) {
 }
 
 /// Returns a color for one AI screen change status.
-Color _screenChangeColor(ScreenChange change) {
+Color _screenChangeColor(BuildContext context, ScreenChange change) {
+  final colors = context.agentAwesomeColors;
   return switch (change.status) {
-    ScreenChangeStatus.applied => AgentAwesomeColors.green,
-    ScreenChangeStatus.rejected ||
-    ScreenChangeStatus.failed => AgentAwesomeColors.coral,
-    ScreenChangeStatus.undone => AgentAwesomeColors.muted,
+    ScreenChangeStatus.applied => context.agentAwesomeLowAccent,
+    ScreenChangeStatus.rejected || ScreenChangeStatus.failed => colors.coral,
+    ScreenChangeStatus.undone => colors.muted,
     ScreenChangeStatus.proposed =>
       change.safety == ScreenChangeSafety.autoApply
-          ? AgentAwesomeColors.green
-          : const Color(0xffc98219),
+          ? context.agentAwesomeLowAccent
+          : context.agentAwesomeWarningAccent,
   };
 }
 

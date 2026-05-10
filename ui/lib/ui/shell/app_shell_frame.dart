@@ -120,7 +120,13 @@ class AppShellFrame extends StatelessWidget {
                 onOpenSetup: onOpenSetup,
               ),
               Expanded(
-                child: ColoredBox(color: colors.page, child: content),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.page,
+                    gradient: context.agentAwesomeWorkspaceGradient,
+                  ),
+                  child: content,
+                ),
               ),
             ],
           ),
@@ -221,25 +227,9 @@ class _AppSidebar extends StatelessWidget {
           iconGlyph: '↗',
         ),
         _SidebarItem(
-          label: AppSections.workflows,
-          section: AppSections.workflows,
-          iconGlyph: '✦',
-        ),
-      ],
-    ),
-    _SidebarGroup(
-      title: 'WORK MANAGEMENT',
-      items: <_SidebarItem>[
-        _SidebarItem(
           label: AppSections.backlog,
           section: AppSections.backlog,
           iconGlyph: '▤',
-          showsChevron: true,
-        ),
-        _SidebarItem(
-          label: AppSections.timeline,
-          section: AppSections.timeline,
-          iconGlyph: '▷',
           showsChevron: true,
         ),
       ],
@@ -286,7 +276,10 @@ class _AppSidebar extends StatelessWidget {
     final compact = !expanded;
     final colors = context.agentAwesomeColors;
     return Container(
-      color: colors.sidebar,
+      decoration: BoxDecoration(
+        color: colors.sidebar,
+        gradient: context.agentAwesomeSidebarGradient,
+      ),
       padding: EdgeInsets.fromLTRB(14, 24, expanded ? 14 : 12, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,6 +322,7 @@ class _AppBrandHeader extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.chrome,
+        gradient: context.agentAwesomeChromeGradient,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       padding: EdgeInsets.fromLTRB(expanded ? 24 : 14, 12, 14, 12),
@@ -593,11 +587,13 @@ class _LogoFallbackMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final gradient = context.agentAwesomePrimaryGradient;
     return Container(
       height: 58,
       width: 58,
       decoration: BoxDecoration(
-        color: colors.green,
+        color: gradient == null ? colors.green : null,
+        gradient: gradient,
         borderRadius: BorderRadius.circular(8),
       ),
       child: const Center(
@@ -637,6 +633,9 @@ class _NavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final selectedGradient = selected
+        ? context.agentAwesomeSelectedGradient
+        : null;
     final foreground = selected ? colors.ink : colors.muted;
     return Tooltip(
       message: compact ? label : '',
@@ -652,7 +651,12 @@ class _NavButton extends StatelessWidget {
             vertical: compact ? 8 : 7,
           ),
           decoration: BoxDecoration(
-            color: selected ? colors.greenSoft : Colors.transparent,
+            color: selectedGradient == null
+                ? selected
+                      ? colors.greenSoft
+                      : Colors.transparent
+                : null,
+            gradient: selectedGradient,
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(

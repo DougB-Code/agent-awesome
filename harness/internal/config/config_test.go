@@ -386,6 +386,8 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		"get_task",
 		"list_tasks",
 		"task_graph_projection",
+		"project_executive_summary",
+		"explain_executive_summary_item",
 		"update_task",
 		"complete_task",
 		"cancel_task",

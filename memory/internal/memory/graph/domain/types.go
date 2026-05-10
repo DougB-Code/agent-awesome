@@ -22,7 +22,7 @@ const (
 	KindArtifact NodeKind = "artifact"
 	// KindCommitment represents an obligation or promise.
 	KindCommitment NodeKind = "commitment"
-	// KindEvidence represents source-backed evidence content.
+	// KindEvidence represents source-backed content.
 	KindEvidence NodeKind = "evidence"
 	// KindEntity represents a generic named entity.
 	KindEntity NodeKind = "entity"
@@ -60,7 +60,7 @@ const (
 	RelationAssignedTo RelationType = "assigned_to"
 	// RelationBlocks means the source prevents the target from progressing.
 	RelationBlocks RelationType = "blocks"
-	// RelationCapturedFrom links a memory node to source evidence.
+	// RelationCapturedFrom links a memory node to source content.
 	RelationCapturedFrom RelationType = "captured_from"
 	// RelationContradicts links conflicting facts.
 	RelationContradicts RelationType = "contradicts"
@@ -261,7 +261,7 @@ type Alias struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// EvidenceBlob stores source content metadata for an evidence node.
+// EvidenceBlob stores source content metadata for a source node.
 type EvidenceBlob struct {
 	NodeID       NodeID    `json:"node_id"`
 	Checksum     string    `json:"checksum"`
@@ -353,7 +353,7 @@ type UpsertAliasRequest struct {
 	Kind   string
 }
 
-// WriteEvidenceBlobRequest asks the repository to persist evidence text.
+// WriteEvidenceBlobRequest asks the repository to persist source text.
 type WriteEvidenceBlobRequest struct {
 	NodeID       NodeID
 	Content      string

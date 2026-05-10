@@ -9,23 +9,29 @@ import 'package:flutter/foundation.dart';
 
 import '../clients/assistant_client.dart';
 import '../clients/chat_title_client.dart';
+import '../clients/executive_summary_client.dart';
 import '../clients/mcp_client.dart';
 import '../clients/screen_command_client.dart';
+import '../domain/executive_summary.dart';
 import '../domain/models.dart';
 import '../domain/screen_command.dart';
 import '../domain/task_insight_index.dart';
 import '../domain/task_insight_query.dart';
 import '../domain/task_projection_adapters.dart';
+import '../domain/today_task_insight_metrics.dart';
 import '../domain/user_message_text.dart';
+import '../features/today/today_controller.dart';
 import 'app_config.dart';
 import 'app_logger.dart';
 import 'app_settings.dart';
 import 'chat_history.dart';
 import 'config_files.dart';
 import 'credential_store.dart';
+import 'file_import.dart';
 import 'local_model_runtime.dart';
 import 'local_services.dart';
 import 'model_config.dart';
+import 'model_file_capabilities.dart';
 import 'onboarding_model_setup.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';
@@ -95,6 +101,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     AssistantClient? assistantClient,
     MemoryClient? memoryClient,
     TasksClient? tasksClient,
+    ExecutiveSummaryClient? executiveSummaryClient,
     LocalServiceSupervisor? localServices,
     LocalModelRuntime? localModels,
     ConfigFileStore? configFiles,
@@ -103,6 +110,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     CredentialStore? credentialStore,
     ChatTitleClient? titleClient,
     ScreenCommandPlanner? screenCommandPlanner,
+    AgentFileImporter? fileImporter,
     AppLogger? logger,
   }) {
     final effectiveLogger =
@@ -146,6 +154,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
               logger: effectiveLogger,
             ),
           ),
+      executiveSummaryClient:
+          executiveSummaryClient ??
+          ExecutiveSummaryClient(
+            rpc: GatewayContextClient(
+              baseUrl: config.agentGatewayContextBaseUrl,
+              headers: config.gatewayAuthHeaders,
+              logger: effectiveLogger,
+            ),
+          ),
       localServices:
           localServices ??
           LocalServiceSupervisor(
@@ -172,9 +189,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
           ),
       screenCommandPlanner:
           screenCommandPlanner ?? ScreenCommandClient(logger: effectiveLogger),
+      fileImporter: fileImporter ?? const FileSelectorAgentFileImporter(),
       assistantClientInjected: assistantClient != null,
       memoryClientInjected: memoryClient != null,
       tasksClientInjected: tasksClient != null,
+      executiveSummaryClientInjected: executiveSummaryClient != null,
       screenCommandPlannerInjected: screenCommandPlanner != null,
     );
   }
@@ -187,6 +206,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     required this.assistantClient,
     required this.memoryClient,
     required this.tasksClient,
+    required this.executiveSummaryClient,
     required this.localServices,
     required this.localModels,
     required this.configFiles,
@@ -195,13 +215,16 @@ class AgentAwesomeAppController extends ChangeNotifier {
     required this.credentialStore,
     required this.titleClient,
     required this.screenCommandPlanner,
+    required this.fileImporter,
     required bool assistantClientInjected,
     required bool memoryClientInjected,
     required bool tasksClientInjected,
+    required bool executiveSummaryClientInjected,
     required bool screenCommandPlannerInjected,
   }) : _assistantClientInjected = assistantClientInjected,
        _memoryClientInjected = memoryClientInjected,
        _tasksClientInjected = tasksClientInjected,
+       _executiveSummaryClientInjected = executiveSummaryClientInjected,
        _screenCommandPlannerInjected = screenCommandPlannerInjected;
 
   /// Runtime service configuration.
@@ -221,6 +244,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Client for graph-backed task tools exposed by the memory service.
   TasksClient tasksClient;
+
+  /// Client for the canonical Today projection tools.
+  ExecutiveSummaryClient executiveSummaryClient;
 
   /// Local process supervisor for the pilot service stack.
   final LocalServiceSupervisor localServices;
@@ -246,9 +272,13 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Client used for structured current-screen AI command planning.
   final ScreenCommandPlanner screenCommandPlanner;
 
+  /// Imports source files through the platform file picker.
+  final AgentFileImporter fileImporter;
+
   final bool _assistantClientInjected;
   final bool _memoryClientInjected;
   final bool _tasksClientInjected;
+  final bool _executiveSummaryClientInjected;
   final bool _screenCommandPlannerInjected;
 
   /// Active runtime profile for harness configs and MCP topology.
@@ -338,6 +368,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Latest task constellation projection.
   TaskConstellationProjection taskConstellationProjection =
       const TaskConstellationProjection();
+
+  /// Latest canonical Today projection state.
+  TodayState todayState = const TodayState();
 
   /// Last task projection loading problem.
   String taskProjectionMessage = '';
@@ -1459,6 +1492,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     assistantClient.close();
     memoryClient.close();
     tasksClient.close();
+    executiveSummaryClient.close();
     titleClient.close();
     if (!_screenCommandPlannerInjected &&
         screenCommandPlanner is ScreenCommandClient) {
@@ -1536,10 +1570,61 @@ class AgentAwesomeAppController extends ChangeNotifier {
         ),
       );
     }
+    if (!_executiveSummaryClientInjected) {
+      executiveSummaryClient.close();
+      executiveSummaryClient = ExecutiveSummaryClient(
+        rpc: GatewayContextClient(
+          baseUrl: _contextBaseUrl(profile),
+          headers: _gatewayHeadersForProfile(profile),
+          logger: logger,
+        ),
+      );
+    }
   }
 
   /// Selects the home workspace without fabricating local data.
   void openHome() {
+    unawaited(_loadToday(quiet: true));
+    notifyListeners();
+  }
+
+  /// Refreshes the Today projection from the UI.
+  Future<void> refreshTodayFromUi() async {
+    await _loadToday();
+  }
+
+  /// Loads an explanation for one Today projection item.
+  Future<void> explainTodayItem(String itemId) async {
+    final trimmed = itemId.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    todayState = todayState.copyWith(
+      busy: true,
+      error: '',
+      selectedExplanationItemId: trimmed,
+    );
+    notifyListeners();
+    try {
+      final explanation = await executiveSummaryClient
+          .explainExecutiveSummaryItem(trimmed);
+      todayState = todayState.copyWith(
+        busy: false,
+        error: '',
+        explanation: explanation,
+      );
+    } catch (error) {
+      todayState = todayState.copyWith(busy: false, error: error.toString());
+    }
+    notifyListeners();
+  }
+
+  /// Clears the selected Today explanation.
+  void clearTodayExplanation() {
+    todayState = todayState.copyWith(
+      selectedExplanationItemId: '',
+      explanation: const ExecutiveSummaryItemExplanation(),
+    );
     notifyListeners();
   }
 
@@ -2438,7 +2523,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       return;
     }
     memoryBusy = true;
-    memoryMessage = 'Loading source evidence';
+    memoryMessage = 'Loading source content';
     notifyListeners();
     try {
       final records = await memoryClient.searchSources(
@@ -2451,9 +2536,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
       final hydrated = records.where((record) => record.id == memory.id);
       if (hydrated.isNotEmpty) {
         _replaceMemoryRecord(hydrated.first);
-        memoryMessage = 'Source evidence loaded';
+        memoryMessage = 'Source content loaded';
       } else {
-        memoryMessage = 'Source evidence was not returned by search';
+        memoryMessage = 'Source content was not returned by search';
       }
       _setEndpoint(
         _primaryMemoryLabel(),
@@ -2482,16 +2567,20 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
   }
 
-  /// Saves a reviewed memory candidate as immutable source-backed evidence.
-  Future<void> saveMemoryCandidateFromUi(MemoryCaptureDraft draft) async {
+  /// Saves a reviewed memory candidate as immutable source-backed content.
+  Future<void> saveMemoryCandidateFromUi(
+    MemoryCaptureDraft draft, {
+    String idempotencyKey = '',
+  }) async {
     memoryBusy = true;
     memoryMessage = 'Saving reviewed memory candidate';
     notifyListeners();
     try {
       await memoryClient.saveMemoryCandidate(
         draft: draft,
-        idempotencyKey:
-            'agent_awesome_ui:${DateTime.now().microsecondsSinceEpoch}:${draft.title}',
+        idempotencyKey: idempotencyKey.trim().isEmpty
+            ? 'agent_awesome_ui:${DateTime.now().microsecondsSinceEpoch}:${draft.title}'
+            : idempotencyKey.trim(),
       );
       memoryMessage = 'Memory candidate saved';
       _setEndpoint(
@@ -2513,7 +2602,140 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
   }
 
-  /// Repairs selected memory metadata without changing raw evidence.
+  /// Imports a local source file and stores it as a memory-backed file.
+  Future<void> importFileFromUi() async {
+    memoryBusy = true;
+    memoryMessage = 'Selecting file';
+    notifyListeners();
+    try {
+      final imported = await fileImporter.pickFile();
+      if (imported == null) {
+        memoryMessage = 'File import canceled';
+        return;
+      }
+      await memoryClient.saveMemoryCandidate(
+        draft: imported.toMemoryDraft(),
+        idempotencyKey: imported.idempotencyKey,
+      );
+      memoryMessage = 'Imported ${imported.name}';
+      _setEndpoint(
+        _primaryMemoryLabel(),
+        ConnectionStateKind.connected,
+        memoryMessage,
+      );
+      await _loadMemory();
+    } catch (error) {
+      memoryMessage = error.toString();
+      _setEndpoint(
+        _primaryMemoryLabel(),
+        ConnectionStateKind.disconnected,
+        memoryMessage,
+      );
+    } finally {
+      memoryBusy = false;
+      notifyListeners();
+    }
+  }
+
+  /// Sends one indexed file to the current chat using the active model policy.
+  Future<void> sendFileToChatFromUi(MemoryRecord file) async {
+    final hydrated = await _hydratedFileRecord(file);
+    final capabilities = await activeModelFileCapabilities();
+    final payload = _fileChatPrompt(hydrated, capabilities);
+    await sendUserMessage(payload, displayText: 'Review ${hydrated.title}');
+  }
+
+  /// Resolves the active model's file handling from the harness model config.
+  Future<ModelFileCapabilities> activeModelFileCapabilities() async {
+    final path = runtimeProfile?.harness.modelConfigPath.trim() ?? '';
+    if (path.isEmpty) {
+      return fallbackModelFileCapabilities('No active model config is loaded.');
+    }
+    try {
+      final file = File(path);
+      if (!await file.exists()) {
+        return fallbackModelFileCapabilities(
+          'The active model config was not found.',
+        );
+      }
+      final document = ModelConfigDocument.parse(await file.readAsString());
+      final selection = activeModelFileSelection(document);
+      if (selection == null) {
+        return fallbackModelFileCapabilities(
+          'The active model config has no usable provider/model selection.',
+        );
+      }
+      return modelFileCapabilitiesFor(
+        provider: selection.provider,
+        model: selection.model,
+      );
+    } catch (error) {
+      return fallbackModelFileCapabilities(
+        'Could not inspect model file support: $error',
+      );
+    }
+  }
+
+  /// Loads raw source text for a file record before sending it to chat.
+  Future<MemoryRecord> _hydratedFileRecord(MemoryRecord file) async {
+    if (file.rawContent.trim().isNotEmpty) {
+      return file;
+    }
+    try {
+      final records = await memoryClient.searchSources(
+        scope: file.scope,
+        text: file.title,
+        kinds: <String>[file.kind],
+        allowedSensitivities: _sensitivitiesIncluding(file.sensitivity),
+        limit: 20,
+      );
+      for (final record in records) {
+        if (record.id == file.id || record.evidenceId == file.evidenceId) {
+          _replaceMemoryRecord(record);
+          return record;
+        }
+      }
+    } catch (error) {
+      await _log('file source hydration failed: $error');
+    }
+    return file;
+  }
+
+  /// Builds the text payload used by the current ADK chat endpoint.
+  String _fileChatPrompt(
+    MemoryRecord file,
+    ModelFileCapabilities capabilities,
+  ) {
+    final title = file.title.trim().isEmpty
+        ? 'Untitled file'
+        : file.title.trim();
+    final mediaType = file.rawMediaType.trim().isEmpty
+        ? 'application/octet-stream'
+        : file.rawMediaType.trim();
+    final content = file.rawContent.trim().isEmpty
+        ? 'The source content has not been hydrated by the memory service.'
+        : file.rawContent.trim();
+    final transport = capabilities.usesBase64Fallback
+        ? 'base64_text'
+        : 'native_file_parts_requested';
+    return '''
+Please review this file and use it as source material for the conversation.
+
+File name: $title
+Media type: $mediaType
+Source: ${file.sourceLabel}
+Model: ${capabilities.modelName.isEmpty ? 'unknown' : capabilities.modelName}
+Native file support detected: ${capabilities.nativeFileParts}
+Transport selected: $transport
+Transport reason: ${capabilities.reason}
+
+--- file_payload ---
+$content
+'''
+        .trim();
+  }
+
+  /// Repairs selected memory metadata without changing raw source content.
   Future<void> repairMemoryFromUi(MemoryRepairDraft draft) async {
     memoryBusy = true;
     memoryMessage = 'Repairing memory metadata';
@@ -3512,7 +3734,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     if (operation == ScreenChangeOperation.linkTaskMemory &&
         _stringField(fields, 'memory_id').isEmpty &&
         _stringField(fields, 'memory_evidence_id').isEmpty) {
-      return 'Memory link requires memory_id or memory_evidence_id';
+      return 'Memory link requires a memory id or source record id';
     }
     if (fields.containsKey('topics') && fields['topics'] is! List) {
       return 'topics must be a list';
@@ -3972,6 +4194,45 @@ class AgentAwesomeAppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Loads the memory-owned Today executive summary projection.
+  Future<void> _loadToday({bool quiet = false}) async {
+    final profile = runtimeProfile;
+    if (profile == null || profile.memoryServers.isEmpty) {
+      todayState = todayState.copyWith(
+        busy: false,
+        error: 'No graph memory server is configured',
+      );
+      if (!quiet) {
+        notifyListeners();
+      }
+      return;
+    }
+    if (!quiet) {
+      todayState = todayState.copyWith(busy: true, error: '');
+      notifyListeners();
+    }
+    try {
+      final projection = alignTodayProjectionWithTaskInsights(
+        projection: await executiveSummaryClient.projectExecutiveSummary(),
+        index: taskInsightIndex,
+      );
+      todayState = TodayState(projection: projection);
+      _setEndpoint(
+        profile.memoryServers.first.label,
+        ConnectionStateKind.connected,
+        'Today loaded',
+      );
+    } catch (error) {
+      todayState = todayState.copyWith(busy: false, error: error.toString());
+      _setEndpoint(
+        profile.memoryServers.first.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    }
+    notifyListeners();
+  }
+
   /// Loads advertised MCP tool names from the primary graph server.
   Future<void> _loadToolCapabilities() async {
     final server = _primaryGraphServer();
@@ -4084,6 +4345,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
         : failures.join(' | ');
     tasksBusy = false;
     await _log('load tasks complete tasks=${tasks.length}');
+    unawaited(_loadToday(quiet: true));
     notifyListeners();
   }
 

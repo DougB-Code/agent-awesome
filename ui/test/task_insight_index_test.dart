@@ -2,8 +2,10 @@
 library;
 
 import 'package:agentawesome_ui/domain/models.dart';
+import 'package:agentawesome_ui/domain/executive_summary.dart';
 import 'package:agentawesome_ui/domain/task_insight_index.dart';
 import 'package:agentawesome_ui/domain/task_insight_query.dart';
+import 'package:agentawesome_ui/domain/today_task_insight_metrics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Exercises insight candidates, graph traversal, and unblock plans.
@@ -195,6 +197,131 @@ void main() {
     expect(index.unblockPlanFor('review').primaryBlockerId, 'collect');
   });
 
+  test('surfaces Today execute, decide, and follow-up presets', () {
+    final index = TaskInsightIndex.build(
+      workspaceTasks: <WorkspaceTask>[
+        _workspaceTask(id: 'socks', title: 'Buy Socks'),
+        _workspaceTask(
+          id: 'budget',
+          title: 'Approve May budget decision',
+          description: 'Confirm the spending decision.',
+          priority: 'high',
+        ),
+        _workspaceTask(id: 'collect', title: 'Collect forecast inputs'),
+        _workspaceTask(
+          id: 'review',
+          title: 'Review May budget',
+          status: 'blocked',
+        ),
+        _workspaceTask(
+          id: 'reply',
+          title: 'Reply to Sarah',
+          context: 'Promise follow up',
+          owner: 'Sarah',
+          followUpAt: now.subtract(const Duration(days: 1)),
+        ),
+      ],
+      graph: TaskProjectionGraph(
+        tasks: <TaskProjectionTask>[
+          _projectionTask(
+            id: 'socks',
+            title: 'Buy Socks',
+            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+          ),
+          _projectionTask(
+            id: 'budget',
+            title: 'Approve May budget decision',
+            scores: const TaskProjectionScores(
+              humanJudgmentNeed: 0.82,
+              risk: 0.62,
+              metadataCompleteness: 0.90,
+            ),
+          ),
+          _projectionTask(
+            id: 'collect',
+            title: 'Collect forecast inputs',
+            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+          ),
+          _projectionTask(
+            id: 'review',
+            title: 'Review May budget',
+            status: 'blocked',
+            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+          ),
+          _projectionTask(
+            id: 'reply',
+            title: 'Reply to Sarah',
+            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+          ),
+        ],
+        edges: const <TaskProjectionEdge>[
+          TaskProjectionEdge(
+            fromTaskId: 'collect',
+            toTaskId: 'review',
+            relationType: 'blocks',
+            source: 'explicit',
+            confidence: 1,
+          ),
+        ],
+      ),
+      now: now,
+    );
+
+    expect(
+      index.tasksForInsight(TaskInsightIds.todayActions),
+      hasLength(greaterThanOrEqualTo(1)),
+    );
+    expect(
+      index
+          .tasksForInsight(TaskInsightIds.todayDecisions)
+          .map((candidate) => candidate.taskId),
+      contains('budget'),
+    );
+    expect(
+      index
+          .tasksForInsight(TaskInsightIds.todayRelationships)
+          .map((candidate) => candidate.taskId),
+      contains('reply'),
+    );
+  });
+
+  test('aligns Today metrics to task insight preset counts', () {
+    final index = TaskInsightIndex.build(
+      workspaceTasks: <WorkspaceTask>[
+        _workspaceTask(id: 'socks', title: 'Buy Socks'),
+        _workspaceTask(id: 'watch', title: 'Buy a new watch'),
+        _workspaceTask(id: 'coffee', title: 'Buy more coffee'),
+      ],
+      graph: TaskProjectionGraph(
+        tasks: <TaskProjectionTask>[
+          for (final taskId in <String>['socks', 'watch', 'coffee'])
+            _projectionTask(
+              id: taskId,
+              title: taskId,
+              scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+            ),
+        ],
+      ),
+      now: now,
+    );
+
+    final projection = alignTodayProjectionWithTaskInsights(
+      projection: const ExecutiveSummaryProjection(),
+      index: index,
+    );
+    final metrics = <String, SummaryMetric>{
+      for (final metric in projection.metrics) metric.id: metric,
+    };
+
+    expect(metrics['actions']?.value, '3');
+    expect(
+      metrics['actions']?.link.route,
+      '/backlog?insight=${TaskInsightIds.todayActions}',
+    );
+    expect(metrics['decisions']?.value, '0');
+    expect(metrics['relationships']?.value, '0');
+  });
+
   test('reports projection coverage mismatches', () {
     final index = TaskInsightIndex.build(
       workspaceTasks: <WorkspaceTask>[
@@ -297,9 +424,11 @@ WorkspaceTask _workspaceTask({
   String status = 'open',
   String priority = 'normal',
   DateTime? dueAt,
+  DateTime? followUpAt,
   int estimateMinutes = 30,
   String context = '',
   String domain = '',
+  String owner = '',
 }) {
   return WorkspaceTask(
     id: id,
@@ -310,9 +439,11 @@ WorkspaceTask _workspaceTask({
     status: status,
     priority: priority,
     dueAt: dueAt,
+    followUpAt: followUpAt,
     estimateMinutes: estimateMinutes,
     context: context,
     domain: domain,
+    owner: owner,
     confidence: 0.80,
     active: status != 'done' && status != 'canceled',
   );

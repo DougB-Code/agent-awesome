@@ -6,7 +6,7 @@ import (
 	"memory/internal/memory/domain"
 )
 
-// Repository stores source evidence, memory records, jobs, pages, and audit events.
+// Repository stores source content, memory records, jobs, pages, and audit events.
 type Repository interface {
 	Capture(ctx context.Context, req domain.CaptureRequest) (domain.CaptureResult, error)
 	Search(ctx context.Context, q domain.RetrievalQuery) ([]domain.MemoryRecord, error)

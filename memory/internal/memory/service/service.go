@@ -84,7 +84,7 @@ func (s *Service) Stop(ctx context.Context) error {
 	}
 }
 
-// Capture synchronously stores raw evidence and schedules enrichment.
+// Capture synchronously stores raw source content and schedules enrichment.
 func (s *Service) Capture(ctx context.Context, req domain.CaptureRequest) (domain.CaptureResult, error) {
 	return s.repo.Capture(ctx, req)
 }
@@ -149,7 +149,7 @@ func (s *Service) RepairMemoryRecord(ctx context.Context, req domain.RepairReque
 	return s.repo.RepairMemory(ctx, req)
 }
 
-// SubmitMemoryCorrection stores a correction as source evidence.
+// SubmitMemoryCorrection stores a correction as source content.
 func (s *Service) SubmitMemoryCorrection(ctx context.Context, req domain.CorrectionRequest) (domain.CaptureResult, error) {
 	return s.repo.CreateCorrection(ctx, req)
 }
@@ -370,7 +370,7 @@ func (s *Service) handleJob(ctx context.Context, worker string, job domain.Job) 
 	case domain.JobSummarize:
 		return s.handleSummarize(ctx, worker, record, content)
 	case domain.JobDetectDuplicates:
-		return s.auditJob(ctx, worker, job, "duplicate detection completed for checksum-indexed evidence")
+		return s.auditJob(ctx, worker, job, "duplicate detection completed for checksum-indexed source content")
 	case domain.JobReviewContradictions:
 		return s.handleContradictions(ctx, worker, record, content)
 	case domain.JobReindex:

@@ -170,7 +170,7 @@ func (r *Repository) captureNormalized(ctx context.Context, req domain.CaptureRe
 		Actor:         req.Actor,
 		SubjectNodeID: memory.ID,
 		SourceNodeID:  evidence.ID,
-		Message:       "captured source evidence and projected it into the context graph",
+		Message:       "captured source content and projected it into the context graph",
 	}); err != nil {
 		return domain.CaptureResult{}, err
 	}
@@ -677,7 +677,7 @@ func (r *Repository) propertyMap(ctx context.Context, nodeID graph.NodeID) (map[
 	return byKey, nil
 }
 
-// capturedEvidence returns the evidence node and raw evidence for a memory node.
+// capturedEvidence returns the source node and raw source content for a memory node.
 func (r *Repository) capturedEvidence(ctx context.Context, memoryID graph.NodeID) (graph.Node, *domain.RawEvidence, error) {
 	edges, err := r.graph.ListOutgoingEdges(ctx, memoryID, []graph.RelationType{graph.RelationCapturedFrom})
 	if err != nil {
@@ -810,7 +810,7 @@ func buildCompiledPageContent(kind domain.Kind, title string, records []domain.M
 	fmt.Fprintf(&b, "# %s\n\n", title)
 	fmt.Fprintf(&b, "Kind: `%s`\n\n", kind)
 	if len(records) == 0 {
-		b.WriteString("No source evidence matched this page yet.\n")
+		b.WriteString("No source content matched this page yet.\n")
 		return b.String(), nil
 	}
 	sourceSet := map[domain.EvidenceID]struct{}{}
@@ -822,7 +822,7 @@ func buildCompiledPageContent(kind domain.Kind, title string, records []domain.M
 			fmt.Fprintf(&b, "%s\n\n", record.Summary)
 		}
 		fmt.Fprintf(&b, "- Memory: `%s`\n", record.ID)
-		fmt.Fprintf(&b, "- Evidence: `%s`\n", record.EvidenceID)
+		fmt.Fprintf(&b, "- Source: `%s`\n", record.EvidenceID)
 		if len(record.Topics) > 0 {
 			fmt.Fprintf(&b, "- Topics: %s\n", strings.Join(record.Topics, ", "))
 		}

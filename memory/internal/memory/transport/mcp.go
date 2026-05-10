@@ -186,6 +186,18 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 			return nil, err
 		}
 		return s.service.TaskGraphProjection(ctx, req)
+	case "project_executive_summary":
+		var req domain.ExecutiveSummaryQuery
+		if err := decodeArgs(args, &req); err != nil {
+			return nil, err
+		}
+		return s.service.ProjectExecutiveSummary(ctx, req)
+	case "explain_executive_summary_item":
+		var req domain.ExplainExecutiveSummaryItemQuery
+		if err := decodeArgs(args, &req); err != nil {
+			return nil, err
+		}
+		return s.service.ExplainExecutiveSummaryItem(ctx, req)
 	case "update_task":
 		var req domain.UpdateTaskRequest
 		if err := decodeArgs(args, &req); err != nil {
@@ -255,7 +267,7 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 func toolDefinitions() []map[string]any {
 	return []map[string]any{
 		tool("remember", "Store one small memory nugget. Use this for user facts, preferences, notes, and things to recall later. Use create_task only for operational todos.", rememberSchema(), []string{"text"}),
-		tool("save_memory_candidate", "Advanced memory capture for raw evidence. Prefer remember for a single small fact, preference, or note.", map[string]any{
+		tool("save_memory_candidate", "Advanced memory capture for raw source content. Prefer remember for a single small fact, preference, or note.", map[string]any{
 			"content":         stringSchema("Raw text or serialized source content to preserve."),
 			"title":           stringSchema("Human-readable title."),
 			"media_type":      stringSchema("Media type for the source content."),
@@ -271,7 +283,7 @@ func toolDefinitions() []map[string]any {
 			"actor":           stringSchema("Calling agent or user."),
 		}, []string{"content"}),
 		tool("search_memory", "Search memory metadata and compiled retrieval context.", retrievalSchema(), []string{}),
-		tool("search_sources", "Search and return matching source evidence text.", retrievalSchema(), []string{}),
+		tool("search_sources", "Search and return matching source content text.", retrievalSchema(), []string{}),
 		tool("load_entity_page", "Load or build a compiled entity page.", map[string]any{
 			"scope":     enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
 			"entity_id": stringSchema("Canonical entity id."),
@@ -302,7 +314,7 @@ func toolDefinitions() []map[string]any {
 			"topics":       arraySchema("Corrected topics.", stringSchema("Topic.")),
 			"entity_names": arraySchema("Corrected entity names.", stringSchema("Entity name.")),
 		}, []string{"memory_id"}),
-		tool("submit_memory_correction", "Store a user correction as first-class source evidence.", map[string]any{
+		tool("submit_memory_correction", "Store a user correction as first-class source content.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
 			"memory_id": stringSchema("Memory record id being corrected."),
 			"scope":     enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
@@ -319,6 +331,8 @@ func toolDefinitions() []map[string]any {
 		tool("get_task", "Load one graph-backed task by id.", map[string]any{"task_id": stringSchema("Task id.")}, []string{"task_id"}),
 		tool("list_tasks", "List graph-backed tasks.", taskQuerySchema(), []string{}),
 		tool("task_graph_projection", "Read a graph-backed task node and edge projection.", taskGraphProjectionSchema(), []string{}),
+		tool("project_executive_summary", "Read the canonical Today executive summary projection.", executiveSummarySchema(), []string{}),
+		tool("explain_executive_summary_item", "Explain why one Today projection item was surfaced.", explainExecutiveSummaryItemSchema(), []string{"item_id"}),
 		tool("update_task", "Patch a graph-backed operational task.", taskUpdateSchema(), []string{"task_id"}),
 		tool("complete_task", "Mark a graph-backed task done.", map[string]any{"task_id": stringSchema("Task id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
 		tool("cancel_task", "Mark a graph-backed task canceled.", map[string]any{"task_id": stringSchema("Task id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
@@ -441,6 +455,27 @@ func taskGraphProjectionSchema() map[string]any {
 	}
 }
 
+// executiveSummarySchema returns project_executive_summary input properties.
+func executiveSummarySchema() map[string]any {
+	return map[string]any{
+		"scope":            enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
+		"horizon":          enumSchema("Projection horizon.", []string{"now", "today", "tomorrow", "week", "all"}),
+		"now":              stringSchema("Optional RFC3339 clock override."),
+		"max_items":        map[string]any{"type": "integer", "description": "Maximum visible items across primary sections."},
+		"include_evidence": map[string]any{"type": "boolean", "description": "Include concise source handles."},
+		"include_actions":  map[string]any{"type": "boolean", "description": "Include safe action hints."},
+		"channel":          enumSchema("Presentation channel.", []string{"ui", "slack", "chat", "api"}),
+	}
+}
+
+// explainExecutiveSummaryItemSchema returns explanation input properties.
+func explainExecutiveSummaryItemSchema() map[string]any {
+	return map[string]any{
+		"item_id":         stringSchema("Executive summary item id."),
+		"include_sources": map[string]any{"type": "boolean", "description": "Include source handles when available."},
+	}
+}
+
 // taskUpdateSchema returns graph-backed update_task input properties.
 func taskUpdateSchema() map[string]any {
 	schema := taskAdvancedSchema()
@@ -491,7 +526,7 @@ func taskRelationUpsertSchema() map[string]any {
 func memoryLinkSchema() map[string]any {
 	return objectSchema(map[string]any{
 		"memory_id":          stringSchema("Memory record id."),
-		"memory_evidence_id": stringSchema("Memory evidence id."),
+		"memory_evidence_id": stringSchema("Memory source record id."),
 		"relationship":       enumSchema("Memory relationship.", []string{"originated_from", "context", "supporting", "related"}),
 		"note":               stringSchema("Link note."),
 	}, []string{})

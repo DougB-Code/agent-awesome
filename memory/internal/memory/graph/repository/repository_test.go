@@ -47,7 +47,7 @@ func TestCaptureProjectsGraphMemory(t *testing.T) {
 	}
 	content, err := repo.GetEvidenceContent(ctx, result.EvidenceID)
 	if err != nil {
-		t.Fatalf("get evidence content: %v", err)
+		t.Fatalf("get source content: %v", err)
 	}
 	if content != "remember the normalized source" {
 		t.Fatalf("content = %q, want trimmed source", content)
@@ -80,10 +80,10 @@ func TestCaptureIdempotencyReusesGraphNodes(t *testing.T) {
 	}
 	content, err := repo.GetEvidenceContent(ctx, first.EvidenceID)
 	if err != nil {
-		t.Fatalf("get evidence content: %v", err)
+		t.Fatalf("get source content: %v", err)
 	}
 	if content != "same source" {
-		t.Fatalf("evidence content = %q, want first source", content)
+		t.Fatalf("source content = %q, want first source", content)
 	}
 }
 

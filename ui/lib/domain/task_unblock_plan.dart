@@ -52,7 +52,7 @@ class TaskUnblockPlan {
   /// Missing context that limits unblock confidence.
   final List<String> missingContext;
 
-  /// Evidence ids supporting the plan.
+  /// Source record ids supporting the plan.
   final List<String> evidenceIds;
 
   /// Plan confidence from 0 to 1.

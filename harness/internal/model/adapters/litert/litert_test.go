@@ -419,6 +419,24 @@ func TestPromptSelectsCreateTaskFromLargeToolCatalogForGemma(t *testing.T) {
 	}
 }
 
+// TestPromptSelectsExecutiveSummaryFromLargeToolCatalogForGemma verifies Today prompts keep the summary tool.
+func TestPromptSelectsExecutiveSummaryFromLargeToolCatalogForGemma(t *testing.T) {
+	prompt, err := promptFromRequest(&llmapi.LLMRequest{
+		Contents: []*genai.Content{
+			genai.NewContentFromText("Brief me on what needs my attention today", "user"),
+		},
+		Config: &genai.GenerateContentConfig{
+			Tools: []*genai.Tool{{FunctionDeclarations: largeToolCatalog()}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("promptFromRequest() error = %v", err)
+	}
+	if !strings.Contains(prompt, "<|tool>declaration:project_executive_summary") {
+		t.Fatalf("prompt = %q, want project_executive_summary declaration", prompt)
+	}
+}
+
 func TestPromptKeepsToolHistoryDeclarationInLargeCatalogForGemma(t *testing.T) {
 	req := &llmapi.LLMRequest{
 		Contents: []*genai.Content{
@@ -465,7 +483,7 @@ func largeToolCatalog() []*genai.FunctionDeclaration {
 		{Name: "remember", Description: "Store one small memory nugget."},
 		{Name: "save_memory_candidate", Description: "Advanced memory capture."},
 		{Name: "search_memory", Description: "Search memory metadata."},
-		{Name: "search_sources", Description: "Search source evidence."},
+		{Name: "search_sources", Description: "Search source content."},
 		{Name: "load_entity_page", Description: "Load an entity page."},
 		{Name: "load_timeline", Description: "Load a timeline."},
 		{Name: "query_context_graph", Description: "Execute a graph query."},
@@ -482,6 +500,8 @@ func largeToolCatalog() []*genai.FunctionDeclaration {
 			},
 		},
 		{Name: "list_tasks", Description: "List graph-backed tasks."},
+		{Name: "project_executive_summary", Description: "Read the canonical Today executive summary projection."},
+		{Name: "explain_executive_summary_item", Description: "Explain why one Today projection item was surfaced."},
 		{Name: "update_task", Description: "Patch a graph-backed task."},
 		{Name: "complete_task", Description: "Mark a graph-backed task done."},
 		{Name: "delete_task", Description: "Delete a graph-backed task."},

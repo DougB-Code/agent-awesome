@@ -10,18 +10,18 @@ import (
 	"testing"
 )
 
-// TestSnapshotRoundTrip verifies database and evidence files survive archive restore.
+// TestSnapshotRoundTrip verifies database and source files survive archive restore.
 func TestSnapshotRoundTrip(t *testing.T) {
 	source := t.TempDir()
 	sourceDB := filepath.Join(source, "memory.db")
 	sourceData := filepath.Join(source, "data")
-	if err := os.MkdirAll(filepath.Join(sourceData, "evidence"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(sourceData, "sources"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(sourceDB, []byte("sqlite bytes"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(sourceData, "evidence", "a.txt"), []byte("evidence"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(sourceData, "sources", "a.txt"), []byte("source"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	archive, err := buildSnapshot(sourceDB, sourceData)
@@ -42,12 +42,12 @@ func TestSnapshotRoundTrip(t *testing.T) {
 	if string(dbData) != "sqlite bytes" {
 		t.Fatalf("db = %q, want sqlite bytes", dbData)
 	}
-	evidence, err := os.ReadFile(filepath.Join(targetData, "evidence", "a.txt"))
+	sourceFile, err := os.ReadFile(filepath.Join(targetData, "sources", "a.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(evidence) != "evidence" {
-		t.Fatalf("evidence = %q, want evidence", evidence)
+	if string(sourceFile) != "source" {
+		t.Fatalf("source = %q, want source", sourceFile)
 	}
 }
 
@@ -72,7 +72,7 @@ func TestRestoreRejectsCorruptArchiveWithoutDeletingExistingData(t *testing.T) {
 func TestRestoreRejectsMissingDBWithoutDeletingExistingData(t *testing.T) {
 	targetDB, targetData := existingSnapshotTarget(t)
 	archive := testSnapshotArchive(t, map[string]string{
-		"data/evidence/new.txt": "new evidence",
+		"data/sources/new.txt": "new source",
 	}, nil)
 
 	if err := extractSnapshot(bytes.NewReader(archive), targetDB, targetData); err == nil {
@@ -101,7 +101,7 @@ func TestRestoreFailureLeavesPreviousDataReadable(t *testing.T) {
 	archive := testSnapshotArchive(t, map[string]string{
 		"memory.db": "new db",
 	}, []tar.Header{{
-		Name:     "data/evidence/link.txt",
+		Name:     "data/sources/link.txt",
 		Typeflag: tar.TypeSymlink,
 		Linkname: "/tmp/nope",
 		Mode:     0o600,
@@ -119,13 +119,13 @@ func existingSnapshotTarget(t *testing.T) (string, string) {
 	root := t.TempDir()
 	targetDB := filepath.Join(root, "memory.db")
 	targetData := filepath.Join(root, "data")
-	if err := os.MkdirAll(filepath.Join(targetData, "evidence"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(targetData, "sources"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(targetDB, []byte("existing db"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(targetData, "evidence", "existing.txt"), []byte("existing evidence"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(targetData, "sources", "existing.txt"), []byte("existing source"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return targetDB, targetData
@@ -141,12 +141,12 @@ func assertExistingSnapshot(t *testing.T, targetDB string, targetData string) {
 	if string(db) != "existing db" {
 		t.Fatalf("db = %q, want existing db", db)
 	}
-	evidence, err := os.ReadFile(filepath.Join(targetData, "evidence", "existing.txt"))
+	source, err := os.ReadFile(filepath.Join(targetData, "sources", "existing.txt"))
 	if err != nil {
-		t.Fatalf("read existing evidence: %v", err)
+		t.Fatalf("read existing source: %v", err)
 	}
-	if string(evidence) != "existing evidence" {
-		t.Fatalf("evidence = %q, want existing evidence", evidence)
+	if string(source) != "existing source" {
+		t.Fatalf("source = %q, want existing source", source)
 	}
 }
 

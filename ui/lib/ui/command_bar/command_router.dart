@@ -137,14 +137,12 @@ class CommandRouter {
       'today': AppSections.today,
       'home': AppSections.today,
       'chat': AppSections.chat,
-      'workflows': AppSections.workflows,
-      'workflow': AppSections.workflows,
       'backlog': AppSections.backlog,
+      'pilot': AppSections.backlog,
+      'command': AppSections.backlog,
       'memory': AppSections.memory,
       'files': AppSections.files,
       'sources': AppSections.files,
-      'timeline': AppSections.timeline,
-      'calendar': AppSections.timeline,
       'people': AppSections.people,
       'settings': AppSections.settings,
     };
@@ -296,8 +294,6 @@ class CommandRouter {
     return const <String>{
       'Memory',
       'Files',
-      'Timeline',
-      'Calendar',
       'People',
     }.contains(context.section);
   }

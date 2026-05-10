@@ -109,6 +109,7 @@ class _CommandBarState extends State<CommandBar> {
       height: _height,
       decoration: BoxDecoration(
         color: colors.chrome,
+        gradient: context.agentAwesomeChromeGradient,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: LayoutBuilder(
@@ -146,24 +147,12 @@ class _CommandBarState extends State<CommandBar> {
                 SizedBox(width: compact ? 10 : 16),
                 if (!compact && !widget.appController.hasConfiguredModel)
                   _SetupStatusButton(onTap: _handleOpenSetup),
-                if (roomy) ...const <Widget>[
-                  _VersionBadge(),
-                  SizedBox(width: 10),
-                ],
                 _CommandChromeButton(
                   icon: Icons.add,
                   label: actionCompact ? '' : 'New chat',
                   tooltip: 'New chat',
                   size: _buttonSize,
                   onTap: _handleNewChat,
-                ),
-                const SizedBox(width: 8),
-                _CommandChromeButton(
-                  icon: Icons.tune,
-                  label: actionCompact ? '' : 'Settings',
-                  tooltip: 'Settings',
-                  size: _buttonSize,
-                  onTap: _handleOpenSettings,
                 ),
                 if (roomy) ...const <Widget>[SizedBox(width: 8), _ThemeBadge()],
               ],
@@ -205,13 +194,6 @@ class _CommandBarState extends State<CommandBar> {
       return;
     }
     widget.onStartChatWithProfile(profilePath);
-  }
-
-  /// Opens settings from the global bar.
-  void _handleOpenSettings() {
-    _clearProfilePathForNextChat();
-    _removeQuickAccess();
-    widget.onOpenSettings();
   }
 
   /// Opens the setup wizard from the app shell.
@@ -478,7 +460,6 @@ class _CommandBarState extends State<CommandBar> {
       _workspaceAction(AppSections.chat, Icons.forum_outlined),
       _workspaceAction(AppSections.backlog, Icons.task_alt_outlined),
       _workspaceAction(AppSections.memory, Icons.chat_bubble_outline),
-      _workspaceAction(AppSections.workflows, Icons.radio_button_unchecked),
     ];
   }
 
@@ -595,6 +576,7 @@ class _CommandInputFrame extends StatelessWidget {
       padding: const EdgeInsets.only(left: 14, right: 8),
       decoration: BoxDecoration(
         color: colors.surface,
+        gradient: context.agentAwesomeControlGradient,
         border: Border.all(color: colors.searchBorder),
         borderRadius: BorderRadius.circular(8),
         boxShadow: <BoxShadow>[
@@ -746,6 +728,7 @@ class _CommandChromeButton extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
           decoration: BoxDecoration(
             color: colors.surface,
+            gradient: context.agentAwesomeControlGradient,
             border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -784,46 +767,6 @@ class _CommandChromeButton extends StatelessWidget {
   }
 }
 
-/// _VersionBadge renders the current app version shown in the screenshot.
-class _VersionBadge extends StatelessWidget {
-  /// Creates a static version badge.
-  const _VersionBadge();
-
-  /// Builds a version badge that mirrors the documentation chrome.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Container(
-      height: 42,
-      width: 104,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: <Widget>[
-          Flexible(
-            child: Text(
-              'v0.1',
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: colors.ink,
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-              ),
-            ),
-          ),
-          Icon(Icons.keyboard_arrow_down, size: 18, color: colors.ink),
-        ],
-      ),
-    );
-  }
-}
-
 /// _ThemeBadge toggles between the light and dark themes.
 class _ThemeBadge extends StatelessWidget {
   /// Creates a theme toggle badge.
@@ -847,6 +790,7 @@ class _ThemeBadge extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: colors.surface,
+            gradient: context.agentAwesomeControlGradient,
             border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
           ),

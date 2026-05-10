@@ -9,9 +9,6 @@ abstract final class AppSections {
   /// Chat workspace section.
   static const String chat = 'Chat';
 
-  /// Workflow workspace section.
-  static const String workflows = 'Workflows';
-
   /// Backlog workspace section backed by graph task data.
   static const String backlog = 'Backlog';
 
@@ -20,9 +17,6 @@ abstract final class AppSections {
 
   /// File/source workspace section.
   static const String files = 'Files';
-
-  /// Timeline workspace section.
-  static const String timeline = 'Timeline';
 
   /// People workspace section.
   static const String people = 'People';

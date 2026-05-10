@@ -5,7 +5,7 @@ import "time"
 // EvidenceID identifies an immutable raw source artifact.
 type EvidenceID string
 
-// MemoryID identifies the memory record that makes evidence discoverable.
+// MemoryID identifies the memory record that makes source content discoverable.
 type MemoryID string
 
 // EntityID identifies a canonical entity.
@@ -28,7 +28,7 @@ const (
 	KindConversation Kind = "conversation"
 	// KindDocument stores uploaded or fetched documents.
 	KindDocument Kind = "document"
-	// KindToolOutput stores tool output evidence.
+	// KindToolOutput stores tool output source content.
 	KindToolOutput Kind = "tool_output"
 	// KindArtifact stores named generated artifacts.
 	KindArtifact Kind = "artifact"
@@ -96,7 +96,7 @@ type Status string
 const (
 	// StatusActive marks current records.
 	StatusActive Status = "active"
-	// StatusSuperseded marks records replaced by newer evidence.
+	// StatusSuperseded marks records replaced by newer source content.
 	StatusSuperseded Status = "superseded"
 	// StatusDeprecated marks discouraged records that remain auditable.
 	StatusDeprecated Status = "deprecated"
@@ -136,7 +136,7 @@ const (
 	JobSummarize JobKind = "summarization"
 	// JobRefreshCompiledPage refreshes compiled knowledge pages.
 	JobRefreshCompiledPage JobKind = "compiled_page_refresh"
-	// JobDetectDuplicates finds identical or near-identical evidence.
+	// JobDetectDuplicates finds identical or near-identical source content.
 	JobDetectDuplicates JobKind = "duplicate_detection"
 	// JobReviewContradictions flags conflicting claims.
 	JobReviewContradictions JobKind = "contradiction_review"
@@ -158,7 +158,7 @@ const (
 	JobFailed JobStatus = "failed"
 )
 
-// SourceRef identifies where raw evidence came from.
+// SourceRef identifies where raw source content came from.
 type SourceRef struct {
 	System string `json:"system"`
 	ID     string `json:"id"`
@@ -178,7 +178,7 @@ type RawEvidence struct {
 	Idempotency string     `json:"idempotency_key,omitempty"`
 }
 
-// MemoryRecord stores retrieval metadata for raw evidence.
+// MemoryRecord stores retrieval metadata for raw source content.
 type MemoryRecord struct {
 	ID            MemoryID       `json:"id"`
 	EvidenceID    EvidenceID     `json:"evidence_id"`
@@ -211,7 +211,7 @@ type Entity struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Relationship links memory records, evidence, pages, entities, and events.
+// Relationship links memory records, source content, pages, entities, and events.
 type Relationship struct {
 	ID         string           `json:"id"`
 	FromID     string           `json:"from_id"`
@@ -268,7 +268,7 @@ type Job struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-// CaptureRequest asks the service to persist new source evidence.
+// CaptureRequest asks the service to persist new source content.
 type CaptureRequest struct {
 	Actor          string      `json:"actor"`
 	Content        string      `json:"content"`
@@ -308,7 +308,7 @@ type RetrievalQuery struct {
 	Limit                int           `json:"limit"`
 }
 
-// RetrievalBundle returns source evidence, compiled knowledge, and flags.
+// RetrievalBundle returns source content, compiled knowledge, and flags.
 type RetrievalBundle struct {
 	Primary        []MemoryRecord `json:"primary_memory"`
 	Supporting     []MemoryRecord `json:"supporting_memory"`
@@ -332,7 +332,7 @@ type RepairRequest struct {
 	EntityNames []string     `json:"entity_names,omitempty"`
 }
 
-// CorrectionRequest records a user correction as first-class source evidence.
+// CorrectionRequest records a user correction as first-class source content.
 type CorrectionRequest struct {
 	Actor    string   `json:"actor"`
 	MemoryID MemoryID `json:"memory_id"`

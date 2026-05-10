@@ -5,12 +5,134 @@ import 'dart:convert';
 
 import 'package:agentawesome_ui/clients/assistant_client.dart';
 import 'package:agentawesome_ui/clients/mcp_client.dart';
+import 'package:agentawesome_ui/domain/executive_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 /// Runs parser coverage for client helpers.
 void main() {
+  group('executive summary parsing', () {
+    test('parses full v1 projection fixture', () {
+      final projection = parseExecutiveSummaryProjection(<String, dynamic>{
+        'schema_version': 'agent-awesome/executive-summary/v1',
+        'generated_at': '2026-05-09T09:24:00Z',
+        'horizon': 'today',
+        'title': 'Today',
+        'subtitle': 'Here is what matters now.',
+        'metrics': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'decisions',
+            'label': 'Decisions',
+            'value': '2',
+            'subtitle': 'Require your input',
+            'severity': 'attention',
+            'link': <String, dynamic>{'route': '/attention?lane=decide'},
+          },
+        ],
+        'open_loops': <String, dynamic>{
+          'categories': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'orphan_tasks',
+              'label': 'Orphan tasks',
+              'count': 3,
+            },
+          ],
+        },
+        'attention': <String, dynamic>{
+          'items': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'attention:do:milk',
+              'lane': 'do',
+              'kind': 'task',
+              'title': 'Buy milk',
+              'reason': 'Small isolated task, easy to forget',
+              'primary_action': <String, dynamic>{
+                'label': 'Mark done',
+                'tool': 'complete_task',
+                'safety': 'safe',
+                'payload': <String, dynamic>{'task_id': 'milk'},
+              },
+            },
+            <String, dynamic>{
+              'id': 'attention:unknown:x',
+              'lane': 'surprise',
+              'kind': 'task',
+              'title': 'Watch this',
+              'reason': 'Invalid lanes map to monitor',
+            },
+          ],
+        },
+        'delegation': <String, dynamic>{
+          'buckets': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'can_do_now',
+              'label': 'Agent can do now',
+              'count': 4,
+            },
+          ],
+        },
+        'time_horizon': <String, dynamic>{
+          'buckets': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'today',
+              'label': 'Today',
+              'count': 6,
+              'summary': 'High focus',
+            },
+          ],
+        },
+        'risk_unblocks': <String, dynamic>{
+          'chains': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'id': 'risk:budget',
+              'nodes': <Map<String, dynamic>>[
+                <String, dynamic>{'title': 'Collect forecast inputs'},
+                <String, dynamic>{'title': 'Budget decision'},
+              ],
+              'suggested_action': <String, dynamic>{
+                'label': 'Nudge Alex',
+                'safety': 'safe',
+              },
+            },
+          ],
+        },
+        'coverage': <String, dynamic>{
+          'good': <String>['Tasks & projects'],
+          'partial': <String>['Some missing due dates'],
+          'not_connected': <String>['Calendar'],
+          'promise': 'I only use information that is source-backed in memory.',
+        },
+      });
+
+      expect(projection.metrics.single.label, 'Decisions');
+      expect(projection.openLoops.categories.single.count, 3);
+      expect(
+        projection.attention.items.first.primaryAction?.tool,
+        'complete_task',
+      );
+      expect(
+        projection.attention.items.first.primaryAction?.payload['task_id'],
+        'milk',
+      );
+      expect(projection.attention.items.last.lane, 'monitor');
+      expect(projection.delegation.buckets.single.count, 4);
+      expect(projection.timeHorizon.buckets.single.summary, 'High focus');
+      expect(projection.riskUnblocks.chains.single.nodes.length, 2);
+      expect(projection.coverage.notConnected, contains('Calendar'));
+    });
+
+    test('missing optional sections produce empty defaults', () {
+      final projection = parseExecutiveSummaryProjection(<String, dynamic>{});
+
+      expect(projection.title, 'Today');
+      expect(projection.metrics, isEmpty);
+      expect(projection.attention.items, isEmpty);
+      expect(projection.coverage.promise, contains('source-backed'));
+      expect(projection.quality.label, 'Sparse');
+    });
+  });
+
   group('assistant parsing', () {
     test('parses text events', () {
       final event = parseAssistantEvent(<String, dynamic>{

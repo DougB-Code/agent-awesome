@@ -5,12 +5,16 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
+import 'package:agentawesome_ui/app/file_import.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
+import 'package:agentawesome_ui/app/local_services.dart';
 import 'package:agentawesome_ui/app/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
+import 'package:agentawesome_ui/domain/executive_summary.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:agentawesome_ui/domain/screen_command.dart';
+import 'package:agentawesome_ui/features/today/today_controller.dart';
 import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
@@ -19,17 +23,166 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Runs widget tests for the shell.
 void main() {
-  testWidgets('renders home workspace without local demo data', (tester) async {
+  testWidgets('renders Today screen without local demo data', (tester) async {
     final controller = _readyController();
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
 
-    expect(find.text('Live Workspace'), findsOneWidget);
-    expect(find.text('Execution Plan'), findsNothing);
-    expect(find.text('No live chat messages'), findsOneWidget);
+    expect(find.text('Here is what matters now.'), findsNothing);
+    expect(find.byTooltip('Refresh Today'), findsNothing);
+    expect(find.text('Decide'), findsOneWidget);
+    expect(find.text('OPEN LOOP RADAR'), findsOneWidget);
+    expect(find.text("TODAY'S ATTENTION"), findsOneWidget);
+    expect(find.text('CONFIDENCE & COVERAGE'), findsOneWidget);
     expect(find.text('Prepare investor meeting brief'), findsNothing);
+  });
+
+  testWidgets('renders populated Today lower sections without overflow', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1460, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..todayState = TodayState(projection: _populatedTodayProjection());
+    controller.workspace = ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live connected workspace',
+      tasks: <WorkspaceTask>[
+        WorkspaceTask(
+          id: 'scheduled-brief',
+          title: 'Review weekly plan',
+          detail: 'Scheduled today',
+          done: false,
+          scheduledAt: DateTime.now(),
+          project: 'Planning',
+        ),
+      ],
+      sources: const <SourceItem>[],
+      memoryRecords: const <MemoryRecord>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('HORIZON'), findsOneWidget);
+    expect(find.text('CONFIDENCE & COVERAGE'), findsOneWidget);
+    expect(find.text('SCHEDULE'), findsOneWidget);
+    expect(find.text('Review weekly plan'), findsOneWidget);
+    expect(find.textContaining('Banking / Bills'), findsOneWidget);
+    expect(find.text('Manage connections'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('CONFIDENCE & COVERAGE')).dy,
+      lessThan(tester.getTopLeft(find.text("TODAY'S ATTENTION")).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('SCHEDULE')).dy,
+      greaterThan(tester.getTopLeft(find.text('HORIZON')).dy),
+    );
+    expect(find.text('Data quality'), findsNothing);
+    expect(find.textContaining('I only use information'), findsNothing);
+    expect(find.textContaining('I will not infer'), findsNothing);
+  });
+
+  testWidgets('opens Today attention view from execute metric', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..todayState = TodayState(projection: _attentionTodayProjection())
+      ..workspace = _attentionWorkspace();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Execute').first);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('3 items ready to execute'), findsOneWidget);
+    expect(find.text('Buy Socks'), findsWidgets);
+    expect(
+      find.text('Small isolated errand with no date. Easy to forget.'),
+      findsWidgets,
+    );
+    expect(find.text('ATTENTION DETAILS'), findsOneWidget);
+    expect(find.text('Why this surfaced'), findsOneWidget);
+    expect(find.text('QUEUE'), findsNothing);
+  });
+
+  testWidgets('opens Backlog with the command panel subshell', (tester) async {
+    tester.view.physicalSize = const Size(1800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController(
+      fileImporter: const _NoopFileImporter(),
+    );
+    controller.workspace = const ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live connected workspace',
+      tasks: <WorkspaceTask>[
+        WorkspaceTask(
+          id: 'task-brief',
+          title: 'Draft task brief',
+          detail: 'Open',
+          done: false,
+          status: 'open',
+          priority: 'normal',
+        ),
+      ],
+      sources: <SourceItem>[],
+      memoryRecords: <MemoryRecord>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Backlog').first);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Queue command panel'), findsNothing);
+    expect(find.textContaining('visible of'), findsNothing);
+    expect(find.text('Ready'), findsNothing);
+    expect(find.text('New task'), findsNothing);
+    expect(find.text('Inspector'), findsNothing);
+    expect(find.text('Agent handoff 0'), findsNothing);
+    expect(find.byTooltip('Refresh context'), findsNothing);
+    expect(find.byTooltip('New backlog item'), findsOneWidget);
+    expect(find.text('All insights'), findsOneWidget);
+    expect(find.text('Active tasks'), findsOneWidget);
+    expect(find.text('Status'), findsOneWidget);
+    expect(find.text('Queue score'), findsWidgets);
+    expect(find.text('Schedule'), findsWidgets);
+    expect(find.text('Mark done'), findsWidgets);
+    expect(find.textContaining('Data quality'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('command-split-handle')),
+      findsOneWidget,
+    );
+    expect(find.text('INSPECTOR'), findsOneWidget);
+    expect(find.text('Draft task brief'), findsWidgets);
+
+    await tester.tap(find.byTooltip('Stream'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Stream command panel'), findsNothing);
+    expect(find.text('STREAM'), findsWidgets);
+
+    await tester.tap(find.byTooltip('Collapse details column'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('INSPECTOR'), findsOneWidget);
+    expect(find.text('Inspector'), findsNothing);
   });
 
   testWidgets('walks through first-launch model setup', (tester) async {
@@ -92,7 +245,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = _readyController();
+    final controller = _readyController(
+      fileImporter: const _NoopFileImporter(),
+    );
     controller.appSettings = const AgentAwesomeAppSettings();
 
     await tester.pumpWidget(
@@ -153,7 +308,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byTooltip('Settings'));
+    await tester.tap(find.text('Settings').first);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
@@ -320,12 +475,41 @@ void main() {
       ),
     ];
     controller.selectedSessionId = 'session-live';
+    controller.endpointStatuses = const <EndpointStatus>[
+      EndpointStatus(
+        name: 'Agent API',
+        url: 'http://127.0.0.1:8080/api',
+        state: ConnectionStateKind.connected,
+        message: 'Connected',
+      ),
+      EndpointStatus(
+        name: 'Personal Memory',
+        url: 'http://127.0.0.1:8070/mcp',
+        state: ConnectionStateKind.connected,
+        message: 'Connected',
+      ),
+    ];
+    controller.localProcessStatuses = const <ServiceProcessStatus>[
+      ServiceProcessStatus(
+        name: 'Personal Memory',
+        url: 'http://127.0.0.1:8090/healthz',
+        state: ConnectionStateKind.connected,
+        message: 'Started locally',
+      ),
+      ServiceProcessStatus(
+        name: 'Local Harness',
+        url: 'http://127.0.0.1:8080/api/apps/test/users/user/sessions',
+        state: ConnectionStateKind.connected,
+        message: 'Started locally',
+      ),
+    ];
     controller.messages = <ChatMessage>[
       ChatMessage(
         id: 'message-1',
         role: ChatRole.assistant,
         author: 'Agent Awesome',
-        text: 'Connected chat message. Done - created Follow up report.',
+        text:
+            'Connected chat message. Preference noted. Review Quarterly plan.pdf. Done - created Follow up report.',
         createdAt: DateTime(2026, 4, 29, 9, 31),
       ),
     ];
@@ -338,6 +522,7 @@ void main() {
           title: 'Associated chat task',
           detail: 'Open',
           done: false,
+          owner: 'Sam',
           idempotencyKey: 'agent_awesome:session-live:associated-chat-task',
         ),
         WorkspaceTask(
@@ -354,7 +539,13 @@ void main() {
           done: false,
         ),
       ],
-      sources: <SourceItem>[],
+      sources: <SourceItem>[
+        SourceItem(
+          id: '/docs/Quarterly plan.pdf',
+          title: 'Quarterly plan.pdf',
+          detail: '/docs/Quarterly plan.pdf',
+        ),
+      ],
       memoryRecords: <MemoryRecord>[
         MemoryRecord(
           id: 'cat-1',
@@ -365,7 +556,33 @@ void main() {
           topics: <String>['ui'],
           sourceLabel: 'chat:1',
           sourceSystem: 'chat',
-          sourceId: '1',
+          sourceId: 'session-live',
+          entityNames: <String>['Alex'],
+        ),
+        MemoryRecord(
+          id: 'chat-message-1',
+          evidenceId: 'chat-message-ev-1',
+          title: 'Chat message from user in session-live',
+          summary: 'A raw chat transcript row.',
+          kind: 'conversation',
+          topics: <String>['conversation'],
+          sourceLabel: 'google_adk_session:session-live',
+          sourceSystem: 'google_adk_session',
+          sourceId: 'session-live',
+        ),
+        MemoryRecord(
+          id: 'file-1',
+          evidenceId: 'file-ev-1',
+          title: 'Quarterly plan.pdf',
+          summary: 'Planning file used in the current chat.',
+          kind: 'document',
+          topics: <String>['planning'],
+          sourceLabel: 'local_file:/docs/Quarterly plan.pdf',
+          sourceSystem: 'filesystem',
+          sourceId: '/docs/Quarterly plan.pdf',
+          rawPath: 'sources/file-ev-1.txt',
+          rawMediaType: 'application/pdf',
+          subjects: <String>['TODO.md'],
         ),
       ],
     );
@@ -378,7 +595,14 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('CONVERSATION'), findsOneWidget);
-    expect(find.text('CONTEXT'), findsOneWidget);
+    expect(find.text('MEMORY'), findsWidgets);
+    expect(find.byTooltip('Memory'), findsOneWidget);
+    expect(find.byTooltip('Tasks'), findsOneWidget);
+    expect(find.byTooltip('Files'), findsOneWidget);
+    expect(find.byTooltip('People'), findsOneWidget);
+    expect(find.byTooltip('Runtime'), findsOneWidget);
+    expect(find.text('Preference'), findsOneWidget);
+    expect(find.text('Chat message from user in session-live'), findsNothing);
     expect(find.byTooltip('Select chat'), findsOneWidget);
     expect(find.byTooltip('Delete selected chat'), findsOneWidget);
     expect(find.byTooltip('New chat with profile'), findsNothing);
@@ -387,9 +611,46 @@ void main() {
     expect(find.text('Live chat'), findsOneWidget);
     expect(find.byType(SelectableText), findsWidgets);
     expect(
-      find.text('Connected chat message. Done - created Follow up report.'),
+      find.text(
+        'Connected chat message. Preference noted. Review Quarterly plan.pdf. Done - created Follow up report.',
+      ),
       findsOneWidget,
     );
+    await tester.tap(find.text('MEMORY').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('TASKS'), findsWidgets);
+    expect(find.text('Associated chat task'), findsOneWidget);
+    expect(find.text('Follow up report'), findsWidgets);
+
+    await tester.tap(find.byTooltip('Files'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('FILES'), findsWidgets);
+    expect(find.text('Quarterly plan.pdf'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('People'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PEOPLE'), findsWidgets);
+    expect(find.text('Alex'), findsOneWidget);
+    expect(find.text('Sam'), findsOneWidget);
+    expect(find.text('TODO.md'), findsNothing);
+
+    await tester.tap(find.byTooltip('Runtime'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chat model'), findsOneWidget);
+    expect(find.text('OpenAI / gpt-5.4-mini - GPT-5.4 Mini'), findsOneWidget);
+    expect(find.text('Memory'), findsWidgets);
+    expect(find.text('Personal Memory'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Personal'), findsOneWidget);
+    expect(find.text('Local Harness'), findsNothing);
+    expect(find.text('Agent API'), findsNothing);
+    expect(find.text('Local processes'), findsNothing);
+    expect(find.text('Service endpoints'), findsNothing);
+
     expect(find.byTooltip('Copy message'), findsOneWidget);
     expect(find.text('Message Agent Awesome in this chat...'), findsOneWidget);
     expect(
@@ -419,7 +680,17 @@ void main() {
     );
     await tester.pump();
     expect(find.text('PROFILES'), findsNothing);
+    await tester.tap(find.byTooltip('People'));
+    await tester.pumpAndSettle();
+    expect(find.text('Alex'), findsOneWidget);
+    expect(find.text('Sam'), findsOneWidget);
+    await tester.tap(find.byTooltip('Memory'));
+    await tester.pumpAndSettle();
+    expect(find.text('MEMORY'), findsWidgets);
     expect(find.text('Preference'), findsWidgets);
+    expect(find.text('Chat message from user in session-live'), findsNothing);
+    await tester.tap(find.byTooltip('Tasks'));
+    await tester.pumpAndSettle();
     expect(find.text('Associated chat task'), findsOneWidget);
     expect(find.text('Follow up report'), findsOneWidget);
     expect(find.text('Unrelated chat task'), findsNothing);
@@ -527,18 +798,215 @@ void main() {
     expect(find.text('OVERVIEW'), findsNothing);
     expect(find.text('No memory records'), findsNothing);
 
-    await tester.tap(find.text('Timeline'));
-    await tester.pumpAndSettle();
-    expect(find.text('Memory service unavailable'), findsOneWidget);
-    expect(find.text('Topic Timelines'), findsNothing);
-
     await tester.tap(find.text('People'));
     await tester.pumpAndSettle();
     expect(find.text('Memory service unavailable'), findsOneWidget);
     expect(find.text('No entities in memory'), findsNothing);
   });
 
-  testWidgets('shows files as agent files with add-file empty action', (
+  testWidgets('shows file manager with add-file empty action', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController(
+      fileImporter: const _NoopFileImporter(),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+
+    await tester.tap(find.text('Files'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('FILES'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
+    expect(find.text('No files indexed yet'), findsWidgets);
+    expect(find.textContaining('PDFs, spreadsheets, images'), findsWidgets);
+    expect(find.text('Add file'), findsOneWidget);
+    expect(find.text('Immutable source material from memory.'), findsNothing);
+    expect(find.text('No source content loaded'), findsNothing);
+
+    await tester.tap(find.text('Add file'));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('File import is not connected yet'), findsNothing);
+    expect(controller.memoryMessage, 'File import canceled');
+  });
+
+  testWidgets('shows only file records in the Files section', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+    controller.workspace = const ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live connected workspace',
+      tasks: <WorkspaceTask>[],
+      sources: <SourceItem>[],
+      memoryRecords: <MemoryRecord>[
+        MemoryRecord(
+          id: 'chat-memory',
+          evidenceId: 'chat-evidence',
+          title: 'Chat message from user in abc123',
+          summary: 'Please remember to buy coffee.',
+          kind: 'conversation',
+          topics: <String>['conversation'],
+          sourceLabel: 'google_adk_session:abc123',
+          sourceSystem: 'google_adk_session',
+          sourceId: 'abc123',
+        ),
+        MemoryRecord(
+          id: 'file-memory',
+          evidenceId: 'file-evidence',
+          title: 'Quarterly budget',
+          summary: 'Agent Awesome file evidence name: quarterly-budget.xlsx',
+          kind: 'document',
+          topics: <String>['finance'],
+          sourceLabel: 'filesystem:/docs/quarterly-budget.xlsx',
+          sourceSystem: 'filesystem',
+          sourceId: '/docs/quarterly-budget.xlsx',
+          rawPath: 'evidence/file-evidence.txt',
+          rawMediaType:
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+
+    await tester.tap(find.text('Files'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('quarterly-budget.xlsx'), findsWidgets);
+    expect(find.text('Evidence id'), findsNothing);
+    expect(find.textContaining('file evidence'), findsNothing);
+    expect(find.textContaining('evidence/file-evidence.txt'), findsNothing);
+    expect(find.text('Chat message from user in abc123'), findsNothing);
+    expect(find.text('Sheets 1'), findsOneWidget);
+  });
+
+  testWidgets('shows contact manager from memory tasks and commitments', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+    controller.workspace = ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live connected workspace',
+      tasks: <WorkspaceTask>[
+        WorkspaceTask(
+          id: 'task-mina',
+          title: 'Review launch checklist',
+          detail: 'Open',
+          done: false,
+          status: 'open',
+          priority: 'high',
+          owner: 'Mina',
+          project: 'Launch',
+          topics: <String>['launch'],
+        ),
+      ],
+      sources: const <SourceItem>[],
+      memoryRecords: const <MemoryRecord>[
+        MemoryRecord(
+          id: 'mem-doug',
+          evidenceId: 'ev-doug',
+          title: 'Preference',
+          summary: 'Doug likes concise UI.',
+          kind: 'profile_fact',
+          topics: <String>['ui'],
+          sourceLabel: 'chat:1',
+          entityIds: <String>['ent-doug'],
+          entityNames: <String>['Doug'],
+        ),
+        MemoryRecord(
+          id: 'mem-sam-fishing',
+          evidenceId: 'ev-sam-fishing',
+          title: 'Fishing trip plan',
+          summary: 'Sam is bringing the canoe.',
+          kind: 'profile_fact',
+          scope: 'user',
+          subjects: <String>['people', 'Fishing trip'],
+          topics: <String>['fishing'],
+          sourceLabel: 'chat:2',
+          entityIds: <String>['ent-sam'],
+          entityNames: <String>['Sam'],
+        ),
+      ],
+    );
+    controller.taskCommitments = const <TaskCommitment>[
+      TaskCommitment(
+        id: 'commit-sam',
+        taskId: 'task-sam',
+        people: <String>['Sam'],
+        project: 'Launch',
+        responsibility: 'Reviews the customer promise',
+        hardness: 'hard',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+
+    await tester.tap(find.text('People'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CONTACTS'), findsOneWidget);
+    expect(find.text('PROFILE'), findsWidgets);
+    expect(find.text('All contacts 3'), findsOneWidget);
+    expect(find.text('Active 1'), findsOneWidget);
+    expect(find.text('Multi-context 1'), findsOneWidget);
+    expect(find.text('Commitments 1'), findsOneWidget);
+    expect(find.text('Sources 2'), findsOneWidget);
+    expect(find.text('Mina'), findsWidgets);
+    expect(find.text('Sam'), findsWidgets);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('command-subshell-filter')),
+      'sam',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Sam').first);
+    await tester.tap(find.text('Sam').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Sam is bringing the canoe.'), findsWidgets);
+    expect(find.text('Entity id'), findsOneWidget);
+    expect(find.text('ent-sam'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Sources'));
+    await tester.pumpAndSettle();
+    expect(find.text('Fishing trip plan'), findsOneWidget);
+    expect(find.text('chat:2'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Contexts'));
+    await tester.pumpAndSettle();
+    expect(find.text('Project / Launch'), findsWidgets);
+    expect(find.text('User / Fishing trip'), findsWidgets);
+    expect(find.text('Sam is bringing the canoe.'), findsWidgets);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('command-subshell-filter')),
+      'mina',
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Mina').first);
+    await tester.tap(find.text('Mina').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Activity'));
+    await tester.pumpAndSettle();
+    expect(find.text('Review launch checklist'), findsOneWidget);
+  });
+
+  testWidgets('opens contact capture dialog from empty People section', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 1000);
@@ -551,20 +1019,18 @@ void main() {
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
 
-    await tester.tap(find.text('Files'));
+    await tester.tap(find.text('People'));
+    await tester.pumpAndSettle();
+    expect(find.text('No contacts yet'), findsOneWidget);
+
+    await tester.tap(find.text('Add contact'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Files for your agent.'), findsOneWidget);
-    expect(find.text('Add file'), findsOneWidget);
-    expect(
-      find.text('Immutable evidence and source material from memory.'),
-      findsNothing,
-    );
-    expect(find.text('No source evidence loaded'), findsNothing);
-
-    await tester.tap(find.text('Add file'));
-    await tester.pumpAndSettle();
-    expect(find.text('File import is not connected yet'), findsOneWidget);
+    expect(find.text('Add Contact'), findsOneWidget);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Context'), findsOneWidget);
+    expect(find.text('Note'), findsOneWidget);
+    expect(find.text('Topics'), findsOneWidget);
   });
 
   testWidgets('opens backlog workspace with queue and inspector', (
@@ -636,7 +1102,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('QUEUE'), findsOneWidget);
-    expect(find.text('BACKLOG INSPECTOR'), findsOneWidget);
+    expect(find.text('INSPECTOR'), findsOneWidget);
     expect(find.text('Draft task brief'), findsWidgets);
     expect(find.byTooltip('Delete backlog item'), findsWidgets);
     expect(find.text('Backlog Stream'), findsNothing);
@@ -652,13 +1118,12 @@ void main() {
     expect(find.text('Workload'), findsNothing);
     await tester.tap(find.byTooltip('Queue'));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Memory Links'), findsOneWidget);
-    await tester.tap(find.byTooltip('Memory Links'));
+    expect(find.byTooltip('Memory'), findsOneWidget);
+    await tester.tap(find.byTooltip('Memory'));
     await tester.pumpAndSettle();
-    expect(find.text('MEMORY LINKS'), findsOneWidget);
     expect(find.text('No memory selected'), findsOneWidget);
     expect(find.text('No linked memory'), findsOneWidget);
-    await tester.tap(find.byTooltip('Backlog Inspector').last);
+    await tester.tap(find.byTooltip('Inspector').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Draft task brief').first);
     await tester.pumpAndSettle();
@@ -667,16 +1132,14 @@ void main() {
     await tester.tap(find.byTooltip('Stream'));
     await tester.pumpAndSettle();
     expect(find.text('STREAM'), findsOneWidget);
-    expect(find.byTooltip('Collapse panel'), findsNWidgets(2));
-    await tester.tap(find.byTooltip('Collapse panel').first);
+    expect(find.byTooltip('Collapse command column'), findsOneWidget);
+    expect(find.byTooltip('Collapse details column'), findsOneWidget);
+    await tester.tap(find.byTooltip('Collapse command column'));
     await tester.pumpAndSettle();
-    expect(find.text('STREAM'), findsNothing);
-    expect(find.byTooltip('Expand panel'), findsOneWidget);
-    expect(find.byTooltip('Terrain'), findsOneWidget);
+    expect(find.byTooltip('Expand column'), findsOneWidget);
+    await tester.tap(find.byTooltip('Expand column'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Terrain'));
-    await tester.pumpAndSettle();
-    expect(find.text('TERRAIN'), findsNothing);
-    await tester.tap(find.byTooltip('Expand panel'));
     await tester.pumpAndSettle();
     expect(find.text('TERRAIN'), findsOneWidget);
   });
@@ -732,7 +1195,7 @@ void main() {
       await tester.tap(find.text('Backlog').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('REVIEW CHANGES'), findsOneWidget);
+      expect(find.text('Review Changes'), findsOneWidget);
       expect(find.text('Priority changed to high'), findsWidgets);
       await tester.tap(find.byTooltip('Focus change'));
       await tester.pumpAndSettle();
@@ -741,7 +1204,7 @@ void main() {
       await tester.tap(find.text('Draft task brief').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('BACKLOG INSPECTOR'), findsOneWidget);
+      expect(find.text('INSPECTOR'), findsOneWidget);
       expect(controller.backlogReviewPanelOpen, isFalse);
     },
   );
@@ -786,7 +1249,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('QUEUE'), findsOneWidget);
-    expect(find.text('BACKLOG INSPECTOR'), findsOneWidget);
+    expect(find.text('INSPECTOR'), findsOneWidget);
     expect(find.text('CONVERSATION'), findsOneWidget);
     expect(find.text('What changed here?'), findsOneWidget);
     expect(
@@ -794,7 +1257,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byTooltip('New chat'), findsOneWidget);
-    expect(find.byTooltip('Settings'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsNothing);
   });
 
   testWidgets('keeps quick access stable when Backlog opens a third pane', (
@@ -848,116 +1311,18 @@ void main() {
     );
   });
 
-  testWidgets('loads workflow content inside the persistent app shell', (
-    tester,
-  ) async {
+  testWidgets('hides workflow and timeline routes for v1', (tester) async {
     final controller = _readyController();
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.text('Workflows'));
     await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-    expect(find.byTooltip('New chat'), findsOneWidget);
-    expect(find.text('Workspace'), findsWidgets);
-    expect(find.text('MEMORY & CONTEXT'), findsOneWidget);
-  });
-
-  testWidgets('keeps workflow command panes side by side on wide screens', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = _readyController();
-
-    await tester.pumpWidget(
-      MaterialApp(home: AgentAwesomeShell(controller: controller)),
-    );
-    await tester.tap(find.text('Workflows'));
-    await tester.pumpAndSettle();
-
-    final workflowLeft = tester.getRect(find.text('Workspace').first);
-    final workflowRight = tester.getRect(find.text('MEMORY & CONTEXT'));
-
-    expect(tester.takeException(), isNull);
-    expect(workflowLeft.left, lessThan(workflowRight.left));
-    expect(workflowRight.left, greaterThan(900));
-  });
-
-  testWidgets('resizes workflow command panes with the split handle', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(1600, 1000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final controller = _readyController();
-
-    await tester.pumpWidget(
-      MaterialApp(home: AgentAwesomeShell(controller: controller)),
-    );
-    await tester.tap(find.text('Workflows'));
-    await tester.pumpAndSettle();
-
-    final beforeRight = tester.getRect(find.text('MEMORY & CONTEXT')).left;
-    await tester.drag(
-      find.byKey(const ValueKey<String>('command-split-handle')),
-      const Offset(120, 0),
-    );
-    await tester.pumpAndSettle();
-    final afterRight = tester.getRect(find.text('MEMORY & CONTEXT')).left;
-
-    expect(tester.takeException(), isNull);
-    expect(afterRight, greaterThan(beforeRight + 80));
-  });
-
-  testWidgets('cycles and filters workflow command panel content', (
-    tester,
-  ) async {
-    final controller = _readyController();
-    controller.workspace = const ProjectWorkspace(
-      title: 'Workspace',
-      subtitle: 'Live connected workspace',
-      tasks: <WorkspaceTask>[
-        WorkspaceTask(
-          id: 'task-review',
-          title: 'Review source material',
-          detail: 'Open',
-          done: false,
-        ),
-        WorkspaceTask(
-          id: 'task-competitor',
-          title: 'Analyze competitor positioning',
-          detail: 'Open',
-          done: false,
-        ),
-      ],
-      sources: <SourceItem>[],
-      memoryRecords: <MemoryRecord>[],
-    );
-
-    await tester.pumpWidget(
-      MaterialApp(home: AgentAwesomeShell(controller: controller)),
-    );
-    await tester.tap(find.text('Workflows'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('WORKSPACE'));
-    await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('command-panel-filter-Research Plan')),
-      'competitor',
-    );
-    await tester.pumpAndSettle();
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('RESEARCH PLAN'), findsOneWidget);
-    expect(find.text('Analyze competitor positioning'), findsOneWidget);
-    expect(find.text('Review source material'), findsNothing);
+    expect(find.text('WORK MANAGEMENT'), findsNothing);
+    expect(find.text('Workflows'), findsNothing);
+    expect(find.text('Timeline'), findsNothing);
+    expect(find.text('View timeline'), findsNothing);
   });
 
   testWidgets('collapses sidebar without layout overflow', (tester) async {
@@ -1002,8 +1367,11 @@ void main() {
   });
 }
 
-AgentAwesomeAppController _readyController() {
-  final controller = AgentAwesomeAppController(config: _testConfig());
+AgentAwesomeAppController _readyController({AgentFileImporter? fileImporter}) {
+  final controller = AgentAwesomeAppController(
+    config: _testConfig(),
+    fileImporter: fileImporter,
+  );
   controller.appSettings = const AgentAwesomeAppSettings(
     gettingStartedCompleted: true,
   );
@@ -1027,6 +1395,239 @@ AgentAwesomeAppController _readyController() {
     ),
   ];
   return controller;
+}
+
+class _NoopFileImporter implements AgentFileImporter {
+  const _NoopFileImporter();
+
+  /// Returns null to simulate canceling the file picker.
+  @override
+  Future<ImportedAgentFile?> pickFile() async {
+    return null;
+  }
+}
+
+ExecutiveSummaryProjection _populatedTodayProjection() {
+  return const ExecutiveSummaryProjection(
+    metrics: <SummaryMetric>[
+      SummaryMetric(
+        id: 'decisions',
+        label: 'Decide',
+        value: '0',
+        subtitle: 'Need your judgment',
+      ),
+      SummaryMetric(
+        id: 'actions',
+        label: 'Execute',
+        value: '0',
+        subtitle: 'Ready to act',
+      ),
+      SummaryMetric(
+        id: 'relationships',
+        label: 'Follow-ups',
+        value: '0',
+        subtitle: 'People or promises',
+      ),
+      SummaryMetric(
+        id: 'agent_can_handle',
+        label: 'Agent can handle',
+        value: '0',
+        subtitle: 'Ready to act',
+      ),
+      SummaryMetric(
+        id: 'picture_quality',
+        label: 'Data quality',
+        value: 'Partial',
+        subtitle: 'Some gaps known',
+      ),
+    ],
+    timeHorizon: TimeHorizonProjection(
+      buckets: <TimeHorizonBucket>[
+        TimeHorizonBucket(id: 'now', label: 'Now', count: 0, summary: 'Clear'),
+        TimeHorizonBucket(
+          id: 'next',
+          label: 'Next',
+          count: 0,
+          summary: 'No priority queued',
+        ),
+        TimeHorizonBucket(
+          id: 'today',
+          label: 'Today',
+          count: 3,
+          summary: 'High focus',
+        ),
+        TimeHorizonBucket(
+          id: 'tomorrow',
+          label: 'Tomorrow',
+          count: 1,
+          summary: 'Medium focus',
+        ),
+        TimeHorizonBucket(
+          id: 'this_week',
+          label: 'This Week',
+          count: 6,
+          summary: 'Plan ahead',
+        ),
+      ],
+    ),
+    coverage: CoverageProjection(
+      good: <String>['Tasks & projects', 'Commitments'],
+      partial: <String>[
+        'No task relations recorded',
+        'Some missing people context',
+        '3 tasks missing due dates',
+        '3 tasks missing projects',
+      ],
+      notConnected: <String>[
+        'Calendar',
+        'Email',
+        'Health / Sleep',
+        'Banking / Bills',
+      ],
+    ),
+    quality: ProjectionQualitySummary(label: 'Partial', taskCount: 3),
+  );
+}
+
+/// Returns a Today projection with explainable attention rows.
+ExecutiveSummaryProjection _attentionTodayProjection() {
+  return const ExecutiveSummaryProjection(
+    generatedAt: null,
+    metrics: <SummaryMetric>[
+      SummaryMetric(
+        id: 'decisions',
+        label: 'Decide',
+        value: '1',
+        subtitle: 'Need your judgment',
+        link: ProjectionLink(route: '/attention?metric=decisions'),
+      ),
+      SummaryMetric(
+        id: 'actions',
+        label: 'Execute',
+        value: '3',
+        subtitle: 'Ready to act',
+        link: ProjectionLink(route: '/attention?metric=actions'),
+      ),
+      SummaryMetric(
+        id: 'relationships',
+        label: 'Follow-ups',
+        value: '0',
+        subtitle: 'People or promises',
+        link: ProjectionLink(route: '/attention?metric=relationships'),
+      ),
+    ],
+    attention: AttentionProjection(
+      items: <ExecutiveSummaryItem>[
+        ExecutiveSummaryItem(
+          id: 'attention:do:task_buy_socks',
+          kind: 'task',
+          lane: 'do',
+          title: 'Buy Socks',
+          subtitle: 'Small isolated errand with no date.',
+          reason: 'Small isolated errand with no date. Easy to forget.',
+          score: 0.82,
+          confidence: 0.78,
+          status: 'open',
+          priority: 'normal',
+          taskId: 'task_buy_socks',
+          estimateMinutes: 5,
+          primaryAction: ExecutiveSummaryAction(
+            label: 'Mark done',
+            tool: 'complete_task',
+            safety: 'safe',
+            payload: <String, dynamic>{'task_id': 'task_buy_socks'},
+          ),
+          evidence: <ExecutiveSummaryEvidence>[
+            ExecutiveSummaryEvidence(
+              kind: 'task',
+              id: 'task_buy_socks',
+              label: 'Open task',
+            ),
+          ],
+          links: <ProjectionLink>[
+            ProjectionLink(route: '/attention?item=task_buy_socks'),
+          ],
+        ),
+        ExecutiveSummaryItem(
+          id: 'attention:protect:task_forecast',
+          kind: 'task',
+          lane: 'protect',
+          title: 'Collect forecast inputs',
+          reason: 'Waiting on Alex before the budget decision can move.',
+          score: 0.72,
+          confidence: 0.71,
+          status: 'blocked',
+          priority: 'high',
+          taskId: 'task_forecast',
+          primaryAction: ExecutiveSummaryAction(label: 'Nudge Alex'),
+        ),
+        ExecutiveSummaryItem(
+          id: 'attention:do:task_coffee',
+          kind: 'task',
+          lane: 'do',
+          title: 'Buy more coffee',
+          reason: 'Small household item with no schedule.',
+          score: 0.58,
+          confidence: 0.68,
+          status: 'open',
+          priority: 'normal',
+          taskId: 'task_coffee',
+          primaryAction: ExecutiveSummaryAction(label: 'Add to groceries'),
+        ),
+        ExecutiveSummaryItem(
+          id: 'attention:decide:task_budget',
+          kind: 'task',
+          lane: 'decide',
+          title: 'Budget decision',
+          reason: 'Needs your approval.',
+          score: 0.67,
+          confidence: 0.7,
+          status: 'open',
+          priority: 'high',
+          taskId: 'task_budget',
+        ),
+      ],
+    ),
+  );
+}
+
+/// Returns workspace tasks linked to the attention projection fixture.
+ProjectWorkspace _attentionWorkspace() {
+  return const ProjectWorkspace(
+    title: 'Workspace',
+    subtitle: 'Live connected workspace',
+    tasks: <WorkspaceTask>[
+      WorkspaceTask(
+        id: 'task_buy_socks',
+        title: 'Buy Socks',
+        detail: 'Open',
+        done: false,
+        status: 'open',
+        priority: 'normal',
+        description: 'Buy socks',
+        estimateMinutes: 5,
+        topics: <String>['Errands', 'Personal'],
+      ),
+      WorkspaceTask(
+        id: 'task_forecast',
+        title: 'Collect forecast inputs',
+        detail: 'Blocked',
+        done: false,
+        status: 'blocked',
+        priority: 'high',
+      ),
+      WorkspaceTask(
+        id: 'task_coffee',
+        title: 'Buy more coffee',
+        detail: 'Open',
+        done: false,
+        status: 'open',
+        priority: 'normal',
+      ),
+    ],
+    sources: <SourceItem>[],
+    memoryRecords: <MemoryRecord>[],
+  );
 }
 
 AgentAwesomeAppController _unconfiguredModelController() {

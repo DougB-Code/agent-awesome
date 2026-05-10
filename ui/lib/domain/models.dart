@@ -316,7 +316,7 @@ class MemoryRecord {
   /// Source label.
   final String sourceLabel;
 
-  /// Raw evidence id backing the memory record.
+  /// Raw source record id backing the memory record.
   final String evidenceId;
 
   /// Ownership and visibility boundary.
@@ -346,16 +346,16 @@ class MemoryRecord {
   /// Source system record id.
   final String sourceId;
 
-  /// Durable raw evidence path.
+  /// Durable raw source path.
   final String rawPath;
 
-  /// Raw evidence checksum.
+  /// Raw source checksum.
   final String rawChecksum;
 
-  /// Raw evidence media type.
+  /// Raw source media type.
   final String rawMediaType;
 
-  /// Optional hydrated raw evidence text.
+  /// Optional hydrated raw source text.
   final String rawContent;
 
   /// Outgoing memory relationships.
@@ -441,7 +441,7 @@ class MemoryRelationship {
   /// Target memory object id.
   final String toId;
 
-  /// Evidence id supporting the edge.
+  /// Source record id supporting the edge.
   final String sourceId;
 
   /// Trust classification for the edge.
@@ -487,7 +487,7 @@ class CompiledMemoryPage {
   /// Lifecycle status.
   final String status;
 
-  /// Evidence ids cited by the page.
+  /// Source record ids cited by the page.
   final List<String> sourceIds;
 
   /// Optional markdown content.
@@ -999,7 +999,7 @@ class TaskMemoryLink {
   /// Linked memory record id.
   final String memoryId;
 
-  /// Linked memory evidence id.
+  /// Linked memory source record id.
   final String memoryEvidenceId;
 
   /// Relationship from task object to memory.
@@ -1025,7 +1025,7 @@ class TaskMemoryLinkDraft {
   /// Memory record id to link.
   final String memoryId;
 
-  /// Memory evidence id to link.
+  /// Memory source record id to link.
   final String memoryEvidenceId;
 
   /// Relationship from task object to memory.
@@ -1546,7 +1546,7 @@ class TaskProjectionTask {
   /// Stable facet ids associated with this task.
   final List<String> facetIds;
 
-  /// Evidence records that support task classifications.
+  /// Source records that support task classifications.
   final List<String> evidenceIds;
 
   /// Missing fields that lower insight confidence.
@@ -1910,7 +1910,7 @@ class TaskProjectionEdge {
   /// Human-readable edge explanation.
   final String explanation;
 
-  /// Evidence records that support this relation.
+  /// Source records that support this relation.
   final List<String> evidenceIds;
 
   /// Last actor.
@@ -2502,7 +2502,7 @@ class TaskConstellationEdge {
   /// Edge explanation.
   final String explanation;
 
-  /// Evidence records that support this relation.
+  /// Source records that support this relation.
   final List<String> evidenceIds;
 
   /// Last actor.

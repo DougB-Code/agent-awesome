@@ -22,8 +22,8 @@ func TestMCPToolsList(t *testing.T) {
 	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
 	result := body["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 23 {
-		t.Fatalf("tool count = %d, want 23", len(tools))
+	if len(tools) != 25 {
+		t.Fatalf("tool count = %d, want 25", len(tools))
 	}
 }
 
@@ -379,6 +379,46 @@ func TestMCPGraphTaskTools(t *testing.T) {
 	rows := queryResult["structuredContent"].(map[string]any)["rows"].([]any)
 	if len(rows) != 2 {
 		t.Fatalf("query rows = %#v, want two open tasks", rows)
+	}
+	executive := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      8,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "project_executive_summary",
+			"arguments": map[string]any{
+				"now":       "2026-05-09T09:24:00Z",
+				"max_items": 12,
+				"channel":   "ui",
+			},
+		},
+	})
+	executiveResult := executive["result"].(map[string]any)
+	if executiveResult["isError"].(bool) {
+		t.Fatalf("executive summary returned tool error: %#v", executiveResult)
+	}
+	summary := executiveResult["structuredContent"].(map[string]any)
+	if summary["schema_version"] != "agent-awesome/executive-summary/v1" || len(summary["metrics"].([]any)) != 5 {
+		t.Fatalf("executive summary = %#v, want v1 metrics", summary)
+	}
+	explain := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      9,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "explain_executive_summary_item",
+			"arguments": map[string]any{
+				"item_id": "attention:do:" + blocker["id"].(string),
+			},
+		},
+	})
+	explainResult := explain["result"].(map[string]any)
+	if explainResult["isError"].(bool) {
+		t.Fatalf("explain executive summary item returned tool error: %#v", explainResult)
+	}
+	explanation := explainResult["structuredContent"].(map[string]any)
+	if explanation["title"] != blocker["title"] {
+		t.Fatalf("explanation = %#v, want task title %q", explanation, blocker["title"])
 	}
 }
 

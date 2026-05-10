@@ -55,8 +55,12 @@ class TaskConceptProjectionPanel extends StatelessWidget {
   /// Builds the selected projection surface.
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: AgentAwesomeColors.surface,
+    final colors = context.agentAwesomeColors;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        gradient: context.agentAwesomeSurfaceGradient,
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
         child: _buildView(),
@@ -179,18 +183,18 @@ class _WbsBranchNode extends StatelessWidget {
   /// Builds one non-leaf WBS decomposition bucket.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final isRoot = node.kind == TaskWbsTreeNodeKind.root;
     return Container(
       margin: EdgeInsets.only(top: isRoot && depth == 0 ? 8 : 0),
       padding: EdgeInsets.fromLTRB(_wbsIndentForDepth(depth), 10, 14, 10),
       decoration: BoxDecoration(
         color: isRoot
-            ? AgentAwesomeColors.greenSoft.withValues(alpha: 0.32)
-            : const Color(0xfffffcf8),
+            ? colors.greenSoft.withValues(alpha: 0.32)
+            : colors.surface,
+        gradient: isRoot ? null : context.agentAwesomeCardGradient,
         border: Border(
-          bottom: BorderSide(
-            color: AgentAwesomeColors.border.withValues(alpha: 0.8),
-          ),
+          bottom: BorderSide(color: colors.border.withValues(alpha: 0.8)),
         ),
       ),
       child: Row(
@@ -198,7 +202,7 @@ class _WbsBranchNode extends StatelessWidget {
           Icon(
             isRoot ? Icons.account_tree_outlined : Icons.folder_open_outlined,
             size: isRoot ? 20 : 18,
-            color: AgentAwesomeColors.green,
+            color: colors.green,
           ),
           const SizedBox(width: 10),
           _WbsCodeBadge(code: node.code),
@@ -207,9 +211,7 @@ class _WbsBranchNode extends StatelessWidget {
               node.title,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: isRoot
-                    ? AgentAwesomeColors.green
-                    : AgentAwesomeColors.ink,
+                color: isRoot ? colors.green : colors.ink,
                 fontSize: isRoot ? 15 : 14,
                 fontWeight: FontWeight.w900,
               ),
@@ -243,25 +245,20 @@ class _WbsWorkPackageNode extends StatelessWidget {
     }
     final workBreakdown = task.workBreakdown;
     final gaps = _wbsMissingFields(task);
+    final colors = context.agentAwesomeColors;
     return InkWell(
       onTap: () => controller.selectTask(task.id),
       child: Container(
         padding: EdgeInsets.fromLTRB(_wbsIndentForDepth(depth), 10, 14, 12),
         decoration: BoxDecoration(
           border: Border(
-            bottom: BorderSide(
-              color: AgentAwesomeColors.border.withValues(alpha: 0.62),
-            ),
+            bottom: BorderSide(color: colors.border.withValues(alpha: 0.62)),
           ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Icon(
-              Icons.task_alt_outlined,
-              size: 18,
-              color: AgentAwesomeColors.muted,
-            ),
+            Icon(Icons.task_alt_outlined, size: 18, color: colors.muted),
             const SizedBox(width: 10),
             _WbsCodeBadge(code: workBreakdown.code),
             Expanded(
@@ -312,6 +309,7 @@ class _WbsCodeBadge extends StatelessWidget {
   /// Builds the WBS hierarchy code badge.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final label = code.isEmpty ? 'No code' : code;
     return Tooltip(
       message: label,
@@ -319,8 +317,9 @@ class _WbsCodeBadge extends StatelessWidget {
         margin: const EdgeInsets.only(right: 12),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xfffffcf8),
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: ConstrainedBox(
@@ -328,7 +327,11 @@ class _WbsCodeBadge extends StatelessWidget {
           child: Text(
             label,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              color: colors.ink,
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
           ),
         ),
       ),
@@ -342,7 +345,7 @@ class _WbsWorkPackageContent extends StatelessWidget {
   final WorkspaceTask task;
   final List<String> gaps;
 
-  /// Builds one leaf task plus its WBS evidence.
+  /// Builds one leaf task plus its WBS source context.
   @override
   Widget build(BuildContext context) {
     final workBreakdown = task.workBreakdown;
@@ -416,6 +419,7 @@ class _WbsDetailBlock extends StatelessWidget {
   /// Builds one compact leaf detail block.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return SizedBox(
       width: 210,
       child: Column(
@@ -424,8 +428,8 @@ class _WbsDetailBlock extends StatelessWidget {
           Text(
             label,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
+            style: TextStyle(
+              color: colors.subtle,
               fontSize: 11,
               fontWeight: FontWeight.w900,
             ),
@@ -448,6 +452,7 @@ class _WbsTaskSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final workBreakdown = task.workBreakdown;
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: Column(
@@ -457,7 +462,7 @@ class _WbsTaskSummary extends StatelessWidget {
             task.title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w900),
+            style: TextStyle(color: colors.ink, fontWeight: FontWeight.w900),
           ),
           if (workBreakdown.deliverable.isNotEmpty) ...<Widget>[
             const SizedBox(height: 4),
@@ -465,10 +470,7 @@ class _WbsTaskSummary extends StatelessWidget {
               workBreakdown.deliverable,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AgentAwesomeColors.muted,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: colors.muted, fontSize: 12),
             ),
           ],
           const SizedBox(height: 8),
@@ -500,11 +502,12 @@ class _WbsTextList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (values.isEmpty) {
-      return const Text(
+      return Text(
         'Missing',
-        style: TextStyle(color: AgentAwesomeColors.muted, fontSize: 12),
+        style: TextStyle(color: context.agentAwesomeColors.muted, fontSize: 12),
       );
     }
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: Column(
@@ -517,7 +520,7 @@ class _WbsTextList extends StatelessWidget {
                 value,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, height: 1.25),
+                style: TextStyle(color: colors.ink, fontSize: 12, height: 1.25),
               ),
             ),
         ],
@@ -535,11 +538,12 @@ class _WbsResourceSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (resources.isEmpty) {
-      return const Text(
+      return Text(
         'Missing',
-        style: TextStyle(color: AgentAwesomeColors.muted, fontSize: 12),
+        style: TextStyle(color: context.agentAwesomeColors.muted, fontSize: 12),
       );
     }
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.only(right: 12),
       child: Column(
@@ -552,7 +556,7 @@ class _WbsResourceSummary extends StatelessWidget {
                 _resourceSummary(resource),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, height: 1.25),
+                style: TextStyle(color: colors.ink, fontSize: 12, height: 1.25),
               ),
             ),
         ],
@@ -569,17 +573,19 @@ class _MiniBadge extends StatelessWidget {
   /// Builds a small inline WBS badge.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.greenSoft.withValues(alpha: 0.34),
+        color: colors.greenSoft.withValues(alpha: 0.34),
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          color: AgentAwesomeColors.green,
+        style: TextStyle(
+          color: colors.green,
           fontSize: 11,
           fontWeight: FontWeight.w900,
         ),
@@ -903,20 +909,21 @@ class _TaskStreamPresetSelector extends StatelessWidget {
   /// Builds one-click question presets for the Stream view.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return SegmentedButton<_TaskStreamPreset>(
       showSelectedIcon: false,
       style: ButtonStyle(
         visualDensity: VisualDensity.compact,
         side: WidgetStatePropertyAll(
-          BorderSide(color: AgentAwesomeColors.border.withValues(alpha: 0.85)),
+          BorderSide(color: colors.border.withValues(alpha: 0.85)),
         ),
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AgentAwesomeColors.green.withValues(alpha: 0.16);
+            return colors.greenSoft;
           }
-          return AgentAwesomeColors.panel;
+          return colors.surface;
         }),
-        foregroundColor: const WidgetStatePropertyAll(AgentAwesomeColors.ink),
+        foregroundColor: WidgetStatePropertyAll(colors.ink),
       ),
       segments: <ButtonSegment<_TaskStreamPreset>>[
         for (final preset in _TaskStreamPreset.values)
@@ -1036,28 +1043,35 @@ class _TaskStreamAxisSelector extends StatelessWidget {
   /// Builds one compact axis selector for a stream projection.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: tooltip,
       child: Container(
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.panel,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Icon(icon, size: 15, color: AgentAwesomeColors.green),
+              Icon(icon, size: 15, color: colors.green),
               const SizedBox(width: 6),
               DropdownButton<TaskStreamAxisDimension>(
                 value: value,
                 borderRadius: BorderRadius.circular(8),
-                icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                style: const TextStyle(
-                  color: AgentAwesomeColors.ink,
+                dropdownColor: colors.surface,
+                icon: Icon(
+                  Icons.keyboard_arrow_down,
+                  size: 16,
+                  color: colors.muted,
+                ),
+                style: TextStyle(
+                  color: colors.ink,
                   fontSize: 13,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1092,22 +1106,19 @@ class _TaskStreamEffortSummary extends StatelessWidget {
   /// Builds the aggregate effort answer for the active stream filters.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return SizedBox(
       height: 34,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          const Icon(
-            Icons.timer_outlined,
-            size: 15,
-            color: AgentAwesomeColors.muted,
-          ),
+          Icon(Icons.timer_outlined, size: 15, color: colors.muted),
           const SizedBox(width: 6),
           Text(
             '${model.taskCount} items · ${_formatStreamEffort(model.estimateMinutes)}',
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
+            style: TextStyle(
+              color: colors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -1219,8 +1230,8 @@ class _TaskConstellationViewState extends State<_TaskConstellationView>
             queryResult.summary,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
+            style: TextStyle(
+              color: context.agentAwesomeColors.muted,
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
@@ -1634,6 +1645,7 @@ class _ConstellationSavedQueryMenu extends StatelessWidget {
   /// Builds the saved query picker.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: 'Saved graph queries',
       child: SizedBox(
@@ -1641,16 +1653,16 @@ class _ConstellationSavedQueryMenu extends StatelessWidget {
         width: 38,
         child: PopupMenuButton<String>(
           tooltip: '',
-          icon: const Icon(
+          icon: Icon(
             Icons.saved_search_outlined,
             size: 18,
-            color: AgentAwesomeColors.green,
+            color: colors.green,
           ),
-          color: AgentAwesomeColors.panel,
+          color: colors.surface,
           surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
-            side: const BorderSide(color: AgentAwesomeColors.border),
+            side: BorderSide(color: colors.border),
           ),
           onSelected: onSelected,
           itemBuilder: (context) {
@@ -1677,6 +1689,7 @@ class _ConstellationSavedQueryItem extends StatelessWidget {
   /// Builds a compact saved query menu item.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return SizedBox(
       width: 320,
       child: Column(
@@ -1686,8 +1699,8 @@ class _ConstellationSavedQueryItem extends StatelessWidget {
           Text(
             example.label,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AgentAwesomeColors.ink,
+            style: TextStyle(
+              color: colors.ink,
               fontSize: 13,
               fontWeight: FontWeight.w900,
             ),
@@ -1697,8 +1710,8 @@ class _ConstellationSavedQueryItem extends StatelessWidget {
             example.query,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: AgentAwesomeColors.muted,
+            style: TextStyle(
+              color: colors.muted,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -1724,36 +1737,38 @@ class _ConstellationQueryField extends StatelessWidget {
   /// Builds a compact query field for canonical graph syntax.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 280, maxWidth: 720),
       child: Container(
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.panel,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.search, size: 16, color: AgentAwesomeColors.muted),
+            Icon(Icons.search, size: 16, color: colors.muted),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
                 controller: controller,
                 onChanged: onChanged,
                 onSubmitted: onSubmitted,
-                style: const TextStyle(
-                  color: AgentAwesomeColors.ink,
+                style: TextStyle(
+                  color: colors.ink,
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
                 ),
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
                   hintText:
                       'MATCH task -[depends_on*1..3]-> task RETURN from.title, path.depth, to.title LIMIT 10',
-                  hintStyle: TextStyle(color: AgentAwesomeColors.muted),
+                  hintStyle: TextStyle(color: colors.muted),
                 ),
               ),
             ),
@@ -1774,6 +1789,7 @@ class _ConstellationQueryRows extends StatelessWidget {
   /// Builds a horizontal strip of deterministic query result values.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final previews = <_ConstellationQueryPreview>[
       for (final path in paths.take(3))
         _ConstellationQueryPreview(
@@ -1799,20 +1815,20 @@ class _ConstellationQueryRows extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: preview.isPath
-                  ? AgentAwesomeColors.coral.withValues(alpha: 0.1)
-                  : AgentAwesomeColors.greenSoft.withValues(alpha: 0.26),
+                  ? colors.coral.withValues(alpha: 0.1)
+                  : colors.greenSoft.withValues(alpha: 0.26),
               border: Border.all(
                 color: preview.isPath
-                    ? AgentAwesomeColors.coral.withValues(alpha: 0.24)
-                    : AgentAwesomeColors.green.withValues(alpha: 0.24),
+                    ? colors.coral.withValues(alpha: 0.24)
+                    : colors.green.withValues(alpha: 0.24),
               ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               preview.text,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AgentAwesomeColors.ink,
+              style: TextStyle(
+                color: colors.ink,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
               ),
@@ -1887,6 +1903,7 @@ class _IconBadgeButton extends StatelessWidget {
   /// Builds an icon-only projection toolbar button.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -1896,11 +1913,12 @@ class _IconBadgeButton extends StatelessWidget {
           width: 34,
           height: 34,
           decoration: BoxDecoration(
-            color: AgentAwesomeColors.panel,
-            border: Border.all(color: AgentAwesomeColors.border),
+            color: colors.surface,
+            gradient: context.agentAwesomeControlGradient,
+            border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, size: 16, color: AgentAwesomeColors.green),
+          child: Icon(icon, size: 16, color: colors.green),
         ),
       ),
     );
@@ -1923,6 +1941,7 @@ class _PositionedConstellationAnchor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bounds = anchor.bounds;
+    final colors = context.agentAwesomeColors;
     return Positioned(
       left: bounds.left,
       top: bounds.top,
@@ -1937,22 +1956,17 @@ class _PositionedConstellationAnchor extends StatelessWidget {
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
-              color: expanded
-                  ? AgentAwesomeColors.greenSoft
-                  : AgentAwesomeColors.panel,
+              color: expanded ? colors.greenSoft : colors.surface,
+              gradient: expanded ? null : context.agentAwesomeCardGradient,
               border: Border.all(
-                color: expanded
-                    ? AgentAwesomeColors.green
-                    : AgentAwesomeColors.border,
+                color: expanded ? colors.green : colors.border,
                 width: expanded ? 2.2 : 1.2,
               ),
               borderRadius: BorderRadius.circular(12),
               boxShadow: <BoxShadow>[
                 BoxShadow(
                   blurRadius: expanded ? 22 : 10,
-                  color: AgentAwesomeColors.green.withValues(
-                    alpha: expanded ? 0.22 : 0.08,
-                  ),
+                  color: colors.green.withValues(alpha: expanded ? 0.22 : 0.08),
                 ),
               ],
             ),
@@ -1964,7 +1978,8 @@ class _PositionedConstellationAnchor extends StatelessWidget {
                   anchor.label,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
+                    color: colors.ink,
                     fontSize: 13,
                     height: 1.05,
                     fontWeight: FontWeight.w900,
@@ -1976,7 +1991,7 @@ class _PositionedConstellationAnchor extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AgentAwesomeColors.muted,
+                    color: colors.muted,
                     fontSize: 10.5,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2009,6 +2024,7 @@ class _PositionedConstellationNode extends StatelessWidget {
     final node = placement.node;
     final bounds = placement.bounds;
     final color = _categoryColor(node.category);
+    final colors = context.agentAwesomeColors;
     return Positioned(
       left: bounds.left,
       top: bounds.top,
@@ -2023,11 +2039,12 @@ class _PositionedConstellationNode extends StatelessWidget {
             alignment: Alignment.centerLeft,
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
             decoration: BoxDecoration(
-              color: selected || expanded
-                  ? AgentAwesomeColors.greenSoft
-                  : const Color(0xfffffcf8),
+              color: selected || expanded ? colors.greenSoft : colors.surface,
+              gradient: selected || expanded
+                  ? null
+                  : context.agentAwesomeCardGradient,
               border: Border.all(
-                color: selected || expanded ? AgentAwesomeColors.green : color,
+                color: selected || expanded ? colors.green : color,
                 width: expanded
                     ? 2.3
                     : selected
@@ -2050,7 +2067,8 @@ class _PositionedConstellationNode extends StatelessWidget {
                   node.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
+                    color: colors.ink,
                     fontSize: 12,
                     height: 1.08,
                     fontWeight: FontWeight.w900,
@@ -2062,7 +2080,7 @@ class _PositionedConstellationNode extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: AgentAwesomeColors.muted,
+                    color: colors.muted,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                   ),
@@ -2506,7 +2524,12 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
                 return Stack(
                   children: <Widget>[
                     Positioned.fill(
-                      child: CustomPaint(painter: _TerrainPainter(layout)),
+                      child: CustomPaint(
+                        painter: _TerrainPainter(
+                          layout,
+                          context.agentAwesomeColors,
+                        ),
+                      ),
                     ),
                     for (final card in layout.cards)
                       if (_revealedTerrainTaskIds.contains(card.point.taskId))
@@ -2682,23 +2705,30 @@ class _TerrainInsightModeSelector extends StatelessWidget {
   /// Builds a compact selector for terrain insight questions.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: TaskTerrainModeRegistry.question(value),
       child: Container(
         height: 34,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.panel,
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(
           child: DropdownButton<TaskTerrainInsightMode>(
             value: value,
             borderRadius: BorderRadius.circular(8),
-            icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-            style: const TextStyle(
-              color: AgentAwesomeColors.ink,
+            dropdownColor: colors.surface,
+            icon: Icon(
+              Icons.keyboard_arrow_down,
+              size: 16,
+              color: colors.muted,
+            ),
+            style: TextStyle(
+              color: colors.ink,
               fontSize: 13,
               fontWeight: FontWeight.w900,
             ),
@@ -2749,6 +2779,7 @@ class _TerrainFiltersButton extends StatelessWidget {
   /// Builds one toolbar button for the terrain overlay drawer.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     final label = activeCount == 0 ? 'Overlays' : 'Overlays $activeCount';
     return Tooltip(
       message: 'Area overlays',
@@ -2759,14 +2790,9 @@ class _TerrainFiltersButton extends StatelessWidget {
           height: 34,
           padding: const EdgeInsets.symmetric(horizontal: 11),
           decoration: BoxDecoration(
-            color: open
-                ? AgentAwesomeColors.greenSoft
-                : AgentAwesomeColors.panel,
-            border: Border.all(
-              color: open
-                  ? AgentAwesomeColors.green
-                  : AgentAwesomeColors.border,
-            ),
+            color: open ? colors.greenSoft : colors.surface,
+            gradient: open ? null : context.agentAwesomeControlGradient,
+            border: Border.all(color: open ? colors.green : colors.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -2775,17 +2801,13 @@ class _TerrainFiltersButton extends StatelessWidget {
               Icon(
                 Icons.tune,
                 size: 16,
-                color: open
-                    ? AgentAwesomeColors.green
-                    : AgentAwesomeColors.muted,
+                color: open ? colors.green : colors.muted,
               ),
               const SizedBox(width: 7),
               Text(
                 label,
                 style: TextStyle(
-                  color: open
-                      ? AgentAwesomeColors.green
-                      : AgentAwesomeColors.ink,
+                  color: open ? colors.green : colors.ink,
                   fontSize: 13,
                   fontWeight: FontWeight.w900,
                 ),
@@ -2832,6 +2854,7 @@ class _TerrainFilterDrawer extends StatelessWidget {
   /// Builds the over-map overlay drawer.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Positioned(
       top: 10,
       right: 10,
@@ -2839,14 +2862,15 @@ class _TerrainFilterDrawer extends StatelessWidget {
       width: 314,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: AgentAwesomeColors.surface.withValues(alpha: 0.98),
-          border: Border.all(color: AgentAwesomeColors.border),
+          color: colors.surface.withValues(alpha: 0.98),
+          gradient: context.agentAwesomeSurfaceGradient,
+          border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
           boxShadow: <BoxShadow>[
             BoxShadow(
               blurRadius: 22,
               offset: const Offset(0, 10),
-              color: Colors.black.withValues(alpha: 0.08),
+              color: colors.shadow,
             ),
           ],
         ),
@@ -2857,11 +2881,7 @@ class _TerrainFilterDrawer extends StatelessWidget {
             children: <Widget>[
               Row(
                 children: <Widget>[
-                  const Icon(
-                    Icons.tune,
-                    size: 16,
-                    color: AgentAwesomeColors.green,
-                  ),
+                  Icon(Icons.tune, size: 16, color: colors.green),
                   const SizedBox(width: 7),
                   Expanded(
                     child: Text(
@@ -2869,8 +2889,8 @@ class _TerrainFilterDrawer extends StatelessWidget {
                           ? 'Area overlays'
                           : 'Area overlays $activeCount',
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AgentAwesomeColors.ink,
+                      style: TextStyle(
+                        color: colors.ink,
                         fontSize: 13,
                         fontWeight: FontWeight.w900,
                       ),
@@ -2929,6 +2949,7 @@ class _TerrainFilterSelector extends StatelessWidget {
   /// Builds a compact selector for one terrain filter dimension.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Tooltip(
       message: label,
       child: _TerrainDropdownShell(
@@ -2936,8 +2957,8 @@ class _TerrainFilterSelector extends StatelessWidget {
           children: <Widget>[
             Text(
               '$label:',
-              style: const TextStyle(
-                color: AgentAwesomeColors.muted,
+              style: TextStyle(
+                color: colors.muted,
                 fontSize: 12,
                 fontWeight: FontWeight.w900,
               ),
@@ -2950,8 +2971,13 @@ class _TerrainFilterSelector extends StatelessWidget {
                   isDense: true,
                   isExpanded: true,
                   borderRadius: BorderRadius.circular(8),
-                  icon: const Icon(Icons.keyboard_arrow_down, size: 16),
-                  style: _terrainDropdownTextStyle,
+                  dropdownColor: colors.surface,
+                  icon: Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 16,
+                    color: colors.muted,
+                  ),
+                  style: _terrainDropdownTextStyle(context),
                   selectedItemBuilder: (context) {
                     return <Widget>[
                       for (final option in options)
@@ -2999,12 +3025,14 @@ class _TerrainDropdownShell extends StatelessWidget {
   /// Builds shared dropdown chrome for terrain controls.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
-        color: AgentAwesomeColors.panel,
-        border: Border.all(color: AgentAwesomeColors.border),
+        color: colors.surface,
+        gradient: context.agentAwesomeControlGradient,
+        border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,
@@ -3013,11 +3041,13 @@ class _TerrainDropdownShell extends StatelessWidget {
 }
 
 /// Shared text style for terrain dropdown controls.
-const TextStyle _terrainDropdownTextStyle = TextStyle(
-  color: AgentAwesomeColors.ink,
-  fontSize: 13,
-  fontWeight: FontWeight.w900,
-);
+TextStyle _terrainDropdownTextStyle(BuildContext context) {
+  return TextStyle(
+    color: context.agentAwesomeColors.ink,
+    fontSize: 13,
+    fontWeight: FontWeight.w900,
+  );
+}
 
 /// Renders one full terrain task card from computed layout geometry.
 class _PositionedTerrainCard extends StatelessWidget {
@@ -3036,6 +3066,7 @@ class _PositionedTerrainCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final point = placement.point;
     final color = placement.color;
+    final colors = context.agentAwesomeColors;
     return Positioned(
       left: placement.rect.left,
       top: placement.rect.top,
@@ -3049,12 +3080,9 @@ class _PositionedTerrainCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color: selected
-                  ? AgentAwesomeColors.greenSoft
-                  : const Color(0xfffffcf8),
-              border: Border.all(
-                color: selected ? AgentAwesomeColors.green : color,
-              ),
+              color: selected ? colors.panelStrong : colors.surface,
+              gradient: context.agentAwesomeCardGradient,
+              border: Border.all(color: selected ? colors.borderStrong : color),
               borderRadius: BorderRadius.circular(8),
               boxShadow: <BoxShadow>[
                 BoxShadow(
@@ -3090,14 +3118,17 @@ class _PositionedTerrainCard extends StatelessWidget {
                         point.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                        style: TextStyle(
+                          color: colors.ink,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                       Text(
                         placement.cue,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: AgentAwesomeColors.muted,
+                          color: colors.muted,
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
                         ),
@@ -3163,6 +3194,7 @@ class _PositionedTerrainPin extends StatelessWidget {
   Widget build(BuildContext context) {
     final point = pin.point;
     final color = pin.color;
+    final colors = context.agentAwesomeColors;
     return Positioned(
       left: pin.center.dx - 14,
       top: pin.center.dy - 14,
@@ -3176,12 +3208,10 @@ class _PositionedTerrainPin extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: selected || expanded
-                  ? AgentAwesomeColors.green
+                  ? colors.green
                   : color.withValues(alpha: 0.9),
               border: Border.all(
-                color: expanded
-                    ? AgentAwesomeColors.ink
-                    : const Color(0xfffffcf8),
+                color: expanded ? colors.ink : colors.surface,
                 width: expanded ? 2.4 : 2,
               ),
               shape: BoxShape.circle,
@@ -3222,6 +3252,7 @@ class _PositionedTerrainCluster extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = cluster.color;
+    final colors = context.agentAwesomeColors;
     final label =
         '${cluster.zone.label}\n${cluster.points.take(5).map((point) => point.title).join('\n')}';
     return Positioned(
@@ -3236,13 +3267,9 @@ class _PositionedTerrainCluster extends StatelessWidget {
           onTap: onTap,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: expanded
-                  ? AgentAwesomeColors.green
-                  : color.withValues(alpha: 0.9),
+              color: expanded ? colors.green : color.withValues(alpha: 0.9),
               border: Border.all(
-                color: expanded
-                    ? AgentAwesomeColors.ink
-                    : const Color(0xfffffcf8),
+                color: expanded ? colors.ink : colors.surface,
                 width: expanded ? 2.4 : 2,
               ),
               shape: BoxShape.circle,
@@ -3385,9 +3412,10 @@ class _ConstellationPainter extends CustomPainter {
 
 /// Paints the terrain atlas behind terrain markers.
 class _TerrainPainter extends CustomPainter {
-  const _TerrainPainter(this.layout);
+  const _TerrainPainter(this.layout, this.colors);
 
   final TaskTerrainLayout layout;
+  final AgentAwesomePalette colors;
 
   /// Paints the visible terrain atlas and score guides.
   @override
@@ -3432,7 +3460,7 @@ class _TerrainPainter extends CustomPainter {
         TextSpan(
           text: zone.definition.description,
           style: TextStyle(
-            color: AgentAwesomeColors.muted.withValues(alpha: 0.72),
+            color: colors.muted.withValues(alpha: 0.72),
             fontSize: 10,
             fontWeight: FontWeight.w700,
           ),
@@ -3451,7 +3479,7 @@ class _TerrainPainter extends CustomPainter {
   /// Paints quiet reward and pressure score axes.
   void _paintAxes(Canvas canvas) {
     final paint = Paint()
-      ..color = AgentAwesomeColors.border.withValues(alpha: 0.42)
+      ..color = colors.border.withValues(alpha: 0.42)
       ..strokeWidth = 1;
     canvas.drawLine(
       Offset(
@@ -3493,7 +3521,7 @@ class _TerrainPainter extends CustomPainter {
       text: TextSpan(
         text: label,
         style: TextStyle(
-          color: AgentAwesomeColors.muted.withValues(alpha: 0.72),
+          color: colors.muted.withValues(alpha: 0.72),
           fontSize: 10,
           fontWeight: FontWeight.w800,
         ),
@@ -3506,7 +3534,7 @@ class _TerrainPainter extends CustomPainter {
   /// Reports whether this painter needs repainting.
   @override
   bool shouldRepaint(covariant _TerrainPainter oldDelegate) {
-    return oldDelegate.layout != layout;
+    return oldDelegate.layout != layout || oldDelegate.colors != colors;
   }
 }
 

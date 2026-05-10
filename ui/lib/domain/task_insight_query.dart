@@ -8,6 +8,15 @@ class TaskInsightIds {
   /// Operational all-tasks preset.
   static const String all = 'all';
 
+  /// Today work that is ready for concrete execution.
+  static const String todayActions = 'today_actions';
+
+  /// Today work that requires human judgment or approval.
+  static const String todayDecisions = 'today_decisions';
+
+  /// Today person, promise, reply, or check-in loops that are due.
+  static const String todayRelationships = 'today_relationships';
+
   /// Candidate work that is safe and useful to hand to the agent.
   static const String agentHandoff = 'agent_handoff';
 
@@ -90,7 +99,7 @@ class TaskInsightCandidate {
   /// Human-readable candidate explanation.
   final String explanation;
 
-  /// Evidence ids supporting this candidate.
+  /// Source record ids supporting this candidate.
   final List<String> evidenceIds;
 
   /// Candidate confidence from 0 to 1.

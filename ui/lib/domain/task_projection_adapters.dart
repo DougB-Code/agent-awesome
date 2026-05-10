@@ -1552,7 +1552,7 @@ class _DependencyLink {
   /// Original relation explanation.
   final String explanation;
 
-  /// Evidence ids supporting the original relation.
+  /// Source record ids supporting the original relation.
   final List<String> evidenceIds;
 
   /// Last actor on the original relation.

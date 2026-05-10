@@ -202,6 +202,7 @@ class TaskInsightIndex {
       scoresByTaskId: scoreProfiles,
       blockedByTaskId: blocked,
       blockersByTaskId: blockers,
+      commitmentsByTaskId: commitmentsByTaskId,
       metadataGapsByTaskId: gapsByTaskId,
       policy: policy,
       now: referenceTime,
@@ -765,10 +766,14 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
   required Map<String, TaskInsightScoreProfile> scoresByTaskId,
   required Map<String, LinkedHashSet<String>> blockedByTaskId,
   required Map<String, LinkedHashSet<String>> blockersByTaskId,
+  required Map<String, List<TaskCommitment>> commitmentsByTaskId,
   required Map<String, List<TaskMetadataGapRecord>> metadataGapsByTaskId,
   required TaskInsightPolicy policy,
   required DateTime now,
 }) {
+  final todayActions = <TaskInsightCandidate>[];
+  final todayDecisions = <TaskInsightCandidate>[];
+  final todayRelationships = <TaskInsightCandidate>[];
   final agent = <TaskInsightCandidate>[];
   final nextWeek = <TaskInsightCandidate>[];
   final unblocks = <TaskInsightCandidate>[];
@@ -780,6 +785,75 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
     final scores = scoresByTaskId[taskId];
     if (scores == null || !_isActive(workspaceTask, projectionTask)) {
       continue;
+    }
+    final taskGaps =
+        metadataGapsByTaskId[taskId] ?? const <TaskMetadataGapRecord>[];
+    final followUpRules = _todayFollowUpRules(
+      workspaceTask: workspaceTask,
+      projectionTask: projectionTask,
+      commitments: commitmentsByTaskId[taskId] ?? const <TaskCommitment>[],
+      now: now,
+    );
+    if (followUpRules.isNotEmpty) {
+      todayRelationships.add(
+        _candidate(
+          insightId: TaskInsightIds.todayRelationships,
+          taskId: taskId,
+          score: _todayFollowUpRank(scores, followUpRules),
+          severity: 'warning',
+          matchedRules: followUpRules,
+          explanation: _todayFollowUpExplanation(followUpRules),
+          confidence: scores.confidence,
+        ),
+      );
+    }
+    final decisionRules =
+        followUpRules.isEmpty && !_isMonitorTask(workspaceTask, projectionTask)
+        ? _todayDecisionRules(
+            workspaceTask: workspaceTask,
+            projectionTask: projectionTask,
+            scores: scores,
+            policy: policy,
+          )
+        : const <String>[];
+    if (decisionRules.isNotEmpty) {
+      todayDecisions.add(
+        _candidate(
+          insightId: TaskInsightIds.todayDecisions,
+          taskId: taskId,
+          score: _todayDecisionRank(scores, decisionRules),
+          severity: 'warning',
+          matchedRules: decisionRules,
+          explanation: _todayDecisionExplanation(decisionRules),
+          confidence: scores.confidence,
+        ),
+      );
+    }
+    final actionRules =
+        followUpRules.isEmpty &&
+            decisionRules.isEmpty &&
+            !_isMonitorTask(workspaceTask, projectionTask) &&
+            !_isAgentHandoffCandidate(scores, policy)
+        ? _todayActionRules(
+            workspaceTask: workspaceTask,
+            projectionTask: projectionTask,
+            scores: scores,
+            now: now,
+          )
+        : const <String>[];
+    if (actionRules.isNotEmpty) {
+      todayActions.add(
+        _candidate(
+          insightId: TaskInsightIds.todayActions,
+          taskId: taskId,
+          score: _todayActionRank(scores, actionRules),
+          severity: _todayActionSeverity(workspaceTask, projectionTask, now),
+          matchedRules: actionRules,
+          missingRules: _todayActionMissingRules(workspaceTask, projectionTask),
+          explanation: _todayActionExplanation(actionRules),
+          confidence: scores.confidence,
+        ),
+      );
     }
     if (_isAgentHandoffCandidate(scores, policy)) {
       agent.add(
@@ -850,8 +924,6 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
         ),
       );
     }
-    final taskGaps =
-        metadataGapsByTaskId[taskId] ?? const <TaskMetadataGapRecord>[];
     if (taskGaps.isNotEmpty) {
       gaps.add(
         _candidate(
@@ -885,12 +957,451 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
     }
   }
   return <String, List<TaskInsightCandidate>>{
+    TaskInsightIds.todayActions: _rank(todayActions),
+    TaskInsightIds.todayDecisions: _rank(todayDecisions),
+    TaskInsightIds.todayRelationships: _rank(todayRelationships),
     TaskInsightIds.agentHandoff: _rank(agent),
     TaskInsightIds.nextWeekHighValue: _rank(nextWeek),
     TaskInsightIds.quickUnblocks: _rank(unblocks),
     TaskInsightIds.metadataGaps: _rank(gaps),
     TaskInsightIds.highRiskLowConfidence: _rank(highRisk),
   };
+}
+
+/// Returns rules for tasks that match the server's execute lanes.
+List<String> _todayActionRules({
+  required WorkspaceTask? workspaceTask,
+  required TaskProjectionTask? projectionTask,
+  required TaskInsightScoreProfile scores,
+  required DateTime now,
+}) {
+  final rules = <String>{};
+  final dueAt = workspaceTask?.dueAt ?? projectionTask?.dueAt;
+  final scheduledAt = workspaceTask?.scheduledAt ?? projectionTask?.scheduledAt;
+  final dueWindow = _dueWindow(dueAt, now);
+  if (dueWindow == 'overdue') {
+    rules.add('overdue');
+  } else if (dueWindow == 'today') {
+    rules.add('due_today');
+  }
+  final scheduledWindow = _dueWindow(scheduledAt, now);
+  if (scheduledWindow == 'overdue' || scheduledWindow == 'today') {
+    rules.add('scheduled_now');
+  }
+  if (_shouldProtectTask(workspaceTask, projectionTask, scores, now)) {
+    rules.add('protect_focus');
+  }
+  if (dueAt == null && scheduledAt == null) {
+    rules.add('unscheduled');
+  }
+  if (_taskDescription(workspaceTask, projectionTask).isEmpty) {
+    rules.add('missing_details');
+  }
+  if (scores.pressure >= 0.70 || scores.timePressure >= 0.70) {
+    rules.add('high_pressure');
+  }
+  if (rules.isEmpty) {
+    rules.add('ready_open');
+  }
+  return rules.toList();
+}
+
+/// Returns missing next-action inputs visible in the queue card.
+List<String> _todayActionMissingRules(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  final missing = <String>[];
+  if ((workspaceTask?.dueAt ?? projectionTask?.dueAt) == null &&
+      (workspaceTask?.scheduledAt ?? projectionTask?.scheduledAt) == null &&
+      workspaceTask?.followUpAt == null) {
+    missing.add('schedule');
+  }
+  if (_taskDescription(workspaceTask, projectionTask).isEmpty) {
+    missing.add('details');
+  }
+  if (_taskProject(workspaceTask, projectionTask).isEmpty) {
+    missing.add('project');
+  }
+  return missing;
+}
+
+/// Returns warning severity for protected execution items.
+String _todayActionSeverity(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+  DateTime now,
+) {
+  final priority = _taskPriority(workspaceTask, projectionTask);
+  final dueWindow = _dueWindow(
+    workspaceTask?.dueAt ?? projectionTask?.dueAt,
+    now,
+  );
+  if (dueWindow == 'overdue' || priority == 'urgent' || priority == 'high') {
+    return 'warning';
+  }
+  return 'info';
+}
+
+/// Returns the Today action ranking score.
+double _todayActionRank(
+  TaskInsightScoreProfile scores,
+  List<String> matchedRules,
+) {
+  var rank =
+      0.28 +
+      0.22 * scores.pressure +
+      0.18 * scores.timePressure +
+      0.12 * scores.risk +
+      0.10 * (1 - scores.metadataCompleteness);
+  if (matchedRules.contains('overdue')) {
+    rank += 0.20;
+  }
+  if (matchedRules.contains('due_today') ||
+      matchedRules.contains('scheduled_now')) {
+    rank += 0.14;
+  }
+  if (matchedRules.contains('unscheduled')) {
+    rank += 0.08;
+  }
+  if (matchedRules.contains('protect_focus')) {
+    rank += 0.12;
+  }
+  if (matchedRules.contains('missing_details')) {
+    rank += 0.06;
+  }
+  return _clamp01(rank);
+}
+
+/// Returns matching Today decision rules for one active task.
+List<String> _todayDecisionRules({
+  required WorkspaceTask? workspaceTask,
+  required TaskProjectionTask? projectionTask,
+  required TaskInsightScoreProfile scores,
+  required TaskInsightPolicy policy,
+}) {
+  final rules = <String>{};
+  if (_containsDecisionLanguage(workspaceTask, projectionTask)) {
+    rules.add('decision_language');
+  }
+  if (scores.humanJudgmentNeed >= 0.70) {
+    rules.add('human_judgment');
+  }
+  if (scores.risk >= policy.highRiskThreshold) {
+    rules.add('high_risk');
+  }
+  final priority = _taskPriority(workspaceTask, projectionTask);
+  if (priority == 'urgent') {
+    rules.add('urgent');
+  }
+  if (_isUnsafeTask(workspaceTask, projectionTask)) {
+    rules.add('approval_required');
+  }
+  return rules.toList();
+}
+
+/// Returns the Today decision ranking score.
+double _todayDecisionRank(
+  TaskInsightScoreProfile scores,
+  List<String> matchedRules,
+) {
+  var rank =
+      0.24 +
+      0.30 * scores.humanJudgmentNeed +
+      0.22 * scores.risk +
+      0.14 * (1 - scores.confidence) +
+      0.10 * scores.consequence;
+  if (matchedRules.contains('decision_language')) {
+    rank += 0.12;
+  }
+  if (matchedRules.contains('urgent_unclear')) {
+    rank += 0.10;
+  }
+  return _clamp01(rank);
+}
+
+/// Returns rules for due person, promise, reply, or check-in loops.
+List<String> _todayFollowUpRules({
+  required WorkspaceTask? workspaceTask,
+  required TaskProjectionTask? projectionTask,
+  required List<TaskCommitment> commitments,
+  required DateTime now,
+}) {
+  final rules = <String>[];
+  final followUpAt = workspaceTask?.followUpAt;
+  final hasPerson = _taskPerson(workspaceTask, projectionTask).isNotEmpty;
+  final text = _taskTextForPolicy(workspaceTask, projectionTask);
+  final hasPromiseText = _containsAnyText(text, const <String>[
+    'promise',
+    'commitment',
+    'reply',
+    'follow up',
+    'follow-up',
+    'check in',
+    'check-in',
+  ]);
+  if (commitments.isNotEmpty) {
+    rules.add('promise_or_commitment');
+  }
+  if (hasPerson) {
+    rules.add('person_context');
+  }
+  if (hasPromiseText) {
+    rules.add('reply_or_promise');
+  }
+  if (followUpAt != null &&
+      !followUpAt.isAfter(now.add(const Duration(days: 1)))) {
+    rules.add('follow_up_due');
+  }
+  if (followUpAt == null &&
+      hasPerson &&
+      _containsAnyText(text, const <String>[
+        'reply',
+        'follow up',
+        'follow-up',
+        'check in',
+        'check-in',
+      ])) {
+    rules.add('check_in_needed');
+  }
+  if (rules.contains('follow_up_due') ||
+      rules.contains('check_in_needed') ||
+      (rules.contains('promise_or_commitment') &&
+          (hasPerson || hasPromiseText))) {
+    return rules;
+  }
+  return const <String>[];
+}
+
+/// Returns the Today follow-up ranking score.
+double _todayFollowUpRank(
+  TaskInsightScoreProfile scores,
+  List<String> matchedRules,
+) {
+  var rank = 0.34 + 0.20 * scores.pressure + 0.18 * scores.commitmentHardness;
+  if (matchedRules.contains('follow_up_due')) {
+    rank += 0.22;
+  }
+  if (matchedRules.contains('person_context')) {
+    rank += 0.10;
+  }
+  if (matchedRules.contains('promise_or_commitment')) {
+    rank += 0.12;
+  }
+  return _clamp01(rank);
+}
+
+/// Returns whether a task belongs in the server's monitor lane.
+bool _isMonitorTask(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  final status = _taskStatus(workspaceTask, projectionTask);
+  return status == 'blocked' || status == 'waiting';
+}
+
+/// Returns whether task metadata calls for protected focus.
+bool _shouldProtectTask(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+  TaskInsightScoreProfile scores,
+  DateTime now,
+) {
+  final scheduledAt = workspaceTask?.scheduledAt ?? projectionTask?.scheduledAt;
+  if (_dueWindow(scheduledAt, now) == 'today') {
+    return true;
+  }
+  final estimate =
+      workspaceTask?.estimateMinutes ?? projectionTask?.estimateMinutes ?? 0;
+  if (scores.reward >= 0.75 && (scores.risk >= 0.35 || estimate >= 60)) {
+    return true;
+  }
+  return _taskPriority(workspaceTask, projectionTask) == 'high' &&
+      estimate >= 45;
+}
+
+/// Returns whether task text suggests approval-gated external action.
+bool _isUnsafeTask(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  final text = _taskTextForPolicy(workspaceTask, projectionTask);
+  return _containsAnyText(text, const <String>[
+    'payment',
+    'bank',
+    'bill',
+    'wire',
+    'transfer',
+    'delete',
+    'remove',
+    'send email',
+    'send message',
+    'external',
+  ]);
+}
+
+/// Returns whether text contains any case-insensitive needle.
+bool _containsAnyText(String text, List<String> needles) {
+  final normalized = text.toLowerCase();
+  for (final needle in needles) {
+    if (normalized.contains(needle.toLowerCase())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Returns policy text from task title, description, context, and source.
+String _taskTextForPolicy(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  return <String>[
+    workspaceTask?.title ?? projectionTask?.title ?? '',
+    workspaceTask?.description ?? projectionTask?.description ?? '',
+    workspaceTask?.context ?? projectionTask?.context ?? '',
+    workspaceTask?.source ?? projectionTask?.source ?? '',
+  ].join(' ').toLowerCase();
+}
+
+/// Returns task person text from owner metadata.
+String _taskPerson(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  return _firstNonEmptyTaskValue(<String>[
+    workspaceTask?.owner ?? '',
+    projectionTask?.owner ?? '',
+  ]);
+}
+
+/// Returns a short action insight explanation.
+String _todayActionExplanation(List<String> matchedRules) {
+  return _insightRuleSentence(
+    'Ready to execute',
+    matchedRules,
+    const <String, String>{
+      'overdue': 'overdue',
+      'due_today': 'due today',
+      'scheduled_now': 'scheduled now',
+      'unscheduled': 'not scheduled',
+      'missing_details': 'missing details',
+      'protect_focus': 'protect focus',
+      'ready_open': 'open',
+      'high_pressure': 'high pressure',
+    },
+  );
+}
+
+/// Returns a short decision insight explanation.
+String _todayDecisionExplanation(List<String> matchedRules) {
+  return _insightRuleSentence(
+    'Likely needs a human decision',
+    matchedRules,
+    const <String, String>{
+      'decision_language': 'decision language',
+      'human_judgment': 'high judgment need',
+      'high_risk': 'high risk',
+      'urgent': 'urgent',
+      'approval_required': 'approval required',
+    },
+  );
+}
+
+/// Returns a short follow-up insight explanation.
+String _todayFollowUpExplanation(List<String> matchedRules) {
+  return _insightRuleSentence(
+    'Needs follow-up',
+    matchedRules,
+    const <String, String>{
+      'promise_or_commitment': 'linked to a promise',
+      'person_context': 'person context',
+      'reply_or_promise': 'reply or promise language',
+      'follow_up_due': 'follow-up is due',
+      'check_in_needed': 'check-in needed',
+    },
+  );
+}
+
+/// Builds one sentence from deterministic insight rule labels.
+String _insightRuleSentence(
+  String prefix,
+  List<String> matchedRules,
+  Map<String, String> labels,
+) {
+  final text = matchedRules
+      .map((rule) => labels[rule] ?? rule.replaceAll('_', ' '))
+      .join(', ');
+  return text.isEmpty ? '$prefix.' : '$prefix: $text.';
+}
+
+/// Returns true when task text explicitly asks for a decision.
+bool _containsDecisionLanguage(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  final text =
+      '${workspaceTask?.title ?? projectionTask?.title ?? ''} '
+              '${workspaceTask?.description ?? projectionTask?.description ?? ''} '
+              '${workspaceTask?.detail ?? ''}'
+          .toLowerCase();
+  return text.contains('decide') ||
+      text.contains('decision') ||
+      text.contains('approve') ||
+      text.contains('approval') ||
+      text.contains('choose') ||
+      text.contains('confirm');
+}
+
+/// Returns the normalized task status.
+String _taskStatus(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  return (workspaceTask?.status ?? projectionTask?.status ?? '').toLowerCase();
+}
+
+/// Returns the normalized task priority.
+String _taskPriority(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  return (workspaceTask?.priority ?? projectionTask?.priority ?? '')
+      .toLowerCase();
+}
+
+/// Returns task description text.
+String _taskDescription(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  return _firstNonEmptyTaskValue(<String>[
+    workspaceTask?.description ?? '',
+    projectionTask?.description ?? '',
+  ]);
+}
+
+/// Returns task project text.
+String _taskProject(
+  WorkspaceTask? workspaceTask,
+  TaskProjectionTask? projectionTask,
+) {
+  return _firstNonEmptyTaskValue(<String>[
+    workspaceTask?.project ?? '',
+    projectionTask?.project ?? '',
+    projectionTask?.projectId ?? '',
+  ]);
+}
+
+/// Returns the first non-empty task value.
+String _firstNonEmptyTaskValue(List<String> values) {
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) {
+      return trimmed;
+    }
+  }
+  return '';
 }
 
 /// Returns whether task status is non-terminal.
@@ -1028,6 +1539,9 @@ List<TaskInsightQuerySummary> _buildSummaries({
   required Map<String, WorkspaceTask> workspaceTasksById,
 }) {
   const labels = <String, String>{
+    TaskInsightIds.todayActions: 'Execute',
+    TaskInsightIds.todayDecisions: 'Decide',
+    TaskInsightIds.todayRelationships: 'Follow-ups',
     TaskInsightIds.agentHandoff: 'Agent handoff',
     TaskInsightIds.nextWeekHighValue: 'Next week high value',
     TaskInsightIds.quickUnblocks: 'Quick unblocks',
@@ -1035,6 +1549,12 @@ List<TaskInsightQuerySummary> _buildSummaries({
     TaskInsightIds.highRiskLowConfidence: 'Risk gaps',
   };
   const questions = <String, String>{
+    TaskInsightIds.todayActions:
+        'Which backlog items are ready for concrete execution?',
+    TaskInsightIds.todayDecisions:
+        'Which backlog items need human judgment or approval?',
+    TaskInsightIds.todayRelationships:
+        'Which people, promise, reply, or check-in loops are due?',
     TaskInsightIds.agentHandoff:
         'What low-value must-do work can I safely hand off?',
     TaskInsightIds.nextWeekHighValue:

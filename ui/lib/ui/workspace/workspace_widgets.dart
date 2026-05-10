@@ -227,12 +227,12 @@ class _HeroCopy extends StatelessWidget {
                   : () => onOpenSection!(AppSections.chat),
             ),
             _HeroActionButton(
-              label: 'Explore the Mental Model',
+              label: 'Open Backlog',
               primary: false,
               compact: compact,
               onPressed: onOpenSection == null
                   ? null
-                  : () => onOpenSection!(AppSections.workflows),
+                  : () => onOpenSection!(AppSections.backlog),
             ),
           ],
         ),
