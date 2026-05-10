@@ -28,6 +28,19 @@ func newEventDeduper(ttl time.Duration) *eventDeduper {
 	}
 }
 
+// contains reports whether a key is still inside the duplicate window.
+func (d *eventDeduper) contains(key string) bool {
+	if d == nil || key == "" {
+		return false
+	}
+	now := d.now()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.prune(now)
+	expiresAt, ok := d.seen[key]
+	return ok && expiresAt.After(now)
+}
+
 // accept records a key and reports whether it has not been seen recently.
 func (d *eventDeduper) accept(key string) bool {
 	if d == nil || key == "" {

@@ -4,6 +4,7 @@ package mcptransport
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"agentawesome/internal/config/schema"
@@ -52,5 +53,20 @@ func TestNewHTTPTransportInjectsConfiguredHeaders(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("status = %d, want 204", resp.StatusCode)
+	}
+}
+
+// TestNewHTTPTransportRejectsMissingEnvHeader verifies remote MCP auth fails fast.
+func TestNewHTTPTransportRejectsMissingEnvHeader(t *testing.T) {
+	t.Setenv("MCP_AUTH_HEADER", "")
+	_, err := New(schema.MCPServer{
+		Transport: "streamable-http",
+		Endpoint:  "https://example.test/mcp",
+		HeadersFromEnv: map[string]string{
+			"Authorization": "MCP_AUTH_HEADER",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "MCP_AUTH_HEADER") {
+		t.Fatalf("New() error = %v, want missing MCP_AUTH_HEADER", err)
 	}
 }

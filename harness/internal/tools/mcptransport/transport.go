@@ -22,9 +22,13 @@ func New(server schema.MCPServer) (mcp.Transport, error) {
 		}
 		return &mcp.CommandTransport{Command: command}, nil
 	case "streamable-http":
+		client, err := httpClient(server)
+		if err != nil {
+			return nil, err
+		}
 		return &mcp.StreamableClientTransport{
 			Endpoint:   endpoint(server),
-			HTTPClient: httpClient(server),
+			HTTPClient: client,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported transport %q", server.Transport)
@@ -59,21 +63,24 @@ func envPairs(values map[string]string) []string {
 }
 
 // httpClient returns a header-injecting HTTP client when auth headers exist.
-func httpClient(server schema.MCPServer) *http.Client {
-	headers := resolvedHeaders(server)
+func httpClient(server schema.MCPServer) (*http.Client, error) {
+	headers, err := resolvedHeaders(server)
+	if err != nil {
+		return nil, err
+	}
 	if len(headers) == 0 {
-		return nil
+		return nil, nil
 	}
 	return &http.Client{
 		Transport: headerRoundTripper{
 			base:    http.DefaultTransport,
 			headers: headers,
 		},
-	}
+	}, nil
 }
 
 // resolvedHeaders combines literal and environment-backed headers.
-func resolvedHeaders(server schema.MCPServer) http.Header {
+func resolvedHeaders(server schema.MCPServer) (http.Header, error) {
 	headers := make(http.Header)
 	for key, value := range server.Headers {
 		if strings.TrimSpace(key) == "" {
@@ -85,11 +92,14 @@ func resolvedHeaders(server schema.MCPServer) http.Header {
 		if strings.TrimSpace(key) == "" || strings.TrimSpace(envName) == "" {
 			continue
 		}
-		if value := os.Getenv(strings.TrimSpace(envName)); value != "" {
-			headers.Set(key, value)
+		name := strings.TrimSpace(envName)
+		value, ok := os.LookupEnv(name)
+		if !ok || strings.TrimSpace(value) == "" {
+			return nil, fmt.Errorf("mcp header %q requires non-empty environment variable %s", key, name)
 		}
+		headers.Set(key, value)
 	}
-	return headers
+	return headers, nil
 }
 
 // headerRoundTripper injects configured headers into every MCP HTTP request.

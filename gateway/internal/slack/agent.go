@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,10 @@ import (
 
 	"agentgateway/internal/policy"
 )
+
+const confirmationFunctionName = "adk_request_confirmation"
+
+var errSlackConfirmationUnsupported = errors.New("slack tool confirmation is unsupported")
 
 // AgentClient forwards normalized Slack text into the harness REST API.
 type AgentClient struct {
@@ -204,17 +209,7 @@ func decodeAgentSSE(reader io.Reader) (string, error) {
 
 // decodeAgentEvent returns display text from one ADK event payload.
 func decodeAgentEvent(eventType string, data string) (string, error) {
-	var event struct {
-		Error        any    `json:"error"`
-		Author       string `json:"author"`
-		Partial      bool   `json:"partial"`
-		ErrorMessage string `json:"errorMessage"`
-		Content      struct {
-			Parts []struct {
-				Text string `json:"text"`
-			} `json:"parts"`
-		} `json:"content"`
-	}
+	var event agentSSEEvent
 	if err := json.Unmarshal([]byte(data), &event); err != nil {
 		return "", fmt.Errorf("decode agent event: %w", err)
 	}
@@ -227,6 +222,13 @@ func decodeAgentEvent(eventType string, data string) (string, error) {
 	if event.Partial || event.Author == "user" {
 		return "", nil
 	}
+	if call := firstAgentConfirmationCall(event.Content.Parts); call != nil {
+		toolName := confirmationToolName(call)
+		if toolName == "" {
+			return "", errSlackConfirmationUnsupported
+		}
+		return "", fmt.Errorf("%w for %s", errSlackConfirmationUnsupported, toolName)
+	}
 	var parts []string
 	for _, part := range event.Content.Parts {
 		text := strings.TrimSpace(part.Text)
@@ -236,6 +238,52 @@ func decodeAgentEvent(eventType string, data string) (string, error) {
 		parts = append(parts, part.Text)
 	}
 	return strings.TrimSpace(strings.Join(parts, "\n")), nil
+}
+
+// agentSSEEvent stores the ADK SSE fields Slack needs to decode.
+type agentSSEEvent struct {
+	Error        any    `json:"error"`
+	Author       string `json:"author"`
+	Partial      bool   `json:"partial"`
+	ErrorMessage string `json:"errorMessage"`
+	Content      struct {
+		Parts []agentSSEPart `json:"parts"`
+	} `json:"content"`
+}
+
+// agentSSEPart stores one displayable or control part from an ADK event.
+type agentSSEPart struct {
+	Text         string             `json:"text"`
+	FunctionCall *agentFunctionCall `json:"functionCall"`
+}
+
+// agentFunctionCall stores the function-call fields needed by Slack.
+type agentFunctionCall struct {
+	Name string         `json:"name"`
+	Args map[string]any `json:"args"`
+}
+
+// firstAgentConfirmationCall finds the ADK confirmation request, if present.
+func firstAgentConfirmationCall(parts []agentSSEPart) *agentFunctionCall {
+	for _, part := range parts {
+		if part.FunctionCall != nil && part.FunctionCall.Name == confirmationFunctionName {
+			return part.FunctionCall
+		}
+	}
+	return nil
+}
+
+// confirmationToolName returns the original tool that requested confirmation.
+func confirmationToolName(call *agentFunctionCall) string {
+	if call == nil {
+		return ""
+	}
+	original, ok := call.Args["originalFunctionCall"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	name, _ := original["name"].(string)
+	return strings.TrimSpace(name)
 }
 
 // looksLikeLocalToolMarkup reports whether text contains local model control tokens.

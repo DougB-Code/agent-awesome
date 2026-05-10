@@ -4,6 +4,7 @@ package slack
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -104,5 +105,16 @@ func TestDecodeAgentEventSuppressesLocalToolMarkup(t *testing.T) {
 	}
 	if text != "" {
 		t.Fatalf("decodeAgentEvent() = %q, want empty text", text)
+	}
+}
+
+// TestDecodeAgentEventRejectsConfirmationRequest verifies Slack does not report paused writes as success.
+func TestDecodeAgentEventRejectsConfirmationRequest(t *testing.T) {
+	_, err := decodeAgentEvent("message", `{"author":"assistant","content":{"parts":[{"functionCall":{"id":"confirm-1","name":"adk_request_confirmation","args":{"originalFunctionCall":{"id":"call-1","name":"create_task"},"toolConfirmation":{"hint":"Approve task write?"}}}}]}}`)
+	if !errors.Is(err, errSlackConfirmationUnsupported) {
+		t.Fatalf("decodeAgentEvent() error = %v, want unsupported confirmation", err)
+	}
+	if !strings.Contains(err.Error(), "create_task") {
+		t.Fatalf("decodeAgentEvent() error = %v, want original tool name", err)
 	}
 }

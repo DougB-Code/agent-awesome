@@ -21,6 +21,7 @@ import (
 
 const maxSlackRequestBytes = 1 << 20
 const defaultMaxConcurrentDispatches = 4
+const slackFailurePostTimeout = 10 * time.Second
 
 var errSlackDispatchThrottled = errors.New("slack dispatch throttled")
 
@@ -149,7 +150,7 @@ func (a *Adapter) AcceptEnvelopeWithDelivery(body []byte, delivery DeliveryInfo)
 			return "", nil
 		}
 		dedupeKey := eventDedupKey(envelope)
-		if !a.deduper.accept(dedupeKey) {
+		if a.deduper.contains(dedupeKey) {
 			log.Info().
 				Str("event_id", envelope.EventID).
 				Str("dedupe_key", dedupeKey).
@@ -166,6 +167,16 @@ func (a *Adapter) AcceptEnvelopeWithDelivery(body []byte, delivery DeliveryInfo)
 		if err != nil {
 			log.Warn().Err(err).Msg("slack dispatch rejected by limiter")
 			return "", err
+		}
+		if !a.deduper.accept(dedupeKey) {
+			release()
+			log.Info().
+				Str("event_id", envelope.EventID).
+				Str("dedupe_key", dedupeKey).
+				Str("retry_num", delivery.RetryNum).
+				Str("retry_reason", delivery.RetryReason).
+				Msg("slack duplicate event ignored after admission")
+			return "", nil
 		}
 		go func() {
 			defer release()
@@ -277,13 +288,13 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 		Msg("slack dispatch start")
 	if err := a.agent.EnsureSession(ctx, sessionID); err != nil {
 		log.Error().Err(err).Msg("slack ensure session")
-		a.postFailure(ctx, event)
+		a.postFailure(parent, event)
 		return
 	}
 	reply, err := a.agent.RunText(ctx, sessionID, event.Text)
 	if err != nil {
 		log.Error().Err(err).Msg("slack run agent")
-		a.postFailure(ctx, event)
+		a.postFailure(parent, event)
 		return
 	}
 	if reply == "" {
@@ -301,7 +312,9 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 }
 
 // postFailure posts a generic Slack failure without exposing internal details.
-func (a *Adapter) postFailure(ctx context.Context, event MessageEvent) {
+func (a *Adapter) postFailure(parent context.Context, event MessageEvent) {
+	ctx, cancel := context.WithTimeout(parent, slackFailurePostTimeout)
+	defer cancel()
 	if err := a.slack.PostMessage(ctx, event.Channel, ReplyThreadTS(event), "I hit an error running the agent. Check the gateway logs for details."); err != nil {
 		log.Error().Err(err).Msg("slack post failure")
 	}

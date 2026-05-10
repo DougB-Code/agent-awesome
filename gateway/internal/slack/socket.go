@@ -11,6 +11,20 @@ import (
 	"nhooyr.io/websocket"
 )
 
+// socketEnvelope is the Slack Socket Mode wrapper around Events API payloads.
+type socketEnvelope struct {
+	Type       string          `json:"type"`
+	EnvelopeID string          `json:"envelope_id"`
+	Payload    json.RawMessage `json:"payload"`
+	Reason     string          `json:"reason"`
+}
+
+// socketAck describes an acknowledgement that should be written to Slack.
+type socketAck struct {
+	EnvelopeID string
+	Required   bool
+}
+
 // RunSocketMode connects to Slack and receives Events API envelopes over WebSocket.
 func (a *Adapter) RunSocketMode(ctx context.Context) error {
 	if !a.SocketModeEnabled() {
@@ -57,37 +71,51 @@ func (a *Adapter) runSocketOnce(ctx context.Context) error {
 	}
 }
 
-// acceptSocketMessage acknowledges and dispatches one Socket Mode envelope.
+// acceptSocketMessage dispatches one Socket Mode envelope and acknowledges it.
 func (a *Adapter) acceptSocketMessage(ctx context.Context, conn *websocket.Conn, data []byte) error {
-	var envelope struct {
-		Type       string          `json:"type"`
-		EnvelopeID string          `json:"envelope_id"`
-		Payload    json.RawMessage `json:"payload"`
-		Reason     string          `json:"reason"`
-	}
-	if err := json.Unmarshal(data, &envelope); err != nil {
+	ack, err := a.processSocketEnvelope(data)
+	if err != nil {
 		return err
 	}
-	if envelope.EnvelopeID != "" {
-		ack, err := json.Marshal(map[string]string{"envelope_id": envelope.EnvelopeID})
-		if err != nil {
-			return err
-		}
-		if err := conn.Write(ctx, websocket.MessageText, ack); err != nil {
-			return err
-		}
+	if !ack.Required {
+		return nil
+	}
+	return writeSocketAck(ctx, conn, ack.EnvelopeID)
+}
+
+// processSocketEnvelope validates dispatch admission before requiring an ack.
+func (a *Adapter) processSocketEnvelope(data []byte) (socketAck, error) {
+	var envelope socketEnvelope
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return socketAck{}, err
 	}
 	switch envelope.Type {
 	case "hello":
 		log.Info().Msg("slack socket hello")
-		return nil
+		return socketAck{}, nil
 	case "disconnect":
-		return fmt.Errorf("Slack requested disconnect: %s", envelope.Reason)
+		return socketAck{}, fmt.Errorf("Slack requested disconnect: %s", envelope.Reason)
 	case "events_api":
 		log.Info().Msg("slack socket events_api envelope received")
-		_, err := a.AcceptEnvelope(envelope.Payload)
-		return err
+		if _, err := a.AcceptEnvelope(envelope.Payload); err != nil {
+			return socketAck{}, err
+		}
+		return socketAckFor(envelope.EnvelopeID), nil
 	default:
-		return nil
+		return socketAckFor(envelope.EnvelopeID), nil
 	}
+}
+
+// socketAckFor returns a Socket Mode ack descriptor for non-empty ids.
+func socketAckFor(envelopeID string) socketAck {
+	return socketAck{EnvelopeID: envelopeID, Required: envelopeID != ""}
+}
+
+// writeSocketAck sends one Socket Mode acknowledgement to Slack.
+func writeSocketAck(ctx context.Context, conn *websocket.Conn, envelopeID string) error {
+	ack, err := json.Marshal(map[string]string{"envelope_id": envelopeID})
+	if err != nil {
+		return err
+	}
+	return conn.Write(ctx, websocket.MessageText, ack)
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -187,6 +188,34 @@ func TestAcceptEnvelopeThrottlesConcurrentUserChannelDispatch(t *testing.T) {
 	close(release)
 }
 
+// TestAcceptEnvelopeDoesNotDeduplicateThrottledAttempt verifies Slack retries can dispatch after capacity frees.
+func TestAcceptEnvelopeDoesNotDeduplicateThrottledAttempt(t *testing.T) {
+	adapter := NewAdapter(Config{MaxConcurrentDispatches: 2})
+	started := make(chan string, 2)
+	releaseFirst := make(chan struct{})
+	adapter.dispatchMessage = func(_ context.Context, _ string, event MessageEvent) {
+		started <- event.TS
+		if event.TS == "1.0" {
+			<-releaseFirst
+		}
+	}
+	if _, err := adapter.AcceptEnvelope(slackEventBody("EvBusy", "1.0", "first")); err != nil {
+		t.Fatalf("AcceptEnvelope() first error = %v", err)
+	}
+	if ts := waitStartedTS(t, started); ts != "1.0" {
+		t.Fatalf("first dispatch TS = %q, want 1.0", ts)
+	}
+	throttledBody := slackEventBody("EvRetryAfterThrottle", "2.0", "second")
+	if _, err := adapter.AcceptEnvelope(throttledBody); !errors.Is(err, errSlackDispatchThrottled) {
+		t.Fatalf("AcceptEnvelope() throttled error = %v, want dispatch throttled", err)
+	}
+	close(releaseFirst)
+	waitAcceptedEnvelope(t, adapter, throttledBody)
+	if ts := waitStartedTS(t, started); ts != "2.0" {
+		t.Fatalf("retry dispatch TS = %q, want 2.0", ts)
+	}
+}
+
 // TestAcceptEnvelopeThrottlesGlobalConcurrentDispatch verifies fan-out stays bounded.
 func TestAcceptEnvelopeThrottlesGlobalConcurrentDispatch(t *testing.T) {
 	adapter := NewAdapter(Config{MaxConcurrentDispatches: 1})
@@ -221,6 +250,35 @@ func TestDistinctThreadRepliesAcceptedWithoutEventID(t *testing.T) {
 	second := waitDispatch(t, dispatched)
 	if first.TS == second.TS {
 		t.Fatalf("fallback dedupe collapsed distinct replies: first=%#v second=%#v", first, second)
+	}
+}
+
+// TestDispatchPostsFailureWithFreshContextAfterAgentTimeout verifies timeout errors still reach Slack.
+func TestDispatchPostsFailureWithFreshContextAfterAgentTimeout(t *testing.T) {
+	transport := &dispatchFailureTransport{postContextErrors: make(chan error, 1)}
+	adapter := NewAdapter(Config{
+		BotToken:       "xoxb-test",
+		HarnessBaseURL: "http://agent.test",
+		AppName:        "app",
+		AgentUserID:    "user",
+		RequestTimeout: 20 * time.Millisecond,
+	})
+	adapter.client.Transport = transport
+
+	adapter.dispatch(context.Background(), "T1", MessageEvent{
+		Channel: "C1",
+		User:    "U1",
+		Text:    "hello",
+		TS:      "1.0",
+	})
+
+	select {
+	case err := <-transport.postContextErrors:
+		if err != nil {
+			t.Fatalf("failure post context error = %v, want fresh active context", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for Slack failure post")
 	}
 }
 
@@ -276,6 +334,36 @@ func waitDispatch(t *testing.T, dispatched <-chan MessageEvent) MessageEvent {
 	}
 }
 
+// waitAcceptedEnvelope retries admission until the active dispatch releases.
+func waitAcceptedEnvelope(t *testing.T, adapter *Adapter, body []byte) {
+	t.Helper()
+	deadline := time.After(time.Second)
+	for {
+		if _, err := adapter.AcceptEnvelope(body); err == nil {
+			return
+		} else if !errors.Is(err, errSlackDispatchThrottled) {
+			t.Fatalf("AcceptEnvelope() retry error = %v, want nil or throttled", err)
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("timed out waiting for Slack retry admission")
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+}
+
+// waitStartedTS returns the next dispatch timestamp from a blocking test double.
+func waitStartedTS(t *testing.T, started <-chan string) string {
+	t.Helper()
+	select {
+	case ts := <-started:
+		return ts
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for Slack dispatch start")
+		return ""
+	}
+}
+
 // assertNoDispatch verifies no additional event was dispatched.
 func assertNoDispatch(t *testing.T, dispatched <-chan MessageEvent) {
 	t.Helper()
@@ -283,5 +371,36 @@ func assertNoDispatch(t *testing.T, dispatched <-chan MessageEvent) {
 	case event := <-dispatched:
 		t.Fatalf("unexpected Slack dispatch: %#v", event)
 	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+// dispatchFailureTransport simulates an agent timeout and records Slack failure posts.
+type dispatchFailureTransport struct {
+	postContextErrors chan error
+}
+
+// RoundTrip responds to agent session checks, times out runs, and records Slack posts.
+func (t *dispatchFailureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	switch req.URL.Host {
+	case "agent.test":
+		if req.URL.Path == "/run_sse" {
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		}
+		return testHTTPResponse(http.StatusOK, `{}`), nil
+	case "slack.com":
+		t.postContextErrors <- req.Context().Err()
+		return testHTTPResponse(http.StatusOK, `{"ok":true}`), nil
+	default:
+		return testHTTPResponse(http.StatusNotFound, `{"ok":false}`), nil
+	}
+}
+
+// testHTTPResponse creates a minimal HTTP response for fake transports.
+func testHTTPResponse(status int, body string) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Header:     make(http.Header),
+		Body:       io.NopCloser(strings.NewReader(body)),
 	}
 }
