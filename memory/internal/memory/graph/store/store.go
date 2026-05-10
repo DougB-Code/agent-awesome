@@ -15,6 +15,7 @@ import (
 
 	graph "memory/internal/memory/graph/domain"
 	"memory/internal/memory/id"
+	"memory/internal/memory/normalize"
 
 	_ "modernc.org/sqlite"
 )
@@ -236,7 +237,7 @@ func (s *Store) SetNodeStatus(ctx context.Context, nodeID graph.NodeID, status g
 	if !graph.ValidLifecycleStatus(status) {
 		return graph.Node{}, fmt.Errorf("invalid node status %q", status)
 	}
-	actor = defaultString(actor, "agent")
+	actor = normalize.Default(actor, "agent")
 	result, err := s.runner.ExecContext(ctx, `UPDATE graph_nodes SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), nodeID)
 	if err != nil {
 		return graph.Node{}, fmt.Errorf("set graph node status: %w", err)
@@ -330,7 +331,7 @@ func (s *Store) SetEdgeStatus(ctx context.Context, edgeID graph.EdgeID, status g
 	if !graph.ValidLifecycleStatus(status) {
 		return graph.Edge{}, fmt.Errorf("invalid edge status %q", status)
 	}
-	actor = defaultString(actor, "agent")
+	actor = normalize.Default(actor, "agent")
 	result, err := s.runner.ExecContext(ctx, `UPDATE graph_edges SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), edgeID)
 	if err != nil {
 		return graph.Edge{}, fmt.Errorf("set graph edge status: %w", err)
@@ -1374,15 +1375,6 @@ func parseTime(value string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("parse graph time %q: %w", value, err)
 	}
 	return parsed, nil
-}
-
-// defaultString trims a value and substitutes a fallback when blank.
-func defaultString(value string, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fallback
-	}
-	return value
 }
 
 // newNodeID creates a graph node identifier.

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"memory/internal/memory/normalize"
 )
 
 // defaultTaskFollowUpDelay keeps inbox tasks from aging silently forever.
@@ -12,7 +14,7 @@ const defaultTaskFollowUpDelay = 7 * 24 * time.Hour
 
 // NormalizeCreateTaskRequest fills defaults and validates task creation.
 func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, "user")
 	req.Title = strings.TrimSpace(req.Title)
 	if req.Title == "" {
 		return req, errors.New("title is required")
@@ -55,7 +57,7 @@ func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error
 
 // NormalizeUpdateTaskRequest fills defaults and validates task patches.
 func NormalizeUpdateTaskRequest(req UpdateTaskRequest) (UpdateTaskRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, "user")
 	if req.TaskID == "" {
 		return req, errors.New("task_id is required")
 	}
@@ -118,13 +120,11 @@ func NormalizeTaskQuery(q TaskQuery) (TaskQuery, error) {
 
 // NormalizeTaskRelationQuery fills safe defaults and validates edge filters.
 func NormalizeTaskRelationQuery(q TaskRelationQuery) (TaskRelationQuery, error) {
-	q.Direction = strings.ToLower(strings.TrimSpace(q.Direction))
+	q.Direction = normalize.Key(q.Direction)
 	if q.Direction == "" {
 		q.Direction = "outgoing"
 	}
-	switch q.Direction {
-	case "outgoing", "incoming", "either":
-	default:
+	if !containsVocabularyValue(TaskRelationDirectionStrings(), q.Direction) {
 		return q, fmt.Errorf("invalid task relation direction %q", q.Direction)
 	}
 	for _, relation := range q.Types {
@@ -143,13 +143,11 @@ func NormalizeTaskRelationTraversalQuery(q TaskRelationTraversalQuery) (TaskRela
 	if q.RootTaskID == "" {
 		return q, errors.New("root_task_id is required")
 	}
-	q.Direction = strings.ToLower(strings.TrimSpace(q.Direction))
+	q.Direction = normalize.Key(q.Direction)
 	if q.Direction == "" {
 		q.Direction = "outgoing"
 	}
-	switch q.Direction {
-	case "outgoing", "incoming", "either":
-	default:
+	if !containsVocabularyValue(TaskRelationDirectionStrings(), q.Direction) {
 		return q, fmt.Errorf("invalid task relation direction %q", q.Direction)
 	}
 	for _, relation := range q.Types {
@@ -168,7 +166,7 @@ func NormalizeTaskRelationTraversalQuery(q TaskRelationTraversalQuery) (TaskRela
 
 // NormalizeTaskIDRequest validates a request for one task.
 func NormalizeTaskIDRequest(req TaskIDRequest) (TaskIDRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, "user")
 	if req.TaskID == "" {
 		return req, errors.New("task_id is required")
 	}
@@ -177,7 +175,7 @@ func NormalizeTaskIDRequest(req TaskIDRequest) (TaskIDRequest, error) {
 
 // NormalizeUpsertTaskRelationRequest validates one task relationship edge.
 func NormalizeUpsertTaskRelationRequest(req UpsertTaskRelationRequest) (UpsertTaskRelationRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, "user")
 	req.Note = strings.TrimSpace(req.Note)
 	if req.FromTaskID == "" {
 		return req, errors.New("from_task_id is required")
@@ -205,7 +203,7 @@ func NormalizeUpsertTaskRelationRequest(req UpsertTaskRelationRequest) (UpsertTa
 
 // NormalizeDeleteTaskRelationRequest validates relation deletion.
 func NormalizeDeleteTaskRelationRequest(req DeleteTaskRelationRequest) (DeleteTaskRelationRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, "user")
 	if req.RelationID == "" {
 		return req, errors.New("relation_id is required")
 	}
@@ -241,42 +239,22 @@ func NormalizeMemoryLinkRequest(req MemoryLinkRequest) (MemoryLinkRequest, error
 
 // ValidTaskStatus reports whether status is in the controlled vocabulary.
 func ValidTaskStatus(status TaskStatus) bool {
-	switch status {
-	case TaskStatusBlocked, TaskStatusCanceled, TaskStatusDone, TaskStatusOpen, TaskStatusWaiting:
-		return true
-	default:
-		return false
-	}
+	return containsVocabularyValue(TaskStatuses(), status)
 }
 
 // ValidTaskPriority reports whether priority is in the controlled vocabulary.
 func ValidTaskPriority(priority TaskPriority) bool {
-	switch priority {
-	case TaskPriorityHigh, TaskPriorityLow, TaskPriorityNormal, TaskPriorityUrgent:
-		return true
-	default:
-		return false
-	}
+	return containsVocabularyValue(TaskPriorities(), priority)
 }
 
 // ValidTaskMemoryRelationship reports whether relationship is controlled.
 func ValidTaskMemoryRelationship(relationship TaskMemoryRelationship) bool {
-	switch relationship {
-	case TaskMemoryContext, TaskMemoryOriginatedFrom, TaskMemoryRelated, TaskMemorySupporting:
-		return true
-	default:
-		return false
-	}
+	return containsVocabularyValue(TaskMemoryRelationships(), relationship)
 }
 
 // ValidTaskRelationType reports whether relation is controlled.
 func ValidTaskRelationType(relation TaskRelationType) bool {
-	switch relation {
-	case TaskRelationBlocks, TaskRelationDependsOn, TaskRelationEnables, TaskRelationPartOf, TaskRelationRelated:
-		return true
-	default:
-		return false
-	}
+	return containsVocabularyValue(TaskRelationTypes(), relation)
 }
 
 // TerminalTaskStatus reports whether status means no further work is expected.
@@ -286,21 +264,13 @@ func TerminalTaskStatus(status TaskStatus) bool {
 
 // validateTaskMetadata checks numeric task scores.
 func validateTaskMetadata(estimate int, effort float64, value float64, urgency float64, risk float64, confidence float64) error {
-	if estimate < 0 {
-		return errors.New("estimate_minutes must be zero or greater")
-	}
-	for label, score := range map[string]float64{
+	return validateTaskMetadataValues(estimate, map[string]float64{
 		"effort":     effort,
 		"value":      value,
 		"urgency":    urgency,
 		"risk":       risk,
 		"confidence": confidence,
-	} {
-		if score < 0 || score > 1 {
-			return fmt.Errorf("%s must be between 0 and 1", label)
-		}
-	}
-	return nil
+	})
 }
 
 // validateTaskMetadataPointers checks optional numeric task scores.
@@ -308,6 +278,7 @@ func validateTaskMetadataPointers(estimate *int, effort *float64, value *float64
 	if estimate != nil && *estimate < 0 {
 		return errors.New("estimate_minutes must be zero or greater")
 	}
+	scores := map[string]float64{}
 	for label, score := range map[string]*float64{
 		"effort":     effort,
 		"value":      value,
@@ -315,7 +286,25 @@ func validateTaskMetadataPointers(estimate *int, effort *float64, value *float64
 		"risk":       risk,
 		"confidence": confidence,
 	} {
-		if score != nil && (*score < 0 || *score > 1) {
+		if score != nil {
+			scores[label] = *score
+		}
+	}
+	return validateScoreValues(scores)
+}
+
+// validateTaskMetadataValues checks required numeric task scores.
+func validateTaskMetadataValues(estimate int, scores map[string]float64) error {
+	if estimate < 0 {
+		return errors.New("estimate_minutes must be zero or greater")
+	}
+	return validateScoreValues(scores)
+}
+
+// validateScoreValues verifies normalized score bounds.
+func validateScoreValues(scores map[string]float64) error {
+	for label, score := range scores {
+		if score < 0 || score > 1 {
 			return fmt.Errorf("%s must be between 0 and 1", label)
 		}
 	}

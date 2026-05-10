@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -108,8 +109,8 @@ func (r *Repository) captureNormalized(ctx context.Context, req domain.CaptureRe
 		StableKey:   evidenceStableKey(req.IdempotencyKey),
 		Title:       req.Title,
 		Summary:     summary,
-		Scope:       toGraphScope(req.Scope),
-		Sensitivity: toGraphSensitivity(req.Sensitivity),
+		Scope:       req.Scope,
+		Sensitivity: req.Sensitivity,
 		TrustLevel:  graph.TrustSourceOriginal,
 		Actor:       req.Actor,
 	})
@@ -132,9 +133,9 @@ func (r *Repository) captureNormalized(ctx context.Context, req domain.CaptureRe
 		StableKey:   memoryStableKey(req.IdempotencyKey),
 		Title:       req.Title,
 		Summary:     summary,
-		Scope:       toGraphScope(req.Scope),
-		Sensitivity: toGraphSensitivity(req.Sensitivity),
-		TrustLevel:  toGraphTrust(req.TrustLevel),
+		Scope:       req.Scope,
+		Sensitivity: req.Sensitivity,
+		TrustLevel:  req.TrustLevel,
 		Actor:       req.Actor,
 	})
 	if err != nil {
@@ -186,8 +187,8 @@ func (r *Repository) Search(ctx context.Context, q domain.RetrievalQuery) ([]dom
 	nodes, err := r.graph.SearchNodes(ctx, graph.SearchNodesQuery{
 		Text:                 q.Text,
 		Kinds:                []graph.NodeKind{graph.KindMemory},
-		Scope:                toGraphScope(q.Scope),
-		AllowedSensitivities: toGraphSensitivities(q.AllowedSensitivities),
+		Scope:                q.Scope,
+		AllowedSensitivities: q.AllowedSensitivities,
 		Limit:                searchCandidateLimit,
 	})
 	if err != nil {
@@ -247,9 +248,9 @@ func (r *Repository) GetMemory(ctx context.Context, memoryID domain.MemoryID) (d
 		ID:          domain.MemoryID(node.ID),
 		EvidenceID:  domain.EvidenceID(evidence.ID),
 		Kind:        domain.Kind(propertyText(properties[propertyMemoryKind], string(domain.KindDocument))),
-		Scope:       fromGraphScope(node.Scope),
-		TrustLevel:  fromGraphTrust(node.TrustLevel),
-		Sensitivity: fromGraphSensitivity(node.Sensitivity),
+		Scope:       node.Scope,
+		TrustLevel:  node.TrustLevel,
+		Sensitivity: node.Sensitivity,
 		Status:      fromGraphStatus(node.Status),
 		Title:       node.Title,
 		Summary:     node.Summary,
@@ -319,10 +320,10 @@ func (r *Repository) RepairMemory(ctx context.Context, req domain.RepairRequest)
 		StableKey:   existingNode.StableKey,
 		Title:       title,
 		Summary:     summary,
-		Status:      toGraphStatus(status),
-		Scope:       toGraphScope(record.Scope),
-		Sensitivity: toGraphSensitivity(sensitivity),
-		TrustLevel:  toGraphTrust(record.TrustLevel),
+		Status:      status,
+		Scope:       record.Scope,
+		Sensitivity: sensitivity,
+		TrustLevel:  record.TrustLevel,
 		Actor:       req.Actor,
 	})
 	if err != nil {
@@ -438,7 +439,7 @@ func (r *Repository) RefreshCompiledPage(ctx context.Context, req domain.Refresh
 		StableKey: pageStableKey(req.Kind, req.Scope, title),
 		Title:     title,
 		Summary:   excerpt(content, 280),
-		Scope:     toGraphScope(req.Scope),
+		Scope:     req.Scope,
 		Actor:     req.Actor,
 	})
 	if err != nil {
@@ -769,7 +770,7 @@ func (r *Repository) memoryRelationships(ctx context.Context, nodeID graph.NodeI
 			Type:       fromGraphRelationship(edge.Type),
 			ToID:       string(edge.ToNodeID),
 			SourceID:   domain.EvidenceID(edge.SourceNodeID),
-			TrustLevel: fromGraphTrust(edge.TrustLevel),
+			TrustLevel: edge.TrustLevel,
 			CreatedAt:  edge.CreatedAt,
 		})
 	}
@@ -778,16 +779,16 @@ func (r *Repository) memoryRelationships(ctx context.Context, nodeID graph.NodeI
 
 // recordMatches applies filters not handled by graph FTS.
 func recordMatches(record domain.MemoryRecord, q domain.RetrievalQuery) bool {
-	if len(q.Kinds) > 0 && !containsKind(q.Kinds, record.Kind) {
+	if len(q.Kinds) > 0 && !slices.Contains(q.Kinds, record.Kind) {
 		return false
 	}
 	for _, topic := range q.Topics {
-		if !containsString(record.Topics, topic) {
+		if !slices.Contains(record.Topics, topic) {
 			return false
 		}
 	}
 	for _, entityID := range q.EntityIDs {
-		if !containsEntityID(record.EntityIDs, entityID) {
+		if !slices.Contains(record.EntityIDs, entityID) {
 			return false
 		}
 	}
@@ -863,53 +864,26 @@ func propertyText(property graph.NodeProperty, fallback string) string {
 
 // evidenceStableKey returns an idempotent evidence stable key when available.
 func evidenceStableKey(key string) string {
-	if strings.TrimSpace(key) == "" {
-		return ""
-	}
-	return "evidence:idempotency:" + strings.TrimSpace(key)
+	return idempotencyStableKey("evidence", key)
 }
 
 // memoryStableKey returns an idempotent memory stable key when available.
 func memoryStableKey(key string) string {
-	if strings.TrimSpace(key) == "" {
+	return idempotencyStableKey("memory", key)
+}
+
+// idempotencyStableKey returns a namespaced stable key when idempotency is present.
+func idempotencyStableKey(prefix string, key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
 		return ""
 	}
-	return "memory:idempotency:" + strings.TrimSpace(key)
+	return prefix + ":idempotency:" + key
 }
 
 // pageStableKey returns a deterministic compiled page stable key.
 func pageStableKey(kind domain.Kind, scope domain.Scope, title string) string {
 	return fmt.Sprintf("page:%s:%s:%s", kind, scope, strings.ToLower(strings.TrimSpace(title)))
-}
-
-// containsKind reports whether kind is present.
-func containsKind(values []domain.Kind, kind domain.Kind) bool {
-	for _, value := range values {
-		if value == kind {
-			return true
-		}
-	}
-	return false
-}
-
-// containsString reports whether value is present.
-func containsString(values []string, value string) bool {
-	for _, candidate := range values {
-		if candidate == value {
-			return true
-		}
-	}
-	return false
-}
-
-// containsEntityID reports whether id is present.
-func containsEntityID(values []domain.EntityID, id domain.EntityID) bool {
-	for _, value := range values {
-		if value == id {
-			return true
-		}
-	}
-	return false
 }
 
 // excerpt returns a compact deterministic summary.

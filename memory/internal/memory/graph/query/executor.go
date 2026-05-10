@@ -12,6 +12,7 @@ import (
 	"memory/internal/memory/domain"
 	graph "memory/internal/memory/graph/domain"
 	graphstore "memory/internal/memory/graph/store"
+	"memory/internal/memory/normalize"
 )
 
 const maxTraversalCandidates = 1000
@@ -88,17 +89,16 @@ func mutationContextFromRequest(stmt Statement, req domain.GraphQueryRequest, ra
 	return mutationContext{actor: req.Actor, source: graph.NodeID(req.SourceNodeID)}, nil
 }
 
-// graphQueryAccessPolicyFromRequest converts public request policy into graph vocabulary.
+// graphQueryAccessPolicyFromRequest builds graph read policy from public request metadata.
 func graphQueryAccessPolicyFromRequest(req domain.GraphQueryRequest) graphQueryAccessPolicy {
 	allowed := make([]graph.Sensitivity, 0, len(req.AllowedSensitivities))
 	allowedSet := map[graph.Sensitivity]bool{}
 	for _, sensitivity := range req.AllowedSensitivities {
-		graphSensitivity := graph.Sensitivity(sensitivity)
-		allowed = append(allowed, graphSensitivity)
-		allowedSet[graphSensitivity] = true
+		allowed = append(allowed, sensitivity)
+		allowedSet[sensitivity] = true
 	}
 	return graphQueryAccessPolicy{
-		scope:                 graph.Scope(req.Scope),
+		scope:                 req.Scope,
 		allowedSensitivities:  allowed,
 		allowedSensitivitySet: allowedSet,
 	}
@@ -714,11 +714,7 @@ type edgeMutationCandidate struct {
 
 // row returns selected fields for one edge mutation result.
 func (c edgeMutationCandidate) row(fields []string) domain.GraphQueryRow {
-	row := domain.GraphQueryRow{}
-	for _, field := range fields {
-		row[field] = c.typedField(field)
-	}
-	return row
+	return projectorRow(c, fields)
 }
 
 // typedField returns a JSON-friendly value for one edge mutation field.
@@ -743,21 +739,12 @@ type matchCandidate struct {
 
 // matches reports whether a match candidate satisfies every condition.
 func (c matchCandidate) matches(conditions []Condition) bool {
-	for _, condition := range conditions {
-		if !conditionMatches(condition, c.typedField(condition.Field)) {
-			return false
-		}
-	}
-	return true
+	return projectorMatches(c, conditions)
 }
 
 // row returns selected fields for one match candidate.
 func (c matchCandidate) row(fields []string) domain.GraphQueryRow {
-	row := domain.GraphQueryRow{}
-	for _, field := range fields {
-		row[field] = c.typedField(field)
-	}
-	return row
+	return projectorRow(c, fields)
 }
 
 // path returns graph path metadata associated with one match row.
@@ -875,6 +862,25 @@ type graphQueryProjector interface {
 	typedField(string) any
 }
 
+// projectorMatches reports whether a projected candidate satisfies every condition.
+func projectorMatches(candidate graphQueryProjector, conditions []Condition) bool {
+	for _, condition := range conditions {
+		if !conditionMatches(condition, candidate.typedField(condition.Field)) {
+			return false
+		}
+	}
+	return true
+}
+
+// projectorRow returns selected fields for one projected candidate.
+func projectorRow(candidate graphQueryProjector, fields []string) domain.GraphQueryRow {
+	row := domain.GraphQueryRow{}
+	for _, field := range fields {
+		row[field] = candidate.typedField(field)
+	}
+	return row
+}
+
 // groupAccumulator stores one aggregate bucket.
 type groupAccumulator struct {
 	value any
@@ -941,8 +947,8 @@ func compareRowValues(left any, right any) int {
 			return compareTimes(leftTime, rightTime)
 		}
 	}
-	leftNumber, leftNumeric := numericRowValue(left)
-	rightNumber, rightNumeric := numericRowValue(right)
+	leftNumber, leftNumeric := numericValue(left, false)
+	rightNumber, rightNumeric := numericValue(right, false)
 	if leftNumeric && rightNumeric {
 		switch {
 		case leftNumber < rightNumber:
@@ -954,20 +960,6 @@ func compareRowValues(left any, right any) int {
 		}
 	}
 	return strings.Compare(strings.ToLower(comparableString(left)), strings.ToLower(comparableString(right)))
-}
-
-// numericRowValue extracts numeric row values for aggregate ordering.
-func numericRowValue(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case int:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	case float64:
-		return typed, true
-	default:
-		return 0, false
-	}
 }
 
 // limitRows applies the validated row limit to aggregate output.
@@ -1004,21 +996,12 @@ type queryCandidate struct {
 
 // matches reports whether candidate satisfies every condition.
 func (c queryCandidate) matches(conditions []Condition) bool {
-	for _, condition := range conditions {
-		if !conditionMatches(condition, c.typedField(condition.Field)) {
-			return false
-		}
-	}
-	return true
+	return projectorMatches(c, conditions)
 }
 
 // row returns selected fields for one candidate.
 func (c queryCandidate) row(fields []string) domain.GraphQueryRow {
-	row := domain.GraphQueryRow{}
-	for _, field := range fields {
-		row[field] = c.typedField(field)
-	}
-	return row
+	return projectorRow(c, fields)
 }
 
 // typedField returns a JSON-friendly value for one field.
@@ -1132,18 +1115,19 @@ func pathTypedField(nodeIDs []graph.NodeID, edgeIDs []graph.EdgeID, field string
 
 // graphNodeIDStrings returns string IDs for node path metadata.
 func graphNodeIDStrings(nodeIDs []graph.NodeID) []string {
-	values := make([]string, 0, len(nodeIDs))
-	for _, nodeID := range nodeIDs {
-		values = append(values, string(nodeID))
-	}
-	return values
+	return graphIDStrings(nodeIDs)
 }
 
 // graphEdgeIDStrings returns string IDs for edge path metadata.
 func graphEdgeIDStrings(edgeIDs []graph.EdgeID) []string {
-	values := make([]string, 0, len(edgeIDs))
-	for _, edgeID := range edgeIDs {
-		values = append(values, string(edgeID))
+	return graphIDStrings(edgeIDs)
+}
+
+// graphIDStrings returns string IDs for typed graph identifiers.
+func graphIDStrings[T ~string](ids []T) []string {
+	values := make([]string, 0, len(ids))
+	for _, id := range ids {
+		values = append(values, string(id))
 	}
 	return values
 }
@@ -1209,8 +1193,8 @@ func compareConditionValues(actual any, expected string) int {
 			return compareTimes(left, right)
 		}
 	}
-	if left, ok := numericConditionValue(actual); ok {
-		if right, ok := parseConditionNumber(expected); ok {
+	if left, ok := numericValue(actual, true); ok {
+		if right, ok := numericValue(expected, true); ok {
 			return compareNumbers(left, right)
 		}
 	}
@@ -1236,14 +1220,7 @@ func timeConditionValue(value any) (time.Time, bool) {
 
 // parseConditionTime parses graph query time literals.
 func parseConditionTime(value string) (time.Time, bool) {
-	value = strings.TrimSpace(value)
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		parsed, err := time.Parse(layout, value)
-		if err == nil {
-			return parsed.UTC(), true
-		}
-	}
-	return time.Time{}, false
+	return normalize.ParseFlexibleTime(value)
 }
 
 // compareTimes compares two timestamp values.
@@ -1258,8 +1235,8 @@ func compareTimes(left time.Time, right time.Time) int {
 	}
 }
 
-// numericConditionValue extracts a comparable number from a field value.
-func numericConditionValue(value any) (float64, bool) {
+// numericValue extracts numeric values, optionally parsing strings.
+func numericValue(value any, parseStrings bool) (float64, bool) {
 	switch typed := value.(type) {
 	case int:
 		return float64(typed), true
@@ -1268,16 +1245,14 @@ func numericConditionValue(value any) (float64, bool) {
 	case float64:
 		return typed, true
 	case string:
-		return parseConditionNumber(typed)
+		if !parseStrings {
+			return 0, false
+		}
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		return parsed, err == nil
 	default:
 		return 0, false
 	}
-}
-
-// parseConditionNumber parses query number literals.
-func parseConditionNumber(value string) (float64, bool) {
-	parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
-	return parsed, err == nil
 }
 
 // compareNumbers compares two numeric values.

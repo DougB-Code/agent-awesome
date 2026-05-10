@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"memory/internal/memory/normalize"
+	"memory/internal/memory/vocabulary"
 )
 
 // NormalizeCaptureRequest fills conservative defaults and validates a write.
@@ -12,8 +15,8 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 	if req.Content == "" {
 		return req, errors.New("content is required")
 	}
-	req.Actor = normalizeDefault(req.Actor, "agent")
-	req.MediaType = normalizeDefault(req.MediaType, "text/plain; charset=utf-8")
+	req.Actor = normalize.Default(req.Actor, "agent")
+	req.MediaType = normalize.Default(req.MediaType, "text/plain; charset=utf-8")
 	req.Title = strings.TrimSpace(req.Title)
 	if req.Title == "" {
 		req.Title = "Untitled memory"
@@ -25,21 +28,15 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 	if !ValidKind(req.Kind) {
 		return req, fmt.Errorf("invalid kind %q", req.Kind)
 	}
-	if req.Scope == "" {
-		req.Scope = ScopeUser
-	}
+	req.Scope = vocabulary.DefaultScope(req.Scope)
 	if !ValidScope(req.Scope) {
 		return req, fmt.Errorf("invalid scope %q", req.Scope)
 	}
-	if req.TrustLevel == "" {
-		req.TrustLevel = TrustSourceOriginal
-	}
+	req.TrustLevel = vocabulary.DefaultTrustLevel(req.TrustLevel, TrustSourceOriginal)
 	if !ValidTrustLevel(req.TrustLevel) {
 		return req, fmt.Errorf("invalid trust level %q", req.TrustLevel)
 	}
-	if req.Sensitivity == "" {
-		req.Sensitivity = SensitivityPrivate
-	}
+	req.Sensitivity = vocabulary.DefaultSensitivity(req.Sensitivity)
 	if !ValidSensitivity(req.Sensitivity) {
 		return req, fmt.Errorf("invalid sensitivity %q", req.Sensitivity)
 	}
@@ -51,10 +48,8 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 
 // NormalizeRetrievalQuery fills safe retrieval defaults and validates filters.
 func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
-	q.Actor = normalizeDefault(q.Actor, "agent")
-	if q.Scope == "" {
-		q.Scope = ScopeUser
-	}
+	q.Actor = normalize.Default(q.Actor, "agent")
+	q.Scope = vocabulary.DefaultScope(q.Scope)
 	if !ValidScope(q.Scope) {
 		return q, fmt.Errorf("invalid scope %q", q.Scope)
 	}
@@ -80,7 +75,7 @@ func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
 
 // NormalizeRepairRequest validates a memory repair request.
 func NormalizeRepairRequest(req RepairRequest) (RepairRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, "agent")
 	if req.MemoryID == "" {
 		return req, errors.New("memory_id is required")
 	}
@@ -101,7 +96,7 @@ func NormalizeRepairRequest(req RepairRequest) (RepairRequest, error) {
 
 // NormalizeCorrectionRequest validates a user correction.
 func NormalizeCorrectionRequest(req CorrectionRequest) (CorrectionRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, "agent")
 	req.Text = strings.TrimSpace(req.Text)
 	if req.MemoryID == "" {
 		return req, errors.New("memory_id is required")
@@ -109,9 +104,7 @@ func NormalizeCorrectionRequest(req CorrectionRequest) (CorrectionRequest, error
 	if req.Text == "" {
 		return req, errors.New("correction text is required")
 	}
-	if req.Scope == "" {
-		req.Scope = ScopeUser
-	}
+	req.Scope = vocabulary.DefaultScope(req.Scope)
 	if !ValidScope(req.Scope) {
 		return req, fmt.Errorf("invalid scope %q", req.Scope)
 	}
@@ -120,16 +113,14 @@ func NormalizeCorrectionRequest(req CorrectionRequest) (CorrectionRequest, error
 
 // NormalizeRefreshPageRequest validates a compiled page refresh request.
 func NormalizeRefreshPageRequest(req RefreshPageRequest) (RefreshPageRequest, error) {
-	req.Actor = normalizeDefault(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, "agent")
 	if req.Kind == "" {
 		req.Kind = KindEntityPage
 	}
 	if req.Kind != KindEntityPage && req.Kind != KindTimeline {
 		return req, fmt.Errorf("unsupported page kind %q", req.Kind)
 	}
-	if req.Scope == "" {
-		req.Scope = ScopeUser
-	}
+	req.Scope = vocabulary.DefaultScope(req.Scope)
 	if !ValidScope(req.Scope) {
 		return req, fmt.Errorf("invalid scope %q", req.Scope)
 	}
@@ -143,87 +134,35 @@ func NormalizeRefreshPageRequest(req RefreshPageRequest) (RefreshPageRequest, er
 
 // NormalizeStrings trims, lowercases, deduplicates, and removes blanks.
 func NormalizeStrings(values []string) []string {
-	seen := make(map[string]struct{}, len(values))
-	normalized := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.ToLower(strings.TrimSpace(value))
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		normalized = append(normalized, value)
-	}
-	return normalized
+	return normalize.LowerUnique(values)
 }
 
 // ValidKind reports whether kind is in the controlled vocabulary.
 func ValidKind(kind Kind) bool {
-	switch kind {
-	case KindConversation, KindDocument, KindToolOutput, KindArtifact, KindSummary, KindEntityPage, KindTimeline, KindProfileFact:
-		return true
-	default:
-		return false
-	}
+	return containsVocabularyValue(Kinds(), kind)
 }
 
 // ValidScope reports whether scope is in the controlled vocabulary.
 func ValidScope(scope Scope) bool {
-	switch scope {
-	case ScopeSession, ScopeUser, ScopeHousehold, ScopeTenant, ScopeProject, ScopeGlobal:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidScope(scope)
 }
 
 // ValidTrustLevel reports whether level is in the controlled vocabulary.
 func ValidTrustLevel(level TrustLevel) bool {
-	switch level {
-	case TrustSourceOriginal, TrustUserAsserted, TrustModelExtracted, TrustModelSynthesized, TrustExternallyVerified:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidTrustLevel(level)
 }
 
 // ValidSensitivity reports whether sensitivity is in the controlled vocabulary.
 func ValidSensitivity(sensitivity Sensitivity) bool {
-	switch sensitivity {
-	case SensitivityPublic, SensitivityInternal, SensitivityPrivate, SensitivityRestricted:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidSensitivity(sensitivity)
 }
 
-// ValidStatus reports whether status is in the controlled vocabulary.
+// ValidStatus reports whether status is in the memory lifecycle vocabulary.
 func ValidStatus(status Status) bool {
-	switch status {
-	case StatusActive, StatusSuperseded, StatusDeprecated, StatusArchived:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidMemoryStatus(status)
 }
 
 // ValidRelationshipType reports whether relationship type is controlled.
 func ValidRelationshipType(rel RelationshipType) bool {
-	switch rel {
-	case RelationshipGeneratedBy, RelationshipRefersTo, RelationshipSupersedes, RelationshipContradicts, RelationshipDuplicates, RelationshipRelatedToEvent:
-		return true
-	default:
-		return false
-	}
-}
-
-// normalizeDefault trims a value and substitutes a default when blank.
-func normalizeDefault(value string, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fallback
-	}
-	return value
+	return containsVocabularyValue(RelationshipTypes(), rel)
 }

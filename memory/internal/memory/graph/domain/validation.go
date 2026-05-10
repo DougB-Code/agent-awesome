@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"memory/internal/memory/normalize"
+	"memory/internal/memory/vocabulary"
 )
 
 // NormalizeUpsertNodeRequest validates and defaults a node write.
@@ -11,23 +14,23 @@ func NormalizeUpsertNodeRequest(req UpsertNodeRequest) (UpsertNodeRequest, error
 	req.StableKey = strings.TrimSpace(req.StableKey)
 	req.Title = strings.TrimSpace(req.Title)
 	req.Summary = strings.TrimSpace(req.Summary)
-	req.Actor = defaultString(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, "agent")
 	if !ValidNodeKind(req.Kind) {
 		return req, fmt.Errorf("invalid node kind %q", req.Kind)
 	}
-	req.Status = defaultStatus(req.Status)
+	req.Status = vocabulary.DefaultLifecycleStatus(req.Status)
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid node status %q", req.Status)
 	}
-	req.Scope = defaultScope(req.Scope)
+	req.Scope = vocabulary.DefaultScope(req.Scope)
 	if !ValidScope(req.Scope) {
 		return req, fmt.Errorf("invalid scope %q", req.Scope)
 	}
-	req.Sensitivity = defaultSensitivity(req.Sensitivity)
+	req.Sensitivity = vocabulary.DefaultSensitivity(req.Sensitivity)
 	if !ValidSensitivity(req.Sensitivity) {
 		return req, fmt.Errorf("invalid sensitivity %q", req.Sensitivity)
 	}
-	req.TrustLevel = defaultTrustLevel(req.TrustLevel)
+	req.TrustLevel = vocabulary.DefaultTrustLevel(req.TrustLevel, TrustUserAsserted)
 	if !ValidTrustLevel(req.TrustLevel) {
 		return req, fmt.Errorf("invalid trust level %q", req.TrustLevel)
 	}
@@ -37,7 +40,7 @@ func NormalizeUpsertNodeRequest(req UpsertNodeRequest) (UpsertNodeRequest, error
 
 // NormalizeUpsertEdgeRequest validates and defaults an edge write.
 func NormalizeUpsertEdgeRequest(req UpsertEdgeRequest) (UpsertEdgeRequest, error) {
-	req.Actor = defaultString(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, "agent")
 	if req.FromNodeID == "" {
 		return req, errors.New("from_node_id is required")
 	}
@@ -47,11 +50,11 @@ func NormalizeUpsertEdgeRequest(req UpsertEdgeRequest) (UpsertEdgeRequest, error
 	if !ValidRelationType(req.Type) {
 		return req, fmt.Errorf("invalid relation type %q", req.Type)
 	}
-	req.Status = defaultStatus(req.Status)
+	req.Status = vocabulary.DefaultLifecycleStatus(req.Status)
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid edge status %q", req.Status)
 	}
-	req.TrustLevel = defaultTrustLevel(req.TrustLevel)
+	req.TrustLevel = vocabulary.DefaultTrustLevel(req.TrustLevel, TrustUserAsserted)
 	if !ValidTrustLevel(req.TrustLevel) {
 		return req, fmt.Errorf("invalid trust level %q", req.TrustLevel)
 	}
@@ -64,7 +67,7 @@ func NormalizeUpsertNodePropertyRequest(req UpsertNodePropertyRequest) (UpsertNo
 	if req.NodeID == "" {
 		return req, errors.New("node_id is required")
 	}
-	req.Key = normalizeKey(req.Key)
+	req.Key = normalize.Key(req.Key)
 	if req.Key == "" {
 		return req, errors.New("property key is required")
 	}
@@ -76,16 +79,16 @@ func NormalizeUpsertEdgePropertyRequest(req UpsertEdgePropertyRequest) (UpsertEd
 	if req.EdgeID == "" {
 		return req, errors.New("edge_id is required")
 	}
-	req.Key = normalizeKey(req.Key)
+	req.Key = normalize.Key(req.Key)
 	if req.Key == "" {
 		return req, errors.New("property key is required")
 	}
-	req.Actor = defaultString(req.Actor, "agent")
-	req.Status = defaultStatus(req.Status)
+	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Status = vocabulary.DefaultLifecycleStatus(req.Status)
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid property status %q", req.Status)
 	}
-	req.TrustLevel = defaultTrustLevel(req.TrustLevel)
+	req.TrustLevel = vocabulary.DefaultTrustLevel(req.TrustLevel, TrustUserAsserted)
 	if !ValidTrustLevel(req.TrustLevel) {
 		return req, fmt.Errorf("invalid trust level %q", req.TrustLevel)
 	}
@@ -101,12 +104,12 @@ func NormalizeUpsertAliasRequest(req UpsertAliasRequest) (UpsertAliasRequest, er
 	if req.NodeID == "" {
 		return req, errors.New("node_id is required")
 	}
-	req.Locale = strings.ToLower(strings.TrimSpace(req.Locale))
+	req.Locale = normalize.Key(req.Locale)
 	req.Alias = strings.TrimSpace(req.Alias)
 	if req.Alias == "" {
 		return req, errors.New("alias is required")
 	}
-	req.Kind = defaultString(req.Kind, "name")
+	req.Kind = normalize.Default(req.Kind, "name")
 	return req, nil
 }
 
@@ -119,7 +122,7 @@ func NormalizeWriteEvidenceBlobRequest(req WriteEvidenceBlobRequest) (WriteEvide
 	if req.Content == "" {
 		return req, errors.New("content is required")
 	}
-	req.MediaType = defaultString(req.MediaType, "text/plain; charset=utf-8")
+	req.MediaType = normalize.Default(req.MediaType, "text/plain; charset=utf-8")
 	req.SourceSystem = strings.TrimSpace(req.SourceSystem)
 	req.SourceID = strings.TrimSpace(req.SourceID)
 	if req.SourceNodeID == "" {
@@ -134,11 +137,11 @@ func NormalizeWriteEvidenceBlobRequest(req WriteEvidenceBlobRequest) (WriteEvide
 
 // NormalizeAppendAuditRequest validates and defaults an audit append request.
 func NormalizeAppendAuditRequest(req AppendAuditRequest) (AppendAuditRequest, error) {
-	req.Kind = normalizeKey(req.Kind)
+	req.Kind = normalize.Key(req.Kind)
 	if req.Kind == "" {
 		return req, errors.New("audit kind is required")
 	}
-	req.Actor = defaultString(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, "agent")
 	req.Message = strings.TrimSpace(req.Message)
 	req.DetailsJSON = strings.TrimSpace(req.DetailsJSON)
 	return req, nil
@@ -147,9 +150,7 @@ func NormalizeAppendAuditRequest(req AppendAuditRequest) (AppendAuditRequest, er
 // NormalizeSearchNodesQuery validates and defaults a lexical graph search.
 func NormalizeSearchNodesQuery(q SearchNodesQuery) (SearchNodesQuery, error) {
 	q.Text = strings.TrimSpace(q.Text)
-	if q.Scope == "" {
-		q.Scope = ScopeUser
-	}
+	q.Scope = vocabulary.DefaultScope(q.Scope)
 	if !ValidScope(q.Scope) {
 		return q, fmt.Errorf("invalid scope %q", q.Scope)
 	}
@@ -194,42 +195,22 @@ func ValidRelationType(relation RelationType) bool {
 
 // ValidLifecycleStatus reports whether status is in the controlled vocabulary.
 func ValidLifecycleStatus(status LifecycleStatus) bool {
-	switch status {
-	case StatusActive, StatusArchived, StatusDeleted, StatusDeprecated, StatusSuperseded:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidLifecycleStatus(status)
 }
 
 // ValidScope reports whether scope is in the controlled vocabulary.
 func ValidScope(scope Scope) bool {
-	switch scope {
-	case ScopeGlobal, ScopeHousehold, ScopeProject, ScopeSession, ScopeTenant, ScopeUser:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidScope(scope)
 }
 
 // ValidSensitivity reports whether sensitivity is in the controlled vocabulary.
 func ValidSensitivity(sensitivity Sensitivity) bool {
-	switch sensitivity {
-	case SensitivityInternal, SensitivityPrivate, SensitivityPublic, SensitivityRestricted:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidSensitivity(sensitivity)
 }
 
 // ValidTrustLevel reports whether trust is in the controlled vocabulary.
 func ValidTrustLevel(trust TrustLevel) bool {
-	switch trust {
-	case TrustExternallyVerified, TrustModelExtracted, TrustModelSynthesized, TrustSourceOriginal, TrustUserAsserted:
-		return true
-	default:
-		return false
-	}
+	return vocabulary.ValidTrustLevel(trust)
 }
 
 // ValidValue reports whether value has a supported type.
@@ -244,12 +225,12 @@ func ValidValue(value Value) bool {
 
 // normalizePropertyFields defaults common node property metadata.
 func normalizePropertyFields(req UpsertNodePropertyRequest) (UpsertNodePropertyRequest, error) {
-	req.Actor = defaultString(req.Actor, "agent")
-	req.Status = defaultStatus(req.Status)
+	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Status = vocabulary.DefaultLifecycleStatus(req.Status)
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid property status %q", req.Status)
 	}
-	req.TrustLevel = defaultTrustLevel(req.TrustLevel)
+	req.TrustLevel = vocabulary.DefaultTrustLevel(req.TrustLevel, TrustUserAsserted)
 	if !ValidTrustLevel(req.TrustLevel) {
 		return req, fmt.Errorf("invalid trust level %q", req.TrustLevel)
 	}
@@ -258,43 +239,6 @@ func normalizePropertyFields(req UpsertNodePropertyRequest) (UpsertNodePropertyR
 	}
 	req.Confidence = defaultConfidence(req.Confidence)
 	return req, nil
-}
-
-// normalizeKey trims and normalizes a vocabulary key.
-func normalizeKey(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
-}
-
-// defaultStatus returns the active lifecycle when status is blank.
-func defaultStatus(status LifecycleStatus) LifecycleStatus {
-	if status == "" {
-		return StatusActive
-	}
-	return status
-}
-
-// defaultScope returns user scope when scope is blank.
-func defaultScope(scope Scope) Scope {
-	if scope == "" {
-		return ScopeUser
-	}
-	return scope
-}
-
-// defaultSensitivity returns private sensitivity when sensitivity is blank.
-func defaultSensitivity(sensitivity Sensitivity) Sensitivity {
-	if sensitivity == "" {
-		return SensitivityPrivate
-	}
-	return sensitivity
-}
-
-// defaultTrustLevel returns user-asserted trust when trust is blank.
-func defaultTrustLevel(trust TrustLevel) TrustLevel {
-	if trust == "" {
-		return TrustUserAsserted
-	}
-	return trust
 }
 
 // defaultConfidence returns full confidence when confidence is omitted.
@@ -306,13 +250,4 @@ func defaultConfidence(confidence float64) float64 {
 		return 1
 	}
 	return confidence
-}
-
-// defaultString trims a value and substitutes a fallback when blank.
-func defaultString(value string, fallback string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fallback
-	}
-	return value
 }

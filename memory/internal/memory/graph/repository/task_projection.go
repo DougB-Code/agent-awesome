@@ -115,7 +115,7 @@ func projectedRelationEdges(relations []domain.TaskRelation) []domain.TaskGraphP
 			FromNodeID:         string(relation.FromTaskID),
 			ToNodeID:           string(relation.ToTaskID),
 			Type:               string(relation.Type),
-			DirectionSemantics: taskRelationDirectionSemantics(relation.Type),
+			DirectionSemantics: domain.TaskRelationDirectionSemantics(relation.Type),
 			RelationID:         relation.ID,
 			Relation:           &relationCopy,
 			Confidence:         relation.Confidence,
@@ -187,22 +187,6 @@ func projectionFacetID(kind string, value string) string {
 // projectionKey normalizes a label into a stable projection key.
 func projectionKey(value string) string {
 	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(value))), "-")
-}
-
-// taskRelationDirectionSemantics documents traversal direction for projection edges.
-func taskRelationDirectionSemantics(relationType domain.TaskRelationType) string {
-	switch relationType {
-	case domain.TaskRelationBlocks:
-		return "from_blocks_to"
-	case domain.TaskRelationDependsOn:
-		return "from_depends_on_to"
-	case domain.TaskRelationEnables:
-		return "from_enables_to"
-	case domain.TaskRelationPartOf:
-		return "from_part_of_to"
-	default:
-		return "from_related_to_to"
-	}
 }
 
 // projectedRelationCoverage reports the share of projected tasks with graph relations.

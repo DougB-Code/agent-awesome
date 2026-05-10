@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"memory/internal/memory/vocabulary"
+)
 
 // EvidenceID identifies an immutable raw source artifact.
 type EvidenceID string
@@ -43,65 +47,65 @@ const (
 )
 
 // Scope classifies the ownership and visibility boundary for memory.
-type Scope string
+type Scope = vocabulary.Scope
 
 const (
 	// ScopeSession limits memory to one session.
-	ScopeSession Scope = "session"
+	ScopeSession = vocabulary.ScopeSession
 	// ScopeUser limits memory to one user.
-	ScopeUser Scope = "user"
+	ScopeUser = vocabulary.ScopeUser
 	// ScopeHousehold shares memory across a household.
-	ScopeHousehold Scope = "household"
+	ScopeHousehold = vocabulary.ScopeHousehold
 	// ScopeTenant limits memory to an organization tenant.
-	ScopeTenant Scope = "tenant"
+	ScopeTenant = vocabulary.ScopeTenant
 	// ScopeProject limits memory to a project.
-	ScopeProject Scope = "project"
+	ScopeProject = vocabulary.ScopeProject
 	// ScopeGlobal exposes memory globally within the service policy.
-	ScopeGlobal Scope = "global"
+	ScopeGlobal = vocabulary.ScopeGlobal
 )
 
 // TrustLevel describes where a fact or artifact came from.
-type TrustLevel string
+type TrustLevel = vocabulary.TrustLevel
 
 const (
 	// TrustSourceOriginal marks verbatim source artifacts.
-	TrustSourceOriginal TrustLevel = "source_original"
+	TrustSourceOriginal = vocabulary.TrustSourceOriginal
 	// TrustUserAsserted marks user-supplied claims.
-	TrustUserAsserted TrustLevel = "user_asserted"
+	TrustUserAsserted = vocabulary.TrustUserAsserted
 	// TrustModelExtracted marks model-extracted fields.
-	TrustModelExtracted TrustLevel = "model_extracted"
+	TrustModelExtracted = vocabulary.TrustModelExtracted
 	// TrustModelSynthesized marks model-written summaries or pages.
-	TrustModelSynthesized TrustLevel = "model_synthesized"
+	TrustModelSynthesized = vocabulary.TrustModelSynthesized
 	// TrustExternallyVerified marks facts checked against an external source.
-	TrustExternallyVerified TrustLevel = "externally_verified"
+	TrustExternallyVerified = vocabulary.TrustExternallyVerified
 )
 
 // Sensitivity controls whether a caller may see a record.
-type Sensitivity string
+type Sensitivity = vocabulary.Sensitivity
 
 const (
 	// SensitivityPublic is safe for broad disclosure.
-	SensitivityPublic Sensitivity = "public"
+	SensitivityPublic = vocabulary.SensitivityPublic
 	// SensitivityInternal is visible inside the configured boundary.
-	SensitivityInternal Sensitivity = "internal"
+	SensitivityInternal = vocabulary.SensitivityInternal
 	// SensitivityPrivate is visible to the owning user or household.
-	SensitivityPrivate Sensitivity = "private"
+	SensitivityPrivate = vocabulary.SensitivityPrivate
 	// SensitivityRestricted requires an explicit request grant.
-	SensitivityRestricted Sensitivity = "restricted"
+	SensitivityRestricted = vocabulary.SensitivityRestricted
 )
 
 // Status describes the lifecycle state of memory.
-type Status string
+type Status = vocabulary.LifecycleStatus
 
 const (
 	// StatusActive marks current records.
-	StatusActive Status = "active"
+	StatusActive = vocabulary.StatusActive
 	// StatusSuperseded marks records replaced by newer source content.
-	StatusSuperseded Status = "superseded"
+	StatusSuperseded = vocabulary.StatusSuperseded
 	// StatusDeprecated marks discouraged records that remain auditable.
-	StatusDeprecated Status = "deprecated"
+	StatusDeprecated = vocabulary.StatusDeprecated
 	// StatusArchived marks retained but inactive records.
-	StatusArchived Status = "archived"
+	StatusArchived = vocabulary.StatusArchived
 )
 
 // RelationshipType names a relationship between durable memory objects.

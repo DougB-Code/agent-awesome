@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -34,6 +35,33 @@ const (
 	propertyView            = "view"
 	propertyWorkBreakdown   = "work_breakdown"
 )
+
+// taskRelationMapping binds task relation DTOs to graph edge vocabulary.
+type taskRelationMapping struct {
+	task  domain.TaskRelationType
+	graph graph.RelationType
+}
+
+// taskMemoryRelationMapping binds task memory link DTOs to graph edges.
+type taskMemoryRelationMapping struct {
+	task  domain.TaskMemoryRelationship
+	graph graph.RelationType
+}
+
+var taskRelationMappings = []taskRelationMapping{
+	{task: domain.TaskRelationBlocks, graph: graph.RelationBlocks},
+	{task: domain.TaskRelationDependsOn, graph: graph.RelationDependsOn},
+	{task: domain.TaskRelationEnables, graph: graph.RelationEnables},
+	{task: domain.TaskRelationPartOf, graph: graph.RelationPartOf},
+	{task: domain.TaskRelationRelated, graph: graph.RelationRelatedTo},
+}
+
+var taskMemoryRelationMappings = []taskMemoryRelationMapping{
+	{task: domain.TaskMemoryContext, graph: graph.RelationHasContext},
+	{task: domain.TaskMemoryOriginatedFrom, graph: graph.RelationSourcedFrom},
+	{task: domain.TaskMemorySupporting, graph: graph.RelationSupportedBy},
+	{task: domain.TaskMemoryRelated, graph: graph.RelationRelatedTo},
+}
 
 // CreateTask stores one operational task as graph facts.
 func (r *Repository) CreateTask(ctx context.Context, req domain.CreateTaskRequest) (domain.Task, error) {
@@ -861,14 +889,14 @@ func taskMatches(task domain.Task, q domain.TaskQuery) bool {
 	if !q.IncludeDone && domain.TerminalTaskStatus(task.Status) {
 		return false
 	}
-	if len(q.Statuses) > 0 && !containsTaskStatus(q.Statuses, task.Status) {
+	if len(q.Statuses) > 0 && !slices.Contains(q.Statuses, task.Status) {
 		return false
 	}
-	if len(q.Priorities) > 0 && !containsTaskPriority(q.Priorities, task.Priority) {
+	if len(q.Priorities) > 0 && !slices.Contains(q.Priorities, task.Priority) {
 		return false
 	}
 	for _, topic := range q.Topics {
-		if !containsString(task.Topics, topic) {
+		if !slices.Contains(task.Topics, topic) {
 			return false
 		}
 	}
@@ -894,10 +922,7 @@ func taskSortTime(task domain.Task) time.Time {
 
 // taskStableKey returns an idempotent stable key for task creation.
 func taskStableKey(key string) string {
-	if strings.TrimSpace(key) == "" {
-		return ""
-	}
-	return "task:idempotency:" + strings.TrimSpace(key)
+	return idempotencyStableKey("task", key)
 }
 
 // taskTextProperty creates one text task property request.
@@ -972,16 +997,12 @@ func propertyTime(property graph.NodeProperty) *time.Time {
 
 // taskMemoryRelation maps task memory relationship vocabulary to graph edges.
 func taskMemoryRelation(relationship domain.TaskMemoryRelationship) graph.RelationType {
-	switch relationship {
-	case domain.TaskMemoryContext:
-		return graph.RelationHasContext
-	case domain.TaskMemoryOriginatedFrom:
-		return graph.RelationSourcedFrom
-	case domain.TaskMemorySupporting:
-		return graph.RelationSupportedBy
-	default:
-		return graph.RelationRelatedTo
+	for _, mapping := range taskMemoryRelationMappings {
+		if mapping.task == relationship {
+			return mapping.graph
+		}
 	}
+	return graph.RelationRelatedTo
 }
 
 // taskRelationPathState stores traversal state for one path branch.
@@ -1209,77 +1230,35 @@ func normalizedTaskRelationTypes(types []domain.TaskRelationType) []domain.TaskR
 	if len(types) > 0 {
 		return append([]domain.TaskRelationType{}, types...)
 	}
-	return []domain.TaskRelationType{
-		domain.TaskRelationBlocks,
-		domain.TaskRelationDependsOn,
-		domain.TaskRelationEnables,
-		domain.TaskRelationPartOf,
-		domain.TaskRelationRelated,
-	}
+	return domain.TaskRelationTypes()
 }
 
 // taskRelationGraphType maps one task relation to a graph edge type.
 func taskRelationGraphType(relation domain.TaskRelationType) graph.RelationType {
-	switch relation {
-	case domain.TaskRelationBlocks:
-		return graph.RelationBlocks
-	case domain.TaskRelationDependsOn:
-		return graph.RelationDependsOn
-	case domain.TaskRelationEnables:
-		return graph.RelationEnables
-	case domain.TaskRelationPartOf:
-		return graph.RelationPartOf
-	default:
-		return graph.RelationRelatedTo
+	for _, mapping := range taskRelationMappings {
+		if mapping.task == relation {
+			return mapping.graph
+		}
 	}
+	return graph.RelationRelatedTo
 }
 
 // taskRelationType maps one graph edge type to task relation vocabulary.
 func taskRelationType(relation graph.RelationType) domain.TaskRelationType {
-	switch relation {
-	case graph.RelationBlocks:
-		return domain.TaskRelationBlocks
-	case graph.RelationDependsOn:
-		return domain.TaskRelationDependsOn
-	case graph.RelationEnables:
-		return domain.TaskRelationEnables
-	case graph.RelationPartOf:
-		return domain.TaskRelationPartOf
-	default:
-		return domain.TaskRelationRelated
+	for _, mapping := range taskRelationMappings {
+		if mapping.graph == relation {
+			return mapping.task
+		}
 	}
+	return domain.TaskRelationRelated
 }
 
 // taskMemoryRelationship maps graph edges back to task memory vocabulary.
 func taskMemoryRelationship(relation graph.RelationType) domain.TaskMemoryRelationship {
-	switch relation {
-	case graph.RelationHasContext:
-		return domain.TaskMemoryContext
-	case graph.RelationSourcedFrom:
-		return domain.TaskMemoryOriginatedFrom
-	case graph.RelationSupportedBy:
-		return domain.TaskMemorySupporting
-	default:
-		return domain.TaskMemoryRelated
-	}
-}
-
-// containsTaskStatus reports whether a status list includes a value.
-func containsTaskStatus(values []domain.TaskStatus, status domain.TaskStatus) bool {
-	for _, value := range values {
-		if value == status {
-			return true
+	for _, mapping := range taskMemoryRelationMappings {
+		if mapping.graph == relation {
+			return mapping.task
 		}
 	}
-	return false
-}
-
-// containsTaskPriority reports whether a priority list includes a value.
-func containsTaskPriority(values []domain.TaskPriority, priority domain.TaskPriority) bool {
-	for _, value := range values {
-		if value == priority {
-			return true
-		}
-	}
-	return false
+	return domain.TaskMemoryRelated
 }

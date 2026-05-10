@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"memory/internal/memory/vocabulary"
 )
 
 // NormalizeExecutiveSummaryQuery validates and defaults a Today projection query.
 func NormalizeExecutiveSummaryQuery(q ExecutiveSummaryQuery) (ExecutiveSummaryQuery, error) {
-	if q.Scope == "" {
-		q.Scope = ScopeUser
-	}
+	q.Scope = vocabulary.DefaultScope(q.Scope)
 	if !ValidScope(q.Scope) {
 		return q, fmt.Errorf("invalid scope %q", q.Scope)
 	}
@@ -68,20 +68,10 @@ func NormalizeExplainExecutiveSummaryItemQuery(q ExplainExecutiveSummaryItemQuer
 
 // validExecutiveSummaryHorizon reports whether the projection horizon is supported.
 func validExecutiveSummaryHorizon(horizon string) bool {
-	switch horizon {
-	case "now", "today", "tomorrow", "week", "all":
-		return true
-	default:
-		return false
-	}
+	return containsVocabularyValue(ExecutiveSummaryHorizonStrings(), horizon)
 }
 
 // validExecutiveSummaryChannel reports whether the presentation channel is supported.
 func validExecutiveSummaryChannel(channel string) bool {
-	switch channel {
-	case "ui", "slack", "chat", "api":
-		return true
-	default:
-		return false
-	}
+	return containsVocabularyValue(ExecutiveSummaryChannelStrings(), channel)
 }

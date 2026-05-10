@@ -1,6 +1,10 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"memory/internal/memory/vocabulary"
+)
 
 // NodeID identifies one durable graph node.
 type NodeID string
@@ -97,67 +101,67 @@ const (
 )
 
 // LifecycleStatus describes whether graph facts are active or retained history.
-type LifecycleStatus string
+type LifecycleStatus = vocabulary.LifecycleStatus
 
 const (
 	// StatusActive marks current graph facts.
-	StatusActive LifecycleStatus = "active"
+	StatusActive = vocabulary.StatusActive
 	// StatusArchived marks retained but inactive graph facts.
-	StatusArchived LifecycleStatus = "archived"
+	StatusArchived = vocabulary.StatusArchived
 	// StatusDeleted marks lifecycle-deleted graph facts.
-	StatusDeleted LifecycleStatus = "deleted"
+	StatusDeleted = vocabulary.StatusDeleted
 	// StatusDeprecated marks discouraged graph facts that remain auditable.
-	StatusDeprecated LifecycleStatus = "deprecated"
+	StatusDeprecated = vocabulary.StatusDeprecated
 	// StatusSuperseded marks graph facts replaced by newer facts.
-	StatusSuperseded LifecycleStatus = "superseded"
+	StatusSuperseded = vocabulary.StatusSuperseded
 )
 
 // Scope classifies the ownership and visibility boundary for graph facts.
-type Scope string
+type Scope = vocabulary.Scope
 
 const (
 	// ScopeGlobal exposes graph facts globally within service policy.
-	ScopeGlobal Scope = "global"
+	ScopeGlobal = vocabulary.ScopeGlobal
 	// ScopeHousehold shares graph facts across a household.
-	ScopeHousehold Scope = "household"
+	ScopeHousehold = vocabulary.ScopeHousehold
 	// ScopeProject limits graph facts to a project.
-	ScopeProject Scope = "project"
+	ScopeProject = vocabulary.ScopeProject
 	// ScopeSession limits graph facts to one session.
-	ScopeSession Scope = "session"
+	ScopeSession = vocabulary.ScopeSession
 	// ScopeTenant limits graph facts to an organization tenant.
-	ScopeTenant Scope = "tenant"
+	ScopeTenant = vocabulary.ScopeTenant
 	// ScopeUser limits graph facts to one user.
-	ScopeUser Scope = "user"
+	ScopeUser = vocabulary.ScopeUser
 )
 
 // Sensitivity controls whether a caller may see a graph fact.
-type Sensitivity string
+type Sensitivity = vocabulary.Sensitivity
 
 const (
 	// SensitivityInternal is visible inside the configured boundary.
-	SensitivityInternal Sensitivity = "internal"
+	SensitivityInternal = vocabulary.SensitivityInternal
 	// SensitivityPrivate is visible to the owning user or household.
-	SensitivityPrivate Sensitivity = "private"
+	SensitivityPrivate = vocabulary.SensitivityPrivate
 	// SensitivityPublic is safe for broad disclosure.
-	SensitivityPublic Sensitivity = "public"
+	SensitivityPublic = vocabulary.SensitivityPublic
 	// SensitivityRestricted requires an explicit request grant.
-	SensitivityRestricted Sensitivity = "restricted"
+	SensitivityRestricted = vocabulary.SensitivityRestricted
 )
 
 // TrustLevel describes where a graph fact came from.
-type TrustLevel string
+type TrustLevel = vocabulary.TrustLevel
 
 const (
 	// TrustExternallyVerified marks facts checked against an external source.
-	TrustExternallyVerified TrustLevel = "externally_verified"
+	TrustExternallyVerified = vocabulary.TrustExternallyVerified
 	// TrustModelExtracted marks model-extracted fields.
-	TrustModelExtracted TrustLevel = "model_extracted"
+	TrustModelExtracted = vocabulary.TrustModelExtracted
 	// TrustModelSynthesized marks model-written summaries or pages.
-	TrustModelSynthesized TrustLevel = "model_synthesized"
+	TrustModelSynthesized = vocabulary.TrustModelSynthesized
 	// TrustSourceOriginal marks verbatim source artifacts.
-	TrustSourceOriginal TrustLevel = "source_original"
+	TrustSourceOriginal = vocabulary.TrustSourceOriginal
 	// TrustUserAsserted marks user-supplied claims.
-	TrustUserAsserted TrustLevel = "user_asserted"
+	TrustUserAsserted = vocabulary.TrustUserAsserted
 )
 
 // ValueType describes which typed property value column is authoritative.

@@ -15,10 +15,49 @@ import (
 
 	"memory/internal/memory/domain"
 	graphquery "memory/internal/memory/graph/query"
+	"memory/internal/memory/normalize"
 	"memory/internal/memory/service"
 )
 
 const maxJSONRPCRequestBytes int64 = 2 << 20
+
+var taskStatusTokens = map[string]domain.TaskStatus{
+	"blocked":     domain.TaskStatusBlocked,
+	"canceled":    domain.TaskStatusCanceled,
+	"cancelled":   domain.TaskStatusCanceled,
+	"complete":    domain.TaskStatusDone,
+	"completed":   domain.TaskStatusDone,
+	"done":        domain.TaskStatusDone,
+	"open":        domain.TaskStatusOpen,
+	"pending":     domain.TaskStatusOpen,
+	"todo":        domain.TaskStatusOpen,
+	"to_do":       domain.TaskStatusOpen,
+	"new":         domain.TaskStatusOpen,
+	"backlog":     domain.TaskStatusOpen,
+	"in_progress": domain.TaskStatusOpen,
+	"doing":       domain.TaskStatusOpen,
+	"waiting":     domain.TaskStatusWaiting,
+	"waiting_on":  domain.TaskStatusWaiting,
+}
+
+var taskPriorityTokens = map[string]domain.TaskPriority{
+	"high":     domain.TaskPriorityHigh,
+	"low":      domain.TaskPriorityLow,
+	"normal":   domain.TaskPriorityNormal,
+	"medium":   domain.TaskPriorityNormal,
+	"default":  domain.TaskPriorityNormal,
+	"urgent":   domain.TaskPriorityUrgent,
+	"critical": domain.TaskPriorityUrgent,
+}
+
+var qualitativeScoreTokens = map[string]float64{
+	"low":      0.25,
+	"medium":   0.5,
+	"normal":   0.5,
+	"high":     0.75,
+	"urgent":   1,
+	"critical": 1,
+}
 
 // MCPServer serves a small MCP-compatible JSON-RPC tool surface.
 type MCPServer struct {
@@ -327,10 +366,10 @@ func toolDefinitions() []map[string]any {
 			"title":           stringSchema("Human-readable title."),
 			"media_type":      stringSchema("Media type for the source content."),
 			"source":          objectSchema(map[string]any{"system": stringSchema("Source system."), "id": stringSchema("Source record id.")}, []string{}),
-			"kind":            enumSchema("Memory kind.", []string{"conversation", "document", "tool_output", "artifact", "summary", "entity_page", "timeline", "profile_fact"}),
-			"scope":           enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
-			"trust_level":     enumSchema("Trust level.", []string{"source_original", "user_asserted", "model_extracted", "model_synthesized", "externally_verified"}),
-			"sensitivity":     enumSchema("Sensitivity level.", []string{"public", "internal", "private", "restricted"}),
+			"kind":            enumSchema("Memory kind.", domain.KindStrings()),
+			"scope":           enumSchema("Ownership scope.", domain.ScopeStrings()),
+			"trust_level":     enumSchema("Trust level.", domain.TrustLevelStrings()),
+			"sensitivity":     enumSchema("Sensitivity level.", domain.SensitivityStrings()),
 			"subjects":        arraySchema("Primary subjects.", stringSchema("Subject.")),
 			"topics":          arraySchema("Controlled topics.", stringSchema("Topic.")),
 			"entity_names":    arraySchema("Canonical entity names or aliases.", stringSchema("Entity name.")),
@@ -340,19 +379,19 @@ func toolDefinitions() []map[string]any {
 		tool("search_memory", "Search memory metadata and compiled retrieval context.", retrievalSchema(), []string{}),
 		tool("search_sources", "Search and return matching source content text.", retrievalSchema(), []string{}),
 		tool("load_entity_page", "Load or build a compiled entity page.", map[string]any{
-			"scope":     enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
+			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
 			"entity_id": stringSchema("Canonical entity id."),
 			"title":     stringSchema("Entity page title."),
 		}, []string{}),
 		tool("load_timeline", "Load or build a source-backed timeline.", map[string]any{
-			"scope":     enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
+			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
 			"topic":     stringSchema("Timeline topic."),
 			"entity_id": stringSchema("Optional entity id."),
 		}, []string{}),
 		tool("refresh_compiled_page", "Rebuild an entity page or timeline from source-backed memory records.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
-			"kind":      enumSchema("Compiled page kind.", []string{"entity_page", "timeline"}),
-			"scope":     enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
+			"kind":      enumSchema("Compiled page kind.", domain.CompiledPageKindStrings()),
+			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
 			"title":     stringSchema("Page title."),
 			"entity_id": stringSchema("Optional entity id."),
 			"topic":     stringSchema("Optional topic."),
@@ -360,9 +399,9 @@ func toolDefinitions() []map[string]any {
 		tool("repair_memory_record", "Apply explicit memory metadata corrections.", map[string]any{
 			"actor":        stringSchema("Calling agent or user."),
 			"memory_id":    stringSchema("Memory record id."),
-			"kind":         enumSchema("Memory kind.", []string{"conversation", "document", "tool_output", "artifact", "summary", "entity_page", "timeline", "profile_fact"}),
-			"sensitivity":  enumSchema("Sensitivity level.", []string{"public", "internal", "private", "restricted"}),
-			"status":       enumSchema("Lifecycle status.", []string{"active", "superseded", "deprecated", "archived"}),
+			"kind":         enumSchema("Memory kind.", domain.KindStrings()),
+			"sensitivity":  enumSchema("Sensitivity level.", domain.SensitivityStrings()),
+			"status":       enumSchema("Lifecycle status.", domain.StatusStrings()),
 			"title":        stringSchema("Corrected title."),
 			"summary":      stringSchema("Corrected summary."),
 			"subjects":     arraySchema("Corrected subjects.", stringSchema("Subject.")),
@@ -372,7 +411,7 @@ func toolDefinitions() []map[string]any {
 		tool("submit_memory_correction", "Store a user correction as first-class source content.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
 			"memory_id": stringSchema("Memory record id being corrected."),
-			"scope":     enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
+			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
 			"text":      stringSchema("Correction text."),
 		}, []string{"memory_id", "text"}),
 		tool("query_context_graph", "Execute a read-only SQL-like graph query.", graphQuerySchema("Read-only graph query, such as FIND task WHERE status != \"done\" AND risk_score >= 6 RETURN id, title LIMIT 10, FIND task GROUP BY status RETURN status, count ORDER BY count DESC LIMIT 10, MATCH task -[depends_on]-> task RETURN from.title, edge.type, to.title LIMIT 10, or MATCH task -[depends_on*1..3]-> task WHERE path.depth >= 2 RETURN from.title, path.depth, to.title LIMIT 10."), []string{"query"}),
@@ -401,8 +440,8 @@ func graphQuerySchema(queryDescription string) map[string]any {
 		"actor":                 stringSchema("Calling agent or user."),
 		"source_node_id":        stringSchema("Source graph node id required for mutations."),
 		"query":                 stringSchema(queryDescription),
-		"scope":                 enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
-		"allowed_sensitivities": arraySchema("Allowed sensitivity levels; restricted must be requested explicitly.", enumSchema("Sensitivity.", []string{"public", "internal", "private", "restricted"})),
+		"scope":                 enumSchema("Ownership scope.", domain.ScopeStrings()),
+		"allowed_sensitivities": arraySchema("Allowed sensitivity levels; restricted must be requested explicitly.", enumSchema("Sensitivity.", domain.SensitivityStrings())),
 	}
 }
 
@@ -413,8 +452,8 @@ func rememberSchema() map[string]any {
 		"title":           stringSchema("Optional short display title."),
 		"topics":          arraySchema("Optional connective topic tags.", stringSchema("Topic.")),
 		"entities":        arraySchema("Optional people, projects, places, or things this memory mentions.", stringSchema("Entity name.")),
-		"scope":           enumSchema("Optional ownership scope; default is user.", []string{"session", "user", "household", "tenant", "project", "global"}),
-		"sensitivity":     enumSchema("Optional sensitivity; default is private.", []string{"public", "internal", "private", "restricted"}),
+		"scope":           enumSchema("Optional ownership scope; default is user.", domain.ScopeStrings()),
+		"sensitivity":     enumSchema("Optional sensitivity; default is private.", domain.SensitivityStrings()),
 		"idempotency_key": stringSchema("Optional stable key to avoid duplicate nuggets."),
 		"actor":           stringSchema("Optional calling agent or user."),
 	}
@@ -426,7 +465,7 @@ func taskCreateSchema() map[string]any {
 		"actor":           stringSchema("Optional calling agent or user."),
 		"title":           stringSchema("Short task title, such as buy milk."),
 		"description":     stringSchema("Optional note only when the user provides one."),
-		"priority":        enumSchema("Optional task priority; default is normal.", taskPriorities()),
+		"priority":        enumSchema("Optional task priority; default is normal.", domain.TaskPriorityStrings()),
 		"due_at":          stringSchema("Optional RFC3339 due time when the user gave a deadline."),
 		"scheduled_at":    stringSchema("Optional RFC3339 scheduled time when the user gave a start or reminder time."),
 		"topics":          arraySchema("Optional task topics.", stringSchema("Topic.")),
@@ -440,8 +479,8 @@ func taskAdvancedSchema() map[string]any {
 		"actor":            stringSchema("Calling agent or user."),
 		"title":            stringSchema("Task title."),
 		"description":      stringSchema("Task notes."),
-		"status":           enumSchema("Task status.", taskStatuses()),
-		"priority":         enumSchema("Task priority.", taskPriorities()),
+		"status":           enumSchema("Task status.", domain.TaskStatusStrings()),
+		"priority":         enumSchema("Task priority.", domain.TaskPriorityStrings()),
 		"due_at":           stringSchema("RFC3339 due time."),
 		"scheduled_at":     stringSchema("RFC3339 scheduled time."),
 		"follow_up_at":     stringSchema("RFC3339 stale-review time."),
@@ -496,8 +535,8 @@ func taskResourceRequirementSchema() map[string]any {
 // taskQuerySchema returns graph-backed list_tasks input properties.
 func taskQuerySchema() map[string]any {
 	return map[string]any{
-		"statuses":      arraySchema("Statuses to include.", enumSchema("Task status.", taskStatuses())),
-		"priorities":    arraySchema("Priorities to include.", enumSchema("Task priority.", taskPriorities())),
+		"statuses":      arraySchema("Statuses to include.", enumSchema("Task status.", domain.TaskStatusStrings())),
+		"priorities":    arraySchema("Priorities to include.", enumSchema("Task priority.", domain.TaskPriorityStrings())),
 		"topics":        arraySchema("Topics to include.", stringSchema("Topic.")),
 		"search":        stringSchema("Title and description search."),
 		"overdue_only":  map[string]any{"type": "boolean", "description": "Only overdue tasks."},
@@ -511,7 +550,7 @@ func taskQuerySchema() map[string]any {
 func taskGraphProjectionSchema() map[string]any {
 	return map[string]any{
 		"tasks":          objectSchema(taskQuerySchema(), []string{}),
-		"relation_types": arraySchema("Relation types to include.", enumSchema("Task relation type.", taskRelationTypes())),
+		"relation_types": arraySchema("Relation types to include.", enumSchema("Task relation type.", domain.TaskRelationTypeStrings())),
 		"include_facets": map[string]any{"type": "boolean", "description": "Include project, person, and topic facet nodes."},
 	}
 }
@@ -519,13 +558,13 @@ func taskGraphProjectionSchema() map[string]any {
 // executiveSummarySchema returns project_executive_summary input properties.
 func executiveSummarySchema() map[string]any {
 	return map[string]any{
-		"scope":            enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
-		"horizon":          enumSchema("Projection horizon.", []string{"now", "today", "tomorrow", "week", "all"}),
+		"scope":            enumSchema("Ownership scope.", domain.ScopeStrings()),
+		"horizon":          enumSchema("Projection horizon.", domain.ExecutiveSummaryHorizonStrings()),
 		"now":              stringSchema("Optional RFC3339 clock override."),
 		"max_items":        map[string]any{"type": "integer", "description": "Maximum visible items across primary sections."},
 		"include_evidence": map[string]any{"type": "boolean", "description": "Include concise source handles."},
 		"include_actions":  map[string]any{"type": "boolean", "description": "Include safe action hints."},
-		"channel":          enumSchema("Presentation channel.", []string{"ui", "slack", "chat", "api"}),
+		"channel":          enumSchema("Presentation channel.", domain.ExecutiveSummaryChannelStrings()),
 	}
 }
 
@@ -553,8 +592,8 @@ func taskUpdateSchema() map[string]any {
 func taskRelationQuerySchema() map[string]any {
 	return map[string]any{
 		"task_id":   stringSchema("Optional task id."),
-		"types":     arraySchema("Relation types to include.", enumSchema("Task relation type.", taskRelationTypes())),
-		"direction": enumSchema("Relation direction when task_id is set.", []string{"outgoing", "incoming", "either"}),
+		"types":     arraySchema("Relation types to include.", enumSchema("Task relation type.", domain.TaskRelationTypeStrings())),
+		"direction": enumSchema("Relation direction when task_id is set.", domain.TaskRelationDirectionStrings()),
 		"limit":     map[string]any{"type": "integer", "description": "Maximum relations."},
 	}
 }
@@ -575,7 +614,7 @@ func taskRelationUpsertSchema() map[string]any {
 	return map[string]any{
 		"actor":        stringSchema("Calling agent or user."),
 		"from_task_id": stringSchema("Source task id."),
-		"type":         enumSchema("Task relation type.", taskRelationTypes()),
+		"type":         enumSchema("Task relation type.", domain.TaskRelationTypeStrings()),
 		"to_task_id":   stringSchema("Target task id."),
 		"note":         stringSchema("Relation note."),
 		"lag_minutes":  map[string]any{"type": "integer", "description": "Minimum lag minutes between source and target."},
@@ -588,36 +627,21 @@ func memoryLinkSchema() map[string]any {
 	return objectSchema(map[string]any{
 		"memory_id":          stringSchema("Memory record id."),
 		"memory_evidence_id": stringSchema("Memory source record id."),
-		"relationship":       enumSchema("Memory relationship.", []string{"originated_from", "context", "supporting", "related"}),
+		"relationship":       enumSchema("Memory relationship.", domain.TaskMemoryRelationshipStrings()),
 		"note":               stringSchema("Link note."),
 	}, []string{})
-}
-
-// taskStatuses returns graph-backed task status values.
-func taskStatuses() []string {
-	return []string{"open", "waiting", "blocked", "done", "canceled"}
-}
-
-// taskPriorities returns graph-backed task priority values.
-func taskPriorities() []string {
-	return []string{"low", "normal", "high", "urgent"}
-}
-
-// taskRelationTypes returns graph-backed task relation values.
-func taskRelationTypes() []string {
-	return []string{"depends_on", "blocks", "enables", "part_of", "related_to"}
 }
 
 // retrievalSchema returns the shared retrieval input schema.
 func retrievalSchema() map[string]any {
 	return map[string]any{
 		"actor":                 stringSchema("Calling agent or user."),
-		"scope":                 enumSchema("Ownership scope.", []string{"session", "user", "household", "tenant", "project", "global"}),
+		"scope":                 enumSchema("Ownership scope.", domain.ScopeStrings()),
 		"text":                  stringSchema("Search text."),
-		"kinds":                 arraySchema("Kinds to include.", enumSchema("Memory kind.", []string{"conversation", "document", "tool_output", "artifact", "summary", "entity_page", "timeline", "profile_fact"})),
+		"kinds":                 arraySchema("Kinds to include.", enumSchema("Memory kind.", domain.KindStrings())),
 		"topics":                arraySchema("Topics to include.", stringSchema("Topic.")),
 		"entity_ids":            arraySchema("Entity ids to include.", stringSchema("Entity id.")),
-		"allowed_sensitivities": arraySchema("Allowed sensitivity levels.", enumSchema("Sensitivity.", []string{"public", "internal", "private", "restricted"})),
+		"allowed_sensitivities": arraySchema("Allowed sensitivity levels.", enumSchema("Sensitivity.", domain.SensitivityStrings())),
 		"limit":                 map[string]any{"type": "integer", "description": "Maximum records to return."},
 	}
 }
@@ -804,36 +828,12 @@ func stringArg(value any) string {
 
 // taskStatusArg maps loose model vocabulary onto supported task statuses.
 func taskStatusArg(value any) domain.TaskStatus {
-	switch tokenArg(value) {
-	case "blocked":
-		return domain.TaskStatusBlocked
-	case "canceled", "cancelled":
-		return domain.TaskStatusCanceled
-	case "complete", "completed", "done":
-		return domain.TaskStatusDone
-	case "open", "pending", "todo", "to_do", "new", "backlog", "in_progress", "doing":
-		return domain.TaskStatusOpen
-	case "waiting", "waiting_on":
-		return domain.TaskStatusWaiting
-	default:
-		return ""
-	}
+	return taskStatusTokens[tokenArg(value)]
 }
 
 // taskPriorityArg maps loose model vocabulary onto supported priorities.
 func taskPriorityArg(value any) domain.TaskPriority {
-	switch tokenArg(value) {
-	case "high":
-		return domain.TaskPriorityHigh
-	case "low":
-		return domain.TaskPriorityLow
-	case "normal", "medium", "default":
-		return domain.TaskPriorityNormal
-	case "urgent", "critical":
-		return domain.TaskPriorityUrgent
-	default:
-		return ""
-	}
+	return taskPriorityTokens[tokenArg(value)]
 }
 
 // tokenArg normalizes a scalar value for controlled-vocabulary matching.
@@ -850,12 +850,8 @@ func timeArg(value any) *time.Time {
 	if text == "" || strings.EqualFold(text, "null") {
 		return nil
 	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		parsed, err := time.Parse(layout, text)
-		if err == nil {
-			value := parsed.UTC()
-			return &value
-		}
+	if parsed, ok := normalize.ParseFlexibleTime(text); ok {
+		return &parsed
 	}
 	return nil
 }
@@ -902,18 +898,10 @@ func scoreArg(value any) float64 {
 		}
 		return number
 	}
-	switch tokenArg(value) {
-	case "low":
-		return 0.25
-	case "medium", "normal":
-		return 0.5
-	case "high":
-		return 0.75
-	case "urgent", "critical":
-		return 1
-	default:
-		return 0
+	if score, ok := qualitativeScoreTokens[tokenArg(value)]; ok {
+		return score
 	}
+	return 0
 }
 
 // numberArg reads scalar numeric values from JSON-decoded arguments.
