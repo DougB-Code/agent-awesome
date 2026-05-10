@@ -5,10 +5,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
-import 'package:yaml/yaml.dart';
 
 import '../app/app_logger.dart';
 import '../domain/models.dart';
+import 'model_invocation_config.dart';
 
 /// ChatTitleException reports title model configuration or request failures.
 class ChatTitleException implements Exception {
@@ -78,54 +78,31 @@ class ChatTitleClient {
   }
 
   /// Loads the selected provider, endpoint, key, and model from config.
-  Future<_TitleModelSelection> _loadSelection(
+  Future<ModelInvocationConfig> _loadSelection(
     String modelConfigPath,
     String modelRef,
   ) async {
-    final path = modelConfigPath.trim();
-    if (path.isEmpty) {
-      throw const ChatTitleException('Summary model config is not selected');
+    try {
+      return await resolveModelInvocationConfig(
+        modelConfigPath: modelConfigPath,
+        modelRef: modelRef,
+        environment: _environment,
+        localModelChatCompletionsUrl: _localModelChatCompletionsUrl,
+        messages: const ModelInvocationConfigMessages(
+          missingSelection: 'Summary model config is not selected',
+          missingFilePrefix: 'Summary model config does not exist',
+          missingProviders: 'Summary model config has no providers',
+          missingDefaultModel: 'Summary model default model is missing',
+        ),
+      );
+    } on ModelInvocationConfigException catch (error) {
+      throw ChatTitleException(error.message);
     }
-    final file = File(path);
-    if (!await file.exists()) {
-      throw ChatTitleException('Summary model config does not exist: $path');
-    }
-    final decoded = _plainYaml(loadYaml(await file.readAsString()));
-    if (decoded is! Map<String, dynamic>) {
-      throw const ChatTitleException('Summary model config must be a map');
-    }
-    final providers = decoded['providers'];
-    if (providers is! Map<String, dynamic> || providers.isEmpty) {
-      throw const ChatTitleException('Summary model config has no providers');
-    }
-    final configuredRef = modelRef.trim();
-    final defaultRef = _string(decoded['default']);
-    final parsedDefault = _parseDefault(
-      configuredRef.isEmpty ? defaultRef : configuredRef,
-    );
-    final providerName = parsedDefault.provider;
-    if (providerName.isEmpty) {
-      throw const ChatTitleException('Summary model is not selected');
-    }
-    final provider = providers[providerName];
-    if (provider is! Map<String, dynamic>) {
-      throw ChatTitleException('Provider "$providerName" is not configured');
-    }
-    final modelId = parsedDefault.model.isEmpty
-        ? _string(provider['default'])
-        : parsedDefault.model;
-    final model = _resolveModel(provider, modelId);
-    return _TitleModelSelection(
-      adapter: _string(provider['adapter'], fallback: 'openai'),
-      url: _providerUrl(provider, _localModelChatCompletionsUrl),
-      apiKey: _apiKey(_string(provider['api-key'] ?? provider['api_key'])),
-      model: model,
-    );
   }
 
   /// Calls an OpenAI-compatible chat completions endpoint for a title.
   Future<String> _generateOpenAi(
-    _TitleModelSelection selection,
+    ModelInvocationConfig selection,
     String transcript,
   ) async {
     final response = await _http.post(
@@ -139,7 +116,8 @@ class ChatTitleClient {
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ChatTitleException(
-        'Title model HTTP ${response.statusCode}: ${_clip(response.body)}',
+        'Title model HTTP ${response.statusCode}: '
+        '${clipProviderBody(response.body)}',
       );
     }
     final decoded = jsonDecode(response.body);
@@ -150,12 +128,12 @@ class ChatTitleClient {
     final first = choices.first;
     final message = first is Map<String, dynamic> ? first['message'] : null;
     final content = message is Map<String, dynamic> ? message['content'] : null;
-    return _string(content);
+    return modelInvocationString(content);
   }
 
   /// Calls an Anthropic messages endpoint for a title.
   Future<String> _generateAnthropic(
-    _TitleModelSelection selection,
+    ModelInvocationConfig selection,
     String transcript,
   ) async {
     final response = await _http.post(
@@ -177,7 +155,8 @@ class ChatTitleClient {
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw ChatTitleException(
-        'Title model HTTP ${response.statusCode}: ${_clip(response.body)}',
+        'Title model HTTP ${response.statusCode}: '
+        '${clipProviderBody(response.body)}',
       );
     }
     final decoded = jsonDecode(response.body);
@@ -187,7 +166,7 @@ class ChatTitleClient {
     }
     return content
         .whereType<Map<String, dynamic>>()
-        .map((part) => _string(part['text']))
+        .map((part) => modelInvocationString(part['text']))
         .where((text) => text.isNotEmpty)
         .join(' ');
   }
@@ -196,26 +175,11 @@ class ChatTitleClient {
   Future<void> _log(String message) async {
     await logger?.write('chat-title-client', message);
   }
-
-  /// Resolves an API key reference from the configured environment.
-  String _apiKey(String reference) {
-    if (reference.isEmpty) {
-      return '';
-    }
-    final fromEnvironment = _environment[reference];
-    if (fromEnvironment != null && fromEnvironment.isNotEmpty) {
-      return fromEnvironment;
-    }
-    if (RegExp(r'^[A-Z][A-Z0-9_]+$').hasMatch(reference)) {
-      throw ChatTitleException('Environment variable $reference is not set');
-    }
-    return reference;
-  }
 }
 
 /// Builds the OpenAI-compatible request body for title generation.
 Map<String, dynamic> _openAiRequestBody(String model, String transcript) {
-  final usesCompletionTokens = _usesCompletionTokenLimit(model);
+  final usesCompletionTokens = usesCompletionTokenLimit(model);
   return <String, dynamic>{
     'model': model,
     'temperature': 0.2,
@@ -226,115 +190,6 @@ Map<String, dynamic> _openAiRequestBody(String model, String transcript) {
       <String, String>{'role': 'user', 'content': transcript},
     ],
   };
-}
-
-/// Returns whether a chat-completions model requires max_completion_tokens.
-bool _usesCompletionTokenLimit(String model) {
-  final normalized = model.trim().toLowerCase();
-  return normalized.startsWith('gpt-5') ||
-      normalized.startsWith('o1') ||
-      normalized.startsWith('o3') ||
-      normalized.startsWith('o4');
-}
-
-/// _TitleModelSelection is the resolved model invocation target.
-class _TitleModelSelection {
-  /// Creates a resolved title model selection.
-  const _TitleModelSelection({
-    required this.adapter,
-    required this.url,
-    required this.apiKey,
-    required this.model,
-  });
-
-  /// Provider adapter name.
-  final String adapter;
-
-  /// HTTP endpoint used for generation.
-  final String url;
-
-  /// Resolved provider API key.
-  final String apiKey;
-
-  /// Provider-specific model identifier sent on the wire.
-  final String model;
-}
-
-/// Converts a YAML object graph to plain Dart collection types.
-dynamic _plainYaml(dynamic value) {
-  if (value is YamlMap) {
-    return <String, dynamic>{
-      for (final entry in value.entries)
-        entry.key.toString(): _plainYaml(entry.value),
-    };
-  }
-  if (value is YamlList) {
-    return value.map(_plainYaml).toList();
-  }
-  return value;
-}
-
-/// Parses a provider:model default reference.
-({String provider, String model}) _parseDefault(String value) {
-  final parts = value.split(':');
-  if (parts.length == 1) {
-    return (provider: parts.first.trim(), model: '');
-  }
-  return (
-    provider: parts.first.trim(),
-    model: parts.sublist(1).join(':').trim(),
-  );
-}
-
-/// Resolves the wire model name from a provider model list.
-String _resolveModel(Map<String, dynamic> provider, String modelId) {
-  final id = modelId.trim();
-  final models = provider['models'];
-  if (models is List) {
-    for (final rawModel in models) {
-      if (rawModel is! Map<String, dynamic>) {
-        continue;
-      }
-      if (_string(rawModel['id']) == id) {
-        return _string(rawModel['model'], fallback: id);
-      }
-    }
-  }
-  if (id.isNotEmpty) {
-    return id;
-  }
-  throw const ChatTitleException('Summary model default model is missing');
-}
-
-/// Returns the request URL for the configured provider.
-String _providerUrl(
-  Map<String, dynamic> provider,
-  String localModelChatCompletionsUrl,
-) {
-  final explicit = _string(provider['url']);
-  if (explicit.isNotEmpty) {
-    return explicit;
-  }
-  final adapter = _string(provider['adapter'], fallback: 'openai');
-  if (adapter == 'litert' && localModelChatCompletionsUrl.isNotEmpty) {
-    return localModelChatCompletionsUrl;
-  }
-  final base = _string(provider['base_url'] ?? provider['base-url']);
-  if (base.isEmpty) {
-    if (adapter == 'openai') {
-      return 'https://api.openai.com/v1/chat/completions';
-    }
-    if (adapter == 'anthropic') {
-      return 'https://api.anthropic.com/v1/messages';
-    }
-    throw const ChatTitleException('Provider url or base_url is required');
-  }
-  final trimmed = base.endsWith('/')
-      ? base.substring(0, base.length - 1)
-      : base;
-  return adapter == 'anthropic'
-      ? '$trimmed/messages'
-      : '$trimmed/chat/completions';
 }
 
 /// Builds a compact transcript for title generation.
@@ -354,15 +209,6 @@ String _transcript(List<ChatMessage> messages) {
   return visible.substring(0, 2400);
 }
 
-/// Converts a dynamic scalar to a string.
-String _string(dynamic value, {String fallback = ''}) {
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString().trim();
-  return text.isEmpty ? fallback : text;
-}
-
 /// Cleans model output into a short UI title.
 String _sanitizeTitle(String raw) {
   var title = raw.trim();
@@ -377,15 +223,6 @@ String _sanitizeTitle(String raw) {
     title = title.substring(0, 64).trimRight();
   }
   return title;
-}
-
-/// Clips long provider error bodies for chat title storage.
-String _clip(String value) {
-  const limit = 500;
-  if (value.length <= limit) {
-    return value;
-  }
-  return '${value.substring(0, limit)}...';
 }
 
 const String _titleSystemPrompt =

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
+import '../../domain/date_formatting.dart';
 import '../../domain/executive_summary.dart';
 import '../../domain/models.dart';
 import 'widgets/executive_summary_explanation_drawer.dart';
@@ -1171,11 +1172,17 @@ class _TaskDetailsBlock extends StatelessWidget {
           _DetailRow(label: 'Priority', value: _priorityText(item, task)),
           _DetailRow(
             label: 'Due',
-            value: _dateValue(item.dueAt ?? task?.dueAt),
+            value: formatOptionalLocalDate(
+              item.dueAt ?? task?.dueAt,
+              fallback: '-',
+            ),
           ),
           _DetailRow(
             label: 'Scheduled',
-            value: _dateValue(item.scheduledAt ?? task?.scheduledAt),
+            value: formatOptionalLocalDate(
+              item.scheduledAt ?? task?.scheduledAt,
+              fallback: '-',
+            ),
           ),
           _DetailRow(
             label: 'Project',
@@ -1686,17 +1693,6 @@ String _priorityText(ExecutiveSummaryItem item, WorkspaceTask? task) {
 String _fallbackText(String value, String fallback) {
   final trimmed = value.trim();
   return trimmed.isEmpty ? fallback : _titleCase(trimmed);
-}
-
-/// _dateValue formats a date or returns a placeholder.
-String _dateValue(DateTime? date) {
-  if (date == null) {
-    return '-';
-  }
-  final local = date.toLocal();
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  return '${local.year}-$month-$day';
 }
 
 /// _formatMinutes formats an estimate as compact effort text.

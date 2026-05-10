@@ -69,14 +69,14 @@ ActiveModelFileSelection? activeModelFileSelection(
   if (document.providers.isEmpty) {
     return null;
   }
-  final parsed = _parseDefaultRef(document.defaultRef);
+  final parsed = parseModelProviderRef(document.defaultRef);
   final provider = parsed.providerId.isEmpty
       ? document.providers.first
       : document.providers.firstWhere(
           (candidate) => candidate.id == parsed.providerId,
           orElse: () => document.providers.first,
         );
-  final model = _modelForProvider(provider, parsed.modelId);
+  final model = modelConfigModelForProvider(provider, parsed.modelId);
   if (model == null) {
     return null;
   }
@@ -165,38 +165,6 @@ ModelFileCapabilities fallbackModelFileCapabilities(String reason) {
     nativeFileParts: false,
     transport: ModelFileTransport.base64Text,
     reason: reason,
-  );
-}
-
-/// Parses a provider:model default reference.
-({String providerId, String modelId}) _parseDefaultRef(String value) {
-  final parts = value.split(':');
-  if (parts.length == 1) {
-    return (providerId: parts.first.trim(), modelId: '');
-  }
-  return (
-    providerId: parts.first.trim(),
-    modelId: parts.sublist(1).join(':').trim(),
-  );
-}
-
-/// Returns the selected model inside a provider config.
-ModelConfigModel? _modelForProvider(
-  ModelProviderConfig provider,
-  String modelId,
-) {
-  if (provider.models.isEmpty) {
-    return null;
-  }
-  final selectedId = modelId.trim().isEmpty
-      ? provider.defaultModel
-      : modelId.trim();
-  if (selectedId.isEmpty) {
-    return provider.models.first;
-  }
-  return provider.models.firstWhere(
-    (candidate) => candidate.id == selectedId,
-    orElse: () => provider.models.first,
   );
 }
 

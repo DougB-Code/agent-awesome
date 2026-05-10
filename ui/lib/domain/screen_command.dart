@@ -3,6 +3,8 @@ library;
 
 import 'dart:convert';
 
+import 'json_value.dart';
+
 /// ScreenCommandIntent identifies the planner's top-level decision.
 enum ScreenCommandIntent {
   /// The user asked for changes to the current screen.
@@ -374,7 +376,9 @@ ScreenCommandRun parseScreenCommandRunMap(
   String command = '',
 }) {
   final now = DateTime.now();
-  final intent = screenCommandIntentFromWire(_string(decoded['intent']));
+  final intent = screenCommandIntentFromWire(
+    stringValue(decoded['intent'], trim: true),
+  );
   final changesSource = decoded['changes'];
   final changes = changesSource is List
       ? changesSource
@@ -383,14 +387,15 @@ ScreenCommandRun parseScreenCommandRunMap(
             .toList()
       : const <ScreenChange>[];
   return ScreenCommandRun(
-    id: _string(
+    id: stringValue(
       decoded['id'],
       fallback: 'screen-run-${now.microsecondsSinceEpoch}',
+      trim: true,
     ),
-    command: _string(decoded['command'], fallback: command),
+    command: stringValue(decoded['command'], fallback: command, trim: true),
     intent: intent,
-    message: _string(decoded['message']),
-    confidence: _double(decoded['confidence']),
+    message: stringValue(decoded['message'], trim: true),
+    confidence: normalizedDouble(decoded['confidence']),
     changes: changes,
     createdAt: now,
   );
@@ -399,30 +404,35 @@ ScreenCommandRun parseScreenCommandRunMap(
 /// Parses one decoded screen-change response map.
 ScreenChange parseScreenChangeMap(Map<String, dynamic> decoded) {
   final operation = screenChangeOperationFromWire(
-    _string(decoded['operation']),
+    stringValue(decoded['operation'], trim: true),
   );
   final targetSource = decoded['target'];
   final target = targetSource is Map<String, dynamic>
       ? ScreenChangeTarget(
-          taskId: _string(targetSource['task_id']),
-          taskTitle: _string(targetSource['task_title']),
+          taskId: stringValue(targetSource['task_id'], trim: true),
+          taskTitle: stringValue(targetSource['task_title'], trim: true),
         )
       : ScreenChangeTarget(
-          taskId: _string(decoded['task_id']),
-          taskTitle: _string(decoded['task_title']),
+          taskId: stringValue(decoded['task_id'], trim: true),
+          taskTitle: stringValue(decoded['task_title'], trim: true),
         );
-  final fields = _dynamicMap(decoded['fields']);
+  final fields = jsonStringKeyMap(decoded['fields']);
   final now = DateTime.now();
   return ScreenChange(
-    id: _string(
+    id: stringValue(
       decoded['id'],
       fallback: 'screen-change-${now.microsecondsSinceEpoch}',
+      trim: true,
     ),
     operation: operation,
     target: target,
-    summary: _string(decoded['summary'], fallback: _operationLabel(operation)),
-    reason: _string(decoded['reason']),
-    confidence: _double(decoded['confidence']),
+    summary: stringValue(
+      decoded['summary'],
+      fallback: _operationLabel(operation),
+      trim: true,
+    ),
+    reason: stringValue(decoded['reason'], trim: true),
+    confidence: normalizedDouble(decoded['confidence']),
     fields: fields,
   );
 }
@@ -486,31 +496,4 @@ String screenChangeOperationToolName(ScreenChangeOperation operation) {
 /// Builds a readable fallback summary for one operation.
 String _operationLabel(ScreenChangeOperation operation) {
   return screenChangeOperationToolName(operation).replaceAll('_', ' ');
-}
-
-/// Converts a decoded map-like value into a string-keyed dynamic map.
-Map<String, dynamic> _dynamicMap(dynamic value) {
-  if (value is! Map) {
-    return const <String, dynamic>{};
-  }
-  return <String, dynamic>{
-    for (final entry in value.entries) entry.key.toString(): entry.value,
-  };
-}
-
-/// Converts a dynamic numeric value to a normalized confidence score.
-double _double(dynamic value) {
-  if (value is num) {
-    return value.toDouble().clamp(0, 1);
-  }
-  return double.tryParse(value?.toString() ?? '')?.clamp(0, 1) ?? 0;
-}
-
-/// Converts a dynamic scalar to a trimmed string.
-String _string(dynamic value, {String fallback = ''}) {
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString().trim();
-  return text.isEmpty ? fallback : text;
 }

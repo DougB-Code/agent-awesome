@@ -13,6 +13,7 @@ import '../clients/executive_summary_client.dart';
 import '../clients/mcp_client.dart';
 import '../clients/screen_command_client.dart';
 import '../domain/executive_summary.dart';
+import '../domain/json_value.dart';
 import '../domain/models.dart';
 import '../domain/screen_command.dart';
 import '../domain/task_insight_index.dart';
@@ -5067,12 +5068,7 @@ String _stringField(
   String key, {
   String fallback = '',
 }) {
-  final value = fields[key];
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString().trim();
-  return text.isEmpty ? fallback : text;
+  return stringValue(fields[key], fallback: fallback, trim: true);
 }
 
 /// Reads an integer field from a screen-change payload.
@@ -5084,47 +5080,27 @@ int _intField(Map<String, dynamic> fields, String key) {
   if (value is num) {
     return value.round();
   }
-  return int.tryParse(value?.toString() ?? '') ?? 0;
+  return intValue(value);
 }
 
 /// Reads a floating-point field from a screen-change payload.
 double _doubleField(Map<String, dynamic> fields, String key) {
-  final value = fields[key];
-  if (value is num) {
-    return value.toDouble();
-  }
-  return double.tryParse(value?.toString() ?? '') ?? 0;
+  return doubleValue(fields[key]);
 }
 
 /// Reads a boolean field from a screen-change payload.
 bool _boolField(Map<String, dynamic> fields, String key) {
-  final value = fields[key];
-  if (value is bool) {
-    return value;
-  }
-  final text = value?.toString().trim().toLowerCase() ?? '';
-  return text == 'true' || text == '1' || text == 'yes';
+  return boolValue(fields[key]);
 }
 
 /// Reads a string-list field from a screen-change payload.
 List<String> _stringListField(Map<String, dynamic> fields, String key) {
-  final value = fields[key];
-  if (value is! List) {
-    return const <String>[];
-  }
-  return value
-      .map((item) => item.toString().trim())
-      .where((item) => item.isNotEmpty)
-      .toList();
+  return stringList(fields[key], trim: true);
 }
 
 /// Reads an ISO date or timestamp field from a screen-change payload.
 DateTime? _dateField(Map<String, dynamic> fields, String key) {
-  final text = _stringField(fields, key);
-  if (text.isEmpty) {
-    return null;
-  }
-  return DateTime.tryParse(text);
+  return parseOptionalDateTime(fields[key], trim: true);
 }
 
 /// Compares tasks for the default work-queue order.

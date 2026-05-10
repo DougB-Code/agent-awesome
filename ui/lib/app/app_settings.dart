@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import '../domain/json_value.dart';
 import 'runtime_profile.dart';
 
 /// AgentAwesomeAppSettings stores UI-owned defaults and app model choices.
@@ -67,14 +68,14 @@ class AgentAwesomeAppSettings {
   /// Parses settings from decoded JSON.
   factory AgentAwesomeAppSettings.fromJson(Map<String, dynamic> json) {
     return AgentAwesomeAppSettings(
-      defaultChatProfilePath: _stringValue(json['default_chat_profile']),
-      summaryModelConfigPath: _stringValue(json['summary_model_config']),
-      summaryModelRef: _stringValue(json['summary_model_ref']),
-      chatTitleSummariesEnabled: _boolValue(
+      defaultChatProfilePath: stringValue(json['default_chat_profile']),
+      summaryModelConfigPath: stringValue(json['summary_model_config']),
+      summaryModelRef: stringValue(json['summary_model_ref']),
+      chatTitleSummariesEnabled: boolValue(
         json['chat_title_summaries_enabled'],
         fallback: true,
       ),
-      gettingStartedCompleted: _boolValue(
+      gettingStartedCompleted: boolValue(
         json['getting_started_completed'],
         fallback: false,
       ),
@@ -112,17 +113,4 @@ class AgentAwesomeAppSettingsStore {
 /// Returns the app settings JSON path.
 String appSettingsPath() {
   return '${agentAwesomeAppConfigDirectoryPath()}/app_settings.json';
-}
-
-/// Converts a decoded setting value to a string.
-String _stringValue(dynamic value) {
-  return value == null ? '' : value.toString();
-}
-
-/// Converts a decoded setting value to a bool with a required fallback.
-bool _boolValue(dynamic value, {required bool fallback}) {
-  if (value is bool) {
-    return value;
-  }
-  return fallback;
 }

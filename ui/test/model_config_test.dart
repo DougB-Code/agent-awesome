@@ -217,6 +217,14 @@ providers:
     expect(modelProviderDefaultRef(provider), 'provider-2:fast');
   });
 
+  test('parses provider refs while preserving colons in model ids', () {
+    final ref = parseModelProviderRef('openai:ft:gpt-mini:2026');
+
+    expect(ref.providerId, 'openai');
+    expect(ref.modelId, 'ft:gpt-mini:2026');
+    expect(ref.ref, 'openai:ft:gpt-mini:2026');
+  });
+
   test('lists provider model choices with exact refs', () {
     final choices = modelConfigChoices('''
 default: openai:gpt-nano

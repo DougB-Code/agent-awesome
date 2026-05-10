@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import '../domain/json_value.dart';
 import 'app_config.dart';
 
 /// RuntimeProfile describes the complete service topology for one UI session.
@@ -487,7 +488,7 @@ class McpServerRuntime {
       healthUrl: _requiredString(json, 'health_url'),
       workingDirectory: _optionalString(json['working_directory']),
       packagePath: _optionalString(json['package_path']),
-      arguments: _stringList(json['arguments']),
+      arguments: stringList(json['arguments']),
       autoStart: _requiredBool(json, 'auto_start'),
       enabled: _requiredBool(json, 'enabled'),
     );
@@ -830,11 +831,7 @@ String _requiredString(Map<String, dynamic> json, String field) {
 }
 
 String _optionalString(dynamic value) {
-  if (value == null) {
-    return '';
-  }
-  final text = value.toString();
-  return text;
+  return stringValue(value);
 }
 
 int _requiredInt(Map<String, dynamic> json, String field) {
@@ -862,11 +859,4 @@ bool _requiredBool(Map<String, dynamic> json, String field) {
     return false;
   }
   throw FormatException('Runtime profile field "$field" must be a boolean');
-}
-
-List<String> _stringList(dynamic value) {
-  if (value is! List) {
-    return const <String>[];
-  }
-  return value.map(_optionalString).where((item) => item.isNotEmpty).toList();
 }

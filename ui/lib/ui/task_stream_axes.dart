@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
+import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 
 /// TaskStreamAxisDimension identifies a task attribute that can become an axis.
@@ -712,7 +713,7 @@ TaskStreamAxisBucket _dateWindowBucket({
     return TaskStreamAxisBucket(
       id: 'overdue',
       title: 'Overdue',
-      subtitle: _dateSubtitle(value),
+      subtitle: formatLocalDate(value),
       color: AgentAwesomeColors.coral,
       icon: icon,
     );
@@ -721,7 +722,7 @@ TaskStreamAxisBucket _dateWindowBucket({
     return TaskStreamAxisBucket(
       id: 'today',
       title: 'Today',
-      subtitle: _dateSubtitle(value),
+      subtitle: formatLocalDate(value),
       color: Color(0xffd7a246),
       icon: icon,
     );
@@ -730,7 +731,7 @@ TaskStreamAxisBucket _dateWindowBucket({
     return TaskStreamAxisBucket(
       id: 'tomorrow',
       title: 'Tomorrow',
-      subtitle: _dateSubtitle(value),
+      subtitle: formatLocalDate(value),
       color: Color(0xff7a9a91),
       icon: icon,
     );
@@ -739,7 +740,7 @@ TaskStreamAxisBucket _dateWindowBucket({
     return TaskStreamAxisBucket(
       id: 'this-week',
       title: 'This week',
-      subtitle: _dateSubtitle(value),
+      subtitle: formatLocalDate(value),
       color: Color(0xff6f9b62),
       icon: icon,
     );
@@ -748,7 +749,7 @@ TaskStreamAxisBucket _dateWindowBucket({
     return TaskStreamAxisBucket(
       id: 'next-week',
       title: 'Next week',
-      subtitle: _dateSubtitle(value),
+      subtitle: formatLocalDate(value),
       color: Color(0xff5f94c9),
       icon: icon,
     );
@@ -756,7 +757,7 @@ TaskStreamAxisBucket _dateWindowBucket({
   return TaskStreamAxisBucket(
     id: 'later',
     title: 'Later',
-    subtitle: _dateSubtitle(value),
+    subtitle: formatLocalDate(value),
     color: Color(0xff9177c0),
     icon: icon,
   );
@@ -765,17 +766,6 @@ TaskStreamAxisBucket _dateWindowBucket({
 /// Returns the local day start for stable date bucket comparison.
 DateTime _startOfDay(DateTime value) {
   return DateTime(value.year, value.month, value.day);
-}
-
-/// Formats a compact local date subtitle without external dependencies.
-String _dateSubtitle(DateTime value) {
-  final local = value.toLocal();
-  return '${local.year}-${_twoDigits(local.month)}-${_twoDigits(local.day)}';
-}
-
-/// Formats one two-digit date component.
-String _twoDigits(int value) {
-  return value.toString().padLeft(2, '0');
 }
 
 /// Returns a duration bucket for an estimate in minutes.

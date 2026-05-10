@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
 import '../app/theme.dart';
+import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import 'panels/panels.dart';
 
@@ -865,7 +866,7 @@ class _ContactProfileDetails extends StatelessWidget {
               _ContactInspectorRow(label: 'Entity id', value: contact.entityId),
               _ContactInspectorRow(
                 label: 'Last update',
-                value: _formatContactDate(contact.lastUpdatedAt),
+                value: formatOptionalLocalDateTime(contact.lastUpdatedAt),
               ),
               _ContactInspectorRow(
                 label: 'Contexts',
@@ -2901,19 +2902,6 @@ String _firstNonEmpty(List<String> values) {
     }
   }
   return '';
-}
-
-/// Formats a nullable timestamp for compact display.
-String _formatContactDate(DateTime? value) {
-  if (value == null) {
-    return '';
-  }
-  final local = value.toLocal();
-  return '${local.year.toString().padLeft(4, '0')}-'
-      '${local.month.toString().padLeft(2, '0')}-'
-      '${local.day.toString().padLeft(2, '0')} '
-      '${local.hour.toString().padLeft(2, '0')}:'
-      '${local.minute.toString().padLeft(2, '0')}';
 }
 
 /// Converts controlled vocabulary to readable labels.

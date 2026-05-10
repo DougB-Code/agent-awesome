@@ -1,9 +1,10 @@
 /// Parses and writes harness model provider configuration files.
 library;
 
-import 'dart:convert';
-
 import 'package:yaml/yaml.dart';
+
+import '../domain/json_value.dart';
+import 'config_yaml.dart';
 
 /// Model adapters supported by the local harness runtime.
 const List<String> supportedModelAdapters = <String>[
@@ -33,7 +34,7 @@ class ModelConfigDocument {
 
   /// Parses YAML or JSON model config content.
   factory ModelConfigDocument.parse(String content) {
-    final decoded = _plainConfig(loadYaml(content));
+    final decoded = plainYamlValue(loadYaml(content));
     if (decoded is! Map<String, dynamic>) {
       return const ModelConfigDocument(defaultRef: '', providers: []);
     }
@@ -51,7 +52,7 @@ class ModelConfigDocument {
       ..remove('default')
       ..remove('providers');
     return ModelConfigDocument(
-      defaultRef: _configString(decoded['default']),
+      defaultRef: stringValue(decoded['default'], trim: true),
       providers: providers,
       extra: extra,
     );
@@ -83,7 +84,7 @@ class ModelConfigDocument {
 
   /// Encodes the config document as YAML.
   String toYaml() {
-    return _yamlMap(toJson());
+    return encodeYamlMap(toJson());
   }
 }
 
@@ -138,12 +139,9 @@ class ModelProviderConfig {
   /// Parses one provider from a decoded YAML map.
   factory ModelProviderConfig.fromMap(String id, Map<String, dynamic> map) {
     final modelsSource = map['models'];
-    final models = modelsSource is List
-        ? modelsSource
-              .whereType<Map<String, dynamic>>()
-              .map(ModelConfigModel.fromMap)
-              .toList()
-        : const <ModelConfigModel>[];
+    final models = jsonObjectList(
+      modelsSource,
+    ).map(ModelConfigModel.fromMap).toList();
     final extra = Map<String, dynamic>.from(map)
       ..remove('adapter')
       ..remove('name')
@@ -155,12 +153,12 @@ class ModelProviderConfig {
       ..remove('models');
     return ModelProviderConfig(
       id: id,
-      name: _configString(map['name'], fallback: id),
-      adapter: _configString(map['adapter'], fallback: 'openai'),
-      apiKey: _configString(map['api-key'] ?? map['api_key']),
-      defaultModel: _configString(map['default']),
-      url: _configString(map['url']),
-      executable: _configString(map['executable']),
+      name: stringValue(map['name'], fallback: id, trim: true),
+      adapter: stringValue(map['adapter'], fallback: 'openai', trim: true),
+      apiKey: stringValue(map['api-key'] ?? map['api_key'], trim: true),
+      defaultModel: stringValue(map['default'], trim: true),
+      url: stringValue(map['url'], trim: true),
+      executable: stringValue(map['executable'], trim: true),
       models: models,
       extra: extra,
     );
@@ -235,9 +233,9 @@ class ModelConfigModel {
       ..remove('model')
       ..remove('path');
     return ModelConfigModel(
-      id: _configString(map['id']),
-      model: _configString(map['model']),
-      path: _configString(map['path']),
+      id: stringValue(map['id'], trim: true),
+      model: stringValue(map['model'], trim: true),
+      path: stringValue(map['path'], trim: true),
       extra: extra,
     );
   }
@@ -308,6 +306,26 @@ class ModelConfigChoice {
   }
 }
 
+/// ModelProviderRef stores a provider:model reference from config.
+class ModelProviderRef {
+  /// Creates a parsed provider/model reference.
+  const ModelProviderRef({required this.providerId, required this.modelId});
+
+  /// Provider id before the first colon.
+  final String providerId;
+
+  /// Model id after the first colon, when supplied.
+  final String modelId;
+
+  /// Encodes this reference in provider:model form.
+  String get ref {
+    if (modelId.isEmpty) {
+      return providerId;
+    }
+    return '$providerId:$modelId';
+  }
+}
+
 /// Returns a new provider with one starter model.
 ModelProviderConfig newModelProviderConfig(String id) {
   return ModelProviderConfig(
@@ -331,12 +349,44 @@ ModelConfigDocument emptyModelConfigDocument() {
 
 /// Encodes one provider as YAML in the shape used under `providers`.
 String modelProviderConfigYaml(ModelProviderConfig provider) {
-  return _yamlMap(<String, dynamic>{provider.id: provider.toJson()});
+  return encodeYamlMap(<String, dynamic>{provider.id: provider.toJson()});
 }
 
 /// Returns the top-level default reference for a provider.
 String modelProviderDefaultRef(ModelProviderConfig provider) {
   return '${provider.id}:${provider.defaultModel}';
+}
+
+/// Parses a provider:model reference while preserving colons in model ids.
+ModelProviderRef parseModelProviderRef(String value) {
+  final parts = value.split(':');
+  if (parts.length == 1) {
+    return ModelProviderRef(providerId: parts.first.trim(), modelId: '');
+  }
+  return ModelProviderRef(
+    providerId: parts.first.trim(),
+    modelId: parts.sublist(1).join(':').trim(),
+  );
+}
+
+/// Returns the selected model inside a provider config.
+ModelConfigModel? modelConfigModelForProvider(
+  ModelProviderConfig provider,
+  String modelId,
+) {
+  if (provider.models.isEmpty) {
+    return null;
+  }
+  final selectedId = modelId.trim().isEmpty
+      ? provider.defaultModel
+      : modelId.trim();
+  if (selectedId.isEmpty) {
+    return provider.models.first;
+  }
+  return provider.models.firstWhere(
+    (candidate) => candidate.id == selectedId,
+    orElse: () => provider.models.first,
+  );
 }
 
 /// Returns every provider:model choice available in a model config file.
@@ -417,7 +467,9 @@ String modelConfigValidationError(ModelConfigDocument document) {
 /// Returns the human-readable display name for a model config file.
 String modelConfigDisplayName(String content) {
   final document = ModelConfigDocument.parse(content);
-  final defaultProviderId = document.defaultRef.split(':').first.trim();
+  final defaultProviderId = parseModelProviderRef(
+    document.defaultRef,
+  ).providerId;
   if (defaultProviderId.isNotEmpty) {
     for (final provider in document.providers) {
       if (provider.id == defaultProviderId && provider.name.trim().isNotEmpty) {
@@ -430,105 +482,6 @@ String modelConfigDisplayName(String content) {
       return provider.name.trim();
     }
   }
-  final topLevelName = _configString(document.extra['name']);
+  final topLevelName = stringValue(document.extra['name'], trim: true);
   return topLevelName;
-}
-
-/// Converts YAML package collection values to plain Dart values.
-dynamic _plainConfig(dynamic value) {
-  if (value is YamlMap) {
-    return <String, dynamic>{
-      for (final entry in value.entries)
-        entry.key.toString(): _plainConfig(entry.value),
-    };
-  }
-  if (value is YamlList) {
-    return value.map(_plainConfig).toList();
-  }
-  return value;
-}
-
-/// Converts a decoded scalar to a config string.
-String _configString(dynamic value, {String fallback = ''}) {
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString().trim();
-  return text.isEmpty ? fallback : text;
-}
-
-/// Encodes a map as readable YAML.
-String _yamlMap(Map<String, dynamic> map) {
-  final buffer = StringBuffer();
-  _writeYamlMap(buffer, map, 0);
-  return buffer.toString();
-}
-
-/// Writes a YAML map with stable indentation.
-void _writeYamlMap(StringBuffer buffer, Map<String, dynamic> map, int indent) {
-  for (final entry in map.entries) {
-    _writeYamlMapEntry(buffer, entry.key, entry.value, indent);
-  }
-}
-
-/// Writes one YAML map entry, optionally prefixed by a list marker.
-void _writeYamlMapEntry(
-  StringBuffer buffer,
-  String key,
-  dynamic value,
-  int indent, {
-  String prefix = '',
-}) {
-  final padding = ' ' * indent;
-  final entryPrefix = '$padding$prefix$key:';
-  final childIndent = indent + prefix.length + 2;
-  if (value is Map<String, dynamic>) {
-    buffer.writeln(entryPrefix);
-    _writeYamlMap(buffer, value, childIndent);
-  } else if (value is List) {
-    buffer.writeln(entryPrefix);
-    _writeYamlList(buffer, value, childIndent);
-  } else {
-    buffer.writeln('$entryPrefix ${_yamlScalar(value)}');
-  }
-}
-
-/// Writes a YAML list with stable indentation.
-void _writeYamlList(StringBuffer buffer, List<dynamic> list, int indent) {
-  for (final value in list) {
-    final prefix = ' ' * indent;
-    if (value is Map<String, dynamic>) {
-      if (value.isEmpty) {
-        buffer.writeln('$prefix- {}');
-        continue;
-      }
-      final entries = value.entries.toList(growable: false);
-      final first = entries.first;
-      _writeYamlMapEntry(buffer, first.key, first.value, indent, prefix: '- ');
-      for (final entry in entries.skip(1)) {
-        _writeYamlMapEntry(buffer, entry.key, entry.value, indent + 2);
-      }
-    } else {
-      buffer.writeln('$prefix- ${_yamlScalar(value)}');
-    }
-  }
-}
-
-/// Encodes one YAML scalar conservatively.
-String _yamlScalar(dynamic value) {
-  if (value is num || value is bool) {
-    return value.toString();
-  }
-  if (value == null) {
-    return 'null';
-  }
-  final text = value.toString();
-  if (text.isEmpty ||
-      text.contains(': ') ||
-      text.startsWith('{') ||
-      text.startsWith('[') ||
-      text.contains('\n')) {
-    return jsonEncode(text);
-  }
-  return text;
 }

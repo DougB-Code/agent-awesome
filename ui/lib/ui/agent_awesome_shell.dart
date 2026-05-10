@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
 import '../app/theme.dart';
+import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import '../features/today/attention_screen.dart';
 import '../features/today/today_screen.dart';
@@ -19,6 +20,7 @@ import 'people_section.dart';
 import 'settings/settings_panel.dart';
 import 'shell/app_sections.dart';
 import 'shell/app_shell_frame.dart';
+import 'string_list_values.dart';
 import 'workspace/workspace_widgets.dart';
 
 /// AgentAwesomeShell renders the desktop assistant workspace.
@@ -401,16 +403,6 @@ bool _matchesFuzzyQuery(String value, String query) {
   return true;
 }
 
-/// Formats a chat timestamp for dense chat utility rows.
-String _chatTimestamp(DateTime timestamp) {
-  final local = timestamp.toLocal();
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$month/$day $hour:$minute';
-}
-
 const String _chatMemoryDetailId = 'memory';
 const String _chatTasksDetailId = 'tasks';
 const String _chatFilesDetailId = 'files';
@@ -788,7 +780,7 @@ class _ChatSessionPicker extends StatelessWidget {
             value: chat.key,
             title: chat.title,
             subtitle:
-                '${chat.profileLabel} • ${_chatTimestamp(chat.updatedAt)}',
+                '${chat.profileLabel} • ${formatLocalMonthDayTime(chat.updatedAt)}',
             searchText:
                 '${chat.sessionId} ${chat.profileId} ${chat.profilePath}',
             icon: Icons.chat_bubble_outline,
@@ -800,7 +792,7 @@ class _ChatSessionPicker extends StatelessWidget {
         SearchPickerOption<String>(
           value: '${controller.runtimeProfilePath}::${session.id}',
           title: session.title,
-          subtitle: _chatTimestamp(session.updatedAt),
+          subtitle: formatLocalMonthDayTime(session.updatedAt),
           searchText: session.id,
           icon: Icons.chat_bubble_outline,
         ),
@@ -1935,9 +1927,10 @@ class _MemoryFilterBar extends StatelessWidget {
                         unawaited(
                           controller.applyMemoryFilters(
                             filters.copyWith(
-                              allowedSensitivities: _toggleString(
+                              allowedSensitivities: toggleStringValue(
                                 filters.allowedSensitivities,
                                 sensitivity,
+                                allowEmpty: false,
                               ),
                             ),
                           ),
@@ -2772,9 +2765,9 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
       sensitivity: _sensitivity,
       sourceSystem: _sourceSystem.text.trim(),
       sourceId: _sourceId.text.trim(),
-      subjects: _splitList(_subjects.text),
-      topics: _splitList(_topics.text),
-      entityNames: _splitList(_entities.text),
+      subjects: splitCommaSeparatedValues(_subjects.text),
+      topics: splitCommaSeparatedValues(_topics.text),
+      entityNames: splitCommaSeparatedValues(_entities.text),
     );
     if (draft.content.isEmpty) {
       return;
@@ -2881,15 +2874,15 @@ class _MemoryOverviewContent extends StatelessWidget {
                 _MemoryMetadataRow(label: 'Source', value: memory.sourceLabel),
                 _MemoryMetadataRow(
                   label: 'Created',
-                  value: _formatDate(memory.createdAt),
+                  value: formatOptionalLocalDateTime(memory.createdAt),
                 ),
                 _MemoryMetadataRow(
                   label: 'Updated',
-                  value: _formatDate(memory.updatedAt),
+                  value: formatOptionalLocalDateTime(memory.updatedAt),
                 ),
                 _MemoryMetadataRow(
                   label: 'Event',
-                  value: _formatDate(memory.eventTime),
+                  value: formatOptionalLocalDateTime(memory.eventTime),
                 ),
               ],
             ),
@@ -3234,9 +3227,9 @@ class _MemoryMetadataContentState extends State<_MemoryMetadataContent> {
         kind: _kind,
         sensitivity: _sensitivity,
         status: _status,
-        subjects: _splitList(_subjects.text),
-        topics: _splitList(_topics.text),
-        entityNames: _splitList(_entities.text),
+        subjects: splitCommaSeparatedValues(_subjects.text),
+        topics: splitCommaSeparatedValues(_topics.text),
+        entityNames: splitCommaSeparatedValues(_entities.text),
       ),
     );
   }
@@ -3824,26 +3817,6 @@ void _selectFirstEntity(AgentAwesomeAppController controller, String entity) {
   }
 }
 
-/// Toggles a value in a string list.
-List<String> _toggleString(List<String> values, String value) {
-  if (values.contains(value)) {
-    if (values.length == 1) {
-      return values;
-    }
-    return values.where((item) => item != value).toList();
-  }
-  return <String>[...values, value];
-}
-
-/// Splits comma-delimited user input into normalized labels.
-List<String> _splitList(String value) {
-  return value
-      .split(',')
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toList();
-}
-
 /// Coerces a dropdown value to a valid controlled value.
 String _coerceDropdownValue(
   List<String> values,
@@ -3851,19 +3824,6 @@ String _coerceDropdownValue(
   String defaultValue,
 ) {
   return values.contains(value) ? value : defaultValue;
-}
-
-/// Formats a nullable timestamp for compact display.
-String _formatDate(DateTime? value) {
-  if (value == null) {
-    return '';
-  }
-  final local = value.toLocal();
-  return '${local.year.toString().padLeft(4, '0')}-'
-      '${local.month.toString().padLeft(2, '0')}-'
-      '${local.day.toString().padLeft(2, '0')} '
-      '${local.hour.toString().padLeft(2, '0')}:'
-      '${local.minute.toString().padLeft(2, '0')}';
 }
 
 /// Converts controlled vocabulary to readable labels.

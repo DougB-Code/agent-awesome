@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../app/app_controller.dart';
 import '../app/theme.dart';
+import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import 'task_stream_axes.dart';
 
@@ -1795,24 +1796,13 @@ String _cardSubtitle(TaskStreamCard card) {
     if (card.context.isNotEmpty) taskStreamDisplayLabel(card.context),
     if (card.owner.isNotEmpty) taskStreamDisplayLabel(card.owner),
     if (card.estimateMinutes > 0) '${card.estimateMinutes}m',
-    if (card.dueAt != null) 'Due ${_cardDate(card.dueAt!)}',
+    if (card.dueAt != null) 'Due ${formatLocalDate(card.dueAt!)}',
     if (card.dueAt == null && card.scheduledAt != null)
-      'Scheduled ${_cardDate(card.scheduledAt!)}',
+      'Scheduled ${formatLocalDate(card.scheduledAt!)}',
     if (card.spendLabel.isNotEmpty) card.spendLabel,
   ];
   if (parts.isEmpty) {
     return taskStreamDisplayLabel(card.priority);
   }
   return parts.join(' · ');
-}
-
-/// Formats a task card date as a compact local ISO day.
-String _cardDate(DateTime value) {
-  final local = value.toLocal();
-  return '${local.year}-${_cardTwoDigits(local.month)}-${_cardTwoDigits(local.day)}';
-}
-
-/// Formats one date component with two digits.
-String _cardTwoDigits(int value) {
-  return value.toString().padLeft(2, '0');
 }

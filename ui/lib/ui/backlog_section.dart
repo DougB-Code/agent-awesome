@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
 import '../app/theme.dart';
+import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import '../domain/screen_command.dart';
 import '../domain/task_insight_explanations.dart';
@@ -14,6 +15,7 @@ import '../domain/task_insight_query.dart';
 import 'panels/panels.dart';
 import 'task_concept_views.dart';
 import 'task_insight_presets.dart';
+import 'string_list_values.dart';
 import 'task_wbs_formatting.dart';
 
 const List<String> _taskStatuses = <String>[
@@ -847,7 +849,7 @@ class _TaskStatusFilterMenu extends StatelessWidget {
           ),
           '__overdue' => filters.copyWith(overdueOnly: !filters.overdueOnly),
           _ => filters.copyWith(
-            statuses: _toggleFilterValue(filters.statuses, value),
+            statuses: toggleStringValue(filters.statuses, value),
           ),
         };
         unawaited(controller.applyTaskFilters(next));
@@ -908,7 +910,7 @@ class _TaskPriorityFilterMenu extends StatelessWidget {
         final next = value == '__any_priority'
             ? filters.copyWith(priorities: const <String>[])
             : filters.copyWith(
-                priorities: _toggleFilterValue(filters.priorities, value),
+                priorities: toggleStringValue(filters.priorities, value),
               );
         unawaited(controller.applyTaskFilters(next));
       },
@@ -959,7 +961,7 @@ class _TaskTopicFilterMenu extends StatelessWidget {
         final next = value == '__any_topic'
             ? filters.copyWith(topics: const <String>[])
             : filters.copyWith(
-                topics: _toggleFilterValue(filters.topics, value),
+                topics: toggleStringValue(filters.topics, value),
               );
         unawaited(controller.applyTaskFilters(next));
       },
@@ -1172,12 +1174,12 @@ class _TaskQueueTile extends StatelessWidget {
                                     else
                                       _TaskBadge(
                                         label:
-                                            'Due ${_formatTaskDate(task.dueAt)}',
+                                            'Due ${formatOptionalLocalDate(task.dueAt)}',
                                       ),
                                     if (task.scheduledAt != null)
                                       _TaskBadge(
                                         label:
-                                            'Scheduled ${_formatTaskDate(task.scheduledAt)}',
+                                            'Scheduled ${formatOptionalLocalDate(task.scheduledAt)}',
                                       ),
                                     if (task.estimateMinutes > 0)
                                       _TaskBadge(
@@ -1609,7 +1611,7 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
       priority: _priority,
       dueAt: dueAt,
       scheduledAt: scheduledAt,
-      topics: _splitTaskList(_topics.text),
+      topics: splitCommaSeparatedValues(_topics.text),
       linkSelectedMemory: _linkMemory,
     );
     if (!mounted) {
@@ -1797,8 +1799,8 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
     _title.text = widget.task.title;
     _description.text = widget.task.description;
     _topics.text = widget.task.topics.join(', ');
-    _dueAt.text = _formatTaskDate(widget.task.dueAt);
-    _scheduledAt.text = _formatTaskDate(widget.task.scheduledAt);
+    _dueAt.text = formatOptionalLocalDate(widget.task.dueAt);
+    _scheduledAt.text = formatOptionalLocalDate(widget.task.scheduledAt);
     _status = widget.task.status;
     _priority = widget.task.priority;
     _message = '';
@@ -1831,7 +1833,7 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
       scheduledAt: scheduledAt,
       clearScheduledAt:
           _scheduledAt.text.trim().isEmpty && widget.task.scheduledAt != null,
-      topics: _splitTaskList(_topics.text),
+      topics: splitCommaSeparatedValues(_topics.text),
     );
     if (mounted) {
       setState(() => _message = '');
@@ -1932,19 +1934,19 @@ class _TaskMetadataBlock extends StatelessWidget {
           _TaskMetadataRow(label: 'Server', value: task.sourceLabel),
           _TaskMetadataRow(
             label: 'Created',
-            value: _formatTaskDateTime(task.createdAt),
+            value: formatOptionalLocalDateTime(task.createdAt),
           ),
           _TaskMetadataRow(
             label: 'Updated',
-            value: _formatTaskDateTime(task.updatedAt),
+            value: formatOptionalLocalDateTime(task.updatedAt),
           ),
           _TaskMetadataRow(
             label: 'Completed',
-            value: _formatTaskDateTime(task.completedAt),
+            value: formatOptionalLocalDateTime(task.completedAt),
           ),
           _TaskMetadataRow(
             label: 'Canceled',
-            value: _formatTaskDateTime(task.canceledAt),
+            value: formatOptionalLocalDateTime(task.canceledAt),
           ),
         ],
       ),
@@ -2616,7 +2618,7 @@ class _TaskConstellationEdgeInspector extends StatelessWidget {
       rows.add(
         _TaskMetadataRow(
           label: 'Created',
-          value: _formatTaskDateTime(createdAt),
+          value: formatOptionalLocalDateTime(createdAt),
         ),
       );
     }
@@ -2624,7 +2626,7 @@ class _TaskConstellationEdgeInspector extends StatelessWidget {
       rows.add(
         _TaskMetadataRow(
           label: 'Updated',
-          value: _formatTaskDateTime(updatedAt),
+          value: formatOptionalLocalDateTime(updatedAt),
         ),
       );
     }
@@ -2632,7 +2634,7 @@ class _TaskConstellationEdgeInspector extends StatelessWidget {
       rows.add(
         _TaskMetadataRow(
           label: 'Confirmed',
-          value: _formatTaskDateTime(edge.confirmedAt),
+          value: formatOptionalLocalDateTime(edge.confirmedAt),
         ),
       );
     }
@@ -2640,7 +2642,7 @@ class _TaskConstellationEdgeInspector extends StatelessWidget {
       rows.add(
         _TaskMetadataRow(
           label: 'Dismissed',
-          value: _formatTaskDateTime(edge.dismissedAt),
+          value: formatOptionalLocalDateTime(edge.dismissedAt),
         ),
       );
     }
@@ -3385,7 +3387,7 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
       return;
     }
     setState(() {
-      widget.controller.text = _formatTaskDate(picked);
+      widget.controller.text = formatOptionalLocalDate(picked);
     });
   }
 
@@ -3403,7 +3405,7 @@ String _datePickerFieldLabel(String value) {
   if (parsed == null) {
     return value;
   }
-  return _formatTaskDate(parsed);
+  return formatOptionalLocalDate(parsed);
 }
 
 /// Returns a date constrained to a picker-supported range.
@@ -4144,7 +4146,7 @@ class _TaskCommitmentDialogState extends State<_TaskCommitmentDialog> {
     await widget.controller.upsertTaskCommitmentFromUi(
       commitmentId: widget.commitment?.id ?? '',
       taskId: widget.task.id,
-      people: _splitTaskList(_people.text),
+      people: splitCommaSeparatedValues(_people.text),
       domain: _domain.text.trim(),
       project: _project.text.trim(),
       timeWindow: _timeWindow.text.trim(),
@@ -4254,7 +4256,7 @@ class _TaskCreateDialogState extends State<_TaskCreateDialog> {
       title,
       description: _description.text.trim(),
       priority: _priority,
-      topics: _splitTaskList(_topics.text),
+      topics: splitCommaSeparatedValues(_topics.text),
       linkSelectedMemory: _linkMemory,
     );
     if (mounted) {
@@ -4603,23 +4605,6 @@ bool _sameFilterValues(List<String> left, List<String> right) {
   return left.every(rightValues.contains);
 }
 
-/// Toggles one filter value.
-List<String> _toggleFilterValue(List<String> values, String value) {
-  if (values.contains(value)) {
-    return values.where((item) => item != value).toList();
-  }
-  return <String>[...values, value];
-}
-
-/// Splits comma-delimited context labels.
-List<String> _splitTaskList(String value) {
-  return value
-      .split(',')
-      .map((item) => item.trim())
-      .where((item) => item.isNotEmpty)
-      .toList();
-}
-
 /// Formats a normalized score for inspector display.
 String _formatTaskScore(double value) {
   if (value <= 0) {
@@ -4842,30 +4827,6 @@ DateTime? _parseTaskDateInput(String value) {
     int.parse(dateOnly.group(2)!),
     int.parse(dateOnly.group(3)!),
   );
-}
-
-/// Formats a nullable task date.
-String _formatTaskDate(DateTime? value) {
-  if (value == null) {
-    return '';
-  }
-  final local = value.toLocal();
-  return '${local.year.toString().padLeft(4, '0')}-'
-      '${local.month.toString().padLeft(2, '0')}-'
-      '${local.day.toString().padLeft(2, '0')}';
-}
-
-/// Formats a nullable task timestamp.
-String _formatTaskDateTime(DateTime? value) {
-  if (value == null) {
-    return '';
-  }
-  final local = value.toLocal();
-  return '${local.year.toString().padLeft(4, '0')}-'
-      '${local.month.toString().padLeft(2, '0')}-'
-      '${local.day.toString().padLeft(2, '0')} '
-      '${local.hour.toString().padLeft(2, '0')}:'
-      '${local.minute.toString().padLeft(2, '0')}';
 }
 
 /// Converts controlled task vocabulary to readable labels.

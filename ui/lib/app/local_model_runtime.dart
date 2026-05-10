@@ -11,6 +11,7 @@ import 'package:yaml/yaml.dart';
 
 import '../domain/models.dart';
 import 'app_config.dart';
+import 'config_yaml.dart';
 import 'local_services.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';
@@ -952,7 +953,7 @@ class _LiteRtOpenAiServer {
     }
     try {
       final decoded = loadYaml(normalized);
-      final plain = _plainYamlValue(decoded);
+      final plain = plainYamlValue(decoded);
       if (plain is Map<String, dynamic>) {
         return plain;
       }
@@ -971,20 +972,6 @@ class _LiteRtOpenAiServer {
           .replaceAll("$field:'", "$field: '");
     }
     return normalized;
-  }
-
-  /// Converts package:yaml collection types into plain Dart JSON values.
-  Object? _plainYamlValue(Object? value) {
-    if (value is YamlMap) {
-      return <String, dynamic>{
-        for (final entry in value.entries)
-          entry.key.toString(): _plainYamlValue(entry.value),
-      };
-    }
-    if (value is YamlList) {
-      return value.map(_plainYamlValue).toList();
-    }
-    return value;
   }
 
   /// Returns function names supplied in the OpenAI-compatible request.

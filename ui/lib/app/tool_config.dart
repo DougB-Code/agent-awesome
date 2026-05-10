@@ -1,10 +1,10 @@
 /// Parses and writes harness tool configuration files.
 library;
 
-import 'dart:convert';
-
 import 'package:yaml/yaml.dart';
 
+import '../domain/json_value.dart';
+import 'config_yaml.dart';
 import 'runtime_profile.dart';
 
 /// Tools currently exposed by the graph-backed memory MCP endpoint.
@@ -76,7 +76,7 @@ class ToolConfigDocument {
 
   /// Parses YAML or JSON tool config content.
   factory ToolConfigDocument.parse(String content) {
-    final decoded = _plainYaml(loadYaml(content));
+    final decoded = plainYamlValue(loadYaml(content));
     if (decoded is! Map<String, dynamic>) {
       return emptyToolConfigDocument();
     }
@@ -86,9 +86,9 @@ class ToolConfigDocument {
       ..remove('mcp');
     return ToolConfigDocument(
       localExec: LocalExecToolConfig.fromMap(
-        _mapValue(decoded['local-exec'] ?? decoded['local_exec']),
+        jsonObject(decoded['local-exec'] ?? decoded['local_exec']),
       ),
-      mcp: McpToolConfig.fromMap(_mapValue(decoded['mcp'])),
+      mcp: McpToolConfig.fromMap(jsonObject(decoded['mcp'])),
       extra: extra,
     );
   }
@@ -117,7 +117,7 @@ class ToolConfigDocument {
 
   /// Encodes the config document as readable YAML.
   String toYaml() {
-    return _yamlMap(toJson());
+    return encodeYamlMap(toJson());
   }
 }
 
@@ -175,23 +175,25 @@ class LocalExecToolConfig {
       ..remove('allowed_workdirs')
       ..remove('commands');
     return LocalExecToolConfig(
-      enabled: _configBool(map['enabled']),
-      requireConfirmation: _nullableBool(
+      enabled: boolValue(map['enabled']),
+      requireConfirmation: nullableBoolValue(
         map['require-confirmation'] ?? map['require_confirmation'],
       ),
-      allowPersistentApprovals: _configBool(
+      allowPersistentApprovals: boolValue(
         map['allow-persistent-approvals'] ?? map['allow_persistent_approvals'],
       ),
-      defaultTimeout: _configString(
+      defaultTimeout: stringValue(
         map['default-timeout'] ?? map['default_timeout'],
+        trim: true,
       ),
-      defaultMaxOutputBytes: _configInt(
+      defaultMaxOutputBytes: intValue(
         map['default-max-output-bytes'] ?? map['default_max_output_bytes'],
       ),
-      allowedWorkdirs: _stringList(
+      allowedWorkdirs: stringList(
         map['allowed-workdirs'] ?? map['allowed_workdirs'],
+        trim: true,
       ),
-      commands: _mapList(
+      commands: jsonObjectList(
         map['commands'],
       ).map(LocalExecCommandConfig.fromMap).toList(),
       extra: extra,
@@ -294,15 +296,15 @@ class LocalExecCommandConfig {
       ..remove('max_output_bytes')
       ..remove('approval');
     return LocalExecCommandConfig(
-      name: _configString(map['name']),
-      executable: _configString(map['executable']),
-      description: _configString(map['description']),
-      args: _stringList(map['args']),
-      timeout: _configString(map['timeout']),
-      maxOutputBytes: _configInt(
+      name: stringValue(map['name'], trim: true),
+      executable: stringValue(map['executable'], trim: true),
+      description: stringValue(map['description'], trim: true),
+      args: stringList(map['args'], trim: true),
+      timeout: stringValue(map['timeout'], trim: true),
+      maxOutputBytes: intValue(
         map['max-output-bytes'] ?? map['max_output_bytes'],
       ),
-      approval: LocalExecApprovalConfig.fromMap(_mapValue(map['approval'])),
+      approval: LocalExecApprovalConfig.fromMap(jsonObject(map['approval'])),
       extra: extra,
     );
   }
@@ -377,15 +379,16 @@ class LocalExecApprovalConfig {
       ..remove('always-allow')
       ..remove('always_allow');
     return LocalExecApprovalConfig(
-      alwaysAllowWithinWorkspace: _configBool(
+      alwaysAllowWithinWorkspace: boolValue(
         map['always-allow-within-workspace'] ??
             map['always_allow_within_workspace'],
       ),
-      alwaysAllowCommandPrefixes: _stringList(
+      alwaysAllowCommandPrefixes: stringList(
         map['always-allow-command-starts-with'] ??
             map['always_allow_command_starts_with'],
+        trim: true,
       ),
-      alwaysAllow: _configBool(map['always-allow'] ?? map['always_allow']),
+      alwaysAllow: boolValue(map['always-allow'] ?? map['always_allow']),
       extra: extra,
     );
   }
@@ -443,8 +446,8 @@ class McpToolConfig {
       ..remove('enabled')
       ..remove('servers');
     return McpToolConfig(
-      enabled: _configBool(map['enabled']),
-      servers: _mapList(
+      enabled: boolValue(map['enabled']),
+      servers: jsonObjectList(
         map['servers'],
       ).map(McpServerToolConfig.fromMap).toList(),
       extra: extra,
@@ -547,23 +550,28 @@ class McpServerToolConfig {
       ..remove('require_confirmation_tools')
       ..remove('tools');
     return McpServerToolConfig(
-      name: _configString(map['name']),
-      transport: _configString(map['transport'], fallback: 'streamable-http'),
-      command: _configString(map['command']),
-      args: _stringList(map['args']),
+      name: stringValue(map['name'], trim: true),
+      transport: stringValue(
+        map['transport'],
+        fallback: 'streamable-http',
+        trim: true,
+      ),
+      command: stringValue(map['command'], trim: true),
+      args: stringList(map['args'], trim: true),
       env: _stringMap(map['env']),
       headersFromEnv: _stringMap(
         map['headers-from-env'] ?? map['headers_from_env'],
       ),
-      endpoint: _configString(map['endpoint']),
-      url: _configString(map['url']),
-      requireConfirmation: _configBool(
+      endpoint: stringValue(map['endpoint'], trim: true),
+      url: stringValue(map['url'], trim: true),
+      requireConfirmation: boolValue(
         map['require-confirmation'] ?? map['require_confirmation'],
       ),
-      requireConfirmationTools: _stringList(
+      requireConfirmationTools: stringList(
         map['require-confirmation-tools'] ?? map['require_confirmation_tools'],
+        trim: true,
       ),
-      tools: McpToolFilterConfig.fromMap(_mapValue(map['tools'])),
+      tools: McpToolFilterConfig.fromMap(jsonObject(map['tools'])),
       extra: extra,
     );
   }
@@ -637,7 +645,10 @@ class McpToolFilterConfig {
   /// Parses an MCP tool filter from decoded YAML.
   factory McpToolFilterConfig.fromMap(Map<String, dynamic> map) {
     final extra = Map<String, dynamic>.from(map)..remove('allow');
-    return McpToolFilterConfig(allow: _stringList(map['allow']), extra: extra);
+    return McpToolFilterConfig(
+      allow: stringList(map['allow'], trim: true),
+      extra: extra,
+    );
   }
 
   /// Returns a copy with selected values changed.
@@ -972,90 +983,6 @@ String mcpServerEndpoint(McpServerToolConfig server) {
   return server.url.trim();
 }
 
-/// Converts YAML package collection values to plain Dart values.
-dynamic _plainYaml(dynamic value) {
-  if (value is YamlMap) {
-    return <String, dynamic>{
-      for (final entry in value.entries)
-        entry.key.toString(): _plainYaml(entry.value),
-    };
-  }
-  if (value is YamlList) {
-    return value.map(_plainYaml).toList();
-  }
-  return value;
-}
-
-/// Converts a decoded value to a map.
-Map<String, dynamic> _mapValue(dynamic value) {
-  if (value is Map<String, dynamic>) {
-    return value;
-  }
-  return const <String, dynamic>{};
-}
-
-/// Converts a decoded value to a list of maps.
-List<Map<String, dynamic>> _mapList(dynamic value) {
-  if (value is List) {
-    return value.whereType<Map<String, dynamic>>().toList();
-  }
-  return const <Map<String, dynamic>>[];
-}
-
-/// Converts a decoded scalar to a config string.
-String _configString(dynamic value, {String fallback = ''}) {
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString().trim();
-  return text.isEmpty ? fallback : text;
-}
-
-/// Converts a decoded scalar to a bool.
-bool _configBool(dynamic value) {
-  if (value is bool) {
-    return value;
-  }
-  return value.toString().trim().toLowerCase() == 'true';
-}
-
-/// Converts a decoded scalar to a nullable bool.
-bool? _nullableBool(dynamic value) {
-  if (value == null) {
-    return null;
-  }
-  if (value is bool) {
-    return value;
-  }
-  final normalized = value.toString().trim().toLowerCase();
-  if (normalized == 'true') {
-    return true;
-  }
-  if (normalized == 'false') {
-    return false;
-  }
-  return null;
-}
-
-/// Converts a decoded scalar to an integer.
-int _configInt(dynamic value) {
-  if (value is int) {
-    return value;
-  }
-  return int.tryParse(value?.toString().trim() ?? '') ?? 0;
-}
-
-/// Converts a decoded value to a trimmed string list.
-List<String> _stringList(dynamic value) {
-  if (value is! List) {
-    return const <String>[];
-  }
-  return value
-      .map((item) => item.toString().trim())
-      .where((item) => item.isNotEmpty)
-      .toList();
-}
-
 /// Converts a decoded map to a trimmed string map.
 Map<String, String> _stringMap(dynamic value) {
   if (value is! Map<String, dynamic>) {
@@ -1106,90 +1033,6 @@ List<String> _filesystemRootArgs(McpServerToolConfig server) {
 bool _looksAbsolutePath(String value) {
   final path = value.trim();
   return path.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
-}
-
-/// Encodes a map as readable YAML.
-String _yamlMap(Map<String, dynamic> map) {
-  final buffer = StringBuffer();
-  _writeYamlMap(buffer, map, 0);
-  return buffer.toString();
-}
-
-/// Writes a YAML map with stable indentation.
-void _writeYamlMap(StringBuffer buffer, Map<String, dynamic> map, int indent) {
-  for (final entry in map.entries) {
-    _writeYamlMapEntry(buffer, entry.key, entry.value, indent);
-  }
-}
-
-/// Writes one YAML map entry, optionally prefixed by a list marker.
-void _writeYamlMapEntry(
-  StringBuffer buffer,
-  String key,
-  dynamic value,
-  int indent, {
-  String prefix = '',
-}) {
-  final padding = ' ' * indent;
-  final entryPrefix = '$padding$prefix$key:';
-  final childIndent = indent + prefix.length + 2;
-  if (value is Map<String, dynamic>) {
-    if (value.isEmpty) {
-      buffer.writeln('$entryPrefix {}');
-      return;
-    }
-    buffer.writeln(entryPrefix);
-    _writeYamlMap(buffer, value, childIndent);
-  } else if (value is List) {
-    if (value.isEmpty) {
-      buffer.writeln('$entryPrefix []');
-      return;
-    }
-    buffer.writeln(entryPrefix);
-    _writeYamlList(buffer, value, childIndent);
-  } else {
-    buffer.writeln('$entryPrefix ${_yamlScalar(value)}');
-  }
-}
-
-/// Writes a YAML list with stable indentation.
-void _writeYamlList(StringBuffer buffer, List<dynamic> list, int indent) {
-  for (final value in list) {
-    final prefix = ' ' * indent;
-    if (value is Map<String, dynamic>) {
-      if (value.isEmpty) {
-        buffer.writeln('$prefix- {}');
-        continue;
-      }
-      final entries = value.entries.toList(growable: false);
-      final first = entries.first;
-      _writeYamlMapEntry(buffer, first.key, first.value, indent, prefix: '- ');
-      for (final entry in entries.skip(1)) {
-        _writeYamlMapEntry(buffer, entry.key, entry.value, indent + 2);
-      }
-    } else {
-      buffer.writeln('$prefix- ${_yamlScalar(value)}');
-    }
-  }
-}
-
-/// Encodes one YAML scalar conservatively.
-String _yamlScalar(dynamic value) {
-  if (value is num || value is bool) {
-    return value.toString();
-  }
-  if (value == null) {
-    return 'null';
-  }
-  final text = value.toString();
-  if (text.isEmpty ||
-      text.contains(': ') ||
-      text.startsWith('{') ||
-      text.startsWith('[') ||
-      text.contains('\n')) {
-    return jsonEncode(text);
-  }
-  return text;
 }
 
 const Object _unset = Object();

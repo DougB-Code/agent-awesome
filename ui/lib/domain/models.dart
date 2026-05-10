@@ -1,6 +1,8 @@
 /// Contains UI-facing domain models shared by clients, state, and widgets.
 library;
 
+import 'json_value.dart';
+
 /// ConnectionStateKind describes service availability for the shell.
 enum ConnectionStateKind {
   /// The service has not been checked yet.
@@ -134,15 +136,15 @@ class ChatHistoryEntry {
   /// Parses a history entry from decoded JSON.
   factory ChatHistoryEntry.fromJson(Map<String, dynamic> json) {
     return ChatHistoryEntry(
-      profilePath: _modelString(json['profile_path']),
-      profileId: _modelString(json['profile_id']),
-      profileLabel: _modelString(json['profile_label']),
-      sessionId: _modelString(json['session_id']),
-      title: _modelString(json['title'], fallback: 'Untitled chat'),
-      createdAt: _modelDateTime(json['created_at']),
-      updatedAt: _modelDateTime(json['updated_at']) ?? DateTime.now(),
-      titleStatus: _modelString(json['title_status'], fallback: 'session'),
-      titleError: _modelString(json['title_error']),
+      profilePath: stringValue(json['profile_path']),
+      profileId: stringValue(json['profile_id']),
+      profileLabel: stringValue(json['profile_label']),
+      sessionId: stringValue(json['session_id']),
+      title: stringValue(json['title'], fallback: 'Untitled chat'),
+      createdAt: parseOptionalDateTime(json['created_at']),
+      updatedAt: parseOptionalDateTime(json['updated_at']) ?? DateTime.now(),
+      titleStatus: stringValue(json['title_status'], fallback: 'session'),
+      titleError: stringValue(json['title_error']),
     );
   }
 }
@@ -2569,22 +2571,4 @@ class EndpointStatus {
 
   /// Optional status detail.
   final String message;
-}
-
-/// Converts a decoded model value to a display string.
-String _modelString(dynamic value, {String fallback = ''}) {
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString();
-  return text.isEmpty ? fallback : text;
-}
-
-/// Converts a decoded model value to an optional timestamp.
-DateTime? _modelDateTime(dynamic value) {
-  final text = _modelString(value);
-  if (text.isEmpty) {
-    return null;
-  }
-  return DateTime.tryParse(text);
 }

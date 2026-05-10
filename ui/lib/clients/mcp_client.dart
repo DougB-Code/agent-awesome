@@ -6,6 +6,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../app/app_logger.dart';
+import '../domain/date_formatting.dart';
+import '../domain/json_value.dart';
 import '../domain/models.dart';
 
 /// McpException reports a JSON-RPC or MCP tool error.
@@ -1017,11 +1019,11 @@ WorkspaceTask parseWorkspaceTask(dynamic content) {
     detailParts.add(priorityLabel(priority));
   }
   if (dueAt != null) {
-    detailParts.add('Due ${dateOnlyLabel(dueAt)}');
+    detailParts.add('Due ${formatLocalDate(dueAt)}');
   } else if (scheduledAt != null) {
-    detailParts.add('Scheduled ${dateOnlyLabel(scheduledAt)}');
+    detailParts.add('Scheduled ${formatLocalDate(scheduledAt)}');
   } else if (followUpAt != null) {
-    detailParts.add('Review ${dateOnlyLabel(followUpAt)}');
+    detailParts.add('Review ${formatLocalDate(followUpAt)}');
   }
   return WorkspaceTask(
     id: stringValue(task['id']),
@@ -1352,9 +1354,9 @@ List<TaskProjectionTask> parseTaskProjectionTasks(dynamic content) {
     return const <TaskProjectionTask>[];
   }
   return content.whereType<Map<String, dynamic>>().map((task) {
-    final raw = _mapValue(task['raw']);
-    final normalized = _mapValue(task['normalized']);
-    final quality = _mapValue(task['quality']);
+    final raw = jsonObject(task['raw']);
+    final normalized = jsonObject(task['normalized']);
+    final quality = jsonObject(task['quality']);
     return TaskProjectionTask(
       taskId: stringValue(task['task_id'], fallback: stringValue(task['id'])),
       title: stringValue(
@@ -1603,79 +1605,6 @@ List<TaskInsightSummary> parseTaskInsightSummaries(dynamic content) {
   }).toList();
 }
 
-/// Converts a dynamic value to a JSON object map when possible.
-Map<String, dynamic> _mapValue(dynamic value) {
-  return value is Map<String, dynamic> ? value : <String, dynamic>{};
-}
-
-/// Converts a dynamic value to a display string.
-String stringValue(dynamic value, {String fallback = ''}) {
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString();
-  return text.isEmpty ? fallback : text;
-}
-
-/// Converts a dynamic list into display strings.
-List<String> stringList(dynamic value) {
-  if (value is! List) {
-    return const <String>[];
-  }
-  return value.map(stringValue).where((item) => item.isNotEmpty).toList();
-}
-
-/// Converts a dynamic value to a bool.
-bool boolValue(dynamic value, {bool fallback = false}) {
-  if (value is bool) {
-    return value;
-  }
-  if (value is String) {
-    return value.toLowerCase() == 'true';
-  }
-  return fallback;
-}
-
-/// Converts a dynamic value to an integer.
-int intValue(dynamic value, {int fallback = 0}) {
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.toInt();
-  }
-  if (value is String) {
-    return int.tryParse(value) ?? fallback;
-  }
-  return fallback;
-}
-
-/// Converts a dynamic value to a double.
-double doubleValue(dynamic value, {double fallback = 0}) {
-  if (value is double) {
-    return value;
-  }
-  if (value is int) {
-    return value.toDouble();
-  }
-  if (value is num) {
-    return value.toDouble();
-  }
-  if (value is String) {
-    return double.tryParse(value) ?? fallback;
-  }
-  return fallback;
-}
-
-/// Parses an optional service timestamp.
-DateTime? parseOptionalDateTime(dynamic value) {
-  final text = stringValue(value);
-  if (text.isEmpty) {
-    return null;
-  }
-  return DateTime.tryParse(text);
-}
-
 /// Converts backend task status values into compact display labels.
 String statusLabel(String status) {
   switch (status) {
@@ -1704,14 +1633,6 @@ String priorityLabel(String priority) {
     default:
       return 'Normal';
   }
-}
-
-/// Formats a task date for compact row details.
-String dateOnlyLabel(DateTime value) {
-  final local = value.toLocal();
-  return '${local.year.toString().padLeft(4, '0')}-'
-      '${local.month.toString().padLeft(2, '0')}-'
-      '${local.day.toString().padLeft(2, '0')}';
 }
 
 /// Builds task query arguments while omitting empty filters.

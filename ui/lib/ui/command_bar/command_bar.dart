@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
+import '../../domain/date_formatting.dart';
 import '../shell/app_sections.dart';
 import 'command_context.dart';
 import 'quick_access_menu.dart';
@@ -420,7 +421,7 @@ class _CommandBarState extends State<CommandBar> {
           QuickAccessAction(
             label: chat.title,
             detail:
-                '${chat.profileLabel} • ${_commandBarTimestamp(chat.updatedAt)}',
+                '${chat.profileLabel} • ${formatLocalMonthDayTime(chat.updatedAt)}',
             icon: chat.key == widget.appController.selectedChatKey
                 ? Icons.check_circle_outline
                 : Icons.chat_bubble_outline,
@@ -439,7 +440,7 @@ class _CommandBarState extends State<CommandBar> {
       for (final session in widget.appController.sessions.take(4))
         QuickAccessAction(
           label: session.title,
-          detail: _commandBarTimestamp(session.updatedAt),
+          detail: formatLocalMonthDayTime(session.updatedAt),
           icon: session.id == widget.appController.selectedSessionId
               ? Icons.check_circle_outline
               : Icons.chat_bubble_outline,
@@ -821,14 +822,4 @@ class _ThemeBadge extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Formats a chat timestamp for dense command bar rows.
-String _commandBarTimestamp(DateTime timestamp) {
-  final local = timestamp.toLocal();
-  final month = local.month.toString().padLeft(2, '0');
-  final day = local.day.toString().padLeft(2, '0');
-  final hour = local.hour.toString().padLeft(2, '0');
-  final minute = local.minute.toString().padLeft(2, '0');
-  return '$month/$day $hour:$minute';
 }

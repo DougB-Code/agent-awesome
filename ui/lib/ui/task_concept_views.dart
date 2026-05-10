@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
 import '../app/theme.dart';
+import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import '../domain/task_graph_query.dart';
 import '../domain/task_projection_adapters.dart';
@@ -3139,7 +3140,7 @@ class _PositionedTerrainCard extends StatelessWidget {
                             child: Text(
                               point.dueAt == null
                                   ? placement.zone.label
-                                  : 'Due ${_formatShortDate(point.dueAt)}',
+                                  : 'Due ${formatOptionalLocalMonthDay(point.dueAt)}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -3621,15 +3622,6 @@ String _firstNonEmpty(List<String> values) {
     }
   }
   return '';
-}
-
-/// Formats a compact date.
-String _formatShortDate(DateTime? value) {
-  if (value == null) {
-    return '';
-  }
-  final local = value.toLocal();
-  return '${local.month}/${local.day}';
 }
 
 /// Returns a color for a constellation category.

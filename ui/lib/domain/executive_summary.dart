@@ -1,6 +1,8 @@
 /// Defines the canonical Today executive summary projection for the UI.
 library;
 
+import 'json_value.dart';
+
 /// ExecutiveSummaryProjection stores the server-owned Today read model.
 class ExecutiveSummaryProjection {
   /// Creates a complete executive summary projection.
@@ -602,20 +604,20 @@ class ExecutiveSummaryItemExplanation {
 
 /// Parses a canonical executive summary projection response.
 ExecutiveSummaryProjection parseExecutiveSummaryProjection(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return ExecutiveSummaryProjection(
-    schemaVersion: _stringValue(
+    schemaVersion: stringValue(
       object['schema_version'],
       fallback: 'agent-awesome/executive-summary/v1',
     ),
-    generatedAt: _dateTimeValue(object['generated_at']),
-    horizon: _stringValue(object['horizon'], fallback: 'today'),
-    title: _stringValue(object['title'], fallback: 'Today'),
-    subtitle: _stringValue(
+    generatedAt: parseOptionalDateTime(object['generated_at']),
+    horizon: stringValue(object['horizon'], fallback: 'today'),
+    title: stringValue(object['title'], fallback: 'Today'),
+    subtitle: stringValue(
       object['subtitle'],
       fallback: 'Here is what matters now.',
     ),
-    narrativeSummary: _stringValue(object['narrative_summary']),
+    narrativeSummary: stringValue(object['narrative_summary']),
     metrics: _parseMetrics(object['metrics']),
     attention: _parseAttention(object['attention']),
     openLoops: _parseOpenLoops(object['open_loops']),
@@ -633,14 +635,14 @@ ExecutiveSummaryProjection parseExecutiveSummaryProjection(dynamic content) {
 ExecutiveSummaryItemExplanation parseExecutiveSummaryItemExplanation(
   dynamic content,
 ) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return ExecutiveSummaryItemExplanation(
-    itemId: _stringValue(object['item_id']),
-    title: _stringValue(object['title']),
-    reason: _stringValue(object['reason']),
+    itemId: stringValue(object['item_id']),
+    title: stringValue(object['title']),
+    reason: stringValue(object['reason']),
     evidence: _parseEvidence(object['evidence']),
-    confidence: _doubleValue(object['confidence']),
-    limits: _stringList(object['limits']),
+    confidence: doubleValue(object['confidence']),
+    limits: stringList(object['limits']),
   );
 }
 
@@ -651,11 +653,11 @@ List<SummaryMetric> _parseMetrics(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((metric) {
     return SummaryMetric(
-      id: _stringValue(metric['id']),
-      label: _stringValue(metric['label']),
-      value: _stringValue(metric['value']),
-      subtitle: _stringValue(metric['subtitle']),
-      severity: _stringValue(metric['severity'], fallback: 'normal'),
+      id: stringValue(metric['id']),
+      label: stringValue(metric['label']),
+      value: stringValue(metric['value']),
+      subtitle: stringValue(metric['subtitle']),
+      severity: stringValue(metric['severity'], fallback: 'normal'),
       link: _parseLink(metric['link']),
     );
   }).toList();
@@ -663,7 +665,7 @@ List<SummaryMetric> _parseMetrics(dynamic content) {
 
 /// Parses the attention section.
 AttentionProjection _parseAttention(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return AttentionProjection(
     items: _parseItems(object['items']),
     link: _parseLink(object['link']),
@@ -672,7 +674,7 @@ AttentionProjection _parseAttention(dynamic content) {
 
 /// Parses the open-loop radar section.
 OpenLoopProjection _parseOpenLoops(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return OpenLoopProjection(
     categories: _parseOpenLoopCategories(object['categories']),
     link: _parseLink(object['link']),
@@ -681,7 +683,7 @@ OpenLoopProjection _parseOpenLoops(dynamic content) {
 
 /// Parses relationship and promise commitments.
 CommitmentProjection _parseCommitments(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return CommitmentProjection(
     items: _parseItems(object['items']),
     link: _parseLink(object['link']),
@@ -690,7 +692,7 @@ CommitmentProjection _parseCommitments(dynamic content) {
 
 /// Parses fixed time-horizon buckets.
 TimeHorizonProjection _parseTimeHorizon(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return TimeHorizonProjection(
     buckets: _parseTimeHorizonBuckets(object['buckets']),
     link: _parseLink(object['link']),
@@ -699,7 +701,7 @@ TimeHorizonProjection _parseTimeHorizon(dynamic content) {
 
 /// Parses agent delegation buckets.
 DelegationProjection _parseDelegation(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return DelegationProjection(
     buckets: _parseDelegationBuckets(object['buckets']),
     link: _parseLink(object['link']),
@@ -708,7 +710,7 @@ DelegationProjection _parseDelegation(dynamic content) {
 
 /// Parses risk and unblock chains.
 RiskUnblockProjection _parseRiskUnblocks(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return RiskUnblockProjection(
     chains: _parseRiskChains(object['chains']),
     link: _parseLink(object['link']),
@@ -717,12 +719,12 @@ RiskUnblockProjection _parseRiskUnblocks(dynamic content) {
 
 /// Parses source coverage details.
 CoverageProjection _parseCoverage(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return CoverageProjection(
-    good: _stringList(object['good']),
-    partial: _stringList(object['partial']),
-    notConnected: _stringList(object['not_connected']),
-    promise: _stringValue(
+    good: stringList(object['good']),
+    partial: stringList(object['partial']),
+    notConnected: stringList(object['not_connected']),
+    promise: stringValue(
       object['promise'],
       fallback: 'I only use information that is source-backed in memory.',
     ),
@@ -731,13 +733,13 @@ CoverageProjection _parseCoverage(dynamic content) {
 
 /// Parses projection quality metadata.
 ProjectionQualitySummary _parseQuality(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return ProjectionQualitySummary(
-    label: _stringValue(object['label'], fallback: 'Sparse'),
-    relationCoverage: _doubleValue(object['relation_coverage']),
-    taskCount: _intValue(object['task_count']),
-    unknownDomains: _stringList(object['unknown_domains']),
-    limits: _stringList(object['limits']),
+    label: stringValue(object['label'], fallback: 'Sparse'),
+    relationCoverage: doubleValue(object['relation_coverage']),
+    taskCount: intValue(object['task_count']),
+    unknownDomains: stringList(object['unknown_domains']),
+    limits: stringList(object['limits']),
   );
 }
 
@@ -748,10 +750,10 @@ List<OpenLoopCategory> _parseOpenLoopCategories(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((category) {
     return OpenLoopCategory(
-      id: _stringValue(category['id']),
-      label: _stringValue(category['label']),
-      count: _intValue(category['count']),
-      severity: _stringValue(category['severity']),
+      id: stringValue(category['id']),
+      label: stringValue(category['label']),
+      count: intValue(category['count']),
+      severity: stringValue(category['severity']),
       topItems: _parseItems(category['top_items']),
       link: _parseLink(category['link']),
     );
@@ -765,11 +767,11 @@ List<TimeHorizonBucket> _parseTimeHorizonBuckets(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((bucket) {
     return TimeHorizonBucket(
-      id: _stringValue(bucket['id']),
-      label: _stringValue(bucket['label']),
-      count: _intValue(bucket['count']),
-      summary: _stringValue(bucket['summary']),
-      topItem: _stringValue(bucket['top_item']),
+      id: stringValue(bucket['id']),
+      label: stringValue(bucket['label']),
+      count: intValue(bucket['count']),
+      summary: stringValue(bucket['summary']),
+      topItem: stringValue(bucket['top_item']),
       link: _parseLink(bucket['link']),
     );
   }).toList();
@@ -782,11 +784,11 @@ List<DelegationBucket> _parseDelegationBuckets(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((bucket) {
     return DelegationBucket(
-      id: _stringValue(bucket['id']),
-      label: _stringValue(bucket['label']),
-      count: _intValue(bucket['count']),
+      id: stringValue(bucket['id']),
+      label: stringValue(bucket['label']),
+      count: intValue(bucket['count']),
       items: _parseItems(bucket['items']),
-      severity: _stringValue(bucket['severity']),
+      severity: stringValue(bucket['severity']),
       link: _parseLink(bucket['link']),
     );
   }).toList();
@@ -799,7 +801,7 @@ List<RiskUnblockChain> _parseRiskChains(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((chain) {
     return RiskUnblockChain(
-      id: _stringValue(chain['id']),
+      id: stringValue(chain['id']),
       nodes: _parseRiskChainNodes(chain['nodes']),
       suggestedAction: _parseOptionalAction(chain['suggested_action']),
     );
@@ -813,9 +815,9 @@ List<RiskUnblockChainNode> _parseRiskChainNodes(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((node) {
     return RiskUnblockChainNode(
-      taskId: _stringValue(node['task_id']),
-      title: _stringValue(node['title']),
-      subtitle: _stringValue(node['subtitle']),
+      taskId: stringValue(node['task_id']),
+      title: stringValue(node['title']),
+      subtitle: stringValue(node['subtitle']),
     );
   }).toList();
 }
@@ -827,23 +829,23 @@ List<ExecutiveSummaryItem> _parseItems(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((item) {
     return ExecutiveSummaryItem(
-      id: _stringValue(item['id']),
-      kind: _stringValue(item['kind'], fallback: 'item'),
-      lane: _validLane(_stringValue(item['lane'])),
-      title: _stringValue(item['title'], fallback: 'Untitled item'),
-      subtitle: _stringValue(item['subtitle']),
-      reason: _stringValue(item['reason']),
-      score: _doubleValue(item['score']),
-      confidence: _doubleValue(item['confidence']),
-      status: _stringValue(item['status']),
-      priority: _stringValue(item['priority']),
-      taskId: _stringValue(item['task_id']),
-      person: _stringValue(item['person']),
-      project: _stringValue(item['project']),
-      dueAt: _dateTimeValue(item['due_at']),
-      scheduledAt: _dateTimeValue(item['scheduled_at']),
-      followUpAt: _dateTimeValue(item['follow_up_at']),
-      estimateMinutes: _intValue(item['estimate_minutes']),
+      id: stringValue(item['id']),
+      kind: stringValue(item['kind'], fallback: 'item'),
+      lane: _validLane(stringValue(item['lane'])),
+      title: stringValue(item['title'], fallback: 'Untitled item'),
+      subtitle: stringValue(item['subtitle']),
+      reason: stringValue(item['reason']),
+      score: doubleValue(item['score']),
+      confidence: doubleValue(item['confidence']),
+      status: stringValue(item['status']),
+      priority: stringValue(item['priority']),
+      taskId: stringValue(item['task_id']),
+      person: stringValue(item['person']),
+      project: stringValue(item['project']),
+      dueAt: parseOptionalDateTime(item['due_at']),
+      scheduledAt: parseOptionalDateTime(item['scheduled_at']),
+      followUpAt: parseOptionalDateTime(item['follow_up_at']),
+      estimateMinutes: intValue(item['estimate_minutes']),
       evidence: _parseEvidence(item['evidence']),
       primaryAction: _parseOptionalAction(item['primary_action']),
       actions: _parseActions(item['actions']),
@@ -859,10 +861,10 @@ List<ExecutiveSummaryEvidence> _parseEvidence(dynamic content) {
   }
   return content.whereType<Map<String, dynamic>>().map((source) {
     return ExecutiveSummaryEvidence(
-      kind: _stringValue(source['kind']),
-      id: _stringValue(source['id']),
-      label: _stringValue(source['label']),
-      relationship: _stringValue(source['relationship']),
+      kind: stringValue(source['kind']),
+      id: stringValue(source['id']),
+      label: stringValue(source['label']),
+      relationship: stringValue(source['relationship']),
     );
   }).toList();
 }
@@ -886,11 +888,11 @@ ExecutiveSummaryAction? _parseOptionalAction(dynamic content) {
 /// Parses one action hint.
 ExecutiveSummaryAction _parseAction(Map<String, dynamic> action) {
   return ExecutiveSummaryAction(
-    id: _stringValue(action['id']),
-    label: _stringValue(action['label']),
-    tool: _stringValue(action['tool']),
-    safety: _stringValue(action['safety']),
-    payload: _mapValue(action['payload']),
+    id: stringValue(action['id']),
+    label: stringValue(action['label']),
+    tool: stringValue(action['tool']),
+    safety: stringValue(action['safety']),
+    payload: jsonObject(action['payload']),
   );
 }
 
@@ -904,10 +906,10 @@ List<ProjectionLink> _parseLinks(dynamic content) {
 
 /// Parses one route link.
 ProjectionLink _parseLink(dynamic content) {
-  final object = _mapValue(content);
+  final object = jsonObject(content);
   return ProjectionLink(
-    label: _stringValue(object['label']),
-    route: _stringValue(object['route']),
+    label: stringValue(object['label']),
+    route: stringValue(object['route']),
   );
 }
 
@@ -925,63 +927,4 @@ String _validLane(String lane) {
     default:
       return 'monitor';
   }
-}
-
-/// Returns a typed JSON object or an empty object.
-Map<String, dynamic> _mapValue(dynamic value) {
-  return value is Map<String, dynamic> ? value : <String, dynamic>{};
-}
-
-/// Returns a non-empty string or the supplied fallback.
-String _stringValue(dynamic value, {String fallback = ''}) {
-  if (value == null) {
-    return fallback;
-  }
-  final text = value.toString();
-  return text.isEmpty ? fallback : text;
-}
-
-/// Parses a list of non-empty strings.
-List<String> _stringList(dynamic value) {
-  if (value is! List) {
-    return const <String>[];
-  }
-  return value.map(_stringValue).where((item) => item.isNotEmpty).toList();
-}
-
-/// Parses an integer from flexible JSON.
-int _intValue(dynamic value) {
-  if (value is int) {
-    return value;
-  }
-  if (value is num) {
-    return value.toInt();
-  }
-  if (value is String) {
-    return int.tryParse(value) ?? 0;
-  }
-  return 0;
-}
-
-/// Parses a floating-point number from flexible JSON.
-double _doubleValue(dynamic value) {
-  if (value is double) {
-    return value;
-  }
-  if (value is num) {
-    return value.toDouble();
-  }
-  if (value is String) {
-    return double.tryParse(value) ?? 0;
-  }
-  return 0;
-}
-
-/// Parses an RFC3339 timestamp when present.
-DateTime? _dateTimeValue(dynamic value) {
-  final text = _stringValue(value);
-  if (text.isEmpty) {
-    return null;
-  }
-  return DateTime.tryParse(text);
 }
