@@ -1,3 +1,4 @@
+// This file runs live and dry-run Cloudflare apply workflows.
 package cloudflare
 
 import (
@@ -50,11 +51,12 @@ func Apply(ctx context.Context, deployment Deployment, options ApplyOptions) (Ap
 		if options.DryRun {
 			secrets = dryRunSecrets(deployment)
 		} else {
-			built, err := BuildSecrets(deployment, OSEnvironment{})
-			if err != nil {
-				return ApplyResult{}, err
-			}
-			secrets = built
+			return ApplyResult{}, fmt.Errorf("secret values are required for live Cloudflare apply")
+		}
+	}
+	if !options.DryRun {
+		if err := validateSecretValues(deployment, secrets); err != nil {
+			return ApplyResult{}, err
 		}
 	}
 	bundle, err := WriteBundle(deployment, options.OutputDirectory)
@@ -145,6 +147,16 @@ func dryRunSecrets(deployment Deployment) SecretValues {
 		secrets[name] = "dry-run"
 	}
 	return secrets
+}
+
+// validateSecretValues requires every deployment secret before live remote writes.
+func validateSecretValues(deployment Deployment, secrets SecretValues) error {
+	for _, name := range deployment.RequiredSecrets {
+		if strings.TrimSpace(secrets[name]) == "" {
+			return fmt.Errorf("secret %s is required", name)
+		}
+	}
+	return nil
 }
 
 // writeDeploymentWorkerConfig writes the final transient Worker config.

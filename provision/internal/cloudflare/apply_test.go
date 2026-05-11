@@ -1,3 +1,4 @@
+// This file verifies Cloudflare apply orchestration and command planning.
 package cloudflare
 
 import (
@@ -179,30 +180,30 @@ func TestEnsureWorkerScriptBootstrapsMissingWorker(t *testing.T) {
 func TestCommandFailureDiagnosesNodeVersion(t *testing.T) {
 	err := commandFailure(Command{Name: "npx", Arguments: []string{"wrangler", "deploy"}}, CommandResult{
 		Output: "Wrangler requires at least Node.js v22.0.0. You are using v18.19.1.",
-	}, errMissingTestSecret)
+	}, errors.New("test command failed"))
 	if !strings.Contains(err.Error(), "Install Node.js 22 or newer") {
 		t.Fatalf("commandFailure() = %v, want Node diagnosis", err)
 	}
 }
 
-// TestBuildSecretsRequiresSlackSecretsWhenEnabled verifies optional Slack setup gates secret prompts.
-func TestBuildSecretsRequiresSlackSecretsWhenEnabled(t *testing.T) {
+// TestApplyRequiresSecretsWhenLive verifies Cloudflare apply never sources secrets itself.
+func TestApplyRequiresSecretsWhenLive(t *testing.T) {
 	deployment, err := NewDeployment(DeploymentInput{
-		AgentID:               "sister",
-		UserID:                "sister",
-		Hostname:              "sister.agent-awesome.com",
-		SlackEnabled:          true,
-		SlackAllowedTeamID:    "T1",
-		SlackAllowedUserID:    "U1",
-		SlackAllowedChannelID: "C1",
+		AgentID:  "sister",
+		UserID:   "sister",
+		Hostname: "sister.agent-awesome.com",
 	})
 	if err != nil {
 		t.Fatalf("NewDeployment() error = %v", err)
 	}
 
-	_, err = BuildSecrets(deployment, mapEnvironment{"OPENAI_API_KEY": "openai"})
-	if err == nil {
-		t.Fatalf("BuildSecrets() error = nil, want missing Slack secret")
+	_, err = Apply(t.Context(), deployment, ApplyOptions{
+		WorkerDirectory: t.TempDir(),
+		OutputDirectory: t.TempDir(),
+		Runner:          recordingRunner{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "secret values are required") {
+		t.Fatalf("Apply() error = %v, want missing secrets", err)
 	}
 }
 
@@ -245,21 +246,6 @@ func (r *bootstrapRecordingRunner) Run(_ context.Context, command Command) (Comm
 	}
 	return CommandResult{}, nil
 }
-
-// mapEnvironment reads secrets from a map.
-type mapEnvironment map[string]string
-
-// Lookup returns one mapped secret value.
-func (m mapEnvironment) Lookup(name string) (string, error) {
-	value, ok := m[name]
-	if !ok {
-		return "", errMissingTestSecret
-	}
-	return value, nil
-}
-
-// errMissingTestSecret is a stable test error value.
-var errMissingTestSecret = errors.New("missing test secret")
 
 // containsCommand reports whether a command list contains one prefix.
 func containsCommand(commands []string, prefix string) bool {

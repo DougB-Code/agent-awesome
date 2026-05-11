@@ -16,6 +16,7 @@ import (
 	"agentprovision/internal/cloudflare"
 	"agentprovision/internal/platform"
 	"agentprovision/internal/state"
+	"agentprovision/internal/workersecrets"
 	"golang.org/x/term"
 )
 
@@ -621,7 +622,7 @@ func prepareApplyState(deployment cloudflare.Deployment, stateDir string, dryRun
 	if err != nil {
 		return nil, state.AgentRecord{}, state.Store{}, err
 	}
-	secrets, err := cloudflare.BuildSecretsWithTokens(deployment, credentialEnvironment{store: secretStore}, cloudflare.InternalTokens{
+	secrets, err := workersecrets.BuildWithTokens(deployment, credentialEnvironment{store: secretStore}, workersecrets.InternalTokens{
 		GatewayToken:     gatewayToken,
 		PersistenceToken: persistenceToken,
 	})

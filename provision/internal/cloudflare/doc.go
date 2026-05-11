@@ -9,6 +9,6 @@
 //   - cloudflare.NewDeployment(...) creates a validated desired deployment.
 //   - cloudflare.WriteBundle(...) writes the generated files under build/.
 //
-// This package should not prompt users, persist operator state, or store secret
-// values.
+// This package should not prompt users, persist operator state, or source secret
+// values from operator credentials.
 package cloudflare
