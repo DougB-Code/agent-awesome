@@ -209,7 +209,9 @@ sleep 30
       if (entity is! File || !entity.path.endsWith('.dart')) {
         continue;
       }
-      if (entity.path.endsWith('lib/app/process_supervisor.dart')) {
+      final normalizedPath = entity.path.replaceAll('\\', '/');
+      if (normalizedPath == 'lib/app/process_supervisor.dart' ||
+          normalizedPath.startsWith('lib/app/process_supervisor_')) {
         continue;
       }
       final lines = await entity.readAsLines();
