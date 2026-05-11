@@ -1,0 +1,1102 @@
+/// Graph-backed task queue and projection workflows for AgentAwesomeAppController.
+part of 'app_controller.dart';
+
+extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
+  /// Creates a task after local UI confirmation.
+  Future<void> createTaskFromUi(
+    String title, {
+    String description = '',
+    String status = 'open',
+    String priority = 'normal',
+    DateTime? dueAt,
+    DateTime? scheduledAt,
+    List<String> topics = const <String>[],
+    bool linkSelectedMemory = false,
+  }) async {
+    final server = _primaryGraphServer();
+    if (server == null) {
+      _setEndpoint(
+        'Backlog',
+        ConnectionStateKind.disconnected,
+        'No graph memory server',
+      );
+      _notifyControllerListeners();
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = 'Creating backlog item';
+    _notifyControllerListeners();
+    try {
+      final memoryLinks = linkSelectedMemory
+          ? _selectedMemoryLinkDrafts('originated_from')
+          : const <TaskMemoryLinkDraft>[];
+      await _withTasksClientForGraphServer(server, (client) {
+        return client.createTask(
+          title: title,
+          description: description,
+          status: status,
+          priority: priority,
+          dueAt: dueAt,
+          scheduledAt: scheduledAt,
+          topics: topics,
+          memoryLinks: memoryLinks,
+        );
+      });
+      await _loadTasks();
+      taskSelectionKind = 'task';
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.connected,
+        'Backlog item created',
+      );
+      tasksMessage = 'Backlog item created';
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+    }
+    _notifyControllerListeners();
+  }
+
+  /// Returns the selected task when the task inspector is active.
+  WorkspaceTask? get selectedTask {
+    if (taskSelectionKind != 'task') {
+      return null;
+    }
+    if (selectedTaskId != null) {
+      final indexedTask = taskInsightIndex.workspaceTaskForId(selectedTaskId);
+      if (indexedTask != null) {
+        return indexedTask;
+      }
+      for (final task in workspace.tasks) {
+        if (task.id == selectedTaskId) {
+          return task;
+        }
+      }
+    }
+    if (workspace.tasks.isEmpty) {
+      return null;
+    }
+    return workspace.tasks.first;
+  }
+
+  /// Returns the selected task's graph task id.
+  String get selectedGraphTaskId {
+    final taskId = selectedTaskId;
+    if (taskId != null && taskId.isNotEmpty) {
+      return taskId;
+    }
+    final task = selectedTask;
+    return task == null ? '' : task.id;
+  }
+
+  /// Returns explicit relation records connected to the selected task.
+  List<TaskRelationRecord> get selectedTaskRelations {
+    final task = selectedTask;
+    if (task == null) {
+      return const <TaskRelationRecord>[];
+    }
+    final taskId = task.id;
+    return taskRelations.where((relation) {
+      return relation.fromTaskId == taskId || relation.toTaskId == taskId;
+    }).toList();
+  }
+
+  /// Returns inferred relation suggestions connected to the selected task.
+  List<TaskRelationSuggestion> get selectedTaskRelationSuggestions {
+    final task = selectedTask;
+    if (task == null) {
+      return const <TaskRelationSuggestion>[];
+    }
+    final taskId = task.id;
+    return taskRelationSuggestions.where((suggestion) {
+      return suggestion.fromTaskId == taskId || suggestion.toTaskId == taskId;
+    }).toList();
+  }
+
+  /// Returns inferred metadata suggestions connected to the selected task.
+  List<TaskMetadataSuggestion> get selectedTaskMetadataSuggestions {
+    final task = selectedTask;
+    if (task == null) {
+      return const <TaskMetadataSuggestion>[];
+    }
+    final taskId = task.id;
+    return taskMetadataSuggestions.where((suggestion) {
+      return suggestion.taskId == taskId;
+    }).toList();
+  }
+
+  /// Returns inferred commitment suggestions connected to the selected task.
+  List<TaskCommitmentSuggestion> get selectedTaskCommitmentSuggestions {
+    final task = selectedTask;
+    if (task == null) {
+      return const <TaskCommitmentSuggestion>[];
+    }
+    final taskId = task.id;
+    return taskCommitmentSuggestions.where((suggestion) {
+      return suggestion.taskId == taskId;
+    }).toList();
+  }
+
+  /// Returns first-class commitments represented by the selected task.
+  List<TaskCommitment> get selectedTaskCommitments {
+    final task = selectedTask;
+    if (task == null) {
+      return const <TaskCommitment>[];
+    }
+    final taskId = task.id;
+    return taskCommitments.where((commitment) {
+      return commitment.taskId == taskId;
+    }).toList();
+  }
+
+  /// Returns the selected constellation edge when the inspector is in edge mode.
+  TaskConstellationEdge? get selectedConstellationEdge {
+    if (taskSelectionKind != 'constellation_edge') {
+      return null;
+    }
+    final edge = selectedTaskConstellationEdge;
+    if (edge == null) {
+      return null;
+    }
+    if (!taskInsightIndex.isVisibleEndpoint(edge.fromTaskId) ||
+        !taskInsightIndex.isVisibleEndpoint(edge.toTaskId)) {
+      return null;
+    }
+    return edge;
+  }
+
+  /// Returns tasks after applying local queue filters.
+  List<WorkspaceTask> get filteredTasks {
+    return workspace.tasks.where((task) {
+      final terminal = task.status == 'done' || task.status == 'canceled';
+      if (!taskFilters.includeDone && terminal) {
+        return false;
+      }
+      if (taskFilters.statuses.isNotEmpty &&
+          !taskFilters.statuses.contains(task.status)) {
+        return false;
+      }
+      if (taskFilters.priorities.isNotEmpty &&
+          !taskFilters.priorities.contains(task.priority)) {
+        return false;
+      }
+      if (taskFilters.topics.isNotEmpty &&
+          !task.topics.any(taskFilters.topics.contains)) {
+        return false;
+      }
+      if (taskFilters.overdueOnly && !task.overdue) {
+        return false;
+      }
+      final search = taskFilters.search.trim();
+      if (search.isNotEmpty &&
+          !_textContains('${task.title} ${task.description}', search)) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  /// Returns all task topics in count order.
+  List<String> get taskTopics {
+    final counts = <String, int>{};
+    for (final task in workspace.tasks) {
+      for (final topic in task.topics) {
+        counts[topic] = (counts[topic] ?? 0) + 1;
+      }
+    }
+    final entries = counts.entries.toList()
+      ..sort((left, right) {
+        final countCompare = right.value.compareTo(left.value);
+        return countCompare == 0 ? left.key.compareTo(right.key) : countCompare;
+      });
+    return entries.map((entry) => entry.key).toList();
+  }
+
+  /// Returns tasks created from or otherwise associated with the selected chat.
+  List<WorkspaceTask> get selectedChatTasks {
+    final sessionId = selectedSessionId;
+    if (sessionId == null || sessionId.isEmpty) {
+      return const <WorkspaceTask>[];
+    }
+    final associatedTaskIds = _chatTaskIds[sessionId] ?? const <String>{};
+    final conversationText = messages
+        .map((message) => '${message.author} ${message.text}')
+        .join('\n');
+    return workspace.tasks.where((task) {
+      return _taskBelongsToChat(task, sessionId) ||
+          associatedTaskIds.contains(task.id) ||
+          _taskTitleAppearsInChat(task, conversationText);
+    }).toList();
+  }
+
+  /// Applies local task filters and refreshes the task surface.
+  Future<void> applyTaskFilters(TaskFilterState filters) async {
+    taskFilters = filters;
+    _notifyControllerListeners();
+  }
+
+  /// Applies one semantic task insight preset to Queue.
+  Future<void> applyTaskInsightPreset(String presetId) async {
+    taskInsightPresetId = presetId;
+    _notifyControllerListeners();
+  }
+
+  /// Refreshes graph-backed task state from memory graph servers.
+  Future<void> refreshTasksFromUi() async {
+    await _loadTasks();
+  }
+
+  /// Refreshes graph-backed memory records from memory MCP servers.
+  Future<void> refreshMemoryFromUi() async {
+    await _loadMemory();
+  }
+
+  /// Reports whether the primary memory server advertises a tool.
+  bool primaryMemoryToolAvailable(String toolName) {
+    return primaryMemoryToolNames.contains(toolName);
+  }
+
+  /// Selects a task for the inspector.
+  void selectTask(String taskId) {
+    taskSelectionKind = 'task';
+    selectedTaskId = taskId;
+    selectedTaskConstellationEdge = null;
+    _notifyControllerListeners();
+  }
+
+  /// Selects a constellation relation edge for the inspector.
+  void selectConstellationEdge(TaskConstellationEdge edge) {
+    taskSelectionKind = 'constellation_edge';
+    selectedTaskConstellationEdge = edge;
+    selectedTaskId = null;
+    _notifyControllerListeners();
+  }
+
+  /// Clears the selected constellation edge without changing task data.
+  void clearConstellationEdgeSelection() {
+    if (selectedTaskConstellationEdge == null &&
+        taskSelectionKind != 'constellation_edge') {
+      return;
+    }
+    selectedTaskConstellationEdge = null;
+    if (taskSelectionKind == 'constellation_edge') {
+      taskSelectionKind = 'task';
+    }
+    _notifyControllerListeners();
+  }
+
+  /// Completes a task after local UI confirmation.
+  Future<void> completeTaskFromUi(String taskId) async {
+    final server = _primaryGraphServer();
+    if (server == null) {
+      _setEndpoint(
+        'Backlog',
+        ConnectionStateKind.disconnected,
+        'No graph memory server',
+      );
+      _notifyControllerListeners();
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = 'Completing backlog item';
+    _notifyControllerListeners();
+    try {
+      await _withTasksClientForGraphServer(server, (client) {
+        return client.completeTask(taskId);
+      });
+      await _loadTasks();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.connected,
+        'Backlog item completed',
+      );
+      tasksMessage = 'Backlog item completed';
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+    }
+    _notifyControllerListeners();
+  }
+
+  /// Updates mutable task fields after local UI confirmation.
+  Future<void> updateTaskFromUi({
+    required String taskId,
+    String? title,
+    String? description,
+    String? status,
+    String? priority,
+    DateTime? dueAt,
+    bool clearDueAt = false,
+    DateTime? scheduledAt,
+    bool clearScheduledAt = false,
+    List<String>? topics,
+    int? estimateMinutes,
+    String? energyRequired,
+    double? effort,
+    double? value,
+    double? urgency,
+    double? risk,
+    String? context,
+    String? domain,
+    String? location,
+    String? owner,
+    String? source,
+    TaskWorkBreakdown? workBreakdown,
+    double? confidence,
+  }) async {
+    final server = _primaryGraphServer();
+    if (server == null) {
+      _setEndpoint(
+        'Backlog',
+        ConnectionStateKind.disconnected,
+        'No graph memory server',
+      );
+      _notifyControllerListeners();
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = 'Saving backlog item';
+    _notifyControllerListeners();
+    try {
+      await _withTasksClientForGraphServer(server, (client) {
+        return client.updateTask(
+          taskId: taskId,
+          title: title,
+          description: description,
+          status: status,
+          priority: priority,
+          dueAt: dueAt,
+          clearDueAt: clearDueAt,
+          scheduledAt: scheduledAt,
+          clearScheduledAt: clearScheduledAt,
+          topics: topics,
+          replaceTopics: topics != null,
+          estimateMinutes: estimateMinutes,
+          energyRequired: energyRequired,
+          effort: effort,
+          value: value,
+          urgency: urgency,
+          risk: risk,
+          context: context,
+          domain: domain,
+          location: location,
+          owner: owner,
+          source: source,
+          workBreakdown: workBreakdown,
+          confidence: confidence,
+        );
+      });
+      selectedTaskId = taskId;
+      taskSelectionKind = 'task';
+      await _loadTasks();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.connected,
+        'Backlog item saved',
+      );
+      tasksMessage = 'Backlog item saved';
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Creates or updates an explicit task relation from the inspector.
+  Future<void> upsertTaskRelationFromUi({
+    required String fromTaskId,
+    required String toTaskId,
+    String relationType = 'related_to',
+    double confidence = 1,
+    String explanation = '',
+  }) async {
+    await _mutateTaskGraphFromUi(
+      server: _primaryGraphServer(),
+      selectedTaskAfter: fromTaskId,
+      busyMessage: 'Saving backlog relation',
+      successMessage: 'Backlog relation saved',
+      action: (client) async {
+        await client.upsertTaskRelation(
+          fromTaskId: fromTaskId,
+          toTaskId: toTaskId,
+          relationType: relationType,
+          confidence: confidence,
+          explanation: explanation,
+        );
+      },
+    );
+  }
+
+  /// Deletes an explicit task relation from the inspector.
+  Future<void> deleteTaskRelationFromUi(TaskRelationRecord relation) async {
+    await _mutateTaskGraphFromUi(
+      server: _primaryGraphServer(),
+      selectedTaskAfter: relation.fromTaskId,
+      busyMessage: 'Deleting backlog relation',
+      successMessage: 'Backlog relation deleted',
+      action: (client) async {
+        await client.deleteTaskRelation(relation.id);
+      },
+    );
+  }
+
+  /// Accepts an inferred task relation suggestion as explicit metadata.
+  Future<void> applyTaskSuggestionFromUi(String suggestionId) async {
+    final taskId = _taskIdForSuggestion(suggestionId);
+    await _mutateTaskGraphFromUi(
+      server: _primaryGraphServer(),
+      selectedTaskAfter: taskId,
+      busyMessage: 'Accepting backlog suggestion',
+      successMessage: 'Backlog suggestion accepted',
+      action: (client) async {
+        await client.applyTaskSuggestion(suggestionId);
+      },
+    );
+  }
+
+  /// Dismisses an inferred task relation suggestion.
+  Future<void> dismissTaskSuggestionFromUi(String suggestionId) async {
+    final taskId = _taskIdForSuggestion(suggestionId);
+    await _mutateTaskGraphFromUi(
+      server: _primaryGraphServer(),
+      selectedTaskAfter: taskId,
+      busyMessage: 'Dismissing backlog suggestion',
+      successMessage: 'Backlog suggestion dismissed',
+      action: (client) async {
+        await client.dismissTaskSuggestion(suggestionId);
+      },
+    );
+  }
+
+  /// Creates or updates a first-class task commitment from the inspector.
+  Future<void> upsertTaskCommitmentFromUi({
+    String commitmentId = '',
+    required String taskId,
+    List<String> people = const <String>[],
+    String domain = '',
+    String project = '',
+    String timeWindow = '',
+    String responsibility = '',
+    String promiseSource = '',
+    String hardness = '',
+    String consequence = '',
+  }) async {
+    await _mutateTaskGraphFromUi(
+      server: _primaryGraphServer(),
+      selectedTaskAfter: taskId,
+      busyMessage: 'Saving backlog commitment',
+      successMessage: 'Backlog commitment saved',
+      action: (client) async {
+        await client.upsertCommitment(
+          commitmentId: commitmentId,
+          taskId: taskId,
+          people: people,
+          domain: domain,
+          project: project,
+          timeWindow: timeWindow,
+          responsibility: responsibility,
+          promiseSource: promiseSource,
+          hardness: hardness,
+          consequence: consequence,
+        );
+      },
+    );
+  }
+
+  /// Deletes one first-class task commitment from the inspector.
+  Future<void> deleteTaskCommitmentFromUi(TaskCommitment commitment) async {
+    await _mutateTaskGraphFromUi(
+      server: _primaryGraphServer(),
+      selectedTaskAfter: commitment.taskId,
+      busyMessage: 'Deleting backlog commitment',
+      successMessage: 'Backlog commitment deleted',
+      action: (client) async {
+        await client.deleteCommitment(commitment.id);
+      },
+    );
+  }
+
+  /// Cancels a task after local UI confirmation.
+  Future<void> cancelTaskFromUi(String taskId) async {
+    final server = _primaryGraphServer();
+    if (server == null) {
+      _setEndpoint(
+        'Backlog',
+        ConnectionStateKind.disconnected,
+        'No graph memory server',
+      );
+      _notifyControllerListeners();
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = 'Canceling backlog item';
+    _notifyControllerListeners();
+    try {
+      await _withTasksClientForGraphServer(server, (client) {
+        return client.cancelTask(taskId);
+      });
+      selectedTaskId = taskId;
+      await _loadTasks();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.connected,
+        'Backlog item canceled',
+      );
+      tasksMessage = 'Backlog item canceled';
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Deletes a task after local UI confirmation.
+  Future<void> deleteTaskFromUi(String taskId) async {
+    final server = _primaryGraphServer();
+    if (server == null) {
+      _setEndpoint(
+        'Backlog',
+        ConnectionStateKind.disconnected,
+        'No graph memory server',
+      );
+      _notifyControllerListeners();
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = 'Deleting backlog item';
+    _notifyControllerListeners();
+    try {
+      await _withTasksClientForGraphServer(server, (client) {
+        return client.deleteTask(taskId);
+      });
+      if (selectedTaskId == taskId) {
+        selectedTaskId = null;
+      }
+      await _loadTasks();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.connected,
+        'Backlog item deleted',
+      );
+      tasksMessage = 'Backlog item deleted';
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Links the selected memory record to a backlog item.
+  Future<void> linkSelectedMemoryToTaskFromUi(String taskId) async {
+    final server = _primaryGraphServer();
+    final drafts = _selectedMemoryLinkDrafts('context');
+    if (server == null || drafts.isEmpty) {
+      tasksMessage = 'Select a graph memory server and memory record first';
+      _notifyControllerListeners();
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = 'Linking memory to backlog item';
+    _notifyControllerListeners();
+    try {
+      await _withTasksClientForGraphServer(server, (client) {
+        return client.linkTaskMemory(taskId: taskId, link: drafts.first);
+      });
+      selectedTaskId = taskId;
+      taskSelectionKind = 'task';
+      await _loadTasks();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.connected,
+        'Memory linked',
+      );
+      tasksMessage = 'Memory linked';
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Unlinks memory from a task.
+  Future<void> unlinkTaskMemoryFromUi({
+    required String taskId,
+    required String linkId,
+  }) async {
+    final server = _primaryGraphServer();
+    if (server == null) {
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = 'Unlinking memory';
+    _notifyControllerListeners();
+    try {
+      await _withTasksClientForGraphServer(server, (client) {
+        return client.unlinkTaskMemory(taskId: taskId, linkId: linkId);
+      });
+      selectedTaskId = taskId;
+      taskSelectionKind = 'task';
+      await _loadTasks();
+      tasksMessage = 'Memory unlinked';
+      _setEndpoint(server.label, ConnectionStateKind.connected, tasksMessage);
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  Future<void> _loadTasks() async {
+    await _log('load tasks start');
+    tasksBusy = true;
+    tasksMessage = 'Loading backlog';
+    _notifyControllerListeners();
+    final tasks = <WorkspaceTask>[];
+    final failures = <String>[];
+    final profile = runtimeProfile;
+    if (profile == null) {
+      workspace = ProjectWorkspace(
+        title: workspace.title,
+        subtitle: workspace.subtitle,
+        tasks: const <WorkspaceTask>[],
+        sources: workspace.sources,
+        memoryRecords: workspace.memoryRecords,
+      );
+      _clearTaskProjections();
+      tasksBusy = false;
+      tasksMessage = 'Runtime profile is not loaded';
+      _notifyControllerListeners();
+      return;
+    }
+    for (final server in profile.memoryServers) {
+      await _log('load tasks via ${server.label} ${server.endpoint}');
+      final client = _tasksClientFor(server);
+      try {
+        final serverTasks = await client.listTasks(
+          filters: const TaskFilterState(statuses: <String>[]),
+          includeDone: true,
+          includeLinks: true,
+          limit: taskFilters.limit,
+        );
+        final workBreakdowns = await _loadTaskWorkBreakdowns(client);
+        await _log('load tasks ${server.label} returned ${serverTasks.length}');
+        tasks.addAll(
+          serverTasks.map((task) {
+            final workBreakdown =
+                _taskWorkBreakdownHasContent(task.workBreakdown)
+                ? task.workBreakdown
+                : workBreakdowns[task.id];
+            return task.copyWith(
+              sourceId: server.id,
+              sourceLabel: server.label,
+              workBreakdown: workBreakdown,
+            );
+          }),
+        );
+        _setEndpoint(server.label, ConnectionStateKind.connected, 'Connected');
+      } catch (error) {
+        await _log('load tasks failed for ${server.label}: $error');
+        failures.add('${server.label}: $error');
+        _setEndpoint(
+          server.label,
+          ConnectionStateKind.disconnected,
+          error.toString(),
+        );
+      } finally {
+        if (!identical(client, tasksClient)) {
+          client.close();
+        }
+      }
+    }
+    tasks.sort(_compareTasksForWorkQueue);
+    workspace = ProjectWorkspace(
+      title: workspace.title,
+      subtitle: workspace.subtitle,
+      tasks: tasks,
+      sources: workspace.sources,
+      memoryRecords: workspace.memoryRecords,
+    );
+    if (selectedTaskId != null &&
+        !tasks.any((task) => task.id == selectedTaskId)) {
+      selectedTaskId = null;
+    }
+    await _loadTaskProjections(profile.memoryServers, workspaceTasks: tasks);
+    final selectedEdge = selectedTaskConstellationEdge;
+    if (selectedEdge != null &&
+        (!taskInsightIndex.isVisibleEndpoint(selectedEdge.fromTaskId) ||
+            !taskInsightIndex.isVisibleEndpoint(selectedEdge.toTaskId))) {
+      selectedTaskConstellationEdge = null;
+    }
+    tasksMessage = failures.isEmpty
+        ? 'Loaded ${tasks.length} backlog items'
+        : failures.join(' | ');
+    tasksBusy = false;
+    await _log('load tasks complete tasks=${tasks.length}');
+    unawaited(_loadToday(quiet: true));
+    _notifyControllerListeners();
+  }
+
+  /// Loads WBS graph facts that may be absent from the task DTO.
+  Future<Map<String, TaskWorkBreakdown>> _loadTaskWorkBreakdowns(
+    TasksClient client,
+  ) async {
+    try {
+      return await client.getTaskWorkBreakdowns();
+    } catch (error) {
+      await _log('load task WBS facts failed: $error');
+      return const <String, TaskWorkBreakdown>{};
+    }
+  }
+
+  /// Loads read-only task graph projections from memory graph endpoints.
+  Future<void> _loadTaskProjections(
+    List<McpServerRuntime> servers, {
+    required List<WorkspaceTask> workspaceTasks,
+  }) async {
+    if (servers.isEmpty) {
+      _clearTaskProjections();
+      return;
+    }
+    final failures = <String>[];
+    var projectionGraph = const TaskProjectionGraph();
+    final relationRecords = <TaskRelationRecord>[];
+    final commitments = <TaskCommitment>[];
+    final relationSuggestions = <TaskRelationSuggestion>[];
+    final metadataSuggestions = <TaskMetadataSuggestion>[];
+    final commitmentSuggestions = <TaskCommitmentSuggestion>[];
+    final server = servers.first;
+    final missing = await _missingGraphProjectionTools(server);
+    if (missing.isNotEmpty) {
+      final message =
+          '${server.label} is missing projection tools: ${missing.join(', ')}';
+      failures.add(message);
+      await _log(message);
+    } else {
+      try {
+        projectionGraph = await _withTasksClientForGraphServer(server, (
+          client,
+        ) {
+          return client.getTaskProjectionGraph();
+        });
+      } catch (error) {
+        failures.add('${server.label} Projection Graph: $error');
+      }
+    }
+    final corrections = await _loadTaskGraphCorrectionsForGraphServer(server);
+    relationRecords.addAll(corrections.relations);
+    commitments.addAll(corrections.commitments);
+    relationSuggestions.addAll(corrections.relationSuggestions);
+    metadataSuggestions.addAll(corrections.metadataSuggestions);
+    commitmentSuggestions.addAll(corrections.commitmentSuggestions);
+    taskProjectionGraph = projectionGraph;
+    taskRelations = relationRecords;
+    taskCommitments = commitments;
+    taskRelationSuggestions = relationSuggestions;
+    taskMetadataSuggestions = metadataSuggestions;
+    taskCommitmentSuggestions = commitmentSuggestions;
+    taskInsightIndex = TaskInsightIndex.build(
+      workspaceTasks: workspaceTasks,
+      graph: taskProjectionGraph,
+      taskRelations: taskRelations,
+      taskCommitments: taskCommitments,
+      metadataSuggestions: taskMetadataSuggestions,
+    );
+    taskInsightSummaries = taskInsightIndex.insightSummaries;
+    taskStreamProjection = TaskInsightProjectionAdapters.stream(
+      taskInsightIndex,
+    );
+    priorityTerrainProjection = TaskInsightProjectionAdapters.terrain(
+      taskInsightIndex,
+    );
+    taskConstellationProjection = TaskInsightProjectionAdapters.constellation(
+      taskInsightIndex,
+    );
+    taskInsightMessage = taskInsightIndex.projectionCoverageMessage;
+    final messages = <String>[
+      ...failures,
+      if (taskInsightMessage.isNotEmpty) taskInsightMessage,
+    ];
+    taskProjectionMessage = messages.join(' | ');
+    if (taskProjectionMessage.isNotEmpty) {
+      await _log('load task projections: $taskProjectionMessage');
+    }
+  }
+
+  /// Returns projection tools missing from a memory graph endpoint.
+  Future<List<String>> _missingGraphProjectionTools(
+    McpServerRuntime server,
+  ) async {
+    try {
+      final names = await _withTasksClientForGraphServer(server, (client) {
+        return client.listToolNames();
+      });
+      final available = names.toSet();
+      return _requiredTaskProjectionTools
+          .where((tool) => !available.contains(tool))
+          .toList();
+    } catch (error) {
+      await _log('task projection tool check failed: $error');
+      return const <String>[];
+    }
+  }
+
+  /// Loads user-correctable graph state from one memory graph endpoint.
+  Future<_TaskGraphCorrectionState> _loadTaskGraphCorrectionsForGraphServer(
+    McpServerRuntime server,
+  ) async {
+    final relations = await _optionalTaskToolResult(
+      server,
+      'list_task_relations',
+      const <TaskRelationRecord>[],
+      (client) {
+        return client.listTaskRelations();
+      },
+    );
+    final commitments = await _optionalTaskToolResult(
+      server,
+      'list_commitments',
+      const <TaskCommitment>[],
+      (client) {
+        return client.listCommitments();
+      },
+    );
+    final suggestions = await _optionalTaskToolResult(
+      server,
+      'suggest_task_relationships',
+      const <TaskRelationSuggestion>[],
+      (client) {
+        return client.suggestTaskRelationships();
+      },
+    );
+    final metadataSuggestions = await _optionalTaskToolResult(
+      server,
+      'suggest_task_metadata',
+      const <TaskMetadataSuggestion>[],
+      (client) {
+        return client.suggestTaskMetadata();
+      },
+    );
+    final commitmentSuggestions = await _optionalTaskToolResult(
+      server,
+      'suggest_commitments',
+      const <TaskCommitmentSuggestion>[],
+      (client) {
+        return client.suggestCommitments();
+      },
+    );
+    return _TaskGraphCorrectionState(
+      relations: relations,
+      commitments: commitments,
+      relationSuggestions: suggestions,
+      metadataSuggestions: metadataSuggestions,
+      commitmentSuggestions: commitmentSuggestions,
+    );
+  }
+
+  /// Returns whether a memory graph endpoint advertises one optional task tool.
+  Future<bool> _taskToolAvailable(
+    McpServerRuntime server,
+    String toolName,
+  ) async {
+    try {
+      final names = await _withTasksClientForGraphServer(server, (client) {
+        return client.listToolNames();
+      });
+      return names.contains(toolName);
+    } catch (error) {
+      await _log('task tool availability check failed: $error');
+      return true;
+    }
+  }
+
+  /// Loads optional task graph data when the endpoint advertises the tool.
+  Future<T> _optionalTaskToolResult<T>(
+    McpServerRuntime server,
+    String toolName,
+    T fallback,
+    Future<T> Function(TasksClient client) action,
+  ) async {
+    if (!await _taskToolAvailable(server, toolName)) {
+      return fallback;
+    }
+    try {
+      return await _withTasksClientForGraphServer(server, action);
+    } catch (error) {
+      await _log('${server.label} optional task tool $toolName failed: $error');
+      return fallback;
+    }
+  }
+
+  /// Clears read-only task projection and graph correction state.
+  void _clearTaskProjections() {
+    taskProjectionGraph = const TaskProjectionGraph();
+    taskInsightIndex = TaskInsightIndex.empty;
+    taskInsightSummaries = const <TaskInsightQuerySummary>[];
+    taskStreamProjection = const TaskStreamProjection();
+    priorityTerrainProjection = const PriorityTerrainProjection();
+    taskConstellationProjection = const TaskConstellationProjection();
+    taskProjectionMessage = '';
+    taskInsightMessage = '';
+    taskRelations = const <TaskRelationRecord>[];
+    taskCommitments = const <TaskCommitment>[];
+    taskRelationSuggestions = const <TaskRelationSuggestion>[];
+    taskMetadataSuggestions = const <TaskMetadataSuggestion>[];
+    taskCommitmentSuggestions = const <TaskCommitmentSuggestion>[];
+  }
+
+  /// Reloads tasks and associates newly created tasks with the active chat.
+  Future<void> _loadTasksAfterChatTaskWrite({
+    required String sessionId,
+    required bool associateCreatedTask,
+  }) async {
+    final previousTaskIds = workspace.tasks.map((task) => task.id).toSet();
+    await _loadTasks();
+    if (!associateCreatedTask || sessionId.isEmpty) {
+      return;
+    }
+    final createdTaskIds = workspace.tasks
+        .where((task) => !previousTaskIds.contains(task.id))
+        .map((task) => task.id)
+        .toSet();
+    if (createdTaskIds.isEmpty) {
+      return;
+    }
+    final existingTaskIds = _chatTaskIds[sessionId] ?? <String>{};
+    _chatTaskIds[sessionId] = <String>{...existingTaskIds, ...createdTaskIds};
+    await _log(
+      'associated chat $sessionId with created tasks ${createdTaskIds.join(',')}',
+    );
+    _notifyControllerListeners();
+  }
+
+  Future<void> _mutateTaskGraphFromUi({
+    required McpServerRuntime? server,
+    required String busyMessage,
+    required String successMessage,
+    required Future<void> Function(TasksClient client) action,
+    String? selectedTaskAfter,
+  }) async {
+    if (server == null) {
+      _setEndpoint(
+        'Backlog',
+        ConnectionStateKind.disconnected,
+        'No graph memory server',
+      );
+      _notifyControllerListeners();
+      return;
+    }
+    tasksBusy = true;
+    tasksMessage = busyMessage;
+    _notifyControllerListeners();
+    try {
+      await _withTasksClientForGraphServer(server, action);
+      if (selectedTaskAfter != null && selectedTaskAfter.isNotEmpty) {
+        selectedTaskId = selectedTaskAfter;
+        taskSelectionKind = 'task';
+      }
+      await _loadTasks();
+      _setEndpoint(server.label, ConnectionStateKind.connected, successMessage);
+      tasksMessage = successMessage;
+    } catch (error) {
+      tasksMessage = error.toString();
+      _setEndpoint(
+        server.label,
+        ConnectionStateKind.disconnected,
+        error.toString(),
+      );
+    } finally {
+      tasksBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  String? _taskIdForSuggestion(String suggestionId) {
+    for (final suggestion in taskRelationSuggestions) {
+      if (suggestion.id == suggestionId) {
+        return suggestion.fromTaskId;
+      }
+    }
+    for (final suggestion in taskMetadataSuggestions) {
+      if (suggestion.id == suggestionId) {
+        return suggestion.taskId;
+      }
+    }
+    for (final suggestion in taskCommitmentSuggestions) {
+      if (suggestion.id == suggestionId) {
+        return suggestion.taskId;
+      }
+    }
+    return null;
+  }
+
+  Future<T> _withTasksClientForGraphServer<T>(
+    McpServerRuntime server,
+    Future<T> Function(TasksClient client) action,
+  ) async {
+    final client = _tasksClientFor(server);
+    try {
+      return await action(client);
+    } finally {
+      if (!identical(client, tasksClient)) {
+        client.close();
+      }
+    }
+  }
+
+  List<TaskMemoryLinkDraft> _selectedMemoryLinkDrafts(String relationship) {
+    final memory = selectedMemory;
+    if (memory == null) {
+      return const <TaskMemoryLinkDraft>[];
+    }
+    return <TaskMemoryLinkDraft>[
+      TaskMemoryLinkDraft(
+        memoryId: memory.id,
+        memoryEvidenceId: memory.evidenceId,
+        relationship: relationship,
+        note: memory.title,
+      ),
+    ];
+  }
+}
