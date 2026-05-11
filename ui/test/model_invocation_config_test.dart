@@ -1,15 +1,13 @@
 /// Tests shared model invocation config resolution.
 library;
 
-import 'dart:io';
-
 import 'package:agentawesome_ui/clients/model_invocation_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs model invocation config tests.
 void main() {
   test('resolves provider base url, api key, and wire model', () async {
-    final file = await _writeModelConfig('''
+    const content = '''
 default: openai:gpt-mini
 providers:
   openai:
@@ -20,10 +18,10 @@ providers:
     models:
       - id: gpt-mini
         model: gpt-5.4-mini
-''');
+''';
 
-    final config = await resolveModelInvocationConfig(
-      modelConfigPath: file.path,
+    final config = resolveModelInvocationConfig(
+      modelConfigContent: content,
       modelRef: '',
       environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
       messages: _messages,
@@ -36,7 +34,7 @@ providers:
   });
 
   test('keeps explicit unknown model refs as direct wire models', () async {
-    final file = await _writeModelConfig('''
+    const content = '''
 default: openai:gpt-mini
 providers:
   openai:
@@ -46,10 +44,10 @@ providers:
     models:
       - id: gpt-mini
         model: gpt-5.4-mini
-''');
+''';
 
-    final config = await resolveModelInvocationConfig(
-      modelConfigPath: file.path,
+    final config = resolveModelInvocationConfig(
+      modelConfigContent: content,
       modelRef: 'openai:gpt-custom',
       environment: const <String, String>{},
       messages: _messages,
@@ -59,7 +57,7 @@ providers:
   });
 
   test('uses local chat completions URL for litert providers', () async {
-    final file = await _writeModelConfig('''
+    const content = '''
 default: local:gemma
 providers:
   local:
@@ -68,10 +66,10 @@ providers:
     models:
       - id: gemma
         model: gemma-4-E2B-it
-''');
+''';
 
-    final config = await resolveModelInvocationConfig(
-      modelConfigPath: file.path,
+    final config = resolveModelInvocationConfig(
+      modelConfigContent: content,
       modelRef: '',
       environment: const <String, String>{},
       localModelChatCompletionsUrl: 'http://127.0.0.1:4321/v1/chat/completions',
@@ -89,19 +87,8 @@ providers:
   });
 }
 
-/// Writes a temporary model config fixture.
-Future<File> _writeModelConfig(String content) async {
-  final directory = await Directory.systemTemp.createTemp(
-    'agentawesome-model-invocation-test-',
-  );
-  final file = File('${directory.path}/model.yaml');
-  await file.writeAsString(content);
-  return file;
-}
-
 const ModelInvocationConfigMessages _messages = ModelInvocationConfigMessages(
   missingSelection: 'Model config is not selected',
-  missingFilePrefix: 'Model config is missing',
   missingProviders: 'Model config has no providers',
   missingDefaultModel: 'Model default model is missing',
 );

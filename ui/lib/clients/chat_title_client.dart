@@ -2,7 +2,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -25,14 +24,14 @@ class ChatTitleException implements Exception {
 
 /// ChatTitleClient calls a small app-owned model to name conversations.
 class ChatTitleClient {
-  /// Creates a title client using the current process environment by default.
+  /// Creates a title client with explicitly supplied credential references.
   ChatTitleClient({
     http.Client? httpClient,
-    Map<String, String>? environment,
+    Map<String, String> environment = const <String, String>{},
     String localModelChatCompletionsUrl = '',
     this.logger,
   }) : _http = httpClient ?? http.Client(),
-       _environment = environment ?? Platform.environment,
+       _environment = environment,
        _localModelChatCompletionsUrl = localModelChatCompletionsUrl.trim();
 
   final http.Client _http;
@@ -44,11 +43,11 @@ class ChatTitleClient {
 
   /// Generates a concise title for a visible chat transcript.
   Future<String> generateTitle({
-    required String modelConfigPath,
+    required String modelConfigContent,
     String modelRef = '',
     required List<ChatMessage> messages,
   }) async {
-    final selection = await _loadSelection(modelConfigPath, modelRef);
+    final selection = _loadSelection(modelConfigContent, modelRef);
     final transcript = _transcript(messages);
     if (transcript.isEmpty) {
       throw const ChatTitleException('Transcript is empty');
@@ -78,19 +77,18 @@ class ChatTitleClient {
   }
 
   /// Loads the selected provider, endpoint, key, and model from config.
-  Future<ModelInvocationConfig> _loadSelection(
-    String modelConfigPath,
+  ModelInvocationConfig _loadSelection(
+    String modelConfigContent,
     String modelRef,
-  ) async {
+  ) {
     try {
-      return await resolveModelInvocationConfig(
-        modelConfigPath: modelConfigPath,
+      return resolveModelInvocationConfig(
+        modelConfigContent: modelConfigContent,
         modelRef: modelRef,
         environment: _environment,
         localModelChatCompletionsUrl: _localModelChatCompletionsUrl,
         messages: const ModelInvocationConfigMessages(
           missingSelection: 'Summary model config is not selected',
-          missingFilePrefix: 'Summary model config does not exist',
           missingProviders: 'Summary model config has no providers',
           missingDefaultModel: 'Summary model default model is missing',
         ),

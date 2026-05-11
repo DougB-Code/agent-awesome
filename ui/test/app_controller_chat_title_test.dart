@@ -2,11 +2,13 @@
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/chat_history.dart';
+import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/clients/assistant_client.dart';
 import 'package:agentawesome_ui/clients/chat_title_client.dart';
@@ -32,16 +34,31 @@ void main() {
         ],
       );
       final titleClient = _FakeChatTitleClient(title: 'UI Regression Fix');
+      final tempRoot = await Directory.systemTemp.createTemp(
+        'agentawesome-title-controller-test-',
+      );
+      addTearDown(() async {
+        if (await tempRoot.exists()) {
+          await tempRoot.delete(recursive: true);
+        }
+      });
+      final configFiles = ConfigFileStore(
+        configDirectoryPath: '${tempRoot.path}/config',
+      );
+      final modelConfigPath = await configFiles.create(ConfigFileKind.model);
+      const modelConfigContent = 'default: local:test\nproviders: {}\n';
+      await configFiles.write(modelConfigPath, modelConfigContent);
       final controller = AgentAwesomeAppController(
         config: _testConfig(),
         assistantClient: _TranscriptAssistantClient(),
         chatHistoryStore: historyStore,
+        configFiles: configFiles,
         titleClient: titleClient,
       );
       controller.appSettings = const AgentAwesomeAppSettings(
         chatTitleSummariesEnabled: true,
       );
-      controller.runtimeProfile = _testProfile('/tmp/general-model.yaml');
+      controller.runtimeProfile = _testProfile(modelConfigPath);
       controller.runtimeProfilePath = '/tmp/personal.json';
       controller.chatHistory = await historyStore.load();
       controller.sessions = <ChatSession>[
@@ -56,7 +73,7 @@ void main() {
       await titleClient.completed.future;
       await Future<void>.delayed(Duration.zero);
 
-      expect(titleClient.modelConfigPath, '/tmp/general-model.yaml');
+      expect(titleClient.modelConfigContent, modelConfigContent);
       expect(historyStore.saved.single.title, 'UI Regression Fix');
       expect(historyStore.saved.single.titleStatus, 'generated');
     },
@@ -100,17 +117,17 @@ class _FakeChatTitleClient extends ChatTitleClient {
   /// Completes when title generation has been requested and returned.
   final Completer<bool> completed = Completer<bool>();
 
-  /// Model config path observed by the fake.
-  String modelConfigPath = '';
+  /// Model config content observed by the fake.
+  String modelConfigContent = '';
 
   /// Generates a deterministic title for assertions.
   @override
   Future<String> generateTitle({
-    required String modelConfigPath,
+    required String modelConfigContent,
     String modelRef = '',
     required List<ChatMessage> messages,
   }) async {
-    this.modelConfigPath = modelConfigPath;
+    this.modelConfigContent = modelConfigContent;
     completed.complete(true);
     return title;
   }

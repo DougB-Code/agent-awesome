@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"agentawesome/internal/app"
 	"agentawesome/internal/config"
+	"agentawesome/internal/console"
+	"agentawesome/internal/runtime"
 	"github.com/spf13/cobra"
 )
 
@@ -38,7 +41,7 @@ Examples:
   agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- web --port 8080
 
 AA runtime syntax:
-%s`, app.RuntimeSyntax()),
+%s`, runtimeSyntax()),
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Args = args
@@ -58,4 +61,12 @@ AA runtime syntax:
 	cmd.Flags().StringVar(&opts.SessionDatabase, "session-db", opts.SessionDatabase, "ADK session SQLite database path; defaults to the memory database")
 	cmd.Flags().SetInterspersed(false)
 	return cmd
+}
+
+// runtimeSyntax returns the runtime argument syntax shown in CLI help.
+func runtimeSyntax() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Agent Awesome console:\n%s\n", console.Syntax())
+	fmt.Fprintf(&b, "Delegated ADK runtime modes:\n%s", runtime.Syntax())
+	return b.String()
 }

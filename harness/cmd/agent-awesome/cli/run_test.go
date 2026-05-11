@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"agentawesome/internal/app"
@@ -163,5 +164,23 @@ func TestRunCommandUsesExpectedConfigPathFlags(t *testing.T) {
 	}
 	if got, want := captured.AgentConfigPath, "./harness/agent.yaml"; got != want {
 		t.Fatalf("AgentConfigPath = %q, want %q", got, want)
+	}
+}
+
+func TestRuntimeSyntaxSeparatesHarnessConsoleFromDelegatedADKModes(t *testing.T) {
+	syntax := runtimeSyntax()
+	for _, want := range []string{
+		"Agent Awesome console:",
+		"console - runs an agent in Agent Awesome console mode.",
+		"-streaming_mode",
+		"Delegated ADK runtime modes:",
+		"web - starts web server",
+	} {
+		if !strings.Contains(syntax, want) {
+			t.Fatalf("runtimeSyntax() = %q, want substring %q", syntax, want)
+		}
+	}
+	if strings.Contains(syntax, "Console shutdown timeout") {
+		t.Fatalf("runtimeSyntax() includes ADK console-only flags: %q", syntax)
 	}
 }

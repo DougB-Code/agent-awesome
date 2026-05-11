@@ -1,7 +1,7 @@
 /// Provides non-widget helpers for settings panels.
 library;
 
-import '../../app/config_files.dart';
+import '../../domain/config_files.dart';
 import '../../domain/model_config.dart';
 
 /// SettingsTextCodec parses user-entered multiline settings fields.

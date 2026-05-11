@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/config_files.dart';
-import '../../app/credential_store.dart';
 import '../../app/runtime_profile.dart';
 import '../../app/theme.dart';
 import '../../app/tool_config.dart';
+import '../../domain/config_files.dart';
+import '../../domain/credentials.dart';
 import '../../domain/model_config.dart';
 import '../panels/panels.dart';
 import 'settings_form.dart';

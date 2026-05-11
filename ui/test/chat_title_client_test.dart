@@ -2,7 +2,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:agentawesome_ui/clients/chat_title_client.dart';
 import 'package:agentawesome_ui/domain/models.dart';
@@ -13,7 +12,6 @@ import 'package:http/testing.dart';
 /// Runs chat title client tests.
 void main() {
   test('generates openai compatible chat title from model config', () async {
-    final file = await _writeModelConfig();
     final client = ChatTitleClient(
       environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
       httpClient: MockClient((request) async {
@@ -41,7 +39,7 @@ void main() {
     );
 
     final title = await client.generateTitle(
-      modelConfigPath: file.path,
+      modelConfigContent: _openAiModelConfig,
       messages: <ChatMessage>[
         ChatMessage(
           id: '1',
@@ -58,7 +56,6 @@ void main() {
   });
 
   test('generates chat title from selected provider model ref', () async {
-    final file = await _writeModelConfig();
     final client = ChatTitleClient(
       environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
       httpClient: MockClient((request) async {
@@ -80,7 +77,7 @@ void main() {
     );
 
     final title = await client.generateTitle(
-      modelConfigPath: file.path,
+      modelConfigContent: _openAiModelConfig,
       modelRef: 'openai:gpt-nano',
       messages: <ChatMessage>[
         ChatMessage(
@@ -100,11 +97,7 @@ void main() {
   test(
     'uses local OpenAI-compatible endpoint for litert title model',
     () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'agentawesome-title-litert-test-',
-      );
-      final file = File('${directory.path}/model.yaml');
-      await file.writeAsString('''
+      const content = '''
 default: local:gemma
 providers:
   local:
@@ -113,7 +106,7 @@ providers:
     models:
       - id: gemma
         model: gemma-4-E2B-it
-''');
+''';
       final client = ChatTitleClient(
         localModelChatCompletionsUrl:
             'http://127.0.0.1:4321/v1/chat/completions',
@@ -141,7 +134,7 @@ providers:
       );
 
       final title = await client.generateTitle(
-        modelConfigPath: file.path,
+        modelConfigContent: content,
         messages: <ChatMessage>[
           ChatMessage(
             id: '1',
@@ -159,7 +152,6 @@ providers:
   );
 
   test('reports missing environment variable for configured api key', () async {
-    final file = await _writeModelConfig();
     final client = ChatTitleClient(
       environment: const <String, String>{},
       httpClient: MockClient((request) async => http.Response('{}', 200)),
@@ -167,7 +159,7 @@ providers:
 
     await expectLater(
       client.generateTitle(
-        modelConfigPath: file.path,
+        modelConfigContent: _openAiModelConfig,
         messages: <ChatMessage>[
           ChatMessage(
             id: '1',
@@ -184,13 +176,7 @@ providers:
   });
 }
 
-/// Writes a temporary model config matching the app harness schema.
-Future<File> _writeModelConfig() async {
-  final directory = await Directory.systemTemp.createTemp(
-    'agentawesome-title-test-',
-  );
-  final file = File('${directory.path}/model.yaml');
-  await file.writeAsString('''
+const String _openAiModelConfig = '''
 default: openai:gpt-mini
 providers:
   openai:
@@ -203,8 +189,6 @@ providers:
         model: gpt-5.4-mini
       - id: gpt-nano
         model: gpt-5.4-nano
-''');
-  return file;
-}
+''';
 
 final DateTime _testTime = DateTime(2026, 4, 30, 12);

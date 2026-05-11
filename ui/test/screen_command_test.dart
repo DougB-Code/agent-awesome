@@ -1,6 +1,8 @@
 /// Tests structured Backlog screen-command planning and controller behavior.
 library;
 
+import 'dart:io';
+
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
@@ -205,12 +207,22 @@ AgentAwesomeAppController _controller({
   required ScreenCommandPlanner planner,
   required TasksClient tasksClient,
 }) {
+  final tempRoot = Directory.systemTemp.createTempSync(
+    'agentawesome-screen-command-controller-test-',
+  );
+  addTearDown(() {
+    if (tempRoot.existsSync()) {
+      tempRoot.deleteSync(recursive: true);
+    }
+  });
+  final modelConfig = File('${tempRoot.path}/model.yaml');
+  modelConfig.writeAsStringSync(_modelConfig);
   final controller = AgentAwesomeAppController(
     config: _testConfig(),
     screenCommandPlanner: planner,
     tasksClient: tasksClient,
   );
-  controller.runtimeProfile = _profile();
+  controller.runtimeProfile = _profile(modelConfig.path);
   controller.runtimeProfilePath = '/tmp/personal.json';
   return controller;
 }
@@ -278,8 +290,8 @@ WorkspaceTask _copyTask(
 }
 
 /// Builds a runtime profile with one fake memory server.
-RuntimeProfile _profile() {
-  return const RuntimeProfile(
+RuntimeProfile _profile(String modelConfigPath) {
+  return RuntimeProfile(
     id: 'personal',
     label: 'Personal',
     harness: HarnessRuntime(
@@ -291,14 +303,14 @@ RuntimeProfile _profile() {
       userId: 'user',
       workingDirectory: '/tmp/harness',
       packagePath: './cmd/agent-awesome',
-      modelConfigPath: '/tmp/model.yaml',
+      modelConfigPath: modelConfigPath,
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
       port: 1,
       autoStart: false,
     ),
     memoryServerConfigPath: '/tmp/memory.json',
-    mcpServers: <McpServerRuntime>[
+    mcpServers: const <McpServerRuntime>[
       McpServerRuntime(
         id: 'memory',
         label: 'Personal Memory',
@@ -339,7 +351,7 @@ class _FakePlanner implements ScreenCommandPlanner {
   /// Returns the configured run without calling a model.
   @override
   Future<ScreenCommandRun> planBacklogCommand({
-    required String modelConfigPath,
+    required String modelConfigContent,
     String modelRef = '',
     required String command,
     required BacklogScreenSnapshot snapshot,
@@ -347,6 +359,18 @@ class _FakePlanner implements ScreenCommandPlanner {
     return run.copyWith(command: command);
   }
 }
+
+const String _modelConfig = '''
+default: openai:gpt-mini
+providers:
+  openai:
+    adapter: openai
+    url: https://api.openai.com/v1/chat/completions
+    default: gpt-mini
+    models:
+      - id: gpt-mini
+        model: gpt-5.4-mini
+''';
 
 class _FakeTasksClient extends TasksClient {
   /// Creates a fake task client for one endpoint.

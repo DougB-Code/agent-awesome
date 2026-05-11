@@ -5,7 +5,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"agentawesome/internal/adkmemory"
 	agentpkg "agentawesome/internal/agent"
@@ -62,7 +61,6 @@ func Run(ctx context.Context, opts Options) error {
 		return err
 	}
 
-	// @TODO why is this the only runtime config in this package. Model, agent, tools are loaded from config
 	runtimeConfig, err := NewRuntimeConfig(ctx, modelCfg, agent, toolsCfg, opts)
 	if err != nil {
 		return err
@@ -75,7 +73,6 @@ func Run(ctx context.Context, opts Options) error {
 	return runtime.Execute(ctx, runtimeConfig, opts.Args)
 }
 
-// @TODO is this breading SRP
 // NewRuntimeConfig resolves the selected model/provider, converts the configured
 // agent, attaches configured tools and toolsets, and returns the executable
 // runtime config.
@@ -133,15 +130,6 @@ func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCf
 		runtimeConfig.PluginConfig.Plugins = append(runtimeConfig.PluginConfig.Plugins, plugin)
 	}
 	return runtimeConfig, nil
-}
-
-// @TODO is more of a CLI concern and better suited for the cmd folder
-// RuntimeSyntax returns the runtime argument syntax shown in CLI help.
-func RuntimeSyntax() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Agent Awesome console:\n%s\n", console.Syntax())
-	fmt.Fprintf(&b, "Delegated ADK runtime modes:\n%s", runtime.Syntax())
-	return b.String()
 }
 
 // validateSelectedModelCapabilities rejects runtime requests that the selected

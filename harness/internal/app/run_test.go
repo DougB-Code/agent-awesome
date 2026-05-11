@@ -49,21 +49,3 @@ func TestValidateSelectedModelCapabilitiesIgnoresOtherEntrypoints(t *testing.T) 
 		t.Fatalf("validateSelectedModelCapabilities() error = %v", err)
 	}
 }
-
-func TestRuntimeSyntaxSeparatesHarnessConsoleFromDelegatedADKModes(t *testing.T) {
-	syntax := RuntimeSyntax()
-	for _, want := range []string{
-		"Agent Awesome console:",
-		"console - runs an agent in Agent Awesome console mode.",
-		"-streaming_mode",
-		"Delegated ADK runtime modes:",
-		"web - starts web server",
-	} {
-		if !strings.Contains(syntax, want) {
-			t.Fatalf("RuntimeSyntax() = %q, want substring %q", syntax, want)
-		}
-	}
-	if strings.Contains(syntax, "Console shutdown timeout") {
-		t.Fatalf("RuntimeSyntax() includes ADK console-only flags: %q", syntax)
-	}
-}

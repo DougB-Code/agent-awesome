@@ -13,6 +13,7 @@ import '../clients/executive_summary_client.dart';
 import '../clients/mcp_client.dart';
 import '../clients/screen_command_client.dart';
 import '../domain/executive_summary.dart';
+import '../domain/credentials.dart';
 import '../domain/json_value.dart';
 import '../domain/model_config.dart';
 import '../domain/models.dart';
@@ -185,11 +186,16 @@ class AgentAwesomeAppController extends ChangeNotifier {
       titleClient:
           titleClient ??
           ChatTitleClient(
+            environment: Platform.environment,
             localModelChatCompletionsUrl: config.localModelChatCompletionsUrl,
             logger: effectiveLogger,
           ),
       screenCommandPlanner:
-          screenCommandPlanner ?? ScreenCommandClient(logger: effectiveLogger),
+          screenCommandPlanner ??
+          ScreenCommandClient(
+            environment: Platform.environment,
+            logger: effectiveLogger,
+          ),
       fileImporter: fileImporter ?? const FileSelectorAgentFileImporter(),
       assistantClientInjected: assistantClient != null,
       memoryClientInjected: memoryClient != null,
@@ -2273,8 +2279,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
       if (profile == null) {
         throw StateError('Runtime profile is not loaded');
       }
+      final modelConfigContent = await _readRuntimeModelConfigContent(
+        profile.harness.modelConfigPath,
+      );
       final planned = await screenCommandPlanner.planBacklogCommand(
-        modelConfigPath: profile.harness.modelConfigPath,
+        modelConfigContent: modelConfigContent,
         command: command,
         snapshot: _backlogScreenSnapshot(scopeLabel),
       );
@@ -4105,8 +4114,12 @@ $content
       '${titleModelRef.isEmpty ? '' : ' $titleModelRef'}',
     );
     try {
+      final modelConfigContent =
+          appSettings.summaryModelConfigPath.trim().isNotEmpty
+          ? await readConfigurationFile(titleModelConfigPath)
+          : await _readRuntimeModelConfigContent(titleModelConfigPath);
       final title = await titleClient.generateTitle(
-        modelConfigPath: titleModelConfigPath,
+        modelConfigContent: modelConfigContent,
         modelRef: titleModelRef,
         messages: transcript,
       );
@@ -4126,6 +4139,19 @@ $content
       );
       await _log('chat title generation failed for $sessionId: $error');
     }
+  }
+
+  /// Reads a model config referenced by the active runtime profile.
+  Future<String> _readRuntimeModelConfigContent(String path) async {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      throw const FileSystemException('Runtime model config path is empty');
+    }
+    final file = File(trimmed);
+    if (!await file.exists()) {
+      throw FileSystemException('Runtime model config does not exist', trimmed);
+    }
+    return file.readAsString();
   }
 
   Future<void> _loadMemory() async {

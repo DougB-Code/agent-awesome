@@ -2,7 +2,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -14,7 +13,7 @@ import 'model_invocation_config.dart';
 abstract class ScreenCommandPlanner {
   /// Plans one Backlog command from a compact screen snapshot.
   Future<ScreenCommandRun> planBacklogCommand({
-    required String modelConfigPath,
+    required String modelConfigContent,
     String modelRef = '',
     required String command,
     required BacklogScreenSnapshot snapshot,
@@ -35,13 +34,13 @@ class ScreenCommandException implements Exception {
 
 /// ScreenCommandClient asks the configured model for strict JSON plans.
 class ScreenCommandClient implements ScreenCommandPlanner {
-  /// Creates a screen-command client using process environment credentials.
+  /// Creates a screen-command client with explicitly supplied credentials.
   ScreenCommandClient({
     http.Client? httpClient,
-    Map<String, String>? environment,
+    Map<String, String> environment = const <String, String>{},
     this.logger,
   }) : _http = httpClient ?? http.Client(),
-       _environment = environment ?? Platform.environment;
+       _environment = environment;
 
   final http.Client _http;
   final Map<String, String> _environment;
@@ -52,12 +51,12 @@ class ScreenCommandClient implements ScreenCommandPlanner {
   /// Plans one Backlog command without exposing write tools to the model.
   @override
   Future<ScreenCommandRun> planBacklogCommand({
-    required String modelConfigPath,
+    required String modelConfigContent,
     String modelRef = '',
     required String command,
     required BacklogScreenSnapshot snapshot,
   }) async {
-    final selection = await _loadSelection(modelConfigPath, modelRef);
+    final selection = _loadSelection(modelConfigContent, modelRef);
     final prompt = _backlogPlannerPrompt(command: command, snapshot: snapshot);
     await _log(
       'plan backlog command adapter=${selection.adapter} model=${selection.model} promptLength=${prompt.length}',
@@ -78,18 +77,17 @@ class ScreenCommandClient implements ScreenCommandPlanner {
   }
 
   /// Resolves the configured provider, model, endpoint, and credential.
-  Future<ModelInvocationConfig> _loadSelection(
-    String modelConfigPath,
+  ModelInvocationConfig _loadSelection(
+    String modelConfigContent,
     String modelRef,
-  ) async {
+  ) {
     try {
-      return await resolveModelInvocationConfig(
-        modelConfigPath: modelConfigPath,
+      return resolveModelInvocationConfig(
+        modelConfigContent: modelConfigContent,
         modelRef: modelRef,
         environment: _environment,
         messages: const ModelInvocationConfigMessages(
           missingSelection: 'Screen planner model is not selected',
-          missingFilePrefix: 'Screen planner model config is missing',
           missingProviders: 'Screen planner model config has no providers',
           missingDefaultModel: 'Screen planner default model is missing',
         ),

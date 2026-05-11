@@ -1,7 +1,5 @@
-/// Resolves app-owned model config files into HTTP invocation targets.
+/// Resolves app-owned model config documents into HTTP invocation targets.
 library;
-
-import 'dart:io';
 
 import '../domain/model_config.dart';
 
@@ -33,16 +31,12 @@ class ModelInvocationConfigMessages {
   /// Creates caller-specific model config failure messages.
   const ModelInvocationConfigMessages({
     required this.missingSelection,
-    required this.missingFilePrefix,
     required this.missingProviders,
     required this.missingDefaultModel,
   });
 
   /// Message used when no config or provider was selected.
   final String missingSelection;
-
-  /// Prefix used before the missing file path.
-  final String missingFilePrefix;
 
   /// Message used when the config has no provider map.
   final String missingProviders;
@@ -64,24 +58,18 @@ class ModelInvocationConfigException implements Exception {
 }
 
 /// Resolves the provider, model, endpoint, and credential for one model call.
-Future<ModelInvocationConfig> resolveModelInvocationConfig({
-  required String modelConfigPath,
+ModelInvocationConfig resolveModelInvocationConfig({
+  required String modelConfigContent,
   required String modelRef,
   required Map<String, String> environment,
   required ModelInvocationConfigMessages messages,
   String localModelChatCompletionsUrl = '',
-}) async {
-  final path = modelConfigPath.trim();
-  if (path.isEmpty) {
+}) {
+  final content = modelConfigContent.trim();
+  if (content.isEmpty) {
     throw ModelInvocationConfigException(messages.missingSelection);
   }
-  final file = File(path);
-  if (!await file.exists()) {
-    throw ModelInvocationConfigException(
-      '${messages.missingFilePrefix}: $path',
-    );
-  }
-  final document = ModelConfigDocument.parse(await file.readAsString());
+  final document = ModelConfigDocument.parse(content);
   if (document.providers.isEmpty) {
     throw ModelInvocationConfigException(messages.missingProviders);
   }

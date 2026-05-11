@@ -2,7 +2,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:agentawesome_ui/clients/screen_command_client.dart';
 import 'package:agentawesome_ui/domain/screen_command.dart';
@@ -13,7 +12,6 @@ import 'package:http/testing.dart';
 /// Runs screen-command client tests.
 void main() {
   test('plans backlog command from model config', () async {
-    final file = await _writeModelConfig();
     final client = ScreenCommandClient(
       environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
       httpClient: MockClient((request) async {
@@ -44,7 +42,7 @@ void main() {
     );
 
     final run = await client.planBacklogCommand(
-      modelConfigPath: file.path,
+      modelConfigContent: _modelConfig,
       command: 'make Draft schema high priority',
       snapshot: const BacklogScreenSnapshot(
         scopeLabel: 'Backlog / Queue',
@@ -66,13 +64,7 @@ void main() {
   });
 }
 
-/// Writes a temporary model config for planner calls.
-Future<File> _writeModelConfig() async {
-  final directory = await Directory.systemTemp.createTemp(
-    'agentawesome-screen-command-test-',
-  );
-  final file = File('${directory.path}/model.yaml');
-  await file.writeAsString('''
+const String _modelConfig = '''
 default: openai:gpt-mini
 providers:
   openai:
@@ -83,6 +75,4 @@ providers:
     models:
       - id: gpt-mini
         model: gpt-5.4-mini
-''');
-  return file;
-}
+''';
