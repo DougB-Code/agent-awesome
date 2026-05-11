@@ -6,7 +6,7 @@
 //   - Report delegated command-line syntax for help text.
 //
 // High-level examples:
-//   - runtime.NewConfig(def, llm, tools) prepares launcher configuration.
+//   - runtime.NewConfig(def, llm, bundle) prepares launcher configuration.
 //   - runtime.Execute(ctx, cfg, args) runs the delegated runtime.
 //
 // This package should not load YAML files or parse Cobra flags. Application

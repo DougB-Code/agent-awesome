@@ -4,7 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'model_config.dart';
+import '../domain/model_config.dart';
 import 'runtime_profile.dart';
 
 /// ConfigFileKind identifies a managed configuration file collection.

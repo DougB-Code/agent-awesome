@@ -1,7 +1,7 @@
 /// Tests structured model provider config parsing and serialization.
 library;
 
-import 'package:agentawesome_ui/app/model_config.dart';
+import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs model config document tests.

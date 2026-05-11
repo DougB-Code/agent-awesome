@@ -9,6 +9,7 @@ import (
 
 	agentpkg "agentawesome/internal/agent"
 	"agentawesome/internal/runtime/callbacks"
+	"agentawesome/internal/tools/toolbundle"
 	aaagent "google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
 	"google.golang.org/adk/cmd/launcher"
@@ -20,19 +21,12 @@ import (
 	"google.golang.org/adk/cmd/launcher/web/triggers/pubsub"
 	"google.golang.org/adk/cmd/launcher/web/webui"
 	llmapi "google.golang.org/adk/model"
-	"google.golang.org/adk/tool"
 )
-
-// ToolsConfig contains runtime tools and toolsets to install on an agent.
-type ToolsConfig struct {
-	Tools    []tool.Tool
-	Toolsets []tool.Toolset
-}
 
 // NewConfig builds a runtime configuration for a single Agent Awesome agent.
 // It converts the local agent definition into the runtime's LLM agent shape and
 // installs any configured tools and toolsets on that agent.
-func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools ToolsConfig) (*launcher.Config, error) {
+func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools toolbundle.Bundle) (*launcher.Config, error) {
 	runtimeAgent, err := llmagent.New(llmagent.Config{
 		Name:                def.Name,
 		Model:               llm,

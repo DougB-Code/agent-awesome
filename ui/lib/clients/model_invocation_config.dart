@@ -3,7 +3,7 @@ library;
 
 import 'dart:io';
 
-import '../app/model_config.dart';
+import '../domain/model_config.dart';
 
 /// ModelInvocationConfig stores a resolved model endpoint and credential.
 class ModelInvocationConfig {

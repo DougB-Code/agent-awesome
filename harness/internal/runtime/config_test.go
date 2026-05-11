@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	agentpkg "agentawesome/internal/agent"
+	"agentawesome/internal/tools/toolbundle"
 	llmapi "google.golang.org/adk/model"
 )
 
@@ -16,7 +17,7 @@ func TestNewConfigBuildsSingleAgentLoader(t *testing.T) {
 		Name:        "test_agent",
 		Description: "Test agent.",
 		Instruction: "Be helpful.",
-	}, testLLM{}, ToolsConfig{})
+	}, testLLM{}, toolbundle.Bundle{})
 	if err != nil {
 		t.Fatalf("NewConfig() error = %v", err)
 	}

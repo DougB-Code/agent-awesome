@@ -6,8 +6,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../app/app_logger.dart';
 import '../domain/models.dart';
+import 'client_logger.dart';
 import 'model_invocation_config.dart';
 
 /// ChatTitleException reports title model configuration or request failures.
@@ -40,7 +40,7 @@ class ChatTitleClient {
   final String _localModelChatCompletionsUrl;
 
   /// Optional persistent logger.
-  final AppLogger? logger;
+  final ClientLogger? logger;
 
   /// Generates a concise title for a visible chat transcript.
   Future<String> generateTitle({

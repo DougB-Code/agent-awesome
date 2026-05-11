@@ -3,7 +3,7 @@ library;
 
 import 'package:yaml/yaml.dart';
 
-import '../domain/json_value.dart';
+import 'json_value.dart';
 import 'config_yaml.dart';
 
 /// Model adapters supported by the local harness runtime.

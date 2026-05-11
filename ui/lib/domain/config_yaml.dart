@@ -1,4 +1,4 @@
-/// Provides shared YAML normalization and encoding for app config documents.
+/// Provides shared YAML normalization and encoding for config documents.
 library;
 
 import 'dart:convert';

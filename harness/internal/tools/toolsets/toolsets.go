@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"agentawesome/internal/config/schema"
-	"agentawesome/internal/runtime"
 	"agentawesome/internal/tools/localexec"
 	"agentawesome/internal/tools/mcptransport"
+	"agentawesome/internal/tools/toolbundle"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/adk/tool"
@@ -16,24 +16,24 @@ import (
 )
 
 // Build creates the complete ADK tool bundle for the runtime.
-func Build(cfg *schema.Tools) (runtime.ToolsConfig, error) {
+func Build(cfg *schema.Tools) (toolbundle.Bundle, error) {
 	if cfg != nil {
 		if err := cfg.Validate(); err != nil {
-			return runtime.ToolsConfig{}, fmt.Errorf("validate tools config: %w", err)
+			return toolbundle.Bundle{}, fmt.Errorf("validate tools config: %w", err)
 		}
 	}
 
 	localTools, err := localexec.NewTools(cfg)
 	if err != nil {
-		return runtime.ToolsConfig{}, fmt.Errorf("create local tools: %w", err)
+		return toolbundle.Bundle{}, fmt.Errorf("create local tools: %w", err)
 	}
 
 	mcpToolsets, err := buildMCPToolsets(cfg)
 	if err != nil {
-		return runtime.ToolsConfig{}, fmt.Errorf("create mcp toolsets: %w", err)
+		return toolbundle.Bundle{}, fmt.Errorf("create mcp toolsets: %w", err)
 	}
 
-	return runtime.ToolsConfig{
+	return toolbundle.Bundle{
 		Tools:    localTools,
 		Toolsets: mcpToolsets,
 	}, nil

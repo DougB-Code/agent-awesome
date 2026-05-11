@@ -1,7 +1,7 @@
 /// Defines state used by the Today screen presenter.
 library;
 
-import '../../domain/executive_summary.dart';
+import 'executive_summary.dart';
 
 /// TodayState stores loading, error, projection, and explanation UI state.
 class TodayState {

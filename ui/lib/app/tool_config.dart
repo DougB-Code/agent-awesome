@@ -3,8 +3,8 @@ library;
 
 import 'package:yaml/yaml.dart';
 
+import '../domain/config_yaml.dart';
 import '../domain/json_value.dart';
-import 'config_yaml.dart';
 import 'runtime_profile.dart';
 
 /// Tools currently exposed by the graph-backed memory MCP endpoint.

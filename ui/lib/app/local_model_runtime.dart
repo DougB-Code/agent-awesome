@@ -9,9 +9,9 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:yaml/yaml.dart';
 
+import '../domain/config_yaml.dart';
 import '../domain/models.dart';
 import 'app_config.dart';
-import 'config_yaml.dart';
 import 'local_services.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';

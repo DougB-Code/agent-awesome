@@ -6,8 +6,8 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../app/app_logger.dart';
 import '../domain/models.dart';
+import 'client_logger.dart';
 
 /// AssistantException reports an ADK REST or stream parsing failure.
 class AssistantException implements Exception {
@@ -83,7 +83,7 @@ class AssistantClient {
   final Map<String, String> headers;
 
   final http.Client _http;
-  final AppLogger? logger;
+  final ClientLogger? logger;
 
   /// Lists existing ADK sessions for the configured user.
   Future<List<ChatSession>> listSessions() async {

@@ -1,7 +1,7 @@
 /// Resolves model file handling so chat can choose native or base64 transport.
 library;
 
-import 'model_config.dart';
+import '../domain/model_config.dart';
 
 /// ModelFileTransport names how files should be passed to the active model.
 enum ModelFileTransport {

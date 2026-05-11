@@ -3,8 +3,10 @@ library;
 
 import 'dart:io';
 
+import '../clients/client_logger.dart';
+
 /// AppLogger appends UI and client diagnostics to ui.log.
-class AppLogger {
+class AppLogger implements ClientLogger {
   /// Creates a file-backed app logger.
   const AppLogger({required this.directory});
 
@@ -12,6 +14,7 @@ class AppLogger {
   final String directory;
 
   /// Writes a timestamped log line to the UI log.
+  @override
   Future<void> write(String source, String message) async {
     await Directory(directory).create(recursive: true);
     final timestamp = DateTime.now().toIso8601String();

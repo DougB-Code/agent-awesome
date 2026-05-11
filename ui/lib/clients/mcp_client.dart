@@ -5,10 +5,10 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import '../app/app_logger.dart';
 import '../domain/date_formatting.dart';
 import '../domain/json_value.dart';
 import '../domain/models.dart';
+import 'client_logger.dart';
 
 /// McpException reports a JSON-RPC or MCP tool error.
 class McpException implements Exception {
@@ -57,7 +57,7 @@ class McpJsonRpcClient implements ToolRpcClient {
   final Map<String, String> headers;
 
   final http.Client _http;
-  final AppLogger? logger;
+  final ClientLogger? logger;
   int _nextId = 1;
 
   /// Calls an MCP tool and returns its structured content.
@@ -150,7 +150,7 @@ class GatewayContextClient implements ToolRpcClient {
   final Map<String, String> headers;
 
   final http.Client _http;
-  final AppLogger? logger;
+  final ClientLogger? logger;
 
   @override
   String get endpoint => baseUrl;

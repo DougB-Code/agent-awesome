@@ -2,7 +2,7 @@
 library;
 
 import '../../app/config_files.dart';
-import '../../app/model_config.dart';
+import '../../domain/model_config.dart';
 
 /// SettingsTextCodec parses user-entered multiline settings fields.
 class SettingsTextCodec {

@@ -1,7 +1,7 @@
 /// Tests active model file capability resolution.
 library;
 
-import 'package:agentawesome_ui/app/model_config.dart';
+import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/app/model_file_capabilities.dart';
 import 'package:flutter_test/flutter_test.dart';
 

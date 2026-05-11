@@ -6,8 +6,8 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
-import '../app/app_logger.dart';
 import '../domain/screen_command.dart';
+import 'client_logger.dart';
 import 'model_invocation_config.dart';
 
 /// ScreenCommandPlanner describes a structured AI planner dependency.
@@ -47,7 +47,7 @@ class ScreenCommandClient implements ScreenCommandPlanner {
   final Map<String, String> _environment;
 
   /// Optional persistent logger.
-  final AppLogger? logger;
+  final ClientLogger? logger;
 
   /// Plans one Backlog command without exposing write tools to the model.
   @override
