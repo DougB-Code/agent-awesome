@@ -78,15 +78,20 @@ List<_ScheduleEntry> _entriesForScope({
   required _ScheduleScope scope,
   required DateTime now,
 }) {
+  if (scope == _ScheduleScope.overview) {
+    return entries;
+  }
   final start = switch (scope) {
     _ScheduleScope.today => _dayStart(now),
     _ScheduleScope.week => _weekStart(now),
     _ScheduleScope.month => DateTime(now.year, now.month),
+    _ScheduleScope.overview => _dayStart(now),
   };
   final end = switch (scope) {
     _ScheduleScope.today => start.add(const Duration(days: 1)),
     _ScheduleScope.week => start.add(const Duration(days: 7)),
     _ScheduleScope.month => DateTime(now.year, now.month + 1),
+    _ScheduleScope.overview => start,
   };
   return entries.where((entry) {
     return !entry.when.isBefore(start) && entry.when.isBefore(end);

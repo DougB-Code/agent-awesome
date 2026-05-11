@@ -3,6 +3,9 @@ part of 'today_schedule_card.dart';
 
 /// _ScheduleScope names the supported schedule ranges.
 enum _ScheduleScope {
+  /// Shows a compact dated-work overview.
+  overview('Overview'),
+
   /// Shows only items dated today.
   today('Today'),
 
@@ -19,7 +22,7 @@ enum _ScheduleScope {
   final String label;
 }
 
-/// _ScheduleScopeSelector renders the Today/Week/Month segmented control.
+/// _ScheduleScopeSelector renders the schedule segmented control.
 class _ScheduleScopeSelector extends StatelessWidget {
   /// Creates a scope selector.
   const _ScheduleScopeSelector({required this.scope, required this.onChanged});

@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 
 import 'package:agentawesome_ui/app/app_config.dart';
+import 'package:agentawesome_ui/app/local_service_environment.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
 import 'package:agentawesome_ui/app/process_supervisor.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
@@ -81,6 +82,45 @@ void main() {
       '/tmp/service-bin',
       './cmd/service',
     ]);
+  });
+
+  test('managed gateway environment disables ambient Slack ingress', () {
+    final environment = buildManagedGatewayEnvironment(
+      config: _testConfig(),
+      goCachePath: '/tmp/gocache',
+      baseEnvironment: const <String, String>{
+        'PATH': '/usr/bin',
+        'SLACK_ENABLED': 'true',
+        'SLACK_SOCKET_MODE': 'true',
+        'SLACK_SIGNING_SECRET': 'secret',
+        'SLACK_BOT_TOKEN': 'xoxb-secret',
+        'SLACK_APP_TOKEN': 'xapp-secret',
+        'SLACK_ALLOWED_TEAM_ID': 'T1',
+        'SLACK_ALLOWED_USER_ID': 'U1',
+        'SLACK_ALLOWED_CHANNEL_ID': 'C1',
+      },
+    );
+
+    expect(environment['PATH'], '/usr/bin');
+    expect(environment['GOCACHE'], '/tmp/gocache');
+    expect(environment['SLACK_ENABLED'], 'false');
+    expect(environment['SLACK_SOCKET_MODE'], 'false');
+    expect(environment['SLACK_SIGNING_SECRET'], '');
+    expect(environment['SLACK_BOT_TOKEN'], '');
+    expect(environment['SLACK_APP_TOKEN'], '');
+    expect(environment['SLACK_ALLOWED_TEAM_ID'], '');
+    expect(environment['SLACK_ALLOWED_USER_ID'], '');
+    expect(environment['SLACK_ALLOWED_CHANNEL_ID'], '');
+  });
+
+  test('local service environment preserves non-gateway Slack config', () {
+    final environment = buildLocalServiceEnvironment(
+      config: _testConfig(),
+      goCachePath: '/tmp/gocache',
+      baseEnvironment: const <String, String>{'SLACK_ENABLED': 'true'},
+    );
+
+    expect(environment['SLACK_ENABLED'], 'true');
   });
 
   test(

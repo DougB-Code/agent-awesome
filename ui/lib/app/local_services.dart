@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../domain/models.dart';
 import 'app_config.dart';
+import 'local_service_environment.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';
 
@@ -578,6 +579,7 @@ class LocalServiceSupervisor {
       packagePath: gateway.packagePath,
       arguments: gateway.arguments,
       outputLogPath: '${config.serviceLogDirectory}/gateway.log',
+      disableSlackIngress: true,
     );
     _started[gateway.id] = process;
     final status = await _waitForProcessHealth(
@@ -602,19 +604,18 @@ class LocalServiceSupervisor {
     required String packagePath,
     required List<String> arguments,
     String? outputLogPath,
+    bool disableSlackIngress = false,
   }) async {
-    final env = Map<String, String>.of(Platform.environment);
-    _applyGatewayAuthorizationEnvironment(env);
-    env.putIfAbsent(
-      'AGENTAWESOME_CONFIG_DIR',
-      () => agentAwesomeConfigDirectoryPath(),
-    );
-    env.putIfAbsent(
-      'AGENTAWESOME_DATA_DIR',
-      () => agentAwesomeDataDirectoryPath(),
-    );
-    env['GOCACHE'] =
-        env['GOCACHE'] ?? '${config.workspaceRoot}/harness/build/gocache';
+    final goCachePath = '${config.workspaceRoot}/harness/build/gocache';
+    final env = disableSlackIngress
+        ? buildManagedGatewayEnvironment(
+            config: config,
+            goCachePath: goCachePath,
+          )
+        : buildLocalServiceEnvironment(
+            config: config,
+            goCachePath: goCachePath,
+          );
     await Directory(env['GOCACHE']!).create(recursive: true);
     final resolvedOutputLogPath =
         outputLogPath ?? _processOutputLogPath(arguments);
@@ -724,19 +725,6 @@ class LocalServiceSupervisor {
     }
     stdout.writeln('[agentawesome-ui] $line');
     await _writeLogLine('startup', line);
-  }
-
-  /// Exposes the UI-resolved gateway bearer header to managed child services.
-  void _applyGatewayAuthorizationEnvironment(Map<String, String> env) {
-    final header = config.gatewayAuthorizationHeader.trim();
-    if (header.isEmpty) {
-      return;
-    }
-    env.putIfAbsent('AGENTAWESOME_GATEWAY_AUTHORIZATION', () => header);
-    final token = config.gatewayBearerToken;
-    if (token.isNotEmpty) {
-      env.putIfAbsent('AGENTAWESOME_GATEWAY_TOKEN', () => token);
-    }
   }
 
   /// Builds a Go command binary into the pilot build directory.

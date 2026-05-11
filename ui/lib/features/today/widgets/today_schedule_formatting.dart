@@ -60,6 +60,7 @@ String _entrySeverity(_ScheduleEntry entry) {
 /// Returns an icon for one scope segment.
 IconData _scopeIcon(_ScheduleScope scope) {
   return switch (scope) {
+    _ScheduleScope.overview => Icons.dashboard_outlined,
     _ScheduleScope.today => Icons.today_outlined,
     _ScheduleScope.week => Icons.view_week_outlined,
     _ScheduleScope.month => Icons.calendar_month_outlined,
@@ -69,6 +70,7 @@ IconData _scopeIcon(_ScheduleScope scope) {
 /// Returns a sentence suffix for an empty schedule scope.
 String _emptyScopeLabel(_ScheduleScope scope) {
   return switch (scope) {
+    _ScheduleScope.overview => 'in this overview',
     _ScheduleScope.today => 'today',
     _ScheduleScope.week => 'this week',
     _ScheduleScope.month => 'this month',

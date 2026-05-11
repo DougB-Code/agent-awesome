@@ -9,6 +9,7 @@ class TodayScheduleCard extends StatefulWidget {
     required this.workspace,
     required this.projection,
     this.onOpenLink,
+    this.now,
   });
 
   /// Workspace tasks used as the primary source of scheduled work.
@@ -20,9 +21,12 @@ class TodayScheduleCard extends StatefulWidget {
   /// Route activation callback.
   final ValueChanged<String>? onOpenLink;
 
+  /// Optional clock override used by widget tests.
+  final DateTime? now;
+
   /// Returns the card height for the current viewport.
   static double preferredHeight({required double width}) {
-    return width < 760 ? 430 : 360;
+    return width < 760 ? 520 : 430;
   }
 
   /// Creates mutable state for the selected schedule scope.
@@ -32,12 +36,12 @@ class TodayScheduleCard extends StatefulWidget {
 
 /// _TodayScheduleCardState stores the selected schedule scope.
 class _TodayScheduleCardState extends State<TodayScheduleCard> {
-  _ScheduleScope _scope = _ScheduleScope.today;
+  _ScheduleScope _scope = _ScheduleScope.overview;
 
   /// Builds the schedule card.
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
+    final now = widget.now ?? DateTime.now();
     final entries = _scheduledEntries(
       workspace: widget.workspace,
       projection: widget.projection,
@@ -53,7 +57,14 @@ class _TodayScheduleCardState extends State<TodayScheduleCard> {
           _ScheduleScopeSelector(scope: _scope, onChanged: _selectScope),
           Divider(height: 1, color: context.agentAwesomeColors.border),
           Expanded(
-            child: visible.isEmpty
+            child: _scope == _ScheduleScope.overview
+                ? _ScheduleOverview(
+                    entries: entries,
+                    timeHorizon: widget.projection.timeHorizon,
+                    now: now,
+                    onOpenLink: widget.onOpenLink,
+                  )
+                : visible.isEmpty
                 ? _ScheduleEmptyState(scope: _scope)
                 : _ScheduleEntryList(
                     entries: visible,

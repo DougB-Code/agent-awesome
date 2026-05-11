@@ -9,9 +9,7 @@ import '../../domain/executive_summary.dart';
 import 'widgets/confidence_coverage_card.dart';
 import 'widgets/delegation_agent_card.dart';
 import 'widgets/executive_summary_explanation_drawer.dart';
-import 'widgets/horizon_strip_card.dart';
 import 'widgets/open_loop_radar_card.dart';
-import 'widgets/risk_unblocks_card.dart';
 import 'widgets/today_schedule_card.dart';
 import 'widgets/todays_attention_card.dart';
 
@@ -43,13 +41,15 @@ class TodayScreen extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               return SizedBox(
-                height: ConfidenceCoverageCard.preferredHeight(
+                height: RisksCoverageCard.preferredHeight(
                   width: constraints.maxWidth,
                   coverage: projection.coverage,
+                  riskUnblocks: projection.riskUnblocks,
                 ),
-                child: ConfidenceCoverageCard(
+                child: RisksCoverageCard(
                   coverage: projection.coverage,
                   quality: projection.quality,
+                  riskUnblocks: projection.riskUnblocks,
                   onOpenLink: _openRoute,
                 ),
               );
@@ -61,8 +61,6 @@ class TodayScreen extends StatelessWidget {
             onExplain: (item) => _showExplanation(context, item),
             onOpenLink: _openRoute,
           ),
-          const SizedBox(height: 14),
-          _SecondarySections(projection: projection, onOpenLink: _openRoute),
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -169,62 +167,6 @@ class _PrimarySections extends StatelessWidget {
               Expanded(flex: 7, child: cards[1]),
               const SizedBox(width: 14),
               Expanded(flex: 6, child: cards[2]),
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// _SecondarySections arranges the horizon and risk panels.
-class _SecondarySections extends StatelessWidget {
-  /// Creates the secondary Today section layout.
-  const _SecondarySections({
-    required this.projection,
-    required this.onOpenLink,
-  });
-
-  final ExecutiveSummaryProjection projection;
-  final ValueChanged<String> onOpenLink;
-
-  /// Builds the responsive secondary section layout.
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 980;
-        final horizon = HorizonStripCard(
-          timeHorizon: projection.timeHorizon,
-          onOpenLink: onOpenLink,
-        );
-        final risks = RiskUnblocksCard(
-          riskUnblocks: projection.riskUnblocks,
-          onOpenLink: onOpenLink,
-        );
-        final horizonHeight = HorizonStripCard.preferredHeight(
-          width: wide
-              ? (constraints.maxWidth - 14) * 5 / 11
-              : constraints.maxWidth,
-          bucketCount: projection.timeHorizon.buckets.length,
-        );
-        if (!wide) {
-          return Column(
-            children: <Widget>[
-              SizedBox(height: horizonHeight, child: horizon),
-              const SizedBox(height: 12),
-              SizedBox(height: 190, child: risks),
-            ],
-          );
-        }
-        final rowHeight = horizonHeight > 190 ? horizonHeight : 190.0;
-        return SizedBox(
-          height: rowHeight,
-          child: Row(
-            children: <Widget>[
-              Expanded(flex: 5, child: horizon),
-              const SizedBox(width: 14),
-              Expanded(flex: 6, child: risks),
             ],
           ),
         );

@@ -25,27 +25,57 @@ class RiskUnblocksCard extends StatelessWidget {
   /// Builds the risk and unblock section.
   @override
   Widget build(BuildContext context) {
-    final chain = riskUnblocks.chains.isEmpty
-        ? null
-        : riskUnblocks.chains.first;
     return TodaySectionCard(
       title: 'Risk & Unblocks',
       link: riskUnblocks.link.route.isEmpty
           ? const ProjectionLink(label: 'View risks', route: '/risks')
           : riskUnblocks.link,
       onOpenLink: onOpenLink,
-      child: chain == null
-          ? const _RiskEmptyState()
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Expanded(child: _RiskChain(chain: chain)),
-                if (chain.suggestedAction != null) ...<Widget>[
-                  const SizedBox(height: 12),
-                  _SuggestedUnblock(action: chain.suggestedAction!),
-                ],
-              ],
-            ),
+      child: RiskUnblocksContent(riskUnblocks: riskUnblocks),
+    );
+  }
+}
+
+/// RiskUnblocksContent renders blocker chains without owning section chrome.
+class RiskUnblocksContent extends StatelessWidget {
+  /// Creates reusable risk and unblock content.
+  const RiskUnblocksContent({
+    super.key,
+    required this.riskUnblocks,
+    this.fillAvailableHeight = true,
+  });
+
+  /// Risk and unblock projection data.
+  final RiskUnblockProjection riskUnblocks;
+
+  /// Whether the chain should expand to fill its parent panel.
+  final bool fillAvailableHeight;
+
+  /// Builds blocker content for standalone and combined cards.
+  @override
+  Widget build(BuildContext context) {
+    final chain = riskUnblocks.chains.isEmpty
+        ? null
+        : riskUnblocks.chains.first;
+    if (chain == null) {
+      return SizedBox(
+        height: fillAvailableHeight ? double.infinity : 76,
+        child: const _RiskEmptyState(),
+      );
+    }
+    final chainContent = _RiskChain(chain: chain);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (fillAvailableHeight)
+          Expanded(child: chainContent)
+        else
+          chainContent,
+        if (chain.suggestedAction != null) ...<Widget>[
+          const SizedBox(height: 12),
+          _SuggestedUnblock(action: chain.suggestedAction!),
+        ],
+      ],
     );
   }
 }

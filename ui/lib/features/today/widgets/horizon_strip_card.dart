@@ -60,30 +60,55 @@ class HorizonStripCard extends StatelessWidget {
           ? null
           : timeHorizon.link,
       onOpenLink: onOpenLink,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final buckets = timeHorizon.buckets;
-          final columns = _bucketColumnCount(
-            constraints.maxWidth,
-            buckets.length,
-          );
-          const spacing = _bucketSpacing;
-          final itemWidth = columns <= 0
-              ? constraints.maxWidth
-              : (constraints.maxWidth - spacing * (columns - 1)) / columns;
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: <Widget>[
-              for (final bucket in buckets)
-                SizedBox(
-                  width: itemWidth,
-                  child: _HorizonBucket(bucket: bucket, onOpenLink: onOpenLink),
-                ),
-            ],
-          );
-        },
+      child: HorizonBucketStrip(
+        timeHorizon: timeHorizon,
+        onOpenLink: onOpenLink,
       ),
+    );
+  }
+}
+
+/// HorizonBucketStrip renders timeline buckets without section chrome.
+class HorizonBucketStrip extends StatelessWidget {
+  /// Creates a reusable horizon bucket strip.
+  const HorizonBucketStrip({
+    super.key,
+    required this.timeHorizon,
+    this.onOpenLink,
+  });
+
+  /// Time horizon projection data.
+  final TimeHorizonProjection timeHorizon;
+
+  /// Route activation callback.
+  final ValueChanged<String>? onOpenLink;
+
+  /// Builds the responsive horizon bucket strip.
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final buckets = timeHorizon.buckets;
+        final columns = _bucketColumnCount(
+          constraints.maxWidth,
+          buckets.length,
+        );
+        const spacing = HorizonStripCard._bucketSpacing;
+        final itemWidth = columns <= 0
+            ? constraints.maxWidth
+            : (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: <Widget>[
+            for (final bucket in buckets)
+              SizedBox(
+                width: itemWidth,
+                child: _HorizonBucket(bucket: bucket, onOpenLink: onOpenLink),
+              ),
+          ],
+        );
+      },
     );
   }
 }

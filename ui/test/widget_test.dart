@@ -9,12 +9,14 @@ import 'package:agentawesome_ui/app/file_import.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
+import 'package:agentawesome_ui/app/theme.dart';
 import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/domain/executive_summary.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:agentawesome_ui/domain/screen_command.dart';
 import 'package:agentawesome_ui/domain/today_state.dart';
+import 'package:agentawesome_ui/features/today/widgets/today_schedule_card.dart';
 import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
@@ -35,7 +37,7 @@ void main() {
     expect(find.text('Decide'), findsOneWidget);
     expect(find.text('OPEN LOOP RADAR'), findsOneWidget);
     expect(find.text("TODAY'S ATTENTION"), findsOneWidget);
-    expect(find.text('CONFIDENCE & COVERAGE'), findsOneWidget);
+    expect(find.text('RISKS & COVERAGE'), findsOneWidget);
     expect(find.text('Prepare investor meeting brief'), findsNothing);
   });
 
@@ -71,23 +73,72 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('HORIZON'), findsOneWidget);
-    expect(find.text('CONFIDENCE & COVERAGE'), findsOneWidget);
+    expect(find.text('RISKS & COVERAGE'), findsOneWidget);
     expect(find.text('SCHEDULE'), findsOneWidget);
-    expect(find.text('Review weekly plan'), findsOneWidget);
+    expect(find.text('Review weekly plan'), findsWidgets);
+    expect(find.text('Overview'), findsOneWidget);
     expect(find.textContaining('Banking / Bills'), findsOneWidget);
     expect(find.text('Manage connections'), findsNothing);
     expect(
-      tester.getTopLeft(find.text('CONFIDENCE & COVERAGE')).dy,
+      tester.getTopLeft(find.text('RISKS & COVERAGE')).dy,
       lessThan(tester.getTopLeft(find.text("TODAY'S ATTENTION")).dy),
     );
     expect(
       tester.getTopLeft(find.text('SCHEDULE')).dy,
-      greaterThan(tester.getTopLeft(find.text('HORIZON')).dy),
+      greaterThan(tester.getTopLeft(find.text("TODAY'S ATTENTION")).dy),
     );
     expect(find.text('Data quality'), findsNothing);
     expect(find.textContaining('I only use information'), findsNothing);
     expect(find.textContaining('I will not infer'), findsNothing);
+  });
+
+  testWidgets('schedule opens nearest dated range when today is empty', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 5, 11, 9);
+    final workspace = ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live connected workspace',
+      tasks: <WorkspaceTask>[
+        WorkspaceTask(
+          id: 'calendar-rollup',
+          title: 'Fix calendar rollup',
+          detail: 'Due this week',
+          done: false,
+          dueAt: DateTime(2026, 5, 13, 17),
+        ),
+      ],
+      sources: const <SourceItem>[],
+      memoryRecords: const <MemoryRecord>[],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(
+          body: SizedBox(
+            height: 360,
+            child: TodayScheduleCard(
+              workspace: workspace,
+              projection: const ExecutiveSummaryProjection(),
+              now: now,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fix calendar rollup'), findsWidgets);
+    expect(find.text('Due'), findsOneWidget);
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.text('No scheduled items today'), findsNothing);
+
+    await tester.tap(find.text('Today').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Fix calendar rollup'), findsNothing);
+    expect(find.text('No scheduled items today'), findsOneWidget);
   });
 
   testWidgets('opens Today attention view from execute metric', (tester) async {
