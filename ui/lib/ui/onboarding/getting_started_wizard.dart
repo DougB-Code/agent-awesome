@@ -8,10 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/local_model_runtime.dart';
-import '../../app/onboarding_model_setup.dart';
-import '../../app/system_capabilities.dart';
 import '../../app/theme.dart';
+import '../../domain/local_models.dart';
+import '../../domain/onboarding_model_setup.dart';
+import '../../domain/system_capabilities.dart';
 
 enum _SetupStep {
   choose,
@@ -726,7 +726,7 @@ class _LocalModelSetup extends StatelessWidget {
                     width: cardWidth,
                     icon: Icons.memory_outlined,
                     title: 'CPU',
-                    value: '${systemCapabilities.cpuThreads} cores',
+                    value: _formatCpuThreads(systemCapabilities.cpuThreads),
                     detail: 'Detected processor threads',
                   ),
                   _SystemCheckCard(
@@ -1248,6 +1248,14 @@ String _formatOptionalBytes(int? bytes) {
     return 'Unknown';
   }
   return _formatBytes(bytes);
+}
+
+/// Formats CPU thread counts for system-check cards.
+String _formatCpuThreads(int cpuThreads) {
+  if (cpuThreads <= 0) {
+    return 'Unknown';
+  }
+  return '$cpuThreads cores';
 }
 
 /// Returns a local model memory recommendation for the detected system.

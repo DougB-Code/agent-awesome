@@ -3,36 +3,9 @@ library;
 
 import 'dart:io';
 
+import '../domain/system_capabilities.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';
-
-/// SystemCapabilitySnapshot stores hardware and storage facts for setup.
-class SystemCapabilitySnapshot {
-  /// Creates an immutable system capability snapshot.
-  const SystemCapabilitySnapshot({
-    required this.cpuThreads,
-    required this.memoryBytes,
-    required this.diskBytes,
-  });
-
-  /// Snapshot with unknown optional values.
-  factory SystemCapabilitySnapshot.unknown() {
-    return SystemCapabilitySnapshot(
-      cpuThreads: Platform.numberOfProcessors,
-      memoryBytes: null,
-      diskBytes: null,
-    );
-  }
-
-  /// Detected logical CPU thread count.
-  final int cpuThreads;
-
-  /// Total physical memory in bytes, when detectable.
-  final int? memoryBytes;
-
-  /// Available model-data disk space in bytes, when detectable.
-  final int? diskBytes;
-}
 
 /// SystemCapabilityReader loads system capability data for the setup UI.
 class SystemCapabilityReader {

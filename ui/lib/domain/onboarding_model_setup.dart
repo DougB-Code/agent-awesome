@@ -1,8 +1,8 @@
 /// Defines first-run model setup choices and result data.
 library;
 
-import '../domain/model_config.dart';
-import 'local_model_runtime.dart';
+import 'local_models.dart';
+import 'model_config.dart';
 
 /// OnboardingModelOption stores one selectable model for first-run setup.
 class OnboardingModelOption {

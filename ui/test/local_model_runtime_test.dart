@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/local_model_runtime.dart';
 import 'package:agentawesome_ui/app/process_supervisor.dart';
+import 'package:agentawesome_ui/domain/local_models.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
