@@ -24,6 +24,7 @@ import '../domain/system_capabilities.dart';
 import '../domain/task_insight_index.dart';
 import '../domain/task_insight_query.dart';
 import '../domain/task_projection_adapters.dart';
+import '../domain/tool_config.dart';
 import '../domain/today_task_insight_metrics.dart';
 import '../domain/today_state.dart';
 import '../domain/user_message_text.dart';
@@ -40,7 +41,6 @@ import 'model_file_capabilities.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';
 import 'system_capabilities.dart';
-import 'tool_config.dart';
 
 const List<String> _requiredTaskProjectionTools = <String>[
   'task_graph_projection',
@@ -1443,7 +1443,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
         ? ToolConfigDocument.parse(await file.readAsString())
         : emptyToolConfigDocument();
     final target = graphBackedMemoryToolConfig(
-      server: graphServer,
+      serverKind: graphServer.kind,
+      serverEndpoint: graphServer.endpoint,
       localExec: document.localExec,
       headersFromEnv: _mcpHeadersFromEnv(profile, graphServer),
       extra: document.extra,

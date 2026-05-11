@@ -3,9 +3,8 @@ library;
 
 import 'package:yaml/yaml.dart';
 
-import '../domain/config_yaml.dart';
-import '../domain/json_value.dart';
-import 'runtime_profile.dart';
+import 'config_yaml.dart';
+import 'json_value.dart';
 
 /// Tools currently exposed by the graph-backed memory MCP endpoint.
 const List<String> graphBackedMcpToolNames = <String>[
@@ -728,19 +727,21 @@ McpServerToolConfig newHttpMcpServerToolConfig({
 
 /// Creates the target-state MCP tool config for one graph-backed memory server.
 ToolConfigDocument graphBackedMemoryToolConfig({
-  required McpServerRuntime server,
+  required String serverKind,
+  required String serverEndpoint,
   required LocalExecToolConfig localExec,
   Map<String, String> headersFromEnv = const <String, String>{},
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
+  final normalizedKind = serverKind.trim();
   return ToolConfigDocument(
     localExec: localExec,
     mcp: McpToolConfig(
       enabled: true,
       servers: <McpServerToolConfig>[
         newHttpMcpServerToolConfig(
-          name: server.kind.isEmpty ? 'memory' : server.kind,
-          endpoint: server.endpoint,
+          name: normalizedKind.isEmpty ? 'memory' : normalizedKind,
+          endpoint: serverEndpoint,
           headersFromEnv: headersFromEnv,
         ).copyWith(
           requireConfirmationTools: graphBackedMcpConfirmationToolNames,

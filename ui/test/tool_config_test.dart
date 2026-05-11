@@ -1,8 +1,7 @@
 /// Tests structured harness tool config parsing and serialization.
 library;
 
-import 'package:agentawesome_ui/app/runtime_profile.dart';
-import 'package:agentawesome_ui/app/tool_config.dart';
+import 'package:agentawesome_ui/domain/tool_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs tool config document tests.
@@ -117,21 +116,9 @@ mcp:
   });
 
   test('creates target graph-backed memory MCP tool config', () {
-    const server = McpServerRuntime(
-      id: 'memory-personal',
-      label: 'Personal Memory',
-      kind: 'memory',
-      endpoint: 'http://127.0.0.1:8090/mcp',
-      healthUrl: 'http://127.0.0.1:8090/healthz',
-      workingDirectory: '/tmp/memory',
-      packagePath: './cmd/memoryd',
-      arguments: <String>[],
-      autoStart: true,
-      enabled: true,
-    );
-
     final document = graphBackedMemoryToolConfig(
-      server: server,
+      serverKind: 'memory',
+      serverEndpoint: 'http://127.0.0.1:8090/mcp',
       localExec: emptyToolConfigDocument().localExec,
       headersFromEnv: const <String, String>{
         'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
