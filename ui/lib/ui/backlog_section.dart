@@ -23,6 +23,17 @@ part 'backlog_section_editor.dart';
 part 'backlog_section_details.dart';
 part 'backlog_section_controls.dart';
 part 'backlog_section_dialogs.dart';
+part 'backlog_section_commitment_dialog.dart';
+part 'backlog_section_create_dialog.dart';
+part 'backlog_section_filter_helpers.dart';
+part 'backlog_section_formatting_helpers.dart';
+part 'backlog_section_graph_helpers.dart';
+part 'backlog_section_metadata_dialog.dart';
+part 'backlog_section_query_helpers.dart';
+part 'backlog_section_relation_dialog.dart';
+part 'backlog_section_screen_change_helpers.dart';
+part 'backlog_section_suggestion_helpers.dart';
+part 'backlog_section_wbs_dialog.dart';
 
 const List<String> _taskStatuses = <String>[
   'open',

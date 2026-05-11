@@ -1,0 +1,267 @@
+/// Selected-memory overview, source, and relationship detail widgets.
+part of 'agent_awesome_shell.dart';
+
+class _MemoryOverviewContent extends StatelessWidget {
+  const _MemoryOverviewContent({required this.controller, required this.query});
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds selected memory metadata and stewardship posture.
+  @override
+  Widget build(BuildContext context) {
+    final memory = controller.selectedMemory;
+    if (memory == null) {
+      return const _MemorySelectionEmpty();
+    }
+    if (!_matchesMemoryRecord(memory, query)) {
+      return PanelEmptyState(query: query);
+    }
+    final contradictionCount = memory.relationships
+        .where((relationship) => relationship.type == 'contradicts')
+        .length;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          PanelSectionBlock(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        memory.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                    if (contradictionCount > 0)
+                      _MemoryBadge(label: '$contradictionCount conflicts'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  memory.summary,
+                  style: TextStyle(color: context.agentAwesomeColors.muted),
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _MemoryBadge(label: _memoryLabel(memory.kind)),
+                    _MemoryBadge(label: memory.scope),
+                    _MemoryBadge(label: memory.sensitivity),
+                    _MemoryBadge(label: _memoryLabel(memory.trustLevel)),
+                    _MemoryBadge(label: memory.status),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PanelSectionBlock(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _MemoryPanelLabel('Memory'),
+                const SizedBox(height: 10),
+                _MemoryMetadataRow(label: 'Memory id', value: memory.id),
+                _MemoryMetadataRow(
+                  label: 'Source record id',
+                  value: memory.evidenceId,
+                ),
+                _MemoryMetadataRow(label: 'Source', value: memory.sourceLabel),
+                _MemoryMetadataRow(
+                  label: 'Created',
+                  value: formatOptionalLocalDateTime(memory.createdAt),
+                ),
+                _MemoryMetadataRow(
+                  label: 'Updated',
+                  value: formatOptionalLocalDateTime(memory.updatedAt),
+                ),
+                _MemoryMetadataRow(
+                  label: 'Event',
+                  value: formatOptionalLocalDateTime(memory.eventTime),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PanelSectionBlock(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _MemoryPanelLabel('Access Paths'),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    for (final subject in memory.subjects)
+                      _MemoryBadge(label: subject),
+                    for (final topic in memory.topics)
+                      _MemoryBadge(label: topic),
+                    for (final entity in memory.entityNames)
+                      _MemoryBadge(label: entity),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemorySourceContent extends StatelessWidget {
+  const _MemorySourceContent({required this.controller, required this.query});
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds immutable raw source preview for the selected memory.
+  @override
+  Widget build(BuildContext context) {
+    final memory = controller.selectedMemory;
+    if (memory == null) {
+      return const _MemorySelectionEmpty();
+    }
+    if (!_matchesFuzzyQuery(
+      '${memory.rawContent} ${memory.rawPath} ${memory.rawChecksum}',
+      query,
+    )) {
+      return PanelEmptyState(query: query);
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          PanelSectionBlock(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _MemoryPanelLabel('Source'),
+                const SizedBox(height: 10),
+                _MemoryMetadataRow(
+                  label: 'Source record id',
+                  value: memory.evidenceId,
+                ),
+                _MemoryMetadataRow(label: 'Path', value: memory.rawPath),
+                _MemoryMetadataRow(
+                  label: 'Checksum',
+                  value: memory.rawChecksum,
+                ),
+                _MemoryMetadataRow(
+                  label: 'Media type',
+                  value: memory.rawMediaType,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: controller.memoryBusy
+                      ? null
+                      : () =>
+                            unawaited(controller.hydrateSelectedMemorySource()),
+                  icon: const Icon(Icons.visibility_outlined),
+                  label: const Text('Load Source'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            constraints: const BoxConstraints(minHeight: 260),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.agentAwesomeColors.surface,
+              gradient: context.agentAwesomeCardGradient,
+              border: Border.all(color: context.agentAwesomeColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              memory.rawContent.isEmpty
+                  ? 'Source not loaded'
+                  : memory.rawContent,
+              style: TextStyle(
+                color: context.agentAwesomeColors.ink,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MemoryRelationsContent extends StatelessWidget {
+  const _MemoryRelationsContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds relationship review for the selected memory.
+  @override
+  Widget build(BuildContext context) {
+    final memory = controller.selectedMemory;
+    if (memory == null) {
+      return const _MemorySelectionEmpty();
+    }
+    final relationships = memory.relationships.where((relationship) {
+      return _matchesFuzzyQuery(
+        '${relationship.type} ${relationship.toId} ${relationship.sourceId}',
+        query,
+      );
+    }).toList();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          PanelSectionBlock(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _MemoryPanelLabel('Outgoing Edges'),
+                const SizedBox(height: 10),
+                if (relationships.isEmpty)
+                  Text(
+                    'No matching relationship edges',
+                    style: TextStyle(color: context.agentAwesomeColors.muted),
+                  )
+                else
+                  for (final relationship in relationships)
+                    _MemoryRelationshipLine(relationship: relationship),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          PanelSectionBlock(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _MemoryPanelLabel('Incoming Edges'),
+                const SizedBox(height: 10),
+                for (final record in controller.workspace.memoryRecords)
+                  for (final relationship in record.relationships.where(
+                    (rel) => rel.toId == memory.id,
+                  ))
+                    _MemoryRelationshipLine(relationship: relationship),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
