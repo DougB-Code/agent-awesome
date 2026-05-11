@@ -11,15 +11,32 @@ import (
 
 	"memory/internal/memory/domain"
 	graph "memory/internal/memory/graph/domain"
-	graphstore "memory/internal/memory/graph/store"
 	"memory/internal/memory/normalize"
 )
 
 const maxTraversalCandidates = 1000
 
+// Store is the graph storage surface required by query execution.
+type Store interface {
+	SearchNodes(context.Context, graph.SearchNodesQuery) ([]graph.Node, error)
+	ListEdges(context.Context, []graph.RelationType, int) ([]graph.Edge, error)
+	ListOutgoingEdges(context.Context, graph.NodeID, []graph.RelationType) ([]graph.Edge, error)
+	GetNode(context.Context, graph.NodeID) (graph.Node, error)
+	GetEdge(context.Context, graph.EdgeID) (graph.Edge, error)
+	UpsertNode(context.Context, graph.UpsertNodeRequest) (graph.Node, error)
+	UpsertEdge(context.Context, graph.UpsertEdgeRequest) (graph.Edge, error)
+	SetNodeStatus(context.Context, graph.NodeID, graph.LifecycleStatus, string) (graph.Node, error)
+	SetEdgeStatus(context.Context, graph.EdgeID, graph.LifecycleStatus, string) (graph.Edge, error)
+	UpsertNodeProperty(context.Context, graph.UpsertNodePropertyRequest) (graph.NodeProperty, error)
+	UpsertEdgeProperty(context.Context, graph.UpsertEdgePropertyRequest) (graph.EdgeProperty, error)
+	AppendAudit(context.Context, graph.AppendAuditRequest) (graph.AuditEvent, error)
+	ListNodeProperties(context.Context, graph.NodeID) ([]graph.NodeProperty, error)
+	ListEdgeProperties(context.Context, graph.EdgeID) ([]graph.EdgeProperty, error)
+}
+
 // Executor evaluates parsed graph statements against graph storage.
 type Executor struct {
-	store *graphstore.Store
+	store Store
 }
 
 // graphQueryAccessPolicy stores node visibility rules for one query.
@@ -42,7 +59,7 @@ type mutationContext struct {
 }
 
 // NewExecutor creates a graph query executor.
-func NewExecutor(store *graphstore.Store) *Executor {
+func NewExecutor(store Store) *Executor {
 	return &Executor{store: store}
 }
 

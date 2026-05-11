@@ -272,7 +272,7 @@ func openSnapshotDrillService(t *testing.T, dbPath string, dataRoot string) *ser
 	if err != nil {
 		t.Fatalf("open graph repository: %v", err)
 	}
-	return service.New(repo, nil, service.Config{})
+	return service.New(service.RepositoriesFrom(repo), nil, service.Config{})
 }
 
 // existingSnapshotTarget creates live data that should survive failed restores.

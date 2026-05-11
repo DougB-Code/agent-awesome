@@ -871,6 +871,24 @@ class AgentAwesomeAppController extends ChangeNotifier {
     ).read();
   }
 
+  /// Resolves one credential reference for display or explicit reveal.
+  Future<CredentialLookup> lookupCredential(String reference) {
+    return credentialStore.lookup(reference);
+  }
+
+  /// Stores one provider credential in the app-owned credential store.
+  Future<CredentialMutationResult> storeCredential({
+    required String reference,
+    required String secret,
+  }) {
+    return credentialStore.store(reference: reference, secret: secret);
+  }
+
+  /// Deletes one provider credential from the app-owned credential store.
+  Future<CredentialMutationResult> deleteCredential(String reference) {
+    return credentialStore.delete(reference);
+  }
+
   /// Stores a cloud API key and makes the selected model the active default.
   Future<OnboardingModelSetupResult> configureOnboardingCloudModel({
     required String providerId,
@@ -1069,21 +1087,12 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Reads a text configuration file referenced by the active profile.
   Future<String> readConfigurationFile(String path) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      throw FileSystemException('Configuration file does not exist', path);
-    }
-    return file.readAsString();
+    return configFiles.read(path);
   }
 
   /// Saves a text configuration file referenced by the active profile.
   Future<void> saveConfigurationFile(String path, String content) async {
-    if (path.trim().isEmpty) {
-      throw const FileSystemException('Configuration path is empty');
-    }
-    final file = File(path);
-    await file.parent.create(recursive: true);
-    await file.writeAsString(content);
+    await configFiles.write(path, content);
     statusMessage = 'Saved $path';
     notifyListeners();
   }

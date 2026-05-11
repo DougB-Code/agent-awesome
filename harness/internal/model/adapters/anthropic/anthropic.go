@@ -292,7 +292,7 @@ func anthropicContentMessages(content *genai.Content) ([]anthropicMessage, error
 		blocks = append(blocks, assistantBlocks...)
 		messages = append(messages, anthropicMessage{Role: "assistant", Content: blocks})
 	} else if strings.TrimSpace(text) != "" {
-		role, err := protocol.AnthropicRole(content.Role)
+		role, err := anthropicRole(content.Role)
 		if err != nil {
 			return nil, err
 		}
@@ -300,6 +300,18 @@ func anthropicContentMessages(content *genai.Content) ([]anthropicMessage, error
 	}
 	messages = append(messages, toolResults...)
 	return messages, nil
+}
+
+// anthropicRole maps runtime roles into Anthropic message roles.
+func anthropicRole(role string) (string, error) {
+	switch role {
+	case "", "user":
+		return "user", nil
+	case "model", "assistant":
+		return "assistant", nil
+	default:
+		return "", fmt.Errorf("unsupported Anthropic role %q", role)
+	}
 }
 
 // anthropicTools converts runtime function declarations into Anthropic tool

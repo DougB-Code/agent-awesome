@@ -307,7 +307,7 @@ func openAIContentMessages(content *genai.Content) ([]openAIMessage, error) {
 			ToolCalls: toolCalls,
 		})
 	} else if strings.TrimSpace(text) != "" {
-		role, err := protocol.OpenAIRole(content.Role)
+		role, err := openAIRole(content.Role)
 		if err != nil {
 			return nil, err
 		}
@@ -315,6 +315,20 @@ func openAIContentMessages(content *genai.Content) ([]openAIMessage, error) {
 	}
 	messages = append(messages, toolResponses...)
 	return messages, nil
+}
+
+// openAIRole maps runtime roles into OpenAI-compatible chat roles.
+func openAIRole(role string) (string, error) {
+	switch role {
+	case "", "user":
+		return "user", nil
+	case "model", "assistant":
+		return "assistant", nil
+	case "system":
+		return "system", nil
+	default:
+		return "", fmt.Errorf("unsupported OpenAI-compatible role %q", role)
+	}
 }
 
 // openAITools converts runtime function declarations into OpenAI tool

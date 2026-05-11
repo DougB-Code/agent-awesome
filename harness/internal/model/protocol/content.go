@@ -64,31 +64,3 @@ func UnsupportedPartTypes(part *genai.Part) []string {
 	}
 	return unsupported
 }
-
-// OpenAIRole maps runtime roles into OpenAI-compatible chat roles.
-// @TODO this should be in the OpenAI folder
-func OpenAIRole(role string) (string, error) {
-	switch role {
-	case "", "user":
-		return "user", nil
-	case "model", "assistant":
-		return "assistant", nil
-	case "system":
-		return "system", nil
-	default:
-		return "", fmt.Errorf("unsupported OpenAI-compatible role %q", role)
-	}
-}
-
-// AnthropicRole maps runtime roles into Anthropic message roles.
-// @TODO this should be in the Anthropic folder
-func AnthropicRole(role string) (string, error) {
-	switch role {
-	case "", "user":
-		return "user", nil
-	case "model", "assistant":
-		return "assistant", nil
-	default:
-		return "", fmt.Errorf("unsupported Anthropic role %q", role)
-	}
-}

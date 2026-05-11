@@ -733,7 +733,7 @@ class _SettingsModelProviderCollectionState
           ],
         ),
         _SettingsModelProviderCard(
-          credentialStore: widget.controller.credentialStore,
+          controller: widget.controller,
           provider: provider,
           onChanged: (next) => _replaceProvider(document, provider.id, next),
         ),
@@ -905,7 +905,7 @@ class _SettingsModelProviderCollectionState
       return;
     }
     if (provider.apiKey.trim().isNotEmpty) {
-      await widget.controller.credentialStore.delete(provider.apiKey);
+      await widget.controller.deleteCredential(provider.apiKey);
     }
     final providers = document.providers
         .where((candidate) => candidate.id != provider.id)
@@ -2753,12 +2753,12 @@ class _SettingsServerContentState extends State<_SettingsServerContent> {
 
 class _SettingsModelProviderCard extends StatelessWidget {
   const _SettingsModelProviderCard({
-    required this.credentialStore,
+    required this.controller,
     required this.provider,
     required this.onChanged,
   });
 
-  final CredentialStore credentialStore;
+  final AgentAwesomeAppController controller;
   final ModelProviderConfig provider;
   final ValueChanged<ModelProviderConfig> onChanged;
 
@@ -2783,7 +2783,7 @@ class _SettingsModelProviderCard extends StatelessWidget {
           ],
         ),
         _SettingsCredentialField(
-          credentialStore: credentialStore,
+          controller: controller,
           providerId: provider.id,
           reference: provider.apiKey,
           onChanged: (value) => onChanged(provider.copyWith(apiKey: value)),
@@ -2934,13 +2934,13 @@ class _SettingsAdapterDropdown extends StatelessWidget {
 
 class _SettingsCredentialField extends StatefulWidget {
   const _SettingsCredentialField({
-    required this.credentialStore,
+    required this.controller,
     required this.providerId,
     required this.reference,
     required this.onChanged,
   });
 
-  final CredentialStore credentialStore;
+  final AgentAwesomeAppController controller;
   final String providerId;
   final String reference;
   final ValueChanged<String> onChanged;
@@ -3069,7 +3069,7 @@ class _SettingsCredentialFieldState extends State<_SettingsCredentialField> {
     setState(() {
       _saving = true;
     });
-    final result = await widget.credentialStore.store(
+    final result = await widget.controller.storeCredential(
       reference: reference,
       secret: secret,
     );
@@ -3084,7 +3084,7 @@ class _SettingsCredentialFieldState extends State<_SettingsCredentialField> {
     }
     _controller.clear();
     widget.onChanged(reference);
-    final lookup = await widget.credentialStore.lookup(reference);
+    final lookup = await widget.controller.lookupCredential(reference);
     if (!mounted) {
       return;
     }
@@ -3112,8 +3112,8 @@ class _SettingsCredentialFieldState extends State<_SettingsCredentialField> {
     setState(() {
       _saving = true;
     });
-    await widget.credentialStore.delete(reference);
-    final lookup = await widget.credentialStore.lookup(reference);
+    await widget.controller.deleteCredential(reference);
+    final lookup = await widget.controller.lookupCredential(reference);
     if (!mounted) {
       return;
     }
@@ -3157,7 +3157,7 @@ class _SettingsCredentialFieldState extends State<_SettingsCredentialField> {
   }
 
   Future<void> _load() async {
-    final lookup = await widget.credentialStore.lookup(widget.reference);
+    final lookup = await widget.controller.lookupCredential(widget.reference);
     if (!mounted) {
       return;
     }

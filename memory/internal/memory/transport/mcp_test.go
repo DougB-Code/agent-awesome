@@ -505,7 +505,7 @@ func newTestMCPServer(t *testing.T) *MCPServer {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
-	return NewMCPServer(service.New(repo, nil, service.Config{}))
+	return NewMCPServer(service.New(service.RepositoriesFrom(repo), nil, service.Config{}))
 }
 
 // postRPC sends a JSON-RPC request and decodes its response.

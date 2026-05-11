@@ -125,7 +125,7 @@ func TestStewardDisabledWorkersComplete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
-	service := New(repo, nil, Config{WorkerCount: 2, PollInterval: 10 * time.Millisecond})
+	service := New(RepositoriesFrom(repo), nil, Config{WorkerCount: 2, PollInterval: 10 * time.Millisecond})
 	service.Start(ctx)
 	defer service.Close(context.Background())
 
@@ -304,7 +304,7 @@ func newTestService(t *testing.T) *Service {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { _ = repo.Close() })
-	return New(repo, nil, Config{})
+	return New(RepositoriesFrom(repo), nil, Config{})
 }
 
 // containsTestString reports whether a test slice contains a value.

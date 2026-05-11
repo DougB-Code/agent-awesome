@@ -19,20 +19,36 @@ type Config struct {
 	PollInterval time.Duration
 }
 
+// Repositories contains the storage ports required by service features.
+type Repositories struct {
+	Memory     ports.Repository
+	Tasks      ports.TaskRepository
+	GraphQuery ports.GraphQueryRepository
+}
+
+// RepositoriesFrom adapts one composite repository at the process wiring edge.
+func RepositoriesFrom(repo ports.Repository) Repositories {
+	tasks, _ := repo.(ports.TaskRepository)
+	graphQuery, _ := repo.(ports.GraphQueryRepository)
+	return Repositories{Memory: repo, Tasks: tasks, GraphQuery: graphQuery}
+}
+
 // Service provides process-boundary-safe memory operations.
 type Service struct {
-	repo         ports.Repository
-	steward      ports.Steward
-	workerCount  int
-	pollInterval time.Duration
-	cancel       context.CancelFunc
-	done         chan struct{}
-	startOnce    sync.Once
-	stopOnce     sync.Once
+	repo           ports.Repository
+	taskRepo       ports.TaskRepository
+	graphQueryRepo ports.GraphQueryRepository
+	steward        ports.Steward
+	workerCount    int
+	pollInterval   time.Duration
+	cancel         context.CancelFunc
+	done           chan struct{}
+	startOnce      sync.Once
+	stopOnce       sync.Once
 }
 
 // New creates a memory service backed by the given repository.
-func New(repo ports.Repository, steward ports.Steward, cfg Config) *Service {
+func New(repos Repositories, steward ports.Steward, cfg Config) *Service {
 	if cfg.WorkerCount <= 0 {
 		cfg.WorkerCount = 2
 	}
@@ -40,11 +56,13 @@ func New(repo ports.Repository, steward ports.Steward, cfg Config) *Service {
 		cfg.PollInterval = 250 * time.Millisecond
 	}
 	return &Service{
-		repo:         repo,
-		steward:      steward,
-		workerCount:  cfg.WorkerCount,
-		pollInterval: cfg.PollInterval,
-		done:         make(chan struct{}),
+		repo:           repos.Memory,
+		taskRepo:       repos.Tasks,
+		graphQueryRepo: repos.GraphQuery,
+		steward:        steward,
+		workerCount:    cfg.WorkerCount,
+		pollInterval:   cfg.PollInterval,
+		done:           make(chan struct{}),
 	}
 }
 
@@ -297,20 +315,18 @@ func (s *Service) Close(ctx context.Context) error {
 
 // taskRepository returns the optional graph-backed task repository.
 func (s *Service) taskRepository() (ports.TaskRepository, error) {
-	repo, ok := s.repo.(ports.TaskRepository)
-	if !ok {
+	if s.taskRepo == nil {
 		return nil, errors.New("task graph repository is not configured")
 	}
-	return repo, nil
+	return s.taskRepo, nil
 }
 
 // graphQueryRepository returns the optional graph query repository.
 func (s *Service) graphQueryRepository() (ports.GraphQueryRepository, error) {
-	repo, ok := s.repo.(ports.GraphQueryRepository)
-	if !ok {
+	if s.graphQueryRepo == nil {
 		return nil, errors.New("graph query repository is not configured")
 	}
-	return repo, nil
+	return s.graphQueryRepo, nil
 }
 
 // workerLoop continuously leases and handles enrichment jobs.

@@ -74,7 +74,23 @@ class ConfigFileEntry {
 /// ConfigFileStore manages real configuration files in the app config folder.
 class ConfigFileStore {
   /// Creates a configuration file store.
-  const ConfigFileStore();
+  const ConfigFileStore({this.configDirectoryPath = ''});
+
+  /// Root config directory used for editable collections.
+  final String configDirectoryPath;
+
+  /// Reads one managed text configuration file.
+  Future<String> read(String path) async {
+    final file = await _validatedConfigFile(path, requireExists: true);
+    return file.readAsString();
+  }
+
+  /// Writes one managed text configuration file.
+  Future<void> write(String path, String content) async {
+    final file = await _validatedConfigFile(path);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(content);
+  }
 
   /// Lists config files for a collection, including assigned external paths.
   Future<List<ConfigFileEntry>> list({
@@ -83,7 +99,8 @@ class ConfigFileStore {
   }) async {
     final directory = Directory(_directoryPath(kind));
     final entries = <ConfigFileEntry>[];
-    if (await directory.exists()) {
+    if (!await _hasSymlinkPathComponent(directory.path) &&
+        await directory.exists()) {
       final files = await directory
           .list()
           .where((entity) => entity is File && _isConfigFile(entity.path))
@@ -104,14 +121,19 @@ class ConfigFileStore {
     }
     if (assignedPath.trim().isNotEmpty &&
         !entries.any((entry) => entry.path == assignedPath)) {
+      final readMetadata = await _canReadManagedMetadata(assignedPath);
       entries.insert(
         0,
         ConfigFileEntry(
           path: assignedPath,
           kind: kind,
           assigned: true,
-          displayName: await _displayName(assignedPath, kind),
-          modelChoices: await _modelChoices(assignedPath, kind),
+          displayName: readMetadata
+              ? await _displayName(assignedPath, kind)
+              : '',
+          modelChoices: readMetadata
+              ? await _modelChoices(assignedPath, kind)
+              : const <ModelConfigChoice>[],
         ),
       );
     }
@@ -126,30 +148,26 @@ class ConfigFileStore {
       directory.path,
       '${_defaultPrefix(kind)}.yaml',
     );
-    await File(path).writeAsString('');
+    final file = await _validatedConfigFile(path);
+    await file.writeAsString('');
     return path;
   }
 
   /// Duplicates a config file into the app config collection directory.
   Future<String> duplicate(String sourcePath, ConfigFileKind kind) async {
-    final source = File(sourcePath);
-    if (!await source.exists()) {
-      throw FileSystemException(
-        'Configuration file does not exist',
-        sourcePath,
-      );
-    }
+    final source = await _validatedConfigFile(sourcePath, requireExists: true);
     final directory = Directory(_directoryPath(kind));
     await directory.create(recursive: true);
     final sourceName = sourcePath.replaceAll('\\', '/').split('/').last;
     final path = await _uniquePath(directory.path, _copyName(sourceName));
-    await File(path).writeAsString(await source.readAsString());
+    final target = await _validatedConfigFile(path);
+    await target.writeAsString(await source.readAsString());
     return path;
   }
 
   /// Deletes an existing config file.
   Future<void> delete(String path) async {
-    final file = File(path);
+    final file = await _validatedConfigFile(path);
     if (!await file.exists()) {
       return;
     }
@@ -162,13 +180,7 @@ class ConfigFileStore {
     if (trimmed.isEmpty) {
       throw FileSystemException('Configuration name is required', entry.path);
     }
-    final file = File(entry.path);
-    if (!await file.exists()) {
-      throw FileSystemException(
-        'Configuration file does not exist',
-        entry.path,
-      );
-    }
+    final file = await _validatedConfigFile(entry.path, requireExists: true);
     final directory = Directory(_directoryPath(entry.kind));
     await directory.create(recursive: true);
     final extension = _extension(entry.path);
@@ -180,15 +192,17 @@ class ConfigFileStore {
     if (await File(target).exists()) {
       throw FileSystemException('Configuration name already exists', target);
     }
-    await file.rename(target);
+    final targetFile = await _validatedConfigFile(target);
+    await file.rename(targetFile.path);
     return target;
   }
 
   String _directoryPath(ConfigFileKind kind) {
+    final root = _configRootPath();
     return switch (kind) {
-      ConfigFileKind.model => modelConfigsDirectoryPath(),
-      ConfigFileKind.agent => agentConfigsDirectoryPath(),
-      ConfigFileKind.tool => toolConfigsDirectoryPath(),
+      ConfigFileKind.model => '$root/models',
+      ConfigFileKind.agent => '$root/agents',
+      ConfigFileKind.tool => '$root/tools',
     };
   }
 
@@ -198,6 +212,91 @@ class ConfigFileStore {
       ConfigFileKind.agent => 'agent',
       ConfigFileKind.tool => 'tool',
     };
+  }
+
+  /// Returns the configured root for editable app config files.
+  String _configRootPath() {
+    final trimmed = configDirectoryPath.trim();
+    return trimmed.isEmpty ? agentAwesomeConfigDirectoryPath() : trimmed;
+  }
+
+  /// Returns a managed config file after validating its path and extension.
+  Future<File> _validatedConfigFile(
+    String path, {
+    bool requireExists = false,
+  }) async {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      throw const FileSystemException('Configuration path is empty');
+    }
+    if (!_isConfigFile(trimmed)) {
+      throw FileSystemException('Unsupported configuration file type', trimmed);
+    }
+    final file = File(trimmed);
+    if (!_isManagedConfigPath(file.path)) {
+      throw FileSystemException(
+        'Configuration path is outside managed config directories',
+        trimmed,
+      );
+    }
+    if (await _hasSymlinkPathComponent(file.path)) {
+      throw FileSystemException(
+        'Configuration path cannot include symbolic links',
+        trimmed,
+      );
+    }
+    if (requireExists && !await file.exists()) {
+      throw FileSystemException('Configuration file does not exist', trimmed);
+    }
+    return file;
+  }
+
+  /// Reports whether a path belongs to one editable config collection.
+  bool _isManagedConfigPath(String path) {
+    final candidate = _normalizedAbsolutePath(path);
+    return ConfigFileKind.values.any((kind) {
+      final directory = _normalizedAbsolutePath(_directoryPath(kind));
+      return candidate == directory || candidate.startsWith('$directory/');
+    });
+  }
+
+  /// Reports whether metadata can be read without crossing store boundaries.
+  Future<bool> _canReadManagedMetadata(String path) async {
+    final trimmed = path.trim();
+    if (!_isConfigFile(trimmed)) {
+      return false;
+    }
+    final file = File(trimmed);
+    return _isManagedConfigPath(file.path) &&
+        !await _hasSymlinkPathComponent(file.path);
+  }
+
+  /// Reports whether any existing managed-path segment is a symbolic link.
+  Future<bool> _hasSymlinkPathComponent(String path) async {
+    final candidate = _normalizedAbsolutePath(path);
+    final root = _normalizedAbsolutePath(_configRootPath());
+    if (candidate == root) {
+      return false;
+    }
+    if (!candidate.startsWith('$root/')) {
+      return true;
+    }
+    final relative = candidate.substring(root.length + 1);
+    var current = root;
+    for (final part in relative.split('/')) {
+      if (part.isEmpty) {
+        continue;
+      }
+      current = '$current/$part';
+      final type = await FileSystemEntity.type(current, followLinks: false);
+      if (type == FileSystemEntityType.link) {
+        return true;
+      }
+      if (type == FileSystemEntityType.notFound) {
+        return false;
+      }
+    }
+    return false;
   }
 }
 
@@ -345,4 +444,26 @@ String _sanitizeFileName(String name) {
     throw FileSystemException('Configuration name has no valid characters');
   }
   return safe;
+}
+
+/// Returns a slash-normalized absolute path for boundary checks.
+String _normalizedAbsolutePath(String path) {
+  final raw = File(path).absolute.path.replaceAll('\\', '/');
+  final prefix = raw.startsWith('/') ? '/' : '';
+  final parts = <String>[];
+  for (final part in raw.split('/')) {
+    if (part.isEmpty || part == '.') {
+      continue;
+    }
+    if (part == '..') {
+      if (parts.isNotEmpty && parts.last != '..') {
+        parts.removeLast();
+      } else {
+        parts.add(part);
+      }
+      continue;
+    }
+    parts.add(part);
+  }
+  return '$prefix${parts.join('/')}';
 }
