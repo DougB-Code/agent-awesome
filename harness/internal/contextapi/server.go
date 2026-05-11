@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"agentawesome/internal/config/schema"
-	"agentawesome/internal/tools/mcptransport"
+	"agentawesome/internal/tools/mcpclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
 )
@@ -265,12 +265,7 @@ func serverForTool(ctx context.Context, servers []schema.MCPServer, name string)
 
 // connectMCP opens one MCP client session for a configured server.
 func connectMCP(ctx context.Context, server schema.MCPServer) (*mcp.ClientSession, error) {
-	transport, err := mcptransport.New(server)
-	if err != nil {
-		return nil, err
-	}
-	client := mcp.NewClient(&mcp.Implementation{Name: "agent-awesome-context-api", Version: "v1.0.0"}, nil)
-	return client.Connect(ctx, transport, nil)
+	return mcpclient.Connect(ctx, server, "agent-awesome-context-api", "v1.0.0")
 }
 
 // configuredMCPServers returns enabled MCP servers from tool configuration.

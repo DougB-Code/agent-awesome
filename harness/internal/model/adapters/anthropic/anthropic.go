@@ -9,6 +9,7 @@ import (
 	"io"
 	"iter"
 	"net/http"
+	"os"
 	"strings"
 
 	"agentawesome/internal/config/schema"
@@ -41,7 +42,7 @@ func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection)
 		return nil, fmt.Errorf("provider %q API key %q: %w", selection.Name, apiKeyEnv, err)
 	}
 
-	endpoint, err := selection.Provider.ResolvedURL()
+	endpoint, err := adapter.ResolveProviderURL(selection.Provider, os.LookupEnv)
 	if err != nil {
 		return nil, fmt.Errorf("provider %q url: %w", selection.Name, err)
 	}

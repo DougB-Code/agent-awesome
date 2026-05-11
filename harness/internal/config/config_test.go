@@ -832,26 +832,6 @@ providers: {}
 	}
 }
 
-func TestProviderResolvedURLExpandsEnvironment(t *testing.T) {
-	t.Setenv("TEST_GATEWAY_URL", "https://gateway.example.test/v1/chat/completions")
-
-	provider := schema.Provider{URL: "${TEST_GATEWAY_URL}"}
-	got, err := provider.ResolvedURL()
-	if err != nil {
-		t.Fatalf("ResolvedURL() error = %v", err)
-	}
-	if want := "https://gateway.example.test/v1/chat/completions"; got != want {
-		t.Fatalf("ResolvedURL() = %q, want %q", got, want)
-	}
-}
-
-func TestProviderResolvedURLRejectsMissingEnvironment(t *testing.T) {
-	provider := schema.Provider{URL: "${TEST_MISSING_GATEWAY_URL}"}
-	if _, err := provider.ResolvedURL(); err == nil {
-		t.Fatalf("ResolvedURL() error = nil, want missing environment error")
-	}
-}
-
 func TestLoadAgentRejectsMissingName(t *testing.T) {
 	path := writeTempFile(t, "agent.yaml", `
 instruction: Be helpful.

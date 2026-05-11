@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"agentawesome/internal/config/schema"
@@ -47,7 +48,7 @@ func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection)
 	if err := f.ValidateProvider(selection.Name, selection.Provider); err != nil {
 		return nil, err
 	}
-	url, err := selection.Provider.ResolvedURL()
+	url, err := adapter.ResolveProviderURL(selection.Provider, os.LookupEnv)
 	if err != nil {
 		return nil, fmt.Errorf("provider %q url: %w", selection.Name, err)
 	}

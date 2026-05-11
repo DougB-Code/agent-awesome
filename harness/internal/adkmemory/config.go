@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"agentawesome/internal/config/schema"
-	"agentawesome/internal/tools/mcptransport"
+	"agentawesome/internal/tools/mcpclient"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/loadmemorytool"
 	"google.golang.org/adk/tool/preloadmemorytool"
@@ -18,7 +18,7 @@ func NewFromToolsConfig(cfg *schema.Tools) (*Service, bool, error) {
 	if !ok {
 		return nil, false, nil
 	}
-	if _, err := mcptransport.New(server); err != nil {
+	if err := mcpclient.ValidateServer(server); err != nil {
 		return nil, true, fmt.Errorf("create memory MCP transport: %w", err)
 	}
 	return New(server), true, nil

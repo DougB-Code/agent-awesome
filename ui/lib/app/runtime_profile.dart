@@ -9,6 +9,108 @@ import 'app_config.dart';
 
 export '../domain/runtime_profile.dart';
 
+/// HarnessRuntimeLaunch derives app launch details from harness profile data.
+extension HarnessRuntimeLaunch on HarnessRuntime {
+  /// URL used to prove harness readiness.
+  String get sessionsUrl {
+    final base = apiBaseUrl.endsWith('/')
+        ? apiBaseUrl.substring(0, apiBaseUrl.length - 1)
+        : apiBaseUrl;
+    return '$base/apps/$appName/users/$userId/sessions';
+  }
+
+  /// Command arguments passed to the built harness executable.
+  List<String> get arguments {
+    return <String>[
+      'run',
+      '--model',
+      modelConfigPath,
+      '--agent',
+      agentConfigPath,
+      '--tool',
+      toolConfigPath,
+      if (contextApiBaseUrl.isNotEmpty) ...<String>[
+        '--context-api-addr',
+        _listenAddress(contextApiBaseUrl, _contextPort(contextApiBaseUrl)),
+      ],
+      '--',
+      'web',
+      '--port',
+      port.toString(),
+      'api',
+      '--webui_address',
+      webUiAddress,
+    ];
+  }
+
+  /// Host and optional port passed to ADK for local REST API CORS headers.
+  String get webUiAddress {
+    final uri = Uri.tryParse(apiBaseUrl);
+    if (uri == null || uri.host.isEmpty) {
+      return 'localhost:$port';
+    }
+    if (uri.hasPort) {
+      return '${uri.host}:${uri.port}';
+    }
+    return uri.host;
+  }
+}
+
+/// GatewayRuntimeLaunch derives app launch details from gateway profile data.
+extension GatewayRuntimeLaunch on GatewayRuntime {
+  /// Memory MCP URL exposed by this gateway control plane.
+  String get mcpUrl {
+    final uri = Uri.parse(apiBaseUrl);
+    return uri.replace(path: '/mcp', query: null).toString();
+  }
+
+  /// Effective beta status URL for this gateway.
+  String get effectiveStatusUrl {
+    if (statusUrl.trim().isNotEmpty) {
+      return statusUrl;
+    }
+    final uri = Uri.parse(apiBaseUrl);
+    return uri
+        .replace(path: '/api/gateway/beta-status', query: null)
+        .toString();
+  }
+
+  /// Command arguments passed to the built gateway executable.
+  List<String> get arguments {
+    return <String>[
+      '--addr',
+      _listenAddress(apiBaseUrl, port),
+      '--harness-base-url',
+      harnessBaseUrl,
+      '--context-base-url',
+      contextBaseUrl,
+      '--memory-mcp-url',
+      memoryMcpUrl,
+      '--app-name',
+      appName,
+      '--user-id',
+      userId,
+      if (modelProviderId.trim().isNotEmpty) ...<String>[
+        '--model-provider-id',
+        modelProviderId,
+      ],
+      if (modelId.trim().isNotEmpty) ...<String>['--model-id', modelId],
+    ];
+  }
+}
+
+/// Encodes a runtime profile as stable, human-editable JSON.
+String encodeRuntimeProfileJson(RuntimeProfile profile) {
+  const encoder = JsonEncoder.withIndent('  ');
+  return '${encoder.convert(profile.toJson())}\n';
+}
+
+/// Encodes an MCP server runtime config as stable, human-editable JSON.
+String encodeMcpServerRuntimeJson(McpServerRuntime server) {
+  const encoder = JsonEncoder.withIndent('  ');
+  return '${encoder.convert(server.toJson())}\n';
+}
+
 /// RuntimeProfileLoader loads and validates the configured or shipped profile.
 class RuntimeProfileLoader {
   /// Creates a runtime profile loader.
@@ -243,4 +345,21 @@ String _portString(Uri uri, int fallback) {
     return uri.port.toString();
   }
   return fallback.toString();
+}
+
+/// Returns the listen port encoded in a context API URL.
+int _contextPort(String contextApiBaseUrl) {
+  final uri = Uri.parse(contextApiBaseUrl);
+  if (uri.hasPort) {
+    return uri.port;
+  }
+  return 8081;
+}
+
+/// Returns the host:port listen address for a base API URL.
+String _listenAddress(String apiBaseUrl, int fallbackPort) {
+  final uri = Uri.parse(apiBaseUrl);
+  final port = uri.hasPort ? uri.port : fallbackPort;
+  final host = uri.host.isEmpty ? '127.0.0.1' : uri.host;
+  return '$host:$port';
 }

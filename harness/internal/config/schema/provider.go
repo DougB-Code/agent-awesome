@@ -3,8 +3,6 @@ package schema
 
 import (
 	"fmt"
-	"os"
-	"sort"
 	"strings"
 )
 
@@ -21,11 +19,6 @@ func (s ProviderSelection) ModelName() string {
 // AuthMode returns the normalized provider authentication policy.
 func (p Provider) AuthMode() string {
 	return strings.ToLower(strings.TrimSpace(p.Auth))
-}
-
-// ResolvedURL expands any environment variables in the provider URL.
-func (p Provider) ResolvedURL() (string, error) {
-	return expandEnv(strings.TrimSpace(p.URL))
 }
 
 // validateProvider checks provider-level fields and model ids.
@@ -76,22 +69,4 @@ func validateProviderAuth(name string, provider Provider) error {
 	default:
 		return fmt.Errorf("provider %q auth must be %q or %q", name, ProviderAuthRequired, ProviderAuthOptional)
 	}
-}
-
-// expandEnv expands environment variables and reports the first missing value.
-func expandEnv(value string) (string, error) {
-	var missing []string
-	expanded := os.Expand(value, func(name string) string {
-		raw, ok := os.LookupEnv(name)
-		if !ok || strings.TrimSpace(raw) == "" {
-			missing = append(missing, name)
-			return ""
-		}
-		return raw
-	})
-	if len(missing) > 0 {
-		sort.Strings(missing)
-		return "", fmt.Errorf("environment variable %q is not set", missing[0])
-	}
-	return strings.TrimSpace(expanded), nil
 }

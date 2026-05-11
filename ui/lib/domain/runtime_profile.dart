@@ -1,7 +1,5 @@
-/// Defines runtime profiles that connect chat to harness and MCP services.
+/// Defines runtime profile topology data.
 library;
-
-import 'dart:convert';
 
 import 'json_value.dart';
 
@@ -154,51 +152,11 @@ class GatewayRuntime {
   /// Gateway listen port.
   final int port;
 
-  /// Memory MCP URL exposed by this gateway control plane.
-  String get mcpUrl {
-    final uri = Uri.parse(apiBaseUrl);
-    return uri.replace(path: '/mcp', query: null).toString();
-  }
-
-  /// Effective beta status URL for this gateway.
-  String get effectiveStatusUrl {
-    if (statusUrl.trim().isNotEmpty) {
-      return statusUrl;
-    }
-    final uri = Uri.parse(apiBaseUrl);
-    return uri
-        .replace(path: '/api/gateway/beta-status', query: null)
-        .toString();
-  }
-
   /// Whether the UI should start this gateway.
   final bool autoStart;
 
   /// Whether the UI should use this gateway for assistant traffic.
   final bool enabled;
-
-  /// Command arguments passed to the built gateway executable.
-  List<String> get arguments {
-    return <String>[
-      '--addr',
-      _listenAddress(apiBaseUrl, port),
-      '--harness-base-url',
-      harnessBaseUrl,
-      '--context-base-url',
-      contextBaseUrl,
-      '--memory-mcp-url',
-      memoryMcpUrl,
-      '--app-name',
-      appName,
-      '--user-id',
-      userId,
-      if (modelProviderId.trim().isNotEmpty) ...<String>[
-        '--model-provider-id',
-        modelProviderId,
-      ],
-      if (modelId.trim().isNotEmpty) ...<String>['--model-id', modelId],
-    ];
-  }
 
   /// Encodes this gateway runtime to explicit JSON values.
   Map<String, dynamic> toJson() {
@@ -308,50 +266,6 @@ class HarnessRuntime {
 
   /// Whether the UI should start this harness.
   final bool autoStart;
-
-  /// URL used to prove harness readiness.
-  String get sessionsUrl {
-    final base = apiBaseUrl.endsWith('/')
-        ? apiBaseUrl.substring(0, apiBaseUrl.length - 1)
-        : apiBaseUrl;
-    return '$base/apps/$appName/users/$userId/sessions';
-  }
-
-  /// Command arguments passed to the built harness executable.
-  List<String> get arguments {
-    return <String>[
-      'run',
-      '--model',
-      modelConfigPath,
-      '--agent',
-      agentConfigPath,
-      '--tool',
-      toolConfigPath,
-      if (contextApiBaseUrl.isNotEmpty) ...<String>[
-        '--context-api-addr',
-        _listenAddress(contextApiBaseUrl, _contextPort(contextApiBaseUrl)),
-      ],
-      '--',
-      'web',
-      '--port',
-      port.toString(),
-      'api',
-      '--webui_address',
-      webUiAddress,
-    ];
-  }
-
-  /// Host and optional port passed to ADK for local REST API CORS headers.
-  String get webUiAddress {
-    final uri = Uri.tryParse(apiBaseUrl);
-    if (uri == null || uri.host.isEmpty) {
-      return 'localhost:$port';
-    }
-    if (uri.hasPort) {
-      return '${uri.host}:${uri.port}';
-    }
-    return uri.host;
-  }
 
   /// Creates a harness runtime with selected fields replaced.
   HarnessRuntime copyWith({
@@ -536,40 +450,11 @@ class McpServerRuntime {
   }
 }
 
-/// Encodes a runtime profile as stable, human-editable JSON.
-String encodeRuntimeProfileJson(RuntimeProfile profile) {
-  const encoder = JsonEncoder.withIndent('  ');
-  return '${encoder.convert(profile.toJson())}\n';
-}
-
-/// Encodes an MCP server runtime config as stable, human-editable JSON.
-String encodeMcpServerRuntimeJson(McpServerRuntime server) {
-  const encoder = JsonEncoder.withIndent('  ');
-  return '${encoder.convert(server.toJson())}\n';
-}
-
 /// Returns the default context API base URL beside a harness API URL.
 String _defaultContextBaseUrl(String apiBaseUrl) {
   final uri = Uri.parse(apiBaseUrl);
   final port = uri.hasPort ? uri.port + 1 : 8081;
   return uri.replace(path: '/api/context', query: null, port: port).toString();
-}
-
-/// Returns the listen port encoded in a context API URL.
-int _contextPort(String contextApiBaseUrl) {
-  final uri = Uri.parse(contextApiBaseUrl);
-  if (uri.hasPort) {
-    return uri.port;
-  }
-  return 8081;
-}
-
-/// Returns the host:port listen address for a base API URL.
-String _listenAddress(String apiBaseUrl, int fallbackPort) {
-  final uri = Uri.parse(apiBaseUrl);
-  final port = uri.hasPort ? uri.port : fallbackPort;
-  final host = uri.host.isEmpty ? '127.0.0.1' : uri.host;
-  return '$host:$port';
 }
 
 /// Reads a required nested JSON object from a profile map.
