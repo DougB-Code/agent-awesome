@@ -278,3 +278,5 @@ fcomb_*
 logs/*
 deploy/cloudflare/worker/pnpm-lock.yaml
 pilots/*
+!pilots/personal-assistant/
+!pilots/personal-assistant/**

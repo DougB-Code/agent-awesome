@@ -1,0 +1,164 @@
+# This workflow verifies the current Agent Awesome codebase without publishing
+# binaries, pushing container images, or deploying Cloudflare resources.
+name: CI Verification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: -mod=readonly
+  GOCACHE: ${{ github.workspace }}/build/go/cache
+  GOMODCACHE: ${{ github.workspace }}/build/go/pkg/mod
+  NPM_CONFIG_CACHE: ${{ github.workspace }}/build/npm-cache
+  PUB_CACHE: ${{ github.workspace }}/build/pub-cache
+  NODE_VERSION: 22.15.0
+  FLUTTER_VERSION: 3.38.5
+
+jobs:
+  go:
+    name: Go / ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - gateway
+          - harness
+          - memory
+          - provision
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.0
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Prepare build caches
+        run: mkdir -p "$GOCACHE" "$GOMODCACHE"
+
+      - name: Download dependencies
+        working-directory: ${{ matrix.module }}
+        run: go mod download
+
+      - name: Run tests
+        working-directory: ${{ matrix.module }}
+        run: go test ./cmd/... ./internal/...
+
+      - name: Run provisioning preflight
+        if: matrix.module == 'provision'
+        working-directory: provision
+        run: go run ./cmd/agent-awesome-provision check --repo-root "${{ github.workspace }}"
+
+  flutter-linux:
+    name: Flutter / Linux desktop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libgtk-3-dev liblzma-dev ninja-build pkg-config
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Prepare build caches
+        run: mkdir -p "$PUB_CACHE"
+
+      - name: Download dependencies
+        working-directory: ui
+        run: flutter pub get
+
+      - name: Analyze
+        working-directory: ui
+        run: flutter analyze
+
+      - name: Run tests
+        working-directory: ui
+        run: flutter test
+
+      - name: Build Linux release
+        working-directory: ui
+        run: >
+          flutter build linux --release
+          --dart-define=AGENTAWESOME_WORKSPACE_ROOT=${{ github.workspace }}
+          --dart-define=AUTO_START_LOCAL_SERVICES=false
+
+  cloudflare-worker:
+    name: Cloudflare Worker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: deploy/cloudflare/worker/package-lock.json
+
+      - name: Prepare npm cache
+        run: mkdir -p "$NPM_CONFIG_CACHE"
+
+      - name: Install dependencies
+        working-directory: deploy/cloudflare/worker
+        run: npm ci
+
+      - name: Run smoke tests
+        working-directory: deploy/cloudflare/worker
+        run: npm test
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Prepare npm cache
+        run: mkdir -p "$NPM_CONFIG_CACHE"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check beta script syntax
+        run: bash -n scripts/check-beta.sh
+
+      - name: Build docs
+        run: npm run docs:build
+
+  cloudflare-container:
+    name: Cloudflare Container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build container image
+        run: docker build --file Dockerfile.cloudflare --tag agent-awesome-cloudflare:ci .
