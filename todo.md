@@ -14,3 +14,6 @@
 - Integrate server provisioning and hardening as tools.
 
 - Run commands to eliminate excess logic, in the same manner as duplicate implementations are eliminated.
+
+
+- CI is working, but the FLutter app is calling 'go build'.

@@ -1,6 +1,8 @@
 /// Tests runtime profile parsing for harness and MCP topologies.
 library;
 
+import 'dart:io';
+
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -85,16 +87,17 @@ void main() {
 }
 
 AppConfig _testConfig() {
-  return const AppConfig(
+  final uiRoot = Directory.current.path;
+  final workspaceRoot = Directory.current.parent.path;
+  return AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:8080/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
     agentAppName: 'agent_awesome',
     agentUserId: 'doug',
-    workspaceRoot: '/home/doug/dev/agentawesome/agent',
+    workspaceRoot: workspaceRoot,
     autoStartLocalServices: true,
-    runtimeProfilePath:
-        '/home/doug/dev/agentawesome/agent/ui/runtime_profiles/agent_awesome.json',
+    runtimeProfilePath: '$uiRoot/runtime_profiles/agent_awesome.json',
   );
 }
