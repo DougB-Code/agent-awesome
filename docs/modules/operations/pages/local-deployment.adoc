@@ -6,7 +6,7 @@ Use it to prove the memory service, harness, gateway, and UI can run on the work
 
 == Credential
 
-The default local personal-assistant pilot uses OpenAI.
+The default local Agent Awesome assistant uses OpenAI.
 Store the credential in the harness keyring:
 
 [source,sh]
@@ -18,20 +18,20 @@ go run ./cmd/agent-awesome credentials set OPENAI_API_KEY
 You may also export `OPENAI_API_KEY` in the shell that starts the harness.
 Keyring values take precedence over environment variables.
 
-Verify the configured model ID and credential before starting the pilot:
+Verify the configured model ID and credential before starting Agent Awesome:
 
 [source,sh]
 ----
 cd /home/doug/dev/agentawesome/agent/harness
 go run ./cmd/agent-awesome models check \
-  --model ../pilots/personal-assistant/model.yaml \
+  --model model.yaml \
   --provider openai \
   --model-id gpt-mini
 ----
 
 == UI-Managed Local Run
 
-This is the normal desktop pilot path.
+This is the normal desktop app path.
 The default UI runtime profile starts memory, the harness, and the gateway.
 
 [source,sh]
@@ -61,7 +61,7 @@ The default profile uses:
 |===
 
 The harness context API is a gateway dependency, not a browser-facing service.
-Keep it on loopback for local pilots. If you intentionally bind it to a
+Keep it on loopback for local runs. If you intentionally bind it to a
 non-loopback address, set `AGENTAWESOME_CONTEXT_API_TOKEN` on both the harness
 and gateway, or pass the matching `--context-api-token` flag to each process.
 
@@ -111,9 +111,9 @@ Terminal 2, harness:
 ----
 cd /home/doug/dev/agentawesome/agent
 ./build/package/bin/agent-awesome run \
-  --model pilots/personal-assistant/model.yaml \
-  --agent pilots/personal-assistant/agent.yaml \
-  --tool pilots/personal-assistant/tool.yaml \
+  --model harness/model.yaml \
+  --agent harness/agent.yaml \
+  --tool harness/tool.local.yaml \
   --context-api-addr 127.0.0.1:8081 \
   --log-file build/local/logs/harness.log \
   -- web --port 8080 api --webui_address 127.0.0.1:8080

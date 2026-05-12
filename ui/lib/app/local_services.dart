@@ -769,7 +769,7 @@ class LocalServiceSupervisor {
     await _writeLogLine('startup', line);
   }
 
-  /// Builds a Go command binary into the pilot build directory.
+  /// Builds a Go command binary into the profile build directory.
   Future<String> _buildBinary({
     required RuntimeProfile profile,
     required String name,

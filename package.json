@@ -4,10 +4,9 @@
   "private": true,
   "description": "Antora documentation build for Agent Awesome.",
   "scripts": {
-    "check:beta": "bash scripts/check-beta.sh",
     "docs:build": "antora antora-playbook.yml",
     "docs:clean": "rm -rf build/site build/antora-cache",
-    "test": "npm run check:beta"
+    "test": "npm run docs:build"
   },
   "devDependencies": {
     "@antora/cli": "3.1.14",

@@ -105,7 +105,7 @@ Root-adjacent directories wire complete systems together; deeper `internal` pack
 |Cloudflare Worker, Container, Wrangler config, Dockerfile, and deployment scripts.
 
 |`pilots`
-|Pilot configuration profiles, including the default personal-assistant setup.
+|Ignored local or experimental pilot configuration profiles.
 
 |`build`
 |Generated docs, caches, compiled binaries, packaged archives, test output, and temporary inspection files.

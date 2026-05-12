@@ -12,8 +12,8 @@ Gateway profiles also name the beta status endpoint and the non-secret model/pro
 |===
 |Profile |Use
 
-|`runtime_profiles/personal_assistant.json`
-|Default local personal assistant topology.
+|`runtime_profiles/agent_awesome.json`
+|Default local Agent Awesome topology.
 
 |`runtime_profiles/local_dev.json`
 |Local memory with the harness pointed at `harness/tool.local.yaml`.
@@ -27,6 +27,6 @@ Gateway profiles also name the beta status endpoint and the non-secret model/pro
 
 Use profiles to change service topology without mixing deployment policy into widgets.
 
-The default profile reads model, agent, and tool config from `pilots/personal-assistant`.
-Keep that pilot bundle present when packaging or distributing the desktop app.
+The default profile reads model, agent, and tool config from the harness package.
+Keep `harness/model.yaml`, `harness/agent.yaml`, and `harness/tool.local.yaml` present when packaging or distributing the desktop app.
 The gateway status URL resolves to `/api/gateway/beta-status`, which returns authenticated health, Slack scope, snapshot freshness, and model identity without exposing secrets.

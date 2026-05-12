@@ -49,13 +49,13 @@ npm install --cache ../../../build/npm-cache
 cd ../../..
 ----
 
-== Beta Check
+== CI Verification
 
-Run the full private beta gate from the repository root:
+Run the documentation check from the repository root:
 
 [source,sh]
 ----
 npm test
 ----
 
-The gate verifies the toolchain, required Cloudflare deploy assets, docs build, Go test suites, Worker smoke/type checks, the provisioning dry run, and the desktop UI when Flutter is available.
+The GitHub `CI Verification` workflow runs the full source gate for Go modules, the Cloudflare Worker, the desktop UI, the Cloudflare container, provisioning preflight, and docs.

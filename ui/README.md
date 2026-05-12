@@ -1,6 +1,6 @@
 # Agent Awesome UI
 
-A desktop-first Flutter app for the Agent Awesome personal assistant workspace.
+A desktop-first Flutter app for the Agent Awesome workspace.
 
 ## Run
 
@@ -11,26 +11,24 @@ servers in that profile, and starts any missing services it owns:
 flutter run -d linux
 ```
 
-The default profile uses the real services and pilot configuration:
+The default profile uses the real local services and harness configuration:
 
 - `memoryd` on `127.0.0.1:8090`, serving memory and graph-backed task tools
 - the harness web API on `127.0.0.1:8080`
 
-Memory and task data live under
-`../harness/build/pilot/personal-assistant/data/`. The harness uses the
-personal-assistant pilot model config, so it needs the configured provider
+The harness uses `../harness/model.yaml`, so it needs the configured provider
 credential, such as `OPENAI_API_KEY`, in the environment or Agent Awesome
 keyring before chat runs can connect.
 
 Runtime profiles are JSON service topologies. The default shipped profile is
-`runtime_profiles/personal_assistant.json`; the app loads that file when no
+`runtime_profiles/agent_awesome.json`; the app loads that file when no
 profile path is supplied. A profile can point the harness at different model,
 agent, and tool config files, and can point memory and task surfaces at the
 same graph-backed MCP endpoint. Managed servers include `working_directory`,
 `package_path`, and `arguments`; external servers set `auto_start` to `false`.
 
 ```sh
-flutter run -d linux --dart-define=AGENTAWESOME_RUNTIME_PROFILE=/home/doug/dev/agentawesome/ui/runtime_profiles/personal_assistant.json
+flutter run -d linux --dart-define=AGENTAWESOME_RUNTIME_PROFILE=/home/doug/dev/agentawesome/ui/runtime_profiles/agent_awesome.json
 ```
 
 The UI reads these optional `--dart-define` values:
@@ -43,14 +41,14 @@ The UI reads these optional `--dart-define` values:
 - `AGENTAWESOME_WORKSPACE_ROOT`, default `/home/doug/dev/agentawesome/agent`
 - `AUTO_START_LOCAL_SERVICES`, default `true`
 - `AGENTAWESOME_RUNTIME_PROFILE`, default empty, which loads
-  `runtime_profiles/personal_assistant.json`
+  `runtime_profiles/agent_awesome.json`
 
 When services are unavailable, the app marks the relevant connections as
 disconnected and shows empty states.
 
 ## Gateway Mode
 
-The default personal assistant profile starts memory, the harness, and
+The default Agent Awesome profile starts memory, the harness, and
 `agent-gateway`. The UI sends assistant traffic through the gateway while the
 gateway forwards to the harness. To override the gateway endpoint:
 

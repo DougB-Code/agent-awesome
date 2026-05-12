@@ -4,7 +4,7 @@
 The desktop UI is a Flutter application in `ui`.
 It starts with the default runtime profile and connects to the local gateway, harness, and memory services described by that profile.
 
-The default profile expects the checked-in personal-assistant pilot config under `pilots/personal-assistant`.
+The default profile expects the checked-in Agent Awesome harness config under `harness`.
 It also needs a model credential, such as `OPENAI_API_KEY`, available to the harness keyring or environment.
 
 == Start The UI
@@ -16,7 +16,7 @@ From `ui`:
 flutter run -d linux
 ----
 
-The default runtime profile is `runtime_profiles/personal_assistant.json`.
+The default runtime profile is `runtime_profiles/agent_awesome.json`.
 When local service auto-start is enabled, the UI starts the services it owns and marks unavailable services as disconnected.
 
 == Runtime Profile Override

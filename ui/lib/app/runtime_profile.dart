@@ -158,12 +158,12 @@ class RuntimeProfileLoader {
 
   /// Returns the default profile path in the operating system config folder.
   String defaultRuntimeProfilePath() {
-    return '${runtimeProfilesDirectoryPath()}/personal_assistant.json';
+    return '${runtimeProfilesDirectoryPath()}/agent_awesome.json';
   }
 
   /// Returns the shipped profile template path in the workspace.
   String shippedRuntimeProfilePath() {
-    return '${config.workspaceRoot}/ui/runtime_profiles/personal_assistant.json';
+    return '${config.workspaceRoot}/ui/runtime_profiles/agent_awesome.json';
   }
 
   /// Expands supported template variables in profile JSON content.

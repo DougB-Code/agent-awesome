@@ -12,10 +12,11 @@ cd /home/doug/dev/agentawesome/agent
 
 npm install --cache ./build/npm-cache
 npm --prefix deploy/cloudflare/worker install --cache ./build/npm-cache
-npm run check:beta
+npm test
+(cd deploy/cloudflare/worker && npm test)
 ----
 
-The beta check runs whitespace validation, Go module tests, the Cloudflare Worker smoke test, Flutter analysis/tests, and the Antora documentation build.
+The GitHub `CI Verification` workflow runs Go module tests, the Cloudflare Worker smoke test, Flutter analysis/tests, the Linux release build, the Cloudflare container build, and the Antora documentation build.
 
 `npx wrangler` commands require Node 22 or newer.
 If the Worker smoke test passes but Wrangler refuses to start, update the active Node version before deploying Cloudflare resources.
@@ -29,7 +30,7 @@ credentials available in the harness keyring or environment:
 ----
 cd /home/doug/dev/agentawesome/agent/harness
 go run ./cmd/agent-awesome models check \
-  --model ../pilots/personal-assistant/model.yaml \
+  --model model.yaml \
   --provider openai \
   --model-id gpt-mini
 cd ..
@@ -87,17 +88,19 @@ Use a fresh package directory so older artifacts are not mixed into the archive:
 ----
 cd /home/doug/dev/agentawesome/agent
 PACKAGE_DIR="build/package/agent-awesome-linux-x64-$(date +%Y%m%d%H%M%S)"
-mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/ui" "$PACKAGE_DIR/config"
+mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/ui" "$PACKAGE_DIR/config/harness"
 
 cp build/package/bin/agent-awesome "$PACKAGE_DIR/bin/"
 cp build/package/bin/memoryd "$PACKAGE_DIR/bin/"
 cp build/package/bin/agent-gateway "$PACKAGE_DIR/bin/"
 cp build/package/bin/agent-awesome-provision "$PACKAGE_DIR/bin/"
 cp -R ui/build/linux/x64/release/bundle "$PACKAGE_DIR/ui/linux-x64"
-cp -R pilots/personal-assistant "$PACKAGE_DIR/config/personal-assistant"
+cp harness/model.yaml "$PACKAGE_DIR/config/harness/model.yaml"
+cp harness/agent.yaml "$PACKAGE_DIR/config/harness/agent.yaml"
+cp harness/tool.local.yaml "$PACKAGE_DIR/config/harness/tool.local.yaml"
 
 tar -C "$PACKAGE_DIR/.." -czf "$PACKAGE_DIR.tar.gz" "$(basename "$PACKAGE_DIR")"
 ls -lh "$PACKAGE_DIR.tar.gz"
 ----
 
-The archive contains the Go binaries, the Flutter Linux bundle, and the default personal-assistant pilot config.
+The archive contains the Go binaries, the Flutter Linux bundle, and the default Agent Awesome harness config.

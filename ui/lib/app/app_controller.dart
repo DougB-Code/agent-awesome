@@ -263,7 +263,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Client for the canonical Today projection tools.
   ExecutiveSummaryClient executiveSummaryClient;
 
-  /// Local process supervisor for the pilot service stack.
+  /// Local process supervisor for the managed service stack.
   final LocalServiceSupervisor localServices;
 
   /// Local model installer and runtime supervisor.

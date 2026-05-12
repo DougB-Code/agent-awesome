@@ -53,10 +53,15 @@ The Worker hides `/mcp` and `/api/*` unless the gateway bearer token is present.
 
 [source,sh]
 ----
-npm test
+(cd gateway && go test ./cmd/... ./internal/...)
+(cd harness && go test ./cmd/... ./internal/...)
+(cd memory && go test ./cmd/... ./internal/...)
+(cd provision && go test ./cmd/... ./internal/...)
+(cd deploy/cloudflare/worker && npm test)
+(cd provision && go run ./cmd/agent-awesome-provision check --repo-root ..)
 ----
 
-This runs the beta check script, including Go tests, Worker smoke/type checks, config preflights, and the provisioner dry run.
+The GitHub `CI Verification` workflow also runs these checks plus the desktop UI, docs, and Cloudflare container build.
 
 == Tool Safety
 

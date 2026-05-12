@@ -69,7 +69,7 @@ void main() {
       const CommandContext(
         section: AppSections.backlog,
         area: 'Queue',
-        text: 'open pilot',
+        text: 'open command',
       ),
     );
 

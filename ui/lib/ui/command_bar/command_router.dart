@@ -138,7 +138,6 @@ class CommandRouter {
       'home': AppSections.today,
       'chat': AppSections.chat,
       'backlog': AppSections.backlog,
-      'pilot': AppSections.backlog,
       'command': AppSections.backlog,
       'memory': AppSections.memory,
       'files': AppSections.files,

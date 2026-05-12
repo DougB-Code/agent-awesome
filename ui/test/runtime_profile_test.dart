@@ -10,7 +10,7 @@ void main() {
   test('loads profile with harness and multiple MCP kinds', () async {
     final profile = await RuntimeProfileLoader(_testConfig()).load();
 
-    expect(profile.harness.toolConfigPath, contains('tool.yaml'));
+    expect(profile.harness.toolConfigPath, contains('tool.local.yaml'));
     expect(profile.memoryServerConfigPath, contains('/memory/'));
     expect(profile.toJson(), isNot(contains('mcp_servers')));
     expect(profile.toJson(), isNot(contains('mcp_server_configs')));
@@ -95,6 +95,6 @@ AppConfig _testConfig() {
     workspaceRoot: '/home/doug/dev/agentawesome/agent',
     autoStartLocalServices: true,
     runtimeProfilePath:
-        '/home/doug/dev/agentawesome/agent/ui/runtime_profiles/personal_assistant.json',
+        '/home/doug/dev/agentawesome/agent/ui/runtime_profiles/agent_awesome.json',
   );
 }

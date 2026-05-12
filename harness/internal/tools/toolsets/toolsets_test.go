@@ -89,7 +89,6 @@ func TestShippedGraphMutationToolRequiresRuntimeConfirmation(t *testing.T) {
 	for _, path := range []string{
 		filepath.Join(root, "harness", "tool.local.yaml"),
 		filepath.Join(root, "harness", "tool.cloudflare.yaml"),
-		filepath.Join(root, "pilots", "personal-assistant", "tool.yaml"),
 		filepath.Join(root, "deploy", "cloudflare", "config", "tool.yaml"),
 	} {
 		t.Run(filepath.ToSlash(path), func(t *testing.T) {

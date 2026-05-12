@@ -188,7 +188,7 @@ void main() {
   test('startup log line includes pid, ports, binary, and log path', () {
     final line = serviceStartupLogLine(
       state: 'started',
-      name: 'Personal Pilot Harness',
+      name: 'Agent Awesome Harness',
       pid: 123,
       executable: '/tmp/service-bin',
       ownsProcessGroup: true,

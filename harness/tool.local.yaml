@@ -1,4 +1,4 @@
-# This file configures local development tools for Agent Awesome.
+# This file configures default local tools for Agent Awesome.
 local-exec:
   enabled: false
   allow-persistent-approvals: false
