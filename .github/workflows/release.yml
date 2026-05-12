@@ -20,6 +20,8 @@ env:
   GOFLAGS: -mod=readonly
   GOCACHE: ${{ github.workspace }}/build/go/cache
   GOMODCACHE: ${{ github.workspace }}/build/go/pkg/mod
+  DOCKER_CONFIG: ${{ github.workspace }}/build/docker-config
+  BUILDX_CONFIG: ${{ github.workspace }}/build/docker-buildx
   PUB_CACHE: ${{ github.workspace }}/build/pub-cache
   FLUTTER_VERSION: 3.38.5
 
@@ -75,7 +77,7 @@ jobs:
           mkdir -p "$bin_root"
           (cd harness && go build -trimpath -buildvcs=false -o "${bin_root}/agent-awesome-harness" ./cmd/agent-awesome)
           (cd gateway && go build -trimpath -buildvcs=false -o "${bin_root}/agent-awesome-gateway" ./cmd/agent-gateway)
-          (cd memory && go build -trimpath -buildvcs=false -o "${bin_root}/personal-memory" ./cmd/memoryd)
+          (cd memory && go build -trimpath -buildvcs=false -o "${bin_root}/memory" ./cmd/memoryd)
           touch "${profile_root}/.prebuilt"
 
       - name: Smoke test service binaries
@@ -84,7 +86,7 @@ jobs:
           bin_root="${GITHUB_WORKSPACE}/build/release/agent-awesome-linux-x64/harness/build/profiles/agent-awesome/bin"
           "${bin_root}/agent-awesome-harness" --help >/dev/null
           "${bin_root}/agent-awesome-gateway" --check-config --harness-auto-start=false --memory-auto-start=false
-          "${bin_root}/personal-memory" --check-config --db "${RUNNER_TEMP}/memory.db" --data "${RUNNER_TEMP}/memory-files"
+          "${bin_root}/memory" --check-config --db "${RUNNER_TEMP}/memory.db" --data "${RUNNER_TEMP}/memory-files"
 
       - name: Build Flutter Linux release
         working-directory: ui
@@ -99,11 +101,17 @@ jobs:
           cp -a ui/runtime_profiles "${release_root}/ui/"
           cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml "${release_root}/harness/"
           cp -a gateway/slack-manifest.json "${release_root}/gateway/"
+          cp deploy/linux/install.sh "${release_root}/install.sh"
+          chmod 0755 "${release_root}/install.sh"
           printf '%s\n' \
             'Agent Awesome Linux x64 release bundle' \
             '' \
-            'Run the desktop executable from this extracted directory.' \
-            'The bundled service binaries live under harness/build/profiles/agent-awesome/bin.' \
+            'Quick start:' \
+            '  1. Extract this directory somewhere writable.' \
+            '  2. Run ./install.sh to register a desktop launcher, or run ./agentawesome_ui directly.' \
+            '  3. Complete the in-app model setup on first launch.' \
+            '' \
+            'Go is not required for release users. The bundled service binaries live under harness/build/profiles/agent-awesome/bin.' \
             > "${release_root}/README.txt"
 
       - name: Archive Linux bundle
@@ -145,6 +153,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Prepare Docker build state
+        run: mkdir -p "$DOCKER_CONFIG" "$BUILDX_CONFIG" build/release
 
       - name: Build container image
         run: |

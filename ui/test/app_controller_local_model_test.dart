@@ -9,6 +9,7 @@ import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/local_model_runtime.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
+import 'package:agentawesome_ui/app/process_supervisor.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/domain/local_models.dart';
 import 'package:agentawesome_ui/domain/models.dart';
@@ -16,6 +17,72 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Runs controller-level local model recovery tests.
 void main() {
+  test(
+    'startup waits for first-run setup before starting harness services',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'agentawesome-controller-first-run-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final configDirectory = Directory('${root.path}/config');
+      final modelFile = File('${configDirectory.path}/models/model.yaml');
+      await modelFile.parent.create(recursive: true);
+      await modelFile.writeAsString('');
+      final memoryFile = File('${root.path}/memory.json');
+      await memoryFile.writeAsString(
+        encodeMcpServerRuntimeJson(_memoryServer(root.path)),
+      );
+      final profileFile = File('${root.path}/profile.json');
+      await profileFile.writeAsString(
+        encodeRuntimeProfileJson(
+          _runtimeProfile(
+            root.path,
+            modelConfigPath: modelFile.path,
+            memoryConfigPath: memoryFile.path,
+          ),
+        ),
+      );
+      final processSupervisor = ProcessSupervisor(
+        logDirectory: '${root.path}/logs',
+        workspaceRoot: root.path,
+      );
+      final localServices = _TrackingLocalServiceSupervisor(
+        config: _testConfig(
+          workspaceRoot: root.path,
+          runtimeProfilePath: profileFile.path,
+          autoStartLocalServices: true,
+        ),
+        processSupervisor: processSupervisor,
+      );
+      final controller = AgentAwesomeAppController(
+        config: _testConfig(
+          workspaceRoot: root.path,
+          runtimeProfilePath: profileFile.path,
+          autoStartLocalServices: true,
+        ),
+        appSettingsStore: _MemoryAppSettingsStore(),
+        configFiles: ConfigFileStore(configDirectoryPath: configDirectory.path),
+        localModels: const _MissingLocalModelRuntime(),
+        localServices: localServices,
+        processSupervisor: processSupervisor,
+      );
+      addTearDown(() async {
+        await controller.close();
+      });
+
+      await controller.initialize();
+
+      expect(controller.shellDecisionReady, isTrue);
+      expect(controller.gettingStartedCompleted, isFalse);
+      expect(controller.statusMessage, 'Model setup required');
+      expect(localServices.startCount, 0);
+    },
+  );
+
   test(
     'startup completes setup when the managed local model verifies',
     () async {
@@ -237,6 +304,74 @@ class _RecoveringLocalModelRuntime implements LocalModelRuntime {
   }
 }
 
+class _MissingLocalModelRuntime implements LocalModelRuntime {
+  const _MissingLocalModelRuntime();
+
+  /// Closes no resources because the fake starts no process.
+  @override
+  Future<void> close() async {}
+
+  /// Returns no install because this fake models a fresh user machine.
+  @override
+  Future<LocalModelInstall> ensureInstalled(
+    LocalModelDescriptor model, {
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) {
+    throw UnimplementedError('install should not run during startup');
+  }
+
+  /// Reports that no local model is currently installed.
+  @override
+  Future<bool> isInstalled(LocalModelDescriptor model) async {
+    return false;
+  }
+
+  /// Returns no runtime because setup has not selected local models.
+  @override
+  Future<String> ensureRuntimeInstalled({
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) {
+    throw UnimplementedError('runtime install should not run during startup');
+  }
+
+  /// Finds no recovered install on a fresh machine.
+  @override
+  Future<LocalModelInstall?> recoverInstalled(
+    LocalModelDescriptor model, {
+    List<String> candidatePaths = const <String>[],
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    return null;
+  }
+
+  /// Does not start because no local model exists.
+  @override
+  Future<ServiceProcessStatus> start(LocalModelDescriptor model) {
+    throw UnimplementedError('local model should not start before setup');
+  }
+}
+
+class _TrackingLocalServiceSupervisor extends LocalServiceSupervisor {
+  /// Creates a local service supervisor that records startup requests.
+  _TrackingLocalServiceSupervisor({
+    required super.config,
+    required super.processSupervisor,
+  });
+
+  /// Number of service startup requests.
+  int startCount = 0;
+
+  /// Records startup requests without launching subprocesses.
+  @override
+  Future<List<ServiceProcessStatus>> startRequiredServices(
+    RuntimeProfile profile, {
+    bool restartAutoStarted = false,
+  }) async {
+    startCount++;
+    return const <ServiceProcessStatus>[];
+  }
+}
+
 RuntimeProfile _runtimeProfile(
   String root, {
   required String modelConfigPath,
@@ -268,7 +403,7 @@ RuntimeProfile _runtimeProfile(
 McpServerRuntime _memoryServer(String root) {
   return McpServerRuntime(
     id: 'memory',
-    label: 'Personal Memory',
+    label: 'Memory',
     kind: 'memory',
     endpoint: 'http://127.0.0.1:1/mcp',
     healthUrl: 'http://127.0.0.1:1/healthz',
@@ -284,6 +419,7 @@ AppConfig _testConfig({
   required String workspaceRoot,
   required String runtimeProfilePath,
   String litertLmExecutable = 'litert-lm',
+  bool autoStartLocalServices = false,
 }) {
   return AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
@@ -293,7 +429,7 @@ AppConfig _testConfig({
     agentAppName: 'test',
     agentUserId: 'user',
     workspaceRoot: workspaceRoot,
-    autoStartLocalServices: false,
+    autoStartLocalServices: autoStartLocalServices,
     runtimeProfilePath: runtimeProfilePath,
     litertLmExecutable: litertLmExecutable,
   );

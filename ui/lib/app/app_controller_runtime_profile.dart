@@ -213,8 +213,9 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     if (config.runtimeProfilePath.trim().isNotEmpty) {
       return profile;
     }
-    final storageProfile = _withDefaultMemoryStorage(profile);
-    final harness = profile.harness;
+    final topologyProfile = await _withCurrentDefaultServiceTopology(profile);
+    final storageProfile = _withDefaultMemoryStorage(topologyProfile);
+    final harness = storageProfile.harness;
     final modelPath = await _ensureSharedModelConfig(
       sourcePath: harness.modelConfigPath,
     );
@@ -253,6 +254,25 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       await file.writeAsString(encodeRuntimeProfileJson(next));
     }
     return next;
+  }
+
+  /// Rebases the shipped default service topology onto the current bundle.
+  Future<RuntimeProfile> _withCurrentDefaultServiceTopology(
+    RuntimeProfile profile,
+  ) async {
+    final loader = RuntimeProfileLoader(config);
+    final shippedFile = File(loader.shippedRuntimeProfilePath());
+    if (!await shippedFile.exists()) {
+      return profile;
+    }
+    final shipped = await loader.loadFile(shippedFile);
+    return shipped.copyWith(
+      harness: shipped.harness.copyWith(
+        modelConfigPath: profile.harness.modelConfigPath,
+        agentConfigPath: profile.harness.agentConfigPath,
+        toolConfigPath: profile.harness.toolConfigPath,
+      ),
+    );
   }
 
   /// Places default managed memory files in the OS app data directory.

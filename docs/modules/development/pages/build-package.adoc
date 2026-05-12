@@ -1,7 +1,7 @@
 = Build And Package
 :description: Verified build and packaging steps for Agent Awesome.
 
-This page builds all local Agent Awesome artifacts and creates a Linux x64 package under `build`.
+This page builds all local Agent Awesome artifacts and creates the same Linux x64 release bundle that GitHub Actions publishes.
 Run commands from the repository root unless a step explicitly changes directories.
 
 == Verify Source
@@ -36,32 +36,37 @@ go run ./cmd/agent-awesome models check \
 cd ..
 ----
 
-== Build Go Binaries
+== Build Service Binaries
 
 [source,sh]
 ----
 cd /home/doug/dev/agentawesome/agent
-mkdir -p build/package/bin
+RELEASE_ROOT="$PWD/build/release/agent-awesome-linux-x64"
+PROFILE_ROOT="$RELEASE_ROOT/harness/build/profiles/agent-awesome"
+BIN_ROOT="$PROFILE_ROOT/bin"
+
+rm -rf "$RELEASE_ROOT"
+mkdir -p "$BIN_ROOT"
 
 cd harness
-go build -trimpath -o ../build/package/bin/agent-awesome ./cmd/agent-awesome
+go build -trimpath -buildvcs=false -o "$BIN_ROOT/agent-awesome-harness" ./cmd/agent-awesome
 cd ../memory
-go build -trimpath -o ../build/package/bin/memoryd ./cmd/memoryd
+go build -trimpath -buildvcs=false -o "$BIN_ROOT/memory" ./cmd/memoryd
 cd ../gateway
-go build -trimpath -o ../build/package/bin/agent-gateway ./cmd/agent-gateway
-cd ../provision
-go build -trimpath -o ../build/package/bin/agent-awesome-provision ./cmd/agent-awesome-provision
+go build -trimpath -buildvcs=false -o "$BIN_ROOT/agent-awesome-gateway" ./cmd/agent-gateway
 cd ..
+
+touch "$PROFILE_ROOT/.prebuilt"
 ----
 
 Expected binaries:
 
 [source,text]
 ----
-build/package/bin/agent-awesome
-build/package/bin/memoryd
-build/package/bin/agent-gateway
-build/package/bin/agent-awesome-provision
+build/release/agent-awesome-linux-x64/harness/build/profiles/agent-awesome/bin/agent-awesome-harness
+build/release/agent-awesome-linux-x64/harness/build/profiles/agent-awesome/bin/memory
+build/release/agent-awesome-linux-x64/harness/build/profiles/agent-awesome/bin/agent-awesome-gateway
+build/release/agent-awesome-linux-x64/harness/build/profiles/agent-awesome/.prebuilt
 ----
 
 == Build The Desktop UI
@@ -80,27 +85,50 @@ Flutter writes the Linux bundle to:
 ui/build/linux/x64/release/bundle
 ----
 
-== Create A Package Archive
+== Assemble Release Bundle
 
-Use a fresh package directory so older artifacts are not mixed into the archive:
+Copy the Flutter bundle, runtime profile templates, harness configs, and installer into the release directory:
 
 [source,sh]
 ----
 cd /home/doug/dev/agentawesome/agent
-PACKAGE_DIR="build/package/agent-awesome-linux-x64-$(date +%Y%m%d%H%M%S)"
-mkdir -p "$PACKAGE_DIR/bin" "$PACKAGE_DIR/ui" "$PACKAGE_DIR/config/harness"
+RELEASE_ROOT="$PWD/build/release/agent-awesome-linux-x64"
 
-cp build/package/bin/agent-awesome "$PACKAGE_DIR/bin/"
-cp build/package/bin/memoryd "$PACKAGE_DIR/bin/"
-cp build/package/bin/agent-gateway "$PACKAGE_DIR/bin/"
-cp build/package/bin/agent-awesome-provision "$PACKAGE_DIR/bin/"
-cp -R ui/build/linux/x64/release/bundle "$PACKAGE_DIR/ui/linux-x64"
-cp harness/model.yaml "$PACKAGE_DIR/config/harness/model.yaml"
-cp harness/agent.yaml "$PACKAGE_DIR/config/harness/agent.yaml"
-cp harness/tool.local.yaml "$PACKAGE_DIR/config/harness/tool.local.yaml"
+cp -a ui/build/linux/x64/release/bundle/. "$RELEASE_ROOT/"
+mkdir -p "$RELEASE_ROOT/ui" "$RELEASE_ROOT/harness" "$RELEASE_ROOT/gateway" "$RELEASE_ROOT/memory"
+cp -a ui/runtime_profiles "$RELEASE_ROOT/ui/"
+cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml "$RELEASE_ROOT/harness/"
+cp -a gateway/slack-manifest.json "$RELEASE_ROOT/gateway/"
+cp deploy/linux/install.sh "$RELEASE_ROOT/install.sh"
+chmod 0755 "$RELEASE_ROOT/install.sh"
 
-tar -C "$PACKAGE_DIR/.." -czf "$PACKAGE_DIR.tar.gz" "$(basename "$PACKAGE_DIR")"
-ls -lh "$PACKAGE_DIR.tar.gz"
+cat > "$RELEASE_ROOT/README.txt" <<'EOF'
+Agent Awesome Linux x64 release bundle
+
+Quick start:
+  1. Extract this directory somewhere writable.
+  2. Run ./install.sh to register a desktop launcher, or run ./agentawesome_ui directly.
+  3. Complete the in-app model setup on first launch.
+
+Go is not required for release users. The bundled service binaries live under harness/build/profiles/agent-awesome/bin.
+EOF
 ----
 
-The archive contains the Go binaries, the Flutter Linux bundle, and the default Agent Awesome harness config.
+The installer is inside the bundle at:
+
+[source,text]
+----
+build/release/agent-awesome-linux-x64/install.sh
+----
+
+== Create Release Archive
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/build/release
+tar -czf agent-awesome-linux-x64.tar.gz agent-awesome-linux-x64
+sha256sum agent-awesome-linux-x64.tar.gz > agent-awesome-linux-x64.tar.gz.sha256
+ls -lh agent-awesome-linux-x64.tar.gz agent-awesome-linux-x64.tar.gz.sha256
+----
+
+The archive contains the Flutter Linux bundle, prebuilt service binaries, runtime profiles, default Agent Awesome harness config, and the user-local installer.

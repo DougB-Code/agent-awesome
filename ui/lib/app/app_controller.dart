@@ -327,6 +327,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   bool _clientsClosed = false;
   Future<void>? _localServicesCloseFuture;
   Future<void>? _localModelsCloseFuture;
+  Future<void>? _runtimeStartup;
   Future<void>? _closeFuture;
   bool _closing = false;
 
@@ -586,6 +587,28 @@ class AgentAwesomeAppController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    _shellDecisionReady = true;
+    notifyListeners();
+    if (!appSettings.gettingStartedCompleted) {
+      statusMessage = 'Model setup required';
+      _initialized = true;
+      await _log('initialize paused for first-run model setup');
+      notifyListeners();
+      return;
+    }
+    await _startRuntimeServicesAndLoadData();
+    _initialized = true;
+    await _log('initialize complete');
+  }
+
+  /// Starts model-backed services and loads data after setup is complete.
+  Future<void> _startRuntimeServicesAndLoadData() {
+    _runtimeStartup ??= _startRuntimeServicesAndLoadDataOnce();
+    return _runtimeStartup!;
+  }
+
+  /// Performs one runtime service startup and initial data load.
+  Future<void> _startRuntimeServicesAndLoadDataOnce() async {
     try {
       _throwIfClosing();
       await _log('starting required local services');
@@ -615,15 +638,21 @@ class AgentAwesomeAppController extends ChangeNotifier {
     } catch (error) {
       if (_isClosing) {
         statusMessage = 'Agent Awesome runtime is shutting down';
-        _initialized = true;
         notifyListeners();
         return;
       }
       await _log('local model startup failed: $error');
       await _markSetupIncompleteForUnavailableLocalModel();
     }
-    _shellDecisionReady = true;
     notifyListeners();
+    if (_requiredLocalServiceStartupFailed()) {
+      statusMessage = 'Local services are not ready';
+      await _log(
+        'initial data load skipped because local services are not ready',
+      );
+      notifyListeners();
+      return;
+    }
     await _loadToolCapabilities();
     await _log('loading sessions, memory, and tasks');
     await Future.wait(<Future<void>>[
@@ -631,8 +660,19 @@ class AgentAwesomeAppController extends ChangeNotifier {
       _loadMemory(),
       _loadTasks(),
     ]);
-    _initialized = true;
-    await _log('initialize complete');
+  }
+
+  /// Reports whether a required non-model service failed before data loading.
+  bool _requiredLocalServiceStartupFailed() {
+    for (final status in localProcessStatuses) {
+      if (status.name == 'Local model') {
+        continue;
+      }
+      if (status.state == ConnectionStateKind.disconnected) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// Resolves the startup profile from env override, app default, or template.
@@ -1054,9 +1094,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Shows or hides the first-launch setup guide.
   Future<void> setGettingStartedCompleted(bool completed) async {
+    final wasCompleted = appSettings.gettingStartedCompleted;
     await saveAppSettings(
       appSettings.copyWith(gettingStartedCompleted: completed),
     );
+    if (completed && !wasCompleted && _initialized && runtimeProfile != null) {
+      statusMessage = 'Starting Agent Awesome services';
+      notifyListeners();
+      await _startRuntimeServicesAndLoadData();
+    }
   }
 
   /// Saves user-configured memory firewalls.

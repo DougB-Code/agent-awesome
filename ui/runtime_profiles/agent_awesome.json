@@ -35,5 +35,5 @@
     "auto_start": ${AUTO_START_LOCAL_SERVICES},
     "enabled": true
   },
-  "memory_server_config": "${AGENTAWESOME_WORKSPACE_ROOT}/ui/runtime_profiles/memory/personal_memory.json"
+  "memory_server_config": "${AGENTAWESOME_WORKSPACE_ROOT}/ui/runtime_profiles/memory/memory.json"
 }

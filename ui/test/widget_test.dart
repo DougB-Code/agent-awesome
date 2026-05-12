@@ -384,7 +384,6 @@ void main() {
     expect(find.text('Agent'), findsWidgets);
     expect(find.text('Tools'), findsWidgets);
     expect(find.text('Memory'), findsWidgets);
-    expect(find.text('Personal Memory'), findsOneWidget);
 
     await tester.tap(find.text('Tools').first);
     await tester.pump();
@@ -534,7 +533,7 @@ void main() {
         message: 'Connected',
       ),
       EndpointStatus(
-        name: 'Personal Memory',
+        name: 'Memory',
         url: 'http://127.0.0.1:8070/mcp',
         state: ConnectionStateKind.connected,
         message: 'Connected',
@@ -542,7 +541,7 @@ void main() {
     ];
     controller.localProcessStatuses = const <ServiceProcessStatus>[
       ServiceProcessStatus(
-        name: 'Personal Memory',
+        name: 'Memory',
         url: 'http://127.0.0.1:8090/healthz',
         state: ConnectionStateKind.connected,
         message: 'Started locally',
@@ -694,7 +693,6 @@ void main() {
     expect(find.text('Chat model'), findsOneWidget);
     expect(find.text('OpenAI / gpt-5.4-mini - GPT-5.4 Mini'), findsOneWidget);
     expect(find.text('Memory'), findsWidgets);
-    expect(find.text('Personal Memory'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Personal'), findsOneWidget);
     expect(find.text('Local Harness'), findsNothing);
@@ -833,7 +831,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final controller = _readyController();
     controller.memoryMessage =
-        'Personal Memory: McpException: HTTP 401 from http://127.0.0.1:8070/api/context/tools/call';
+        'Memory: McpException: HTTP 401 from http://127.0.0.1:8070/api/context/tools/call';
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
@@ -1762,7 +1760,7 @@ RuntimeProfile _settingsProfile() {
     mcpServers: <McpServerRuntime>[
       McpServerRuntime(
         id: 'memory',
-        label: 'Personal Memory',
+        label: 'Memory',
         kind: 'memory',
         endpoint: 'http://127.0.0.1:1/mcp',
         healthUrl: 'http://127.0.0.1:1/healthz',

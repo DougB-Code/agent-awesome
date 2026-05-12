@@ -1,6 +1,6 @@
 {
-  "id": "memory-personal",
-  "label": "Personal Memory",
+  "id": "memory",
+  "label": "Memory",
   "kind": "memory",
   "endpoint": "${AGENT_GATEWAY_MCP_URL}",
   "health_url": "${MEMORY_HEALTH_URL}",

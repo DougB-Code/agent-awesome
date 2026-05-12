@@ -313,7 +313,7 @@ RuntimeProfile _profile(String modelConfigPath) {
     mcpServers: const <McpServerRuntime>[
       McpServerRuntime(
         id: 'memory',
-        label: 'Personal Memory',
+        label: 'Memory',
         kind: 'memory',
         endpoint: _memoryEndpoint,
         healthUrl: 'http://127.0.0.1:1/healthz',

@@ -18,6 +18,8 @@ env:
   GOFLAGS: -mod=readonly
   GOCACHE: ${{ github.workspace }}/build/go/cache
   GOMODCACHE: ${{ github.workspace }}/build/go/pkg/mod
+  DOCKER_CONFIG: ${{ github.workspace }}/build/docker-config
+  BUILDX_CONFIG: ${{ github.workspace }}/build/docker-buildx
   NPM_CONFIG_CACHE: ${{ github.workspace }}/build/npm-cache
   PUB_CACHE: ${{ github.workspace }}/build/pub-cache
   NODE_VERSION: 22.15.0
@@ -156,6 +158,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+
+      - name: Prepare Docker build state
+        run: mkdir -p "$DOCKER_CONFIG" "$BUILDX_CONFIG"
 
       - name: Build container image
         run: docker build --file Dockerfile.cloudflare --tag agent-awesome-cloudflare:ci .

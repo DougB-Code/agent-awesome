@@ -48,7 +48,7 @@ void main() {
         'gpt-mini',
       ]),
     );
-    expect(profile.memoryServers.single.label, 'Personal Memory');
+    expect(profile.memoryServers.single.label, 'Memory');
     expect(profile.memoryServers.single.endpoint, 'http://127.0.0.1:8070/mcp');
     expect(
       profile.memoryServers.single.arguments,
