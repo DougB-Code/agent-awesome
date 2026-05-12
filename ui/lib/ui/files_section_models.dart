@@ -17,7 +17,7 @@ class _AgentFileItem {
     required this.sourceLabel,
     required this.sourceSystem,
     required this.sourceId,
-    required this.scope,
+    required this.firewall,
     required this.sensitivity,
     required this.trustLevel,
     required this.status,
@@ -61,8 +61,8 @@ class _AgentFileItem {
   /// Source id.
   final String sourceId;
 
-  /// Access scope.
-  final String scope;
+  /// Memory firewall.
+  final String firewall;
 
   /// Sensitivity label.
   final String sensitivity;

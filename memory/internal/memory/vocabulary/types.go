@@ -1,22 +1,22 @@
 // This file defines shared controlled vocabularies and their validators.
 package vocabulary
 
-// Scope classifies an ownership and visibility boundary.
-type Scope string
+// Firewall classifies an isolated memory sharing boundary.
+type Firewall string
 
 const (
-	// ScopeSession limits data to one session.
-	ScopeSession Scope = "session"
-	// ScopeUser limits data to one user.
-	ScopeUser Scope = "user"
-	// ScopeHousehold shares data across a household.
-	ScopeHousehold Scope = "household"
-	// ScopeTenant limits data to an organization tenant.
-	ScopeTenant Scope = "tenant"
-	// ScopeProject limits data to a project.
-	ScopeProject Scope = "project"
-	// ScopeGlobal exposes data globally within service policy.
-	ScopeGlobal Scope = "global"
+	// FirewallSession limits data to one session.
+	FirewallSession Firewall = "session"
+	// FirewallUser limits data to one user.
+	FirewallUser Firewall = "user"
+	// FirewallHousehold shares data across a household.
+	FirewallHousehold Firewall = "household"
+	// FirewallTenant limits data to an organization tenant.
+	FirewallTenant Firewall = "tenant"
+	// FirewallProject limits data to a project.
+	FirewallProject Firewall = "project"
+	// FirewallGlobal exposes data globally within service policy.
+	FirewallGlobal Firewall = "global"
 )
 
 // Sensitivity controls whether a caller may see a record or graph fact.
@@ -65,9 +65,9 @@ const (
 	StatusDeleted LifecycleStatus = "deleted"
 )
 
-// ScopeStrings returns scope vocabulary values for schemas and diagnostics.
-func ScopeStrings() []string {
-	return StringValues([]Scope{ScopeSession, ScopeUser, ScopeHousehold, ScopeTenant, ScopeProject, ScopeGlobal})
+// FirewallStrings returns default firewall ids for schemas and diagnostics.
+func FirewallStrings() []string {
+	return StringValues([]Firewall{FirewallSession, FirewallUser, FirewallHousehold, FirewallTenant, FirewallProject, FirewallGlobal})
 }
 
 // SensitivityStrings returns sensitivity vocabulary values for schemas and diagnostics.
@@ -90,14 +90,24 @@ func MemoryStatusStrings() []string {
 	return StringValues([]LifecycleStatus{StatusActive, StatusSuperseded, StatusDeprecated, StatusArchived})
 }
 
-// ValidScope reports whether scope is in the controlled vocabulary.
-func ValidScope(scope Scope) bool {
-	switch scope {
-	case ScopeSession, ScopeUser, ScopeHousehold, ScopeTenant, ScopeProject, ScopeGlobal:
-		return true
-	default:
+// ValidFirewall reports whether firewall is a safe memory firewall id.
+func ValidFirewall(firewall Firewall) bool {
+	value := string(firewall)
+	if len(value) == 0 || len(value) > 64 {
 		return false
 	}
+	for index, char := range value {
+		validLower := char >= 'a' && char <= 'z'
+		validDigit := char >= '0' && char <= '9'
+		validSeparator := char == '-' || char == '_'
+		if index == 0 && !validLower && !validDigit {
+			return false
+		}
+		if !validLower && !validDigit && !validSeparator {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidSensitivity reports whether sensitivity is in the controlled vocabulary.
@@ -140,12 +150,12 @@ func ValidMemoryStatus(status LifecycleStatus) bool {
 	}
 }
 
-// DefaultScope returns user scope when scope is blank.
-func DefaultScope(scope Scope) Scope {
-	if scope == "" {
-		return ScopeUser
+// DefaultFirewall returns the user firewall when firewall is blank.
+func DefaultFirewall(firewall Firewall) Firewall {
+	if firewall == "" {
+		return FirewallUser
 	}
-	return scope
+	return firewall
 }
 
 // DefaultSensitivity returns private sensitivity when sensitivity is blank.

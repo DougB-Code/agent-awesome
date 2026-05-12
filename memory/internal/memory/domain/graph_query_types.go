@@ -5,7 +5,8 @@ type GraphQueryRequest struct {
 	Actor                string        `json:"actor"`
 	Query                string        `json:"query"`
 	SourceNodeID         string        `json:"source_node_id,omitempty"`
-	Scope                Scope         `json:"scope"`
+	Firewall             Firewall      `json:"firewall"`
+	IncludeGlobal        bool          `json:"include_global,omitempty"`
 	AllowedSensitivities []Sensitivity `json:"allowed_sensitivities"`
 }
 

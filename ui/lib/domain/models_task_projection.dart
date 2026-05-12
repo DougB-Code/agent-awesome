@@ -512,7 +512,7 @@ class TaskProjectionEdge {
     this.directionSemantics = '',
     this.source = '',
     this.sourceKind = '',
-    this.scope = '',
+    this.firewall = '',
     this.sensitivity = '',
     this.confidence = 0,
     this.explanation = '',
@@ -545,8 +545,8 @@ class TaskProjectionEdge {
   /// Source kind such as explicit, inferred, or system-derived.
   final String sourceKind;
 
-  /// Access scope attached to the edge's source graph fact.
-  final String scope;
+  /// Access firewall attached to the edge's source graph fact.
+  final String firewall;
 
   /// Sensitivity attached to the edge's source graph fact.
   final String sensitivity;
@@ -584,7 +584,7 @@ class TaskProjectionEdge {
     String? directionSemantics,
     String? source,
     String? sourceKind,
-    String? scope,
+    String? firewall,
     String? sensitivity,
     double? confidence,
     String? explanation,
@@ -603,7 +603,7 @@ class TaskProjectionEdge {
       directionSemantics: directionSemantics ?? this.directionSemantics,
       source: source ?? this.source,
       sourceKind: sourceKind ?? this.sourceKind,
-      scope: scope ?? this.scope,
+      firewall: firewall ?? this.firewall,
       sensitivity: sensitivity ?? this.sensitivity,
       confidence: confidence ?? this.confidence,
       explanation: explanation ?? this.explanation,
@@ -1105,7 +1105,7 @@ class TaskConstellationEdge {
     this.source = '',
     this.factSource = '',
     this.sourceKind = '',
-    this.scope = '',
+    this.firewall = '',
     this.sensitivity = '',
     this.explanation = '',
     this.evidenceIds = const <String>[],
@@ -1140,8 +1140,8 @@ class TaskConstellationEdge {
   /// Source kind such as explicit, inferred, or system-derived.
   final String sourceKind;
 
-  /// Access scope attached to the edge's source graph fact.
-  final String scope;
+  /// Access firewall attached to the edge's source graph fact.
+  final String firewall;
 
   /// Sensitivity attached to the edge's source graph fact.
   final String sensitivity;

@@ -17,23 +17,23 @@ func TestSearchMemoryBuildsRetrievalBundle(t *testing.T) {
 	service := newTestService(t)
 
 	first, err := service.Capture(ctx, domain.CaptureRequest{
-		Content: "bundle source one",
-		Title:   "Bundle one",
-		Scope:   domain.ScopeUser,
-		Source:  domain.SourceRef{System: "test", ID: "one"},
+		Content:  "bundle source one",
+		Title:    "Bundle one",
+		Firewall: domain.FirewallUser,
+		Source:   domain.SourceRef{System: "test", ID: "one"},
 	})
 	if err != nil {
 		t.Fatalf("capture first: %v", err)
 	}
 	if _, err := service.Capture(ctx, domain.CaptureRequest{
-		Content: "bundle source two",
-		Title:   "Bundle two",
-		Scope:   domain.ScopeUser,
-		Source:  domain.SourceRef{System: "test", ID: "two"},
+		Content:  "bundle source two",
+		Title:    "Bundle two",
+		Firewall: domain.FirewallUser,
+		Source:   domain.SourceRef{System: "test", ID: "two"},
 	}); err != nil {
 		t.Fatalf("capture second: %v", err)
 	}
-	bundle, err := service.SearchMemory(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Text: "bundle", Limit: 10})
+	bundle, err := service.SearchMemory(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Text: "bundle", Limit: 10})
 	if err != nil {
 		t.Fatalf("search memory: %v", err)
 	}
@@ -55,13 +55,13 @@ func TestSearchSourcesHydratesRawText(t *testing.T) {
 	service := newTestService(t)
 
 	if _, err := service.Capture(ctx, domain.CaptureRequest{
-		Content: "raw source text to hydrate",
-		Title:   "Hydration",
-		Scope:   domain.ScopeUser,
+		Content:  "raw source text to hydrate",
+		Title:    "Hydration",
+		Firewall: domain.FirewallUser,
 	}); err != nil {
 		t.Fatalf("capture: %v", err)
 	}
-	bundle, err := service.SearchSources(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Text: "hydrate"})
+	bundle, err := service.SearchSources(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Text: "hydrate"})
 	if err != nil {
 		t.Fatalf("search sources: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestBetaMemoryFlowRemembersSearchesAndLoadsContext(t *testing.T) {
 	captured, err := service.Capture(ctx, domain.CaptureRequest{
 		Content:        "Beta memory flow prefers concise status updates.",
 		Title:          "Beta status preference",
-		Scope:          domain.ScopeUser,
+		Firewall:       domain.FirewallUser,
 		Kind:           domain.KindProfileFact,
 		TrustLevel:     domain.TrustUserAsserted,
 		EntityNames:    []string{"Beta User"},
@@ -90,7 +90,7 @@ func TestBetaMemoryFlowRemembersSearchesAndLoadsContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("capture beta memory: %v", err)
 	}
-	bundle, err := service.SearchSources(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Text: "concise status", Limit: 10})
+	bundle, err := service.SearchSources(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Text: "concise status", Limit: 10})
 	if err != nil {
 		t.Fatalf("search beta memory: %v", err)
 	}
@@ -100,11 +100,11 @@ func TestBetaMemoryFlowRemembersSearchesAndLoadsContext(t *testing.T) {
 	if bundle.Primary[0].Raw == nil || !strings.Contains(bundle.Primary[0].Raw.ContentText, "concise status") {
 		t.Fatalf("raw memory = %#v, want source text", bundle.Primary[0].Raw)
 	}
-	entityPage, err := service.LoadEntityPage(ctx, domain.ScopeUser, domain.EntityID("entity:beta-user"), "Beta User")
+	entityPage, err := service.LoadEntityPage(ctx, domain.FirewallUser, domain.EntityID("entity:beta-user"), "Beta User")
 	if err != nil {
 		t.Fatalf("load entity page: %v", err)
 	}
-	timeline, err := service.LoadTimeline(ctx, domain.ScopeUser, "status", domain.EntityID("entity:beta-user"))
+	timeline, err := service.LoadTimeline(ctx, domain.FirewallUser, "status", domain.EntityID("entity:beta-user"))
 	if err != nil {
 		t.Fatalf("load timeline: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestStewardDisabledWorkersComplete(t *testing.T) {
 	service.Start(ctx)
 	defer service.Close(context.Background())
 
-	if _, err := service.Capture(ctx, domain.CaptureRequest{Content: "worker source", Scope: domain.ScopeUser}); err != nil {
+	if _, err := service.Capture(ctx, domain.CaptureRequest{Content: "worker source", Firewall: domain.FirewallUser}); err != nil {
 		t.Fatalf("capture: %v", err)
 	}
 	deadline := time.Now().Add(4 * time.Second)

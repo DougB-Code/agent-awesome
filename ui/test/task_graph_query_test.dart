@@ -38,7 +38,7 @@ void main() {
         <String>{'explicit'},
       );
       expect(
-        result.projection.edges.map((edge) => edge.scope).toSet(),
+        result.projection.edges.map((edge) => edge.firewall).toSet(),
         <String>{'user'},
       );
       expect(
@@ -202,7 +202,7 @@ TaskProjectionGraph _relationshipGraph() {
         relationType: 'depends_on',
         source: 'explicit',
         sourceKind: 'explicit',
-        scope: 'user',
+        firewall: 'user',
         sensitivity: 'private',
         confidence: 0.95,
         explanation: 'API contract depends on the risk API stabilizing.',
@@ -215,7 +215,7 @@ TaskProjectionGraph _relationshipGraph() {
         relationType: 'depends_on',
         source: 'explicit',
         sourceKind: 'explicit',
-        scope: 'user',
+        firewall: 'user',
         sensitivity: 'private',
         confidence: 0.94,
         explanation: 'Mobile release depends on the API contract.',
@@ -228,7 +228,7 @@ TaskProjectionGraph _relationshipGraph() {
         relationType: 'depends_on',
         source: 'explicit',
         sourceKind: 'explicit',
-        scope: 'user',
+        firewall: 'user',
         sensitivity: 'private',
         confidence: 0.7,
         explanation: 'Docs need the API contract.',

@@ -92,7 +92,7 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
             ? null
             : () => unawaited(
                 widget.controller.sendUserMessage(
-                  _contactChatPrompt(selected),
+                  _contactChatPrompt(selected, widget.controller),
                   displayText: 'Review ${selected.name}',
                 ),
               ),

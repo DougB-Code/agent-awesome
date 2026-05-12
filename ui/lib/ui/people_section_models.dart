@@ -15,7 +15,7 @@ class _ContactItem {
     required this.tasks,
     required this.commitments,
     required this.contexts,
-    required this.scopeLabels,
+    required this.firewallLabels,
     required this.topics,
     required this.primaryMemory,
     required this.primaryContext,
@@ -49,11 +49,11 @@ class _ContactItem {
   /// Commitments involving this contact.
   final List<TaskCommitment> commitments;
 
-  /// Scoped context slices for this contact.
+  /// Firewall context slices for this contact.
   final List<_ContactContext> contexts;
 
-  /// Scope labels represented by this contact.
-  final List<String> scopeLabels;
+  /// Firewall labels represented by this contact.
+  final List<String> firewallLabels;
 
   /// Topic labels associated with this contact.
   final List<String> topics;
@@ -68,12 +68,12 @@ class _ContactItem {
   final DateTime? lastUpdatedAt;
 }
 
-/// _ContactContext stores one scoped contact slice.
+/// _ContactContext stores one firewall-bound contact slice.
 class _ContactContext {
   /// Creates an immutable contact context slice.
   const _ContactContext({
     required this.id,
-    required this.scope,
+    required this.firewall,
     required this.label,
     required this.summary,
     required this.sensitivityLabel,
@@ -90,8 +90,8 @@ class _ContactContext {
   /// Stable context id.
   final String id;
 
-  /// Memory or inferred activity scope.
-  final String scope;
+  /// Memory or inferred activity firewall.
+  final String firewall;
 
   /// User-facing project, trip, domain, or topic label.
   final String label;
@@ -128,7 +128,7 @@ class _ContactContext {
 
   /// Combined display label used in compact badges.
   String get displayLabel {
-    return '${_contactLabel(scope)} / $label';
+    return '${_contactLabel(firewall)} / $label';
   }
 }
 
@@ -164,15 +164,15 @@ class _ContactContextAggregate {
   /// Creates a mutable contact context aggregate.
   _ContactContextAggregate({
     required this.id,
-    required this.scope,
+    required this.firewall,
     required this.label,
   });
 
   /// Stable context id.
   final String id;
 
-  /// Scope represented by this context.
-  final String scope;
+  /// Firewall represented by this context.
+  final String firewall;
 
   /// Context display label.
   final String label;
@@ -207,7 +207,7 @@ enum _ContactFilter {
   /// Contacts with first-class commitments.
   commitments('Commitments', Icons.handshake_outlined),
 
-  /// Contacts with more than one scope/context slice.
+  /// Contacts with more than one firewall/context slice.
   multiContext('Multi-context', Icons.account_tree_outlined),
 
   /// Contacts currently known only from work ownership.

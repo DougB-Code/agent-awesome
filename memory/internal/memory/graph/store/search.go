@@ -45,8 +45,12 @@ func (s *Store) SearchNodes(ctx context.Context, q graph.SearchNodesQuery) ([]gr
 	if err != nil {
 		return nil, err
 	}
-	args := []any{graph.StatusActive, q.Scope, graph.ScopeGlobal}
-	clauses := []string{"n.status = ?", "(n.scope = ? OR n.scope = ?)"}
+	args := []any{graph.StatusActive, q.Firewall}
+	clauses := []string{"n.status = ?", "n.firewall = ?"}
+	if q.IncludeGlobal && q.Firewall != graph.FirewallGlobal {
+		clauses[len(clauses)-1] = "(n.firewall = ? OR n.firewall = ?)"
+		args = append(args, graph.FirewallGlobal)
+	}
 	clauses = append(clauses, inClause("n.sensitivity", len(q.AllowedSensitivities)))
 	for _, sensitivity := range q.AllowedSensitivities {
 		args = append(args, sensitivity)

@@ -116,22 +116,22 @@ const (
 	StatusSuperseded = vocabulary.StatusSuperseded
 )
 
-// Scope classifies the ownership and visibility boundary for graph facts.
-type Scope = vocabulary.Scope
+// Firewall classifies the memory firewall boundary for graph facts.
+type Firewall = vocabulary.Firewall
 
 const (
-	// ScopeGlobal exposes graph facts globally within service policy.
-	ScopeGlobal = vocabulary.ScopeGlobal
-	// ScopeHousehold shares graph facts across a household.
-	ScopeHousehold = vocabulary.ScopeHousehold
-	// ScopeProject limits graph facts to a project.
-	ScopeProject = vocabulary.ScopeProject
-	// ScopeSession limits graph facts to one session.
-	ScopeSession = vocabulary.ScopeSession
-	// ScopeTenant limits graph facts to an organization tenant.
-	ScopeTenant = vocabulary.ScopeTenant
-	// ScopeUser limits graph facts to one user.
-	ScopeUser = vocabulary.ScopeUser
+	// FirewallGlobal exposes graph facts globally within service policy.
+	FirewallGlobal = vocabulary.FirewallGlobal
+	// FirewallHousehold shares graph facts across a household.
+	FirewallHousehold = vocabulary.FirewallHousehold
+	// FirewallProject limits graph facts to a project.
+	FirewallProject = vocabulary.FirewallProject
+	// FirewallSession limits graph facts to one session.
+	FirewallSession = vocabulary.FirewallSession
+	// FirewallTenant limits graph facts to an organization tenant.
+	FirewallTenant = vocabulary.FirewallTenant
+	// FirewallUser limits graph facts to one user.
+	FirewallUser = vocabulary.FirewallUser
 )
 
 // Sensitivity controls whether a caller may see a graph fact.
@@ -188,7 +188,7 @@ type Node struct {
 	Title        string          `json:"title,omitempty"`
 	Summary      string          `json:"summary,omitempty"`
 	Status       LifecycleStatus `json:"status"`
-	Scope        Scope           `json:"scope"`
+	Firewall     Firewall        `json:"firewall"`
 	Sensitivity  Sensitivity     `json:"sensitivity"`
 	TrustLevel   TrustLevel      `json:"trust_level"`
 	Confidence   float64         `json:"confidence"`
@@ -298,7 +298,7 @@ type UpsertNodeRequest struct {
 	Title        string
 	Summary      string
 	Status       LifecycleStatus
-	Scope        Scope
+	Firewall     Firewall
 	Sensitivity  Sensitivity
 	TrustLevel   TrustLevel
 	Confidence   float64
@@ -384,7 +384,8 @@ type AppendAuditRequest struct {
 type SearchNodesQuery struct {
 	Text                 string
 	Kinds                []NodeKind
-	Scope                Scope
+	Firewall             Firewall
+	IncludeGlobal        bool
 	AllowedSensitivities []Sensitivity
 	Limit                int
 }

@@ -84,6 +84,51 @@ void main() {
     expect(await runtime.isInstalled(descriptor), isFalse);
   });
 
+  test(
+    'restores a verified local model artifact without downloading',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'agentawesome-local-model-restore-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final cache = Directory('${root.path}/cache');
+      await cache.create(recursive: true);
+      final bytes = utf8.encode('cached local model');
+      final descriptor = _testDescriptor(bytes);
+      final cached = File('${cache.path}/${descriptor.fileName}');
+      await cached.writeAsBytes(bytes);
+      var downloadAttempted = false;
+      final runtime = LiteRtLocalModelRuntime(
+        config: _testConfig(),
+        processSupervisor: _testProcessSupervisor(root),
+        dataDirectory: '${root.path}/data',
+        httpClient: MockClient((request) async {
+          downloadAttempted = true;
+          return http.Response.bytes(const <int>[], 500);
+        }),
+      );
+      addTearDown(runtime.close);
+
+      final install = await runtime.recoverInstalled(
+        descriptor,
+        candidatePaths: <String>[cached.path],
+      );
+
+      expect(install, isNotNull);
+      expect(downloadAttempted, isFalse);
+      expect(await File(install!.modelPath).readAsBytes(), bytes);
+      expect(await runtime.isInstalled(descriptor), isTrue);
+      final manifest = jsonDecode(
+        await File(install.manifestPath).readAsString(),
+      );
+      expect(manifest['source'], descriptor.downloadUrl);
+    },
+  );
+
   test('resolves the underscore LiteRT-LM binary name from PATH', () async {
     final root = await Directory.systemTemp.createTemp(
       'agentawesome-litert-path-',
@@ -108,6 +153,93 @@ void main() {
     );
 
     expect(resolved, executable.path);
+  });
+
+  test('copies a blocked LiteRT-LM binary into app-managed storage', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-repair-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final bin = Directory('${root.path}/programs/bin');
+    await bin.create(recursive: true);
+    final executable = File('${bin.path}/litert_lm');
+    await executable.writeAsString('#!/bin/sh\nexit 0\n');
+    final supervisor = _testProcessSupervisor(root);
+    final resolver = LocalModelExecutableResolver(
+      environment: <String, String>{'PATH': bin.path},
+      commandRunner: ProcessSupervisorCommandRunner(supervisor),
+    );
+
+    final resolved = await resolver.resolve(
+      configuredExecutable: 'litert-lm',
+      dataDirectory: '${root.path}/data',
+    );
+
+    final repaired = File('${root.path}/data/bin/litert_lm');
+    expect(resolved, repaired.path);
+    expect(await repaired.exists(), isTrue);
+    if (!Platform.isWindows) {
+      expect((await repaired.stat()).mode & 0x49, isNot(0));
+    }
+  });
+
+  test('downloads a managed LiteRT-LM runtime binary', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-runtime-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final bytes = utf8.encode(r'''
+#!/bin/sh
+if [ "$1" = "--help" ]; then
+  exit 0
+fi
+exit 0
+''');
+    final artifact = LocalModelRuntimeArtifact(
+      id: 'test-runtime',
+      displayName: 'Test LiteRT-LM runtime',
+      fileName: 'lit_test',
+      executableName: 'litert-lm',
+      downloadUrl: 'https://example.test/litert-lm',
+      expectedBytes: bytes.length,
+      expectedSha256: sha256.convert(bytes).toString(),
+    );
+    var downloads = 0;
+    final supervisor = _testProcessSupervisor(root);
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(litertLmExecutable: 'missing-litert-lm'),
+      processSupervisor: supervisor,
+      dataDirectory: root.path,
+      runtimeArtifact: artifact,
+      executableResolver: LocalModelExecutableResolver(
+        environment: const <String, String>{'PATH': ''},
+        commandRunner: ProcessSupervisorCommandRunner(supervisor),
+      ),
+      httpClient: MockClient((request) async {
+        downloads++;
+        expect(request.url.toString(), artifact.downloadUrl);
+        return http.Response.bytes(bytes, 200);
+      }),
+    );
+    addTearDown(runtime.close);
+
+    final executable = await runtime.ensureRuntimeInstalled();
+
+    final installed = File('${root.path}/bin/litert-lm');
+    expect(executable, installed.path);
+    expect(await installed.readAsBytes(), bytes);
+    expect(downloads, 1);
+    if (!Platform.isWindows) {
+      expect((await installed.stat()).mode & 0x49, isNot(0));
+    }
   });
 
   test(

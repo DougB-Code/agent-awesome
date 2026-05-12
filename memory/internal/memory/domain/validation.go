@@ -28,9 +28,9 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 	if !ValidKind(req.Kind) {
 		return req, fmt.Errorf("invalid kind %q", req.Kind)
 	}
-	req.Scope = vocabulary.DefaultScope(req.Scope)
-	if !ValidScope(req.Scope) {
-		return req, fmt.Errorf("invalid scope %q", req.Scope)
+	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
+	if !ValidFirewall(req.Firewall) {
+		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
 	}
 	req.TrustLevel = vocabulary.DefaultTrustLevel(req.TrustLevel, TrustSourceOriginal)
 	if !ValidTrustLevel(req.TrustLevel) {
@@ -49,9 +49,9 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 // NormalizeRetrievalQuery fills safe retrieval defaults and validates filters.
 func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
 	q.Actor = normalize.Default(q.Actor, "agent")
-	q.Scope = vocabulary.DefaultScope(q.Scope)
-	if !ValidScope(q.Scope) {
-		return q, fmt.Errorf("invalid scope %q", q.Scope)
+	q.Firewall = vocabulary.DefaultFirewall(q.Firewall)
+	if !ValidFirewall(q.Firewall) {
+		return q, fmt.Errorf("invalid firewall %q", q.Firewall)
 	}
 	for _, kind := range q.Kinds {
 		if !ValidKind(kind) {
@@ -104,9 +104,9 @@ func NormalizeCorrectionRequest(req CorrectionRequest) (CorrectionRequest, error
 	if req.Text == "" {
 		return req, errors.New("correction text is required")
 	}
-	req.Scope = vocabulary.DefaultScope(req.Scope)
-	if !ValidScope(req.Scope) {
-		return req, fmt.Errorf("invalid scope %q", req.Scope)
+	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
+	if !ValidFirewall(req.Firewall) {
+		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
 	}
 	return req, nil
 }
@@ -120,9 +120,9 @@ func NormalizeRefreshPageRequest(req RefreshPageRequest) (RefreshPageRequest, er
 	if req.Kind != KindEntityPage && req.Kind != KindTimeline {
 		return req, fmt.Errorf("unsupported page kind %q", req.Kind)
 	}
-	req.Scope = vocabulary.DefaultScope(req.Scope)
-	if !ValidScope(req.Scope) {
-		return req, fmt.Errorf("invalid scope %q", req.Scope)
+	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
+	if !ValidFirewall(req.Firewall) {
+		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
 	}
 	req.Title = strings.TrimSpace(req.Title)
 	req.Topic = strings.TrimSpace(req.Topic)
@@ -142,9 +142,9 @@ func ValidKind(kind Kind) bool {
 	return containsVocabularyValue(Kinds(), kind)
 }
 
-// ValidScope reports whether scope is in the controlled vocabulary.
-func ValidScope(scope Scope) bool {
-	return vocabulary.ValidScope(scope)
+// ValidFirewall reports whether firewall is a safe memory firewall id.
+func ValidFirewall(firewall Firewall) bool {
+	return vocabulary.ValidFirewall(firewall)
 }
 
 // ValidTrustLevel reports whether level is in the controlled vocabulary.

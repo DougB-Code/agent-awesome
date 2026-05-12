@@ -17,9 +17,9 @@ func NormalizeGraphQueryRequest(req GraphQueryRequest) (GraphQueryRequest, error
 	if req.Query == "" {
 		return req, errors.New("query is required")
 	}
-	req.Scope = vocabulary.DefaultScope(req.Scope)
-	if !ValidScope(req.Scope) {
-		return req, fmt.Errorf("invalid scope %q", req.Scope)
+	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
+	if !ValidFirewall(req.Firewall) {
+		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
 	}
 	if len(req.AllowedSensitivities) == 0 {
 		req.AllowedSensitivities = []Sensitivity{SensitivityPublic, SensitivityInternal, SensitivityPrivate}

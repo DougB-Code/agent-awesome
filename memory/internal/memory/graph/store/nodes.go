@@ -36,17 +36,17 @@ func (s *Store) UpsertNode(ctx context.Context, req graph.UpsertNodeRequest) (gr
 		}
 		stamp := timeString(now)
 		if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_nodes
-			(id, kind, stable_key, title, summary, status, scope, sensitivity, trust_level, confidence, source_node_id, actor, created_at, updated_at)
+			(id, kind, stable_key, title, summary, status, firewall, sensitivity, trust_level, confidence, source_node_id, actor, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			nodeID, req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Scope, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
+			nodeID, req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Firewall, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
 			return graph.Node{}, fmt.Errorf("insert graph node: %w", err)
 		}
 		return s.GetNode(ctx, nodeID)
 	}
 	result, err := s.runner.ExecContext(ctx, `UPDATE graph_nodes
-		SET kind = ?, stable_key = ?, title = ?, summary = ?, status = ?, scope = ?, sensitivity = ?, trust_level = ?, confidence = ?, source_node_id = ?, actor = ?, updated_at = ?
+		SET kind = ?, stable_key = ?, title = ?, summary = ?, status = ?, firewall = ?, sensitivity = ?, trust_level = ?, confidence = ?, source_node_id = ?, actor = ?, updated_at = ?
 		WHERE id = ?`,
-		req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Scope, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, timeString(now), nodeID)
+		req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Firewall, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, timeString(now), nodeID)
 	if err != nil {
 		return graph.Node{}, fmt.Errorf("update graph node: %w", err)
 	}
@@ -55,9 +55,9 @@ func (s *Store) UpsertNode(ctx context.Context, req graph.UpsertNodeRequest) (gr
 	} else if rows == 0 {
 		stamp := timeString(now)
 		if _, err := s.runner.ExecContext(ctx, `INSERT INTO graph_nodes
-			(id, kind, stable_key, title, summary, status, scope, sensitivity, trust_level, confidence, source_node_id, actor, created_at, updated_at)
+			(id, kind, stable_key, title, summary, status, firewall, sensitivity, trust_level, confidence, source_node_id, actor, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			nodeID, req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Scope, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
+			nodeID, req.Kind, nullableString(req.StableKey), req.Title, req.Summary, req.Status, req.Firewall, req.Sensitivity, req.TrustLevel, req.Confidence, nullableNodeID(req.SourceNodeID), req.Actor, stamp, stamp); err != nil {
 			return graph.Node{}, fmt.Errorf("insert graph node with id: %w", err)
 		}
 	}
@@ -68,8 +68,8 @@ func (s *Store) UpsertNode(ctx context.Context, req graph.UpsertNodeRequest) (gr
 func (s *Store) GetNode(ctx context.Context, nodeID graph.NodeID) (graph.Node, error) {
 	var node graph.Node
 	var sourceNodeID, stableKey, createdAt, updatedAt string
-	row := s.runner.QueryRowContext(ctx, `SELECT id, kind, COALESCE(stable_key, ''), title, summary, status, scope, sensitivity, trust_level, confidence, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_nodes WHERE id = ?`, nodeID)
-	if err := row.Scan(&node.ID, &node.Kind, &stableKey, &node.Title, &node.Summary, &node.Status, &node.Scope, &node.Sensitivity, &node.TrustLevel, &node.Confidence, &sourceNodeID, &node.Actor, &createdAt, &updatedAt); err != nil {
+	row := s.runner.QueryRowContext(ctx, `SELECT id, kind, COALESCE(stable_key, ''), title, summary, status, firewall, sensitivity, trust_level, confidence, COALESCE(source_node_id, ''), actor, created_at, updated_at FROM graph_nodes WHERE id = ?`, nodeID)
+	if err := row.Scan(&node.ID, &node.Kind, &stableKey, &node.Title, &node.Summary, &node.Status, &node.Firewall, &node.Sensitivity, &node.TrustLevel, &node.Confidence, &sourceNodeID, &node.Actor, &createdAt, &updatedAt); err != nil {
 		return graph.Node{}, fmt.Errorf("load graph node: %w", err)
 	}
 	node.StableKey = stableKey

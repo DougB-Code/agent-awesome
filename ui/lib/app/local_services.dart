@@ -142,6 +142,48 @@ class LocalServiceSupervisor {
     return statuses;
   }
 
+  /// Restarts managed memory MCP services so configuration files are reloaded.
+  Future<List<ServiceProcessStatus>> restartMemoryServices(
+    RuntimeProfile profile,
+  ) async {
+    await _prepareLogDirectory();
+    await _writeLogLine(
+      'supervisor',
+      'restarting memory services for profile ${profile.id}',
+    );
+    if (_closed || _processSupervisor.isClosing) {
+      final status = _status(
+        'Memory Services',
+        config.workspaceRoot,
+        ConnectionStateKind.disconnected,
+        'Supervisor is closed',
+      );
+      await _writeStatusLog(status);
+      return <ServiceProcessStatus>[status];
+    }
+    if (!config.autoStartLocalServices) {
+      final status = _status(
+        'Memory Services',
+        config.workspaceRoot,
+        ConnectionStateKind.unknown,
+        'Auto-start disabled',
+      );
+      await _writeStatusLog(status);
+      return <ServiceProcessStatus>[status];
+    }
+    final statuses = <ServiceProcessStatus>[];
+    for (final server in profile.memoryServers) {
+      final status = await _ensureMcpServerStatus(
+        profile,
+        server,
+        restartAutoStarted: true,
+      );
+      await _writeStatusLog(status);
+      statuses.add(status);
+    }
+    return statuses;
+  }
+
   /// Stops processes started or previously recorded by this supervisor.
   Future<void> close({void Function(String message)? onStatus}) async {
     _closed = true;

@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -49,13 +50,37 @@ const List<String> _localToolArgumentFields = <String>[
   'view',
 ];
 
-/// LocalModelExecutableResolver locates a runnable LiteRT-LM binary.
+const _linuxX64LiteRtCliArtifact = LocalModelRuntimeArtifact(
+  id: 'litert-lm-v0.10.1-linux-x64',
+  displayName: 'LiteRT-LM CLI',
+  fileName: 'lit_linux_x86_64',
+  executableName: 'litert-lm',
+  downloadUrl:
+      'https://github.com/google-ai-edge/LiteRT-LM/releases/download/v0.10.1/lit_linux_x86_64',
+  expectedBytes: 142096416,
+  expectedSha256:
+      'd8461038fc1ce523975f8a2ef8cf403cae30b85e469116f9bee186a3a8fe1f54',
+);
+
+/// Returns the app-managed LiteRT runtime artifact for this host platform.
+LocalModelRuntimeArtifact? _defaultRuntimeArtifactForHost() {
+  if (Abi.current() == Abi.linuxX64) {
+    return _linuxX64LiteRtCliArtifact;
+  }
+  return null;
+}
+
+/// LocalModelExecutableResolver locates or prepares a runnable LiteRT-LM binary.
 class LocalModelExecutableResolver {
-  /// Creates an executable resolver with injectable environment values.
-  const LocalModelExecutableResolver({Map<String, String>? environment})
-    : _environment = environment;
+  /// Creates an executable resolver with injectable environment and commands.
+  const LocalModelExecutableResolver({
+    Map<String, String>? environment,
+    CommandRunner? commandRunner,
+  }) : _environment = environment,
+       _commandRunner = commandRunner;
 
   final Map<String, String>? _environment;
+  final CommandRunner? _commandRunner;
 
   static const List<String> _aliases = <String>['litert_lm', 'litert-lm'];
 
@@ -67,6 +92,7 @@ class LocalModelExecutableResolver {
     final configured = configuredExecutable.trim();
     final names = _candidateNames(configured);
     final checked = <String>[];
+    final presentButBlocked = <String>[];
     for (final candidate in _candidatePaths(
       configured: configured,
       names: names,
@@ -78,8 +104,19 @@ class LocalModelExecutableResolver {
       if (await _isRunnable(candidate)) {
         return candidate;
       }
+      if (await File(candidate).exists() &&
+          !presentButBlocked.contains(candidate)) {
+        presentButBlocked.add(candidate);
+        final repaired = await _prepareRunnableCopy(
+          sourcePath: candidate,
+          dataDirectory: dataDirectory,
+        );
+        if (repaired != null) {
+          return repaired;
+        }
+      }
     }
-    throw StateError(_notFoundMessage(configured, checked));
+    throw StateError(_notFoundMessage(configured, checked, presentButBlocked));
   }
 
   List<String> _candidateNames(String configured) {
@@ -148,16 +185,86 @@ class LocalModelExecutableResolver {
     return stat.type == FileSystemEntityType.file && (stat.mode & 0x49) != 0;
   }
 
+  /// Copies a blocked executable into app-managed storage and makes it runnable.
+  Future<String?> _prepareRunnableCopy({
+    required String sourcePath,
+    required String dataDirectory,
+  }) async {
+    if (Platform.isWindows) {
+      return null;
+    }
+    try {
+      final source = File(sourcePath);
+      final sourceStat = await source.stat();
+      if (sourceStat.type != FileSystemEntityType.file) {
+        return null;
+      }
+      final fileName = source.uri.pathSegments.isEmpty
+          ? _aliases.first
+          : source.uri.pathSegments.last;
+      final target = File('$dataDirectory/bin/$fileName');
+      await target.parent.create(recursive: true);
+      if (source.path == target.path) {
+        return await _makeRunnable(target.path) &&
+                await _isRunnable(target.path)
+            ? target.path
+            : null;
+      }
+      final partial = File('${target.path}.part');
+      if (await partial.exists()) {
+        await partial.delete();
+      }
+      await source.copy(partial.path);
+      if (!await _makeRunnable(partial.path)) {
+        await partial.delete();
+        return null;
+      }
+      if (await target.exists()) {
+        await target.delete();
+      }
+      await partial.rename(target.path);
+      return await _isRunnable(target.path) ? target.path : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Adds owner/group/other execute bits to a local executable candidate.
+  Future<bool> _makeRunnable(String path) async {
+    if (Platform.isWindows) {
+      return true;
+    }
+    final commandRunner = _commandRunner;
+    if (commandRunner == null) {
+      return false;
+    }
+    final result = await commandRunner.run(
+      'chmod',
+      <String>['755', path],
+      timeout: const Duration(seconds: 5),
+      scope: 'local-model',
+      kind: ManagedProcessKind.systemProbe,
+    );
+    return result.exitCode == 0;
+  }
+
   bool _looksLikePath(String value) {
     return value.contains('/') || value.contains(r'\');
   }
 
-  String _notFoundMessage(String configured, List<String> checked) {
+  String _notFoundMessage(
+    String configured,
+    List<String> checked,
+    List<String> presentButBlocked,
+  ) {
     final requested = configured.isEmpty ? _aliases.first : configured;
-    final inspected = checked.take(6).join(', ');
+    final inspected = checked.take(12).join(', ');
+    final blocked = presentButBlocked.isEmpty
+        ? ''
+        : ' Found but not executable: ${presentButBlocked.join(', ')}.';
     return 'LiteRT-LM executable "$requested" was not found or is not executable. '
         'Install litert_lm, make it executable, or set AGENTAWESOME_LITERT_LM. '
-        'Checked: $inspected';
+        '$blocked Checked: $inspected';
   }
 }
 
@@ -169,8 +276,20 @@ abstract class LocalModelRuntime {
     void Function(LocalModelInstallProgress progress)? onProgress,
   });
 
+  /// Restores a previously downloaded artifact without using the network.
+  Future<LocalModelInstall?> recoverInstalled(
+    LocalModelDescriptor model, {
+    List<String> candidatePaths = const <String>[],
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  });
+
   /// Reports whether a model artifact is already installed and verified.
   Future<bool> isInstalled(LocalModelDescriptor model);
+
+  /// Ensures the local runtime executable is installed and launchable.
+  Future<String> ensureRuntimeInstalled({
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  });
 
   /// Starts the local runtime endpoint for an installed model.
   Future<ServiceProcessStatus> start(LocalModelDescriptor model);
@@ -188,11 +307,16 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     http.Client? httpClient,
     String? dataDirectory,
     LocalModelExecutableResolver? executableResolver,
+    LocalModelRuntimeArtifact? runtimeArtifact,
   }) : _processSupervisor = processSupervisor,
        _http = httpClient ?? http.Client(),
        _dataDirectory = dataDirectory ?? agentAwesomeDataDirectoryPath(),
+       _runtimeArtifact = runtimeArtifact ?? _defaultRuntimeArtifactForHost(),
        _executableResolver =
-           executableResolver ?? const LocalModelExecutableResolver();
+           executableResolver ??
+           LocalModelExecutableResolver(
+             commandRunner: ProcessSupervisorCommandRunner(processSupervisor),
+           );
 
   /// App configuration that supplies paths and local endpoint settings.
   final AppConfig config;
@@ -200,6 +324,7 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
   final ProcessSupervisor _processSupervisor;
   final http.Client _http;
   final String _dataDirectory;
+  final LocalModelRuntimeArtifact? _runtimeArtifact;
   final LocalModelExecutableResolver _executableResolver;
   final Set<String> _verifiedInstallPaths = <String>{};
   _LiteRtOpenAiServer? _server;
@@ -234,10 +359,88 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     return install;
   }
 
+  /// Restores a verified local artifact from the app-managed model store.
+  @override
+  Future<LocalModelInstall?> recoverInstalled(
+    LocalModelDescriptor model, {
+    List<String> candidatePaths = const <String>[],
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    final install = _installFor(model);
+    if (await _isCurrentInstall(install)) {
+      return install;
+    }
+    final source = await _findRestorableArtifact(
+      model,
+      install,
+      candidatePaths,
+    );
+    if (source == null) {
+      return null;
+    }
+    onProgress?.call(
+      LocalModelInstallProgress(
+        phase: 'restoring',
+        message: 'Restoring ${model.displayName}',
+        totalBytes: model.expectedBytes,
+      ),
+    );
+    await Directory(install.directory).create(recursive: true);
+    final target = File(install.modelPath);
+    if (source.path != target.path) {
+      final partial = File('${install.modelPath}.part');
+      if (await partial.exists()) {
+        await partial.delete();
+      }
+      await source.copy(partial.path);
+      await _replaceFile(partial, target);
+    }
+    await _writeManifest(install);
+    _verifiedInstallPaths.add(install.modelPath);
+    onProgress?.call(
+      LocalModelInstallProgress(
+        phase: 'ready',
+        message: 'Local model restored',
+        receivedBytes: model.expectedBytes,
+        totalBytes: model.expectedBytes,
+      ),
+    );
+    return install;
+  }
+
   /// Reports whether a model artifact is already installed and verified.
   @override
   Future<bool> isInstalled(LocalModelDescriptor model) async {
     return _isCurrentInstall(_installFor(model));
+  }
+
+  /// Ensures the app-managed LiteRT runtime executable is installed.
+  @override
+  Future<String> ensureRuntimeInstalled({
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    if (_isClosed) {
+      throw StateError('Local model runtime is closed');
+    }
+    final existing = await _resolvedLaunchableExecutable();
+    if (existing != null) {
+      return existing;
+    }
+    final artifact = _runtimeArtifact;
+    if (artifact == null) {
+      throw StateError(
+        'No managed LiteRT-LM runtime binary is available for ${Abi.current()}.',
+      );
+    }
+    final executable = await _ensureRuntimeArtifact(
+      artifact,
+      onProgress: onProgress,
+    );
+    final validationError = await _validateExecutable(executable);
+    if (validationError.isNotEmpty) {
+      throw StateError(validationError);
+    }
+    return executable;
   }
 
   /// Starts the local OpenAI-compatible runtime endpoint.
@@ -319,6 +522,171 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
       state: ConnectionStateKind.disconnected,
       message: 'Local model runtime is closed',
     );
+  }
+
+  /// Returns an already configured executable only when it passes validation.
+  Future<String?> _resolvedLaunchableExecutable() async {
+    try {
+      final path = await _executableResolver.resolve(
+        configuredExecutable: config.litertLmExecutable,
+        dataDirectory: _dataDirectory,
+      );
+      final validationError = await _validateExecutable(path);
+      return validationError.isEmpty ? path : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Downloads or repairs the managed runtime binary and returns its path.
+  Future<String> _ensureRuntimeArtifact(
+    LocalModelRuntimeArtifact artifact, {
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    final target = File(_runtimeExecutablePath(artifact));
+    if (await _isCurrentRuntimeArtifact(target, artifact)) {
+      await _makeRuntimeExecutable(target);
+      if (await _isExecutableFile(target)) {
+        return target.path;
+      }
+    }
+    await _downloadRuntimeArtifact(artifact, target, onProgress: onProgress);
+    await _makeRuntimeExecutable(target);
+    if (!await _isCurrentRuntimeArtifact(target, artifact) ||
+        !await _isExecutableFile(target)) {
+      throw StateError(
+        '${artifact.displayName} installation verification failed',
+      );
+    }
+    onProgress?.call(
+      LocalModelInstallProgress(
+        phase: 'runtime-ready',
+        message: '${artifact.displayName} installed',
+        receivedBytes: artifact.expectedBytes,
+        totalBytes: artifact.expectedBytes,
+      ),
+    );
+    return target.path;
+  }
+
+  /// Returns the app-managed executable path for a runtime artifact.
+  String _runtimeExecutablePath(LocalModelRuntimeArtifact artifact) {
+    return '$_dataDirectory/bin/${artifact.executableName}';
+  }
+
+  /// Reports whether a runtime binary matches the pinned artifact metadata.
+  Future<bool> _isCurrentRuntimeArtifact(
+    File candidate,
+    LocalModelRuntimeArtifact artifact,
+  ) async {
+    if (!await candidate.exists()) {
+      return false;
+    }
+    final stat = await candidate.stat();
+    if (stat.type != FileSystemEntityType.file ||
+        stat.size != artifact.expectedBytes) {
+      return false;
+    }
+    return await _sha256ForFile(candidate) == artifact.expectedSha256;
+  }
+
+  /// Reports whether a file can be launched on the current platform.
+  Future<bool> _isExecutableFile(File file) async {
+    if (!await file.exists()) {
+      return false;
+    }
+    if (Platform.isWindows) {
+      return true;
+    }
+    final stat = await file.stat();
+    return stat.type == FileSystemEntityType.file && (stat.mode & 0x49) != 0;
+  }
+
+  /// Downloads and verifies a runtime artifact into the target executable path.
+  Future<void> _downloadRuntimeArtifact(
+    LocalModelRuntimeArtifact artifact,
+    File target, {
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    final partial = File('${target.path}.part');
+    await partial.parent.create(recursive: true);
+    if (await partial.exists()) {
+      await partial.delete();
+    }
+    onProgress?.call(
+      LocalModelInstallProgress(
+        phase: 'downloading-runtime',
+        message: 'Downloading ${artifact.displayName}',
+        totalBytes: artifact.expectedBytes,
+      ),
+    );
+    final request = http.Request('GET', Uri.parse(artifact.downloadUrl));
+    final response = await _http.send(request);
+    if (response.statusCode < 200 || response.statusCode > 299) {
+      throw StateError(
+        '${artifact.displayName} download failed with HTTP ${response.statusCode}',
+      );
+    }
+    var received = 0;
+    final sink = partial.openWrite();
+    try {
+      await for (final chunk in response.stream) {
+        received += chunk.length;
+        sink.add(chunk);
+        onProgress?.call(
+          LocalModelInstallProgress(
+            phase: 'downloading-runtime',
+            message: 'Downloading ${artifact.displayName}',
+            receivedBytes: received,
+            totalBytes: artifact.expectedBytes,
+          ),
+        );
+      }
+    } finally {
+      await sink.close();
+    }
+    if (received != artifact.expectedBytes) {
+      throw StateError(
+        '${artifact.displayName} download size mismatch: got $received bytes, expected ${artifact.expectedBytes}',
+      );
+    }
+    onProgress?.call(
+      LocalModelInstallProgress(
+        phase: 'verifying-runtime',
+        message: 'Verifying ${artifact.displayName}',
+        receivedBytes: received,
+        totalBytes: artifact.expectedBytes,
+      ),
+    );
+    final digest = await _sha256ForFile(partial);
+    if (digest != artifact.expectedSha256) {
+      throw StateError('${artifact.displayName} checksum verification failed');
+    }
+    await _replaceFile(partial, target);
+  }
+
+  /// Marks a managed runtime binary executable on POSIX hosts.
+  Future<void> _makeRuntimeExecutable(File file) async {
+    if (Platform.isWindows) {
+      return;
+    }
+    final result = await _processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'chmod-litert-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'LiteRT-LM permission repair',
+        executable: 'chmod',
+        arguments: <String>['755', file.path],
+        kind: ManagedProcessKind.systemProbe,
+        shutdownMode: ManagedProcessShutdownMode.processOnly,
+        timeout: const Duration(seconds: 5),
+        scope: 'local-model',
+      ),
+    );
+    if (result.exitCode != 0) {
+      throw StateError(
+        'Could not make ${file.path} executable: ${_processFailureText(result)}',
+      );
+    }
   }
 
   LocalModelInstall _installFor(LocalModelDescriptor model) {
@@ -413,6 +781,51 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     return true;
   }
 
+  Future<File?> _findRestorableArtifact(
+    LocalModelDescriptor model,
+    LocalModelInstall install,
+    List<String> candidatePaths,
+  ) async {
+    final checked = <String>{};
+    for (final path in await _modelArtifactCandidatePaths(
+      model,
+      install,
+      candidatePaths,
+    )) {
+      if (path.trim().isEmpty || !checked.add(path)) {
+        continue;
+      }
+      final candidate = File(path);
+      if (await _isExpectedArtifact(candidate, model)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  Future<List<String>> _modelArtifactCandidatePaths(
+    LocalModelDescriptor model,
+    LocalModelInstall install,
+    List<String> candidatePaths,
+  ) async {
+    return <String>[...candidatePaths, install.modelPath];
+  }
+
+  Future<bool> _isExpectedArtifact(
+    File candidate,
+    LocalModelDescriptor model,
+  ) async {
+    if (!await candidate.exists()) {
+      return false;
+    }
+    final stat = await candidate.stat();
+    if (stat.type != FileSystemEntityType.file ||
+        stat.size != model.expectedBytes) {
+      return false;
+    }
+    return await _sha256ForFile(candidate) == model.expectedSha256;
+  }
+
   Future<void> _downloadModel(
     LocalModelDescriptor model,
     LocalModelInstall install, {
@@ -477,6 +890,13 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
       await target.delete();
     }
     await partial.rename(target.path);
+  }
+
+  Future<void> _replaceFile(File source, File target) async {
+    if (await target.exists()) {
+      await target.delete();
+    }
+    await source.rename(target.path);
   }
 
   Future<void> _writeManifest(LocalModelInstall install) async {

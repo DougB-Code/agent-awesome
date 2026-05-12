@@ -9,6 +9,7 @@ class ExecutiveSummaryProjection {
   const ExecutiveSummaryProjection({
     this.schemaVersion = 'agent-awesome/executive-summary/v1',
     this.generatedAt,
+    this.firewall = const ProjectionFirewall(),
     this.horizon = 'today',
     this.title = 'Today',
     this.subtitle = 'Here is what matters now.',
@@ -33,6 +34,9 @@ class ExecutiveSummaryProjection {
 
   /// Projection generation time.
   final DateTime? generatedAt;
+
+  /// Memory firewall summarized by this projection.
+  final ProjectionFirewall firewall;
 
   /// Projection horizon.
   final String horizon;
@@ -80,6 +84,7 @@ class ExecutiveSummaryProjection {
   ExecutiveSummaryProjection copyWith({
     String? schemaVersion,
     DateTime? generatedAt,
+    ProjectionFirewall? firewall,
     String? horizon,
     String? title,
     String? subtitle,
@@ -98,6 +103,7 @@ class ExecutiveSummaryProjection {
     return ExecutiveSummaryProjection(
       schemaVersion: schemaVersion ?? this.schemaVersion,
       generatedAt: generatedAt ?? this.generatedAt,
+      firewall: firewall ?? this.firewall,
       horizon: horizon ?? this.horizon,
       title: title ?? this.title,
       subtitle: subtitle ?? this.subtitle,
@@ -114,6 +120,25 @@ class ExecutiveSummaryProjection {
       links: links ?? this.links,
     );
   }
+}
+
+/// ProjectionFirewall stores the memory firewall summarized by a projection.
+class ProjectionFirewall {
+  /// Creates projection firewall metadata.
+  const ProjectionFirewall({
+    this.kind = 'user',
+    this.id = '',
+    this.label = 'User',
+  });
+
+  /// Firewall kind or id.
+  final String kind;
+
+  /// Optional actor or owner id.
+  final String id;
+
+  /// User-facing firewall label.
+  final String label;
 }
 
 /// ProjectionLink stores a display label and reserved app route.
@@ -611,6 +636,7 @@ ExecutiveSummaryProjection parseExecutiveSummaryProjection(dynamic content) {
       fallback: 'agent-awesome/executive-summary/v1',
     ),
     generatedAt: parseOptionalDateTime(object['generated_at']),
+    firewall: _parseProjectionFirewall(object['firewall']),
     horizon: stringValue(object['horizon'], fallback: 'today'),
     title: stringValue(object['title'], fallback: 'Today'),
     subtitle: stringValue(
@@ -628,6 +654,16 @@ ExecutiveSummaryProjection parseExecutiveSummaryProjection(dynamic content) {
     coverage: _parseCoverage(object['coverage']),
     quality: _parseQuality(object['quality']),
     links: _parseLinks(object['links']),
+  );
+}
+
+/// Parses projection firewall metadata.
+ProjectionFirewall _parseProjectionFirewall(dynamic content) {
+  final object = jsonObject(content);
+  return ProjectionFirewall(
+    kind: stringValue(object['kind'], fallback: 'user'),
+    id: stringValue(object['id']),
+    label: stringValue(object['label'], fallback: 'User'),
   );
 }
 

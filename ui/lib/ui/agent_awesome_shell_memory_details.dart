@@ -14,7 +14,11 @@ class _MemoryOverviewContent extends StatelessWidget {
     if (memory == null) {
       return const _MemorySelectionEmpty();
     }
-    if (!_matchesMemoryRecord(memory, query)) {
+    if (!_matchesMemoryRecord(
+      memory,
+      query,
+      extra: _memoryFirewallSearchText(controller, memory.firewall),
+    )) {
       return PanelEmptyState(query: query);
     }
     final contradictionCount = memory.relationships
@@ -55,7 +59,16 @@ class _MemoryOverviewContent extends StatelessWidget {
                   runSpacing: 8,
                   children: <Widget>[
                     _MemoryBadge(label: _memoryLabel(memory.kind)),
-                    _MemoryBadge(label: memory.scope),
+                    _MemoryBadge(
+                      label: controller.memoryFirewallLabel(memory.firewall),
+                    ),
+                    if (controller
+                        .memoryFirewallAudienceLabel(memory.firewall)
+                        .isNotEmpty)
+                      _MemoryBadge(
+                        label:
+                            'Shared with ${controller.memoryFirewallAudienceLabel(memory.firewall)}',
+                      ),
                     _MemoryBadge(label: memory.sensitivity),
                     _MemoryBadge(label: _memoryLabel(memory.trustLevel)),
                     _MemoryBadge(label: memory.status),

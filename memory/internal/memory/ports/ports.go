@@ -15,8 +15,8 @@ type Repository interface {
 	RepairMemory(ctx context.Context, req domain.RepairRequest) (domain.MemoryRecord, error)
 	CreateCorrection(ctx context.Context, req domain.CorrectionRequest) (domain.CaptureResult, error)
 	RefreshCompiledPage(ctx context.Context, req domain.RefreshPageRequest) (domain.CompiledPage, error)
-	LoadEntityPage(ctx context.Context, scope domain.Scope, entityID domain.EntityID, title string) (domain.CompiledPage, error)
-	LoadTimeline(ctx context.Context, scope domain.Scope, topic string, entityID domain.EntityID) (domain.CompiledPage, error)
+	LoadEntityPage(ctx context.Context, firewall domain.Firewall, entityID domain.EntityID, title string) (domain.CompiledPage, error)
+	LoadTimeline(ctx context.Context, firewall domain.Firewall, topic string, entityID domain.EntityID) (domain.CompiledPage, error)
 	LeaseJob(ctx context.Context, worker string) (domain.Job, bool, error)
 	CompleteJob(ctx context.Context, id domain.JobID, message string) error
 	FailJob(ctx context.Context, id domain.JobID, err error) error

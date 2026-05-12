@@ -425,7 +425,7 @@ void main() {
             'title': 'Preference',
             'summary': 'Doug likes concise UI.',
             'kind': 'profile_fact',
-            'scope': 'user',
+            'firewall': 'acme-client',
             'trust_level': 'user_asserted',
             'sensitivity': 'private',
             'status': 'active',
@@ -455,6 +455,7 @@ void main() {
       });
 
       expect(records.single.title, 'Preference');
+      expect(records.single.firewall, 'acme-client');
       expect(records.single.evidenceId, 'ev-1');
       expect(records.single.trustLevel, 'user_asserted');
       expect(records.single.rawContent, 'Doug likes concise UI.');
@@ -466,7 +467,7 @@ void main() {
       final page = parseCompiledMemoryPage(<String, dynamic>{
         'id': 'page-1',
         'kind': 'timeline',
-        'scope': 'user',
+        'firewall': 'acme-client',
         'title': 'ui',
         'path': 'pages/page-1.md',
         'status': 'active',
@@ -476,6 +477,7 @@ void main() {
       });
 
       expect(page.title, 'ui');
+      expect(page.firewall, 'acme-client');
       expect(page.sourceIds, <String>['ev-1']);
       expect(page.content, '# UI');
     });

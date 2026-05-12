@@ -169,7 +169,7 @@ class ImportedAgentFile {
       content: serializedContent,
       title: name,
       kind: kind,
-      scope: 'user',
+      firewall: 'user',
       trustLevel: 'source_original',
       sensitivity: 'private',
       sourceSystem: 'local_file',

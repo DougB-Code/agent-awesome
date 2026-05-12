@@ -15,7 +15,11 @@ class _MemoryPagesContent extends StatelessWidget {
     if (memory == null) {
       return const _MemorySelectionEmpty();
     }
-    if (!_matchesMemoryRecord(memory, query) &&
+    if (!_matchesMemoryRecord(
+          memory,
+          query,
+          extra: _memoryFirewallSearchText(controller, memory.firewall),
+        ) &&
         !_matchesFuzzyQuery(
           '${page?.title ?? ''} ${page?.content ?? ''}',
           query,
@@ -82,7 +86,16 @@ class _MemoryPagesContent extends StatelessWidget {
                     runSpacing: 8,
                     children: <Widget>[
                       _MemoryBadge(label: page.kind),
-                      _MemoryBadge(label: page.scope),
+                      _MemoryBadge(
+                        label: controller.memoryFirewallLabel(page.firewall),
+                      ),
+                      if (controller
+                          .memoryFirewallAudienceLabel(page.firewall)
+                          .isNotEmpty)
+                        _MemoryBadge(
+                          label:
+                              'Shared with ${controller.memoryFirewallAudienceLabel(page.firewall)}',
+                        ),
                       _MemoryBadge(label: '${page.sourceIds.length} sources'),
                       if (page.stale) const _MemoryBadge(label: 'stale'),
                     ],

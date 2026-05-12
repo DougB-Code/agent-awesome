@@ -122,6 +122,38 @@ exit 1
 	}
 }
 
+// TestCreateDefersMissingExecutableUntilGeneration keeps tool APIs available at startup.
+func TestCreateDefersMissingExecutableUntilGeneration(t *testing.T) {
+	modelPath := writeFile(t, "model.litertlm", "model")
+	missing := filepath.Join(t.TempDir(), "missing-litert-lm")
+	llm, err := NewFactory().Create(context.Background(), schema.ProviderSelection{
+		Name: "local",
+		Provider: schema.Provider{
+			Adapter:    "litert",
+			Executable: missing,
+		},
+		Model: schema.Model{
+			ID:    "gemma",
+			Model: "gemma",
+			Path:  modelPath,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v, want deferred executable lookup", err)
+	}
+
+	var got error
+	for _, err := range llm.GenerateContent(context.Background(), &llmapi.LLMRequest{
+		Contents: []*genai.Content{genai.NewContentFromText("hello", "user")},
+	}, false) {
+		got = err
+	}
+
+	if got == nil || !strings.Contains(got.Error(), "LiteRT-LM executable") {
+		t.Fatalf("GenerateContent() error = %v, want missing executable error", got)
+	}
+}
+
 // TestValidateProviderRejectsStreamingCapability prevents unsupported local
 // model streaming declarations from passing startup validation.
 func TestValidateProviderRejectsStreamingCapability(t *testing.T) {

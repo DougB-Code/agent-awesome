@@ -39,7 +39,7 @@ func (s *Service) ExplainExecutiveSummaryItem(ctx context.Context, q domain.Expl
 	}
 	includeSources := q.IncludeSourcesEnabled()
 	summary, err := s.ProjectExecutiveSummary(ctx, domain.ExecutiveSummaryQuery{
-		Scope:           domain.ScopeUser,
+		Firewall:        domain.FirewallUser,
 		Horizon:         "today",
 		MaxItems:        50,
 		IncludeEvidence: &includeSources,

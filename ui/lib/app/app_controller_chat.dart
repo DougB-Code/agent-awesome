@@ -204,6 +204,16 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     }
     if (!await _ensureChatRuntimeReady()) {
       await _log('create chat blocked: managed runtime unavailable');
+      messages = <ChatMessage>[
+        ...messages,
+        ChatMessage(
+          id: 'runtime-${DateTime.now().microsecondsSinceEpoch}',
+          role: ChatRole.tool,
+          author: 'Runtime',
+          text: _agentUnavailableMessage(),
+          createdAt: DateTime.now(),
+        ),
+      ];
       _notifyControllerListeners();
       return false;
     }
@@ -655,12 +665,23 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       return statusMessage;
     }
     for (final status in localProcessStatuses) {
-      if (status.name == profile.harness.label && status.message.isNotEmpty) {
+      if (status.name == profile.harness.label &&
+          status.state == ConnectionStateKind.disconnected &&
+          status.message.isNotEmpty) {
         return 'Agent Awesome could not start the managed harness: ${status.message}';
       }
     }
+    for (final status in localProcessStatuses) {
+      if (status.name == 'Local model' &&
+          status.state == ConnectionStateKind.disconnected &&
+          status.message.isNotEmpty) {
+        return 'Agent Awesome could not start the local model: ${status.message}';
+      }
+    }
     for (final status in endpointStatuses) {
-      if (status.name == 'Agent API' && status.message.isNotEmpty) {
+      if (status.name == 'Agent API' &&
+          status.state == ConnectionStateKind.disconnected &&
+          status.message.isNotEmpty) {
         return 'Agent Awesome could not reach the managed Agent API: ${status.message}';
       }
     }

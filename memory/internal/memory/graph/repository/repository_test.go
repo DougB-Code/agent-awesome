@@ -30,8 +30,8 @@ func TestCaptureProjectsGraphMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get memory: %v", err)
 	}
-	if record.Kind != domain.KindDocument || record.Scope != domain.ScopeUser {
-		t.Fatalf("defaults kind/scope = %q/%q", record.Kind, record.Scope)
+	if record.Kind != domain.KindDocument || record.Firewall != domain.FirewallUser {
+		t.Fatalf("defaults kind/firewall = %q/%q", record.Kind, record.Firewall)
 	}
 	if record.TrustLevel != domain.TrustSourceOriginal || record.Sensitivity != domain.SensitivityPrivate {
 		t.Fatalf("defaults trust/sensitivity = %q/%q", record.TrustLevel, record.Sensitivity)
@@ -67,11 +67,11 @@ func TestCaptureIdempotencyReusesGraphNodes(t *testing.T) {
 	repo := openTestRepository(t)
 	defer repo.Close()
 
-	first, err := repo.Capture(ctx, domain.CaptureRequest{Content: "same source", Scope: domain.ScopeUser, IdempotencyKey: " same-key "})
+	first, err := repo.Capture(ctx, domain.CaptureRequest{Content: "same source", Firewall: domain.FirewallUser, IdempotencyKey: " same-key "})
 	if err != nil {
 		t.Fatalf("first capture: %v", err)
 	}
-	second, err := repo.Capture(ctx, domain.CaptureRequest{Content: "changed source", Scope: domain.ScopeUser, IdempotencyKey: "same-key"})
+	second, err := repo.Capture(ctx, domain.CaptureRequest{Content: "changed source", Firewall: domain.FirewallUser, IdempotencyKey: "same-key"})
 	if err != nil {
 		t.Fatalf("second capture: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		Content:     "planning alpha user source",
 		Title:       "User planning",
 		Kind:        domain.KindDocument,
-		Scope:       domain.ScopeUser,
+		Firewall:    domain.FirewallUser,
 		Topics:      []string{"Planning"},
 		EntityNames: []string{"Acme"},
 		EventTime:   &eventOne,
@@ -109,7 +109,7 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		Content:     "planning alpha global source",
 		Title:       "Global planning",
 		Kind:        domain.KindToolOutput,
-		Scope:       domain.ScopeGlobal,
+		Firewall:    domain.FirewallGlobal,
 		Topics:      []string{"planning"},
 		EntityNames: []string{"ACME"},
 		EventTime:   &eventTwo,
@@ -118,7 +118,7 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		Content:     "planning alpha artifact source",
 		Title:       "Artifact planning",
 		Kind:        domain.KindArtifact,
-		Scope:       domain.ScopeUser,
+		Firewall:    domain.FirewallUser,
 		Topics:      []string{"planning"},
 		EntityNames: []string{"acme"},
 		EventTime:   &eventThree,
@@ -127,7 +127,7 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		Content:     "planning alpha project-only source",
 		Title:       "Project planning",
 		Kind:        domain.KindDocument,
-		Scope:       domain.ScopeProject,
+		Firewall:    domain.FirewallProject,
 		Topics:      []string{"planning"},
 		EntityNames: []string{"acme"},
 		EventTime:   &eventOne,
@@ -136,7 +136,7 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 	from := eventOne.Add(-time.Hour)
 	to := eventTwo.Add(time.Hour)
 	records, err := repo.Search(ctx, domain.RetrievalQuery{
-		Scope:     domain.ScopeUser,
+		Firewall:  domain.FirewallUser,
 		Text:      "planning",
 		Kinds:     []domain.Kind{domain.KindDocument, domain.KindToolOutput},
 		Topics:    []string{" Planning "},
@@ -149,13 +149,32 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		t.Fatalf("search: %v", err)
 	}
 	gotIDs := memoryIDs(records)
+	if !reflect.DeepEqual(gotIDs, []domain.MemoryID{userDoc.ID}) {
+		t.Fatalf("memory ids = %#v, want same-firewall record only", gotIDs)
+	}
+
+	records, err = repo.Search(ctx, domain.RetrievalQuery{
+		Firewall:      domain.FirewallUser,
+		IncludeGlobal: true,
+		Text:          "planning",
+		Kinds:         []domain.Kind{domain.KindDocument, domain.KindToolOutput},
+		Topics:        []string{" Planning "},
+		EntityIDs:     []domain.EntityID{userDoc.EntityIDs[0]},
+		TimeFrom:      &from,
+		TimeTo:        &to,
+		Limit:         10,
+	})
+	if err != nil {
+		t.Fatalf("global search: %v", err)
+	}
+	gotIDs = memoryIDs(records)
 	wantIDs := []domain.MemoryID{userDoc.ID, globalTool.ID}
 	sort.Slice(wantIDs, func(i, j int) bool { return wantIDs[i] < wantIDs[j] })
 	if !reflect.DeepEqual(gotIDs, wantIDs) {
-		t.Fatalf("memory ids = %#v, want %#v", gotIDs, wantIDs)
+		t.Fatalf("global memory ids = %#v, want %#v", gotIDs, wantIDs)
 	}
 
-	records, err = repo.Search(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Text: "project-only", Limit: 10})
+	records, err = repo.Search(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Text: "project-only", Limit: 10})
 	if err != nil {
 		t.Fatalf("project search: %v", err)
 	}
@@ -173,13 +192,13 @@ func TestRestrictedGraphMemoryRequiresExplicitSensitivity(t *testing.T) {
 	_, err := repo.Capture(ctx, domain.CaptureRequest{
 		Content:     "restricted payroll source",
 		Title:       "Payroll",
-		Scope:       domain.ScopeUser,
+		Firewall:    domain.FirewallUser,
 		Sensitivity: domain.SensitivityRestricted,
 	})
 	if err != nil {
 		t.Fatalf("capture: %v", err)
 	}
-	records, err := repo.Search(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Text: "payroll"})
+	records, err := repo.Search(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Text: "payroll"})
 	if err != nil {
 		t.Fatalf("default search: %v", err)
 	}
@@ -187,7 +206,7 @@ func TestRestrictedGraphMemoryRequiresExplicitSensitivity(t *testing.T) {
 		t.Fatalf("default search returned restricted records: %d", len(records))
 	}
 	records, err = repo.Search(ctx, domain.RetrievalQuery{
-		Scope:                domain.ScopeUser,
+		Firewall:             domain.FirewallUser,
 		Text:                 "payroll",
 		AllowedSensitivities: []domain.Sensitivity{domain.SensitivityRestricted},
 	})
@@ -208,7 +227,7 @@ func TestRepairGraphMemoryUpdatesMetadata(t *testing.T) {
 	result, err := repo.Capture(ctx, domain.CaptureRequest{
 		Content:     "original launch evidence",
 		Title:       "Old title",
-		Scope:       domain.ScopeUser,
+		Firewall:    domain.FirewallUser,
 		Topics:      []string{"old"},
 		EntityNames: []string{"old entity"},
 	})
@@ -238,14 +257,14 @@ func TestRepairGraphMemoryUpdatesMetadata(t *testing.T) {
 	if !reflect.DeepEqual(record.Topics, []string{"updated"}) || !reflect.DeepEqual(record.EntityNames, []string{"new entity"}) {
 		t.Fatalf("record facets after repair = topics %#v entities %#v", record.Topics, record.EntityNames)
 	}
-	records, err := repo.Search(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Text: "searchable", Topics: []string{"updated"}, Limit: 10})
+	records, err := repo.Search(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Text: "searchable", Topics: []string{"updated"}, Limit: 10})
 	if err != nil {
 		t.Fatalf("search repaired record: %v", err)
 	}
 	if len(records) != 1 || records[0].ID != result.MemoryID {
 		t.Fatalf("repaired search records = %#v, want memory %s", records, result.MemoryID)
 	}
-	records, err = repo.Search(ctx, domain.RetrievalQuery{Scope: domain.ScopeUser, Topics: []string{"old"}, Limit: 10})
+	records, err = repo.Search(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Topics: []string{"old"}, Limit: 10})
 	if err != nil {
 		t.Fatalf("search old topic: %v", err)
 	}
@@ -260,11 +279,11 @@ func TestCorrectionGraphMemoryStoresRelationship(t *testing.T) {
 	repo := openTestRepository(t)
 	defer repo.Close()
 
-	base, err := repo.Capture(ctx, domain.CaptureRequest{Content: "base memory that needs correction", Title: "Base", Scope: domain.ScopeUser})
+	base, err := repo.Capture(ctx, domain.CaptureRequest{Content: "base memory that needs correction", Title: "Base", Firewall: domain.FirewallUser})
 	if err != nil {
 		t.Fatalf("capture base: %v", err)
 	}
-	correction, err := repo.CreateCorrection(ctx, domain.CorrectionRequest{Actor: "user", MemoryID: base.MemoryID, Scope: domain.ScopeUser, Text: "corrected fact"})
+	correction, err := repo.CreateCorrection(ctx, domain.CorrectionRequest{Actor: "user", MemoryID: base.MemoryID, Firewall: domain.FirewallUser, Text: "corrected fact"})
 	if err != nil {
 		t.Fatalf("create correction: %v", err)
 	}
@@ -370,7 +389,7 @@ func TestLinkTaskMemoryCreatesGraphEdge(t *testing.T) {
 	repo := openTestRepository(t)
 	defer repo.Close()
 
-	memory, err := repo.Capture(ctx, domain.CaptureRequest{Content: "Use the BI export notes.", Title: "BI export notes", Scope: domain.ScopeUser})
+	memory, err := repo.Capture(ctx, domain.CaptureRequest{Content: "Use the BI export notes.", Title: "BI export notes", Firewall: domain.FirewallUser})
 	if err != nil {
 		t.Fatalf("capture memory: %v", err)
 	}
@@ -408,7 +427,7 @@ func TestUpdateTaskPatchesGraphFacts(t *testing.T) {
 	repo := openTestRepository(t)
 	defer repo.Close()
 
-	memory, err := repo.Capture(ctx, domain.CaptureRequest{Content: "Original task request.", Title: "Task request", Scope: domain.ScopeUser})
+	memory, err := repo.Capture(ctx, domain.CaptureRequest{Content: "Original task request.", Title: "Task request", Firewall: domain.FirewallUser})
 	if err != nil {
 		t.Fatalf("capture memory: %v", err)
 	}

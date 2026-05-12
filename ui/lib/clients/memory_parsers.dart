@@ -35,7 +35,7 @@ MemoryRecord parseMemoryRecord(dynamic content) {
     title: stringValue(record['title'], fallback: 'Untitled memory'),
     summary: stringValue(record['summary']),
     kind: stringValue(record['kind'], fallback: 'memory'),
-    scope: stringValue(record['scope'], fallback: 'user'),
+    firewall: stringValue(record['firewall'], fallback: 'user'),
     trustLevel: stringValue(record['trust_level'], fallback: 'source_original'),
     sensitivity: stringValue(record['sensitivity'], fallback: 'private'),
     status: stringValue(record['status'], fallback: 'active'),
@@ -84,7 +84,7 @@ CompiledMemoryPage parseCompiledMemoryPage(dynamic content) {
   return CompiledMemoryPage(
     id: stringValue(page['id']),
     kind: stringValue(page['kind'], fallback: 'entity_page'),
-    scope: stringValue(page['scope'], fallback: 'user'),
+    firewall: stringValue(page['firewall'], fallback: 'user'),
     title: stringValue(page['title'], fallback: 'Untitled page'),
     path: stringValue(page['path']),
     status: stringValue(page['status'], fallback: 'active'),

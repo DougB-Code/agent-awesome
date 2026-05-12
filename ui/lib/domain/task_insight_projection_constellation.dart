@@ -160,7 +160,7 @@ List<TaskConstellationEdge> _criticalPathEdges(
       source: critical ? 'critical_path' : 'dependency_context',
       factSource: link.source,
       sourceKind: link.sourceKind,
-      scope: link.scope,
+      firewall: link.firewall,
       sensitivity: link.sensitivity,
       explanation: critical
           ? _criticalPathExplanation(index, link)
@@ -227,7 +227,7 @@ List<TaskConstellationEdge> _riskOwnerEdges(
         source: materialized ? 'materialized_risk' : 'risk_context',
         factSource: edge.source,
         sourceKind: edge.sourceKind,
-        scope: edge.scope,
+        firewall: edge.firewall,
         sensitivity: edge.sensitivity,
         explanation: materialized
             ? 'Risk has materialized on this dependency through blocked, waiting, or overdue work.'
@@ -385,7 +385,7 @@ TaskConstellationEdge _constellationEdge(TaskProjectionEdge edge) {
     source: edge.source,
     factSource: edge.source,
     sourceKind: edge.sourceKind,
-    scope: edge.scope,
+    firewall: edge.firewall,
     sensitivity: edge.sensitivity,
     explanation: edge.explanation,
     evidenceIds: edge.evidenceIds,
@@ -538,7 +538,7 @@ class _DependencyLink {
     required this.originalRelationType,
     required this.source,
     required this.sourceKind,
-    required this.scope,
+    required this.firewall,
     required this.sensitivity,
     required this.confidence,
     required this.explanation,
@@ -563,7 +563,7 @@ class _DependencyLink {
       originalRelationType: edge.relationType,
       source: edge.source,
       sourceKind: edge.sourceKind,
-      scope: edge.scope,
+      firewall: edge.firewall,
       sensitivity: edge.sensitivity,
       confidence: edge.confidence,
       explanation: edge.explanation,
@@ -594,8 +594,8 @@ class _DependencyLink {
   /// Original relation source kind.
   final String sourceKind;
 
-  /// Original relation access scope.
-  final String scope;
+  /// Original relation access firewall.
+  final String firewall;
 
   /// Original relation sensitivity.
   final String sensitivity;

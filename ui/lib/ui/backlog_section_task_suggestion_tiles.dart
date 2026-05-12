@@ -211,8 +211,8 @@ class _TaskConstellationEdgeInspector extends StatelessWidget {
     if (edge.sourceKind.isNotEmpty) {
       rows.add(_TaskMetadataRow(label: 'Source kind', value: edge.sourceKind));
     }
-    if (edge.scope.isNotEmpty) {
-      rows.add(_TaskMetadataRow(label: 'Scope', value: edge.scope));
+    if (edge.firewall.isNotEmpty) {
+      rows.add(_TaskMetadataRow(label: 'Firewall', value: edge.firewall));
     }
     if (edge.sensitivity.isNotEmpty) {
       rows.add(_TaskMetadataRow(label: 'Sensitivity', value: edge.sensitivity));

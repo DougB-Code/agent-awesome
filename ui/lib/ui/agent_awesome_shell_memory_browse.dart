@@ -74,7 +74,11 @@ class _MemoryReviewContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final records = controller.filteredMemoryRecords.where((record) {
       return _memoryReviewReasons(record).isNotEmpty &&
-          _matchesMemoryRecord(record, query);
+          _matchesMemoryRecord(
+            record,
+            query,
+            extra: _memoryFirewallSearchText(controller, record.firewall),
+          );
     }).toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
@@ -96,6 +100,11 @@ class _MemoryReviewContent extends StatelessWidget {
                       _MemoryRecordTile(
                         record: record,
                         selected: controller.selectedMemory?.id == record.id,
+                        firewallLabel: controller.memoryFirewallLabel(
+                          record.firewall,
+                        ),
+                        firewallAudience: controller
+                            .memoryFirewallAudienceLabel(record.firewall),
                         onTap: () =>
                             unawaited(controller.selectMemory(record.id)),
                       ),
@@ -197,7 +206,11 @@ class _MemoryMapContent extends StatelessWidget {
               record.relationships.any((rel) => rel.toId == memory.id);
         })
         .where((record) {
-          return _matchesMemoryRecord(record, query);
+          return _matchesMemoryRecord(
+            record,
+            query,
+            extra: _memoryFirewallSearchText(controller, record.firewall),
+          );
         })
         .toList();
     return SingleChildScrollView(
@@ -224,7 +237,16 @@ class _MemoryMapContent extends StatelessWidget {
                   runSpacing: 8,
                   children: <Widget>[
                     _MemoryBadge(label: memory.sourceLabel),
-                    _MemoryBadge(label: memory.scope),
+                    _MemoryBadge(
+                      label: controller.memoryFirewallLabel(memory.firewall),
+                    ),
+                    if (controller
+                        .memoryFirewallAudienceLabel(memory.firewall)
+                        .isNotEmpty)
+                      _MemoryBadge(
+                        label:
+                            'Shared with ${controller.memoryFirewallAudienceLabel(memory.firewall)}',
+                      ),
                     _MemoryBadge(label: _memoryLabel(memory.kind)),
                     for (final topic in memory.topics)
                       _MemoryBadge(label: topic),
@@ -272,6 +294,11 @@ class _MemoryMapContent extends StatelessWidget {
                       child: _MemoryRecordTile(
                         record: record,
                         selected: false,
+                        firewallLabel: controller.memoryFirewallLabel(
+                          record.firewall,
+                        ),
+                        firewallAudience: controller
+                            .memoryFirewallAudienceLabel(record.firewall),
                         onTap: () =>
                             unawaited(controller.selectMemory(record.id)),
                       ),

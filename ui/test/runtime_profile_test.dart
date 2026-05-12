@@ -55,6 +55,8 @@ void main() {
         '${agentAwesomeDataDirectoryPath()}/memory/memory.db',
         '--data',
         '${agentAwesomeDataDirectoryPath()}/memory/files',
+        '--firewall-policy',
+        memoryFirewallPolicyPath(),
       ]),
     );
   });

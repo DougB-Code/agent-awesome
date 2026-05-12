@@ -7,7 +7,7 @@ const ExecutiveSummarySchemaVersion = "agent-awesome/executive-summary/v1"
 
 // ExecutiveSummaryQuery asks the memory service for a read-only Today projection.
 type ExecutiveSummaryQuery struct {
-	Scope           Scope      `json:"scope,omitempty"`
+	Firewall        Firewall   `json:"firewall,omitempty"`
 	Horizon         string     `json:"horizon,omitempty"`
 	Now             *time.Time `json:"now,omitempty"`
 	MaxItems        int        `json:"max_items,omitempty"`
@@ -20,7 +20,7 @@ type ExecutiveSummaryQuery struct {
 type ExecutiveSummaryProjection struct {
 	SchemaVersion    string                   `json:"schema_version"`
 	GeneratedAt      time.Time                `json:"generated_at"`
-	Scope            ProjectionScope          `json:"scope"`
+	Firewall         ProjectionFirewall       `json:"firewall"`
 	Horizon          string                   `json:"horizon"`
 	Title            string                   `json:"title"`
 	Subtitle         string                   `json:"subtitle"`
@@ -37,8 +37,8 @@ type ExecutiveSummaryProjection struct {
 	Links            []ProjectionLink         `json:"links"`
 }
 
-// ProjectionScope describes the ownership boundary summarized by a projection.
-type ProjectionScope struct {
+// ProjectionFirewall describes the memory firewall summarized by a projection.
+type ProjectionFirewall struct {
 	Kind  string `json:"kind"`
 	ID    string `json:"id,omitempty"`
 	Label string `json:"label,omitempty"`

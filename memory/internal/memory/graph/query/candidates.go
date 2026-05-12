@@ -326,8 +326,8 @@ func (c queryCandidate) typedField(field string) any {
 		return c.node.Summary
 	case "lifecycle_status", "node_status":
 		return string(c.node.Status)
-	case "scope":
-		return string(c.node.Scope)
+	case "firewall":
+		return string(c.node.Firewall)
 	case "sensitivity":
 		return string(c.node.Sensitivity)
 	case "trust_level":

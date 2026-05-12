@@ -519,8 +519,10 @@ class AgentAwesomeAppController extends ChangeNotifier {
     localProcessStatuses = const <ServiceProcessStatus>[];
     try {
       appSettings = await appSettingsStore.load();
-      _shellDecisionReady = true;
-      notifyListeners();
+      memoryFilters = _memoryFiltersForConfiguredFirewalls(memoryFilters);
+      if (config.autoStartLocalServices) {
+        await appSettingsStore.saveMemoryFirewallPolicy(appSettings);
+      }
       chatHistory = await chatHistoryStore.load();
       await _log(
         'loaded chat history ${chatHistory.length} from ${chatHistoryPath()}',
@@ -533,6 +535,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
       runtimeProfile = await _migrateDefaultProfileConfigs(runtimeProfile!);
       await _refreshConfigCollections();
       _configureClientsForRuntimeProfile(runtimeProfile!);
+      final restoredLocalModel = await _restoreLocalModelIfAvailable(
+        allowDefaultModel:
+            !appSettings.gettingStartedCompleted || !hasConfiguredModel,
+      );
+      if (restoredLocalModel && !appSettings.gettingStartedCompleted) {
+        appSettings = appSettings.copyWith(gettingStartedCompleted: true);
+        await appSettingsStore.save(appSettings);
+        await _log('completed setup from verified local model');
+      }
       await _log('loaded runtime profile ${runtimeProfile!.id}');
     } catch (error) {
       await _log('runtime profile load failed: $error');
@@ -600,6 +611,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     try {
       await _startConfiguredLocalModelRuntime();
+      await _markSetupIncompleteForUnavailableLocalModel();
     } catch (error) {
       if (_isClosing) {
         statusMessage = 'Agent Awesome runtime is shutting down';
@@ -608,7 +620,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
         return;
       }
       await _log('local model startup failed: $error');
+      await _markSetupIncompleteForUnavailableLocalModel();
     }
+    _shellDecisionReady = true;
     notifyListeners();
     await _loadToolCapabilities();
     await _log('loading sessions, memory, and tasks');
@@ -696,6 +710,103 @@ class AgentAwesomeAppController extends ChangeNotifier {
     await _log('local model status ${status.state.name}: ${status.message}');
   }
 
+  /// Restores local LiteRT config from a verified app-managed model artifact.
+  Future<bool> _restoreLocalModelIfAvailable({
+    required bool allowDefaultModel,
+  }) async {
+    final provider = await _activeLocalProviderConfig();
+    if (provider == null && !allowDefaultModel) {
+      return false;
+    }
+    final modelId = provider?.defaultModel ?? onboardingLocalModels.first.id;
+    final descriptor = onboardingLocalModelDescriptor(modelId);
+    final configuredModelPath = provider == null
+        ? ''
+        : _configuredLocalModelPath(provider);
+    final install = await localModels.recoverInstalled(
+      descriptor,
+      candidatePaths: <String>[
+        if (configuredModelPath.isNotEmpty) configuredModelPath,
+      ],
+    );
+    if (install == null) {
+      await _log('local model restore skipped: ${descriptor.id} not found');
+      return false;
+    }
+    final executable = await _localModelExecutableForConfig();
+    if (executable == null) {
+      return false;
+    }
+    if (configuredModelPath == install.modelPath &&
+        provider?.executable == executable) {
+      return true;
+    }
+    final result = await _saveOnboardingProviderConfig(
+      onboardingLocalProviderConfig(
+        modelId: descriptor.id,
+        executable: executable,
+        modelPath: install.modelPath,
+      ),
+    );
+    if (result.success) {
+      runtimeProfile = await RuntimeProfileLoader(
+        config,
+      ).loadFile(File(runtimeProfilePath));
+      _configureClientsForRuntimeProfile(runtimeProfile!);
+      await _log('local model restored: ${descriptor.id}');
+      return true;
+    } else {
+      await _log('local model restore failed: ${result.message}');
+      return false;
+    }
+  }
+
+  /// Returns the executable path to persist for local model provider config.
+  Future<String?> _localModelExecutableForConfig() async {
+    final configured = config.litertLmExecutable.trim();
+    try {
+      return await LocalModelExecutableResolver(
+        commandRunner: ProcessSupervisorCommandRunner(processSupervisor),
+      ).resolve(
+        configuredExecutable: configured,
+        dataDirectory: agentAwesomeDataDirectoryPath(),
+      );
+    } catch (error) {
+      await _log('local model executable unresolved: $error');
+      return null;
+    }
+  }
+
+  /// Reopens setup when the configured local runtime cannot start.
+  Future<void> _markSetupIncompleteForUnavailableLocalModel() async {
+    if (!appSettings.gettingStartedCompleted) {
+      return;
+    }
+    final provider = await _activeLocalProviderConfig();
+    if (provider == null) {
+      return;
+    }
+    for (final status in localProcessStatuses) {
+      if (status.name == 'Local model' &&
+          status.state == ConnectionStateKind.disconnected) {
+        appSettings = appSettings.copyWith(gettingStartedCompleted: false);
+        await appSettingsStore.save(appSettings);
+        await _log('setup marked incomplete: ${status.message}');
+        return;
+      }
+    }
+  }
+
+  /// Returns the active configured LiteRT artifact path.
+  String _configuredLocalModelPath(ModelProviderConfig provider) {
+    for (final model in provider.models) {
+      if (model.id == provider.defaultModel) {
+        return model.path.trim();
+      }
+    }
+    return '';
+  }
+
   /// Returns the active local provider from the current model config.
   Future<ModelProviderConfig?> _activeLocalProviderConfig() async {
     final profile = runtimeProfile;
@@ -771,6 +882,76 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Returns whether the first-launch setup guide should stay hidden.
   bool get gettingStartedCompleted {
     return appSettings.gettingStartedCompleted;
+  }
+
+  /// Returns configured memory firewall choices.
+  List<MemoryFirewall> get memoryFirewalls {
+    return appSettings.effectiveMemoryFirewalls;
+  }
+
+  /// Returns configured memory firewall ids.
+  List<String> get memoryFirewallIds {
+    return memoryFirewalls.map((firewall) => firewall.id).toList();
+  }
+
+  /// Returns the fallback memory firewall id.
+  String get defaultMemoryFirewallId {
+    final firewalls = memoryFirewalls;
+    for (final firewall in firewalls) {
+      if (firewall.id == 'user') {
+        return firewall.id;
+      }
+    }
+    return firewalls.first.id;
+  }
+
+  /// Returns a readable label for one memory firewall id.
+  String memoryFirewallLabel(String id) {
+    for (final firewall in memoryFirewalls) {
+      if (firewall.id == id) {
+        return firewall.label;
+      }
+    }
+    return id;
+  }
+
+  /// Returns the configured sharing audience for one memory firewall id.
+  List<String> memoryFirewallSharedWith(String id) {
+    for (final firewall in memoryFirewalls) {
+      if (firewall.id == id) {
+        return firewall.sharedWith;
+      }
+    }
+    return const <String>[];
+  }
+
+  /// Returns a readable sharing audience label for one memory firewall id.
+  String memoryFirewallAudienceLabel(String id) {
+    return memoryFirewallSharedWith(id).join(', ');
+  }
+
+  /// Returns a compact dropdown label for one memory firewall id.
+  String memoryFirewallPickerLabel(String id) {
+    final audience = memoryFirewallAudienceLabel(id);
+    final label = memoryFirewallLabel(id);
+    return audience.isEmpty ? label : '$label / $audience';
+  }
+
+  /// Returns memory filters aligned to configured firewall choices.
+  MemoryFilterState _memoryFiltersForConfiguredFirewalls(
+    MemoryFilterState filters,
+  ) {
+    final ids = memoryFirewallIds;
+    final includeGlobal =
+        ids.contains('global') &&
+        filters.firewall != 'global' &&
+        filters.includeGlobal;
+    return ids.contains(filters.firewall)
+        ? filters.copyWith(includeGlobal: includeGlobal)
+        : filters.copyWith(
+            firewall: defaultMemoryFirewallId,
+            includeGlobal: includeGlobal,
+          );
   }
 
   /// Returns whether the active profile has at least one selectable model.
@@ -878,6 +1059,53 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
   }
 
+  /// Saves user-configured memory firewalls.
+  Future<void> setMemoryFirewalls(List<MemoryFirewall> firewalls) async {
+    final normalized = normalizeMemoryFirewalls(firewalls);
+    final selected =
+        normalized.any((firewall) => firewall.id == memoryFilters.firewall)
+        ? memoryFilters.firewall
+        : normalized.first.id;
+    await saveAppSettings(appSettings.copyWith(memoryFirewalls: normalized));
+    await _restartMemoryServicesForFirewallPolicy();
+    var reloaded = false;
+    if (selected != memoryFilters.firewall) {
+      await applyMemoryFilters(
+        memoryFilters.copyWith(
+          firewall: selected,
+          includeGlobal: selected == 'global'
+              ? false
+              : memoryFilters.includeGlobal,
+        ),
+      );
+      reloaded = true;
+    } else if (!normalized.any((firewall) => firewall.id == 'global') &&
+        memoryFilters.includeGlobal) {
+      await applyMemoryFilters(memoryFilters.copyWith(includeGlobal: false));
+      reloaded = true;
+    }
+    if (!reloaded) {
+      await _loadMemory();
+    }
+  }
+
+  /// Restarts managed memory services after the firewall policy file changes.
+  Future<void> _restartMemoryServicesForFirewallPolicy() async {
+    final profile = runtimeProfile;
+    if (profile == null || !config.autoStartLocalServices || _isClosing) {
+      return;
+    }
+    statusMessage = 'Memory firewall policy saved; restarting memory service';
+    notifyListeners();
+    localProcessStatuses = await localServices.restartMemoryServices(profile);
+    for (final status in localProcessStatuses) {
+      await _log(
+        'memory service restart ${status.name} ${status.state.name}: ${status.message}',
+      );
+    }
+    notifyListeners();
+  }
+
   /// Reads local system capability facts through supervised probes.
   Future<SystemCapabilitySnapshot> readSystemCapabilities() {
     return SystemCapabilityReader(
@@ -967,14 +1195,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
     late final String executable;
     try {
       _throwIfClosing();
-      install = await localModels.ensureInstalled(
-        descriptor,
-        onProgress: onProgress,
-      );
+      install =
+          await localModels.recoverInstalled(
+            descriptor,
+            onProgress: onProgress,
+          ) ??
+          await localModels.ensureInstalled(descriptor, onProgress: onProgress);
       _throwIfClosing();
-      executable = await const LocalModelExecutableResolver().resolve(
-        configuredExecutable: config.litertLmExecutable,
-        dataDirectory: agentAwesomeDataDirectoryPath(),
+      executable = await localModels.ensureRuntimeInstalled(
+        onProgress: onProgress,
       );
     } catch (error) {
       return OnboardingModelSetupResult(

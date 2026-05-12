@@ -201,6 +201,7 @@ class RuntimeProfileLoader {
       'MEMORY_MCP_ADDR': memoryMcp.authority,
       'MEMORY_DB_PATH': defaultMemoryDatabasePath(),
       'MEMORY_DATA_DIR': defaultMemoryDataDirectoryPath(),
+      'MEMORY_FIREWALL_POLICY_PATH': memoryFirewallPolicyPath(),
       'MEMORY_HEALTH_URL': _healthUrl(config.memoryMcpUrl),
       'AUTO_START_LOCAL_SERVICES': config.autoStartLocalServices.toString(),
     };
@@ -325,6 +326,11 @@ String defaultMemoryDatabasePath() {
 /// Returns the default sidecar data directory for local memory.
 String defaultMemoryDataDirectoryPath() {
   return '${agentAwesomeDataDirectoryPath()}/memory/files';
+}
+
+/// Returns the app-owned memory firewall policy path consumed by memoryd.
+String memoryFirewallPolicyPath() {
+  return '${agentAwesomeAppConfigDirectoryPath()}/memory_firewall_policy.json';
 }
 
 /// Returns the health-check URL for a base service endpoint.

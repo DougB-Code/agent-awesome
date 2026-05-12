@@ -57,7 +57,11 @@ class _MemoryMetadataContentState extends State<_MemoryMetadataContent> {
     if (memory == null) {
       return const _MemorySelectionEmpty();
     }
-    if (!_matchesMemoryRecord(memory, widget.query)) {
+    if (!_matchesMemoryRecord(
+      memory,
+      widget.query,
+      extra: _memoryFirewallSearchText(widget.controller, memory.firewall),
+    )) {
       return PanelEmptyState(query: widget.query);
     }
     return SingleChildScrollView(

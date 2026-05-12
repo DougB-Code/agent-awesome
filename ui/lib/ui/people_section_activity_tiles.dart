@@ -56,7 +56,9 @@ class _ContactTaskTile extends StatelessWidget {
                   runSpacing: 8,
                   children: <Widget>[
                     PanelBadge(label: _contactLabel(task.status)),
-                    PanelBadge(label: _contactLabel(_taskContextScope(task))),
+                    PanelBadge(
+                      label: _contactLabel(_taskContextFirewall(task)),
+                    ),
                     PanelBadge(label: _taskContextLabel(task)),
                     if (task.priority.isNotEmpty)
                       PanelBadge(label: _contactLabel(task.priority)),
@@ -129,7 +131,9 @@ class _ContactCommitmentTile extends StatelessWidget {
                     for (final person in commitment.people.take(3))
                       PanelBadge(label: person),
                     PanelBadge(
-                      label: _contactLabel(_commitmentContextScope(commitment)),
+                      label: _contactLabel(
+                        _commitmentContextFirewall(commitment),
+                      ),
                     ),
                     PanelBadge(label: _commitmentContextLabel(commitment)),
                     if (commitment.hardness.isNotEmpty)
@@ -149,10 +153,14 @@ class _ContactCommitmentTile extends StatelessWidget {
 class _ContactMemoryTile extends StatelessWidget {
   /// Creates a contact memory tile.
   const _ContactMemoryTile({
+    required this.controller,
     required this.record,
     required this.selected,
     required this.onTap,
   });
+
+  /// Shared app controller for configured firewall labels.
+  final AgentAwesomeAppController controller;
 
   /// Memory record linked to the contact.
   final MemoryRecord record;
@@ -167,6 +175,9 @@ class _ContactMemoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final firewallAudience = controller.memoryFirewallAudienceLabel(
+      record.firewall,
+    );
     return InkWell(
       borderRadius: BorderRadius.circular(8),
       onTap: onTap,
@@ -203,8 +214,10 @@ class _ContactMemoryTile extends StatelessWidget {
               children: <Widget>[
                 PanelBadge(label: _contactLabel(record.kind)),
                 PanelBadge(
-                  label: _contactLabel(_normalizedScope(record.scope)),
+                  label: controller.memoryFirewallLabel(record.firewall),
                 ),
+                if (firewallAudience.isNotEmpty)
+                  PanelBadge(label: 'Shared with $firewallAudience'),
                 PanelBadge(label: _memoryContextLabel(record)),
                 PanelBadge(label: record.sensitivity),
                 if (record.sourceLabel.isNotEmpty)
@@ -221,7 +234,13 @@ class _ContactMemoryTile extends StatelessWidget {
 /// _ContactCompiledPagePreview renders a compiled contact page.
 class _ContactCompiledPagePreview extends StatelessWidget {
   /// Creates a compiled page preview.
-  const _ContactCompiledPagePreview({required this.page});
+  const _ContactCompiledPagePreview({
+    required this.controller,
+    required this.page,
+  });
+
+  /// Shared app controller for configured firewall labels.
+  final AgentAwesomeAppController controller;
 
   /// Compiled memory page to preview.
   final CompiledMemoryPage page;
@@ -229,6 +248,9 @@ class _ContactCompiledPagePreview extends StatelessWidget {
   /// Builds a source-backed compiled page preview.
   @override
   Widget build(BuildContext context) {
+    final firewallAudience = controller.memoryFirewallAudienceLabel(
+      page.firewall,
+    );
     return PanelSectionBlock(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,7 +265,9 @@ class _ContactCompiledPagePreview extends StatelessWidget {
             runSpacing: 8,
             children: <Widget>[
               PanelBadge(label: _contactLabel(page.kind)),
-              PanelBadge(label: page.scope),
+              PanelBadge(label: controller.memoryFirewallLabel(page.firewall)),
+              if (firewallAudience.isNotEmpty)
+                PanelBadge(label: 'Shared with $firewallAudience'),
               PanelBadge(label: '${page.sourceIds.length} sources'),
             ],
           ),

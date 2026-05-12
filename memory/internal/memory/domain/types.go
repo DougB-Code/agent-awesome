@@ -46,22 +46,22 @@ const (
 	KindProfileFact Kind = "profile_fact"
 )
 
-// Scope classifies the ownership and visibility boundary for memory.
-type Scope = vocabulary.Scope
+// Firewall classifies the memory firewall boundary for records.
+type Firewall = vocabulary.Firewall
 
 const (
-	// ScopeSession limits memory to one session.
-	ScopeSession = vocabulary.ScopeSession
-	// ScopeUser limits memory to one user.
-	ScopeUser = vocabulary.ScopeUser
-	// ScopeHousehold shares memory across a household.
-	ScopeHousehold = vocabulary.ScopeHousehold
-	// ScopeTenant limits memory to an organization tenant.
-	ScopeTenant = vocabulary.ScopeTenant
-	// ScopeProject limits memory to a project.
-	ScopeProject = vocabulary.ScopeProject
-	// ScopeGlobal exposes memory globally within the service policy.
-	ScopeGlobal = vocabulary.ScopeGlobal
+	// FirewallSession limits memory to one session.
+	FirewallSession = vocabulary.FirewallSession
+	// FirewallUser limits memory to one user.
+	FirewallUser = vocabulary.FirewallUser
+	// FirewallHousehold shares memory across a household.
+	FirewallHousehold = vocabulary.FirewallHousehold
+	// FirewallTenant limits memory to an organization tenant.
+	FirewallTenant = vocabulary.FirewallTenant
+	// FirewallProject limits memory to a project.
+	FirewallProject = vocabulary.FirewallProject
+	// FirewallGlobal exposes memory globally within the service policy.
+	FirewallGlobal = vocabulary.FirewallGlobal
 )
 
 // TrustLevel describes where a fact or artifact came from.
@@ -187,7 +187,7 @@ type MemoryRecord struct {
 	ID            MemoryID       `json:"id"`
 	EvidenceID    EvidenceID     `json:"evidence_id"`
 	Kind          Kind           `json:"kind"`
-	Scope         Scope          `json:"scope"`
+	Firewall      Firewall       `json:"firewall"`
 	TrustLevel    TrustLevel     `json:"trust_level"`
 	Sensitivity   Sensitivity    `json:"sensitivity"`
 	Status        Status         `json:"status"`
@@ -230,7 +230,7 @@ type Relationship struct {
 type CompiledPage struct {
 	ID          PageID       `json:"id"`
 	Kind        Kind         `json:"kind"`
-	Scope       Scope        `json:"scope"`
+	Firewall    Firewall     `json:"firewall"`
 	Title       string       `json:"title"`
 	Path        string       `json:"path"`
 	Status      Status       `json:"status"`
@@ -280,7 +280,7 @@ type CaptureRequest struct {
 	Title          string      `json:"title"`
 	Source         SourceRef   `json:"source"`
 	Kind           Kind        `json:"kind"`
-	Scope          Scope       `json:"scope"`
+	Firewall       Firewall    `json:"firewall"`
 	TrustLevel     TrustLevel  `json:"trust_level"`
 	Sensitivity    Sensitivity `json:"sensitivity"`
 	Subjects       []string    `json:"subjects"`
@@ -301,7 +301,8 @@ type CaptureResult struct {
 // RetrievalQuery asks the service to search memory.
 type RetrievalQuery struct {
 	Actor                string        `json:"actor"`
-	Scope                Scope         `json:"scope"`
+	Firewall             Firewall      `json:"firewall"`
+	IncludeGlobal        bool          `json:"include_global,omitempty"`
 	Text                 string        `json:"text"`
 	Kinds                []Kind        `json:"kinds"`
 	Topics               []string      `json:"topics"`
@@ -340,7 +341,7 @@ type RepairRequest struct {
 type CorrectionRequest struct {
 	Actor    string   `json:"actor"`
 	MemoryID MemoryID `json:"memory_id"`
-	Scope    Scope    `json:"scope"`
+	Firewall Firewall `json:"firewall"`
 	Text     string   `json:"text"`
 }
 
@@ -348,7 +349,7 @@ type CorrectionRequest struct {
 type RefreshPageRequest struct {
 	Actor    string   `json:"actor"`
 	Kind     Kind     `json:"kind"`
-	Scope    Scope    `json:"scope"`
+	Firewall Firewall `json:"firewall"`
 	Title    string   `json:"title"`
 	EntityID EntityID `json:"entity_id,omitempty"`
 	Topic    string   `json:"topic,omitempty"`

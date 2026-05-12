@@ -16,6 +16,7 @@ class ExecutiveSummaryClient {
 
   /// Loads the canonical executive summary projection.
   Future<ExecutiveSummaryProjection> projectExecutiveSummary({
+    String firewall = 'user',
     String horizon = 'today',
     DateTime? now,
     int maxItems = 12,
@@ -23,6 +24,7 @@ class ExecutiveSummaryClient {
   }) async {
     final content = await _rpc
         .callTool('project_executive_summary', <String, dynamic>{
+          'firewall': firewall,
           'horizon': horizon,
           if (now != null) 'now': now.toUtc().toIso8601String(),
           'max_items': maxItems,

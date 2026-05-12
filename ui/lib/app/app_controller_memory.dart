@@ -55,7 +55,7 @@ extension AgentAwesomeAppControllerMemory on AgentAwesomeAppController {
     _notifyControllerListeners();
     try {
       final records = await memoryClient.searchSources(
-        scope: memory.scope,
+        firewall: memory.firewall,
         text: memory.title,
         kinds: memoryFilters.kinds,
         allowedSensitivities: _sensitivitiesIncluding(memory.sensitivity),
@@ -211,7 +211,7 @@ extension AgentAwesomeAppControllerMemory on AgentAwesomeAppController {
     }
     try {
       final records = await memoryClient.searchSources(
-        scope: file.scope,
+        firewall: file.firewall,
         text: file.title,
         kinds: <String>[file.kind],
         allowedSensitivities: _sensitivitiesIncluding(file.sensitivity),
@@ -304,7 +304,7 @@ $content
       await memoryClient.submitMemoryCorrection(
         memoryId: memory.id,
         text: text,
-        scope: memory.scope,
+        firewall: memory.firewall,
       );
       memoryMessage = 'Correction saved as new memory';
       _setEndpoint(
@@ -338,7 +338,7 @@ $content
     _notifyControllerListeners();
     try {
       selectedMemoryPage = await memoryClient.loadEntityPage(
-        scope: memory.scope,
+        firewall: memory.firewall,
         entityId: memory.entityIds.isEmpty ? '' : memory.entityIds.first,
         title: memory.entityNames.isEmpty
             ? memory.title
@@ -374,7 +374,7 @@ $content
     _notifyControllerListeners();
     try {
       selectedMemoryPage = await memoryClient.loadTimeline(
-        scope: memory.scope,
+        firewall: memory.firewall,
         topic: topic.trim(),
         entityId: memory.entityIds.isEmpty ? '' : memory.entityIds.first,
       );
@@ -409,7 +409,7 @@ $content
     try {
       selectedMemoryPage = await memoryClient.refreshCompiledPage(
         kind: page.kind,
-        scope: page.scope,
+        firewall: page.firewall,
         title: page.title,
         topic: page.kind == 'timeline' ? page.title : '',
       );
@@ -446,7 +446,8 @@ $content
         try {
           records.addAll(
             await client.searchMemory(
-              scope: memoryFilters.scope,
+              firewall: memoryFilters.firewall,
+              includeGlobal: memoryFilters.includeGlobal,
               text: memoryFilters.text,
               kinds: memoryFilters.kinds,
               topics: memoryFilters.topics,

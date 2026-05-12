@@ -984,7 +984,7 @@ void main() {
           title: 'Fishing trip plan',
           summary: 'Sam is bringing the canoe.',
           kind: 'profile_fact',
-          scope: 'user',
+          firewall: 'user',
           subjects: <String>['people', 'Fishing trip'],
           topics: <String>['fishing'],
           sourceLabel: 'chat:2',

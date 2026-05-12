@@ -22,7 +22,7 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
   final TextEditingController _topics = TextEditingController();
   final TextEditingController _entities = TextEditingController();
   String _kind = 'document';
-  String _scope = 'user';
+  String _firewall = 'user';
   String _trust = 'source_original';
   String _sensitivity = 'private';
 
@@ -30,6 +30,7 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
   @override
   void initState() {
     super.initState();
+    _firewall = widget.controller.defaultMemoryFirewallId;
     _title.addListener(_refreshDuplicateHints);
     _content.addListener(_refreshDuplicateHints);
   }
@@ -55,7 +56,15 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
     final duplicates = widget.controller.filteredMemoryRecords
         .where((record) {
           final probe = '${_title.text} ${_content.text} ${widget.query}';
-          return probe.trim().isNotEmpty && _matchesMemoryRecord(record, probe);
+          return probe.trim().isNotEmpty &&
+              _matchesMemoryRecord(
+                record,
+                probe,
+                extra: _memoryFirewallSearchText(
+                  widget.controller,
+                  record.firewall,
+                ),
+              );
         })
         .take(4)
         .toList();
@@ -106,10 +115,12 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: _MemoryDropdown(
-                        value: _scope,
-                        values: _memoryScopes,
-                        tooltip: 'Scope',
-                        onChanged: (value) => setState(() => _scope = value),
+                        value: _firewall,
+                        values: widget.controller.memoryFirewallIds,
+                        tooltip: 'Firewall',
+                        labelForValue:
+                            widget.controller.memoryFirewallPickerLabel,
+                        onChanged: (value) => setState(() => _firewall = value),
                       ),
                     ),
                   ],
@@ -165,6 +176,11 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                       child: _MemoryRecordTile(
                         record: record,
                         selected: false,
+                        firewallLabel: widget.controller.memoryFirewallLabel(
+                          record.firewall,
+                        ),
+                        firewallAudience: widget.controller
+                            .memoryFirewallAudienceLabel(record.firewall),
                         onTap: () => unawaited(
                           widget.controller.selectMemory(record.id),
                         ),
@@ -190,7 +206,11 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
       content: _content.text.trim(),
       title: _title.text.trim(),
       kind: _kind,
-      scope: _scope,
+      firewall: _coerceDropdownValue(
+        widget.controller.memoryFirewallIds,
+        _firewall,
+        widget.controller.defaultMemoryFirewallId,
+      ),
       trustLevel: _trust,
       sensitivity: _sensitivity,
       sourceSystem: _sourceSystem.text.trim(),

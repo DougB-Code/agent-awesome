@@ -12,7 +12,9 @@
     "--db",
     "${MEMORY_DB_PATH}",
     "--data",
-    "${MEMORY_DATA_DIR}"
+    "${MEMORY_DATA_DIR}",
+    "--firewall-policy",
+    "${MEMORY_FIREWALL_POLICY_PATH}"
   ],
   "auto_start": ${AUTO_START_LOCAL_SERVICES},
   "enabled": true

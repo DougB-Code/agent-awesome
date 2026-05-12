@@ -134,13 +134,13 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		if err := decodeArgs(args, &req); err != nil {
 			return nil, err
 		}
-		return s.service.LoadEntityPage(ctx, req.Scope, req.EntityID, req.Title)
+		return s.service.LoadEntityPageForActor(ctx, req.Actor, req.Firewall, req.EntityID, req.Title)
 	case "load_timeline":
 		var req loadTimelineArgs
 		if err := decodeArgs(args, &req); err != nil {
 			return nil, err
 		}
-		return s.service.LoadTimeline(ctx, req.Scope, req.Topic, req.EntityID)
+		return s.service.LoadTimelineForActor(ctx, req.Actor, req.Firewall, req.Topic, req.EntityID)
 	case "refresh_compiled_page":
 		var req domain.RefreshPageRequest
 		if err := decodeArgs(args, &req); err != nil {
@@ -288,7 +288,7 @@ func toolDefinitions() []map[string]any {
 			"media_type":      stringSchema("Media type for the source content."),
 			"source":          objectSchema(map[string]any{"system": stringSchema("Source system."), "id": stringSchema("Source record id.")}, []string{}),
 			"kind":            enumSchema("Memory kind.", domain.KindStrings()),
-			"scope":           enumSchema("Ownership scope.", domain.ScopeStrings()),
+			"firewall":        stringSchema("Memory firewall id."),
 			"trust_level":     enumSchema("Trust level.", domain.TrustLevelStrings()),
 			"sensitivity":     enumSchema("Sensitivity level.", domain.SensitivityStrings()),
 			"subjects":        arraySchema("Primary subjects.", stringSchema("Subject.")),
@@ -300,19 +300,21 @@ func toolDefinitions() []map[string]any {
 		tool("search_memory", "Search memory metadata and compiled retrieval context.", retrievalSchema(), []string{}),
 		tool("search_sources", "Search and return matching source content text.", retrievalSchema(), []string{}),
 		tool("load_entity_page", "Load or build a compiled entity page.", map[string]any{
-			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
+			"actor":     stringSchema("Calling agent or user."),
+			"firewall":  stringSchema("Memory firewall id."),
 			"entity_id": stringSchema("Canonical entity id."),
 			"title":     stringSchema("Entity page title."),
 		}, []string{}),
 		tool("load_timeline", "Load or build a source-backed timeline.", map[string]any{
-			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
+			"actor":     stringSchema("Calling agent or user."),
+			"firewall":  stringSchema("Memory firewall id."),
 			"topic":     stringSchema("Timeline topic."),
 			"entity_id": stringSchema("Optional entity id."),
 		}, []string{}),
 		tool("refresh_compiled_page", "Rebuild an entity page or timeline from source-backed memory records.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
 			"kind":      enumSchema("Compiled page kind.", domain.CompiledPageKindStrings()),
-			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
+			"firewall":  stringSchema("Memory firewall id."),
 			"title":     stringSchema("Page title."),
 			"entity_id": stringSchema("Optional entity id."),
 			"topic":     stringSchema("Optional topic."),
@@ -332,7 +334,7 @@ func toolDefinitions() []map[string]any {
 		tool("submit_memory_correction", "Store a user correction as first-class source content.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
 			"memory_id": stringSchema("Memory record id being corrected."),
-			"scope":     enumSchema("Ownership scope.", domain.ScopeStrings()),
+			"firewall":  stringSchema("Memory firewall id."),
 			"text":      stringSchema("Correction text."),
 		}, []string{"memory_id", "text"}),
 		tool("query_context_graph", "Execute a read-only SQL-like graph query.", graphQuerySchema("Read-only graph query, such as FIND task WHERE status != \"done\" AND risk_score >= 6 RETURN id, title LIMIT 10, FIND task GROUP BY status RETURN status, count ORDER BY count DESC LIMIT 10, MATCH task -[depends_on]-> task RETURN from.title, edge.type, to.title LIMIT 10, or MATCH task -[depends_on*1..3]-> task WHERE path.depth >= 2 RETURN from.title, path.depth, to.title LIMIT 10."), []string{"query"}),
@@ -361,7 +363,8 @@ func graphQuerySchema(queryDescription string) map[string]any {
 		"actor":                 stringSchema("Calling agent or user."),
 		"source_node_id":        stringSchema("Source graph node id required for mutations."),
 		"query":                 stringSchema(queryDescription),
-		"scope":                 enumSchema("Ownership scope.", domain.ScopeStrings()),
+		"firewall":              stringSchema("Memory firewall id."),
+		"include_global":        boolSchema("When true, also include globally shared records. Default false."),
 		"allowed_sensitivities": arraySchema("Allowed sensitivity levels; restricted must be requested explicitly.", enumSchema("Sensitivity.", domain.SensitivityStrings())),
 	}
 }
@@ -373,7 +376,7 @@ func rememberSchema() map[string]any {
 		"title":           stringSchema("Optional short display title."),
 		"topics":          arraySchema("Optional connective topic tags.", stringSchema("Topic.")),
 		"entities":        arraySchema("Optional people, projects, places, or things this memory mentions.", stringSchema("Entity name.")),
-		"scope":           enumSchema("Optional ownership scope; default is user.", domain.ScopeStrings()),
+		"firewall":        stringSchema("Optional memory firewall id; default is user."),
 		"sensitivity":     enumSchema("Optional sensitivity; default is private.", domain.SensitivityStrings()),
 		"idempotency_key": stringSchema("Optional stable key to avoid duplicate nuggets."),
 		"actor":           stringSchema("Optional calling agent or user."),
@@ -479,7 +482,7 @@ func taskGraphProjectionSchema() map[string]any {
 // executiveSummarySchema returns project_executive_summary input properties.
 func executiveSummarySchema() map[string]any {
 	return map[string]any{
-		"scope":            enumSchema("Ownership scope.", domain.ScopeStrings()),
+		"firewall":         stringSchema("Memory firewall id."),
 		"horizon":          enumSchema("Projection horizon.", domain.ExecutiveSummaryHorizonStrings()),
 		"now":              stringSchema("Optional RFC3339 clock override."),
 		"max_items":        map[string]any{"type": "integer", "description": "Maximum visible items across primary sections."},
@@ -557,7 +560,8 @@ func memoryLinkSchema() map[string]any {
 func retrievalSchema() map[string]any {
 	return map[string]any{
 		"actor":                 stringSchema("Calling agent or user."),
-		"scope":                 enumSchema("Ownership scope.", domain.ScopeStrings()),
+		"firewall":              stringSchema("Memory firewall id."),
+		"include_global":        boolSchema("When true, also include globally shared records. Default false."),
 		"text":                  stringSchema("Search text."),
 		"kinds":                 arraySchema("Kinds to include.", enumSchema("Memory kind.", domain.KindStrings())),
 		"topics":                arraySchema("Topics to include.", stringSchema("Topic.")),
@@ -593,6 +597,11 @@ func objectSchema(properties map[string]any, required []string) map[string]any {
 // stringSchema creates a JSON string schema.
 func stringSchema(description string) map[string]any {
 	return map[string]any{"type": "string", "description": description}
+}
+
+// boolSchema creates a JSON boolean schema.
+func boolSchema(description string) map[string]any {
+	return map[string]any{"type": "boolean", "description": description}
 }
 
 // enumSchema creates a JSON string enum schema.
@@ -679,14 +688,16 @@ type toolCallParams struct {
 
 // loadEntityPageArgs contains load_entity_page arguments.
 type loadEntityPageArgs struct {
-	Scope    domain.Scope    `json:"scope"`
+	Actor    string          `json:"actor"`
+	Firewall domain.Firewall `json:"firewall"`
 	EntityID domain.EntityID `json:"entity_id"`
 	Title    string          `json:"title"`
 }
 
 // loadTimelineArgs contains load_timeline arguments.
 type loadTimelineArgs struct {
-	Scope    domain.Scope    `json:"scope"`
+	Actor    string          `json:"actor"`
+	Firewall domain.Firewall `json:"firewall"`
 	Topic    string          `json:"topic"`
 	EntityID domain.EntityID `json:"entity_id"`
 }

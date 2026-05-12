@@ -32,7 +32,11 @@ class _MemoryCorrectionsContentState extends State<_MemoryCorrectionsContent> {
     if (memory == null) {
       return const _MemorySelectionEmpty();
     }
-    if (!_matchesMemoryRecord(memory, widget.query)) {
+    if (!_matchesMemoryRecord(
+      memory,
+      widget.query,
+      extra: _memoryFirewallSearchText(widget.controller, memory.firewall),
+    )) {
       return PanelEmptyState(query: widget.query);
     }
     final corrections = widget.controller.workspace.memoryRecords.where((
@@ -85,6 +89,11 @@ class _MemoryCorrectionsContentState extends State<_MemoryCorrectionsContent> {
                       child: _MemoryRecordTile(
                         record: correction,
                         selected: false,
+                        firewallLabel: widget.controller.memoryFirewallLabel(
+                          correction.firewall,
+                        ),
+                        firewallAudience: widget.controller
+                            .memoryFirewallAudienceLabel(correction.firewall),
                         onTap: () => unawaited(
                           widget.controller.selectMemory(correction.id),
                         ),

@@ -11,7 +11,11 @@ class _MemorySearchContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final records = controller.filteredMemoryRecords.where((record) {
-      return _matchesMemoryRecord(record, query);
+      return _matchesMemoryRecord(
+        record,
+        query,
+        extra: _memoryFirewallSearchText(controller, record.firewall),
+      );
     }).toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
@@ -32,6 +36,12 @@ class _MemorySearchContent extends StatelessWidget {
                 child: _MemoryRecordTile(
                   record: record,
                   selected: controller.selectedMemory?.id == record.id,
+                  firewallLabel: controller.memoryFirewallLabel(
+                    record.firewall,
+                  ),
+                  firewallAudience: controller.memoryFirewallAudienceLabel(
+                    record.firewall,
+                  ),
                   onTap: () => unawaited(controller.selectMemory(record.id)),
                 ),
               ),
@@ -47,7 +57,7 @@ class _MemoryFilterBar extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
-  /// Builds scope, sensitivity, and service-search controls.
+  /// Builds firewall, sensitivity, and service-search controls.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
@@ -66,13 +76,19 @@ class _MemoryFilterBar extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: _MemoryDropdown(
-                  value: filters.scope,
-                  values: _memoryScopes,
-                  tooltip: 'Scope',
+                  value: filters.firewall,
+                  values: controller.memoryFirewallIds,
+                  tooltip: 'Firewall',
+                  labelForValue: controller.memoryFirewallPickerLabel,
                   onChanged: (value) {
                     unawaited(
                       controller.applyMemoryFilters(
-                        filters.copyWith(scope: value),
+                        filters.copyWith(
+                          firewall: value,
+                          includeGlobal: value == 'global'
+                              ? false
+                              : filters.includeGlobal,
+                        ),
                       ),
                     );
                   },
@@ -108,6 +124,34 @@ class _MemoryFilterBar extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
+              if (controller.memoryFirewallIds.contains('global') &&
+                  filters.firewall != 'global')
+                FilterChip(
+                  label: Text(
+                    'Include ${controller.memoryFirewallLabel('global')}',
+                  ),
+                  selected: filters.includeGlobal,
+                  showCheckmark: true,
+                  backgroundColor: colors.surface,
+                  selectedColor: colors.panelStrong,
+                  checkmarkColor: colors.green,
+                  side: BorderSide(
+                    color: filters.includeGlobal
+                        ? colors.borderStrong
+                        : colors.border,
+                  ),
+                  labelStyle: TextStyle(
+                    color: filters.includeGlobal ? colors.ink : colors.muted,
+                    fontWeight: FontWeight.w800,
+                  ),
+                  onSelected: (value) {
+                    unawaited(
+                      controller.applyMemoryFilters(
+                        filters.copyWith(includeGlobal: value),
+                      ),
+                    );
+                  },
+                ),
               for (final sensitivity in _memorySensitivities)
                 Builder(
                   builder: (context) {
@@ -300,11 +344,15 @@ class _MemoryRecordTile extends StatelessWidget {
   const _MemoryRecordTile({
     required this.record,
     required this.selected,
+    required this.firewallLabel,
+    required this.firewallAudience,
     required this.onTap,
   });
 
   final MemoryRecord record;
   final bool selected;
+  final String firewallLabel;
+  final String firewallAudience;
   final VoidCallback onTap;
 
   /// Builds one selectable memory search result.
@@ -368,7 +416,11 @@ class _MemoryRecordTile extends StatelessWidget {
                                   spacing: 6,
                                   runSpacing: 6,
                                   children: <Widget>[
-                                    _MemoryBadge(label: record.scope),
+                                    _MemoryBadge(label: firewallLabel),
+                                    if (firewallAudience.isNotEmpty)
+                                      _MemoryBadge(
+                                        label: 'Shared with $firewallAudience',
+                                      ),
                                     _MemoryBadge(label: record.sensitivity),
                                     _MemoryBadge(
                                       label: _memoryLabel(record.trustLevel),

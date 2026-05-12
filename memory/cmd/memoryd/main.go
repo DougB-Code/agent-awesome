@@ -63,7 +63,18 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("open graph memory store")
 	}
-	memoryService := service.New(service.RepositoriesFrom(repo), nil, service.Config{WorkerCount: cfg.WorkerCount})
+	firewallPolicy, err := service.LoadFirewallPolicyFile(cfg.FirewallPolicy)
+	if err != nil {
+		log.Fatal().Err(err).Msg("load firewall policy")
+	}
+	if firewallPolicy != nil {
+		log.Info().Str("path", cfg.FirewallPolicy).Msg("memory firewall policy loaded")
+	}
+	memoryService := service.New(
+		service.RepositoriesFrom(repo),
+		nil,
+		service.Config{WorkerCount: cfg.WorkerCount, FirewallPolicy: firewallPolicy},
+	)
 	memoryService.Start(ctx)
 	defer func() {
 		closeCtx, cancelClose := context.WithTimeout(context.Background(), 5*time.Second)

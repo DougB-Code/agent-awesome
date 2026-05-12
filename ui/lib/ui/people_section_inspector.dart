@@ -36,7 +36,10 @@ class _ContactInspectorContent extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
       child: switch (modeId) {
-        _contactContextsModeId => _ContactContextsDetails(contact: selected),
+        _contactContextsModeId => _ContactContextsDetails(
+          controller: controller,
+          contact: selected,
+        ),
         _contactActivityModeId => _ContactActivityDetails(contact: selected),
         _contactSourcesModeId => _ContactSourcesDetails(
           controller: controller,
@@ -138,12 +141,17 @@ class _ContactProfileDetails extends StatelessWidget {
                 value: contact.contexts.length.toString(),
               ),
               _ContactInspectorRow(
-                label: 'Scopes',
-                value: contact.scopeLabels.join(', '),
+                label: 'Firewalls',
+                value: _contactFirewallLabels(controller, contact).join(', '),
               ),
               _ContactInspectorRow(
                 label: 'Primary',
-                value: contact.primaryContext?.displayLabel ?? '',
+                value: contact.primaryContext == null
+                    ? ''
+                    : _contactContextDisplayLabel(
+                        controller,
+                        contact.primaryContext!,
+                      ),
               ),
               _ContactInspectorRow(
                 label: 'Sensitivity',
@@ -160,7 +168,10 @@ class _ContactProfileDetails extends StatelessWidget {
               : Column(
                   children: <Widget>[
                     for (final context in contact.contexts.take(4))
-                      _ContactContextSummaryRow(context: context),
+                      _ContactContextSummaryRow(
+                        controller: controller,
+                        context: context,
+                      ),
                   ],
                 ),
         ),
@@ -186,15 +197,21 @@ class _ContactProfileDetails extends StatelessWidget {
   }
 }
 
-/// _ContactContextsDetails renders scoped context slices for a contact.
+/// _ContactContextsDetails renders firewall context slices for a contact.
 class _ContactContextsDetails extends StatelessWidget {
   /// Creates contact context details.
-  const _ContactContextsDetails({required this.contact});
+  const _ContactContextsDetails({
+    required this.controller,
+    required this.contact,
+  });
+
+  /// Shared app controller for configured firewall labels.
+  final AgentAwesomeAppController controller;
 
   /// Selected contact.
   final _ContactItem contact;
 
-  /// Builds the contact's scope/context groups.
+  /// Builds the contact's firewall/context groups.
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -208,7 +225,10 @@ class _ContactContextsDetails extends StatelessWidget {
           for (final context in contact.contexts)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _ContactContextCard(context: context),
+              child: _ContactContextCard(
+                controller: controller,
+                context: context,
+              ),
             ),
       ],
     );
@@ -218,7 +238,13 @@ class _ContactContextsDetails extends StatelessWidget {
 /// _ContactContextSummaryRow renders a compact context line in Profile.
 class _ContactContextSummaryRow extends StatelessWidget {
   /// Creates a context summary row.
-  const _ContactContextSummaryRow({required this.context});
+  const _ContactContextSummaryRow({
+    required this.controller,
+    required this.context,
+  });
+
+  /// Shared app controller for configured firewall labels.
+  final AgentAwesomeAppController controller;
 
   /// Context slice to summarize.
   final _ContactContext context;
@@ -239,7 +265,7 @@ class _ContactContextSummaryRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  this.context.displayLabel,
+                  _contactContextDisplayLabel(controller, this.context),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -263,10 +289,13 @@ class _ContactContextSummaryRow extends StatelessWidget {
   }
 }
 
-/// _ContactContextCard renders one scoped context slice.
+/// _ContactContextCard renders one firewall context slice.
 class _ContactContextCard extends StatelessWidget {
   /// Creates a context card.
-  const _ContactContextCard({required this.context});
+  const _ContactContextCard({required this.controller, required this.context});
+
+  /// Shared app controller for configured firewall labels.
+  final AgentAwesomeAppController controller;
 
   /// Context slice to render.
   final _ContactContext context;
@@ -275,6 +304,9 @@ class _ContactContextCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final firewallAudience = controller.memoryFirewallAudienceLabel(
+      this.context.firewall,
+    );
     return PanelSectionBlock(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,7 +332,7 @@ class _ContactContextCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _contactLabel(this.context.scope),
+                      controller.memoryFirewallLabel(this.context.firewall),
                       style: TextStyle(color: colors.muted),
                     ),
                   ],
@@ -320,7 +352,11 @@ class _ContactContextCard extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: <Widget>[
-              PanelBadge(label: _contactLabel(this.context.scope)),
+              PanelBadge(
+                label: controller.memoryFirewallLabel(this.context.firewall),
+              ),
+              if (firewallAudience.isNotEmpty)
+                PanelBadge(label: 'Shared with $firewallAudience'),
               PanelBadge(label: this.context.sensitivityLabel),
               PanelBadge(label: '${this.context.sourceCount} sources'),
               if (this.context.openTaskCount > 0)
@@ -412,6 +448,7 @@ class _ContactSourcesDetails extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _ContactMemoryTile(
+                controller: controller,
                 record: record,
                 selected: controller.selectedMemory?.id == record.id,
                 onTap: () => unawaited(controller.selectMemory(record.id)),
@@ -454,7 +491,7 @@ class _ContactPageDetails extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         if (belongs)
-          _ContactCompiledPagePreview(page: page)
+          _ContactCompiledPagePreview(controller: controller, page: page)
         else
           const PanelEmptyBlock(label: 'No compiled contact page loaded'),
       ],

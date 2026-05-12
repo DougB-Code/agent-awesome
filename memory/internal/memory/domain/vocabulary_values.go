@@ -18,9 +18,9 @@ func RelationshipTypeStrings() []string {
 	return vocabulary.StringValues(RelationshipTypes())
 }
 
-// ScopeStrings returns shared ownership scope values.
-func ScopeStrings() []string {
-	return vocabulary.ScopeStrings()
+// FirewallStrings returns default memory firewall ids.
+func FirewallStrings() []string {
+	return vocabulary.FirewallStrings()
 }
 
 // SensitivityStrings returns shared sensitivity values.

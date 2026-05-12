@@ -1,3 +1,4 @@
+// This file tests memory domain request normalization and validation.
 package domain
 
 import "testing"
@@ -11,8 +12,8 @@ func TestNormalizeCaptureRequestDefaults(t *testing.T) {
 	if req.Kind != KindDocument {
 		t.Fatalf("kind = %q, want %q", req.Kind, KindDocument)
 	}
-	if req.Scope != ScopeUser {
-		t.Fatalf("scope = %q, want %q", req.Scope, ScopeUser)
+	if req.Firewall != FirewallUser {
+		t.Fatalf("firewall = %q, want %q", req.Firewall, FirewallUser)
 	}
 	if req.TrustLevel != TrustSourceOriginal {
 		t.Fatalf("trust = %q, want %q", req.TrustLevel, TrustSourceOriginal)
@@ -30,6 +31,16 @@ func TestNormalizeCaptureRequestRejectsInvalidVocabulary(t *testing.T) {
 	_, err := NormalizeCaptureRequest(CaptureRequest{Content: "x", Kind: Kind("unsupported_blob")})
 	if err == nil {
 		t.Fatal("expected invalid kind error")
+	}
+	if _, err := NormalizeCaptureRequest(CaptureRequest{Content: "x", Firewall: Firewall("bad firewall!")}); err == nil {
+		t.Fatal("expected invalid firewall error")
+	}
+	req, err := NormalizeCaptureRequest(CaptureRequest{Content: "x", Firewall: Firewall("acme-client")})
+	if err != nil {
+		t.Fatalf("custom firewall rejected: %v", err)
+	}
+	if req.Firewall != Firewall("acme-client") {
+		t.Fatalf("firewall = %q, want custom firewall", req.Firewall)
 	}
 }
 
@@ -57,8 +68,14 @@ func TestNormalizeRetrievalQueryDefaultsAndRejectsInvalidFilters(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalize query: %v", err)
 	}
-	if query.Actor != "user" || query.Scope != ScopeUser {
-		t.Fatalf("actor/scope = %q/%q, want user/%q", query.Actor, query.Scope, ScopeUser)
+	if query.Actor != "user" || query.Firewall != FirewallUser {
+		t.Fatalf("actor/firewall = %q/%q, want user/%q", query.Actor, query.Firewall, FirewallUser)
+	}
+	if query.Firewall != FirewallUser {
+		t.Fatalf("firewall = %q, want %q", query.Firewall, FirewallUser)
+	}
+	if query.IncludeGlobal {
+		t.Fatal("include_global should default to false")
 	}
 	if len(query.Topics) != 1 || query.Topics[0] != "reporting" {
 		t.Fatalf("topics = %#v, want normalized reporting", query.Topics)
@@ -72,6 +89,13 @@ func TestNormalizeRetrievalQueryDefaultsAndRejectsInvalidFilters(t *testing.T) {
 	if _, err := NormalizeRetrievalQuery(RetrievalQuery{AllowedSensitivities: []Sensitivity{Sensitivity("secret")}}); err == nil {
 		t.Fatal("expected invalid sensitivity error")
 	}
+	query, err = NormalizeRetrievalQuery(RetrievalQuery{Firewall: Firewall("acme-client")})
+	if err != nil {
+		t.Fatalf("retrieval firewall rejected: %v", err)
+	}
+	if query.Firewall != Firewall("acme-client") {
+		t.Fatalf("retrieval firewall = %q, want acme-client", query.Firewall)
+	}
 }
 
 // TestNormalizeGraphQueryRequestDefaultsAndRejectsInvalidPolicy verifies graph reads are policy-bound.
@@ -80,19 +104,32 @@ func TestNormalizeGraphQueryRequestDefaultsAndRejectsInvalidPolicy(t *testing.T)
 	if err != nil {
 		t.Fatalf("normalize graph query: %v", err)
 	}
-	if req.Actor != "user" || req.Query != "FIND task" || req.Scope != ScopeUser {
-		t.Fatalf("graph query request = %#v, want trimmed actor/query and user scope", req)
+	if req.Actor != "user" || req.Query != "FIND task" || req.Firewall != FirewallUser {
+		t.Fatalf("graph query request = %#v, want trimmed actor/query and user firewall", req)
+	}
+	if req.Firewall != FirewallUser {
+		t.Fatalf("graph query firewall = %q, want %q", req.Firewall, FirewallUser)
+	}
+	if req.IncludeGlobal {
+		t.Fatal("graph include_global should default to false")
 	}
 	for _, sensitivity := range req.AllowedSensitivities {
 		if sensitivity == SensitivityRestricted {
 			t.Fatal("restricted sensitivity should not be included by default")
 		}
 	}
-	if _, err := NormalizeGraphQueryRequest(GraphQueryRequest{Query: "FIND task", Scope: Scope("bad")}); err == nil {
-		t.Fatal("expected invalid scope error")
+	if _, err := NormalizeGraphQueryRequest(GraphQueryRequest{Query: "FIND task", Firewall: Firewall("bad firewall!")}); err == nil {
+		t.Fatal("expected invalid firewall error")
 	}
 	if _, err := NormalizeGraphQueryRequest(GraphQueryRequest{Query: "FIND task", AllowedSensitivities: []Sensitivity{Sensitivity("secret")}}); err == nil {
 		t.Fatal("expected invalid sensitivity error")
+	}
+	req, err = NormalizeGraphQueryRequest(GraphQueryRequest{Query: "FIND task", Firewall: Firewall("client-a")})
+	if err != nil {
+		t.Fatalf("graph firewall rejected: %v", err)
+	}
+	if req.Firewall != Firewall("client-a") {
+		t.Fatalf("graph firewall = %q, want client-a", req.Firewall)
 	}
 }
 
@@ -132,8 +169,15 @@ func TestNormalizeCorrectionRequestRequiresTargetAndText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalize correction: %v", err)
 	}
-	if req.Actor != "agent" || req.Scope != ScopeUser || req.Text != "fixed fact" {
+	if req.Actor != "agent" || req.Firewall != FirewallUser || req.Text != "fixed fact" {
 		t.Fatalf("correction request = %#v, want defaults and trimmed text", req)
+	}
+	req, err = NormalizeCorrectionRequest(CorrectionRequest{MemoryID: "mem_1", Firewall: Firewall("client-a"), Text: "fixed"})
+	if err != nil {
+		t.Fatalf("correction firewall rejected: %v", err)
+	}
+	if req.Firewall != Firewall("client-a") {
+		t.Fatalf("correction firewall = %q, want client-a", req.Firewall)
 	}
 }
 
@@ -149,7 +193,14 @@ func TestNormalizeRefreshPageRequestRequiresSupportedTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalize refresh: %v", err)
 	}
-	if req.Actor != "agent" || req.Scope != ScopeUser || req.Topic != "reporting" {
+	if req.Actor != "agent" || req.Firewall != FirewallUser || req.Topic != "reporting" {
 		t.Fatalf("refresh request = %#v, want defaults and trimmed topic", req)
+	}
+	req, err = NormalizeRefreshPageRequest(RefreshPageRequest{Kind: KindTimeline, Firewall: Firewall("client-a"), Topic: "reporting"})
+	if err != nil {
+		t.Fatalf("refresh firewall rejected: %v", err)
+	}
+	if req.Firewall != Firewall("client-a") {
+		t.Fatalf("refresh firewall = %q, want client-a", req.Firewall)
 	}
 }

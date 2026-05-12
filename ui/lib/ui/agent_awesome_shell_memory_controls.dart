@@ -58,12 +58,14 @@ class _MemoryDropdown extends StatelessWidget {
     required this.values,
     required this.tooltip,
     required this.onChanged,
+    this.labelForValue,
   });
 
   final String value;
   final List<String> values;
   final String tooltip;
   final ValueChanged<String> onChanged;
+  final String Function(String value)? labelForValue;
 
   /// Builds a compact dropdown for controlled memory vocabulary.
   @override
@@ -94,7 +96,7 @@ class _MemoryDropdown extends StatelessWidget {
                 DropdownMenuItem<String>(
                   value: item,
                   child: Text(
-                    _memoryLabel(item),
+                    labelForValue?.call(item) ?? _memoryLabel(item),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -266,14 +268,27 @@ class _MemorySelectionEmpty extends StatelessWidget {
 }
 
 /// Returns whether a memory record matches a command filter query.
-bool _matchesMemoryRecord(MemoryRecord record, String query) {
+bool _matchesMemoryRecord(
+  MemoryRecord record,
+  String query, {
+  String extra = '',
+}) {
   return _matchesFuzzyQuery(
-    '${record.title} ${record.summary} ${record.kind} ${record.scope} '
+    '${record.title} ${record.summary} ${record.kind} ${record.firewall} '
     '${record.trustLevel} ${record.sensitivity} ${record.status} '
     '${record.sourceLabel} ${record.subjects.join(' ')} '
-    '${record.topics.join(' ')} ${record.entityNames.join(' ')}',
+    '${record.topics.join(' ')} ${record.entityNames.join(' ')} $extra',
     query,
   );
+}
+
+/// Returns user-facing firewall text for record filtering.
+String _memoryFirewallSearchText(
+  AgentAwesomeAppController controller,
+  String firewallId,
+) {
+  return '${controller.memoryFirewallLabel(firewallId)} '
+      '${controller.memoryFirewallAudienceLabel(firewallId)}';
 }
 
 /// Reports whether the memory route status is an actionable error.

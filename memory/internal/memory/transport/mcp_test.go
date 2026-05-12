@@ -118,7 +118,7 @@ func TestMCPSaveAndSearch(t *testing.T) {
 			"name": "save_memory_candidate",
 			"arguments": map[string]any{
 				"content":         "MCP reporting source",
-				"scope":           "user",
+				"firewall":        "acme-client",
 				"title":           "MCP source",
 				"idempotency_key": "mcp-save",
 			},
@@ -135,8 +135,8 @@ func TestMCPSaveAndSearch(t *testing.T) {
 		"params": map[string]any{
 			"name": "search_memory",
 			"arguments": map[string]any{
-				"scope": "user",
-				"text":  "reporting",
+				"firewall": "acme-client",
+				"text":     "reporting",
 			},
 		},
 	})
@@ -179,8 +179,8 @@ func TestMCPRememberStoresMemoryNugget(t *testing.T) {
 		"params": map[string]any{
 			"name": "search_memory",
 			"arguments": map[string]any{
-				"scope": "user",
-				"text":  "connected nuggets",
+				"firewall": "user",
+				"text":     "connected nuggets",
 			},
 		},
 	})

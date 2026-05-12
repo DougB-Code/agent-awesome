@@ -17,7 +17,8 @@ class MemoryClient {
 
   /// Searches memory records for the memory panel and source list.
   Future<List<MemoryRecord>> searchMemory({
-    String scope = 'user',
+    String firewall = 'user',
+    bool includeGlobal = false,
     String text = '',
     List<String> kinds = const <String>[],
     List<String> topics = const <String>[],
@@ -30,7 +31,8 @@ class MemoryClient {
     int limit = 20,
   }) async {
     final content = await _rpc.callTool('search_memory', <String, dynamic>{
-      'scope': scope,
+      'firewall': firewall,
+      'include_global': includeGlobal,
       'text': text,
       'kinds': kinds,
       'topics': topics,
@@ -43,7 +45,8 @@ class MemoryClient {
 
   /// Searches source-backed text records.
   Future<List<MemoryRecord>> searchSources({
-    String scope = 'user',
+    String firewall = 'user',
+    bool includeGlobal = false,
     String text = '',
     List<String> kinds = const <String>[],
     List<String> topics = const <String>[],
@@ -56,7 +59,8 @@ class MemoryClient {
     int limit = 20,
   }) async {
     final content = await _rpc.callTool('search_sources', <String, dynamic>{
-      'scope': scope,
+      'firewall': firewall,
+      'include_global': includeGlobal,
       'text': text,
       'kinds': kinds,
       'topics': topics,
@@ -83,7 +87,7 @@ class MemoryClient {
         'id': draft.sourceId,
       },
       'kind': draft.kind,
-      'scope': draft.scope,
+      'firewall': draft.firewall,
       'trust_level': draft.trustLevel,
       'sensitivity': draft.sensitivity,
       'subjects': draft.subjects,
@@ -95,12 +99,14 @@ class MemoryClient {
 
   /// Loads or builds a compiled entity page.
   Future<CompiledMemoryPage> loadEntityPage({
-    required String scope,
+    required String firewall,
     required String entityId,
     required String title,
+    String actor = 'agent_awesome_ui',
   }) async {
     final content = await _rpc.callTool('load_entity_page', <String, dynamic>{
-      'scope': scope,
+      'actor': actor,
+      'firewall': firewall,
       'entity_id': entityId,
       'title': title,
     });
@@ -109,12 +115,14 @@ class MemoryClient {
 
   /// Loads or builds a source-backed timeline.
   Future<CompiledMemoryPage> loadTimeline({
-    required String scope,
+    required String firewall,
     required String topic,
     String entityId = '',
+    String actor = 'agent_awesome_ui',
   }) async {
     final content = await _rpc.callTool('load_timeline', <String, dynamic>{
-      'scope': scope,
+      'actor': actor,
+      'firewall': firewall,
       'topic': topic,
       'entity_id': entityId,
     });
@@ -124,7 +132,7 @@ class MemoryClient {
   /// Refreshes a compiled entity page or timeline.
   Future<CompiledMemoryPage> refreshCompiledPage({
     required String kind,
-    required String scope,
+    required String firewall,
     required String title,
     String entityId = '',
     String topic = '',
@@ -134,7 +142,7 @@ class MemoryClient {
         .callTool('refresh_compiled_page', <String, dynamic>{
           'actor': actor,
           'kind': kind,
-          'scope': scope,
+          'firewall': firewall,
           'title': title,
           'entity_id': entityId,
           'topic': topic,
@@ -183,13 +191,13 @@ class MemoryClient {
   Future<dynamic> submitMemoryCorrection({
     required String memoryId,
     required String text,
-    required String scope,
+    required String firewall,
     String actor = 'agent_awesome_ui',
   }) {
     return _rpc.callTool('submit_memory_correction', <String, dynamic>{
       'actor': actor,
       'memory_id': memoryId,
-      'scope': scope,
+      'firewall': firewall,
       'text': text,
     });
   }

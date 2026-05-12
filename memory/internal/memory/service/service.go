@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,8 +16,9 @@ import (
 
 // Config controls worker behavior for the memory service.
 type Config struct {
-	WorkerCount  int
-	PollInterval time.Duration
+	WorkerCount    int
+	PollInterval   time.Duration
+	FirewallPolicy *FirewallPolicy
 }
 
 // Repositories contains the storage ports required by service features.
@@ -39,6 +41,7 @@ type Service struct {
 	taskRepo       ports.TaskRepository
 	graphQueryRepo ports.GraphQueryRepository
 	steward        ports.Steward
+	firewallPolicy *FirewallPolicy
 	workerCount    int
 	pollInterval   time.Duration
 	cancel         context.CancelFunc
@@ -60,6 +63,7 @@ func New(repos Repositories, steward ports.Steward, cfg Config) *Service {
 		taskRepo:       repos.Tasks,
 		graphQueryRepo: repos.GraphQuery,
 		steward:        steward,
+		firewallPolicy: cfg.FirewallPolicy,
 		workerCount:    cfg.WorkerCount,
 		pollInterval:   cfg.PollInterval,
 		done:           make(chan struct{}),
@@ -104,11 +108,27 @@ func (s *Service) Stop(ctx context.Context) error {
 
 // Capture synchronously stores raw source content and schedules enrichment.
 func (s *Service) Capture(ctx context.Context, req domain.CaptureRequest) (domain.CaptureResult, error) {
+	normalized, err := domain.NormalizeCaptureRequest(req)
+	if err != nil {
+		return domain.CaptureResult{}, err
+	}
+	if err := s.authorizeWrite(normalized.Actor, normalized.Firewall); err != nil {
+		return domain.CaptureResult{}, err
+	}
+	req = normalized
 	return s.repo.Capture(ctx, req)
 }
 
 // SearchMemory returns ordered memory search results.
 func (s *Service) SearchMemory(ctx context.Context, q domain.RetrievalQuery) (domain.RetrievalBundle, error) {
+	normalized, err := domain.NormalizeRetrievalQuery(q)
+	if err != nil {
+		return domain.RetrievalBundle{}, err
+	}
+	if err := s.authorizeRetrieval(normalized); err != nil {
+		return domain.RetrievalBundle{}, err
+	}
+	q = normalized
 	records, err := s.repo.Search(ctx, q)
 	if err != nil {
 		return domain.RetrievalBundle{}, err
@@ -148,27 +168,79 @@ func (s *Service) SearchSources(ctx context.Context, q domain.RetrievalQuery) (d
 }
 
 // LoadEntityPage returns a compiled entity page, creating it if necessary.
-func (s *Service) LoadEntityPage(ctx context.Context, scope domain.Scope, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
-	return s.repo.LoadEntityPage(ctx, scope, entityID, title)
+func (s *Service) LoadEntityPage(ctx context.Context, firewall domain.Firewall, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
+	return s.LoadEntityPageForActor(ctx, "agent", firewall, entityID, title)
+}
+
+// LoadEntityPageForActor returns a compiled entity page after firewall authorization.
+func (s *Service) LoadEntityPageForActor(ctx context.Context, actor string, firewall domain.Firewall, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
+	req, err := domain.NormalizeRefreshPageRequest(domain.RefreshPageRequest{Actor: actor, Kind: domain.KindEntityPage, Firewall: firewall, EntityID: entityID, Title: title})
+	if err != nil {
+		return domain.CompiledPage{}, err
+	}
+	if err := s.authorizeWrite(req.Actor, req.Firewall); err != nil {
+		return domain.CompiledPage{}, err
+	}
+	return s.repo.LoadEntityPage(ctx, req.Firewall, req.EntityID, req.Title)
 }
 
 // LoadTimeline returns a compiled timeline, creating it if necessary.
-func (s *Service) LoadTimeline(ctx context.Context, scope domain.Scope, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
-	return s.repo.LoadTimeline(ctx, scope, topic, entityID)
+func (s *Service) LoadTimeline(ctx context.Context, firewall domain.Firewall, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
+	return s.LoadTimelineForActor(ctx, "agent", firewall, topic, entityID)
+}
+
+// LoadTimelineForActor returns a compiled timeline after firewall authorization.
+func (s *Service) LoadTimelineForActor(ctx context.Context, actor string, firewall domain.Firewall, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
+	req, err := domain.NormalizeRefreshPageRequest(domain.RefreshPageRequest{Actor: actor, Kind: domain.KindTimeline, Firewall: firewall, Topic: topic, EntityID: entityID})
+	if err != nil {
+		return domain.CompiledPage{}, err
+	}
+	if err := s.authorizeWrite(req.Actor, req.Firewall); err != nil {
+		return domain.CompiledPage{}, err
+	}
+	return s.repo.LoadTimeline(ctx, req.Firewall, req.Topic, req.EntityID)
 }
 
 // RefreshCompiledPage rebuilds a compiled knowledge page.
 func (s *Service) RefreshCompiledPage(ctx context.Context, req domain.RefreshPageRequest) (domain.CompiledPage, error) {
+	normalized, err := domain.NormalizeRefreshPageRequest(req)
+	if err != nil {
+		return domain.CompiledPage{}, err
+	}
+	if err := s.authorizeWrite(normalized.Actor, normalized.Firewall); err != nil {
+		return domain.CompiledPage{}, err
+	}
+	req = normalized
 	return s.repo.RefreshCompiledPage(ctx, req)
 }
 
 // RepairMemoryRecord applies explicit metadata corrections.
 func (s *Service) RepairMemoryRecord(ctx context.Context, req domain.RepairRequest) (domain.MemoryRecord, error) {
+	normalized, err := domain.NormalizeRepairRequest(req)
+	if err != nil {
+		return domain.MemoryRecord{}, err
+	}
+	record, err := s.repo.GetMemory(ctx, normalized.MemoryID)
+	if err != nil {
+		return domain.MemoryRecord{}, err
+	}
+	if err := s.authorizeWrite(normalized.Actor, record.Firewall); err != nil {
+		return domain.MemoryRecord{}, err
+	}
+	req = normalized
 	return s.repo.RepairMemory(ctx, req)
 }
 
 // SubmitMemoryCorrection stores a correction as source content.
 func (s *Service) SubmitMemoryCorrection(ctx context.Context, req domain.CorrectionRequest) (domain.CaptureResult, error) {
+	normalized, err := domain.NormalizeCorrectionRequest(req)
+	if err != nil {
+		return domain.CaptureResult{}, err
+	}
+	if err := s.authorizeWrite(normalized.Actor, normalized.Firewall); err != nil {
+		return domain.CaptureResult{}, err
+	}
+	req = normalized
 	return s.repo.CreateCorrection(ctx, req)
 }
 
@@ -178,6 +250,17 @@ func (s *Service) QueryContextGraph(ctx context.Context, req domain.GraphQueryRe
 	if err != nil {
 		return domain.GraphQueryResult{}, err
 	}
+	if graphQueryMutates(req.Query) && strings.TrimSpace(req.Actor) == "" {
+		return domain.GraphQueryResult{}, errors.New("actor is required for graph mutations")
+	}
+	normalized, err := domain.NormalizeGraphQueryRequest(req)
+	if err != nil {
+		return domain.GraphQueryResult{}, err
+	}
+	if err := s.authorizeGraphQuery(normalized); err != nil {
+		return domain.GraphQueryResult{}, err
+	}
+	req = normalized
 	return repo.QueryContextGraph(ctx, req)
 }
 

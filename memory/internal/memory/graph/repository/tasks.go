@@ -132,10 +132,10 @@ func (r *Repository) ListTasks(ctx context.Context, q domain.TaskQuery) ([]domai
 		return nil, err
 	}
 	nodes, err := r.graph.SearchNodes(ctx, graph.SearchNodesQuery{
-		Text:  q.Search,
-		Kinds: []graph.NodeKind{graph.KindTask},
-		Scope: graph.ScopeUser,
-		Limit: 100,
+		Text:     q.Search,
+		Kinds:    []graph.NodeKind{graph.KindTask},
+		Firewall: graph.FirewallUser,
+		Limit:    100,
 	})
 	if err != nil {
 		return nil, err
@@ -191,7 +191,7 @@ func (r *Repository) UpdateTask(ctx context.Context, req domain.UpdateTaskReques
 			Title:        title,
 			Summary:      summary,
 			Status:       node.Status,
-			Scope:        node.Scope,
+			Firewall:     node.Firewall,
 			Sensitivity:  node.Sensitivity,
 			TrustLevel:   node.TrustLevel,
 			Confidence:   node.Confidence,

@@ -12,15 +12,6 @@ const List<String> _memoryKinds = <String>[
   'profile_fact',
 ];
 
-const List<String> _memoryScopes = <String>[
-  'session',
-  'user',
-  'household',
-  'tenant',
-  'project',
-  'global',
-];
-
 const List<String> _memoryTrustLevels = <String>[
   'source_original',
   'user_asserted',

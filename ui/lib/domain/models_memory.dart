@@ -12,7 +12,7 @@ class MemoryRecord {
     required this.topics,
     required this.sourceLabel,
     this.evidenceId = '',
-    this.scope = 'user',
+    this.firewall = 'user',
     this.trustLevel = 'source_original',
     this.sensitivity = 'private',
     this.status = 'active',
@@ -52,8 +52,8 @@ class MemoryRecord {
   /// Raw source record id backing the memory record.
   final String evidenceId;
 
-  /// Ownership and visibility boundary.
-  final String scope;
+  /// Memory firewall boundary.
+  final String firewall;
 
   /// Provenance trust classification.
   final String trustLevel;
@@ -108,7 +108,7 @@ class MemoryRecord {
     String? title,
     String? summary,
     String? kind,
-    String? scope,
+    String? firewall,
     String? trustLevel,
     String? sensitivity,
     String? status,
@@ -128,7 +128,7 @@ class MemoryRecord {
       topics: topics ?? this.topics,
       sourceLabel: sourceLabel,
       evidenceId: evidenceId,
-      scope: scope ?? this.scope,
+      firewall: firewall ?? this.firewall,
       trustLevel: trustLevel ?? this.trustLevel,
       sensitivity: sensitivity ?? this.sensitivity,
       status: status ?? this.status,
@@ -190,7 +190,7 @@ class CompiledMemoryPage {
   const CompiledMemoryPage({
     required this.id,
     required this.kind,
-    required this.scope,
+    required this.firewall,
     required this.title,
     required this.path,
     required this.status,
@@ -208,8 +208,8 @@ class CompiledMemoryPage {
   /// Page kind, usually entity_page or timeline.
   final String kind;
 
-  /// Ownership scope used to build the page.
-  final String scope;
+  /// Memory firewall used to build the page.
+  final String firewall;
 
   /// Human-readable page title.
   final String title;
@@ -243,7 +243,8 @@ class CompiledMemoryPage {
 class MemoryFilterState {
   /// Creates memory filter state.
   const MemoryFilterState({
-    this.scope = 'user',
+    this.firewall = 'user',
+    this.includeGlobal = false,
     this.text = '',
     this.kinds = const <String>[],
     this.topics = const <String>[],
@@ -254,8 +255,11 @@ class MemoryFilterState {
     this.limit = 100,
   });
 
-  /// Retrieval scope.
-  final String scope;
+  /// Retrieval firewall id.
+  final String firewall;
+
+  /// Whether retrieval should include globally shared records.
+  final bool includeGlobal;
 
   /// Full-text query.
   final String text;
@@ -283,7 +287,8 @@ class MemoryFilterState {
 
   /// Returns a copy with updated filter fields.
   MemoryFilterState copyWith({
-    String? scope,
+    String? firewall,
+    bool? includeGlobal,
     String? text,
     List<String>? kinds,
     List<String>? topics,
@@ -294,7 +299,8 @@ class MemoryFilterState {
     int? limit,
   }) {
     return MemoryFilterState(
-      scope: scope ?? this.scope,
+      firewall: firewall ?? this.firewall,
+      includeGlobal: includeGlobal ?? this.includeGlobal,
       text: text ?? this.text,
       kinds: kinds ?? this.kinds,
       topics: topics ?? this.topics,
@@ -314,7 +320,7 @@ class MemoryCaptureDraft {
     required this.content,
     required this.title,
     required this.kind,
-    required this.scope,
+    required this.firewall,
     required this.trustLevel,
     required this.sensitivity,
     required this.sourceSystem,
@@ -334,8 +340,8 @@ class MemoryCaptureDraft {
   /// Memory kind.
   final String kind;
 
-  /// Memory scope.
-  final String scope;
+  /// Memory firewall.
+  final String firewall;
 
   /// Trust level.
   final String trustLevel;

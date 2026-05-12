@@ -5,10 +5,14 @@ part of 'files_section.dart';
 class _FileInspectorContent extends StatelessWidget {
   /// Creates selected file inspector content.
   const _FileInspectorContent({
+    required this.controller,
     required this.file,
     required this.modeId,
     required this.onSendToChat,
   });
+
+  /// Shared app controller used for configured firewall labels.
+  final AgentAwesomeAppController controller;
 
   /// Selected file.
   final _AgentFileItem? file;
@@ -33,7 +37,10 @@ class _FileInspectorContent extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       child: switch (modeId) {
         _fileSourceModeId => _FileSourceDetails(file: selected),
-        _fileAccessModeId => _FileAccessDetails(file: selected),
+        _fileAccessModeId => _FileAccessDetails(
+          controller: controller,
+          file: selected,
+        ),
         _ => _FilePrimaryDetails(file: selected, onSendToChat: onSendToChat),
       },
     );
@@ -145,14 +152,18 @@ class _FileSourceDetails extends StatelessWidget {
 /// _FileAccessDetails renders access metadata for the selected file.
 class _FileAccessDetails extends StatelessWidget {
   /// Creates access details.
-  const _FileAccessDetails({required this.file});
+  const _FileAccessDetails({required this.controller, required this.file});
+
+  /// Shared app controller used for configured firewall labels.
+  final AgentAwesomeAppController controller;
 
   /// Selected file.
   final _AgentFileItem file;
 
-  /// Builds scope and lifecycle metadata.
+  /// Builds firewall and lifecycle metadata.
   @override
   Widget build(BuildContext context) {
+    final audience = controller.memoryFirewallAudienceLabel(file.firewall);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -162,7 +173,12 @@ class _FileAccessDetails extends StatelessWidget {
           label: 'Access',
           child: Column(
             children: <Widget>[
-              _InspectorRow(label: 'Scope', value: file.scope),
+              _InspectorRow(
+                label: 'Firewall',
+                value: controller.memoryFirewallLabel(file.firewall),
+              ),
+              if (audience.isNotEmpty)
+                _InspectorRow(label: 'Shared with', value: audience),
               _InspectorRow(label: 'Sensitivity', value: file.sensitivity),
               _InspectorRow(label: 'Trust', value: file.trustLevel),
               _InspectorRow(label: 'Status', value: file.status),

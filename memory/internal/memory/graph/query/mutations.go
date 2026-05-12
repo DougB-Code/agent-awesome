@@ -96,7 +96,7 @@ func (e *Executor) executeSetNode(ctx context.Context, stmt Statement, mutationC
 		Title:        node.Title,
 		Summary:      node.Summary,
 		Status:       node.Status,
-		Scope:        node.Scope,
+		Firewall:     node.Firewall,
 		Sensitivity:  node.Sensitivity,
 		TrustLevel:   node.TrustLevel,
 		Confidence:   node.Confidence,
@@ -196,12 +196,12 @@ func applyNodeAssignments(request *graph.UpsertNodeRequest, properties *[]Assign
 				return fmt.Errorf("invalid node lifecycle status %q", assignment.Value.Value)
 			}
 			request.Status = status
-		case "scope":
-			scope := graph.Scope(strings.ToLower(assignment.Value.Value))
-			if !graph.ValidScope(scope) {
-				return fmt.Errorf("invalid node scope %q", assignment.Value.Value)
+		case "firewall":
+			firewall := graph.Firewall(strings.ToLower(assignment.Value.Value))
+			if !graph.ValidFirewall(firewall) {
+				return fmt.Errorf("invalid node firewall %q", assignment.Value.Value)
 			}
-			request.Scope = scope
+			request.Firewall = firewall
 		case "sensitivity":
 			sensitivity := graph.Sensitivity(strings.ToLower(assignment.Value.Value))
 			if !graph.ValidSensitivity(sensitivity) {

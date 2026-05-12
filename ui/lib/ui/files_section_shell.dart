@@ -67,6 +67,7 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
       selectedDetailModeId: _detailModeId,
       onDetailModeSelected: _selectDetailMode,
       detailBuilder: (modeId) => _FileInspectorContent(
+        controller: widget.controller,
         file: selected,
         modeId: modeId,
         onSendToChat: selected == null

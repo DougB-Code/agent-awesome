@@ -15,8 +15,8 @@ String _memoryContextLabel(MemoryRecord record) {
   return 'General';
 }
 
-/// Returns the inferred contact context scope for a task.
-String _taskContextScope(WorkspaceTask task) {
+/// Returns the inferred contact context firewall for a task.
+String _taskContextFirewall(WorkspaceTask task) {
   if (task.project.trim().isNotEmpty) {
     return 'project';
   }
@@ -36,8 +36,8 @@ String _taskContextLabel(WorkspaceTask task) {
   ]);
 }
 
-/// Returns the inferred contact context scope for a commitment.
-String _commitmentContextScope(TaskCommitment commitment) {
+/// Returns the inferred contact context firewall for a commitment.
+String _commitmentContextFirewall(TaskCommitment commitment) {
   if (commitment.project.trim().isNotEmpty) {
     return 'project';
   }
@@ -66,10 +66,39 @@ bool _isContactContextLabel(String value) {
       normalized != 'contact';
 }
 
-/// Normalizes an empty scope into the default contact memory scope.
-String _normalizedScope(String scope) {
-  final trimmed = scope.trim();
+/// Normalizes an empty firewall into the default contact memory firewall.
+String _normalizedFirewall(String firewall) {
+  final trimmed = firewall.trim();
   return trimmed.isEmpty ? 'user' : trimmed;
+}
+
+/// Returns configured firewall labels represented by one contact.
+List<String> _contactFirewallLabels(
+  AgentAwesomeAppController controller,
+  _ContactItem contact,
+) {
+  final labels = <String>[];
+  final seen = <String>{};
+  for (final context in contact.contexts) {
+    final label = controller.memoryFirewallLabel(context.firewall).trim();
+    if (label.isEmpty || seen.contains(label)) {
+      continue;
+    }
+    seen.add(label);
+    labels.add(label);
+  }
+  return labels.isEmpty ? contact.firewallLabels : labels;
+}
+
+/// Returns a contact context label prefixed by the configured firewall.
+String _contactContextDisplayLabel(
+  AgentAwesomeAppController controller,
+  _ContactContext context,
+) {
+  final firewall = controller.memoryFirewallLabel(context.firewall);
+  return context.label.trim().isEmpty
+      ? firewall
+      : '$firewall / ${context.label}';
 }
 
 /// Returns the newest timestamp across contact data.
@@ -122,7 +151,10 @@ bool _pageBelongsToContact(CompiledMemoryPage page, _ContactItem contact) {
 }
 
 /// Builds the chat prompt for reviewing one contact.
-String _contactChatPrompt(_ContactItem contact) {
+String _contactChatPrompt(
+  _ContactItem contact,
+  AgentAwesomeAppController controller,
+) {
   return '''
 Please review this contact context and use it as source material for the conversation.
 
@@ -130,7 +162,7 @@ Contact: ${contact.name}
 Status: ${contact.statusLabel}
 Summary: ${contact.summary}
 Topics: ${contact.topics.join(', ')}
-Contexts: ${contact.contexts.map((item) => item.displayLabel).join(', ')}
+Contexts: ${contact.contexts.map((item) => _contactContextDisplayLabel(controller, item)).join(', ')}
 Open tasks: ${contact.openTaskCount}
 Commitments: ${contact.commitments.length}
 Sources: ${contact.memoryRecords.length}

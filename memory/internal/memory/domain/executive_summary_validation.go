@@ -11,9 +11,9 @@ import (
 
 // NormalizeExecutiveSummaryQuery validates and defaults a Today projection query.
 func NormalizeExecutiveSummaryQuery(q ExecutiveSummaryQuery) (ExecutiveSummaryQuery, error) {
-	q.Scope = vocabulary.DefaultScope(q.Scope)
-	if !ValidScope(q.Scope) {
-		return q, fmt.Errorf("invalid scope %q", q.Scope)
+	q.Firewall = vocabulary.DefaultFirewall(q.Firewall)
+	if !ValidFirewall(q.Firewall) {
+		return q, fmt.Errorf("invalid firewall %q", q.Firewall)
 	}
 	q.Horizon = strings.TrimSpace(q.Horizon)
 	if q.Horizon == "" {

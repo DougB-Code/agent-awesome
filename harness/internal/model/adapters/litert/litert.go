@@ -40,9 +40,9 @@ func (Factory) Create(_ context.Context, selection schema.ProviderSelection) (ll
 	if modelPath == "" {
 		return nil, fmt.Errorf("provider %q model id %q requires path", selection.Name, selection.Model.ID)
 	}
-	executable, err := resolveExecutable(selection.Provider.Executable)
-	if err != nil {
-		return nil, err
+	executable := strings.TrimSpace(selection.Provider.Executable)
+	if executable == "" {
+		executable = defaultExecutable
 	}
 	return &model{
 		executable: executable,
@@ -105,8 +105,12 @@ func (m *model) generate(ctx context.Context, req *llmapi.LLMRequest) (*llmapi.L
 	}
 	defer func() { _ = os.Remove(promptFile) }()
 
-	cmd := exec.CommandContext(ctx, m.executable, "--min_log_level", "4", "run", m.modelPath, "--input_prompt_file", promptFile)
-	cmd.Env = localModelEnvironment(m.executable)
+	executable, err := resolveExecutable(m.executable)
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, executable, "--min_log_level", "4", "run", m.modelPath, "--input_prompt_file", promptFile)
+	cmd.Env = localModelEnvironment(executable)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	output, err := cmd.Output()

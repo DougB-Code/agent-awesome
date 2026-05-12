@@ -33,7 +33,8 @@ type Executor struct {
 
 // graphQueryAccessPolicy stores node visibility rules for one query.
 type graphQueryAccessPolicy struct {
-	scope                 graph.Scope
+	firewall              graph.Firewall
+	includeGlobal         bool
 	allowedSensitivities  []graph.Sensitivity
 	allowedSensitivitySet map[graph.Sensitivity]bool
 }
@@ -87,7 +88,8 @@ func graphQueryAccessPolicyFromRequest(req domain.GraphQueryRequest) graphQueryA
 		allowedSet[sensitivity] = true
 	}
 	return graphQueryAccessPolicy{
-		scope:                 req.Scope,
+		firewall:              req.Firewall,
+		includeGlobal:         req.IncludeGlobal,
 		allowedSensitivities:  allowed,
 		allowedSensitivitySet: allowedSet,
 	}
@@ -98,7 +100,7 @@ func (p graphQueryAccessPolicy) canReadNode(node graph.Node) bool {
 	if node.Status != graph.StatusActive {
 		return false
 	}
-	if node.Scope != p.scope && node.Scope != graph.ScopeGlobal {
+	if node.Firewall != p.firewall && !(p.includeGlobal && node.Firewall == graph.FirewallGlobal) {
 		return false
 	}
 	return p.allowedSensitivitySet[node.Sensitivity]
@@ -130,7 +132,8 @@ func (e *Executor) executeStatement(ctx context.Context, stmt Statement, policy 
 func (e *Executor) executeFind(ctx context.Context, stmt Statement, policy graphQueryAccessPolicy) (executionResult, error) {
 	nodes, err := e.store.SearchNodes(ctx, graph.SearchNodesQuery{
 		Kinds:                []graph.NodeKind{stmt.Kind},
-		Scope:                policy.scope,
+		Firewall:             policy.firewall,
+		IncludeGlobal:        policy.includeGlobal,
 		AllowedSensitivities: policy.allowedSensitivities,
 		Limit:                100,
 	})
@@ -216,7 +219,8 @@ func (e *Executor) executeMatch(ctx context.Context, stmt Statement, policy grap
 func (e *Executor) executeVariableMatch(ctx context.Context, stmt Statement, policy graphQueryAccessPolicy) (executionResult, error) {
 	roots, err := e.store.SearchNodes(ctx, graph.SearchNodesQuery{
 		Kinds:                []graph.NodeKind{stmt.FromKind},
-		Scope:                policy.scope,
+		Firewall:             policy.firewall,
+		IncludeGlobal:        policy.includeGlobal,
 		AllowedSensitivities: policy.allowedSensitivities,
 		Limit:                100,
 	})

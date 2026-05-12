@@ -40,7 +40,7 @@ func TestMemoryDSnapshotSaveRestoreDrill(t *testing.T) {
 	callMemoryDTool(t, first.Address, "save_memory_candidate", map[string]any{
 		"content":         "Daemon snapshot preference survives restart.",
 		"title":           "Daemon snapshot memory",
-		"scope":           "user",
+		"firewall":        "user",
 		"kind":            "profile_fact",
 		"trust_level":     "user_asserted",
 		"idempotency_key": "daemon-snapshot-memory",
@@ -64,9 +64,9 @@ func TestMemoryDSnapshotSaveRestoreDrill(t *testing.T) {
 	defer stopMemoryD(t, second)
 
 	search := callMemoryDTool(t, second.Address, "search_sources", map[string]any{
-		"scope": "user",
-		"text":  "survives restart",
-		"limit": 10,
+		"firewall": "user",
+		"text":     "survives restart",
+		"limit":    10,
 	})
 	primary := search["primary_memory"].([]any)
 	if len(primary) != 1 {

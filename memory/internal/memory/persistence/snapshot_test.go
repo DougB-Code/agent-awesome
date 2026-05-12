@@ -163,7 +163,7 @@ func TestHTTPStoreSnapshotDrillRestoresMemoryAndTasks(t *testing.T) {
 		Actor:          "snapshot-test",
 		Content:        "Snapshot drill preference survives redeploy.",
 		Title:          "Snapshot drill preference",
-		Scope:          domain.ScopeUser,
+		Firewall:       domain.FirewallUser,
 		Kind:           domain.KindProfileFact,
 		TrustLevel:     domain.TrustUserAsserted,
 		IdempotencyKey: "snapshot-drill-memory",
@@ -201,9 +201,9 @@ func TestHTTPStoreSnapshotDrillRestoresMemoryAndTasks(t *testing.T) {
 	defer restored.Close(context.Background())
 
 	bundle, err := restored.SearchSources(ctx, domain.RetrievalQuery{
-		Scope: domain.ScopeUser,
-		Text:  "preference survives redeploy",
-		Limit: 10,
+		Firewall: domain.FirewallUser,
+		Text:     "preference survives redeploy",
+		Limit:    10,
 	})
 	if err != nil {
 		t.Fatalf("search restored memory: %v", err)

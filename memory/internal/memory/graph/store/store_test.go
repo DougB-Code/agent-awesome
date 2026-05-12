@@ -42,7 +42,7 @@ func TestUpsertNodeReusesStableIdentity(t *testing.T) {
 	if second.Title != "Clean forecast input data" {
 		t.Fatalf("node title = %q, want update", second.Title)
 	}
-	if second.Status != graph.StatusActive || second.Scope != graph.ScopeUser || second.Sensitivity != graph.SensitivityPrivate {
+	if second.Status != graph.StatusActive || second.Firewall != graph.FirewallUser || second.Sensitivity != graph.SensitivityPrivate {
 		t.Fatalf("node defaults = %#v", second)
 	}
 }
@@ -163,7 +163,7 @@ func TestLifecycleDeletionExcludesSearch(t *testing.T) {
 	if err := store.ReindexNode(ctx, node.ID); err != nil {
 		t.Fatalf("reindex node: %v", err)
 	}
-	before, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth", Scope: graph.ScopeUser})
+	before, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth", Firewall: graph.FirewallUser})
 	if err != nil {
 		t.Fatalf("search before delete: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestLifecycleDeletionExcludesSearch(t *testing.T) {
 	if deleted.Status != graph.StatusDeleted {
 		t.Fatalf("deleted node status = %q", deleted.Status)
 	}
-	after, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth", Scope: graph.ScopeUser})
+	after, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth", Firewall: graph.FirewallUser})
 	if err != nil {
 		t.Fatalf("search after delete: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestEvidenceBlobAuditAndFTSSearch(t *testing.T) {
 	if err := store.ReindexNode(ctx, evidence.ID); err != nil {
 		t.Fatalf("reindex evidence: %v", err)
 	}
-	results, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "automation", Scope: graph.ScopeUser, Kinds: []graph.NodeKind{graph.KindEvidence}})
+	results, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "automation", Firewall: graph.FirewallUser, Kinds: []graph.NodeKind{graph.KindEvidence}})
 	if err != nil {
 		t.Fatalf("search evidence: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestSearchEnforcesSensitivity(t *testing.T) {
 	if err := store.ReindexNode(ctx, restricted.ID); err != nil {
 		t.Fatalf("reindex restricted node: %v", err)
 	}
-	defaultResults, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "Payroll", Scope: graph.ScopeUser})
+	defaultResults, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "Payroll", Firewall: graph.FirewallUser})
 	if err != nil {
 		t.Fatalf("default search: %v", err)
 	}
@@ -364,7 +364,7 @@ func TestSearchEnforcesSensitivity(t *testing.T) {
 	}
 	restrictedResults, err := store.SearchNodes(ctx, graph.SearchNodesQuery{
 		Text:                 "Payroll",
-		Scope:                graph.ScopeUser,
+		Firewall:             graph.FirewallUser,
 		AllowedSensitivities: []graph.Sensitivity{graph.SensitivityRestricted},
 	})
 	if err != nil {

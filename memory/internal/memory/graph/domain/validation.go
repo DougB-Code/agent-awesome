@@ -22,9 +22,9 @@ func NormalizeUpsertNodeRequest(req UpsertNodeRequest) (UpsertNodeRequest, error
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid node status %q", req.Status)
 	}
-	req.Scope = vocabulary.DefaultScope(req.Scope)
-	if !ValidScope(req.Scope) {
-		return req, fmt.Errorf("invalid scope %q", req.Scope)
+	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
+	if !ValidFirewall(req.Firewall) {
+		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
 	}
 	req.Sensitivity = vocabulary.DefaultSensitivity(req.Sensitivity)
 	if !ValidSensitivity(req.Sensitivity) {
@@ -150,9 +150,9 @@ func NormalizeAppendAuditRequest(req AppendAuditRequest) (AppendAuditRequest, er
 // NormalizeSearchNodesQuery validates and defaults a lexical graph search.
 func NormalizeSearchNodesQuery(q SearchNodesQuery) (SearchNodesQuery, error) {
 	q.Text = strings.TrimSpace(q.Text)
-	q.Scope = vocabulary.DefaultScope(q.Scope)
-	if !ValidScope(q.Scope) {
-		return q, fmt.Errorf("invalid scope %q", q.Scope)
+	q.Firewall = vocabulary.DefaultFirewall(q.Firewall)
+	if !ValidFirewall(q.Firewall) {
+		return q, fmt.Errorf("invalid firewall %q", q.Firewall)
 	}
 	for _, kind := range q.Kinds {
 		if !ValidNodeKind(kind) {
@@ -198,9 +198,9 @@ func ValidLifecycleStatus(status LifecycleStatus) bool {
 	return vocabulary.ValidLifecycleStatus(status)
 }
 
-// ValidScope reports whether scope is in the controlled vocabulary.
-func ValidScope(scope Scope) bool {
-	return vocabulary.ValidScope(scope)
+// ValidFirewall reports whether firewall is a safe memory firewall id.
+func ValidFirewall(firewall Firewall) bool {
+	return vocabulary.ValidFirewall(firewall)
 }
 
 // ValidSensitivity reports whether sensitivity is in the controlled vocabulary.

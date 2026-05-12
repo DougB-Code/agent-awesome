@@ -92,13 +92,14 @@ class _ContactCaptureDialogState extends State<_ContactCaptureDialog> {
   final TextEditingController _context = TextEditingController();
   final TextEditingController _note = TextEditingController();
   final TextEditingController _topics = TextEditingController();
-  String _scope = 'user';
+  String _firewall = 'user';
   String _sensitivity = 'private';
 
   /// Initializes dialog fields from the selected contact.
   @override
   void initState() {
     super.initState();
+    _firewall = widget.controller.defaultMemoryFirewallId;
     _name.text = widget.initialName;
     _context.text = widget.initialContext;
     _topics.text = widget.initialTopics.join(', ');
@@ -137,15 +138,12 @@ class _ContactCaptureDialogState extends State<_ContactCaptureDialog> {
                 children: <Widget>[
                   Expanded(
                     child: _ContactDropdown(
-                      value: _scope,
-                      values: const <String>[
-                        'user',
-                        'household',
-                        'tenant',
-                        'project',
-                      ],
-                      tooltip: 'Scope',
-                      onChanged: (value) => setState(() => _scope = value),
+                      value: _firewall,
+                      values: widget.controller.memoryFirewallIds,
+                      tooltip: 'Firewall',
+                      labelForValue:
+                          widget.controller.memoryFirewallPickerLabel,
+                      onChanged: (value) => setState(() => _firewall = value),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -203,7 +201,11 @@ class _ContactCaptureDialogState extends State<_ContactCaptureDialog> {
         note: note,
       ),
       kind: 'profile_fact',
-      scope: _scope,
+      firewall: _coerceContactDropdownValue(
+        widget.controller.memoryFirewallIds,
+        _firewall,
+        widget.controller.defaultMemoryFirewallId,
+      ),
       trustLevel: 'user_asserted',
       sensitivity: _sensitivity,
       sourceSystem: 'agent_awesome_people',
@@ -265,6 +267,7 @@ class _ContactDropdown extends StatelessWidget {
     required this.values,
     required this.tooltip,
     required this.onChanged,
+    this.labelForValue,
   });
 
   /// Selected value.
@@ -279,23 +282,55 @@ class _ContactDropdown extends StatelessWidget {
   /// Selection callback.
   final ValueChanged<String> onChanged;
 
+  /// Optional visible label resolver.
+  final String Function(String value)? labelForValue;
+
   /// Builds a compact dropdown control.
   @override
   Widget build(BuildContext context) {
-    final dropdownValue = values.contains(value) ? value : values.first;
+    if (values.isEmpty) {
+      return Tooltip(
+        message: tooltip,
+        child: TextField(
+          enabled: false,
+          decoration: InputDecoration(
+            labelText: tooltip,
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      );
+    }
+    final dropdownValue = _coerceContactDropdownValue(
+      values,
+      value,
+      values.first,
+    );
     return Tooltip(
       message: tooltip,
       child: DropdownButtonFormField<String>(
         initialValue: dropdownValue,
+        isExpanded: true,
         decoration: InputDecoration(
           labelText: tooltip,
           border: const OutlineInputBorder(),
         ),
+        selectedItemBuilder: (context) => <Widget>[
+          for (final item in values)
+            Text(
+              labelForValue?.call(item) ?? _contactLabel(item),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
         items: <DropdownMenuItem<String>>[
           for (final item in values)
             DropdownMenuItem<String>(
               value: item,
-              child: Text(_contactLabel(item)),
+              child: Text(
+                labelForValue?.call(item) ?? _contactLabel(item),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
         ],
         onChanged: (value) {
@@ -306,4 +341,13 @@ class _ContactDropdown extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Coerces a contact dropdown selection to an allowed value.
+String _coerceContactDropdownValue(
+  List<String> values,
+  String value,
+  String fallback,
+) {
+  return values.contains(value) ? value : fallback;
 }

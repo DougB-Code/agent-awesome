@@ -557,7 +557,7 @@ List<TaskProjectionEdge> parseTaskProjectionEdges(dynamic content) {
       directionSemantics: stringValue(edge['direction_semantics']),
       source: stringValue(edge['source']),
       sourceKind: stringValue(edge['source_kind']),
-      scope: stringValue(edge['scope']),
+      firewall: stringValue(edge['firewall']),
       sensitivity: stringValue(edge['sensitivity']),
       confidence: doubleValue(edge['confidence']),
       explanation: stringValue(edge['explanation']),

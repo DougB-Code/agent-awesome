@@ -71,6 +71,41 @@ class LocalModelInstall {
   final String manifestPath;
 }
 
+/// LocalModelRuntimeArtifact describes an app-managed runtime executable.
+class LocalModelRuntimeArtifact {
+  /// Creates immutable metadata for a downloadable runtime executable.
+  const LocalModelRuntimeArtifact({
+    required this.id,
+    required this.displayName,
+    required this.fileName,
+    required this.executableName,
+    required this.downloadUrl,
+    required this.expectedBytes,
+    required this.expectedSha256,
+  });
+
+  /// Stable runtime artifact id.
+  final String id;
+
+  /// User-facing runtime name.
+  final String displayName;
+
+  /// Source filename from the release artifact.
+  final String fileName;
+
+  /// Executable filename stored in the app-managed bin directory.
+  final String executableName;
+
+  /// Pinned release asset download URL.
+  final String downloadUrl;
+
+  /// Expected artifact size in bytes.
+  final int expectedBytes;
+
+  /// Expected SHA-256 digest for the downloaded executable.
+  final String expectedSha256;
+}
+
 /// LocalModelInstallProgress reports model download and verification progress.
 class LocalModelInstallProgress {
   /// Creates a progress update for the local model setup UI.

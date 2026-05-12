@@ -33,7 +33,7 @@ _AgentFileItem _fileItemFromRecord(MemoryRecord record) {
     sourceLabel: record.sourceLabel,
     sourceSystem: record.sourceSystem,
     sourceId: sourceId,
-    scope: record.scope,
+    firewall: record.firewall,
     sensitivity: record.sensitivity,
     trustLevel: record.trustLevel,
     status: record.status,

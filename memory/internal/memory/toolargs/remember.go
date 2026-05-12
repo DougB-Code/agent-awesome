@@ -14,7 +14,7 @@ type RememberArgs struct {
 	Title          string             `json:"title"`
 	Topics         []string           `json:"topics"`
 	Entities       []string           `json:"entities"`
-	Scope          domain.Scope       `json:"scope"`
+	Firewall       domain.Firewall    `json:"firewall"`
 	Sensitivity    domain.Sensitivity `json:"sensitivity"`
 	IdempotencyKey string             `json:"idempotency_key"`
 }
@@ -27,7 +27,7 @@ func (args RememberArgs) CaptureRequest() domain.CaptureRequest {
 		MediaType:      "text/plain; charset=utf-8",
 		Title:          rememberTitle(args.Title, args.Text),
 		Kind:           domain.KindProfileFact,
-		Scope:          args.Scope,
+		Firewall:       args.Firewall,
 		TrustLevel:     domain.TrustUserAsserted,
 		Sensitivity:    args.Sensitivity,
 		Topics:         args.Topics,

@@ -103,7 +103,7 @@ _ContactItem _contactItemFromAggregate(_ContactAggregate aggregate) {
     tasks: tasks,
     commitments: commitments,
   );
-  final scopeLabels = _scopeLabelsForContexts(contexts);
+  final firewallLabels = _firewallLabelsForContexts(contexts);
   final openTaskCount = tasks.where(_contactTaskIsOpen).length;
   return _ContactItem(
     id: aggregate.id,
@@ -126,7 +126,7 @@ _ContactItem _contactItemFromAggregate(_ContactAggregate aggregate) {
     tasks: tasks,
     commitments: commitments,
     contexts: contexts,
-    scopeLabels: scopeLabels,
+    firewallLabels: firewallLabels,
     topics: aggregate.topics.toList()..sort(),
     primaryMemory: primary,
     primaryContext: contexts.isEmpty ? null : contexts.first,
@@ -134,7 +134,7 @@ _ContactItem _contactItemFromAggregate(_ContactAggregate aggregate) {
   );
 }
 
-/// Builds scoped context slices from a contact aggregate.
+/// Builds firewall context slices from a contact aggregate.
 List<_ContactContext> _contactContextsFromAggregate({
   required List<MemoryRecord> records,
   required List<WorkspaceTask> tasks,
@@ -145,7 +145,7 @@ List<_ContactContext> _contactContextsFromAggregate({
     final label = _memoryContextLabel(record);
     final aggregate = _contextAggregateFor(
       aggregates,
-      scope: _normalizedScope(record.scope),
+      firewall: _normalizedFirewall(record.firewall),
       label: label,
     );
     aggregate.memoryRecords.add(record);
@@ -157,7 +157,7 @@ List<_ContactContext> _contactContextsFromAggregate({
   for (final task in tasks) {
     final aggregate = _contextAggregateFor(
       aggregates,
-      scope: _taskContextScope(task),
+      firewall: _taskContextFirewall(task),
       label: _taskContextLabel(task),
     );
     aggregate.tasks.add(task);
@@ -171,7 +171,7 @@ List<_ContactContext> _contactContextsFromAggregate({
   for (final commitment in commitments) {
     final aggregate = _contextAggregateFor(
       aggregates,
-      scope: _commitmentContextScope(commitment),
+      firewall: _commitmentContextFirewall(commitment),
       label: _commitmentContextLabel(commitment),
     );
     aggregate.commitments.add(commitment);
@@ -191,20 +191,20 @@ List<_ContactContext> _contactContextsFromAggregate({
   return contexts;
 }
 
-/// Returns the aggregate for a scope/context pair.
+/// Returns the aggregate for a firewall/context pair.
 _ContactContextAggregate _contextAggregateFor(
   Map<String, _ContactContextAggregate> aggregates, {
-  required String scope,
+  required String firewall,
   required String label,
 }) {
-  final normalizedScope = _normalizedScope(scope);
+  final normalizedFirewall = _normalizedFirewall(firewall);
   final displayLabel = label.trim().isEmpty ? 'General' : label.trim();
-  final id = '$normalizedScope:${_normalizedContactId(displayLabel)}';
+  final id = '$normalizedFirewall:${_normalizedContactId(displayLabel)}';
   return aggregates.putIfAbsent(
     id,
     () => _ContactContextAggregate(
       id: id,
-      scope: normalizedScope,
+      firewall: normalizedFirewall,
       label: displayLabel,
     ),
   );
@@ -220,7 +220,7 @@ _ContactContext _contactContextFromAggregate(
   final openTaskCount = tasks.where(_contactTaskIsOpen).length;
   return _ContactContext(
     id: aggregate.id,
-    scope: aggregate.scope,
+    firewall: aggregate.firewall,
     label: aggregate.label,
     summary: _contactContextSummary(
       label: aggregate.label,
@@ -240,7 +240,7 @@ _ContactContext _contactContextFromAggregate(
   );
 }
 
-/// Summarizes one scoped context slice.
+/// Summarizes one firewall context slice.
 String _contactContextSummary({
   required String label,
   required List<MemoryRecord> records,
@@ -275,11 +275,11 @@ String _contextSensitivityLabel(Set<String> sensitivities) {
   return 'mixed';
 }
 
-/// Returns distinct readable scope labels for a contact.
-List<String> _scopeLabelsForContexts(List<_ContactContext> contexts) {
+/// Returns distinct readable firewall labels for a contact.
+List<String> _firewallLabelsForContexts(List<_ContactContext> contexts) {
   final labels = <String>{};
   for (final context in contexts) {
-    labels.add(_contactLabel(context.scope));
+    labels.add(_contactLabel(context.firewall));
   }
   return labels.toList()..sort();
 }
@@ -300,9 +300,9 @@ int _compareContactContexts(_ContactContext left, _ContactContext right) {
   if (sourceCompare != 0) {
     return sourceCompare;
   }
-  final scopeCompare = left.scope.compareTo(right.scope);
-  if (scopeCompare != 0) {
-    return scopeCompare;
+  final firewallCompare = left.firewall.compareTo(right.firewall);
+  if (firewallCompare != 0) {
+    return firewallCompare;
   }
   return left.label.compareTo(right.label);
 }
