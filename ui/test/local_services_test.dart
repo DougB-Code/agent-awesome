@@ -84,6 +84,24 @@ void main() {
     ]);
   });
 
+  test('managed service binary path matches release profile layout', () {
+    final path = managedServiceBinaryPath(
+      workspaceRoot: '/tmp/work',
+      profileId: 'Agent Awesome',
+      serviceName: 'Agent Awesome Gateway',
+    );
+    final marker = managedServicePrebuiltMarkerPath(
+      workspaceRoot: '/tmp/work',
+      profileId: 'Agent Awesome',
+    );
+
+    expect(
+      path,
+      '/tmp/work/harness/build/profiles/agent-awesome/bin/agent-awesome-gateway',
+    );
+    expect(marker, '/tmp/work/harness/build/profiles/agent-awesome/.prebuilt');
+  });
+
   test('managed gateway environment disables ambient Slack ingress', () {
     final environment = buildManagedGatewayEnvironment(
       config: _testConfig(),

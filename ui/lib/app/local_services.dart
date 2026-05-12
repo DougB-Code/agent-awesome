@@ -661,8 +661,7 @@ class LocalServiceSupervisor {
     await Directory(env['GOCACHE']!).create(recursive: true);
     final resolvedOutputLogPath =
         outputLogPath ?? _processOutputLogPath(arguments);
-    await _writeLogLine(name, 'building $packagePath in $workingDirectory');
-    final executable = await _buildBinary(
+    final executable = await _resolveServiceExecutable(
       profile: profile,
       name: name,
       workingDirectory: workingDirectory,
@@ -770,6 +769,39 @@ class LocalServiceSupervisor {
   }
 
   /// Builds a Go command binary into the profile build directory.
+  Future<String> _resolveServiceExecutable({
+    required RuntimeProfile profile,
+    required String name,
+    required String workingDirectory,
+    required String packagePath,
+    required Map<String, String> environment,
+  }) async {
+    final executable = managedServiceBinaryPath(
+      workspaceRoot: config.workspaceRoot,
+      profileId: profile.id,
+      serviceName: name,
+    );
+    final prebuiltMarker = File(
+      managedServicePrebuiltMarkerPath(
+        workspaceRoot: config.workspaceRoot,
+        profileId: profile.id,
+      ),
+    );
+    if (await prebuiltMarker.exists() && await File(executable).exists()) {
+      await _writeLogLine(name, 'using prebuilt $executable');
+      return executable;
+    }
+    await _writeLogLine(name, 'building $packagePath in $workingDirectory');
+    return _buildBinary(
+      profile: profile,
+      name: name,
+      workingDirectory: workingDirectory,
+      packagePath: packagePath,
+      environment: environment,
+    );
+  }
+
+  /// Builds a Go command binary into the profile build directory.
   Future<String> _buildBinary({
     required RuntimeProfile profile,
     required String name,
@@ -777,14 +809,16 @@ class LocalServiceSupervisor {
     required String packagePath,
     required Map<String, String> environment,
   }) async {
-    final binRoot = Directory(
-      '${config.workspaceRoot}/harness/build/profiles/${_binaryName(profile.id)}/bin',
+    final executable = managedServiceBinaryPath(
+      workspaceRoot: config.workspaceRoot,
+      profileId: profile.id,
+      serviceName: name,
     );
+    final binRoot = File(executable).parent;
     await binRoot.create(recursive: true);
-    final executable = '${binRoot.path}/${_binaryName(name)}';
     final result = await _processSupervisor.run(
       ManagedProcessSpec(
-        id: 'go-build-${_binaryName(profile.id)}-${_binaryName(name)}',
+        id: 'go-build-${serviceBinaryName(profile.id)}-${serviceBinaryName(name)}',
         name: 'go build $name',
         executable: 'go',
         arguments: buildGoBuildArguments(
@@ -895,15 +929,6 @@ class LocalServiceSupervisor {
   Future<String> _startupFailureMessage(String name, Object error) async {
     await _writeLogLine(name, 'startup failed: $error');
     return 'Startup failed. See service logs for details.';
-  }
-
-  /// Converts a display name into a stable local binary filename.
-  String _binaryName(String name) {
-    final safe = name
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-+|-+$'), '');
-    return safe.isEmpty ? 'service' : safe;
   }
 
   /// Creates parent directories for known file path arguments.
@@ -1031,6 +1056,40 @@ List<String> buildGoBuildArguments({
   required String packagePath,
 }) {
   return <String>['build', '-buildvcs=false', '-o', outputPath, packagePath];
+}
+
+/// Returns the app-managed binary path for one service in one runtime profile.
+String managedServiceBinaryPath({
+  required String workspaceRoot,
+  required String profileId,
+  required String serviceName,
+}) {
+  return '${managedServiceProfileBuildPath(workspaceRoot: workspaceRoot, profileId: profileId)}/bin/${serviceBinaryName(serviceName)}';
+}
+
+/// Returns the profile build directory used for managed service binaries.
+String managedServiceProfileBuildPath({
+  required String workspaceRoot,
+  required String profileId,
+}) {
+  return '$workspaceRoot/harness/build/profiles/${serviceBinaryName(profileId)}';
+}
+
+/// Returns the marker path that identifies a packaged prebuilt service set.
+String managedServicePrebuiltMarkerPath({
+  required String workspaceRoot,
+  required String profileId,
+}) {
+  return '${managedServiceProfileBuildPath(workspaceRoot: workspaceRoot, profileId: profileId)}/.prebuilt';
+}
+
+/// Converts a display name into a stable local binary filename.
+String serviceBinaryName(String name) {
+  final safe = name
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  return safe.isEmpty ? 'service' : safe;
 }
 
 /// Builds the UI-visible startup line for one managed service process.

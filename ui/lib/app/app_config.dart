@@ -48,9 +48,13 @@ class AppConfig {
         'AGENT_USER_ID',
         defaultValue: 'doug',
       ),
-      workspaceRoot: const String.fromEnvironment(
-        'AGENTAWESOME_WORKSPACE_ROOT',
-        defaultValue: '/home/doug/dev/agentawesome/agent',
+      workspaceRoot: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENTAWESOME_WORKSPACE_ROOT',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENTAWESOME_WORKSPACE_ROOT',
+        fallback: _defaultWorkspaceRoot(),
       ),
       autoStartLocalServices: const bool.fromEnvironment(
         'AUTO_START_LOCAL_SERVICES',
@@ -205,4 +209,31 @@ String _gatewayAuthorizationHeaderFromEnvironment() {
     return '';
   }
   return 'Bearer ${token.trim()}';
+}
+
+/// Finds the nearest Agent Awesome workspace root for source and release runs.
+String _defaultWorkspaceRoot() {
+  final executableDirectory = File(Platform.resolvedExecutable).parent;
+  final candidates = <Directory>[
+    Directory.current,
+    Directory.current.parent,
+    executableDirectory,
+    executableDirectory.parent,
+  ];
+  for (final candidate in candidates) {
+    if (_isAgentAwesomeWorkspace(candidate)) {
+      return candidate.absolute.path;
+    }
+  }
+  return Directory.current.absolute.path;
+}
+
+/// Reports whether a directory contains the app-owned runtime topology files.
+bool _isAgentAwesomeWorkspace(Directory directory) {
+  return File(
+        '${directory.path}/ui/runtime_profiles/agent_awesome.json',
+      ).existsSync() &&
+      Directory('${directory.path}/harness').existsSync() &&
+      Directory('${directory.path}/gateway').existsSync() &&
+      Directory('${directory.path}/memory').existsSync();
 }

@@ -1,0 +1,178 @@
+# This workflow builds distributable Agent Awesome artifacts without deploying
+# them. Tagged runs publish GitHub release assets and a GHCR container image.
+name: Release Build
+
+on:
+  push:
+    tags:
+      - v*
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOFLAGS: -mod=readonly
+  GOCACHE: ${{ github.workspace }}/build/go/cache
+  GOMODCACHE: ${{ github.workspace }}/build/go/pkg/mod
+  PUB_CACHE: ${{ github.workspace }}/build/pub-cache
+  FLUTTER_VERSION: 3.38.5
+
+jobs:
+  linux-desktop:
+    name: Linux desktop bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libgtk-3-dev liblzma-dev ninja-build pkg-config
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26.0
+          cache-dependency-path: |
+            gateway/go.sum
+            harness/go.sum
+            memory/go.sum
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Prepare build directories
+        run: mkdir -p "$GOCACHE" "$GOMODCACHE" "$PUB_CACHE" build/release
+
+      - name: Download Go dependencies
+        run: |
+          (cd gateway && go mod download)
+          (cd harness && go mod download)
+          (cd memory && go mod download)
+
+      - name: Download Flutter dependencies
+        working-directory: ui
+        run: flutter pub get
+
+      - name: Build service binaries
+        run: |
+          set -euo pipefail
+          release_root="${GITHUB_WORKSPACE}/build/release/agent-awesome-linux-x64"
+          profile_root="${release_root}/harness/build/profiles/agent-awesome"
+          bin_root="${profile_root}/bin"
+          rm -rf "$release_root"
+          mkdir -p "$bin_root"
+          (cd harness && go build -trimpath -buildvcs=false -o "${bin_root}/agent-awesome-harness" ./cmd/agent-awesome)
+          (cd gateway && go build -trimpath -buildvcs=false -o "${bin_root}/agent-awesome-gateway" ./cmd/agent-gateway)
+          (cd memory && go build -trimpath -buildvcs=false -o "${bin_root}/personal-memory" ./cmd/memoryd)
+          touch "${profile_root}/.prebuilt"
+
+      - name: Smoke test service binaries
+        run: |
+          set -euo pipefail
+          bin_root="${GITHUB_WORKSPACE}/build/release/agent-awesome-linux-x64/harness/build/profiles/agent-awesome/bin"
+          "${bin_root}/agent-awesome-harness" --help >/dev/null
+          "${bin_root}/agent-awesome-gateway" --check-config --harness-auto-start=false --memory-auto-start=false
+          "${bin_root}/personal-memory" --check-config --db "${RUNNER_TEMP}/memory.db" --data "${RUNNER_TEMP}/memory-files"
+
+      - name: Build Flutter Linux release
+        working-directory: ui
+        run: flutter build linux --release
+
+      - name: Assemble Linux bundle
+        run: |
+          set -euo pipefail
+          release_root="${GITHUB_WORKSPACE}/build/release/agent-awesome-linux-x64"
+          cp -a ui/build/linux/x64/release/bundle/. "$release_root/"
+          mkdir -p "${release_root}/ui" "${release_root}/harness" "${release_root}/gateway" "${release_root}/memory"
+          cp -a ui/runtime_profiles "${release_root}/ui/"
+          cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml "${release_root}/harness/"
+          cp -a gateway/slack-manifest.json "${release_root}/gateway/"
+          printf '%s\n' \
+            'Agent Awesome Linux x64 release bundle' \
+            '' \
+            'Run the desktop executable from this extracted directory.' \
+            'The bundled service binaries live under harness/build/profiles/agent-awesome/bin.' \
+            > "${release_root}/README.txt"
+
+      - name: Archive Linux bundle
+        run: |
+          set -euo pipefail
+          cd build/release
+          tar -czf agent-awesome-linux-x64.tar.gz agent-awesome-linux-x64
+          sha256sum agent-awesome-linux-x64.tar.gz > agent-awesome-linux-x64.tar.gz.sha256
+
+      - name: Upload Linux bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-awesome-linux-x64
+          path: |
+            build/release/agent-awesome-linux-x64.tar.gz
+            build/release/agent-awesome-linux-x64.tar.gz.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          assets=(
+            build/release/agent-awesome-linux-x64.tar.gz
+            build/release/agent-awesome-linux-x64.tar.gz.sha256
+          )
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" --title "Agent Awesome ${tag}" --generate-notes
+          fi
+
+  cloudflare-container:
+    name: Cloudflare container image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build container image
+        run: |
+          set -euo pipefail
+          raw_tag="${GITHUB_REF_NAME:-manual}"
+          image_tag="$(printf '%s' "$raw_tag" | tr '/:@ ' '----' | tr -cd 'A-Za-z0-9_.-')"
+          image_tag="${image_tag:-manual}"
+          image="ghcr.io/${GITHUB_REPOSITORY,,}/cloudflare:${image_tag}"
+          docker build --file Dockerfile.cloudflare --tag "$image" .
+          mkdir -p build/release
+          docker save "$image" -o build/release/agent-awesome-cloudflare-image.tar
+          sha256sum build/release/agent-awesome-cloudflare-image.tar > build/release/agent-awesome-cloudflare-image.tar.sha256
+          echo "image=$image" >> "$GITHUB_ENV"
+
+      - name: Upload container image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-awesome-cloudflare-image
+          path: |
+            build/release/agent-awesome-cloudflare-image.tar
+            build/release/agent-awesome-cloudflare-image.tar.sha256
+          if-no-files-found: error
+
+      - name: Push GHCR image
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker push "$image"
