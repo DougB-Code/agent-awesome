@@ -58,6 +58,22 @@ func testConfig(configure func(*config.Config)) config.Config {
 			AllowedSensitivities: []string{"public", "internal", "private"},
 		}
 	}
+	if len(cfg.AgentProfiles) == 0 {
+		cfg.AgentProfiles = []config.AgentProfile{
+			{
+				ID:                   "test",
+				Label:                "Test",
+				AppName:              cfg.AppName,
+				UserID:               cfg.UserID,
+				Actor:                cfg.MemoryPolicy.Actor,
+				ReadDomains:          cfg.MemoryPolicy.ReadDomains,
+				WriteDomains:         cfg.MemoryPolicy.WriteDomains,
+				DefaultWriteDomain:   cfg.MemoryPolicy.DefaultWriteDomain,
+				AllowedSensitivities: cfg.MemoryPolicy.AllowedSensitivities,
+				AllowedFlows:         cfg.MemoryPolicy.AllowedFlows,
+			},
+		}
+	}
 	if len(cfg.MemoryServices) == 0 && cfg.MemoryService.Name != "" {
 		cfg.MemoryServices = []config.MemoryDomainService{
 			{
@@ -474,6 +490,132 @@ func TestContextAPIProxyUsesConfiguredUpstreamToken(t *testing.T) {
 	}
 }
 
+// TestProfileHeaderRoutesHarnessAndContext verifies profile-owned harness routing.
+func TestProfileHeaderRoutesHarnessAndContext(t *testing.T) {
+	dougAPI := false
+	doug := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		dougAPI = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer doug.Close()
+	familyAPI := false
+	family := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		familyAPI = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer family.Close()
+	familyContext := false
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		familyContext = true
+		if r.Header.Get(profileHeader) != "family" {
+			t.Fatalf("profile header = %q, want family", r.Header.Get(profileHeader))
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.HarnessBaseURL = doug.URL + "/api"
+		cfg.ContextBaseURL = doug.URL + "/api/context"
+		cfg.AgentProfiles = []config.AgentProfile{
+			testProfile("doug", "doug", "memory"),
+			testProfile("family", "family", "memory"),
+		}
+		cfg.AgentProfiles[1].HarnessBaseURL = family.URL + "/api"
+		cfg.AgentProfiles[1].ContextBaseURL = contextAPI.URL + "/api/context"
+	})
+
+	apiReq := httptest.NewRequest(http.MethodPost, "/api/profile-check", strings.NewReader(`{}`))
+	apiReq.Header.Set(profileHeader, "family")
+	apiRecorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(apiRecorder, apiReq)
+
+	if apiRecorder.Code != http.StatusOK {
+		t.Fatalf("api status = %d, want 200", apiRecorder.Code)
+	}
+	if !familyAPI || dougAPI {
+		t.Fatalf("profile routing family=%v doug=%v, want family only", familyAPI, dougAPI)
+	}
+
+	contextReq := httptest.NewRequest(http.MethodGet, "/api/context/tools/list", nil)
+	contextReq.Header.Set(profileHeader, "family")
+	contextRecorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(contextRecorder, contextReq)
+
+	if contextRecorder.Code != http.StatusOK {
+		t.Fatalf("context status = %d, want 200", contextRecorder.Code)
+	}
+	if !familyContext {
+		t.Fatalf("family context upstream was not called")
+	}
+}
+
+// TestProfileHeaderScopesMemoryGrants verifies gateway memory policy is per profile.
+func TestProfileHeaderScopesMemoryGrants(t *testing.T) {
+	upstreamCalled := false
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
+		var decoded map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+			t.Fatalf("decode context body: %v", err)
+		}
+		if decoded["domain_id"] != "family" {
+			t.Fatalf("domain_id = %#v, want family", decoded["domain_id"])
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+		cfg.MemoryDomains = memoryDomains("doug", "family")
+		cfg.AgentProfiles = []config.AgentProfile{
+			testProfile("doug", "doug", "doug"),
+			testProfile("family", "family", "family"),
+		}
+	})
+
+	blocked := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"search_memory","domain_id":"family","arguments":{"query":"hello"}}`))
+	blocked.Header.Set(profileHeader, "doug")
+	blockedRecorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(blockedRecorder, blocked)
+
+	if blockedRecorder.Code != http.StatusForbidden {
+		t.Fatalf("blocked status = %d, want 403", blockedRecorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("context upstream was called for blocked profile")
+	}
+
+	allowed := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"search_memory","domain_id":"family","arguments":{"query":"hello"}}`))
+	allowed.Header.Set(profileHeader, "family")
+	allowedRecorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(allowedRecorder, allowed)
+
+	if allowedRecorder.Code != http.StatusOK {
+		t.Fatalf("allowed status = %d, want 200; body = %q", allowedRecorder.Code, allowedRecorder.Body.String())
+	}
+	if !upstreamCalled {
+		t.Fatalf("context upstream was not called for allowed profile")
+	}
+}
+
+// TestProfileHeaderRequiredWithMultipleProfiles avoids ambiguous cloud requests.
+func TestProfileHeaderRequiredWithMultipleProfiles(t *testing.T) {
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.AgentProfiles = []config.AgentProfile{
+			testProfile("doug", "doug", "memory"),
+			testProfile("family", "family", "memory"),
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/profile-check", strings.NewReader(`{}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", recorder.Code)
+	}
+}
+
 // TestContextAPIInjectsSingleAllowedDomain verifies the gateway owns domain defaults.
 func TestContextAPIInjectsSingleAllowedDomain(t *testing.T) {
 	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -755,6 +897,21 @@ func memoryDomains(ids ...string) []config.MemoryDomain {
 		})
 	}
 	return domains
+}
+
+// testProfile builds a minimal profile for gateway route tests.
+func testProfile(id string, userID string, domainID string) config.AgentProfile {
+	return config.AgentProfile{
+		ID:                   id,
+		Label:                id,
+		AppName:              "app",
+		UserID:               userID,
+		Actor:                "agent:" + id,
+		ReadDomains:          []string{domainID},
+		WriteDomains:         []string{domainID},
+		DefaultWriteDomain:   domainID,
+		AllowedSensitivities: []string{"public", "internal", "private"},
+	}
 }
 
 // containsSecret recursively checks a decoded JSON value for a secret.

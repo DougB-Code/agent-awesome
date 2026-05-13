@@ -17,9 +17,20 @@ type Config struct {
 	GatewayAuthToken        string
 	AppName                 string
 	AgentUserID             string
+	ProfileBindings         []ProfileBinding
 	RequestTimeout          time.Duration
 	EventDedupTTL           time.Duration
 	MaxConcurrentDispatches int
+}
+
+// ProfileBinding maps one Slack scope to one gateway agent profile.
+type ProfileBinding struct {
+	ProfileID      string
+	AppName        string
+	AgentUserID    string
+	TeamID         string
+	ChannelID      string
+	AllowedUserIDs []string
 }
 
 // EventEnvelope is the outer Slack Events API payload.
@@ -39,12 +50,13 @@ type DeliveryInfo struct {
 
 // MessageEvent is the Slack message event subset Agent Awesome accepts.
 type MessageEvent struct {
-	Type     string `json:"type"`
-	Subtype  string `json:"subtype"`
-	Channel  string `json:"channel"`
-	User     string `json:"user"`
-	Text     string `json:"text"`
-	TS       string `json:"ts"`
-	ThreadTS string `json:"thread_ts"`
-	BotID    string `json:"bot_id"`
+	Type      string `json:"type"`
+	Subtype   string `json:"subtype"`
+	Channel   string `json:"channel"`
+	User      string `json:"user"`
+	Text      string `json:"text"`
+	TS        string `json:"ts"`
+	ThreadTS  string `json:"thread_ts"`
+	BotID     string `json:"bot_id"`
+	ProfileID string `json:"-"`
 }

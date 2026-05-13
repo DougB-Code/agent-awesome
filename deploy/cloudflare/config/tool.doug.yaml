@@ -1,35 +1,13 @@
-# This file configures a local harness to use the Cloudflare context MCP server.
+# This file configures the Doug harness profile inside the Cloudflare container.
 local-exec:
   enabled: false
   allow-persistent-approvals: false
-  default-timeout: 10s
-  default-max-output-bytes: 65536
-  allowed-workdirs:
-    - .
-  commands:
-    - name: git_status
-      executable: git
-      description: Show repository status.
-      args:
-        - status
-        - --short
-      timeout: 5s
-      max-output-bytes: 16384
-      approval:
-        always-allow-within-workspace: false
-        always-allow-command-starts-with: []
-        always-allow: false
 mcp:
   enabled: true
   servers:
     - name: memory
       transport: streamable-http
-      endpoint: https://agent-awesome.com/mcp
-      headers-from-env:
-        Authorization: AGENTAWESOME_CLOUDFLARE_GATEWAY_AUTHORIZATION
-        X-Agent-Awesome-Profile: AGENTAWESOME_CLOUDFLARE_PROFILE
-        CF-Access-Client-Id: CF_ACCESS_CLIENT_ID
-        CF-Access-Client-Secret: CF_ACCESS_CLIENT_SECRET
+      endpoint: http://127.0.0.1:8090/mcp
       require-confirmation-tools:
         - remember
         - save_memory_candidate
@@ -75,16 +53,11 @@ mcp:
           - upsert_task_relation
           - delete_task_relation
 memory:
-  actor: agent:agent-awesome
+  actor: agent:doug
   read-domains:
     - id: doug
       label: Doug Memory
-      endpoint: https://agent-awesome.com/mcp/doug
-      headers-from-env:
-        Authorization: AGENTAWESOME_CLOUDFLARE_GATEWAY_AUTHORIZATION
-        X-Agent-Awesome-Profile: AGENTAWESOME_CLOUDFLARE_PROFILE
-        CF-Access-Client-Id: CF_ACCESS_CLIENT_ID
-        CF-Access-Client-Secret: CF_ACCESS_CLIENT_SECRET
+      endpoint: http://127.0.0.1:8090/mcp
   write-domains:
     - doug
   default-write-domain: doug

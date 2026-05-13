@@ -33,6 +33,7 @@ type Config struct {
 	MemoryDomains                    []MemoryDomain
 	MemoryPolicy                     MemoryPolicy
 	MemoryServices                   []MemoryDomainService
+	AgentProfiles                    []AgentProfile
 	AppName                          string
 	UserID                           string
 	AuthToken                        string
@@ -75,6 +76,30 @@ type MemoryDomainFlow struct {
 	To   string `json:"to"`
 }
 
+// AgentProfile stores one server-side executable agent identity and grants.
+type AgentProfile struct {
+	ID                   string                `json:"id"`
+	Label                string                `json:"label"`
+	AppName              string                `json:"app_name"`
+	UserID               string                `json:"user_id"`
+	HarnessBaseURL       string                `json:"harness_base_url,omitempty"`
+	ContextBaseURL       string                `json:"context_base_url,omitempty"`
+	Actor                string                `json:"actor"`
+	ReadDomains          []string              `json:"read_domains"`
+	WriteDomains         []string              `json:"write_domains"`
+	DefaultWriteDomain   string                `json:"default_write_domain"`
+	AllowedSensitivities []string              `json:"allowed_sensitivities"`
+	AllowedFlows         []MemoryDomainFlow    `json:"allowed_flows,omitempty"`
+	SlackBindings        []SlackProfileBinding `json:"slack_bindings,omitempty"`
+}
+
+// SlackProfileBinding maps one Slack scope to an agent profile.
+type SlackProfileBinding struct {
+	TeamID         string   `json:"team_id"`
+	ChannelID      string   `json:"channel_id"`
+	AllowedUserIDs []string `json:"allowed_user_ids"`
+}
+
 // MemoryDomainService stores process supervision for one memory domain.
 type MemoryDomainService struct {
 	DomainID   string   `json:"domain_id"`
@@ -113,6 +138,7 @@ func FromFlags(args []string) (Config, error) {
 	memoryDomainsJSON := envString("AGENTAWESOME_MEMORY_DOMAINS_JSON", "")
 	memoryPolicyJSON := envString("AGENTAWESOME_MEMORY_POLICY_JSON", "")
 	memoryServicesJSON := envString("AGENTAWESOME_MEMORY_SERVICES_JSON", "")
+	agentProfilesJSON := envString("AGENTAWESOME_AGENT_PROFILES_JSON", "")
 	cfg := Config{
 		ListenAddress:                    envString("AGENTAWESOME_GATEWAY_ADDR", "127.0.0.1:8070"),
 		GatewayBaseURL:                   envString("AGENTAWESOME_GATEWAY_API_BASE_URL", ""),
@@ -172,6 +198,7 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&memoryDomainsJSON, "memory-domains-json", memoryDomainsJSON, "JSON memory domain list for gateway routing")
 	fs.StringVar(&memoryPolicyJSON, "memory-policy-json", memoryPolicyJSON, "JSON memory access policy for the active agent profile")
 	fs.StringVar(&memoryServicesJSON, "memory-services-json", memoryServicesJSON, "JSON memory service list for per-domain supervision")
+	fs.StringVar(&agentProfilesJSON, "agent-profiles-json", agentProfilesJSON, "JSON agent profile list for gateway request policy")
 	fs.StringVar(&cfg.AppName, "app-name", cfg.AppName, "default assistant app name")
 	fs.StringVar(&cfg.UserID, "user-id", cfg.UserID, "default assistant user id")
 	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "optional bearer token required for gateway API requests")
@@ -202,6 +229,9 @@ func FromFlags(args []string) (Config, error) {
 	cfg.HarnessService.Arguments = harnessArgs
 	cfg.MemoryService.Arguments = memoryArgs
 	if err := cfg.applyMemoryTopology(memoryDomainsJSON, memoryPolicyJSON); err != nil {
+		return Config{}, err
+	}
+	if err := cfg.applyAgentProfiles(agentProfilesJSON); err != nil {
 		return Config{}, err
 	}
 	if strings.TrimSpace(cfg.GatewayBaseURL) == "" {
@@ -277,6 +307,9 @@ func (c Config) Validate() error {
 	if err := c.validateMemoryServices(); err != nil {
 		return err
 	}
+	if err := c.validateAgentProfiles(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -308,6 +341,9 @@ func (s SlackConfig) Validate() error {
 	if !s.SocketMode && s.SigningSecret == "" {
 		return fmt.Errorf("signing secret is required when Slack HTTP Events API is enabled")
 	}
+	if !s.hasLegacyAllowList() {
+		return nil
+	}
 	for _, required := range []struct {
 		name  string
 		value string
@@ -335,6 +371,7 @@ func (c Config) StatusView() map[string]any {
 		"memory_domains":                      memoryDomainStatusViews(c.MemoryDomains),
 		"memory_policy":                       c.MemoryPolicy.StatusView(),
 		"memory_services":                     memoryServiceStatusViews(c.MemoryServices),
+		"agent_profiles":                      agentProfileStatusViews(c.AgentProfiles),
 		"app_name":                            c.AppName,
 		"user_id":                             c.UserID,
 		"auth_required":                       c.AuthToken != "",
@@ -353,6 +390,52 @@ func (c Config) StatusView() map[string]any {
 		"memory_service":  c.MemoryService.StatusView(),
 		"slack":           c.Slack.StatusView(),
 	}
+}
+
+// MemoryPolicy returns this profile's memory grants in gateway policy shape.
+func (p AgentProfile) MemoryPolicy() MemoryPolicy {
+	return MemoryPolicy{
+		Actor:                p.Actor,
+		ReadDomains:          append([]string(nil), p.ReadDomains...),
+		WriteDomains:         append([]string(nil), p.WriteDomains...),
+		DefaultWriteDomain:   p.DefaultWriteDomain,
+		AllowedSensitivities: append([]string(nil), p.AllowedSensitivities...),
+		AllowedFlows:         append([]MemoryDomainFlow(nil), p.AllowedFlows...),
+	}
+}
+
+// StatusView returns sanitized agent profile settings.
+func (p AgentProfile) StatusView() map[string]any {
+	return map[string]any{
+		"id":               p.ID,
+		"label":            p.Label,
+		"app_name":         p.AppName,
+		"user_id":          p.UserID,
+		"harness_base_url": p.HarnessBaseURL,
+		"context_base_url": p.ContextBaseURL,
+		"memory_policy":    p.MemoryPolicy().StatusView(),
+		"slack_bindings":   slackBindingStatusViews(p.SlackBindings),
+		"slack_configured": len(p.SlackBindings) > 0,
+	}
+}
+
+// ProfileByID returns one configured agent profile by id.
+func (c Config) ProfileByID(profileID string) (AgentProfile, bool) {
+	profileID = strings.TrimSpace(profileID)
+	for _, profile := range c.AgentProfiles {
+		if strings.TrimSpace(profile.ID) == profileID {
+			return profile, true
+		}
+	}
+	return AgentProfile{}, false
+}
+
+// DefaultProfile returns the first configured agent profile.
+func (c Config) DefaultProfile() (AgentProfile, bool) {
+	if len(c.AgentProfiles) == 0 {
+		return AgentProfile{}, false
+	}
+	return c.AgentProfiles[0], true
 }
 
 // StatusView returns sanitized service supervision settings.
@@ -455,6 +538,22 @@ func (c *Config) applyMemoryTopology(domainsJSON string, policyJSON string) erro
 	return nil
 }
 
+// applyAgentProfiles loads request-scoped agent profiles from JSON flags.
+func (c *Config) applyAgentProfiles(profilesJSON string) error {
+	if strings.TrimSpace(profilesJSON) != "" {
+		var profiles []AgentProfile
+		if err := json.Unmarshal([]byte(profilesJSON), &profiles); err != nil {
+			return fmt.Errorf("agent profiles JSON: %w", err)
+		}
+		c.AgentProfiles = profiles
+	}
+	if len(c.AgentProfiles) == 0 {
+		c.AgentProfiles = []AgentProfile{defaultAgentProfile(c.AppName, c.UserID, c.MemoryPolicy)}
+	}
+	c.MemoryPolicy = c.AgentProfiles[0].MemoryPolicy()
+	return nil
+}
+
 // applyMemoryServices loads per-domain memory service supervision from JSON.
 func (c *Config) applyMemoryServices(servicesJSON string) error {
 	if strings.TrimSpace(servicesJSON) != "" {
@@ -553,6 +652,85 @@ func (c Config) validateMemoryServices() error {
 	return nil
 }
 
+// validateAgentProfiles rejects unsafe profile ids and unknown memory grants.
+func (c Config) validateAgentProfiles() error {
+	if len(c.AgentProfiles) == 0 {
+		return fmt.Errorf("at least one agent profile is required")
+	}
+	domainIDs := make(map[string]struct{}, len(c.MemoryDomains))
+	for _, domain := range c.MemoryDomains {
+		domainIDs[strings.TrimSpace(domain.ID)] = struct{}{}
+	}
+	seen := map[string]struct{}{}
+	hasSlackBindings := false
+	for _, profile := range c.AgentProfiles {
+		id := strings.TrimSpace(profile.ID)
+		if !isSafeID(id) {
+			return fmt.Errorf("agent profile id %q is not a safe id", profile.ID)
+		}
+		if _, exists := seen[id]; exists {
+			return fmt.Errorf("duplicate agent profile id %q", id)
+		}
+		seen[id] = struct{}{}
+		if strings.TrimSpace(profile.Label) == "" {
+			return fmt.Errorf("agent profile %q label is required", id)
+		}
+		if strings.TrimSpace(profile.AppName) == "" {
+			return fmt.Errorf("agent profile %q app_name is required", id)
+		}
+		if strings.TrimSpace(profile.UserID) == "" {
+			return fmt.Errorf("agent profile %q user_id is required", id)
+		}
+		if err := validateOptionalTrimmedRequestURL("agent profile "+id+" harness_base_url", profile.HarnessBaseURL); err != nil {
+			return err
+		}
+		if err := validateOptionalTrimmedRequestURL("agent profile "+id+" context_base_url", profile.ContextBaseURL); err != nil {
+			return err
+		}
+		if err := validateMemoryPolicy(profile.MemoryPolicy(), domainIDs); err != nil {
+			return fmt.Errorf("agent profile %q: %w", id, err)
+		}
+		if len(profile.SlackBindings) > 0 {
+			hasSlackBindings = true
+		}
+		if err := validateSlackBindings(profile.ID, profile.SlackBindings); err != nil {
+			return err
+		}
+	}
+	if c.Slack.Enabled && !hasSlackBindings && !c.Slack.hasCompleteLegacyAllowList() {
+		return fmt.Errorf("slack profile binding or legacy allow-list is required when Slack is enabled")
+	}
+	return nil
+}
+
+// validateSlackBindings rejects incomplete Slack profile scopes.
+func validateSlackBindings(profileID string, bindings []SlackProfileBinding) error {
+	for index, binding := range bindings {
+		label := fmt.Sprintf("agent profile %q slack binding %d", strings.TrimSpace(profileID), index)
+		if strings.TrimSpace(binding.TeamID) == "" {
+			return fmt.Errorf("%s team_id is required", label)
+		}
+		if strings.TrimSpace(binding.ChannelID) == "" {
+			return fmt.Errorf("%s channel_id is required", label)
+		}
+		if len(binding.AllowedUserIDs) == 0 {
+			return fmt.Errorf("%s allowed_user_ids must not be empty", label)
+		}
+		seen := map[string]struct{}{}
+		for _, userID := range binding.AllowedUserIDs {
+			userID = strings.TrimSpace(userID)
+			if userID == "" {
+				return fmt.Errorf("%s allowed_user_ids must not contain blank values", label)
+			}
+			if _, exists := seen[userID]; exists {
+				return fmt.Errorf("%s contains duplicate user id %q", label, userID)
+			}
+			seen[userID] = struct{}{}
+		}
+	}
+	return nil
+}
+
 // validateMemoryPolicy rejects incomplete or over-broad active profile grants.
 func validateMemoryPolicy(policy MemoryPolicy, domainIDs map[string]struct{}) error {
 	if strings.TrimSpace(policy.Actor) == "" {
@@ -642,6 +820,53 @@ func defaultMemoryPolicy(appName string, domains []MemoryDomain) MemoryPolicy {
 	}
 }
 
+// defaultAgentProfile returns the shipped one-profile gateway identity.
+func defaultAgentProfile(appName string, userID string, policy MemoryPolicy) AgentProfile {
+	return AgentProfile{
+		ID:                   defaultProfileID(appName),
+		Label:                defaultProfileLabel(appName),
+		AppName:              strings.TrimSpace(appName),
+		UserID:               strings.TrimSpace(userID),
+		Actor:                policy.Actor,
+		ReadDomains:          append([]string(nil), policy.ReadDomains...),
+		WriteDomains:         append([]string(nil), policy.WriteDomains...),
+		DefaultWriteDomain:   policy.DefaultWriteDomain,
+		AllowedSensitivities: append([]string(nil), policy.AllowedSensitivities...),
+		AllowedFlows:         append([]MemoryDomainFlow(nil), policy.AllowedFlows...),
+	}
+}
+
+// defaultProfileID derives a safe profile id from the app name.
+func defaultProfileID(appName string) string {
+	normalized := strings.Trim(strings.NewReplacer("_", "-", ".", "-", " ", "-").Replace(strings.ToLower(appName)), "-")
+	if normalized == "" {
+		return "agent-awesome"
+	}
+	if !isSafeID(normalized) {
+		return "agent-awesome"
+	}
+	return normalized
+}
+
+// defaultProfileLabel derives a readable label from the app name.
+func defaultProfileLabel(appName string) string {
+	id := defaultProfileID(appName)
+	parts := strings.FieldsFunc(id, func(r rune) bool {
+		return r == '-' || r == '_'
+	})
+	for index, part := range parts {
+		if part == "" {
+			continue
+		}
+		parts[index] = strings.ToUpper(part[:1]) + part[1:]
+	}
+	label := strings.Join(parts, " ")
+	if strings.TrimSpace(label) == "" {
+		return "Agent Awesome"
+	}
+	return label
+}
+
 // MemoryServiceNameForDomain returns the deterministic service name for a domain.
 func MemoryServiceNameForDomain(domainID string) string {
 	domainID = strings.TrimSpace(domainID)
@@ -711,6 +936,28 @@ func memoryServiceStatusViews(services []MemoryDomainService) []map[string]any {
 	views := make([]map[string]any, 0, len(services))
 	for _, service := range services {
 		views = append(views, service.StatusView())
+	}
+	return views
+}
+
+// agentProfileStatusViews renders sanitized profile rows.
+func agentProfileStatusViews(profiles []AgentProfile) []map[string]any {
+	views := make([]map[string]any, 0, len(profiles))
+	for _, profile := range profiles {
+		views = append(views, profile.StatusView())
+	}
+	return views
+}
+
+// slackBindingStatusViews renders Slack scopes without token fields.
+func slackBindingStatusViews(bindings []SlackProfileBinding) []map[string]any {
+	views := make([]map[string]any, 0, len(bindings))
+	for _, binding := range bindings {
+		views = append(views, map[string]any{
+			"team_id":          binding.TeamID,
+			"channel_id":       binding.ChannelID,
+			"allowed_user_ids": append([]string(nil), binding.AllowedUserIDs...),
+		})
 	}
 	return views
 }
@@ -856,6 +1103,20 @@ func validateSlackRequired(name string, value string) error {
 		return fmt.Errorf("%s is required when Slack is enabled", name)
 	}
 	return nil
+}
+
+// hasCompleteLegacyAllowList reports whether old single-profile Slack scope is set.
+func (s SlackConfig) hasCompleteLegacyAllowList() bool {
+	return strings.TrimSpace(s.AllowedTeamID) != "" &&
+		strings.TrimSpace(s.AllowedUserID) != "" &&
+		strings.TrimSpace(s.AllowedChannelID) != ""
+}
+
+// hasLegacyAllowList reports whether any old single-profile Slack field is set.
+func (s SlackConfig) hasLegacyAllowList() bool {
+	return strings.TrimSpace(s.AllowedTeamID) != "" ||
+		strings.TrimSpace(s.AllowedUserID) != "" ||
+		strings.TrimSpace(s.AllowedChannelID) != ""
 }
 
 // envServiceConfig builds dependency supervision settings from environment keys.

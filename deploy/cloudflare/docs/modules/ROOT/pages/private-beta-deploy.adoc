@@ -65,6 +65,7 @@ curl -fsS \
   https://agent-awesome.com/api/gateway/beta-status
 curl -fsS \
   -H "Authorization: Bearer ${GATEWAY_TOKEN}" \
+  -H "X-Agent-Awesome-Profile: doug" \
   https://agent-awesome.com/api/context/tools/list
 ----
 
@@ -83,6 +84,7 @@ export AUTO_START_LOCAL_SERVICES=false
 
 Open chat and memory from the UI.
 Both routes should use the hosted gateway, not direct memory MCP endpoints.
+Use `ui/runtime_profiles/cloudflare_family.json` when testing the Family profile.
 
 == Slack Check
 
@@ -93,7 +95,8 @@ After Slack Events URL verification succeeds, send one message from the allow-li
 npx wrangler tail agent-awesome-pilot --format pretty
 ----
 
-Slack and the desktop UI should reach the same gateway-backed harness and memory topology.
+Slack and the desktop UI should reach the same gateway-backed profile topology.
+For multi-profile Slack, add `slack_bindings` to the intended profile in `AGENTAWESOME_AGENT_PROFILES_JSON`.
 
 == Snapshot Check
 
@@ -102,7 +105,7 @@ Slack and the desktop UI should reach the same gateway-backed harness and memory
 mkdir -p ../../../build/ai
 curl -fsS \
   -H "Authorization: Bearer ${PERSISTENCE_TOKEN}" \
-  https://agent-awesome.com/internal/context-snapshot/memory \
+  https://agent-awesome.com/internal/context-snapshot/doug \
   -o ../../../build/ai/cloudflare-context-snapshot.tar.gz
 test -s ../../../build/ai/cloudflare-context-snapshot.tar.gz
 gzip -t ../../../build/ai/cloudflare-context-snapshot.tar.gz

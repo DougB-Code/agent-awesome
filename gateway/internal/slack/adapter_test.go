@@ -121,6 +121,64 @@ func TestAcceptedMessageEnforcesAllowLists(t *testing.T) {
 	}
 }
 
+// TestAcceptedMessageMapsProfileBindings verifies Slack scopes select profiles.
+func TestAcceptedMessageMapsProfileBindings(t *testing.T) {
+	adapter := NewAdapter(Config{
+		Enabled: true,
+		ProfileBindings: []ProfileBinding{
+			{
+				ProfileID:      "doug",
+				AppName:        "app",
+				AgentUserID:    "doug",
+				TeamID:         "T1",
+				ChannelID:      "C1",
+				AllowedUserIDs: []string{"U1"},
+			},
+			{
+				ProfileID:      "family",
+				AppName:        "app",
+				AgentUserID:    "family",
+				TeamID:         "T1",
+				ChannelID:      "C2",
+				AllowedUserIDs: []string{"U1", "U2"},
+			},
+		},
+	})
+	event, _, ok := adapter.acceptedMessage(EventEnvelope{
+		Type:   "event_callback",
+		TeamID: "T1",
+		Event: MessageEvent{
+			Type:    "message",
+			Channel: "C2",
+			User:    "U2",
+			Text:    "hello",
+			TS:      "1.0",
+		},
+	})
+
+	if !ok {
+		t.Fatalf("acceptedMessage() rejected bound event")
+	}
+	if event.ProfileID != "family" {
+		t.Fatalf("ProfileID = %q, want family", event.ProfileID)
+	}
+
+	disallowed := EventEnvelope{
+		Type:   "event_callback",
+		TeamID: "T1",
+		Event: MessageEvent{
+			Type:    "message",
+			Channel: "C2",
+			User:    "U3",
+			Text:    "hello",
+			TS:      "2.0",
+		},
+	}
+	if _, reason, ok := adapter.acceptedMessage(disallowed); ok || !strings.Contains(reason, "profile") {
+		t.Fatalf("disallowed binding ok=%v reason=%q, want profile rejection", ok, reason)
+	}
+}
+
 // TestSessionIDForMessageUsesThreadRoot verifies Slack threads map to one session.
 func TestSessionIDForMessageUsesThreadRoot(t *testing.T) {
 	root := MessageEvent{Channel: "C1", TS: "1.0", ThreadTS: "0.5"}
@@ -298,6 +356,38 @@ func TestNewAdapterRoutesAgentTurnsThroughGateway(t *testing.T) {
 	}
 	if adapter.agent.headers["Authorization"] != "Bearer secret" {
 		t.Fatalf("Authorization = %q, want gateway bearer", adapter.agent.headers["Authorization"])
+	}
+}
+
+// TestNewAdapterCreatesProfileAgentClients verifies profile headers reach gateway.
+func TestNewAdapterCreatesProfileAgentClients(t *testing.T) {
+	adapter := NewAdapter(Config{
+		GatewayBaseURL:   "http://gateway.test/api",
+		GatewayAuthToken: "secret",
+		ProfileBindings: []ProfileBinding{
+			{
+				ProfileID:      "family",
+				AppName:        "app",
+				AgentUserID:    "family",
+				TeamID:         "T1",
+				ChannelID:      "C1",
+				AllowedUserIDs: []string{"U1"},
+			},
+		},
+	})
+
+	agent := adapter.agentForEvent(MessageEvent{ProfileID: "family"})
+	if agent == nil {
+		t.Fatalf("agentForEvent() = nil, want profile agent")
+	}
+	if agent.headers["Authorization"] != "Bearer secret" {
+		t.Fatalf("Authorization = %q, want gateway bearer", agent.headers["Authorization"])
+	}
+	if agent.headers["X-Agent-Awesome-Profile"] != "family" {
+		t.Fatalf("profile header = %q, want family", agent.headers["X-Agent-Awesome-Profile"])
+	}
+	if agent.userID != "family" {
+		t.Fatalf("agent user = %q, want family", agent.userID)
 	}
 }
 

@@ -421,6 +421,8 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		filepath.Join(root, "harness", "tool.local.yaml"),
 		filepath.Join(root, "harness", "tool.cloudflare.yaml"),
 		filepath.Join(root, "deploy", "cloudflare", "config", "tool.yaml"),
+		filepath.Join(root, "deploy", "cloudflare", "config", "tool.doug.yaml"),
+		filepath.Join(root, "deploy", "cloudflare", "config", "tool.family.yaml"),
 	}
 
 	for _, path := range paths {

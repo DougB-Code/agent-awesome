@@ -27,13 +27,15 @@ import (
 
 // Server routes gateway-owned endpoints and harness proxy traffic.
 type Server struct {
-	config        config.Config
-	manager       *supervisor.Manager
-	apiProxy      *proxy.Proxy
-	contextProxy  *proxy.Proxy
-	memoryProxies map[string]*proxy.Proxy
-	slack         *slack.Adapter
-	httpServer    *http.Server
+	config         config.Config
+	manager        *supervisor.Manager
+	apiProxy       *proxy.Proxy
+	contextProxy   *proxy.Proxy
+	apiProxies     map[string]*proxy.Proxy
+	contextProxies map[string]*proxy.Proxy
+	memoryProxies  map[string]*proxy.Proxy
+	slack          *slack.Adapter
+	httpServer     *http.Server
 }
 
 // readinessView summarizes whether proxied dependency routes should accept traffic.
@@ -115,6 +117,8 @@ type memorySnapshotOperationView struct {
 const maxGatewayContextRequestBytes int64 = 1 << 20
 
 const memoryDomainHeader = "X-Agent-Awesome-Memory-Domain"
+const profileHeader = "X-Agent-Awesome-Profile"
+const actorHeader = "X-Agent-Awesome-Actor"
 
 var errGatewayBodyTooLarge = errors.New("gateway request body too large")
 
@@ -125,6 +129,12 @@ const (
 	memoryReadAccess memoryAccessKind = iota
 	memoryWriteAccess
 )
+
+// executionContext is the gateway-owned profile context for one request.
+type executionContext struct {
+	Profile config.AgentProfile
+	Policy  config.MemoryPolicy
+}
 
 // contextToolCallRequest is the gateway-inspected context API request body.
 type contextToolCallRequest struct {
@@ -222,17 +232,23 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 	if err != nil {
 		return nil, err
 	}
+	apiProxies, contextProxies, err := agentProfileProxies(cfg, runtimePolicy)
+	if err != nil {
+		return nil, err
+	}
 	memoryProxies, err := memoryDomainProxies(cfg)
 	if err != nil {
 		return nil, err
 	}
 	server := &Server{
-		config:        cfg,
-		manager:       manager,
-		apiProxy:      apiProxy,
-		contextProxy:  contextProxy,
-		memoryProxies: memoryProxies,
-		slack:         slack.NewAdapter(slackConfig(cfg)),
+		config:         cfg,
+		manager:        manager,
+		apiProxy:       apiProxy,
+		contextProxy:   contextProxy,
+		apiProxies:     apiProxies,
+		contextProxies: contextProxies,
+		memoryProxies:  memoryProxies,
+		slack:          slack.NewAdapter(slackConfig(cfg)),
 	}
 	server.httpServer = &http.Server{
 		Addr:              cfg.ListenAddress,
@@ -266,6 +282,50 @@ func contextProxyOptions(cfg config.Config) []proxy.Option {
 	return append(options, proxy.WithUpstreamHeader("Authorization", "Bearer "+token))
 }
 
+// agentProfileProxies creates profile-specific harness API and context proxies.
+func agentProfileProxies(cfg config.Config, runtimePolicy *policy.Injector) (map[string]*proxy.Proxy, map[string]*proxy.Proxy, error) {
+	apiProxies := make(map[string]*proxy.Proxy, len(cfg.AgentProfiles))
+	contextProxies := make(map[string]*proxy.Proxy, len(cfg.AgentProfiles))
+	for _, profile := range cfg.AgentProfiles {
+		profileID := strings.TrimSpace(profile.ID)
+		apiBaseURL := profileHarnessBaseURL(cfg, profile)
+		apiProxy, err := proxy.New(
+			apiBaseURL,
+			"/api",
+			cfg.RequestTimeout,
+			proxy.WithRouteGroup("api:"+profileID),
+			proxy.WithBodyTransformer(runSSEBodyTransformer(runtimePolicy)),
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("agent profile %s api proxy: %w", profileID, err)
+		}
+		contextBaseURL := profileContextBaseURL(cfg, profile)
+		contextProxy, err := proxy.New(contextBaseURL, "/api/context", cfg.RequestTimeout, contextProxyOptions(cfg)...)
+		if err != nil {
+			return nil, nil, fmt.Errorf("agent profile %s context proxy: %w", profileID, err)
+		}
+		apiProxies[profileID] = apiProxy
+		contextProxies[profileID] = contextProxy
+	}
+	return apiProxies, contextProxies, nil
+}
+
+// profileHarnessBaseURL returns the harness API URL assigned to a profile.
+func profileHarnessBaseURL(cfg config.Config, profile config.AgentProfile) string {
+	if value := strings.TrimSpace(profile.HarnessBaseURL); value != "" {
+		return value
+	}
+	return cfg.HarnessBaseURL
+}
+
+// profileContextBaseURL returns the harness context API URL assigned to a profile.
+func profileContextBaseURL(cfg config.Config, profile config.AgentProfile) string {
+	if value := strings.TrimSpace(profile.ContextBaseURL); value != "" {
+		return value
+	}
+	return cfg.ContextBaseURL
+}
+
 // runSSEBodyTransformer applies optional operator policy to ADK run_sse requests.
 func runSSEBodyTransformer(injector *policy.Injector) proxy.BodyTransformer {
 	return func(r *http.Request, body []byte) ([]byte, error) {
@@ -294,7 +354,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/mcp", s.authenticated(s.memoryMCPHandler))
 	mux.HandleFunc("/mcp/", s.authenticated(s.memoryMCPHandler))
 	mux.HandleFunc("/api/context/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.contextAPIHandler)))
-	mux.Handle("/api/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.apiProxy.ServeHTTP)))
+	mux.HandleFunc("/api/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.apiHandler)))
 	return s.cors(mux)
 }
 
@@ -336,10 +396,26 @@ func (s *Server) channelsHandler(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// apiHandler applies profile context before proxying assistant API traffic.
+func (s *Server) apiHandler(w http.ResponseWriter, r *http.Request) {
+	exec, err := s.executionContextForRequest(r)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
+	s.apiProxyForProfile(exec.Profile.ID).ServeHTTP(w, requestWithExecutionContext(r, exec))
+}
+
 // contextAPIHandler enforces gateway memory-domain policy before proxying calls.
 func (s *Server) contextAPIHandler(w http.ResponseWriter, r *http.Request) {
+	exec, err := s.executionContextForRequest(r)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
+	contextProxy := s.contextProxyForProfile(exec.Profile.ID)
 	if r.Method != http.MethodPost || r.URL.Path != "/api/context/tools/call" {
-		s.contextProxy.ServeHTTP(w, r)
+		contextProxy.ServeHTTP(w, requestWithExecutionContext(r, exec))
 		return
 	}
 	body, err := readLimitedBody(w, r, maxGatewayContextRequestBytes)
@@ -360,7 +436,7 @@ func (s *Server) contextAPIHandler(w http.ResponseWriter, r *http.Request) {
 		writePolicyError(w, policyError{status: http.StatusForbidden, message: "memory domain overrides must use the gateway domain_id field"})
 		return
 	}
-	domainID, err := s.authorizeMemoryTool(call.Name, call.DomainID)
+	domainID, err := s.authorizeMemoryTool(exec.Policy, call.Name, call.DomainID)
 	if err != nil {
 		writePolicyError(w, err)
 		return
@@ -374,11 +450,16 @@ func (s *Server) contextAPIHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "encode context tool call"})
 		return
 	}
-	s.contextProxy.ServeHTTP(w, requestWithBody(r, r.URL.Path, nextBody))
+	contextProxy.ServeHTTP(w, requestWithExecutionContext(requestWithBody(r, r.URL.Path, nextBody), exec))
 }
 
 // memoryMCPHandler routes direct MCP traffic to an authorized memory domain.
 func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
+	exec, err := s.executionContextForRequest(r)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
 	requestedDomain, err := requestedMemoryDomain(r)
 	if err != nil {
 		writePolicyError(w, err)
@@ -394,7 +475,7 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 		writePolicyError(w, err)
 		return
 	}
-	domainID, err := s.authorizeMemoryAccess(access, requestedDomain)
+	domainID, err := s.authorizeMemoryAccess(exec.Policy, access, requestedDomain)
 	if err != nil {
 		writePolicyError(w, err)
 		return
@@ -411,26 +492,26 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // authorizeMemoryTool selects a domain and checks read/write grants for one tool.
-func (s *Server) authorizeMemoryTool(name string, requestedDomain string) (string, error) {
+func (s *Server) authorizeMemoryTool(policy config.MemoryPolicy, name string, requestedDomain string) (string, error) {
 	access, ok := memoryToolAccessFor(name)
 	if !ok {
 		return "", policyError{status: http.StatusForbidden, message: "memory tool " + strings.TrimSpace(name) + " is not allowed by gateway policy"}
 	}
-	return s.authorizeMemoryAccess(access, requestedDomain)
+	return s.authorizeMemoryAccess(policy, access, requestedDomain)
 }
 
 // authorizeMemoryAccess selects a domain and checks grants for one access type.
-func (s *Server) authorizeMemoryAccess(access memoryAccessKind, requestedDomain string) (string, error) {
-	allowed := s.allowedDomainsForAccess(access)
+func (s *Server) authorizeMemoryAccess(policy config.MemoryPolicy, access memoryAccessKind, requestedDomain string) (string, error) {
+	allowed := allowedDomainsForAccess(policy, access)
 	return selectAllowedDomain(strings.TrimSpace(requestedDomain), allowed, access)
 }
 
 // allowedDomainsForAccess returns active profile grants for one memory access type.
-func (s *Server) allowedDomainsForAccess(access memoryAccessKind) []string {
+func allowedDomainsForAccess(policy config.MemoryPolicy, access memoryAccessKind) []string {
 	if access == memoryWriteAccess {
-		return s.config.MemoryPolicy.WriteDomains
+		return policy.WriteDomains
 	}
-	return s.config.MemoryPolicy.ReadDomains
+	return policy.ReadDomains
 }
 
 // RunSlackSocketMode runs the Slack Socket Mode loop when configured.
@@ -671,6 +752,38 @@ func (s *Server) snapshotStatus(ctx context.Context, memoryHealth memoryHealthVi
 // snapshotStatusURL returns the domain-specific snapshot URL for status checks.
 func (s *Server) snapshotStatusURL() string {
 	return snapshotStatusURLForDomain(s.config.SnapshotStatusURL, s.config.MemoryPolicy.DefaultWriteDomain)
+}
+
+// executionContextForRequest resolves the gateway-owned profile for a request.
+func (s *Server) executionContextForRequest(r *http.Request) (executionContext, error) {
+	requested := strings.TrimSpace(r.Header.Get(profileHeader))
+	if requested == "" {
+		if profile, ok := s.config.DefaultProfile(); ok && len(s.config.AgentProfiles) == 1 {
+			return executionContext{Profile: profile, Policy: profile.MemoryPolicy()}, nil
+		}
+		return executionContext{}, policyError{status: http.StatusBadRequest, message: "agent profile is required"}
+	}
+	profile, ok := s.config.ProfileByID(requested)
+	if !ok {
+		return executionContext{}, policyError{status: http.StatusForbidden, message: "agent profile " + requested + " is not allowed"}
+	}
+	return executionContext{Profile: profile, Policy: profile.MemoryPolicy()}, nil
+}
+
+// apiProxyForProfile returns the harness API proxy assigned to a profile.
+func (s *Server) apiProxyForProfile(profileID string) *proxy.Proxy {
+	if proxy, ok := s.apiProxies[strings.TrimSpace(profileID)]; ok {
+		return proxy
+	}
+	return s.apiProxy
+}
+
+// contextProxyForProfile returns the harness context proxy assigned to a profile.
+func (s *Server) contextProxyForProfile(profileID string) *proxy.Proxy {
+	if proxy, ok := s.contextProxies[strings.TrimSpace(profileID)]; ok {
+		return proxy
+	}
+	return s.contextProxy
 }
 
 // snapshotStatusURLForDomain appends the memory domain to a snapshot base URL.
@@ -947,6 +1060,15 @@ func requestWithBody(r *http.Request, path string, body []byte) *http.Request {
 	return next
 }
 
+// requestWithExecutionContext annotates proxied traffic with verified profile data.
+func requestWithExecutionContext(r *http.Request, exec executionContext) *http.Request {
+	next := r.Clone(r.Context())
+	next.Header = r.Header.Clone()
+	next.Header.Set(profileHeader, exec.Profile.ID)
+	next.Header.Set(actorHeader, exec.Policy.Actor)
+	return next
+}
+
 // writeBodyReadError writes a safe body decode error to the caller.
 func writeBodyReadError(w http.ResponseWriter, err error) {
 	if errors.Is(err, errGatewayBodyTooLarge) {
@@ -1073,8 +1195,27 @@ func slackConfig(cfg config.Config) slack.Config {
 		GatewayAuthToken: cfg.AuthToken,
 		AppName:          cfg.AppName,
 		AgentUserID:      cfg.UserID,
+		ProfileBindings:  slackProfileBindings(cfg.AgentProfiles),
 		RequestTimeout:   cfg.RequestTimeout,
 	}
+}
+
+// slackProfileBindings maps gateway profile config into Slack adapter config.
+func slackProfileBindings(profiles []config.AgentProfile) []slack.ProfileBinding {
+	var bindings []slack.ProfileBinding
+	for _, profile := range profiles {
+		for _, binding := range profile.SlackBindings {
+			bindings = append(bindings, slack.ProfileBinding{
+				ProfileID:      profile.ID,
+				AppName:        profile.AppName,
+				AgentUserID:    profile.UserID,
+				TeamID:         binding.TeamID,
+				ChannelID:      binding.ChannelID,
+				AllowedUserIDs: append([]string(nil), binding.AllowedUserIDs...),
+			})
+		}
+	}
+	return bindings
 }
 
 // authenticated wraps API handlers with optional bearer token checks.
@@ -1101,7 +1242,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.config.AllowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", s.config.AllowedOrigin)
-			w.Header().Set("Access-Control-Allow-Headers", "authorization, content-type, x-agent-awesome-memory-domain")
+			w.Header().Set("Access-Control-Allow-Headers", "authorization, content-type, x-agent-awesome-memory-domain, x-agent-awesome-profile")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		}
 		next.ServeHTTP(w, r)

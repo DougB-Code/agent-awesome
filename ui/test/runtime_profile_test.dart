@@ -56,6 +56,7 @@ void main() {
     final gatewayArguments = gatewayArgumentsForProfile(profile);
     expect(gatewayArguments, contains('--memory-domains-json'));
     expect(gatewayArguments, contains('--memory-policy-json'));
+    expect(gatewayArguments, contains('--agent-profiles-json'));
     expect(gatewayArguments, contains('--memory-services-json'));
     final domainsJson = jsonDecode(
       gatewayArguments[gatewayArguments.indexOf('--memory-domains-json') + 1],
@@ -65,6 +66,9 @@ void main() {
     );
     final servicesJson = jsonDecode(
       gatewayArguments[gatewayArguments.indexOf('--memory-services-json') + 1],
+    );
+    final profilesJson = jsonDecode(
+      gatewayArguments[gatewayArguments.indexOf('--agent-profiles-json') + 1],
     );
     expect(domainsJson, isA<List<dynamic>>());
     expect(domainsJson.single['id'], 'memory');
@@ -76,6 +80,8 @@ void main() {
     );
     expect(servicesJson.single['domain_id'], 'memory');
     expect(servicesJson.single['auto_start'], isFalse);
+    expect(profilesJson.single['id'], 'agent-awesome');
+    expect(profilesJson.single['default_write_domain'], 'memory');
     expect(profile.memoryServers.single.label, 'Memory');
     expect(profile.memoryServers.single.endpoint, 'http://127.0.0.1:8090/mcp');
     expect(
@@ -132,13 +138,15 @@ void main() {
     expect(profile.gateway.memoryMcpUrl, 'https://agent-awesome.com/mcp');
     expect(profile.gateway.autoStart, isFalse);
     expect(profile.harness.autoStart, isFalse);
+    expect(profile.gateway.profileId, 'doug');
+    expect(profile.memoryServers.single.id, 'doug');
     expect(
       profile.memoryServers.single.endpoint,
-      'https://agent-awesome.com/mcp',
+      'https://agent-awesome.com/mcp/doug',
     );
     expect(profile.memoryServers.single.autoStart, isFalse);
-    expect(profile.agentMemory.actor, 'agent:agent-awesome');
-    expect(profile.agentMemory.readDomains, <String>['memory']);
+    expect(profile.agentMemory.actor, 'agent:doug');
+    expect(profile.agentMemory.readDomains, <String>['doug']);
   });
 
   test('uses one shared app model config path', () {

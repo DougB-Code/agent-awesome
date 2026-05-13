@@ -4,8 +4,11 @@ This folder contains the Cloudflare Worker and Container scaffold for a beta
 Agent Awesome Slack pilot.
 
 The deployment runs one Cloudflare Container behind a Worker. Inside the
-container, `agent-gateway` listens on port `8070` and supervises the local
-harness on `8080` plus memory MCP on `8090`. Slack uses the HTTP Events API at
+container, `agent-gateway` listens on port `8070`, routes profile-scoped
+requests to separate harness processes, and supervises separate memory MCP
+services for the configured domains. The checked-in beta config starts Doug on
+ports `8080`/`8081` with memory on `8090`, and Family on ports `8082`/`8083`
+with memory on `8091`. Slack uses the HTTP Events API at
 `/slack/events`; Socket Mode remains for local testing only. The Worker rejects
 all public requests except unauthenticated `GET` or `HEAD /healthz`, bearer
 authenticated gateway control-plane requests, and Slack-signed
@@ -20,8 +23,8 @@ container.
 
 - `../../Dockerfile.cloudflare` builds the Go gateway, harness, and memory
   binaries into one Linux container.
-- `scripts/entrypoint.sh` starts the gateway with harness and memory auto-start
-  flags.
+- `scripts/entrypoint.sh` starts the profile-specific harness processes and the
+  gateway-supervised memory services.
 - `config/*.yaml` contains the pilot model, agent, and tool configuration used
   inside the container.
 - `worker/src/index.ts` defines the Cloudflare Container class and request
@@ -88,10 +91,11 @@ with Slack signatures by the gateway, while `/api/*`, `/mcp`, and gateway status
 routes use the bearer token. The public `/healthz` route only returns the
 gateway liveness response.
 
-Keep `SLACK_ALLOWED_TEAM_ID`, `SLACK_ALLOWED_USER_ID`, and
-`SLACK_ALLOWED_CHANNEL_ID` populated in `worker/wrangler.jsonc` before any Slack
-beta deployment. The gateway refuses to start Slack ingress without all three
-allow-list ids.
+For multi-profile Slack, put `slack_bindings` on the relevant objects inside
+`AGENTAWESOME_AGENT_PROFILES_JSON`. A binding includes `team_id`, `channel_id`,
+and `allowed_user_ids`. The older single-channel `SLACK_ALLOWED_TEAM_ID`,
+`SLACK_ALLOWED_USER_ID`, and `SLACK_ALLOWED_CHANNEL_ID` values still scope Slack
+to the default profile, but they do not select between Doug and Family.
 
 ## Persistence Note
 

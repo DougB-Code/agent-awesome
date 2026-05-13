@@ -23,6 +23,7 @@ export interface Env {
   AGENTAWESOME_MEMORY_DOMAINS_JSON?: string;
   AGENTAWESOME_MEMORY_POLICY_JSON?: string;
   AGENTAWESOME_MEMORY_SERVICES_JSON?: string;
+  AGENTAWESOME_AGENT_PROFILES_JSON?: string;
   AGENTAWESOME_PERSISTENCE_TOKEN?: string;
   AGENTAWESOME_MEMORY_SNAPSHOT_URL?: string;
   AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX?: string;
@@ -62,6 +63,8 @@ export function buildContainerEnv(env: Env): Record<string, string> {
       env.AGENTAWESOME_MEMORY_POLICY_JSON ?? defaultMemoryPolicyJSON(),
     AGENTAWESOME_MEMORY_SERVICES_JSON:
       env.AGENTAWESOME_MEMORY_SERVICES_JSON ?? defaultMemoryServicesJSON(env),
+    AGENTAWESOME_AGENT_PROFILES_JSON:
+      env.AGENTAWESOME_AGENT_PROFILES_JSON ?? defaultAgentProfilesJSON(env),
     AGENTAWESOME_PERSISTENCE_TOKEN: env.AGENTAWESOME_PERSISTENCE_TOKEN ?? "",
     AGENTAWESOME_MEMORY_SNAPSHOT_URL:
       env.AGENTAWESOME_MEMORY_SNAPSHOT_URL ??
@@ -129,48 +132,106 @@ function isGatewayRequest(request: Request): boolean {
   return pathname === "/mcp" || pathname.startsWith("/mcp/") || pathname.startsWith("/api/");
 }
 
-/** defaultMemoryDomainsJSON returns the shipped single-domain cloud topology. */
+/** defaultMemoryDomainsJSON returns the shipped beta cloud domain topology. */
 function defaultMemoryDomainsJSON(): string {
   return JSON.stringify([
     {
-      id: "memory",
-      label: "Memory",
+      id: "doug",
+      label: "Doug Memory",
       endpoint: "http://127.0.0.1:8090/mcp",
       health_url: "http://127.0.0.1:8090/healthz",
+    },
+    {
+      id: "family",
+      label: "Family Memory",
+      endpoint: "http://127.0.0.1:8091/mcp",
+      health_url: "http://127.0.0.1:8091/healthz",
     },
   ]);
 }
 
-/** defaultMemoryPolicyJSON returns the shipped single-domain cloud grants. */
+/** defaultMemoryPolicyJSON returns the operator default profile grants. */
 function defaultMemoryPolicyJSON(): string {
   return JSON.stringify({
-    actor: "agent:agent-awesome",
-    read_domains: ["memory"],
-    write_domains: ["memory"],
-    default_write_domain: "memory",
+    actor: "agent:doug",
+    read_domains: ["doug"],
+    write_domains: ["doug"],
+    default_write_domain: "doug",
     allowed_sensitivities: ["public", "internal", "private"],
   });
 }
 
-/** defaultMemoryServicesJSON returns the shipped single-domain service config. */
+/** defaultAgentProfilesJSON returns the shipped beta profile registry. */
+function defaultAgentProfilesJSON(env: Env): string {
+  const appName = env.AGENTAWESOME_APP_NAME ?? "agent_awesome";
+  return JSON.stringify([
+    {
+      id: "doug",
+      label: "Doug",
+      app_name: appName,
+      user_id: "doug",
+      harness_base_url: "http://127.0.0.1:8080/api",
+      context_base_url: "http://127.0.0.1:8081/api/context",
+      actor: "agent:doug",
+      read_domains: ["doug"],
+      write_domains: ["doug"],
+      default_write_domain: "doug",
+      allowed_sensitivities: ["public", "internal", "private"],
+    },
+    {
+      id: "family",
+      label: "Family",
+      app_name: appName,
+      user_id: "family",
+      harness_base_url: "http://127.0.0.1:8082/api",
+      context_base_url: "http://127.0.0.1:8083/api/context",
+      actor: "agent:family",
+      read_domains: ["family"],
+      write_domains: ["family"],
+      default_write_domain: "family",
+      allowed_sensitivities: ["public", "internal", "private"],
+    },
+  ]);
+}
+
+/** defaultMemoryServicesJSON returns the shipped beta service config. */
 function defaultMemoryServicesJSON(env: Env): string {
   return JSON.stringify([
     {
-      domain_id: "memory",
-      name: "memory",
+      domain_id: "doug",
+      name: "memory-doug",
       health_url: "http://127.0.0.1:8090/healthz",
       command: "/usr/local/bin/memoryd",
       arguments: [
         "--addr",
         "127.0.0.1:8090",
         "--db",
-        "/app/data/memory/memory.db",
+        "/app/data/memory/doug/memory.db",
         "--data",
-        "/app/data/memory/files",
+        "/app/data/memory/doug/files",
         "--log-file",
-        "/app/logs/memory.log",
+        "/app/logs/memory-doug.log",
         "--snapshot-url",
-        memorySnapshotURL(env, "memory"),
+        memorySnapshotURL(env, "doug"),
+      ],
+      auto_start: true,
+    },
+    {
+      domain_id: "family",
+      name: "memory-family",
+      health_url: "http://127.0.0.1:8091/healthz",
+      command: "/usr/local/bin/memoryd",
+      arguments: [
+        "--addr",
+        "127.0.0.1:8091",
+        "--db",
+        "/app/data/memory/family/memory.db",
+        "--data",
+        "/app/data/memory/family/files",
+        "--log-file",
+        "/app/logs/memory-family.log",
+        "--snapshot-url",
+        memorySnapshotURL(env, "family"),
       ],
       auto_start: true,
     },

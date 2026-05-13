@@ -43,8 +43,10 @@ After first deployment, set the Slack Events API request URL to:
 https://agent-awesome.com/slack/events
 ----
 
-Set `SLACK_ALLOWED_TEAM_ID`, `SLACK_ALLOWED_USER_ID`, and `SLACK_ALLOWED_CHANNEL_ID` in `wrangler.jsonc` before redeploying a Slack beta pilot.
-The gateway refuses to start Slack ingress without all three allow-list ids.
+For multi-profile Slack, edit `AGENTAWESOME_AGENT_PROFILES_JSON` in `wrangler.jsonc` and add `slack_bindings` to the profile that owns the channel.
+Each binding must include `team_id`, `channel_id`, and `allowed_user_ids`.
+The older `SLACK_ALLOWED_TEAM_ID`, `SLACK_ALLOWED_USER_ID`, and `SLACK_ALLOWED_CHANNEL_ID` values scope Slack to the default profile only.
+The gateway refuses to start Slack ingress unless either a profile binding or a complete legacy allow-list is configured.
 
 The public `workers.dev` URL is disabled.
 The configured production route is `agent-awesome.com/*`.
@@ -76,6 +78,7 @@ curl -fsS \
   https://agent-awesome.com/api/gateway/beta-status
 curl -fsS \
   -H "Authorization: Bearer ${GATEWAY_TOKEN}" \
+  -H "X-Agent-Awesome-Profile: doug" \
   https://agent-awesome.com/api/context/tools/list
 ----
 
@@ -94,6 +97,7 @@ export AUTO_START_LOCAL_SERVICES=false
 
 The desktop UI sends chat, memory, and task traffic to the hosted gateway.
 It does not call memory MCP endpoints directly.
+Use `ui/runtime_profiles/cloudflare_family.json` to connect the same release binary to the Family profile.
 
 == Verify Slack Channel
 

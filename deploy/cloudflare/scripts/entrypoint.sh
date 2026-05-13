@@ -1,15 +1,44 @@
 #!/usr/bin/env sh
-# Starts the Cloudflare pilot container by letting the gateway supervise the
-# colocated harness and memory services.
+# Starts the Cloudflare pilot container with profile-specific harnesses and
+# gateway-supervised memory services.
 set -eu
 
-mkdir -p /app/data /app/logs
-touch /app/logs/harness.log /app/logs/memory.log
-tail -n +1 -F /app/logs/harness.log /app/logs/memory.log &
+mkdir -p /app/data /app/data/sessions /app/logs
+touch /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log
+tail -n +1 -F /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log &
 
-MEMORY_DOMAINS_JSON=${AGENTAWESOME_MEMORY_DOMAINS_JSON:-'[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"}]'}
-MEMORY_POLICY_JSON=${AGENTAWESOME_MEMORY_POLICY_JSON:-'{"actor":"agent:agent-awesome","read_domains":["memory"],"write_domains":["memory"],"default_write_domain":"memory","allowed_sensitivities":["public","internal","private"]}'}
-MEMORY_SERVICES_JSON=${AGENTAWESOME_MEMORY_SERVICES_JSON:-'[{"domain_id":"memory","name":"memory","health_url":"http://127.0.0.1:8090/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8090","--db","/app/data/memory/memory.db","--data","/app/data/memory/files","--log-file","/app/logs/memory.log"],"auto_start":true}]'}
+MEMORY_DOMAINS_JSON=${AGENTAWESOME_MEMORY_DOMAINS_JSON:-'[{"id":"doug","label":"Doug Memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"},{"id":"family","label":"Family Memory","endpoint":"http://127.0.0.1:8091/mcp","health_url":"http://127.0.0.1:8091/healthz"}]'}
+MEMORY_POLICY_JSON=${AGENTAWESOME_MEMORY_POLICY_JSON:-'{"actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","internal","private"]}'}
+AGENT_PROFILES_JSON=${AGENTAWESOME_AGENT_PROFILES_JSON:-'[{"id":"doug","label":"Doug","app_name":"agent_awesome","user_id":"doug","harness_base_url":"http://127.0.0.1:8080/api","context_base_url":"http://127.0.0.1:8081/api/context","actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","internal","private"]},{"id":"family","label":"Family","app_name":"agent_awesome","user_id":"family","harness_base_url":"http://127.0.0.1:8082/api","context_base_url":"http://127.0.0.1:8083/api/context","actor":"agent:family","read_domains":["family"],"write_domains":["family"],"default_write_domain":"family","allowed_sensitivities":["public","internal","private"]}]'}
+MEMORY_SERVICES_JSON=${AGENTAWESOME_MEMORY_SERVICES_JSON:-'[{"domain_id":"doug","name":"memory-doug","health_url":"http://127.0.0.1:8090/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8090","--db","/app/data/memory/doug/memory.db","--data","/app/data/memory/doug/files","--log-file","/app/logs/memory-doug.log","--snapshot-url","https://agent-awesome.com/internal/context-snapshot/doug"],"auto_start":true},{"domain_id":"family","name":"memory-family","health_url":"http://127.0.0.1:8091/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8091","--db","/app/data/memory/family/memory.db","--data","/app/data/memory/family/files","--log-file","/app/logs/memory-family.log","--snapshot-url","https://agent-awesome.com/internal/context-snapshot/family"],"auto_start":true}]'}
+
+agent-awesome \
+  run \
+  --model /app/config/model.yaml \
+  --agent /app/config/agent.yaml \
+  --tool /app/config/tool.doug.yaml \
+  --context-api-addr 127.0.0.1:8081 \
+  --session-db /app/data/sessions/doug.db \
+  --log-file /app/logs/harness-doug.log \
+  -- \
+  web \
+  --port 8080 \
+  api \
+  --webui_address 127.0.0.1:8080 &
+
+agent-awesome \
+  run \
+  --model /app/config/model.yaml \
+  --agent /app/config/agent.yaml \
+  --tool /app/config/tool.family.yaml \
+  --context-api-addr 127.0.0.1:8083 \
+  --session-db /app/data/sessions/family.db \
+  --log-file /app/logs/harness-family.log \
+  -- \
+  web \
+  --port 8082 \
+  api \
+  --webui_address 127.0.0.1:8082 &
 
 exec agent-gateway \
   --addr "${AGENTAWESOME_GATEWAY_ADDR:-0.0.0.0:8070}" \
@@ -18,6 +47,7 @@ exec agent-gateway \
   --memory-mcp-url "${AGENTAWESOME_MEMORY_MCP_URL:-http://127.0.0.1:8090/mcp}" \
   --memory-domains-json "$MEMORY_DOMAINS_JSON" \
   --memory-policy-json "$MEMORY_POLICY_JSON" \
+  --agent-profiles-json "$AGENT_PROFILES_JSON" \
   --memory-services-json "$MEMORY_SERVICES_JSON" \
   --app-name "${AGENTAWESOME_APP_NAME:-agent_awesome}" \
   --user-id "${AGENTAWESOME_USER_ID:-doug}" \
@@ -31,25 +61,4 @@ exec agent-gateway \
   --slack-app-token "${SLACK_APP_TOKEN:-}" \
   --slack-allowed-team-id "${SLACK_ALLOWED_TEAM_ID:-}" \
   --slack-allowed-user-id "${SLACK_ALLOWED_USER_ID:-}" \
-  --slack-allowed-channel-id "${SLACK_ALLOWED_CHANNEL_ID:-}" \
-  --harness-auto-start \
-  --harness-command /usr/local/bin/agent-awesome \
-  --harness-workdir /app \
-  --harness-arg run \
-  --harness-arg --model \
-  --harness-arg /app/config/model.yaml \
-  --harness-arg --agent \
-  --harness-arg /app/config/agent.yaml \
-  --harness-arg --tool \
-  --harness-arg /app/config/tool.yaml \
-  --harness-arg --context-api-addr \
-  --harness-arg 127.0.0.1:8081 \
-  --harness-arg --log-file \
-  --harness-arg /app/logs/harness.log \
-  --harness-arg -- \
-  --harness-arg web \
-  --harness-arg --port \
-  --harness-arg 8080 \
-  --harness-arg api \
-  --harness-arg --webui_address \
-  --harness-arg 127.0.0.1:8080
+  --slack-allowed-channel-id "${SLACK_ALLOWED_CHANNEL_ID:-}"

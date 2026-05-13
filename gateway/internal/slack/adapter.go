@@ -30,6 +30,7 @@ type Adapter struct {
 	config          Config
 	slack           *WebAPI
 	agent           *AgentClient
+	agents          map[string]*AgentClient
 	client          *http.Client
 	deduper         *eventDeduper
 	limiter         *dispatchLimiter
@@ -59,8 +60,9 @@ func NewAdapter(config Config) *Adapter {
 			config.AppName,
 			config.AgentUserID,
 			policy.NewInjector(policy.Config{}),
-			gatewayHeaders(config.GatewayAuthToken),
+			gatewayHeaders(config.GatewayAuthToken, ""),
 		),
+		agents:  profileAgentClients(client, config),
 		client:  client,
 		deduper: newEventDeduper(config.EventDedupTTL),
 		limiter: newDispatchLimiter(config.MaxConcurrentDispatches),
@@ -70,12 +72,40 @@ func NewAdapter(config Config) *Adapter {
 }
 
 // gatewayHeaders returns auth headers for Slack-to-gateway agent turns.
-func gatewayHeaders(token string) map[string]string {
+func gatewayHeaders(token string, profileID string) map[string]string {
+	headers := map[string]string{}
 	token = strings.TrimSpace(token)
-	if token == "" {
+	if token != "" {
+		headers["Authorization"] = "Bearer " + token
+	}
+	profileID = strings.TrimSpace(profileID)
+	if profileID != "" {
+		headers["X-Agent-Awesome-Profile"] = profileID
+	}
+	if len(headers) == 0 {
 		return nil
 	}
-	return map[string]string{"Authorization": "Bearer " + token}
+	return headers
+}
+
+// profileAgentClients creates gateway API clients for bound Slack profiles.
+func profileAgentClients(client *http.Client, config Config) map[string]*AgentClient {
+	agents := make(map[string]*AgentClient, len(config.ProfileBindings))
+	for _, binding := range config.ProfileBindings {
+		profileID := strings.TrimSpace(binding.ProfileID)
+		if profileID == "" {
+			continue
+		}
+		agents[profileID] = NewAgentClientWithPolicyAndHeaders(
+			client,
+			config.GatewayBaseURL,
+			binding.AppName,
+			binding.AgentUserID,
+			policy.NewInjector(policy.Config{}),
+			gatewayHeaders(config.GatewayAuthToken, profileID),
+		)
+	}
+	return agents
 }
 
 // Enabled reports whether Slack channel handling is configured.
@@ -258,7 +288,7 @@ func logDuplicateEventIgnored(envelope EventEnvelope, delivery DeliveryInfo, ded
 		Msg(message)
 }
 
-// acceptedMessage filters Slack events to the configured personal pilot scope.
+// acceptedMessage filters Slack events to configured profile Slack scopes.
 func (a *Adapter) acceptedMessage(envelope EventEnvelope) (MessageEvent, string, bool) {
 	event := envelope.Event
 	if event.Type != "message" && event.Type != "app_mention" {
@@ -272,6 +302,14 @@ func (a *Adapter) acceptedMessage(envelope EventEnvelope) (MessageEvent, string,
 	}
 	if strings.TrimSpace(event.Text) == "" || event.Channel == "" || event.User == "" || event.TS == "" {
 		return MessageEvent{}, "message is missing required text, channel, user, or timestamp", false
+	}
+	if len(a.config.ProfileBindings) > 0 {
+		profileID, reason, ok := acceptedProfileBinding(a.config.ProfileBindings, envelope.TeamID, event)
+		if !ok {
+			return MessageEvent{}, reason, false
+		}
+		event.ProfileID = profileID
+		return event, "", true
 	}
 	for _, scope := range []struct {
 		name    string
@@ -287,6 +325,38 @@ func (a *Adapter) acceptedMessage(envelope EventEnvelope) (MessageEvent, string,
 		}
 	}
 	return event, "", true
+}
+
+// acceptedProfileBinding returns the profile bound to a Slack event scope.
+func acceptedProfileBinding(bindings []ProfileBinding, teamID string, event MessageEvent) (string, string, bool) {
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.TeamID) != strings.TrimSpace(teamID) {
+			continue
+		}
+		if strings.TrimSpace(binding.ChannelID) != strings.TrimSpace(event.Channel) {
+			continue
+		}
+		if !containsSlackUser(binding.AllowedUserIDs, event.User) {
+			continue
+		}
+		profileID := strings.TrimSpace(binding.ProfileID)
+		if profileID == "" {
+			return "", "profile binding is missing profile id", false
+		}
+		return profileID, "", true
+	}
+	return "", "event is not bound to an agent profile", false
+}
+
+// containsSlackUser reports whether the event user is allow-listed.
+func containsSlackUser(allowed []string, userID string) bool {
+	userID = strings.TrimSpace(userID)
+	for _, value := range allowed {
+		if strings.TrimSpace(value) == userID {
+			return true
+		}
+	}
+	return false
 }
 
 // allowListedSlackValue reports whether one Slack identifier matches its scope.
@@ -308,12 +378,18 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 		Str("thread", threadTS).
 		Str("session", sessionID).
 		Msg("slack dispatch start")
-	if err := a.agent.EnsureSession(ctx, sessionID); err != nil {
+	agent := a.agentForEvent(event)
+	if agent == nil {
+		log.Error().Str("profile", event.ProfileID).Msg("slack profile has no agent client")
+		a.postFailure(parent, event)
+		return
+	}
+	if err := agent.EnsureSession(ctx, sessionID); err != nil {
 		log.Error().Err(err).Msg("slack ensure session")
 		a.postFailure(parent, event)
 		return
 	}
-	reply, err := a.agent.RunText(ctx, sessionID, event.Text)
+	reply, err := agent.RunText(ctx, sessionID, event.Text)
 	if err != nil {
 		log.Error().Err(err).Msg("slack run agent")
 		a.postFailure(parent, event)
@@ -331,6 +407,15 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 		Str("thread", threadTS).
 		Str("session", sessionID).
 		Msg("slack dispatch complete")
+}
+
+// agentForEvent returns the gateway API client for one accepted Slack event.
+func (a *Adapter) agentForEvent(event MessageEvent) *AgentClient {
+	profileID := strings.TrimSpace(event.ProfileID)
+	if profileID != "" {
+		return a.agents[profileID]
+	}
+	return a.agent
 }
 
 // postFailure posts a generic Slack failure without exposing internal details.

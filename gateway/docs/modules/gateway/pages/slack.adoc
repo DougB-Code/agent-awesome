@@ -32,4 +32,9 @@ SLACK_ALLOWED_CHANNEL_ID=C... \
 go run ./cmd/agent-gateway
 ----
 
+When one gateway serves multiple profiles, prefer `slack_bindings` inside
+`AGENTAWESOME_AGENT_PROFILES_JSON` instead of the single allow-list variables.
+The adapter matches team, channel, and sender, then sends the selected
+`X-Agent-Awesome-Profile` header through the gateway.
+
 Do not use Socket Mode for the Cloudflare deployment unless an operations maintainer deliberately changes the cloud topology.

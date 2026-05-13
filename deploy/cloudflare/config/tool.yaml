@@ -52,3 +52,16 @@ mcp:
           - traverse_task_relations
           - upsert_task_relation
           - delete_task_relation
+memory:
+  actor: agent:doug
+  read-domains:
+    - id: doug
+      label: Doug Memory
+      endpoint: http://127.0.0.1:8090/mcp
+  write-domains:
+    - doug
+  default-write-domain: doug
+  allowed-sensitivities:
+    - public
+    - internal
+    - private

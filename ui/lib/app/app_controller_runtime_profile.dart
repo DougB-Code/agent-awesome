@@ -761,7 +761,12 @@ extension AgentAwesomeAppControllerRuntimeProfiles
 
   /// Returns headers needed to call protected gateway routes.
   Map<String, String> _gatewayHeadersForProfile(RuntimeProfile profile) {
-    return config.gatewayAuthHeaders;
+    final headers = <String, String>{...config.gatewayAuthHeaders};
+    final profileId = profile.gateway.profileId.trim();
+    if (profileId.isNotEmpty) {
+      headers['X-Agent-Awesome-Profile'] = profileId;
+    }
+    return headers;
   }
 }
 

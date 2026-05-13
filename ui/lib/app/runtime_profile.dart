@@ -91,8 +91,25 @@ List<String> gatewayArgumentsForProfile(RuntimeProfile profile) {
     jsonEncode(_gatewayMemoryDomainJson(profile.memoryServers)),
     '--memory-policy-json',
     jsonEncode(profile.agentMemory.toJson()),
+    '--agent-profiles-json',
+    jsonEncode(_gatewayAgentProfilesJson(profile)),
     '--memory-services-json',
     jsonEncode(_gatewayMemoryServiceJson(profile.memoryServers)),
+  ];
+}
+
+/// Encodes the active runtime profile as a gateway agent profile registry.
+List<Map<String, dynamic>> _gatewayAgentProfilesJson(RuntimeProfile profile) {
+  return <Map<String, dynamic>>[
+    <String, dynamic>{
+      'id': profile.gateway.profileId.trim().isEmpty
+          ? profile.id
+          : profile.gateway.profileId.trim(),
+      'label': profile.label,
+      'app_name': profile.harness.appName,
+      'user_id': profile.harness.userId,
+      ...profile.agentMemory.toJson(),
+    },
   ];
 }
 

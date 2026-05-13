@@ -76,6 +76,52 @@ func TestFromFlagsParsesMemoryTopologyJSON(t *testing.T) {
 	}
 }
 
+// TestFromFlagsParsesAgentProfilesJSON verifies request-scoped profile policy.
+func TestFromFlagsParsesAgentProfilesJSON(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	cfg, err := FromFlags([]string{
+		"--memory-domains-json", `[
+			{"id":"doug","label":"Doug","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"},
+			{"id":"family","label":"Family","endpoint":"http://127.0.0.1:8091/mcp","health_url":"http://127.0.0.1:8091/healthz"}
+		]`,
+		"--agent-profiles-json", `[
+			{"id":"doug","label":"Doug","app_name":"agent_awesome","user_id":"doug","harness_base_url":"http://127.0.0.1:8080/api","context_base_url":"http://127.0.0.1:8081/api/context","actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","private"]},
+			{"id":"family","label":"Family","app_name":"agent_awesome","user_id":"family","harness_base_url":"http://127.0.0.1:8082/api","context_base_url":"http://127.0.0.1:8083/api/context","actor":"agent:family","read_domains":["family"],"write_domains":["family"],"default_write_domain":"family","allowed_sensitivities":["public","private"]}
+		]`,
+	})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if len(cfg.AgentProfiles) != 2 {
+		t.Fatalf("AgentProfiles = %#v, want two profiles", cfg.AgentProfiles)
+	}
+	if cfg.MemoryPolicy.Actor != "agent:doug" || cfg.MemoryPolicy.DefaultWriteDomain != "doug" {
+		t.Fatalf("MemoryPolicy = %#v, want first profile policy", cfg.MemoryPolicy)
+	}
+	family, ok := cfg.ProfileByID("family")
+	if !ok {
+		t.Fatalf("ProfileByID(family) not found")
+	}
+	if family.ContextBaseURL != "http://127.0.0.1:8083/api/context" {
+		t.Fatalf("family context URL = %q", family.ContextBaseURL)
+	}
+	if cfg.StatusView()["agent_profiles"] == nil {
+		t.Fatalf("status view omitted agent profiles: %#v", cfg.StatusView())
+	}
+}
+
+// TestFromFlagsRejectsAgentProfileUnknownDomain verifies profiles cannot invent domains.
+func TestFromFlagsRejectsAgentProfileUnknownDomain(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--memory-domains-json", `[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp"}]`,
+		"--agent-profiles-json", `[{"id":"bad","label":"Bad","app_name":"agent_awesome","user_id":"bad","actor":"agent:bad","read_domains":["other"],"write_domains":["memory"],"default_write_domain":"memory","allowed_sensitivities":["public"]}]`,
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want unknown profile domain validation error")
+	}
+}
+
 // TestFromFlagsRejectsMultipleDomainsWithSingleServiceFlags avoids accidental shared services.
 func TestFromFlagsRejectsMultipleDomainsWithSingleServiceFlags(t *testing.T) {
 	clearGatewayAuthEnv(t)
@@ -308,6 +354,7 @@ func clearGatewayAuthEnv(t *testing.T) {
 	t.Setenv("AGENTAWESOME_MEMORY_DOMAINS_JSON", "")
 	t.Setenv("AGENTAWESOME_MEMORY_POLICY_JSON", "")
 	t.Setenv("AGENTAWESOME_MEMORY_SERVICES_JSON", "")
+	t.Setenv("AGENTAWESOME_AGENT_PROFILES_JSON", "")
 	t.Setenv("AGENTAWESOME_ALLOWED_ORIGIN", "")
 	t.Setenv("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", "true")
 	t.Setenv("AGENTAWESOME_RUNTIME_POLICY_TEXT", "")
@@ -400,5 +447,33 @@ func TestSlackRequiresAllowLists(t *testing.T) {
 	}
 	if cfg.Slack.AllowedTeamID != "T1" || cfg.Slack.AllowedUserID != "U1" || cfg.Slack.AllowedChannelID != "C1" {
 		t.Fatalf("Slack allow-lists = %#v", cfg.Slack)
+	}
+}
+
+// TestSlackAllowsProfileBindings verifies Slack can scope ingress by profile.
+func TestSlackAllowsProfileBindings(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	cfg, err := FromFlags([]string{
+		"--slack-enabled",
+		"--slack-signing-secret", "secret",
+		"--slack-bot-token", "xoxb-test",
+		"--agent-profiles-json", `[{
+			"id":"family",
+			"label":"Family",
+			"app_name":"agent_awesome",
+			"user_id":"family",
+			"actor":"agent:family",
+			"read_domains":["memory"],
+			"write_domains":["memory"],
+			"default_write_domain":"memory",
+			"allowed_sensitivities":["public"],
+			"slack_bindings":[{"team_id":"T1","channel_id":"C1","allowed_user_ids":["U1","U2"]}]
+		}]`,
+	})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if got := cfg.AgentProfiles[0].SlackBindings[0].AllowedUserIDs; len(got) != 2 {
+		t.Fatalf("Slack allowed users = %#v, want two users", got)
 	}
 }

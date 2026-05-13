@@ -1,13 +1,13 @@
 {
-  "id": "cloudflare-doug",
-  "label": "Cloudflare Doug",
+  "id": "cloudflare-family",
+  "label": "Cloudflare Family",
   "harness": {
-    "id": "cloudflare-context-harness",
+    "id": "cloudflare-family-harness",
     "label": "Cloudflare Harness",
     "api_base_url": "${AGENT_API_BASE_URL}",
     "context_api_base_url": "${AGENT_CONTEXT_API_BASE_URL}",
     "app_name": "${AGENT_APP_NAME}",
-    "user_id": "${AGENT_USER_ID}",
+    "user_id": "family",
     "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/harness",
     "package_path": "./cmd/agent-awesome",
     "model_config": "${AGENTAWESOME_WORKSPACE_ROOT}/harness/model.yaml",
@@ -17,7 +17,7 @@
     "auto_start": false
   },
   "gateway": {
-    "id": "cloudflare-context-gateway",
+    "id": "cloudflare-family-gateway",
     "label": "Cloudflare Gateway",
     "api_base_url": "${AGENT_GATEWAY_BASE_URL}",
     "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
@@ -28,8 +28,8 @@
     "context_base_url": "${AGENT_CONTEXT_API_BASE_URL}",
     "memory_mcp_url": "${AGENT_GATEWAY_MCP_URL}",
     "app_name": "${AGENT_APP_NAME}",
-    "user_id": "${AGENT_USER_ID}",
-    "profile_id": "doug",
+    "user_id": "family",
+    "profile_id": "family",
     "model_provider_id": "openai",
     "model_id": "gpt-mini",
     "port": ${AGENT_GATEWAY_PORT},
@@ -38,10 +38,10 @@
   },
   "memory_domains": [
     {
-      "id": "doug",
-      "label": "Doug Memory",
+      "id": "family",
+      "label": "Family Memory",
       "kind": "memory",
-      "endpoint": "${AGENT_GATEWAY_MCP_URL}/doug",
+      "endpoint": "${AGENT_GATEWAY_MCP_URL}/family",
       "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
       "working_directory": "",
       "package_path": "",
@@ -53,10 +53,10 @@
     }
   ],
   "agent_memory": {
-    "actor": "agent:doug",
-    "read_domains": ["doug"],
-    "write_domains": ["doug"],
-    "default_write_domain": "doug",
+    "actor": "agent:family",
+    "read_domains": ["family"],
+    "write_domains": ["family"],
+    "default_write_domain": "family",
     "allowed_sensitivities": ["public", "internal", "private"]
   }
 }

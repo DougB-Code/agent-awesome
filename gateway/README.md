@@ -59,6 +59,9 @@ For packaged pilots, the same values can be supplied with environment variables:
 - `AGENTAWESOME_CONTEXT_API_BASE_URL`
 - `AGENTAWESOME_CONTEXT_API_TOKEN`
 - `AGENTAWESOME_MEMORY_MCP_URL`
+- `AGENTAWESOME_MEMORY_DOMAINS_JSON`
+- `AGENTAWESOME_AGENT_PROFILES_JSON`
+- `AGENTAWESOME_MEMORY_SERVICES_JSON`
 - `AGENTAWESOME_GATEWAY_TOKEN`
 - `AGENTAWESOME_ALLOWED_ORIGIN`
 - `AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY`
@@ -108,9 +111,11 @@ go run ./cmd/agent-gateway
 
 The Slack app needs Socket Mode enabled, an app-level token with
 `connections:write`, a bot token with `chat:write`, and message event
-subscriptions such as `message.channels` for channel pilots. Slack startup now
-requires team, user, and channel allow-list ids so beta traffic stays scoped to
-one known workspace, tester, and channel.
+subscriptions such as `message.channels` for channel pilots. Slack startup
+requires either a complete team/user/channel allow-list for the default profile
+or profile-specific `slack_bindings` inside `AGENTAWESOME_AGENT_PROFILES_JSON`.
+Use profile bindings when one gateway serves more than one profile; the adapter
+selects the profile before it calls `/api/*`.
 
 For cloud deployments, turn Socket Mode off and configure Slack's Events API
 Request URL to:

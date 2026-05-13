@@ -58,6 +58,8 @@ function assertRequiredDeploymentAssets() {
     resolve(workerRoot, "src/index.ts"),
     resolve(workerRoot, "src/app.ts"),
     resolve(workerRoot, "scripts/smoke-test.mjs"),
+    resolve(workerRoot, "../config/tool.doug.yaml"),
+    resolve(workerRoot, "../config/tool.family.yaml"),
     resolve(workerRoot, "../../../Dockerfile.cloudflare"),
   ]) {
     assert.ok(existsSync(path), `${path} must exist`);
@@ -165,10 +167,12 @@ function assertContainerConfiguration(config) {
   assert.equal(r2.bucket_name, "agent-awesome-beta-context");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_ID, "gpt-mini");
-  assert.ok(config.vars?.AGENTAWESOME_MEMORY_DOMAINS_JSON?.includes('"id":"memory"'));
-  assert.ok(config.vars?.AGENTAWESOME_MEMORY_POLICY_JSON?.includes('"read_domains":["memory"]'));
-  assert.ok(config.vars?.AGENTAWESOME_MEMORY_SERVICES_JSON?.includes('"domain_id":"memory"'));
-  assert.equal(config.vars?.AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX, "beta-pilot/memory");
+  assert.ok(config.vars?.AGENTAWESOME_MEMORY_DOMAINS_JSON?.includes('"id":"doug"'));
+  assert.ok(config.vars?.AGENTAWESOME_MEMORY_DOMAINS_JSON?.includes('"id":"family"'));
+  assert.ok(config.vars?.AGENTAWESOME_MEMORY_POLICY_JSON?.includes('"read_domains":["doug"]'));
+  assert.ok(config.vars?.AGENTAWESOME_AGENT_PROFILES_JSON?.includes('"id":"family"'));
+  assert.ok(config.vars?.AGENTAWESOME_MEMORY_SERVICES_JSON?.includes('"domain_id":"family"'));
+  assert.equal(config.vars?.AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX, "beta-pilot");
   assert.equal(config.vars?.AGENTAWESOME_MEMORY_SNAPSHOT_KEY, undefined);
   for (const secret of [
     "AGENTAWESOME_GATEWAY_TOKEN",
@@ -188,10 +192,13 @@ function assertContainerEnvironment(app) {
   assert.equal(mapped.AGENTAWESOME_PERSISTENCE_TOKEN, "persistence-token");
   assert.equal(mapped.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
   assert.equal(mapped.AGENTAWESOME_MODEL_ID, "gpt-mini");
-  assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"memory"'));
-  assert.ok(mapped.AGENTAWESOME_MEMORY_POLICY_JSON.includes('"default_write_domain":"memory"'));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"doug"'));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"family"'));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_POLICY_JSON.includes('"default_write_domain":"doug"'));
+  assert.ok(mapped.AGENTAWESOME_AGENT_PROFILES_JSON.includes('"id":"family"'));
   assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes('"--snapshot-url"'));
-  assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/memory"));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/doug"));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/family"));
   assert.equal(mapped.SLACK_SIGNING_SECRET, "slack-secret");
   assert.equal(mapped.SLACK_ENABLED, "true");
   assert.equal(mapped.SLACK_SOCKET_MODE, "false");
