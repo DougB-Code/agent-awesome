@@ -114,7 +114,7 @@ class AppConfig {
   /// ADK user id used for local sessions.
   final String agentUserId;
 
-  /// Root directory containing the ui, memory, harness, and gateway packages.
+  /// Root directory containing app service packages or release bundle files.
   final String workspaceRoot;
 
   /// Whether the UI should manage local services during initialization.
@@ -228,12 +228,20 @@ String _defaultWorkspaceRoot() {
   return Directory.current.absolute.path;
 }
 
-/// Reports whether a directory contains the app-owned runtime topology files.
+/// Reports whether a directory contains source or release runtime files.
 bool _isAgentAwesomeWorkspace(Directory directory) {
-  return File(
-        '${directory.path}/ui/runtime_profiles/agent_awesome.json',
-      ).existsSync() &&
+  final hasRuntimeProfile = File(
+    '${directory.path}/ui/runtime_profiles/agent_awesome.json',
+  ).existsSync();
+  final hasServiceDirectories =
       Directory('${directory.path}/harness').existsSync() &&
       Directory('${directory.path}/gateway').existsSync() &&
       Directory('${directory.path}/memory').existsSync();
+  final hasPrebuiltReleaseServices = File(
+    '${directory.path}/harness/build/profiles/agent-awesome/.prebuilt',
+  ).existsSync();
+  return hasRuntimeProfile &&
+      hasServiceDirectories &&
+      (hasPrebuiltReleaseServices ||
+          File('${directory.path}/harness/go.mod').existsSync());
 }

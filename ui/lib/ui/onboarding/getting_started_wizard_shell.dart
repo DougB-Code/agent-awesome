@@ -44,6 +44,7 @@ class _GettingStartedWizardState extends State<GettingStartedWizard> {
       SystemCapabilitySnapshot.unknown();
   bool _revealApiKey = false;
   bool _busy = false;
+  bool _localModelInstalled = false;
 
   /// Starts asynchronous system checks used by local model setup.
   @override
@@ -107,7 +108,7 @@ class _GettingStartedWizardState extends State<GettingStartedWizard> {
     return switch (_step) {
       _SetupStep.choose => _ChooseSetupMethod(
         onApiKey: () => setState(() => _step = _SetupStep.apiKey),
-        onLocalModel: () => setState(() => _step = _SetupStep.localModel),
+        onLocalModel: _showLocalModelStep,
       ),
       _SetupStep.apiKey => _ApiKeySetup(
         providerId: _providerId,
@@ -122,14 +123,15 @@ class _GettingStartedWizardState extends State<GettingStartedWizard> {
         onPaste: _pasteApiKey,
         onBack: () => setState(() => _step = _SetupStep.choose),
         onVerify: _verifyApiKey,
-        onUseLocal: () => setState(() => _step = _SetupStep.localModel),
+        onUseLocal: _showLocalModelStep,
       ),
       _SetupStep.localModel => _LocalModelSetup(
         selectedModelId: _localModelId,
         systemCapabilities: _systemCapabilities,
         busy: _busy,
+        installed: _localModelInstalled,
         statusMessage: _statusMessage,
-        onModelChanged: (modelId) => setState(() => _localModelId = modelId),
+        onModelChanged: _selectLocalModel,
         onBack: () => setState(() => _step = _SetupStep.choose),
         onUseApiKey: () => setState(() => _step = _SetupStep.apiKey),
         onContinue: _configureLocalModel,
@@ -163,6 +165,34 @@ class _GettingStartedWizardState extends State<GettingStartedWizard> {
       _modelId = provider.models.first.id;
       _statusMessage = '';
     });
+  }
+
+  /// Shows local setup and refreshes whether the selected model already exists.
+  void _showLocalModelStep() {
+    setState(() => _step = _SetupStep.localModel);
+    unawaited(_refreshLocalModelInstalled());
+  }
+
+  /// Selects a local model and refreshes install state for action copy.
+  void _selectLocalModel(String modelId) {
+    setState(() {
+      _localModelId = modelId;
+      _localModelInstalled = false;
+      _statusMessage = '';
+    });
+    unawaited(_refreshLocalModelInstalled());
+  }
+
+  /// Refreshes whether the selected local model is already installed.
+  Future<void> _refreshLocalModelInstalled() async {
+    final modelId = _localModelId;
+    final installed = await widget.controller.isOnboardingLocalModelInstalled(
+      modelId,
+    );
+    if (!mounted || _localModelId != modelId) {
+      return;
+    }
+    setState(() => _localModelInstalled = installed);
   }
 
   /// Pastes an API key from the clipboard into the setup field.
@@ -220,6 +250,9 @@ class _GettingStartedWizardState extends State<GettingStartedWizard> {
           return;
         }
         setState(() {
+          if (progress.phase == 'ready') {
+            _localModelInstalled = true;
+          }
           _statusMessage = progress.fraction == null
               ? progress.message
               : '${progress.message} (${(progress.fraction! * 100).toStringAsFixed(0)}%)';

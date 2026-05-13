@@ -123,6 +123,37 @@ void main() {
   );
 
   test(
+    'local model setup validates runtime profile before installing',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'agentawesome-controller-local-model-preflight-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final localModels = _CountingLocalModelRuntime();
+      final controller = AgentAwesomeAppController(
+        config: _testConfig(workspaceRoot: root.path, runtimeProfilePath: ''),
+        localModels: localModels,
+      );
+      addTearDown(() async {
+        await controller.close();
+      });
+
+      final result = await controller.configureOnboardingLocalModel(
+        modelId: 'gemma-4-e2b-it',
+      );
+
+      expect(result.success, isFalse);
+      expect(result.message, 'Runtime profile is not loaded');
+      expect(localModels.installAttempts, 0);
+      expect(localModels.runtimeInstallAttempts, 0);
+    },
+  );
+
+  test(
     'startup reopens setup when restored local model cannot start',
     () async {
       final root = await Directory.systemTemp.createTemp(
@@ -208,7 +239,10 @@ class _MemoryAppSettingsStore extends AgentAwesomeAppSettingsStore {
 
   /// Saves app settings in memory for assertions.
   @override
-  Future<void> save(AgentAwesomeAppSettings settings) async {
+  Future<void> save(
+    AgentAwesomeAppSettings settings, {
+    Iterable<String> extraPolicyActors = const <String>[],
+  }) async {
     saved = settings;
   }
 }
@@ -324,6 +358,68 @@ class _MissingLocalModelRuntime implements LocalModelRuntime {
   @override
   Future<ServiceProcessStatus> start(LocalModelDescriptor model) {
     throw UnimplementedError('local model should not start before setup');
+  }
+}
+
+class _CountingLocalModelRuntime implements LocalModelRuntime {
+  /// Number of model install attempts.
+  int installAttempts = 0;
+
+  /// Number of runtime executable install attempts.
+  int runtimeInstallAttempts = 0;
+
+  /// Closes no resources because this fake never starts a process.
+  @override
+  Future<void> close() async {}
+
+  /// Records unexpected install attempts.
+  @override
+  Future<LocalModelInstall> ensureInstalled(
+    LocalModelDescriptor model, {
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    installAttempts++;
+    return _installFor(model);
+  }
+
+  /// Reports no installed model.
+  @override
+  Future<bool> isInstalled(LocalModelDescriptor model) async {
+    return false;
+  }
+
+  /// Records unexpected runtime install attempts.
+  @override
+  Future<String> ensureRuntimeInstalled({
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    runtimeInstallAttempts++;
+    return Platform.resolvedExecutable;
+  }
+
+  /// Returns no recovered model.
+  @override
+  Future<LocalModelInstall?> recoverInstalled(
+    LocalModelDescriptor model, {
+    List<String> candidatePaths = const <String>[],
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    return null;
+  }
+
+  /// Does not start because the setup preflight should fail first.
+  @override
+  Future<ServiceProcessStatus> start(LocalModelDescriptor model) {
+    throw UnimplementedError('local model should not start before setup');
+  }
+
+  LocalModelInstall _installFor(LocalModelDescriptor model) {
+    return LocalModelInstall(
+      model: model,
+      directory: '/tmp/${model.id}',
+      modelPath: '/tmp/${model.id}/${model.fileName}',
+      manifestPath: '/tmp/${model.id}/manifest.json',
+    );
   }
 }
 

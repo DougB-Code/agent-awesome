@@ -97,23 +97,30 @@ void main() {
   });
 
   test('encodes memory firewall policy for the local daemon', () {
-    final policy = memoryFirewallPolicyJson(const <MemoryFirewall>[
-      MemoryFirewall(
-        id: 'acme-client',
-        label: 'Acme Client',
-        shares: <MemoryFirewallShare>[
-          MemoryFirewallShare(
-            kind: 'team',
-            id: 'acme-legal',
-            label: 'Acme Legal',
-          ),
-          MemoryFirewallShare(kind: 'public', id: 'everyone', label: 'Public'),
-        ],
-        writers: <MemoryFirewallShare>[
-          MemoryFirewallShare(kind: 'person', id: 'pat', label: 'Pat'),
-        ],
-      ),
-    ]);
+    final policy = memoryFirewallPolicyJson(
+      const <MemoryFirewall>[
+        MemoryFirewall(
+          id: 'acme-client',
+          label: 'Acme Client',
+          shares: <MemoryFirewallShare>[
+            MemoryFirewallShare(
+              kind: 'team',
+              id: 'acme-legal',
+              label: 'Acme Legal',
+            ),
+            MemoryFirewallShare(
+              kind: 'public',
+              id: 'everyone',
+              label: 'Public',
+            ),
+          ],
+          writers: <MemoryFirewallShare>[
+            MemoryFirewallShare(kind: 'person', id: 'pat', label: 'Pat'),
+          ],
+        ),
+      ],
+      extraLocalActors: <String>['agent:test'],
+    );
 
     expect(policy['default_allow'], isFalse);
     final rules = policy['firewalls'] as List<Map<String, dynamic>>;
@@ -122,6 +129,7 @@ void main() {
       rules.single['readers'],
       containsAll(<String>[
         'agent',
+        'agent:test',
         'agent_awesome_ui',
         'acme-legal',
         'team:acme-legal',
@@ -130,7 +138,13 @@ void main() {
     );
     expect(
       rules.single['writers'],
-      containsAll(<String>['agent', 'agent_awesome_ui', 'pat', 'person:pat']),
+      containsAll(<String>[
+        'agent',
+        'agent:test',
+        'agent_awesome_ui',
+        'pat',
+        'person:pat',
+      ]),
     );
   });
 

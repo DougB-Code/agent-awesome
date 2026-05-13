@@ -4,6 +4,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart' show rootBundle;
+
 import '../domain/runtime_profile.dart';
 import 'app_config.dart';
 
@@ -199,9 +201,14 @@ class RuntimeProfileLoader {
     if (await file.exists()) {
       return file;
     }
-    final template = File(shippedRuntimeProfilePath());
+    return writeDefaultRuntimeProfileFile();
+  }
+
+  /// Writes the bundled target-state default profile into app-owned storage.
+  Future<File> writeDefaultRuntimeProfileFile() async {
+    final file = File(defaultRuntimeProfilePath());
     await file.parent.create(recursive: true);
-    await file.writeAsString(await template.readAsString());
+    await file.writeAsString(await loadShippedRuntimeProfileTemplate());
     return file;
   }
 
@@ -213,6 +220,15 @@ class RuntimeProfileLoader {
   /// Returns the shipped profile template path in the workspace.
   String shippedRuntimeProfilePath() {
     return '${config.workspaceRoot}/ui/runtime_profiles/agent_awesome.json';
+  }
+
+  /// Loads the bundled default profile from the release bundle or app assets.
+  Future<String> loadShippedRuntimeProfileTemplate() async {
+    final template = File(shippedRuntimeProfilePath());
+    if (await template.exists()) {
+      return template.readAsString();
+    }
+    return rootBundle.loadString('runtime_profiles/agent_awesome.json');
   }
 
   /// Expands supported template variables in profile JSON content.

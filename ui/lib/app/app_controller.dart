@@ -525,9 +525,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
     try {
       appSettings = await appSettingsStore.load();
       memoryFilters = _memoryFiltersForConfiguredFirewalls(memoryFilters);
-      if (config.autoStartLocalServices) {
-        await appSettingsStore.saveMemoryFirewallPolicy(appSettings);
-      }
       chatHistory = await chatHistoryStore.load();
       await _log(
         'loaded chat history ${chatHistory.length} from ${chatHistoryPath()}',
@@ -536,8 +533,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
       final profileFile = await _resolveInitialProfileFile(loader);
       await _log('resolved runtime profile ${profileFile.path}');
       runtimeProfilePath = profileFile.path;
-      runtimeProfile = await loader.loadFile(profileFile);
+      runtimeProfile = await _loadInitialRuntimeProfile(loader, profileFile);
       runtimeProfile = await _migrateDefaultProfileConfigs(runtimeProfile!);
+      if (config.autoStartLocalServices) {
+        await _saveMemoryFirewallPolicyForActiveProfile();
+      }
       await _refreshConfigCollections();
       _configureClientsForRuntimeProfile(runtimeProfile!);
       final restoredLocalModel = await _restoreLocalModelIfAvailable(
@@ -693,6 +693,36 @@ class AgentAwesomeAppController extends ChangeNotifier {
       await _log('default chat profile missing: $defaultChatProfile');
     }
     return loader.resolveProfileFile();
+  }
+
+  /// Loads the startup profile and repairs only the app-owned default profile.
+  Future<RuntimeProfile> _loadInitialRuntimeProfile(
+    RuntimeProfileLoader loader,
+    File profileFile,
+  ) async {
+    try {
+      return await loader.loadFile(profileFile);
+    } catch (error) {
+      if (!_isAppOwnedDefaultRuntimeProfile(loader, profileFile)) {
+        rethrow;
+      }
+      await _log('rewriting invalid default runtime profile: $error');
+      final resetFile = await loader.writeDefaultRuntimeProfileFile();
+      runtimeProfilePath = resetFile.path;
+      return loader.loadFile(resetFile);
+    }
+  }
+
+  /// Reports whether a profile path is the managed default profile file.
+  bool _isAppOwnedDefaultRuntimeProfile(
+    RuntimeProfileLoader loader,
+    File profileFile,
+  ) {
+    if (config.runtimeProfilePath.trim().isNotEmpty) {
+      return false;
+    }
+    return profileFile.absolute.path ==
+        File(loader.defaultRuntimeProfilePath()).absolute.path;
   }
 
   /// Lists editable runtime profiles from the app config directory.
@@ -1057,9 +1087,29 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Saves app-owned settings.
   Future<void> saveAppSettings(AgentAwesomeAppSettings settings) async {
     appSettings = settings;
-    await appSettingsStore.save(settings);
+    await appSettingsStore.save(
+      settings,
+      extraPolicyActors: _activeMemoryPolicyActors(),
+    );
     statusMessage = 'App settings saved';
     notifyListeners();
+  }
+
+  /// Saves memory firewall policy with active runtime actor grants.
+  Future<void> _saveMemoryFirewallPolicyForActiveProfile() async {
+    await appSettingsStore.saveMemoryFirewallPolicy(
+      appSettings,
+      extraPolicyActors: _activeMemoryPolicyActors(),
+    );
+  }
+
+  /// Returns active agent principals that local memory services must trust.
+  List<String> _activeMemoryPolicyActors() {
+    final actor = runtimeProfile?.agentMemory.actor.trim() ?? '';
+    if (actor.isEmpty) {
+      return const <String>[];
+    }
+    return <String>[actor];
   }
 
   /// Selects the default runtime profile for fast-path new chats.
@@ -1241,6 +1291,13 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     final model = onboardingLocalModelById(modelId);
     final descriptor = onboardingLocalModelDescriptor(model.id);
+    final targetCheck = _onboardingModelConfigTargetCheck(
+      providerName: 'Local model',
+      modelId: model.id,
+    );
+    if (targetCheck != null) {
+      return targetCheck;
+    }
     late final LocalModelInstall install;
     late final String executable;
     try {
@@ -1287,24 +1344,26 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
   }
 
+  /// Reports whether the selected onboarding local model is already installed.
+  Future<bool> isOnboardingLocalModelInstalled(String modelId) async {
+    final model = onboardingLocalModelById(modelId);
+    final descriptor = onboardingLocalModelDescriptor(model.id);
+    return localModels.isInstalled(descriptor);
+  }
+
   /// Writes the active model provider into the current model config file.
   Future<OnboardingModelSetupResult> _saveOnboardingProviderConfig(
     ModelProviderConfig provider,
   ) async {
-    final profile = runtimeProfile;
-    if (profile == null) {
-      return const OnboardingModelSetupResult(
-        success: false,
-        message: 'Runtime profile is not loaded',
-      );
+    final targetCheck = _onboardingModelConfigTargetCheck(
+      providerName: provider.displayName,
+      modelId: provider.defaultModel,
+    );
+    if (targetCheck != null) {
+      return targetCheck;
     }
+    final profile = runtimeProfile!;
     final path = profile.harness.modelConfigPath.trim();
-    if (path.isEmpty) {
-      return const OnboardingModelSetupResult(
-        success: false,
-        message: 'Model config path is not configured',
-      );
-    }
     final file = File(path);
     final content = await file.exists() ? await file.readAsString() : '';
     final document = ModelConfigDocument.parse(content);
@@ -1335,6 +1394,32 @@ class AgentAwesomeAppController extends ChangeNotifier {
       providerName: provider.displayName,
       modelId: provider.defaultModel,
     );
+  }
+
+  /// Validates that onboarding can write the active model config file.
+  OnboardingModelSetupResult? _onboardingModelConfigTargetCheck({
+    required String providerName,
+    required String modelId,
+  }) {
+    final profile = runtimeProfile;
+    if (profile == null) {
+      return OnboardingModelSetupResult(
+        success: false,
+        message: 'Runtime profile is not loaded',
+        providerName: providerName,
+        modelId: modelId,
+      );
+    }
+    final path = profile.harness.modelConfigPath.trim();
+    if (path.isEmpty) {
+      return OnboardingModelSetupResult(
+        success: false,
+        message: 'Model config path is not configured',
+        providerName: providerName,
+        modelId: modelId,
+      );
+    }
+    return null;
   }
 
   /// Releases HTTP clients while leaving managed local services running.

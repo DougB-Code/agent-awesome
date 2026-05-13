@@ -6,6 +6,7 @@ class _LocalModelSetup extends StatelessWidget {
     required this.selectedModelId,
     required this.systemCapabilities,
     required this.busy,
+    required this.installed,
     required this.statusMessage,
     required this.onModelChanged,
     required this.onBack,
@@ -16,6 +17,7 @@ class _LocalModelSetup extends StatelessWidget {
   final String selectedModelId;
   final SystemCapabilitySnapshot systemCapabilities;
   final bool busy;
+  final bool installed;
   final String statusMessage;
   final ValueChanged<String> onModelChanged;
   final VoidCallback onBack;
@@ -124,8 +126,8 @@ class _LocalModelSetup extends StatelessWidget {
               SizedBox(
                 width: 300,
                 child: _SetupButton(
-                  label: busy ? 'Saving local model' : 'Download and continue',
-                  icon: Icons.download,
+                  label: _continueLabel,
+                  icon: installed ? Icons.arrow_forward : Icons.download,
                   filled: true,
                   onPressed: busy ? null : () => unawaited(onContinue()),
                   iconBefore: true,
@@ -136,6 +138,14 @@ class _LocalModelSetup extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Returns primary action copy for fresh and already-installed local models.
+  String get _continueLabel {
+    if (busy) {
+      return installed ? 'Saving local model' : 'Downloading local model';
+    }
+    return installed ? 'Continue' : 'Download and continue';
   }
 }
 

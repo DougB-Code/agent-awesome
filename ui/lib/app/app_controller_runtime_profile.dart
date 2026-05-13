@@ -13,6 +13,9 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     await file.writeAsString(encodeRuntimeProfileJson(profile));
     runtimeProfilePath = path;
     runtimeProfile = profile;
+    if (config.autoStartLocalServices) {
+      await _saveMemoryFirewallPolicyForActiveProfile();
+    }
     await _refreshConfigCollections();
     _configureClientsForRuntimeProfile(profile);
     _refreshEndpointSkeleton(profile);
@@ -29,6 +32,9 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     final profile = await RuntimeProfileLoader(config).loadFile(file);
     runtimeProfilePath = file.path;
     runtimeProfile = profile;
+    if (config.autoStartLocalServices) {
+      await _saveMemoryFirewallPolicyForActiveProfile();
+    }
     await _refreshConfigCollections();
     _configureClientsForRuntimeProfile(profile);
     _refreshEndpointSkeleton(profile);
@@ -227,6 +233,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
   Future<void> saveAgentMemoryRuntime(AgentMemoryRuntime agentMemory) async {
     final profile = _activeRuntimeProfile().copyWith(agentMemory: agentMemory);
     await _saveRuntimeProfileAndGeneratedToolConfig(_validatedProfile(profile));
+    await _restartMemoryServicesForFirewallPolicy();
     statusMessage = 'Agent memory access saved';
     _notifyControllerListeners();
   }

@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Runs runtime profile tests.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   test('loads profile with harness and default memory domain', () async {
     final profile = await RuntimeProfileLoader(_testConfig()).load();
 
@@ -92,6 +94,29 @@ void main() {
       ]),
     );
   });
+
+  test(
+    'loads bundled default profile template without source workspace',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'agentawesome-runtime-profile-',
+      );
+      addTearDown(() => root.delete(recursive: true));
+
+      final loader = RuntimeProfileLoader(
+        _testConfig(workspaceRoot: root.path),
+      );
+      final content = await loader.loadShippedRuntimeProfileTemplate();
+      final file = File('${root.path}/agent_awesome.json');
+      await file.writeAsString(content);
+
+      final profile = await loader.loadFile(file);
+
+      expect(profile.id, 'agent-awesome');
+      expect(profile.memoryDomains.single.id, 'memory');
+      expect(profile.agentMemory.defaultWriteDomain, 'memory');
+    },
+  );
 
   test('uses one shared app model config path', () {
     expect(
@@ -335,9 +360,9 @@ Map<String, dynamic> _gatewayJson({bool enabled = true}) {
   };
 }
 
-AppConfig _testConfig() {
+AppConfig _testConfig({String? workspaceRoot}) {
   final uiRoot = Directory.current.path;
-  final workspaceRoot = Directory.current.parent.path;
+  final resolvedWorkspaceRoot = workspaceRoot ?? Directory.current.parent.path;
   return AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:8080/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
@@ -345,7 +370,7 @@ AppConfig _testConfig() {
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
     agentAppName: 'agent_awesome',
     agentUserId: 'doug',
-    workspaceRoot: workspaceRoot,
+    workspaceRoot: resolvedWorkspaceRoot,
     autoStartLocalServices: true,
     runtimeProfilePath: '$uiRoot/runtime_profiles/agent_awesome.json',
   );

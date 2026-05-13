@@ -1745,7 +1745,10 @@ class _MemoryAppSettingsStore extends AgentAwesomeAppSettingsStore {
 
   /// Saves app settings in memory for widget assertions.
   @override
-  Future<void> save(AgentAwesomeAppSettings settings) async {
+  Future<void> save(
+    AgentAwesomeAppSettings settings, {
+    Iterable<String> extraPolicyActors = const <String>[],
+  }) async {
     saved = settings;
   }
 }

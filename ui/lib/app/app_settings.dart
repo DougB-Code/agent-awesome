@@ -365,39 +365,57 @@ List<MemoryFirewallShare> normalizeMemoryFirewallShares(
 
 /// Encodes configured firewalls as the JSON policy consumed by memoryd.
 Map<String, dynamic> memoryFirewallPolicyJson(
-  Iterable<MemoryFirewall> firewalls,
-) {
+  Iterable<MemoryFirewall> firewalls, {
+  Iterable<String> extraLocalActors = const <String>[],
+}) {
+  final localActors = _normalizedLocalMemoryPolicyActors(extraLocalActors);
   return <String, dynamic>{
     'default_allow': false,
     'firewalls': <Map<String, dynamic>>[
       for (final firewall in normalizeMemoryFirewalls(firewalls))
         <String, dynamic>{
           'firewall': firewall.id,
-          'readers': _memoryFirewallPolicyReaders(firewall),
-          'writers': _memoryFirewallPolicyWriters(firewall),
+          'readers': _memoryFirewallPolicyReaders(
+            firewall,
+            localActors: localActors,
+          ),
+          'writers': _memoryFirewallPolicyWriters(
+            firewall,
+            localActors: localActors,
+          ),
         },
     ],
   };
 }
 
 /// Returns actor principals allowed to read a configured memory firewall.
-List<String> _memoryFirewallPolicyReaders(MemoryFirewall firewall) {
+List<String> _memoryFirewallPolicyReaders(
+  MemoryFirewall firewall, {
+  required Set<String> localActors,
+}) {
   return _memoryFirewallPolicyPrincipals(<MemoryFirewallShare>[
     ...firewall.shares,
     ...firewall.writers,
-  ]);
+  ], localActors: localActors);
 }
 
 /// Returns actor principals allowed to write a configured memory firewall.
-List<String> _memoryFirewallPolicyWriters(MemoryFirewall firewall) {
-  return _memoryFirewallPolicyPrincipals(firewall.writers);
+List<String> _memoryFirewallPolicyWriters(
+  MemoryFirewall firewall, {
+  required Set<String> localActors,
+}) {
+  return _memoryFirewallPolicyPrincipals(
+    firewall.writers,
+    localActors: localActors,
+  );
 }
 
 /// Returns daemon actor strings for configured principals plus local operators.
 List<String> _memoryFirewallPolicyPrincipals(
-  Iterable<MemoryFirewallShare> principals,
-) {
-  final actors = <String>{..._localMemoryPolicyActors};
+  Iterable<MemoryFirewallShare> principals, {
+  required Set<String> localActors,
+}) {
+  final actors = <String>{...localActors};
   for (final share in principals) {
     if (share.kind == 'public') {
       actors.add('*');
@@ -411,6 +429,17 @@ List<String> _memoryFirewallPolicyPrincipals(
   }
   actors.remove('');
   return List<String>.unmodifiable(actors);
+}
+
+/// Returns normalized actor principals trusted by the local app runtime.
+Set<String> _normalizedLocalMemoryPolicyActors([
+  Iterable<String> extraActors = const <String>[],
+]) {
+  return <String>{
+    ..._localMemoryPolicyActors,
+    for (final actor in extraActors)
+      if (actor.trim().isNotEmpty) actor.trim(),
+  };
 }
 
 /// Normalizes one memory firewall id to a safe lowercase identifier.
@@ -466,23 +495,30 @@ class AgentAwesomeAppSettingsStore {
   }
 
   /// Saves settings to disk.
-  Future<void> save(AgentAwesomeAppSettings settings) async {
+  Future<void> save(
+    AgentAwesomeAppSettings settings, {
+    Iterable<String> extraPolicyActors = const <String>[],
+  }) async {
     final file = File(appSettingsPath());
     await file.parent.create(recursive: true);
     const encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString('${encoder.convert(settings.toJson())}\n');
-    await saveMemoryFirewallPolicy(settings);
+    await saveMemoryFirewallPolicy(
+      settings,
+      extraPolicyActors: extraPolicyActors,
+    );
   }
 
   /// Saves the memory daemon policy derived from app firewall settings.
   Future<void> saveMemoryFirewallPolicy(
-    AgentAwesomeAppSettings settings,
-  ) async {
+    AgentAwesomeAppSettings settings, {
+    Iterable<String> extraPolicyActors = const <String>[],
+  }) async {
     final file = File(memoryFirewallPolicyPath());
     await file.parent.create(recursive: true);
     const encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString(
-      '${encoder.convert(memoryFirewallPolicyJson(settings.effectiveMemoryFirewalls))}\n',
+      '${encoder.convert(memoryFirewallPolicyJson(settings.effectiveMemoryFirewalls, extraLocalActors: extraPolicyActors))}\n',
     );
   }
 }

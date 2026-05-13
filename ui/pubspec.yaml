@@ -24,3 +24,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/agent-awesome-logo.png
+    - runtime_profiles/agent_awesome.json
