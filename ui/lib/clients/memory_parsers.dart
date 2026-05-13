@@ -22,6 +22,7 @@ MemoryRecord parseMemoryRecord(dynamic content) {
       : <String, dynamic>{};
   final source = record['source'];
   final raw = record['raw'];
+  final metadata = record['metadata'];
   final sourceSystem = source is Map<String, dynamic>
       ? stringValue(source['system'], fallback: 'source')
       : 'source';
@@ -29,8 +30,15 @@ MemoryRecord parseMemoryRecord(dynamic content) {
       ? stringValue(source['id'])
       : '';
   final rawMap = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
+  final metadataMap = metadata is Map<String, dynamic>
+      ? metadata
+      : <String, dynamic>{};
   return MemoryRecord(
     id: stringValue(record['id']),
+    domainId: stringValue(
+      record['domain_id'],
+      fallback: stringValue(metadataMap['domain_id']),
+    ),
     evidenceId: stringValue(record['evidence_id']),
     title: stringValue(record['title'], fallback: 'Untitled memory'),
     summary: stringValue(record['summary']),
@@ -83,6 +91,7 @@ CompiledMemoryPage parseCompiledMemoryPage(dynamic content) {
   final page = content is Map<String, dynamic> ? content : <String, dynamic>{};
   return CompiledMemoryPage(
     id: stringValue(page['id']),
+    domainId: stringValue(page['domain_id']),
     kind: stringValue(page['kind'], fallback: 'entity_page'),
     firewall: stringValue(page['firewall'], fallback: 'user'),
     title: stringValue(page['title'], fallback: 'Untitled page'),

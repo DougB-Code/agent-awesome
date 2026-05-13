@@ -20,9 +20,12 @@ export interface Env {
   AGENTAWESOME_GATEWAY_TOKEN?: string;
   AGENTAWESOME_CONTEXT_API_BASE_URL?: string;
   AGENTAWESOME_CONTEXT_API_TOKEN?: string;
+  AGENTAWESOME_MEMORY_DOMAINS_JSON?: string;
+  AGENTAWESOME_MEMORY_POLICY_JSON?: string;
+  AGENTAWESOME_MEMORY_SERVICES_JSON?: string;
   AGENTAWESOME_PERSISTENCE_TOKEN?: string;
   AGENTAWESOME_MEMORY_SNAPSHOT_URL?: string;
-  AGENTAWESOME_MEMORY_SNAPSHOT_KEY?: string;
+  AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX?: string;
   AGENTAWESOME_MODEL_PROVIDER_ID?: string;
   AGENTAWESOME_MODEL_ID?: string;
   AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT?: string;
@@ -53,6 +56,12 @@ export function buildContainerEnv(env: Env): Record<string, string> {
       env.AGENTAWESOME_CONTEXT_API_BASE_URL ??
       "http://127.0.0.1:8081/api/context",
     AGENTAWESOME_CONTEXT_API_TOKEN: env.AGENTAWESOME_CONTEXT_API_TOKEN ?? "",
+    AGENTAWESOME_MEMORY_DOMAINS_JSON:
+      env.AGENTAWESOME_MEMORY_DOMAINS_JSON ?? defaultMemoryDomainsJSON(),
+    AGENTAWESOME_MEMORY_POLICY_JSON:
+      env.AGENTAWESOME_MEMORY_POLICY_JSON ?? defaultMemoryPolicyJSON(),
+    AGENTAWESOME_MEMORY_SERVICES_JSON:
+      env.AGENTAWESOME_MEMORY_SERVICES_JSON ?? defaultMemoryServicesJSON(env),
     AGENTAWESOME_PERSISTENCE_TOKEN: env.AGENTAWESOME_PERSISTENCE_TOKEN ?? "",
     AGENTAWESOME_MEMORY_SNAPSHOT_URL:
       env.AGENTAWESOME_MEMORY_SNAPSHOT_URL ??
@@ -117,7 +126,63 @@ function isHealthRequest(request: Request): boolean {
 /** isGatewayRequest reports whether a request targets the gateway control plane. */
 function isGatewayRequest(request: Request): boolean {
   const pathname = new URL(request.url).pathname;
-  return pathname === "/mcp" || pathname.startsWith("/api/");
+  return pathname === "/mcp" || pathname.startsWith("/mcp/") || pathname.startsWith("/api/");
+}
+
+/** defaultMemoryDomainsJSON returns the shipped single-domain cloud topology. */
+function defaultMemoryDomainsJSON(): string {
+  return JSON.stringify([
+    {
+      id: "memory",
+      label: "Memory",
+      endpoint: "http://127.0.0.1:8090/mcp",
+      health_url: "http://127.0.0.1:8090/healthz",
+    },
+  ]);
+}
+
+/** defaultMemoryPolicyJSON returns the shipped single-domain cloud grants. */
+function defaultMemoryPolicyJSON(): string {
+  return JSON.stringify({
+    actor: "agent:agent-awesome",
+    read_domains: ["memory"],
+    write_domains: ["memory"],
+    default_write_domain: "memory",
+    allowed_sensitivities: ["public", "internal", "private"],
+  });
+}
+
+/** defaultMemoryServicesJSON returns the shipped single-domain service config. */
+function defaultMemoryServicesJSON(env: Env): string {
+  return JSON.stringify([
+    {
+      domain_id: "memory",
+      name: "memory",
+      health_url: "http://127.0.0.1:8090/healthz",
+      command: "/usr/local/bin/memoryd",
+      arguments: [
+        "--addr",
+        "127.0.0.1:8090",
+        "--db",
+        "/app/data/memory/memory.db",
+        "--data",
+        "/app/data/memory/files",
+        "--log-file",
+        "/app/logs/memory.log",
+        "--snapshot-url",
+        memorySnapshotURL(env, "memory"),
+      ],
+      auto_start: true,
+    },
+  ]);
+}
+
+/** memorySnapshotURL returns the private Worker snapshot URL for one domain. */
+function memorySnapshotURL(env: Env, domainID: string): string {
+  const base =
+    env.AGENTAWESOME_MEMORY_SNAPSHOT_URL ??
+    "https://agent-awesome.com/internal/context-snapshot";
+  return `${base.replace(/\/+$/, "")}/${domainID}`;
 }
 
 /** hasGatewayAuth checks the gateway bearer token before reaching the container. */
@@ -175,7 +240,8 @@ async function handlePersistenceRequest(
   env: Env,
 ): Promise<Response | null> {
   const url = new URL(request.url);
-  if (url.pathname !== "/internal/context-snapshot") {
+  const domainID = snapshotDomainFromPath(url.pathname);
+  if (domainID === null) {
     return null;
   }
   if (!hasPersistenceAuth(request, env)) {
@@ -183,14 +249,27 @@ async function handlePersistenceRequest(
   }
   switch (request.method) {
     case "GET":
-      return readContextSnapshot(env);
+      return readContextSnapshot(env, domainID);
     case "HEAD":
-      return headContextSnapshot(env);
+      return headContextSnapshot(env, domainID);
     case "PUT":
-      return writeContextSnapshot(request, env);
+      return writeContextSnapshot(request, env, domainID);
     default:
       return new Response("Not found\n", { status: 404 });
   }
+}
+
+/** snapshotDomainFromPath parses the optional memory domain from a snapshot route. */
+function snapshotDomainFromPath(pathname: string): string | null {
+  const base = "/internal/context-snapshot";
+  if (!pathname.startsWith(`${base}/`)) {
+    return null;
+  }
+  const domainID = pathname.slice(base.length + 1);
+  if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(domainID)) {
+    return null;
+  }
+  return domainID;
 }
 
 /** hasPersistenceAuth checks the private bearer token for container snapshots. */
@@ -206,8 +285,8 @@ function hasPersistenceAuth(request: Request, env: Env): boolean {
 }
 
 /** readContextSnapshot returns the latest persisted memory snapshot from R2. */
-async function readContextSnapshot(env: Env): Promise<Response> {
-  const object = await env.CONTEXT_SNAPSHOTS.get(contextSnapshotKey(env));
+async function readContextSnapshot(env: Env, domainID: string): Promise<Response> {
+  const object = await env.CONTEXT_SNAPSHOTS.get(contextSnapshotKey(env, domainID));
   if (object === null) {
     return new Response("Not found\n", { status: 404 });
   }
@@ -217,8 +296,8 @@ async function readContextSnapshot(env: Env): Promise<Response> {
 }
 
 /** headContextSnapshot returns latest snapshot metadata without the archive body. */
-async function headContextSnapshot(env: Env): Promise<Response> {
-  const object = await env.CONTEXT_SNAPSHOTS.head(contextSnapshotKey(env));
+async function headContextSnapshot(env: Env, domainID: string): Promise<Response> {
+  const object = await env.CONTEXT_SNAPSHOTS.head(contextSnapshotKey(env, domainID));
   if (object === null) {
     return new Response(null, { status: 404 });
   }
@@ -229,8 +308,9 @@ async function headContextSnapshot(env: Env): Promise<Response> {
 async function writeContextSnapshot(
   request: Request,
   env: Env,
+  domainID: string,
 ): Promise<Response> {
-  await env.CONTEXT_SNAPSHOTS.put(contextSnapshotKey(env), request.body, {
+  await env.CONTEXT_SNAPSHOTS.put(contextSnapshotKey(env, domainID), request.body, {
     httpMetadata: {
       contentType: request.headers.get("content-type") ?? "application/gzip",
     },
@@ -239,11 +319,11 @@ async function writeContextSnapshot(
 }
 
 /** contextSnapshotKey returns the configured R2 object key for this agent. */
-function contextSnapshotKey(env: Env): string {
-  return (
-    env.AGENTAWESOME_MEMORY_SNAPSHOT_KEY ??
-    "beta-pilot/context-snapshot.tar.gz"
-  );
+function contextSnapshotKey(env: Env, domainID: string): string {
+  const prefix =
+    env.AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX ??
+    "beta-pilot/memory";
+  return `${prefix.replace(/^\/+|\/+$/g, "")}/${domainID}/context-snapshot.tar.gz`;
 }
 
 /** snapshotHeaders returns safe operator metadata for a persisted snapshot. */

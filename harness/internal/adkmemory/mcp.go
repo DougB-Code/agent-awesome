@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/mcpclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -16,8 +17,8 @@ const (
 )
 
 // connect opens one MCP client session for memory operations.
-func (s *Service) connect(ctx context.Context) (*mcp.ClientSession, error) {
-	return mcpclient.Connect(ctx, s.server, mcpClientName, mcpClientVersion)
+func (s *Service) connect(ctx context.Context, server schema.MCPServer) (*mcp.ClientSession, error) {
+	return mcpclient.Connect(ctx, server, mcpClientName, mcpClientVersion)
 }
 
 // callTool invokes one memory MCP tool and returns structured content.

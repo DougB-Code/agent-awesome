@@ -129,12 +129,16 @@ class GatewayContextClient implements ToolRpcClient {
     required this.baseUrl,
     http.Client? httpClient,
     Map<String, String> headers = const <String, String>{},
+    this.domainId = '',
     this.logger,
   }) : headers = Map<String, String>.unmodifiable(headers),
        _http = httpClient ?? http.Client();
 
   /// Gateway context API base URL.
   final String baseUrl;
+
+  /// Optional memory domain routed by the harness control plane.
+  final String domainId;
 
   /// Headers applied to every gateway context API request.
   final Map<String, String> headers;
@@ -158,6 +162,7 @@ class GatewayContextClient implements ToolRpcClient {
       headers: _headers(contentTypeJson: true),
       body: jsonEncode(<String, dynamic>{
         'name': name,
+        if (domainId.trim().isNotEmpty) 'domain_id': domainId.trim(),
         'arguments': arguments ?? <String, dynamic>{},
       }),
     );

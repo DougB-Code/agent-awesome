@@ -822,6 +822,41 @@ void main() {
     expect(find.text('MEMORY'), findsOneWidget);
   });
 
+  testWidgets('shows memory safety event history', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+    controller.memorySafetyEvents = <MemorySafetyEvent>[
+      MemorySafetyEvent(
+        id: 'event-1',
+        kind: 'blocked_export',
+        severity: 'warning',
+        title: 'Export blocked',
+        detail: 'Marriage cannot write to Side Project',
+        sourceDomain: 'memory',
+        targetDomain: 'memory',
+        sourceMemoryId: 'liquid-capital',
+        createdAt: DateTime(2026, 5, 12, 10),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Memory'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Safety'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('SAFETY'), findsOneWidget);
+    expect(find.text('Export blocked'), findsOneWidget);
+    expect(find.text('Marriage cannot write to Side Project'), findsOneWidget);
+    expect(find.text('liquid-capital'), findsOneWidget);
+  });
+
   testWidgets('shows memory-backed route errors as generic pages', (
     tester,
   ) async {
@@ -1756,8 +1791,23 @@ RuntimeProfile _settingsProfile() {
       port: 1,
       autoStart: false,
     ),
-    memoryServerConfigPath: '/tmp/memory.json',
-    mcpServers: <McpServerRuntime>[
+    gateway: GatewayRuntime(
+      id: 'gateway',
+      label: 'Gateway',
+      apiBaseUrl: 'http://127.0.0.1:2/api',
+      healthUrl: 'http://127.0.0.1:2/healthz',
+      workingDirectory: '/tmp/gateway',
+      packagePath: './cmd/agent-gateway',
+      harnessBaseUrl: 'http://127.0.0.1:1/api',
+      contextBaseUrl: 'http://127.0.0.1:8081/api/context',
+      memoryMcpUrl: 'http://127.0.0.1:1/mcp',
+      appName: 'test',
+      userId: 'user',
+      port: 2,
+      autoStart: false,
+      enabled: true,
+    ),
+    memoryDomains: <McpServerRuntime>[
       McpServerRuntime(
         id: 'memory',
         label: 'Memory',
@@ -1766,11 +1816,20 @@ RuntimeProfile _settingsProfile() {
         healthUrl: 'http://127.0.0.1:1/healthz',
         workingDirectory: '/tmp/memory',
         packagePath: './cmd/memoryd',
+        dbPath: '/tmp/memory.db',
+        dataDir: '/tmp/memory-files',
         arguments: <String>[],
         autoStart: false,
         enabled: true,
       ),
     ],
+    agentMemory: AgentMemoryRuntime(
+      actor: 'agent:test',
+      readDomains: <String>['memory'],
+      writeDomains: <String>['memory'],
+      defaultWriteDomain: 'memory',
+      allowedSensitivities: <String>['public', 'internal', 'private'],
+    ),
   );
 }
 

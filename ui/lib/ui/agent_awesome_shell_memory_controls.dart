@@ -379,7 +379,9 @@ void _selectFirstEntity(AgentAwesomeAppController controller, String entity) {
     return record.entityNames.contains(entity);
   });
   if (matches.isNotEmpty) {
-    unawaited(controller.selectMemory(matches.first.id));
+    unawaited(
+      controller.selectMemory(controller.memorySelectionKey(matches.first)),
+    );
   }
 }
 

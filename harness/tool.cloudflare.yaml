@@ -73,3 +73,20 @@ mcp:
           - traverse_task_relations
           - upsert_task_relation
           - delete_task_relation
+memory:
+  actor: agent:agent-awesome
+  read-domains:
+    - id: memory
+      label: Memory
+      endpoint: https://agent-awesome.com/mcp
+      headers-from-env:
+        Authorization: AGENTAWESOME_CLOUDFLARE_GATEWAY_AUTHORIZATION
+        CF-Access-Client-Id: CF_ACCESS_CLIENT_ID
+        CF-Access-Client-Secret: CF_ACCESS_CLIENT_SECRET
+  write-domains:
+    - memory
+  default-write-domain: memory
+  allowed-sensitivities:
+    - public
+    - internal
+    - private

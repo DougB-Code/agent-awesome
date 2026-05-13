@@ -165,6 +165,11 @@ function assertContainerConfiguration(config) {
   assert.equal(r2.bucket_name, "agent-awesome-beta-context");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_ID, "gpt-mini");
+  assert.ok(config.vars?.AGENTAWESOME_MEMORY_DOMAINS_JSON?.includes('"id":"memory"'));
+  assert.ok(config.vars?.AGENTAWESOME_MEMORY_POLICY_JSON?.includes('"read_domains":["memory"]'));
+  assert.ok(config.vars?.AGENTAWESOME_MEMORY_SERVICES_JSON?.includes('"domain_id":"memory"'));
+  assert.equal(config.vars?.AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX, "beta-pilot/memory");
+  assert.equal(config.vars?.AGENTAWESOME_MEMORY_SNAPSHOT_KEY, undefined);
   for (const secret of [
     "AGENTAWESOME_GATEWAY_TOKEN",
     "AGENTAWESOME_PERSISTENCE_TOKEN",
@@ -183,6 +188,10 @@ function assertContainerEnvironment(app) {
   assert.equal(mapped.AGENTAWESOME_PERSISTENCE_TOKEN, "persistence-token");
   assert.equal(mapped.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
   assert.equal(mapped.AGENTAWESOME_MODEL_ID, "gpt-mini");
+  assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"memory"'));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_POLICY_JSON.includes('"default_write_domain":"memory"'));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes('"--snapshot-url"'));
+  assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/memory"));
   assert.equal(mapped.SLACK_SIGNING_SECRET, "slack-secret");
   assert.equal(mapped.SLACK_ENABLED, "true");
   assert.equal(mapped.SLACK_SOCKET_MODE, "false");
@@ -241,13 +250,27 @@ async function assertMCPAuthBoundary(app) {
   assert.equal(allowed.status, 200);
   assert.equal(authenticated.calls.length, 1);
   assert.equal(authenticated.calls[0].pathname, "/mcp");
+
+  const domainPath = createGatewayRecorder();
+  const domainPathAllowed = await app.routeRequest(
+    new Request("https://agent-awesome.com/mcp/project", {
+      headers: { authorization: "Bearer gateway-token" },
+      method: "POST",
+      body: "{}",
+    }),
+    createEnv(),
+    domainPath.dependencies,
+  );
+  assert.equal(domainPathAllowed.status, 200);
+  assert.equal(domainPath.calls.length, 1);
+  assert.equal(domainPath.calls[0].pathname, "/mcp/project");
 }
 
 /** assertSnapshotHeadMetadata proves snapshot freshness is visible without archive download. */
 async function assertSnapshotHeadMetadata(app) {
   const recorder = createGatewayRecorder();
   const response = await app.routeRequest(
-    new Request("https://agent-awesome.com/internal/context-snapshot", {
+    new Request("https://agent-awesome.com/internal/context-snapshot/memory", {
       headers: { authorization: "Bearer persistence-token" },
       method: "HEAD",
     }),
@@ -274,6 +297,43 @@ async function assertSnapshotHeadMetadata(app) {
   assert.equal(response.headers.get("last-modified"), "Sun, 10 May 2026 12:00:00 GMT");
   assert.equal(response.headers.get("content-length"), "128");
   assert.equal(recorder.calls.length, 0);
+
+  const rootSnapshotDenied = await app.routeRequest(
+    new Request("https://agent-awesome.com/internal/context-snapshot", {
+      headers: { authorization: "Bearer persistence-token" },
+      method: "HEAD",
+    }),
+    createEnv(),
+    recorder.dependencies,
+  );
+  assert.equal(rootSnapshotDenied.status, 404);
+  assert.equal(recorder.calls.length, 0);
+
+  const keys = [];
+  const domainResponse = await app.routeRequest(
+    new Request("https://agent-awesome.com/internal/context-snapshot/project", {
+      headers: { authorization: "Bearer persistence-token" },
+      method: "PUT",
+      body: "snapshot",
+    }),
+    createEnv({
+      CONTEXT_SNAPSHOTS: {
+        async get() {
+          return null;
+        },
+        async head() {
+          return null;
+        },
+        async put(key) {
+          keys.push(key);
+        },
+      },
+      AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX: "beta-pilot/memory",
+    }),
+    recorder.dependencies,
+  );
+  assert.equal(domainResponse.status, 204);
+  assert.deepEqual(keys, ["beta-pilot/memory/project/context-snapshot.tar.gz"]);
 }
 
 /** assertSlackIngressReachesGateway proves only signed Slack events are forwarded. */

@@ -11,6 +11,7 @@ class MemoryRecord {
     required this.kind,
     required this.topics,
     required this.sourceLabel,
+    this.domainId = '',
     this.evidenceId = '',
     this.firewall = 'user',
     this.trustLevel = 'source_original',
@@ -48,6 +49,9 @@ class MemoryRecord {
 
   /// Source label.
   final String sourceLabel;
+
+  /// Memory domain that owns this record.
+  final String domainId;
 
   /// Raw source record id backing the memory record.
   final String evidenceId;
@@ -108,6 +112,7 @@ class MemoryRecord {
     String? title,
     String? summary,
     String? kind,
+    String? domainId,
     String? firewall,
     String? trustLevel,
     String? sensitivity,
@@ -127,6 +132,7 @@ class MemoryRecord {
       kind: kind ?? this.kind,
       topics: topics ?? this.topics,
       sourceLabel: sourceLabel,
+      domainId: domainId ?? this.domainId,
       evidenceId: evidenceId,
       firewall: firewall ?? this.firewall,
       trustLevel: trustLevel ?? this.trustLevel,
@@ -195,6 +201,7 @@ class CompiledMemoryPage {
     required this.path,
     required this.status,
     required this.sourceIds,
+    this.domainId = '',
     this.content = '',
     this.stale = false,
     this.uncertainty = const <String>[],
@@ -223,6 +230,9 @@ class CompiledMemoryPage {
   /// Source record ids cited by the page.
   final List<String> sourceIds;
 
+  /// Memory domain used to build this page.
+  final String domainId;
+
   /// Optional markdown content.
   final String content;
 
@@ -237,6 +247,25 @@ class CompiledMemoryPage {
 
   /// Page update time.
   final DateTime? updatedAt;
+
+  /// Returns a copy annotated with domain provenance.
+  CompiledMemoryPage copyWith({String? domainId}) {
+    return CompiledMemoryPage(
+      id: id,
+      kind: kind,
+      firewall: firewall,
+      title: title,
+      path: path,
+      status: status,
+      sourceIds: sourceIds,
+      domainId: domainId ?? this.domainId,
+      content: content,
+      stale: stale,
+      uncertainty: uncertainty,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
 }
 
 /// MemoryFilterState stores memory retrieval and local stewardship filters.
@@ -366,6 +395,76 @@ class MemoryCaptureDraft {
 
   /// Entity labels.
   final List<String> entityNames;
+}
+
+/// MemoryExportDraft stores user-reviewed declassification text.
+class MemoryExportDraft {
+  /// Creates a reviewed memory-domain export draft.
+  const MemoryExportDraft({
+    required this.title,
+    required this.content,
+    required this.firewall,
+    required this.sensitivity,
+  });
+
+  /// Exported record title.
+  final String title;
+
+  /// Sanitized source content approved for the destination domain.
+  final String content;
+
+  /// Destination memory firewall.
+  final String firewall;
+
+  /// Destination sensitivity label.
+  final String sensitivity;
+}
+
+/// MemorySafetyEvent records a domain-policy decision for review.
+class MemorySafetyEvent {
+  /// Creates an immutable memory safety event.
+  const MemorySafetyEvent({
+    required this.id,
+    required this.kind,
+    required this.severity,
+    required this.title,
+    required this.detail,
+    required this.sourceDomain,
+    required this.targetDomain,
+    this.sourceMemoryId = '',
+    this.approved = false,
+    this.createdAt,
+  });
+
+  /// Stable event id.
+  final String id;
+
+  /// Event category, such as blocked_export or approved_export.
+  final String kind;
+
+  /// Review severity.
+  final String severity;
+
+  /// Human-readable event title.
+  final String title;
+
+  /// Review detail for the decision.
+  final String detail;
+
+  /// Source memory domain id.
+  final String sourceDomain;
+
+  /// Destination memory domain id.
+  final String targetDomain;
+
+  /// Source memory record id when one is involved.
+  final String sourceMemoryId;
+
+  /// Whether a user explicitly approved the movement.
+  final bool approved;
+
+  /// Event creation timestamp.
+  final DateTime? createdAt;
 }
 
 /// MemoryRepairDraft stores explicit memory metadata corrections.

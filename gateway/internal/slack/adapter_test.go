@@ -22,7 +22,7 @@ func TestEventsHandlerRespondsToURLVerification(t *testing.T) {
 		Enabled:        true,
 		SigningSecret:  "secret",
 		BotToken:       "xoxb-test",
-		HarnessBaseURL: "http://127.0.0.1:1/api",
+		GatewayBaseURL: "http://127.0.0.1:1/api",
 		AppName:        "app",
 		AgentUserID:    "user",
 	})
@@ -260,7 +260,7 @@ func TestDispatchPostsFailureWithFreshContextAfterAgentTimeout(t *testing.T) {
 	transport := &dispatchFailureTransport{postContextErrors: make(chan error, 1)}
 	adapter := NewAdapter(Config{
 		BotToken:       "xoxb-test",
-		HarnessBaseURL: "http://agent.test",
+		GatewayBaseURL: "http://gateway.test/api",
 		AppName:        "app",
 		AgentUserID:    "user",
 		RequestTimeout: 20 * time.Millisecond,
@@ -281,6 +281,23 @@ func TestDispatchPostsFailureWithFreshContextAfterAgentTimeout(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("timed out waiting for Slack failure post")
+	}
+}
+
+// TestNewAdapterRoutesAgentTurnsThroughGateway verifies Slack never targets harness directly.
+func TestNewAdapterRoutesAgentTurnsThroughGateway(t *testing.T) {
+	adapter := NewAdapter(Config{
+		GatewayBaseURL:   "http://gateway.test/api",
+		GatewayAuthToken: "secret",
+		AppName:          "app",
+		AgentUserID:      "user",
+	})
+
+	if adapter.agent.baseURL != "http://gateway.test/api" {
+		t.Fatalf("agent baseURL = %q, want gateway API URL", adapter.agent.baseURL)
+	}
+	if adapter.agent.headers["Authorization"] != "Bearer secret" {
+		t.Fatalf("Authorization = %q, want gateway bearer", adapter.agent.headers["Authorization"])
 	}
 }
 
@@ -384,8 +401,8 @@ type dispatchFailureTransport struct {
 // RoundTrip responds to agent session checks, times out runs, and records Slack posts.
 func (t *dispatchFailureTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	switch req.URL.Host {
-	case "agent.test":
-		if req.URL.Path == adk.RunSSEPath() {
+	case "gateway.test":
+		if req.URL.Path == "/api"+adk.RunSSEPath() {
 			<-req.Context().Done()
 			return nil, req.Context().Err()
 		}

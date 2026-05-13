@@ -234,12 +234,6 @@ class _SettingsProfileEditorState extends State<_SettingsProfileEditor> {
               selectedPath: widget.profile.harness.toolConfigPath,
               onChanged: _assignConfig,
             ),
-            _SettingsMcpServerAssignmentDropdown(
-              label: 'Memory',
-              kind: 'memory',
-              servers: widget.profile.mcpServers,
-              onChanged: _assignMcpServer,
-            ),
           ],
         ),
       ],
@@ -263,17 +257,6 @@ class _SettingsProfileEditorState extends State<_SettingsProfileEditor> {
   Future<void> _assignConfig(ConfigFileEntry entry) async {
     try {
       await widget.controller.assignConfigFile(entry);
-      if (!mounted) {
-        return;
-      }
-      setState(() {});
-    } catch (_) {}
-  }
-
-  /// Enables the selected MCP server for its required profile role.
-  Future<void> _assignMcpServer(McpServerRuntime selected) async {
-    try {
-      await widget.controller.assignMcpServerForKind(selected);
       if (!mounted) {
         return;
       }

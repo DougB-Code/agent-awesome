@@ -135,44 +135,99 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     await _assignConfigFile(entry.kind, entry.path);
   }
 
-  /// Saves one required memory server config file.
-  Future<void> saveRequiredServerRuntime({
+  /// Saves one configured memory domain and regenerates harness memory grants.
+  Future<void> saveMemoryDomainRuntime({
     required String originalId,
     required McpServerRuntime server,
   }) async {
     final profile = _activeRuntimeProfile();
-    final index = profile.mcpServers.indexWhere(
+    final index = profile.memoryDomains.indexWhere(
       (candidate) => candidate.id == originalId,
     );
     if (index < 0) {
-      throw FileSystemException('MCP server is not referenced', originalId);
+      throw FileSystemException('Memory domain is not referenced', originalId);
     }
     final servers = <McpServerRuntime>[
-      for (var i = 0; i < profile.mcpServers.length; i++)
-        i == index ? server : profile.mcpServers[i],
+      for (var i = 0; i < profile.memoryDomains.length; i++)
+        i == index ? server : profile.memoryDomains[i],
     ];
-    await _saveRequiredServer(profile, server);
-    _applyRuntimeProfileServers(profile.copyWith(mcpServers: servers));
-    statusMessage = '${server.kind} server saved';
+    final next = _withMemoryDomainGrantRewrite(
+      profile.copyWith(memoryDomains: servers),
+      originalId: originalId,
+      nextId: server.id,
+      enabled: server.enabled,
+    );
+    await _saveRuntimeProfileAndGeneratedToolConfig(_validatedProfile(next));
+    statusMessage = '${server.label} domain saved';
     _notifyControllerListeners();
   }
 
-  /// Enables the selected MCP server for its runtime role.
-  Future<void> assignMcpServerForKind(McpServerRuntime selected) async {
+  /// Creates a new configurable memory domain in the active runtime profile.
+  Future<McpServerRuntime> createMemoryDomainRuntime() async {
     final profile = _activeRuntimeProfile();
-    final servers = <McpServerRuntime>[
-      for (final server in profile.mcpServers)
-        server.kind == selected.kind
-            ? server.copyWith(enabled: server.id == selected.id)
-            : server,
-    ];
-    for (var index = 0; index < servers.length; index++) {
-      if (servers[index].enabled != profile.mcpServers[index].enabled) {
-        await _saveRequiredServer(profile, servers[index]);
-      }
+    final id = _uniqueMemoryDomainId(profile, 'memory');
+    final port = _nextMemoryDomainPort(profile);
+    final domain = McpServerRuntime(
+      id: id,
+      label: _memoryDomainLabel(id),
+      kind: 'memory',
+      endpoint: 'http://127.0.0.1:$port/mcp',
+      healthUrl: 'http://127.0.0.1:$port/healthz',
+      workingDirectory: '${config.workspaceRoot}/memory',
+      packagePath: './cmd/memoryd',
+      dbPath: memoryDomainDatabasePath(id),
+      dataDir: memoryDomainDataDirectoryPath(id),
+      arguments: _memoryStorageArguments(
+        <String>[
+          '--addr',
+          '127.0.0.1:$port',
+          '--firewall-policy',
+          memoryFirewallPolicyPath(),
+        ],
+        dbPath: memoryDomainDatabasePath(id),
+        dataDir: memoryDomainDataDirectoryPath(id),
+      ),
+      autoStart: true,
+      enabled: true,
+    );
+    final next = profile.copyWith(
+      memoryDomains: <McpServerRuntime>[...profile.memoryDomains, domain],
+    );
+    await _saveRuntimeProfileAndGeneratedToolConfig(_validatedProfile(next));
+    statusMessage = '${domain.label} domain created';
+    _notifyControllerListeners();
+    return domain;
+  }
+
+  /// Deletes a memory domain and removes its access grants.
+  Future<void> deleteMemoryDomainRuntime(String domainId) async {
+    final profile = _activeRuntimeProfile();
+    if (profile.memoryDomains.length <= 1) {
+      throw FileSystemException(
+        'Cannot delete the only memory domain',
+        domainId,
+      );
     }
-    _applyRuntimeProfileServers(profile.copyWith(mcpServers: servers));
-    statusMessage = '${selected.kind} server assigned';
+    final remaining = profile.memoryDomains
+        .where((domain) => domain.id != domainId)
+        .toList();
+    if (remaining.length == profile.memoryDomains.length) {
+      throw FileSystemException('Memory domain is not referenced', domainId);
+    }
+    final next = _withMemoryDomainGrantRemoval(
+      profile.copyWith(memoryDomains: remaining),
+      removedId: domainId,
+    );
+    await _saveRuntimeProfileAndGeneratedToolConfig(_validatedProfile(next));
+    statusMessage = 'Memory domain deleted';
+    _notifyControllerListeners();
+  }
+
+  /// Saves agent-profile memory access grants.
+  Future<void> saveAgentMemoryRuntime(AgentMemoryRuntime agentMemory) async {
+    final profile = _activeRuntimeProfile().copyWith(agentMemory: agentMemory);
+    await _saveRuntimeProfileAndGeneratedToolConfig(_validatedProfile(profile));
+    statusMessage = 'Agent memory access saved';
     _notifyControllerListeners();
   }
 
@@ -229,9 +284,6 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       targetDirectory: toolConfigsDirectoryPath(),
       targetName: '${profile.id}-tool.yaml',
     );
-    final serverPaths = await _copyRequiredServerConfigsIntoAppDirectory(
-      storageProfile,
-    );
     final graphToolPath = await _writeDefaultGraphToolConfig(
       profile: storageProfile,
       requestedPath: toolPath ?? harness.toolConfigPath,
@@ -243,12 +295,10 @@ extension AgentAwesomeAppControllerRuntimeProfiles
         agentConfigPath: agentPath ?? harness.agentConfigPath,
         toolConfigPath: graphToolPath,
       ),
-      memoryServerConfigPath: serverPaths.memoryServerConfigPath,
     );
     if (next.harness.modelConfigPath != harness.modelConfigPath ||
         next.harness.agentConfigPath != harness.agentConfigPath ||
-        next.harness.toolConfigPath != harness.toolConfigPath ||
-        next.memoryServerConfigPath != profile.memoryServerConfigPath) {
+        next.harness.toolConfigPath != harness.toolConfigPath) {
       final file = File(runtimeProfilePath);
       await file.parent.create(recursive: true);
       await file.writeAsString(encodeRuntimeProfileJson(next));
@@ -278,12 +328,24 @@ extension AgentAwesomeAppControllerRuntimeProfiles
   /// Places default managed memory files in the OS app data directory.
   RuntimeProfile _withDefaultMemoryStorage(RuntimeProfile profile) {
     return profile.copyWith(
-      mcpServers: profile.mcpServers.map((server) {
+      memoryDomains: profile.memoryDomains.map((server) {
         if (server.kind != 'memory' || !server.autoStart) {
           return server;
         }
+        final dbPath = server.dbPath.trim().isEmpty
+            ? memoryDomainDatabasePath(server.id)
+            : server.dbPath;
+        final dataDir = server.dataDir.trim().isEmpty
+            ? memoryDomainDataDirectoryPath(server.id)
+            : server.dataDir;
         return server.copyWith(
-          arguments: _memoryStorageArguments(server.arguments),
+          dbPath: dbPath,
+          dataDir: dataDir,
+          arguments: _memoryStorageArguments(
+            server.arguments,
+            dbPath: dbPath,
+            dataDir: dataDir,
+          ),
         );
       }).toList(),
     );
@@ -372,7 +434,11 @@ extension AgentAwesomeAppControllerRuntimeProfiles
   }
 
   /// Rewrites memory daemon storage arguments while preserving other flags.
-  List<String> _memoryStorageArguments(List<String> arguments) {
+  List<String> _memoryStorageArguments(
+    List<String> arguments, {
+    required String dbPath,
+    required String dataDir,
+  }) {
     final withoutStorageFlags = <String>[];
     for (var index = 0; index < arguments.length; index++) {
       final value = arguments[index];
@@ -382,13 +448,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       }
       withoutStorageFlags.add(value);
     }
-    return <String>[
-      ...withoutStorageFlags,
-      '--db',
-      defaultMemoryDatabasePath(),
-      '--data',
-      defaultMemoryDataDirectoryPath(),
-    ];
+    return <String>[...withoutStorageFlags, '--db', dbPath, '--data', dataDir];
   }
 
   /// Writes the target graph-backed MCP tool config before harness startup.
@@ -397,9 +457,12 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     required String requestedPath,
     required String targetName,
   }) async {
-    final graphServer = _serverForKind(profile, 'memory');
-    if (graphServer == null) {
-      throw FileSystemException('Memory MCP server is missing', profile.id);
+    final graphServers = profile.memoryServers.where((server) {
+      return profile.agentMemory.readDomains.contains(server.id) ||
+          profile.agentMemory.writeDomains.contains(server.id);
+    }).toList();
+    if (graphServers.isEmpty) {
+      throw FileSystemException('Memory domains are missing', profile.id);
     }
     var path = requestedPath.trim();
     var file = File(path);
@@ -413,11 +476,10 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     final document = await file.exists()
         ? ToolConfigDocument.parse(await file.readAsString())
         : emptyToolConfigDocument();
-    final target = graphBackedMemoryToolConfig(
-      serverKind: graphServer.kind,
-      serverEndpoint: graphServer.endpoint,
+    final target = graphBackedMemoryToolConfigForDomains(
+      memoryDomains: graphServers,
+      agentMemory: profile.agentMemory,
       localExec: document.localExec,
-      headersFromEnv: _mcpHeadersFromEnv(profile, graphServer),
       extra: document.extra,
     );
     final validationError = toolConfigValidationError(target);
@@ -430,59 +492,206 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     return path;
   }
 
-  /// Persists one required app service server config.
-  Future<void> _saveRequiredServer(
+  /// Saves profile JSON after regenerating the domain-aware tool config.
+  Future<void> _saveRuntimeProfileAndGeneratedToolConfig(
     RuntimeProfile profile,
-    McpServerRuntime server,
   ) async {
-    final path = _requiredServerConfigPath(profile, server.kind);
-    if (path.isEmpty) {
-      throw FileSystemException(
-        'Server config reference is missing',
-        server.id,
-      );
-    }
-    final file = File(path);
-    await file.parent.create(recursive: true);
-    await file.writeAsString(encodeMcpServerRuntimeJson(server));
+    final toolPath = await _writeDefaultGraphToolConfig(
+      profile: profile,
+      requestedPath: profile.harness.toolConfigPath,
+      targetName: _pathFilename(profile.harness.toolConfigPath).isEmpty
+          ? '${profile.id}-tool.yaml'
+          : _pathFilename(profile.harness.toolConfigPath),
+    );
+    await saveRuntimeProfile(
+      profile.copyWith(
+        harness: profile.harness.copyWith(toolConfigPath: toolPath),
+      ),
+    );
   }
 
-  /// Applies changed server configs without rewriting the profile JSON.
-  void _applyRuntimeProfileServers(RuntimeProfile profile) {
-    runtimeProfile = profile;
-    _configureClientsForRuntimeProfile(profile);
-    _refreshEndpointSkeleton(profile);
+  /// Validates a profile by round-tripping through the target schema parser.
+  RuntimeProfile _validatedProfile(RuntimeProfile profile) {
+    return RuntimeProfile.fromJson(profile.toJson());
   }
 
-  /// Copies the default memory server config into the app config tree.
-  Future<({String memoryServerConfigPath})>
-  _copyRequiredServerConfigsIntoAppDirectory(RuntimeProfile profile) async {
-    final memoryServer = _serverForKind(profile, 'memory');
-    final memoryPath = await _copyConfigIntoAppDirectory(
-      sourcePath: profile.memoryServerConfigPath,
-      targetDirectory: memoryServerConfigsDirectoryPath(),
-      targetName: '${_serverFileName(memoryServer, 'memory')}.json',
-    );
-    if (memoryServer != null && memoryPath != null) {
-      await File(
-        memoryPath,
-      ).writeAsString(encodeMcpServerRuntimeJson(memoryServer));
+  /// Rewrites agent grants when a memory domain id changes or is disabled.
+  RuntimeProfile _withMemoryDomainGrantRewrite(
+    RuntimeProfile profile, {
+    required String originalId,
+    required String nextId,
+    required bool enabled,
+  }) {
+    if (originalId == nextId && enabled) {
+      return profile;
     }
-    return (
-      memoryServerConfigPath: memoryPath ?? profile.memoryServerConfigPath,
+    final memory = profile.agentMemory;
+    final readDomains = _rewrittenDomainGrantList(
+      memory.readDomains,
+      originalId: originalId,
+      nextId: nextId,
+      keep: enabled,
     );
+    final writeDomains = _rewrittenDomainGrantList(
+      memory.writeDomains,
+      originalId: originalId,
+      nextId: nextId,
+      keep: enabled,
+    );
+    var defaultWriteDomain = memory.defaultWriteDomain == originalId
+        ? nextId
+        : memory.defaultWriteDomain;
+    if (!enabled && defaultWriteDomain == nextId) {
+      defaultWriteDomain = _firstDomainId(writeDomains, profile.memoryDomains);
+    }
+    final effectiveWriteDomains = writeDomains.isEmpty
+        ? <String>[defaultWriteDomain]
+        : writeDomains;
+    final effectiveReadDomains = readDomains.isEmpty
+        ? <String>[defaultWriteDomain]
+        : readDomains;
+    final flows = <MemoryDomainFlow>[
+      for (final flow in memory.allowedFlows)
+        if (enabled ||
+            (flow.fromDomain != originalId && flow.toDomain != originalId))
+          MemoryDomainFlow(
+            fromDomain: flow.fromDomain == originalId
+                ? nextId
+                : flow.fromDomain,
+            toDomain: flow.toDomain == originalId ? nextId : flow.toDomain,
+          ),
+    ];
+    return profile.copyWith(
+      agentMemory: AgentMemoryRuntime(
+        actor: memory.actor,
+        readDomains: effectiveReadDomains,
+        writeDomains: effectiveWriteDomains,
+        defaultWriteDomain: defaultWriteDomain,
+        allowedSensitivities: memory.allowedSensitivities,
+        allowedFlows: flows,
+      ),
+    );
+  }
+
+  /// Removes all agent grants for a deleted domain.
+  RuntimeProfile _withMemoryDomainGrantRemoval(
+    RuntimeProfile profile, {
+    required String removedId,
+  }) {
+    final memory = profile.agentMemory;
+    final readDomains = memory.readDomains
+        .where((domain) => domain != removedId)
+        .toList();
+    final writeDomains = memory.writeDomains
+        .where((domain) => domain != removedId)
+        .toList();
+    final fallback = _firstDomainId(writeDomains, profile.memoryDomains);
+    return profile.copyWith(
+      agentMemory: AgentMemoryRuntime(
+        actor: memory.actor,
+        readDomains: readDomains.isEmpty
+            ? <String>[profile.memoryDomains.first.id]
+            : readDomains,
+        writeDomains: writeDomains.isEmpty ? <String>[fallback] : writeDomains,
+        defaultWriteDomain: memory.defaultWriteDomain == removedId
+            ? fallback
+            : memory.defaultWriteDomain,
+        allowedSensitivities: memory.allowedSensitivities,
+        allowedFlows: <MemoryDomainFlow>[
+          for (final flow in memory.allowedFlows)
+            if (flow.fromDomain != removedId && flow.toDomain != removedId)
+              flow,
+        ],
+      ),
+    );
+  }
+
+  /// Rewrites one read/write domain grant list.
+  List<String> _rewrittenDomainGrantList(
+    List<String> domains, {
+    required String originalId,
+    required String nextId,
+    required bool keep,
+  }) {
+    final rewritten = <String>[];
+    for (final domain in domains) {
+      if (domain == originalId) {
+        if (keep && !rewritten.contains(nextId)) {
+          rewritten.add(nextId);
+        }
+      } else if (!rewritten.contains(domain)) {
+        rewritten.add(domain);
+      }
+    }
+    return rewritten;
+  }
+
+  /// Returns a valid writable fallback domain id.
+  String _firstDomainId(
+    List<String> preferred,
+    List<McpServerRuntime> domains,
+  ) {
+    for (final id in preferred) {
+      if (domains.any((domain) => domain.id == id && domain.enabled)) {
+        return id;
+      }
+    }
+    for (final domain in domains) {
+      if (domain.enabled) {
+        return domain.id;
+      }
+    }
+    return domains.first.id;
+  }
+
+  /// Returns a collision-free memory domain id.
+  String _uniqueMemoryDomainId(RuntimeProfile profile, String prefix) {
+    final existing = profile.memoryDomains.map((domain) => domain.id).toSet();
+    var index = 2;
+    var candidate = '$prefix-$index';
+    while (existing.contains(candidate)) {
+      index++;
+      candidate = '$prefix-$index';
+    }
+    return candidate;
+  }
+
+  /// Returns the next conventional loopback memory port.
+  int _nextMemoryDomainPort(RuntimeProfile profile) {
+    final used = <int>{};
+    for (final domain in profile.memoryDomains) {
+      final uri = Uri.tryParse(domain.endpoint);
+      if (uri != null && uri.hasPort) {
+        used.add(uri.port);
+      }
+    }
+    var port = 8090;
+    while (used.contains(port)) {
+      port++;
+    }
+    return port;
+  }
+
+  /// Formats a generated label for a domain id.
+  String _memoryDomainLabel(String id) {
+    return id
+        .split(RegExp(r'[-_]+'))
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+
+  /// Returns the final path segment without importing UI helpers.
+  String _pathFilename(String path) {
+    return path.replaceAll('\\', '/').split('/').last;
   }
 
   /// Rebuilds owned service clients from the active runtime profile.
   void _configureClientsForRuntimeProfile(RuntimeProfile profile) {
     if (!_assistantClientInjected) {
-      final gateway = profile.gateway;
-      final assistantBaseUrl = gateway != null && gateway.enabled
-          ? gateway.apiBaseUrl
-          : profile.harness.apiBaseUrl;
       assistantClient.close();
       assistantClient = AssistantClient(
-        baseUrl: assistantBaseUrl,
+        baseUrl: profile.gateway.apiBaseUrl,
         appName: profile.harness.appName,
         userId: profile.harness.userId,
         headers: _gatewayHeadersForProfile(profile),
@@ -521,36 +730,15 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     }
   }
 
+  /// Returns the gateway context route used by all UI context clients.
   String _contextBaseUrl(RuntimeProfile profile) {
-    final gateway = profile.gateway;
-    if (gateway != null && gateway.enabled) {
-      final uri = Uri.parse(gateway.apiBaseUrl);
-      return uri.replace(path: '/api/context', query: null).toString();
-    }
-    return profile.harness.contextApiBaseUrl;
+    final uri = Uri.parse(profile.gateway.apiBaseUrl);
+    return uri.replace(path: '/api/context', query: null).toString();
   }
 
+  /// Returns headers needed to call protected gateway routes.
   Map<String, String> _gatewayHeadersForProfile(RuntimeProfile profile) {
-    final gateway = profile.gateway;
-    if (gateway == null || !gateway.enabled) {
-      return const <String, String>{};
-    }
     return config.gatewayAuthHeaders;
-  }
-
-  Map<String, String> _mcpHeadersFromEnv(
-    RuntimeProfile profile,
-    McpServerRuntime server,
-  ) {
-    final gateway = profile.gateway;
-    if (gateway == null ||
-        !gateway.enabled ||
-        server.endpoint != gateway.mcpUrl) {
-      return const <String, String>{};
-    }
-    return const <String, String>{
-      'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
-    };
   }
 }
 
@@ -613,44 +801,6 @@ Future<String?> _copyConfigIntoAppDirectory({
     await target.writeAsString(await source.readAsString());
   }
   return target.path;
-}
-
-/// Returns the config path for one required server kind.
-String _requiredServerConfigPath(RuntimeProfile profile, String kind) {
-  return switch (kind) {
-    'memory' => profile.memoryServerConfigPath,
-    _ => '',
-  };
-}
-
-/// Returns the first profile server for a required kind.
-McpServerRuntime? _serverForKind(RuntimeProfile profile, String kind) {
-  for (final server in profile.mcpServers) {
-    if (server.kind == kind) {
-      return server;
-    }
-  }
-  return null;
-}
-
-/// Returns a stable filename stem for one required server config.
-String _serverFileName(McpServerRuntime? server, String fallback) {
-  final id = server?.id.trim() ?? '';
-  if (id.isNotEmpty) {
-    return _sanitizeConfigFileStem(id);
-  }
-  return fallback;
-}
-
-/// Returns a filesystem-safe config filename stem.
-String _sanitizeConfigFileStem(String value) {
-  final sanitized = value
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
-      .replaceAll(RegExp(r'-+'), '-')
-      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
-  return sanitized.isEmpty ? 'config' : sanitized;
 }
 
 /// Derives a stable profile id from a profile file path.

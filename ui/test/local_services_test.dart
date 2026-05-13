@@ -304,8 +304,30 @@ RuntimeProfile _testProfile() {
       port: 1,
       autoStart: false,
     ),
-    memoryServerConfigPath: '/tmp/memory.json',
-    mcpServers: <McpServerRuntime>[],
+    gateway: GatewayRuntime(
+      id: 'gateway',
+      label: 'Gateway',
+      apiBaseUrl: 'http://127.0.0.1:2/api',
+      healthUrl: 'http://127.0.0.1:2/healthz',
+      workingDirectory: '/tmp/gateway',
+      packagePath: './cmd/agent-gateway',
+      harnessBaseUrl: 'http://127.0.0.1:1/api',
+      contextBaseUrl: 'http://127.0.0.1:1/api/context',
+      memoryMcpUrl: 'http://127.0.0.1:1/mcp',
+      appName: 'test',
+      userId: 'user',
+      port: 2,
+      autoStart: false,
+      enabled: true,
+    ),
+    memoryDomains: <McpServerRuntime>[],
+    agentMemory: AgentMemoryRuntime(
+      actor: 'agent:test',
+      readDomains: <String>['memory'],
+      writeDomains: <String>['memory'],
+      defaultWriteDomain: 'memory',
+      allowedSensitivities: <String>['public', 'internal', 'private'],
+    ),
   );
 }
 

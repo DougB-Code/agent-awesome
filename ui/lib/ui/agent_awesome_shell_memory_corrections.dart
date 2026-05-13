@@ -95,7 +95,9 @@ class _MemoryCorrectionsContentState extends State<_MemoryCorrectionsContent> {
                         firewallAudience: widget.controller
                             .memoryFirewallAudienceLabel(correction.firewall),
                         onTap: () => unawaited(
-                          widget.controller.selectMemory(correction.id),
+                          widget.controller.selectMemory(
+                            widget.controller.memorySelectionKey(correction),
+                          ),
                         ),
                       ),
                     ),

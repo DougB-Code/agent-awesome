@@ -20,13 +20,14 @@ class _SettingsActionRow extends StatelessWidget {
 Future<bool> _confirmSettingsDelete(
   BuildContext context, {
   required String label,
+  String? message,
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
         title: const Text('Delete configuration'),
-        content: Text('Delete "$label"? This cannot be undone.'),
+        content: Text(message ?? 'Delete "$label"? This cannot be undone.'),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),

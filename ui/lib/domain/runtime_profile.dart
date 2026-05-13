@@ -10,9 +10,9 @@ class RuntimeProfile {
     required this.id,
     required this.label,
     required this.harness,
-    this.gateway,
-    required this.memoryServerConfigPath,
-    required this.mcpServers,
+    required this.gateway,
+    required this.memoryDomains,
+    required this.agentMemory,
   });
 
   /// Stable profile id.
@@ -24,18 +24,23 @@ class RuntimeProfile {
   /// Harness process and API configuration.
   final HarnessRuntime harness;
 
-  /// Optional gateway process and API configuration.
-  final GatewayRuntime? gateway;
+  /// Gateway process and API configuration used by every channel client.
+  final GatewayRuntime gateway;
 
-  /// Memory server config file referenced by this profile.
-  final String memoryServerConfigPath;
+  /// Configured memory domains available to this runtime profile.
+  final List<McpServerRuntime> memoryDomains;
+
+  /// Memory access grants applied to the active agent profile.
+  final AgentMemoryRuntime agentMemory;
 
   /// MCP servers available to the harness and UI.
-  final List<McpServerRuntime> mcpServers;
+  List<McpServerRuntime> get mcpServers {
+    return memoryDomains;
+  }
 
   /// Returns enabled memory MCP servers.
   List<McpServerRuntime> get memoryServers {
-    return mcpServers
+    return memoryDomains
         .where((server) => server.enabled && server.kind == 'memory')
         .toList();
   }
@@ -46,17 +51,16 @@ class RuntimeProfile {
     String? label,
     HarnessRuntime? harness,
     GatewayRuntime? gateway,
-    String? memoryServerConfigPath,
-    List<McpServerRuntime>? mcpServers,
+    List<McpServerRuntime>? memoryDomains,
+    AgentMemoryRuntime? agentMemory,
   }) {
     return RuntimeProfile(
       id: id ?? this.id,
       label: label ?? this.label,
       harness: harness ?? this.harness,
       gateway: gateway ?? this.gateway,
-      memoryServerConfigPath:
-          memoryServerConfigPath ?? this.memoryServerConfigPath,
-      mcpServers: mcpServers ?? this.mcpServers,
+      memoryDomains: memoryDomains ?? this.memoryDomains,
+      agentMemory: agentMemory ?? this.agentMemory,
     );
   }
 
@@ -66,20 +70,115 @@ class RuntimeProfile {
       'id': id,
       'label': label,
       'harness': harness.toJson(),
-      if (gateway != null) 'gateway': gateway!.toJson(),
-      'memory_server_config': memoryServerConfigPath,
+      'gateway': gateway.toJson(),
+      'memory_domains': memoryDomains.map((domain) => domain.toJson()).toList(),
+      'agent_memory': agentMemory.toJson(),
     };
   }
 
   /// Parses a runtime profile shell from decoded JSON.
   factory RuntimeProfile.fromJson(Map<String, dynamic> json) {
+    final domains = jsonObjectList(
+      json['memory_domains'],
+    ).map(McpServerRuntime.fromJson).toList();
+    _validateMemoryDomains(domains);
+    final agentMemory = AgentMemoryRuntime.fromJson(
+      _requiredMap(json, 'agent_memory'),
+    );
+    _validateAgentMemory(agentMemory, domains);
     return RuntimeProfile(
       id: _requiredString(json, 'id'),
       label: _requiredString(json, 'label'),
       harness: HarnessRuntime.fromJson(_requiredMap(json, 'harness')),
-      gateway: _optionalGateway(json['gateway']),
-      memoryServerConfigPath: _requiredString(json, 'memory_server_config'),
-      mcpServers: const <McpServerRuntime>[],
+      gateway: _requiredGateway(_requiredMap(json, 'gateway')),
+      memoryDomains: domains,
+      agentMemory: agentMemory,
+    );
+  }
+}
+
+/// AgentMemoryRuntime describes domain grants for the active agent profile.
+class AgentMemoryRuntime {
+  /// Creates immutable memory access grants.
+  const AgentMemoryRuntime({
+    required this.actor,
+    required this.readDomains,
+    required this.writeDomains,
+    required this.defaultWriteDomain,
+    required this.allowedSensitivities,
+    this.allowedFlows = const <MemoryDomainFlow>[],
+  });
+
+  /// Stable actor principal used at memory service boundaries.
+  final String actor;
+
+  /// Domain ids this agent may read.
+  final List<String> readDomains;
+
+  /// Domain ids this agent may write.
+  final List<String> writeDomains;
+
+  /// Domain id used for automatic session capture.
+  final String defaultWriteDomain;
+
+  /// Sensitivity values this agent may retrieve.
+  final List<String> allowedSensitivities;
+
+  /// Explicitly allowed source-to-destination memory flows.
+  final List<MemoryDomainFlow> allowedFlows;
+
+  /// Encodes this access policy to explicit JSON values.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'actor': actor,
+      'read_domains': readDomains,
+      'write_domains': writeDomains,
+      'default_write_domain': defaultWriteDomain,
+      'allowed_sensitivities': allowedSensitivities,
+      if (allowedFlows.isNotEmpty)
+        'allowed_flows': allowedFlows.map((flow) => flow.toJson()).toList(),
+    };
+  }
+
+  /// Parses one agent memory grant set from decoded JSON.
+  factory AgentMemoryRuntime.fromJson(Map<String, dynamic> json) {
+    return AgentMemoryRuntime(
+      actor: _requiredString(json, 'actor'),
+      readDomains: stringList(json['read_domains'], trim: true),
+      writeDomains: stringList(json['write_domains'], trim: true),
+      defaultWriteDomain: _requiredString(json, 'default_write_domain'),
+      allowedSensitivities: stringList(
+        json['allowed_sensitivities'],
+        trim: true,
+      ),
+      allowedFlows: jsonObjectList(
+        json['allowed_flows'],
+      ).map(MemoryDomainFlow.fromJson).toList(),
+    );
+  }
+}
+
+/// MemoryDomainFlow allows one source domain to write into one destination.
+class MemoryDomainFlow {
+  /// Creates an immutable memory-domain information flow grant.
+  const MemoryDomainFlow({required this.fromDomain, required this.toDomain});
+
+  /// Source domain id.
+  final String fromDomain;
+
+  /// Destination domain id.
+  final String toDomain;
+
+  /// Encodes this flow as JSON.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'from': fromDomain, 'to': toDomain};
+  }
+
+  /// Parses one flow rule from decoded JSON.
+  factory MemoryDomainFlow.fromJson(Map<String, dynamic> json) {
+    return MemoryDomainFlow(
+      fromDomain: _requiredString(json, 'from'),
+      toDomain: _requiredString(json, 'to'),
     );
   }
 }
@@ -354,6 +453,8 @@ class McpServerRuntime {
     required this.healthUrl,
     required this.workingDirectory,
     required this.packagePath,
+    required this.dbPath,
+    required this.dataDir,
     required this.arguments,
     required this.autoStart,
     required this.enabled,
@@ -380,6 +481,12 @@ class McpServerRuntime {
   /// Go package path for managed local servers.
   final String packagePath;
 
+  /// Domain-specific database path for managed memory services.
+  final String dbPath;
+
+  /// Domain-specific artifact directory for managed memory services.
+  final String dataDir;
+
   /// Command arguments for managed local servers.
   final List<String> arguments;
 
@@ -400,6 +507,8 @@ class McpServerRuntime {
       healthUrl: _requiredString(json, 'health_url'),
       workingDirectory: _optionalString(json['working_directory']),
       packagePath: _optionalString(json['package_path']),
+      dbPath: _optionalString(json['db_path']),
+      dataDir: _optionalString(json['data_dir']),
       arguments: stringList(json['arguments']),
       autoStart: _requiredBool(json, 'auto_start'),
       enabled: _requiredBool(json, 'enabled'),
@@ -415,6 +524,8 @@ class McpServerRuntime {
     String? healthUrl,
     String? workingDirectory,
     String? packagePath,
+    String? dbPath,
+    String? dataDir,
     List<String>? arguments,
     bool? autoStart,
     bool? enabled,
@@ -427,6 +538,8 @@ class McpServerRuntime {
       healthUrl: healthUrl ?? this.healthUrl,
       workingDirectory: workingDirectory ?? this.workingDirectory,
       packagePath: packagePath ?? this.packagePath,
+      dbPath: dbPath ?? this.dbPath,
+      dataDir: dataDir ?? this.dataDir,
       arguments: arguments ?? this.arguments,
       autoStart: autoStart ?? this.autoStart,
       enabled: enabled ?? this.enabled,
@@ -443,6 +556,8 @@ class McpServerRuntime {
       'health_url': healthUrl,
       'working_directory': workingDirectory,
       'package_path': packagePath,
+      'db_path': dbPath,
+      'data_dir': dataDir,
       'arguments': arguments,
       'auto_start': autoStart,
       'enabled': enabled,
@@ -466,17 +581,95 @@ Map<String, dynamic> _requiredMap(Map<String, dynamic> json, String field) {
   throw FormatException('Runtime profile field "$field" must be an object');
 }
 
-/// Parses an optional gateway runtime object.
-GatewayRuntime? _optionalGateway(dynamic value) {
-  if (value == null) {
-    return null;
+/// Parses and validates the required gateway runtime object.
+GatewayRuntime _requiredGateway(Map<String, dynamic> value) {
+  final gateway = GatewayRuntime.fromJson(value);
+  if (!gateway.enabled) {
+    throw const FormatException('Runtime profile gateway must be enabled');
   }
-  if (value is Map<String, dynamic>) {
-    return GatewayRuntime.fromJson(value);
+  return gateway;
+}
+
+/// Validates configured memory domains as target-state profile data.
+void _validateMemoryDomains(List<McpServerRuntime> domains) {
+  if (domains.isEmpty) {
+    throw const FormatException(
+      'Runtime profile field "memory_domains" must not be empty',
+    );
   }
-  throw const FormatException(
-    'Runtime profile field "gateway" must be an object',
-  );
+  final ids = <String>{};
+  for (final domain in domains) {
+    _validateSafeId(domain.id, 'memory domain id');
+    if (!ids.add(domain.id)) {
+      throw FormatException('Duplicate memory domain id "${domain.id}"');
+    }
+    if (domain.kind != 'memory') {
+      throw FormatException(
+        'Memory domain "${domain.id}" must have kind "memory"',
+      );
+    }
+    if (domain.autoStart &&
+        (domain.dbPath.trim().isEmpty || domain.dataDir.trim().isEmpty)) {
+      throw FormatException(
+        'Managed memory domain "${domain.id}" requires db_path and data_dir',
+      );
+    }
+  }
+}
+
+/// Validates agent memory grants against configured domain ids.
+void _validateAgentMemory(
+  AgentMemoryRuntime memory,
+  List<McpServerRuntime> domains,
+) {
+  _validateSafeId(memory.actor.replaceAll(':', '-'), 'agent memory actor');
+  final ids = domains.map((domain) => domain.id).toSet();
+  if (memory.readDomains.isEmpty) {
+    throw const FormatException('agent_memory.read_domains must not be empty');
+  }
+  if (memory.writeDomains.isEmpty) {
+    throw const FormatException('agent_memory.write_domains must not be empty');
+  }
+  for (final domain in <String>[
+    ...memory.readDomains,
+    ...memory.writeDomains,
+    memory.defaultWriteDomain,
+    for (final flow in memory.allowedFlows) ...<String>[
+      flow.fromDomain,
+      flow.toDomain,
+    ],
+  ]) {
+    _validateSafeId(domain, 'agent memory domain grant');
+    if (!ids.contains(domain)) {
+      throw FormatException('Unknown memory domain grant "$domain"');
+    }
+  }
+  if (!memory.writeDomains.contains(memory.defaultWriteDomain)) {
+    throw FormatException(
+      'default_write_domain "${memory.defaultWriteDomain}" is not writable',
+    );
+  }
+  for (final flow in memory.allowedFlows) {
+    if (!memory.readDomains.contains(flow.fromDomain)) {
+      throw FormatException(
+        'allowed flow source "${flow.fromDomain}" is not readable',
+      );
+    }
+    if (!memory.writeDomains.contains(flow.toDomain)) {
+      throw FormatException(
+        'allowed flow target "${flow.toDomain}" is not writable',
+      );
+    }
+  }
+}
+
+/// Validates one config-owned identifier.
+void _validateSafeId(String value, String label) {
+  final id = value.trim();
+  final pattern = RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$');
+  if (!pattern.hasMatch(id)) {
+    throw FormatException('$label "$value" is not a safe id');
+  }
 }
 
 /// Reads a required string field from a profile map.

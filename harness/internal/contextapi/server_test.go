@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"agentawesome/internal/config/schema"
 )
 
 // TestCallToolRejectsOversizedRequest verifies tool calls have a hard body cap.
@@ -67,5 +69,33 @@ func TestContextAPIHealthzStaysTokenless(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+}
+
+// TestMemoryDomainServerForToolAppliesReadWriteGrants verifies domain routing.
+func TestMemoryDomainServerForToolAppliesReadWriteGrants(t *testing.T) {
+	tools := &schema.Tools{
+		Memory: schema.Memory{
+			Actor: "agent:test",
+			ReadDomains: []schema.MemoryDomain{
+				{ID: "family", Label: "Family", Endpoint: "http://127.0.0.1:8091/mcp"},
+				{ID: "work", Label: "Work", Endpoint: "http://127.0.0.1:8092/mcp"},
+			},
+			WriteDomains:       []string{"work"},
+			DefaultWriteDomain: "work",
+		},
+	}
+	server, err := memoryDomainServerForTool(tools, "list_tasks", "family")
+	if err != nil {
+		t.Fatalf("memoryDomainServerForTool() read error = %v", err)
+	}
+	if server.Endpoint != "http://127.0.0.1:8091/mcp" {
+		t.Fatalf("Endpoint = %q, want family endpoint", server.Endpoint)
+	}
+	if _, err := memoryDomainServerForTool(tools, "create_task", "family"); err == nil {
+		t.Fatalf("memoryDomainServerForTool() write error = nil, want denied family write")
+	}
+	if _, err := memoryDomainServerForTool(tools, "create_task", "work"); err != nil {
+		t.Fatalf("memoryDomainServerForTool() write work error = %v", err)
 	}
 }

@@ -450,8 +450,15 @@ class _ContactSourcesDetails extends StatelessWidget {
               child: _ContactMemoryTile(
                 controller: controller,
                 record: record,
-                selected: controller.selectedMemory?.id == record.id,
-                onTap: () => unawaited(controller.selectMemory(record.id)),
+                selected:
+                    controller.selectedMemory != null &&
+                    controller.memorySelectionKey(controller.selectedMemory!) ==
+                        controller.memorySelectionKey(record),
+                onTap: () => unawaited(
+                  controller.selectMemory(
+                    controller.memorySelectionKey(record),
+                  ),
+                ),
               ),
             ),
       ],

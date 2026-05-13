@@ -26,7 +26,7 @@ const List<({String label, IconData icon, String detail})> _settingsSections =
       (
         label: 'Memory',
         icon: Icons.account_tree_outlined,
-        detail: 'Graph-backed knowledge MCP binding.',
+        detail: 'Graph-backed memory domains.',
       ),
       (
         label: 'Tools',
@@ -120,8 +120,8 @@ class SettingsDetailsPanel extends StatelessWidget {
       'Memory' => _SettingsServerContent(
         profile: profile,
         controller: controller,
-        title: 'Memory',
-        servers: profile.memoryServers,
+        title: 'Memory Domains',
+        servers: profile.memoryDomains,
       ),
       'Tools' => _SettingsToolConfigCollection(
         controller: controller,

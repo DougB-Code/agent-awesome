@@ -2,6 +2,7 @@
 library;
 
 import 'package:agentawesome_ui/domain/tool_config.dart';
+import 'package:agentawesome_ui/domain/runtime_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs tool config document tests.
@@ -116,23 +117,39 @@ mcp:
   });
 
   test('creates target graph-backed memory MCP tool config', () {
-    final document = graphBackedMemoryToolConfig(
-      serverKind: 'memory',
-      serverEndpoint: 'http://127.0.0.1:8090/mcp',
+    final document = graphBackedMemoryToolConfigForDomains(
+      memoryDomains: const <McpServerRuntime>[
+        McpServerRuntime(
+          id: 'memory',
+          label: 'Memory',
+          kind: 'memory',
+          endpoint: 'http://127.0.0.1:8090/mcp',
+          healthUrl: 'http://127.0.0.1:8090/healthz',
+          workingDirectory: '/tmp/memory',
+          packagePath: './cmd/memoryd',
+          dbPath: '/tmp/memory.db',
+          dataDir: '/tmp/memory-files',
+          arguments: <String>[],
+          autoStart: false,
+          enabled: true,
+        ),
+      ],
+      agentMemory: const AgentMemoryRuntime(
+        actor: 'agent:test',
+        readDomains: <String>['memory'],
+        writeDomains: <String>['memory'],
+        defaultWriteDomain: 'memory',
+        allowedSensitivities: <String>['public', 'internal', 'private'],
+      ),
       localExec: emptyToolConfigDocument().localExec,
-      headersFromEnv: const <String, String>{
-        'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
-      },
     );
 
     expect(document.mcp.enabled, isTrue);
     expect(document.mcp.servers, hasLength(1));
-    expect(document.mcp.servers.single.name, 'memory');
+    expect(document.mcp.servers.single.name, 'memory_memory');
     expect(document.mcp.servers.single.endpoint, 'http://127.0.0.1:8090/mcp');
-    expect(document.mcp.servers.single.headersFromEnv, <String, String>{
-      'Authorization': 'AGENTAWESOME_GATEWAY_AUTHORIZATION',
-    });
     expect(document.mcp.servers.single.tools.allow, graphBackedMcpToolNames);
+    expect(document.extra['memory'], isA<Map<String, dynamic>>());
     expect(
       document.mcp.servers.single.tools.allow,
       contains('project_executive_summary'),
@@ -153,6 +170,60 @@ mcp:
       document.mcp.servers.single.requireConfirmationTools,
       contains('update_task'),
     );
+  });
+
+  test('limits model-exposed tools when profile reads multiple domains', () {
+    final document = graphBackedMemoryToolConfigForDomains(
+      memoryDomains: const <McpServerRuntime>[
+        McpServerRuntime(
+          id: 'memory',
+          label: 'Memory',
+          kind: 'memory',
+          endpoint: 'http://127.0.0.1:8090/mcp',
+          healthUrl: 'http://127.0.0.1:8090/healthz',
+          workingDirectory: '/tmp/memory',
+          packagePath: './cmd/memoryd',
+          dbPath: '/tmp/memory.db',
+          dataDir: '/tmp/memory-files',
+          arguments: <String>[],
+          autoStart: false,
+          enabled: true,
+        ),
+        McpServerRuntime(
+          id: 'shared_project',
+          label: 'Shared Project',
+          kind: 'memory',
+          endpoint: 'http://127.0.0.1:8091/mcp',
+          healthUrl: 'http://127.0.0.1:8091/healthz',
+          workingDirectory: '/tmp/memory',
+          packagePath: './cmd/memoryd',
+          dbPath: '/tmp/shared-project.db',
+          dataDir: '/tmp/shared-project-files',
+          arguments: <String>[],
+          autoStart: false,
+          enabled: true,
+        ),
+      ],
+      agentMemory: const AgentMemoryRuntime(
+        actor: 'agent:project-planner',
+        readDomains: <String>['memory', 'shared_project'],
+        writeDomains: <String>['shared_project'],
+        defaultWriteDomain: 'shared_project',
+        allowedSensitivities: <String>['public', 'internal'],
+      ),
+      localExec: emptyToolConfigDocument().localExec,
+    );
+
+    final memory = document.extra['memory']! as Map<String, dynamic>;
+    expect(document.mcp.servers.single.name, 'memory_shared_project');
+    expect(
+      document.mcp.servers.single.tools.allow,
+      graphBackedMcpReadOnlyToolNames,
+    );
+    expect(document.mcp.servers.single.requireConfirmationTools, isEmpty);
+    expect(memory['default-write-domain'], 'shared_project');
+    expect(memory['write-domains'], <String>['shared_project']);
+    expect(memory['read-domains'], hasLength(2));
   });
 
   test('validates local execution command requirements', () {

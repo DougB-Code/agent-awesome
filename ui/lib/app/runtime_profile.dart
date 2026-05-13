@@ -75,28 +75,83 @@ extension GatewayRuntimeLaunch on GatewayRuntime {
         .toString();
   }
 
-  /// Command arguments passed to the built gateway executable.
+  /// Command arguments passed to the built gateway executable without profile grants.
   List<String> get arguments {
-    return <String>[
-      '--addr',
-      _listenAddress(apiBaseUrl, port),
-      '--harness-base-url',
-      harnessBaseUrl,
-      '--context-base-url',
-      contextBaseUrl,
-      '--memory-mcp-url',
-      memoryMcpUrl,
-      '--app-name',
-      appName,
-      '--user-id',
-      userId,
-      if (modelProviderId.trim().isNotEmpty) ...<String>[
-        '--model-provider-id',
-        modelProviderId,
-      ],
-      if (modelId.trim().isNotEmpty) ...<String>['--model-id', modelId],
-    ];
+    return _gatewayBaseArguments(this);
   }
+}
+
+/// Builds gateway launch arguments for the complete active runtime profile.
+List<String> gatewayArgumentsForProfile(RuntimeProfile profile) {
+  return <String>[
+    ..._gatewayBaseArguments(profile.gateway),
+    '--memory-domains-json',
+    jsonEncode(_gatewayMemoryDomainJson(profile.memoryServers)),
+    '--memory-policy-json',
+    jsonEncode(profile.agentMemory.toJson()),
+    '--memory-services-json',
+    jsonEncode(_gatewayMemoryServiceJson(profile.memoryServers)),
+  ];
+}
+
+/// Encodes enabled memory domains in the gateway config shape.
+List<Map<String, dynamic>> _gatewayMemoryDomainJson(
+  List<McpServerRuntime> servers,
+) {
+  return servers
+      .map(
+        (server) => <String, dynamic>{
+          'id': server.id,
+          'label': server.label,
+          'endpoint': server.endpoint,
+          if (server.healthUrl.trim().isNotEmpty)
+            'health_url': server.healthUrl,
+        },
+      )
+      .toList();
+}
+
+/// Encodes UI-managed memory service health checks for gateway readiness.
+List<Map<String, dynamic>> _gatewayMemoryServiceJson(
+  List<McpServerRuntime> servers,
+) {
+  return servers
+      .map(
+        (server) => <String, dynamic>{
+          'domain_id': server.id,
+          'name': server.id == 'memory' ? 'memory' : 'memory-${server.id}',
+          if (server.healthUrl.trim().isNotEmpty)
+            'health_url': server.healthUrl,
+          'auto_start': false,
+        },
+      )
+      .toList();
+}
+
+/// Builds gateway arguments that do not depend on agent-profile grants.
+List<String> _gatewayBaseArguments(GatewayRuntime gateway) {
+  return <String>[
+    '--addr',
+    _listenAddress(gateway.apiBaseUrl, gateway.port),
+    '--harness-base-url',
+    gateway.harnessBaseUrl,
+    '--context-base-url',
+    gateway.contextBaseUrl,
+    '--memory-mcp-url',
+    gateway.memoryMcpUrl,
+    '--app-name',
+    gateway.appName,
+    '--user-id',
+    gateway.userId,
+    if (gateway.modelProviderId.trim().isNotEmpty) ...<String>[
+      '--model-provider-id',
+      gateway.modelProviderId,
+    ],
+    if (gateway.modelId.trim().isNotEmpty) ...<String>[
+      '--model-id',
+      gateway.modelId,
+    ],
+  ];
 }
 
 /// Encodes a runtime profile as stable, human-editable JSON.
@@ -131,13 +186,7 @@ class RuntimeProfileLoader {
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('Runtime profile must be a JSON object');
     }
-    final profile = RuntimeProfile.fromJson(decoded);
-    final mcpServers = <McpServerRuntime>[
-      await _loadMcpServerConfig(profile.memoryServerConfigPath, 'memory'),
-    ];
-    return profile.copyWith(
-      mcpServers: _controlPlaneMcpServers(profile, mcpServers),
-    );
+    return RuntimeProfile.fromJson(decoded);
   }
 
   /// Resolves and creates the selected profile file when using defaults.
@@ -206,50 +255,6 @@ class RuntimeProfileLoader {
       'AUTO_START_LOCAL_SERVICES': config.autoStartLocalServices.toString(),
     };
   }
-
-  /// Loads one required app-owned MCP service config referenced by a profile.
-  Future<McpServerRuntime> _loadMcpServerConfig(
-    String path,
-    String expectedKind,
-  ) async {
-    final file = File(path);
-    if (!await file.exists()) {
-      throw FileSystemException(
-        '$expectedKind server config does not exist',
-        path,
-      );
-    }
-    final decoded = jsonDecode(_expandTemplate(await file.readAsString()));
-    if (decoded is! Map<String, dynamic>) {
-      throw FormatException(
-        '$expectedKind server config "$path" must be a JSON object',
-      );
-    }
-    final server = McpServerRuntime.fromJson(decoded);
-    if (server.kind != expectedKind) {
-      throw FormatException(
-        '$expectedKind server config "$path" must have kind "$expectedKind"',
-      );
-    }
-    return server;
-  }
-
-  /// Rewrites UI MCP endpoints to the gateway when a control plane is active.
-  List<McpServerRuntime> _controlPlaneMcpServers(
-    RuntimeProfile profile,
-    List<McpServerRuntime> servers,
-  ) {
-    final gateway = profile.gateway;
-    if (gateway == null || !gateway.enabled) {
-      return servers;
-    }
-    return servers.map((server) {
-      if (server.kind != 'memory') {
-        return server;
-      }
-      return server.copyWith(endpoint: gateway.mcpUrl);
-    }).toList();
-  }
 }
 
 /// Returns the Agent Awesome app config directory for this operating system.
@@ -313,9 +318,9 @@ String toolConfigsDirectoryPath() {
   return '${agentAwesomeConfigDirectoryPath()}/tools';
 }
 
-/// Returns the directory where editable memory server config files live.
-String memoryServerConfigsDirectoryPath() {
-  return '${agentAwesomeConfigDirectoryPath()}/memory';
+/// Returns the directory where editable memory domain metadata lives.
+String memoryDomainConfigsDirectoryPath() {
+  return '${agentAwesomeConfigDirectoryPath()}/memory-domains';
 }
 
 /// Returns the default SQLite database path for local memory.
@@ -326,6 +331,16 @@ String defaultMemoryDatabasePath() {
 /// Returns the default sidecar data directory for local memory.
 String defaultMemoryDataDirectoryPath() {
   return '${agentAwesomeDataDirectoryPath()}/memory/files';
+}
+
+/// Returns the SQLite database path for one local memory domain.
+String memoryDomainDatabasePath(String domainId) {
+  return '${agentAwesomeDataDirectoryPath()}/memory/$domainId/memory.db';
+}
+
+/// Returns the sidecar data directory for one local memory domain.
+String memoryDomainDataDirectoryPath(String domainId) {
+  return '${agentAwesomeDataDirectoryPath()}/memory/$domainId/files';
 }
 
 /// Returns the app-owned memory firewall policy path consumed by memoryd.

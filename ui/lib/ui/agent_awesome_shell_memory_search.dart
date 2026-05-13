@@ -35,14 +35,23 @@ class _MemorySearchContent extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 10),
                 child: _MemoryRecordTile(
                   record: record,
-                  selected: controller.selectedMemory?.id == record.id,
+                  selected:
+                      controller.selectedMemory != null &&
+                      controller.memorySelectionKey(
+                            controller.selectedMemory!,
+                          ) ==
+                          controller.memorySelectionKey(record),
                   firewallLabel: controller.memoryFirewallLabel(
                     record.firewall,
                   ),
                   firewallAudience: controller.memoryFirewallAudienceLabel(
                     record.firewall,
                   ),
-                  onTap: () => unawaited(controller.selectMemory(record.id)),
+                  onTap: () => unawaited(
+                    controller.selectMemory(
+                      controller.memorySelectionKey(record),
+                    ),
+                  ),
                 ),
               ),
         ],
@@ -425,6 +434,8 @@ class _MemoryRecordTile extends StatelessWidget {
                                     _MemoryBadge(
                                       label: _memoryLabel(record.trustLevel),
                                     ),
+                                    if (record.domainId.isNotEmpty)
+                                      _MemoryBadge(label: record.domainId),
                                     if (record.status != 'active')
                                       _MemoryBadge(label: record.status),
                                     for (final topic in record.topics.take(3))

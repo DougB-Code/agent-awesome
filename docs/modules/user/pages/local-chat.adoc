@@ -32,5 +32,5 @@ For a web API session:
 go run ./cmd/agent-awesome run -- web --port 8080
 ----
 
-The UI normally uses the gateway profile rather than direct harness mode.
-Use direct harness commands when you are testing the agent runtime without the desktop shell.
+The desktop UI always uses the gateway profile.
+Use direct harness commands only when you are testing the agent runtime without the desktop shell.

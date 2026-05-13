@@ -73,10 +73,11 @@ func main() {
 
 // dependencyServices maps gateway config to supervised dependency declarations.
 func dependencyServices(cfg config.Config) []supervisor.Service {
-	return []supervisor.Service{
-		dependencyService(cfg.HarnessService),
-		dependencyService(cfg.MemoryService),
+	services := []supervisor.Service{dependencyService(cfg.HarnessService)}
+	for _, memoryService := range cfg.MemoryServices {
+		services = append(services, dependencyService(memoryService.ServiceConfig()))
 	}
+	return services
 }
 
 // dependencyService maps parsed config to one supervisor declaration.

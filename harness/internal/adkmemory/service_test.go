@@ -24,14 +24,9 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	t.Setenv("MEMORY_AUTH", "Bearer test-token")
 	stamp := time.Date(2026, 5, 8, 10, 30, 0, 0, time.UTC)
 	server := newMemoryMCPTestServer(t, nil)
-	service := New(schema.MCPServer{
-		Name:      "memory",
-		Transport: "streamable-http",
-		Endpoint:  server.URL,
-		HeadersFromEnv: map[string]string{
-			"Authorization": "MEMORY_AUTH",
-		},
-	})
+	service := New(testMemoryRuntime(server.URL, map[string]string{
+		"Authorization": "MEMORY_AUTH",
+	}))
 	chat := stubSession{
 		id:      "session-1234567890",
 		appName: "agent_awesome",
@@ -78,8 +73,8 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	if got := calls[0].arguments["kind"]; got != conversationKind {
 		t.Fatalf("kind = %q, want conversation", got)
 	}
-	if got := calls[0].arguments["scope"]; got != userScope {
-		t.Fatalf("scope = %q, want user", got)
+	if got := calls[0].arguments["firewall"]; got != userFirewall {
+		t.Fatalf("firewall = %q, want user", got)
 	}
 	if got := calls[0].arguments["idempotency_key"]; got != "adk:agent_awesome:doug:session-1234567890:event-user" {
 		t.Fatalf("idempotency = %q, want ADK event key", got)
@@ -89,11 +84,171 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	}
 }
 
+// TestAddSessionToMemorySkipsAssistantCaptureForMultiDomainReads avoids leaks.
+func TestAddSessionToMemorySkipsAssistantCaptureForMultiDomainReads(t *testing.T) {
+	stamp := time.Date(2026, 5, 8, 10, 45, 0, 0, time.UTC)
+	server := newMemoryMCPTestServer(t, nil)
+	runtime := testMemoryRuntime(server.URL, nil)
+	runtime.domains = append(runtime.domains, memoryDomain{
+		id: "shared",
+		server: schema.MCPServer{
+			Name:      "memory_shared",
+			Transport: "streamable-http",
+			Endpoint:  server.URL,
+			Tools:     schema.MCPToolFilter{Allow: []string{saveMemoryToolName, searchSourcesToolName}},
+		},
+		searchTool: searchSourcesToolName,
+	})
+	service := New(runtime)
+	chat := stubSession{
+		id:      "multi-domain-session",
+		appName: "agent_awesome",
+		userID:  "doug",
+		events: []*session.Event{
+			capturableEvent("event-user", "remember my lunch preference", stamp),
+			{
+				ID:          "event-assistant",
+				Timestamp:   stamp.Add(time.Second),
+				Author:      "assistant",
+				LLMResponse: model.LLMResponse{Content: genai.NewContentFromText("Lunch preference noted.", genai.RoleModel)},
+			},
+		},
+	}
+
+	if err := service.AddSessionToMemory(context.Background(), chat); err != nil {
+		t.Fatalf("AddSessionToMemory() error = %v", err)
+	}
+	calls := server.calls()
+	if len(calls) != 1 {
+		t.Fatalf("MCP calls = %d, want only user capture: %#v", len(calls), calls)
+	}
+	if got := calls[0].arguments["content"]; got != "remember my lunch preference" {
+		t.Fatalf("content = %q, want user event", got)
+	}
+}
+
+// TestAddSessionToMemoryDeniesUnapprovedCrossDomainCapture blocks leakage.
+func TestAddSessionToMemoryDeniesUnapprovedCrossDomainCapture(t *testing.T) {
+	stamp := time.Date(2026, 5, 8, 10, 55, 0, 0, time.UTC)
+	server := newMemoryMCPTestServer(t, map[string]any{
+		"primary_memory": []map[string]any{
+			{"id": "source_mem", "title": "private capital note", "raw": map[string]any{"content_text": "private capital"}},
+		},
+	})
+	runtime := testMemoryRuntime(server.URL, nil)
+	runtime.domains = append(runtime.domains, memoryDomain{
+		id: "side_project",
+		server: schema.MCPServer{
+			Name:      "memory_side_project",
+			Transport: "streamable-http",
+			Endpoint:  server.URL,
+			Tools:     schema.MCPToolFilter{Allow: []string{saveMemoryToolName, searchSourcesToolName}},
+		},
+		searchTool: searchSourcesToolName,
+	})
+	runtime.defaultWriteDomain = "side_project"
+	runtime.writeDomains = map[string]struct{}{"side_project": {}}
+	service := New(runtime)
+
+	if _, err := service.SearchMemory(context.Background(), &adkmemory.SearchRequest{
+		Query:   "capital",
+		AppName: "agent_awesome",
+		UserID:  "doug",
+	}); err != nil {
+		t.Fatalf("SearchMemory() error = %v", err)
+	}
+	chat := stubSession{
+		id:      "blocked-cross-domain-session",
+		appName: "agent_awesome",
+		userID:  "doug",
+		events: []*session.Event{
+			capturableEvent("event-user", "remember project idea", stamp),
+			{
+				ID:          "event-assistant",
+				Timestamp:   stamp.Add(time.Second),
+				Author:      "assistant",
+				LLMResponse: model.LLMResponse{Content: genai.NewContentFromText("Funding context noted.", genai.RoleModel)},
+			},
+		},
+	}
+
+	if err := service.AddSessionToMemory(context.Background(), chat); err != nil {
+		t.Fatalf("AddSessionToMemory() error = %v", err)
+	}
+	saves := callsNamed(server.calls(), saveMemoryToolName)
+	if len(saves) != 1 {
+		t.Fatalf("save calls = %d, want only user capture: %#v", len(saves), saves)
+	}
+	if got := saves[0].arguments["content"]; got != "remember project idea" {
+		t.Fatalf("saved content = %q, want user event only", got)
+	}
+}
+
+// TestAddSessionToMemoryAllowsExplicitCrossDomainFlow honors configured export.
+func TestAddSessionToMemoryAllowsExplicitCrossDomainFlow(t *testing.T) {
+	stamp := time.Date(2026, 5, 8, 11, 5, 0, 0, time.UTC)
+	server := newMemoryMCPTestServer(t, map[string]any{
+		"primary_memory": []map[string]any{
+			{"id": "source_mem", "title": "family trip note", "raw": map[string]any{"content_text": "family trip"}},
+		},
+	})
+	runtime := testMemoryRuntime(server.URL, nil)
+	runtime.domains = append(runtime.domains, memoryDomain{
+		id: "planning",
+		server: schema.MCPServer{
+			Name:      "memory_planning",
+			Transport: "streamable-http",
+			Endpoint:  server.URL,
+			Tools:     schema.MCPToolFilter{Allow: []string{saveMemoryToolName, searchSourcesToolName}},
+		},
+		searchTool: searchSourcesToolName,
+	})
+	runtime.defaultWriteDomain = "planning"
+	runtime.writeDomains = map[string]struct{}{"planning": {}}
+	runtime.allowedFlows = map[string]map[string]struct{}{
+		"memory": {"planning": {}},
+	}
+	service := New(runtime)
+
+	if _, err := service.SearchMemory(context.Background(), &adkmemory.SearchRequest{
+		Query:   "trip",
+		AppName: "agent_awesome",
+		UserID:  "doug",
+	}); err != nil {
+		t.Fatalf("SearchMemory() error = %v", err)
+	}
+	chat := stubSession{
+		id:      "allowed-cross-domain-session",
+		appName: "agent_awesome",
+		userID:  "doug",
+		events: []*session.Event{
+			capturableEvent("event-user", "remember planning idea", stamp),
+			{
+				ID:          "event-assistant",
+				Timestamp:   stamp.Add(time.Second),
+				Author:      "assistant",
+				LLMResponse: model.LLMResponse{Content: genai.NewContentFromText("Trip plan context noted.", genai.RoleModel)},
+			},
+		},
+	}
+
+	if err := service.AddSessionToMemory(context.Background(), chat); err != nil {
+		t.Fatalf("AddSessionToMemory() error = %v", err)
+	}
+	saves := callsNamed(server.calls(), saveMemoryToolName)
+	if len(saves) != 2 {
+		t.Fatalf("save calls = %d, want user and assistant capture: %#v", len(saves), saves)
+	}
+	if got := saves[1].arguments["content"]; got != "Trip plan context noted." {
+		t.Fatalf("assistant content = %q, want allowed generated capture", got)
+	}
+}
+
 // TestAddSessionToMemoryCapturesOnlyNewEvents prevents full-session replays.
 func TestAddSessionToMemoryCapturesOnlyNewEvents(t *testing.T) {
 	stamp := time.Date(2026, 5, 8, 12, 0, 0, 0, time.UTC)
 	server := newMemoryMCPTestServer(t, nil)
-	service := New(schema.MCPServer{Name: "memory", Transport: "streamable-http", Endpoint: server.URL})
+	service := New(testMemoryRuntime(server.URL, nil))
 	events := make([]*session.Event, 0, 101)
 	for index := 0; index < 100; index++ {
 		events = append(events, capturableEvent(
@@ -160,7 +315,7 @@ func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 			},
 		},
 	})
-	service := New(schema.MCPServer{Name: "memory", Transport: "streamable-http", Endpoint: server.URL})
+	service := New(testMemoryRuntime(server.URL, nil))
 
 	response, err := service.SearchMemory(context.Background(), &adkmemory.SearchRequest{
 		Query: "[[AGENT_AWESOME_RUNTIME_POLICY:test policy]]\ngreen tea",
@@ -177,6 +332,9 @@ func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 	if got := response.Memories[0].Author; got != "user" {
 		t.Fatalf("author = %q, want subject", got)
 	}
+	if got := response.Memories[0].CustomMetadata["domain_id"]; got != "memory" {
+		t.Fatalf("domain metadata = %q, want memory", got)
+	}
 
 	calls := server.calls()
 	if len(calls) != 1 {
@@ -190,12 +348,14 @@ func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 // TestNewFromToolsConfigSelectsAllowedMemoryServer verifies config discovery.
 func TestNewFromToolsConfigSelectsAllowedMemoryServer(t *testing.T) {
 	service, ok, err := NewFromToolsConfig(&schema.Tools{
-		MCP: schema.MCP{
-			Enabled: true,
-			Servers: []schema.MCPServer{
-				{Name: "files", Transport: "streamable-http", Endpoint: "http://127.0.0.1/files", Tools: schema.MCPToolFilter{Allow: []string{"read_file"}}},
-				{Name: "context", Transport: "streamable-http", Endpoint: "http://127.0.0.1/memory", Tools: schema.MCPToolFilter{Allow: []string{saveMemoryToolName, searchSourcesToolName}}},
+		Memory: schema.Memory{
+			Actor: "agent:test",
+			ReadDomains: []schema.MemoryDomain{
+				{ID: "memory", Endpoint: "http://127.0.0.1/memory"},
 			},
+			WriteDomains:         []string{"memory"},
+			DefaultWriteDomain:   "memory",
+			AllowedSensitivities: []string{"public", "internal", "private"},
 		},
 	})
 	if err != nil {
@@ -203,6 +363,29 @@ func TestNewFromToolsConfigSelectsAllowedMemoryServer(t *testing.T) {
 	}
 	if !ok || service == nil {
 		t.Fatalf("NewFromToolsConfig() ok/service = %v/%v, want selected service", ok, service)
+	}
+}
+
+// testMemoryRuntime creates a single-domain runtime for adapter tests.
+func testMemoryRuntime(endpoint string, headers map[string]string) memoryRuntimeConfig {
+	return memoryRuntimeConfig{
+		actor:                "agent:test",
+		defaultWriteDomain:   "memory",
+		writeDomains:         map[string]struct{}{"memory": {}},
+		allowedSensitivities: []string{"public", "internal", "private"},
+		domains: []memoryDomain{
+			{
+				id: "memory",
+				server: schema.MCPServer{
+					Name:           "memory",
+					Transport:      "streamable-http",
+					Endpoint:       endpoint,
+					HeadersFromEnv: headers,
+					Tools:          schema.MCPToolFilter{Allow: []string{saveMemoryToolName, searchSourcesToolName}},
+				},
+				searchTool: searchSourcesToolName,
+			},
+		},
 	}
 }
 
@@ -237,6 +420,17 @@ func (s *memoryMCPTestServer) calls() []mcpToolCall {
 	calls := make([]mcpToolCall, len(s.toolCalls))
 	copy(calls, s.toolCalls)
 	return calls
+}
+
+// callsNamed filters recorded MCP calls by tool name.
+func callsNamed(calls []mcpToolCall, name string) []mcpToolCall {
+	filtered := make([]mcpToolCall, 0, len(calls))
+	for _, call := range calls {
+		if call.name == name {
+			filtered = append(filtered, call)
+		}
+	}
+	return filtered
 }
 
 // serveHTTP handles the subset of MCP JSON-RPC needed by the adapter.

@@ -185,7 +185,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
         !_screenChangeCanUndo(change)) {
       return;
     }
-    final server = _primaryGraphServer();
+    final server = _graphServerForScreenChange(change);
     if (server == null) {
       _replaceScreenChange(
         change.copyWith(
@@ -202,7 +202,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
     try {
       if (change.operation == ScreenChangeOperation.createTask) {
         await _withTasksClientForGraphServer(server, (client) {
-          return client.deleteTask(change.target.taskId);
+          return client.deleteTask(change.target.taskId, actor: _memoryActor());
         });
       } else {
         await _withTasksClientForGraphServer(server, (client) {
@@ -333,7 +333,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
 
   /// Applies one validated Backlog screen change through the task service.
   Future<void> _applyBacklogScreenChange(ScreenChange change) async {
-    final server = _primaryGraphServer();
+    final server = _graphServerForScreenChange(change);
     if (server == null) {
       _replaceScreenChange(
         change.copyWith(
@@ -364,11 +364,20 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
               fields: change.fields,
             );
           case ScreenChangeOperation.completeTask:
-            await client.completeTask(change.target.taskId);
+            await client.completeTask(
+              change.target.taskId,
+              actor: _memoryActor(),
+            );
           case ScreenChangeOperation.cancelTask:
-            await client.cancelTask(change.target.taskId);
+            await client.cancelTask(
+              change.target.taskId,
+              actor: _memoryActor(),
+            );
           case ScreenChangeOperation.deleteTask:
-            await client.deleteTask(change.target.taskId);
+            await client.deleteTask(
+              change.target.taskId,
+              actor: _memoryActor(),
+            );
           case ScreenChangeOperation.upsertTaskRelation:
             await client.upsertTaskRelation(
               fromTaskId: _stringField(change.fields, 'from_task_id'),
@@ -380,10 +389,12 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
               ),
               confidence: _doubleField(change.fields, 'confidence'),
               explanation: _stringField(change.fields, 'note'),
+              actor: _memoryActor(),
             );
           case ScreenChangeOperation.deleteTaskRelation:
             await client.deleteTaskRelation(
               _stringField(change.fields, 'relation_id'),
+              actor: _memoryActor(),
             );
           case ScreenChangeOperation.linkTaskMemory:
             await client.linkTaskMemory(
@@ -428,6 +439,17 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
     }
   }
 
+  /// Returns the graph server that should handle one screen command change.
+  McpServerRuntime? _graphServerForScreenChange(ScreenChange change) {
+    return switch (change.operation) {
+      ScreenChangeOperation.createTask => _primaryGraphServer(),
+      ScreenChangeOperation.upsertTaskRelation => _graphServerForTaskId(
+        _stringField(change.fields, 'from_task_id'),
+      ),
+      _ => _graphServerForTaskId(change.target.taskId),
+    };
+  }
+
   /// Creates a task from screen-change fields.
   Future<WorkspaceTask> _createTaskForScreenFields({
     required TasksClient client,
@@ -455,6 +477,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       owner: _stringField(fields, 'person'),
       source: _stringField(fields, 'source'),
       confidence: _doubleField(fields, 'confidence'),
+      actor: _memoryActor(),
     );
   }
 
@@ -501,6 +524,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       confidence: fields.containsKey('confidence')
           ? _doubleField(fields, 'confidence')
           : null,
+      actor: _memoryActor(),
     );
   }
 
@@ -523,7 +547,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       if (selectedGraphTaskId.isNotEmpty)
         'selected backlog id: $selectedGraphTaskId',
       if (selectedMemory?.id.isNotEmpty == true)
-        'selected memory id: ${selectedMemory!.id}',
+        'selected memory id: ${_memorySelectionKey(selectedMemory!)}',
     ].join(', ');
   }
 

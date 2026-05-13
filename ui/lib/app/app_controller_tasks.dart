@@ -40,6 +40,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
           scheduledAt: scheduledAt,
           topics: topics,
           memoryLinks: memoryLinks,
+          actor: _memoryActor(),
         );
       });
       await _loadTasks();
@@ -293,7 +294,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
 
   /// Completes a task after local UI confirmation.
   Future<void> completeTaskFromUi(String taskId) async {
-    final server = _primaryGraphServer();
+    final server = _graphServerForTaskId(taskId);
     if (server == null) {
       _setEndpoint(
         'Backlog',
@@ -308,7 +309,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     _notifyControllerListeners();
     try {
       await _withTasksClientForGraphServer(server, (client) {
-        return client.completeTask(taskId);
+        return client.completeTask(taskId, actor: _memoryActor());
       });
       await _loadTasks();
       _setEndpoint(
@@ -356,7 +357,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     TaskWorkBreakdown? workBreakdown,
     double? confidence,
   }) async {
-    final server = _primaryGraphServer();
+    final server = _graphServerForTaskId(taskId);
     if (server == null) {
       _setEndpoint(
         'Backlog',
@@ -396,6 +397,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
           source: source,
           workBreakdown: workBreakdown,
           confidence: confidence,
+          actor: _memoryActor(),
         );
       });
       selectedTaskId = taskId;
@@ -429,7 +431,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     String explanation = '',
   }) async {
     await _mutateTaskGraphFromUi(
-      server: _primaryGraphServer(),
+      server: _graphServerForTaskId(fromTaskId),
       selectedTaskAfter: fromTaskId,
       busyMessage: 'Saving backlog relation',
       successMessage: 'Backlog relation saved',
@@ -440,6 +442,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
           relationType: relationType,
           confidence: confidence,
           explanation: explanation,
+          actor: _memoryActor(),
         );
       },
     );
@@ -448,12 +451,12 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
   /// Deletes an explicit task relation from the inspector.
   Future<void> deleteTaskRelationFromUi(TaskRelationRecord relation) async {
     await _mutateTaskGraphFromUi(
-      server: _primaryGraphServer(),
+      server: _graphServerForTaskId(relation.fromTaskId),
       selectedTaskAfter: relation.fromTaskId,
       busyMessage: 'Deleting backlog relation',
       successMessage: 'Backlog relation deleted',
       action: (client) async {
-        await client.deleteTaskRelation(relation.id);
+        await client.deleteTaskRelation(relation.id, actor: _memoryActor());
       },
     );
   }
@@ -462,7 +465,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
   Future<void> applyTaskSuggestionFromUi(String suggestionId) async {
     final taskId = _taskIdForSuggestion(suggestionId);
     await _mutateTaskGraphFromUi(
-      server: _primaryGraphServer(),
+      server: _graphServerForTaskId(taskId ?? ''),
       selectedTaskAfter: taskId,
       busyMessage: 'Accepting backlog suggestion',
       successMessage: 'Backlog suggestion accepted',
@@ -476,7 +479,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
   Future<void> dismissTaskSuggestionFromUi(String suggestionId) async {
     final taskId = _taskIdForSuggestion(suggestionId);
     await _mutateTaskGraphFromUi(
-      server: _primaryGraphServer(),
+      server: _graphServerForTaskId(taskId ?? ''),
       selectedTaskAfter: taskId,
       busyMessage: 'Dismissing backlog suggestion',
       successMessage: 'Backlog suggestion dismissed',
@@ -500,7 +503,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     String consequence = '',
   }) async {
     await _mutateTaskGraphFromUi(
-      server: _primaryGraphServer(),
+      server: _graphServerForTaskId(taskId),
       selectedTaskAfter: taskId,
       busyMessage: 'Saving backlog commitment',
       successMessage: 'Backlog commitment saved',
@@ -524,7 +527,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
   /// Deletes one first-class task commitment from the inspector.
   Future<void> deleteTaskCommitmentFromUi(TaskCommitment commitment) async {
     await _mutateTaskGraphFromUi(
-      server: _primaryGraphServer(),
+      server: _graphServerForTaskId(commitment.taskId),
       selectedTaskAfter: commitment.taskId,
       busyMessage: 'Deleting backlog commitment',
       successMessage: 'Backlog commitment deleted',
@@ -536,7 +539,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
 
   /// Cancels a task after local UI confirmation.
   Future<void> cancelTaskFromUi(String taskId) async {
-    final server = _primaryGraphServer();
+    final server = _graphServerForTaskId(taskId);
     if (server == null) {
       _setEndpoint(
         'Backlog',
@@ -551,7 +554,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     _notifyControllerListeners();
     try {
       await _withTasksClientForGraphServer(server, (client) {
-        return client.cancelTask(taskId);
+        return client.cancelTask(taskId, actor: _memoryActor());
       });
       selectedTaskId = taskId;
       await _loadTasks();
@@ -576,7 +579,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
 
   /// Deletes a task after local UI confirmation.
   Future<void> deleteTaskFromUi(String taskId) async {
-    final server = _primaryGraphServer();
+    final server = _graphServerForTaskId(taskId);
     if (server == null) {
       _setEndpoint(
         'Backlog',
@@ -591,7 +594,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     _notifyControllerListeners();
     try {
       await _withTasksClientForGraphServer(server, (client) {
-        return client.deleteTask(taskId);
+        return client.deleteTask(taskId, actor: _memoryActor());
       });
       if (selectedTaskId == taskId) {
         selectedTaskId = null;
@@ -618,7 +621,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
 
   /// Links the selected memory record to a backlog item.
   Future<void> linkSelectedMemoryToTaskFromUi(String taskId) async {
-    final server = _primaryGraphServer();
+    final server = _graphServerForTaskId(taskId);
     final drafts = _selectedMemoryLinkDrafts('context');
     if (server == null || drafts.isEmpty) {
       tasksMessage = 'Select a graph memory server and memory record first';
@@ -659,7 +662,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     required String taskId,
     required String linkId,
   }) async {
-    final server = _primaryGraphServer();
+    final server = _graphServerForTaskId(taskId);
     if (server == null) {
       return;
     }
@@ -1088,6 +1091,11 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
   List<TaskMemoryLinkDraft> _selectedMemoryLinkDrafts(String relationship) {
     final memory = selectedMemory;
     if (memory == null) {
+      return const <TaskMemoryLinkDraft>[];
+    }
+    if (memory.domainId.trim().isNotEmpty &&
+        memory.domainId !=
+            _activeRuntimeProfile().agentMemory.defaultWriteDomain) {
       return const <TaskMemoryLinkDraft>[];
     }
     return <TaskMemoryLinkDraft>[

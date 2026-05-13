@@ -8,8 +8,9 @@ Container disk is ephemeral after the instance sleeps, so durable context depend
 
 Memory context is restored from and saved to an R2 bucket through a private Worker endpoint.
 The endpoint requires `AGENTAWESOME_PERSISTENCE_TOKEN` and is intended only for the colocated container.
+Each memory domain uses its own endpoint path, such as `/internal/context-snapshot/memory`, and its own R2 object under the configured snapshot prefix.
 
 == Operational Note
 
-The current snapshot path is enough for an HTTP pilot while the container stays alive and snapshots are healthy.
+The current per-domain snapshot path is enough for an HTTP pilot while the container stays alive and snapshots are healthy.
 Use a persistent memory backend before relying on the deployment for durable long-term personal memory.

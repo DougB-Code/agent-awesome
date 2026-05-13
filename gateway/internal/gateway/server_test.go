@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -28,6 +29,7 @@ func newTestServer(t *testing.T, manager *supervisor.Manager, configure func(*co
 func testConfig(configure func(*config.Config)) config.Config {
 	cfg := config.Config{
 		ListenAddress:  "127.0.0.1:0",
+		GatewayBaseURL: "http://127.0.0.1:9/api",
 		HarnessBaseURL: "http://127.0.0.1:1/api",
 		ContextBaseURL: "http://127.0.0.1:3/api/context",
 		MemoryMCPURL:   "http://127.0.0.1:2/mcp",
@@ -37,7 +39,57 @@ func testConfig(configure func(*config.Config)) config.Config {
 	if configure != nil {
 		configure(&cfg)
 	}
+	if len(cfg.MemoryDomains) == 0 {
+		cfg.MemoryDomains = []config.MemoryDomain{
+			{
+				ID:        "memory",
+				Label:     "Memory",
+				Endpoint:  cfg.MemoryMCPURL,
+				HealthURL: strings.Replace(cfg.MemoryMCPURL, "/mcp", "/healthz", 1),
+			},
+		}
+	}
+	if cfg.MemoryPolicy.Actor == "" {
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"memory"},
+			WriteDomains:         []string{"memory"},
+			DefaultWriteDomain:   "memory",
+			AllowedSensitivities: []string{"public", "internal", "private"},
+		}
+	}
+	if len(cfg.MemoryServices) == 0 && cfg.MemoryService.Name != "" {
+		cfg.MemoryServices = []config.MemoryDomainService{
+			{
+				DomainID:   "memory",
+				Name:       cfg.MemoryService.Name,
+				HealthURL:  cfg.MemoryService.HealthURL,
+				Command:    cfg.MemoryService.Command,
+				Arguments:  cfg.MemoryService.Arguments,
+				WorkingDir: cfg.MemoryService.WorkingDir,
+				AutoStart:  cfg.MemoryService.AutoStart,
+			},
+		}
+	}
 	return cfg
+}
+
+// TestSlackConfigRoutesThroughGateway verifies Slack uses the control plane API.
+func TestSlackConfigRoutesThroughGateway(t *testing.T) {
+	cfg := testConfig(func(cfg *config.Config) {
+		cfg.AuthToken = "secret"
+		cfg.GatewayBaseURL = "http://gateway.test/api"
+		cfg.Slack = config.SlackConfig{Enabled: true}
+	})
+
+	slackCfg := slackConfig(cfg)
+
+	if slackCfg.GatewayBaseURL != "http://gateway.test/api" {
+		t.Fatalf("GatewayBaseURL = %q, want gateway API", slackCfg.GatewayBaseURL)
+	}
+	if slackCfg.GatewayAuthToken != "secret" {
+		t.Fatalf("GatewayAuthToken = %q, want gateway auth token", slackCfg.GatewayAuthToken)
+	}
 }
 
 // TestStatusRequiresBearerToken verifies optional personal cloud auth.
@@ -112,6 +164,9 @@ func TestBetaStatusReturnsSafeOperatorView(t *testing.T) {
 	snapshot := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodHead {
 			t.Fatalf("snapshot method = %s, want HEAD", r.Method)
+		}
+		if r.URL.Path != "/internal/context-snapshot/memory" {
+			t.Fatalf("snapshot path = %q, want domain-specific snapshot path", r.URL.Path)
 		}
 		if got := r.Header.Get("Authorization"); got != "Bearer snapshot-secret" {
 			t.Fatalf("snapshot Authorization = %q, want bearer token", got)
@@ -292,6 +347,49 @@ func TestMCPProxyWaitsForMemoryReadiness(t *testing.T) {
 	}
 }
 
+// TestMCPProxyWaitsForSelectedDomainReadiness verifies each domain has separate readiness.
+func TestMCPProxyWaitsForSelectedDomainReadiness(t *testing.T) {
+	projectCalled := false
+	project := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		projectCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer project.Close()
+	manager := supervisor.New(0)
+	manager.Expect(supervisor.Service{Name: "memory-project", HealthURL: project.URL + "/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.MemoryDomains = []config.MemoryDomain{
+			{ID: "memory", Label: "Memory", Endpoint: "http://127.0.0.1:8090/mcp", HealthURL: "http://127.0.0.1:8090/healthz"},
+			{ID: "project", Label: "Project", Endpoint: project.URL + "/mcp", HealthURL: project.URL + "/healthz"},
+		}
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"memory", "project"},
+			WriteDomains:         []string{"memory"},
+			DefaultWriteDomain:   "memory",
+			AllowedSensitivities: []string{"public"},
+		}
+		cfg.MemoryServices = []config.MemoryDomainService{
+			{DomainID: "memory", Name: "memory", HealthURL: "http://127.0.0.1:8090/healthz"},
+			{DomainID: "project", Name: "memory-project", HealthURL: project.URL + "/healthz"},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp/project", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"hello"}}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", recorder.Code)
+	}
+	if projectCalled {
+		t.Fatalf("project memory upstream was called before readiness")
+	}
+	if !strings.Contains(recorder.Body.String(), `"domain_id":"project"`) {
+		t.Fatalf("body = %q, want selected domain readiness detail", recorder.Body.String())
+	}
+}
+
 // TestMemoryMCPProxyForwardsThroughGateway verifies UI memory traffic uses control plane.
 func TestMemoryMCPProxyForwardsThroughGateway(t *testing.T) {
 	memory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -376,6 +474,206 @@ func TestContextAPIProxyUsesConfiguredUpstreamToken(t *testing.T) {
 	}
 }
 
+// TestContextAPIInjectsSingleAllowedDomain verifies the gateway owns domain defaults.
+func TestContextAPIInjectsSingleAllowedDomain(t *testing.T) {
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var decoded map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+			t.Fatalf("decode context body: %v", err)
+		}
+		if decoded["domain_id"] != "memory" {
+			t.Fatalf("domain_id = %#v, want injected memory domain", decoded["domain_id"])
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"search_memory","arguments":{"query":"hello"}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", recorder.Code)
+	}
+}
+
+// TestContextAPIBlocksUnauthorizedReadDomain verifies UI calls cannot bypass grants.
+func TestContextAPIBlocksUnauthorizedReadDomain(t *testing.T) {
+	upstreamCalled := false
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+		cfg.MemoryDomains = memoryDomains("memory", "project")
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"memory"},
+			WriteDomains:         []string{"memory"},
+			DefaultWriteDomain:   "memory",
+			AllowedSensitivities: []string{"public"},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"search_memory","domain_id":"project","arguments":{"query":"hello"}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("context upstream was called for unauthorized domain")
+	}
+}
+
+// TestContextAPIRequiresDomainForMultipleReadGrants avoids ambiguous fanout writes.
+func TestContextAPIRequiresDomainForMultipleReadGrants(t *testing.T) {
+	upstreamCalled := false
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+		cfg.MemoryDomains = memoryDomains("memory", "project")
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"memory", "project"},
+			WriteDomains:         []string{"memory"},
+			DefaultWriteDomain:   "memory",
+			AllowedSensitivities: []string{"public"},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"search_memory","arguments":{"query":"hello"}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", recorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("context upstream was called without required domain")
+	}
+}
+
+// TestContextAPIBlocksWritesOutsideWriteDomains verifies task writes are domain scoped.
+func TestContextAPIBlocksWritesOutsideWriteDomains(t *testing.T) {
+	upstreamCalled := false
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+		cfg.MemoryDomains = memoryDomains("memory", "project")
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"memory", "project"},
+			WriteDomains:         []string{"memory"},
+			DefaultWriteDomain:   "memory",
+			AllowedSensitivities: []string{"public"},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"update_task","domain_id":"project","arguments":{"id":"TASK-1"}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("context upstream was called for unauthorized write domain")
+	}
+}
+
+// TestMCPRoutesDomainPathToConfiguredMemoryServer verifies model-visible MCP can be domain-scoped.
+func TestMCPRoutesDomainPathToConfiguredMemoryServer(t *testing.T) {
+	memoryCalled := false
+	memory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		memoryCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer memory.Close()
+	projectCalled := false
+	project := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		projectCalled = true
+		if r.URL.Path != "/mcp" {
+			t.Fatalf("project memory path = %q, want /mcp", r.URL.Path)
+		}
+		if r.URL.Query().Get("domain_id") != "" {
+			t.Fatalf("domain_id query leaked to upstream: %q", r.URL.RawQuery)
+		}
+		if r.Header.Get(memoryDomainHeader) != "" {
+			t.Fatalf("gateway memory-domain header leaked upstream")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer project.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.MemoryMCPURL = memory.URL + "/mcp"
+		cfg.MemoryDomains = []config.MemoryDomain{
+			{ID: "memory", Label: "Memory", Endpoint: memory.URL + "/mcp"},
+			{ID: "project", Label: "Project", Endpoint: project.URL + "/mcp"},
+		}
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"memory", "project"},
+			WriteDomains:         []string{"project"},
+			DefaultWriteDomain:   "project",
+			AllowedSensitivities: []string{"public"},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp/project?domain_id=project", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"hello"}}}`))
+	req.Header.Set(memoryDomainHeader, "project")
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %q", recorder.Code, recorder.Body.String())
+	}
+	if !projectCalled {
+		t.Fatalf("project memory upstream was not called")
+	}
+	if memoryCalled {
+		t.Fatalf("default memory upstream was called")
+	}
+}
+
+// TestMCPBlocksModelSuppliedDomainOverrides keeps model output below policy.
+func TestMCPBlocksModelSuppliedDomainOverrides(t *testing.T) {
+	upstreamCalled := false
+	memory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer memory.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.MemoryMCPURL = memory.URL + "/mcp"
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"hello","domain_id":"project"}}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("memory upstream was called for model domain override")
+	}
+}
+
 // TestRunSSEProxyDoesNotInjectRuntimePolicyByDefault verifies clean ADK runs.
 func TestRunSSEProxyDoesNotInjectRuntimePolicyByDefault(t *testing.T) {
 	harness := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -443,6 +741,20 @@ func TestRunSSEProxyInjectsConfiguredRuntimePolicy(t *testing.T) {
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", recorder.Code)
 	}
+}
+
+// memoryDomains builds routable test memory domain configs.
+func memoryDomains(ids ...string) []config.MemoryDomain {
+	domains := make([]config.MemoryDomain, 0, len(ids))
+	for index, id := range ids {
+		domains = append(domains, config.MemoryDomain{
+			ID:        id,
+			Label:     id,
+			Endpoint:  "http://127.0.0.1:" + strconv.Itoa(8090+index) + "/mcp",
+			HealthURL: "http://127.0.0.1:" + strconv.Itoa(8090+index) + "/healthz",
+		})
+	}
+	return domains
 }
 
 // containsSecret recursively checks a decoded JSON value for a secret.

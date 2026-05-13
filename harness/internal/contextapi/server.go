@@ -122,7 +122,7 @@ func (s *Server) callToolHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "decode request: " + err.Error()})
 		return
 	}
-	result, err := s.callTool(r.Context(), req.Name, req.Arguments)
+	result, err := s.callTool(r.Context(), req.Name, req.DomainID, req.Arguments)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
@@ -160,9 +160,9 @@ func (s *Server) listToolNames(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-// callTool invokes one configured MCP tool by name.
-func (s *Server) callTool(ctx context.Context, name string, arguments map[string]any) (any, error) {
-	server, err := serverForTool(ctx, configuredMCPServers(s.tools), name)
+// callTool invokes one configured MCP tool by name and optional memory domain.
+func (s *Server) callTool(ctx context.Context, name string, domainID string, arguments map[string]any) (any, error) {
+	server, err := s.serverForControlTool(ctx, name, domainID)
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +185,14 @@ func (s *Server) callTool(ctx context.Context, name string, arguments map[string
 		return result.StructuredContent, nil
 	}
 	return map[string]any{"content": result.Content}, nil
+}
+
+// serverForControlTool returns the MCP server selected by control-plane policy.
+func (s *Server) serverForControlTool(ctx context.Context, name string, domainID string) (schema.MCPServer, error) {
+	if strings.TrimSpace(domainID) != "" {
+		return memoryDomainServerForTool(s.tools, name, domainID)
+	}
+	return serverForTool(ctx, configuredMCPServers(s.tools), name)
 }
 
 // authenticated protects context tool surfaces when a direct API token is set.
@@ -263,6 +271,101 @@ func serverForTool(ctx context.Context, servers []schema.MCPServer, name string)
 	return schema.MCPServer{}, fmt.Errorf("tool %q is not exposed by harness MCP configuration", name)
 }
 
+// memoryDomainServerForTool resolves a memory domain through agent grants.
+func memoryDomainServerForTool(tools *schema.Tools, name string, domainID string) (schema.MCPServer, error) {
+	if tools == nil {
+		return schema.MCPServer{}, fmt.Errorf("memory domains are not configured")
+	}
+	domainID = strings.TrimSpace(domainID)
+	if domainID == "" {
+		return schema.MCPServer{}, fmt.Errorf("memory domain id is required")
+	}
+	domain, ok := memoryDomainByID(tools.Memory.ReadDomains, domainID)
+	if !ok {
+		return schema.MCPServer{}, fmt.Errorf("memory domain %q is not readable by the active profile", domainID)
+	}
+	if !memoryToolAllowedForDomain(tools.Memory, name, domainID) {
+		return schema.MCPServer{}, fmt.Errorf("tool %q is not allowed for memory domain %q", name, domainID)
+	}
+	return schema.MCPServer{
+		Name:           memoryServerName(domainID),
+		Transport:      "streamable-http",
+		Endpoint:       strings.TrimSpace(domain.Endpoint),
+		HeadersFromEnv: domain.HeadersFromEnv,
+		Tools:          schema.MCPToolFilter{Allow: []string{name}},
+	}, nil
+}
+
+// memoryDomainByID returns one configured readable memory domain.
+func memoryDomainByID(domains []schema.MemoryDomain, domainID string) (schema.MemoryDomain, bool) {
+	for _, domain := range domains {
+		if strings.TrimSpace(domain.ID) == domainID {
+			return domain, true
+		}
+	}
+	return schema.MemoryDomain{}, false
+}
+
+// memoryToolAllowedForDomain applies read/write grants to a domain tool call.
+func memoryToolAllowedForDomain(memory schema.Memory, name string, domainID string) bool {
+	if contextReadOnlyMemoryTools()[strings.TrimSpace(name)] {
+		return containsString(memoryDomainIDs(memory.ReadDomains), domainID)
+	}
+	return containsString(memory.WriteDomains, domainID)
+}
+
+// memoryDomainIDs returns ids from configured memory domain endpoints.
+func memoryDomainIDs(domains []schema.MemoryDomain) []string {
+	ids := make([]string, 0, len(domains))
+	for _, domain := range domains {
+		ids = append(ids, strings.TrimSpace(domain.ID))
+	}
+	return ids
+}
+
+// contextReadOnlyMemoryTools names domain tools that never mutate storage.
+func contextReadOnlyMemoryTools() map[string]bool {
+	return map[string]bool{
+		"search_memory":                  true,
+		"search_sources":                 true,
+		"load_entity_page":               true,
+		"load_timeline":                  true,
+		"query_context_graph":            true,
+		"get_task":                       true,
+		"list_tasks":                     true,
+		"task_graph_projection":          true,
+		"project_executive_summary":      true,
+		"explain_executive_summary_item": true,
+		"list_task_relations":            true,
+		"traverse_task_relations":        true,
+		"list_commitments":               true,
+		"suggest_task_relationships":     true,
+		"suggest_task_metadata":          true,
+		"suggest_commitments":            true,
+		"get_task_work_breakdowns":       true,
+	}
+}
+
+// memoryServerName returns a deterministic server name for a domain endpoint.
+func memoryServerName(domainID string) string {
+	normalized := strings.NewReplacer("-", "_").Replace(strings.TrimSpace(domainID))
+	if normalized == "" {
+		return "memory"
+	}
+	return "memory_" + normalized
+}
+
+// containsString reports whether values contains target after trimming.
+func containsString(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
+}
+
 // connectMCP opens one MCP client session for a configured server.
 func connectMCP(ctx context.Context, server schema.MCPServer) (*mcp.ClientSession, error) {
 	return mcpclient.Connect(ctx, server, "agent-awesome-context-api", "v1.0.0")
@@ -300,6 +403,7 @@ func toolAllowed(name string, allowed map[string]struct{}) bool {
 // toolCallRequest is the request body for one context tool call.
 type toolCallRequest struct {
 	Name      string         `json:"name"`
+	DomainID  string         `json:"domain_id"`
 	Arguments map[string]any `json:"arguments"`
 }
 

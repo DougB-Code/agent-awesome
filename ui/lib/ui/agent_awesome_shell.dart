@@ -38,6 +38,7 @@ part 'agent_awesome_shell_memory_corrections.dart';
 part 'agent_awesome_shell_memory_details.dart';
 part 'agent_awesome_shell_memory_metadata.dart';
 part 'agent_awesome_shell_memory_pages.dart';
+part 'agent_awesome_shell_memory_safety.dart';
 part 'agent_awesome_shell_memory_search.dart';
 part 'agent_awesome_shell_memory_shell.dart';
 part 'agent_awesome_shell_memory_vocabulary.dart';
@@ -282,7 +283,11 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
       area: _commandAreaForSection(),
       text: text,
       selectedTaskId: widget.controller.selectedGraphTaskId,
-      selectedMemoryId: widget.controller.selectedMemory?.id ?? '',
+      selectedMemoryId: widget.controller.selectedMemory == null
+          ? ''
+          : widget.controller.memorySelectionKey(
+              widget.controller.selectedMemory!,
+            ),
       profilePath: profilePath,
     );
   }

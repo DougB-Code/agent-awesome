@@ -3,7 +3,7 @@
 // Intended use cases:
 //   - Receive Slack messages through either HTTP Events API or Socket Mode.
 //   - Verify Slack HTTP signatures before accepting public cloud webhooks.
-//   - Forward accepted Slack messages into the ADK REST harness and post replies.
+//   - Forward accepted Slack messages through the gateway API and post replies.
 //
 // High-level examples:
 //   - adapter.EventsHandler handles POST /slack/events in cloud deployments.

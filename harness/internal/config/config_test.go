@@ -512,6 +512,32 @@ mcp:
 	}
 }
 
+func TestLoadToolsRejectsMemoryFlowToUnwritableDomain(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+memory:
+  actor: agent:test
+  read-domains:
+    - id: memory
+      endpoint: http://127.0.0.1:8070/mcp
+    - id: side_project
+      endpoint: http://127.0.0.1:8071/mcp
+  write-domains:
+    - side_project
+  default-write-domain: side_project
+  allowed-sensitivities:
+    - public
+    - internal
+    - private
+  allowed-flows:
+    - from: side_project
+      to: memory
+`)
+
+	if _, err := LoadTools(path, true); err == nil {
+		t.Fatalf("LoadTools() error = nil, want unwritable flow target error")
+	}
+}
+
 func TestLoadToolsRejectsMCPConfirmationModesCombined(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 mcp:

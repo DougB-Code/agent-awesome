@@ -129,16 +129,13 @@ class LocalServiceSupervisor {
     );
     await _writeStatusLog(harnessStatus);
     statuses.add(harnessStatus);
-    final gateway = profile.gateway;
-    if (gateway != null && gateway.enabled) {
-      final gatewayStatus = await _ensureGatewayStatus(
-        profile,
-        gateway,
-        restartAutoStarted: restartAutoStarted,
-      );
-      await _writeStatusLog(gatewayStatus);
-      statuses.add(gatewayStatus);
-    }
+    final gatewayStatus = await _ensureGatewayStatus(
+      profile,
+      profile.gateway,
+      restartAutoStarted: restartAutoStarted,
+    );
+    await _writeStatusLog(gatewayStatus);
+    statuses.add(gatewayStatus);
     return statuses;
   }
 
@@ -577,11 +574,12 @@ class LocalServiceSupervisor {
     required bool restartAutoStarted,
   }) async {
     final health = Uri.parse(gateway.healthUrl);
+    final arguments = gatewayArgumentsForProfile(profile);
     _rememberServiceEndpoint(
       id: gateway.id,
       name: gateway.label,
       health: health,
-      arguments: gateway.arguments,
+      arguments: arguments,
     );
     if (restartAutoStarted && gateway.autoStart) {
       await _restartAutoStartedEndpoint(
@@ -595,7 +593,7 @@ class LocalServiceSupervisor {
         id: gateway.id,
         name: gateway.label,
         health: health,
-        arguments: gateway.arguments,
+        arguments: arguments,
       );
       return _status(
         gateway.label,
@@ -619,7 +617,7 @@ class LocalServiceSupervisor {
       health: health,
       workingDirectory: gateway.workingDirectory,
       packagePath: gateway.packagePath,
-      arguments: gateway.arguments,
+      arguments: arguments,
       outputLogPath: '${config.serviceLogDirectory}/gateway.log',
       disableSlackIngress: true,
     );

@@ -33,8 +33,15 @@ class _MemoryMetadataContentState extends State<_MemoryMetadataContent> {
   @override
   void didUpdateWidget(covariant _MemoryMetadataContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller.selectedMemory?.id !=
-        widget.controller.selectedMemory?.id) {
+    final oldMemory = oldWidget.controller.selectedMemory;
+    final currentMemory = widget.controller.selectedMemory;
+    final oldKey = oldMemory == null
+        ? ''
+        : oldWidget.controller.memorySelectionKey(oldMemory);
+    final currentKey = currentMemory == null
+        ? ''
+        : widget.controller.memorySelectionKey(currentMemory);
+    if (oldKey != currentKey) {
       _syncFromSelected();
     }
   }

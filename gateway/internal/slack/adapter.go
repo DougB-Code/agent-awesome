@@ -53,12 +53,13 @@ func NewAdapter(config Config) *Adapter {
 	adapter := &Adapter{
 		config: config,
 		slack:  NewWebAPI(client, config.BotToken, config.AppToken),
-		agent: NewAgentClientWithPolicy(
+		agent: NewAgentClientWithPolicyAndHeaders(
 			client,
-			config.HarnessBaseURL,
+			config.GatewayBaseURL,
 			config.AppName,
 			config.AgentUserID,
-			policy.NewInjector(policy.Config{Text: config.RuntimePolicyText}),
+			policy.NewInjector(policy.Config{}),
+			gatewayHeaders(config.GatewayAuthToken),
 		),
 		client:  client,
 		deduper: newEventDeduper(config.EventDedupTTL),
@@ -66,6 +67,15 @@ func NewAdapter(config Config) *Adapter {
 	}
 	adapter.dispatchMessage = adapter.dispatch
 	return adapter
+}
+
+// gatewayHeaders returns auth headers for Slack-to-gateway agent turns.
+func gatewayHeaders(token string) map[string]string {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil
+	}
+	return map[string]string{"Authorization": "Bearer " + token}
 }
 
 // Enabled reports whether Slack channel handling is configured.

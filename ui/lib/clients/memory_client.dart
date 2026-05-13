@@ -17,6 +17,7 @@ class MemoryClient {
 
   /// Searches memory records for the memory panel and source list.
   Future<List<MemoryRecord>> searchMemory({
+    String actor = 'agent_awesome_ui',
     String firewall = 'user',
     bool includeGlobal = false,
     String text = '',
@@ -31,6 +32,7 @@ class MemoryClient {
     int limit = 20,
   }) async {
     final content = await _rpc.callTool('search_memory', <String, dynamic>{
+      'actor': actor,
       'firewall': firewall,
       'include_global': includeGlobal,
       'text': text,
@@ -45,6 +47,7 @@ class MemoryClient {
 
   /// Searches source-backed text records.
   Future<List<MemoryRecord>> searchSources({
+    String actor = 'agent_awesome_ui',
     String firewall = 'user',
     bool includeGlobal = false,
     String text = '',
@@ -59,6 +62,7 @@ class MemoryClient {
     int limit = 20,
   }) async {
     final content = await _rpc.callTool('search_sources', <String, dynamic>{
+      'actor': actor,
       'firewall': firewall,
       'include_global': includeGlobal,
       'text': text,

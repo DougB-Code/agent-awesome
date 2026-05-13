@@ -25,10 +25,14 @@ const (
 // Config stores all runtime settings for one personal gateway process.
 type Config struct {
 	ListenAddress                    string
+	GatewayBaseURL                   string
 	HarnessBaseURL                   string
 	ContextBaseURL                   string
 	ContextAPIToken                  string
 	MemoryMCPURL                     string
+	MemoryDomains                    []MemoryDomain
+	MemoryPolicy                     MemoryPolicy
+	MemoryServices                   []MemoryDomainService
 	AppName                          string
 	UserID                           string
 	AuthToken                        string
@@ -45,6 +49,41 @@ type Config struct {
 	HarnessService                   ServiceConfig
 	MemoryService                    ServiceConfig
 	Slack                            SlackConfig
+}
+
+// MemoryDomain stores one gateway-routable memory security boundary.
+type MemoryDomain struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Endpoint  string `json:"endpoint"`
+	HealthURL string `json:"health_url,omitempty"`
+}
+
+// MemoryPolicy stores the active agent profile's memory access grants.
+type MemoryPolicy struct {
+	Actor                string             `json:"actor"`
+	ReadDomains          []string           `json:"read_domains"`
+	WriteDomains         []string           `json:"write_domains"`
+	DefaultWriteDomain   string             `json:"default_write_domain"`
+	AllowedSensitivities []string           `json:"allowed_sensitivities"`
+	AllowedFlows         []MemoryDomainFlow `json:"allowed_flows,omitempty"`
+}
+
+// MemoryDomainFlow permits selected cross-domain writes after declassification.
+type MemoryDomainFlow struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// MemoryDomainService stores process supervision for one memory domain.
+type MemoryDomainService struct {
+	DomainID   string   `json:"domain_id"`
+	Name       string   `json:"name,omitempty"`
+	HealthURL  string   `json:"health_url,omitempty"`
+	Command    string   `json:"command,omitempty"`
+	Arguments  []string `json:"arguments,omitempty"`
+	WorkingDir string   `json:"working_directory,omitempty"`
+	AutoStart  bool     `json:"auto_start,omitempty"`
 }
 
 // ServiceConfig stores local process supervision settings for one dependency.
@@ -71,8 +110,12 @@ type SlackConfig struct {
 
 // FromFlags parses gateway configuration from CLI flags and environment values.
 func FromFlags(args []string) (Config, error) {
+	memoryDomainsJSON := envString("AGENTAWESOME_MEMORY_DOMAINS_JSON", "")
+	memoryPolicyJSON := envString("AGENTAWESOME_MEMORY_POLICY_JSON", "")
+	memoryServicesJSON := envString("AGENTAWESOME_MEMORY_SERVICES_JSON", "")
 	cfg := Config{
 		ListenAddress:                    envString("AGENTAWESOME_GATEWAY_ADDR", "127.0.0.1:8070"),
+		GatewayBaseURL:                   envString("AGENTAWESOME_GATEWAY_API_BASE_URL", ""),
 		HarnessBaseURL:                   envString("AGENTAWESOME_HARNESS_API_BASE_URL", "http://127.0.0.1:8080/api"),
 		ContextBaseURL:                   envString("AGENTAWESOME_CONTEXT_API_BASE_URL", "http://127.0.0.1:8081/api/context"),
 		ContextAPIToken:                  envString("AGENTAWESOME_CONTEXT_API_TOKEN", ""),
@@ -121,10 +164,14 @@ func FromFlags(args []string) (Config, error) {
 	memoryArgs := repeatedStrings(cfg.MemoryService.Arguments)
 	fs := flag.NewFlagSet("agent-gateway", flag.ContinueOnError)
 	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, "gateway listen address")
+	fs.StringVar(&cfg.GatewayBaseURL, "gateway-base-url", cfg.GatewayBaseURL, "gateway API base URL used by channel adapters")
 	fs.StringVar(&cfg.HarnessBaseURL, "harness-base-url", cfg.HarnessBaseURL, "upstream harness API base URL")
 	fs.StringVar(&cfg.ContextBaseURL, "context-base-url", cfg.ContextBaseURL, "upstream harness context API base URL")
 	fs.StringVar(&cfg.ContextAPIToken, "context-api-token", cfg.ContextAPIToken, "optional bearer token for upstream context API requests")
 	fs.StringVar(&cfg.MemoryMCPURL, "memory-mcp-url", cfg.MemoryMCPURL, "memory MCP endpoint exposed in gateway status")
+	fs.StringVar(&memoryDomainsJSON, "memory-domains-json", memoryDomainsJSON, "JSON memory domain list for gateway routing")
+	fs.StringVar(&memoryPolicyJSON, "memory-policy-json", memoryPolicyJSON, "JSON memory access policy for the active agent profile")
+	fs.StringVar(&memoryServicesJSON, "memory-services-json", memoryServicesJSON, "JSON memory service list for per-domain supervision")
 	fs.StringVar(&cfg.AppName, "app-name", cfg.AppName, "default ADK app name")
 	fs.StringVar(&cfg.UserID, "user-id", cfg.UserID, "default ADK user id")
 	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "optional bearer token required for gateway API requests")
@@ -154,11 +201,20 @@ func FromFlags(args []string) (Config, error) {
 
 	cfg.HarnessService.Arguments = harnessArgs
 	cfg.MemoryService.Arguments = memoryArgs
+	if err := cfg.applyMemoryTopology(memoryDomainsJSON, memoryPolicyJSON); err != nil {
+		return Config{}, err
+	}
+	if strings.TrimSpace(cfg.GatewayBaseURL) == "" {
+		cfg.GatewayBaseURL = gatewayAPIBaseURL(cfg.ListenAddress)
+	}
 	if cfg.HarnessService.HealthURL == "" {
 		cfg.HarnessService.HealthURL = adk.SessionsURL(cfg.HarnessBaseURL, cfg.AppName, cfg.UserID)
 	}
 	if cfg.MemoryService.HealthURL == "" {
-		cfg.MemoryService.HealthURL = memoryHealthURL(cfg.MemoryMCPURL)
+		cfg.MemoryService.HealthURL = defaultMemoryServiceHealthURL(cfg.MemoryDomains, cfg.MemoryMCPURL)
+	}
+	if err := cfg.applyMemoryServices(memoryServicesJSON); err != nil {
+		return Config{}, err
 	}
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
@@ -188,10 +244,16 @@ func (c Config) Validate() error {
 	if err := validateRequestURL("harness base URL", c.HarnessBaseURL); err != nil {
 		return err
 	}
+	if err := validateRequestURL("gateway base URL", c.GatewayBaseURL); err != nil {
+		return err
+	}
 	if err := validateRequestURL("context base URL", c.ContextBaseURL); err != nil {
 		return err
 	}
 	if err := validateRequestURL("memory MCP URL", c.MemoryMCPURL); err != nil {
+		return err
+	}
+	if err := c.validateMemoryTopology(); err != nil {
 		return err
 	}
 	if c.AppName == "" {
@@ -211,6 +273,9 @@ func (c Config) Validate() error {
 	}
 	if err := c.MemoryService.Validate(); err != nil {
 		return fmt.Errorf("memory service: %w", err)
+	}
+	if err := c.validateMemoryServices(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -262,10 +327,14 @@ func (s SlackConfig) Validate() error {
 func (c Config) StatusView() map[string]any {
 	return map[string]any{
 		"listen_address":                      c.ListenAddress,
+		"gateway_base_url":                    c.GatewayBaseURL,
 		"harness_base_url":                    c.HarnessBaseURL,
 		"context_base_url":                    c.ContextBaseURL,
 		"has_context_api_token":               strings.TrimSpace(c.ContextAPIToken) != "",
 		"memory_mcp_url":                      c.MemoryMCPURL,
+		"memory_domains":                      memoryDomainStatusViews(c.MemoryDomains),
+		"memory_policy":                       c.MemoryPolicy.StatusView(),
+		"memory_services":                     memoryServiceStatusViews(c.MemoryServices),
 		"app_name":                            c.AppName,
 		"user_id":                             c.UserID,
 		"auth_required":                       c.AuthToken != "",
@@ -297,6 +366,41 @@ func (s ServiceConfig) StatusView() map[string]any {
 	}
 }
 
+// ServiceConfig returns the supervisor service shape for this memory domain.
+func (s MemoryDomainService) ServiceConfig() ServiceConfig {
+	return ServiceConfig{
+		Name:       s.Name,
+		HealthURL:  s.HealthURL,
+		Command:    s.Command,
+		Arguments:  append([]string(nil), s.Arguments...),
+		WorkingDir: s.WorkingDir,
+		AutoStart:  s.AutoStart,
+	}
+}
+
+// StatusView returns sanitized per-domain memory service settings.
+func (s MemoryDomainService) StatusView() map[string]any {
+	return map[string]any{
+		"domain_id":   s.DomainID,
+		"name":        s.Name,
+		"health_url":  s.HealthURL,
+		"command":     s.Command,
+		"working_dir": s.WorkingDir,
+		"auto_start":  s.AutoStart,
+	}
+}
+
+// MemoryServiceForDomain returns the configured supervisor service for a domain.
+func (c Config) MemoryServiceForDomain(domainID string) (MemoryDomainService, bool) {
+	domainID = strings.TrimSpace(domainID)
+	for _, service := range c.MemoryServices {
+		if strings.TrimSpace(service.DomainID) == domainID {
+			return service, true
+		}
+	}
+	return MemoryDomainService{}, false
+}
+
 // StatusView returns sanitized Slack channel settings.
 func (s SlackConfig) StatusView() map[string]any {
 	return map[string]any{
@@ -309,6 +413,355 @@ func (s SlackConfig) StatusView() map[string]any {
 		"allowed_user_id":    s.AllowedUserID,
 		"allowed_channel_id": s.AllowedChannelID,
 	}
+}
+
+// StatusView returns sanitized memory policy settings.
+func (p MemoryPolicy) StatusView() map[string]any {
+	return map[string]any{
+		"actor":                 p.Actor,
+		"read_domains":          append([]string(nil), p.ReadDomains...),
+		"write_domains":         append([]string(nil), p.WriteDomains...),
+		"default_write_domain":  p.DefaultWriteDomain,
+		"allowed_sensitivities": append([]string(nil), p.AllowedSensitivities...),
+		"allowed_flows":         memoryFlowStatusViews(p.AllowedFlows),
+	}
+}
+
+// applyMemoryTopology loads target-state memory domains and policy from JSON flags.
+func (c *Config) applyMemoryTopology(domainsJSON string, policyJSON string) error {
+	if strings.TrimSpace(domainsJSON) != "" {
+		var domains []MemoryDomain
+		if err := json.Unmarshal([]byte(domainsJSON), &domains); err != nil {
+			return fmt.Errorf("memory domains JSON: %w", err)
+		}
+		c.MemoryDomains = domains
+	}
+	if len(c.MemoryDomains) == 0 {
+		c.MemoryDomains = []MemoryDomain{defaultMemoryDomain(c.MemoryMCPURL)}
+	}
+	if strings.TrimSpace(policyJSON) != "" {
+		var policy MemoryPolicy
+		if err := json.Unmarshal([]byte(policyJSON), &policy); err != nil {
+			return fmt.Errorf("memory policy JSON: %w", err)
+		}
+		c.MemoryPolicy = policy
+	}
+	if c.MemoryPolicy.Actor == "" &&
+		len(c.MemoryPolicy.ReadDomains) == 0 &&
+		len(c.MemoryPolicy.WriteDomains) == 0 &&
+		c.MemoryPolicy.DefaultWriteDomain == "" {
+		c.MemoryPolicy = defaultMemoryPolicy(c.AppName, c.MemoryDomains)
+	}
+	return nil
+}
+
+// applyMemoryServices loads per-domain memory service supervision from JSON.
+func (c *Config) applyMemoryServices(servicesJSON string) error {
+	if strings.TrimSpace(servicesJSON) != "" {
+		var services []MemoryDomainService
+		if err := json.Unmarshal([]byte(servicesJSON), &services); err != nil {
+			return fmt.Errorf("memory services JSON: %w", err)
+		}
+		c.MemoryServices = services
+	}
+	if len(c.MemoryServices) == 0 {
+		if len(c.MemoryDomains) == 1 {
+			c.MemoryServices = []MemoryDomainService{
+				memoryDomainServiceFromServiceConfig(c.MemoryDomains[0].ID, c.MemoryService),
+			}
+		} else if memoryServiceFlagConfigured(c.MemoryService) {
+			return fmt.Errorf("memory-services-json is required when supervising multiple memory domains")
+		}
+	}
+	for index := range c.MemoryServices {
+		c.MemoryServices[index] = c.normalizedMemoryService(c.MemoryServices[index])
+	}
+	return nil
+}
+
+// normalizedMemoryService fills derived names and health URLs for one service.
+func (c Config) normalizedMemoryService(service MemoryDomainService) MemoryDomainService {
+	service.DomainID = strings.TrimSpace(service.DomainID)
+	if strings.TrimSpace(service.Name) == "" {
+		service.Name = MemoryServiceNameForDomain(service.DomainID)
+	}
+	if strings.TrimSpace(service.HealthURL) == "" {
+		if domain, ok := c.memoryDomainByID(service.DomainID); ok {
+			service.HealthURL = domain.HealthURL
+		}
+	}
+	return service
+}
+
+// validateMemoryTopology rejects unsafe memory domains and invalid grants.
+func (c Config) validateMemoryTopology() error {
+	if len(c.MemoryDomains) == 0 {
+		return fmt.Errorf("at least one memory domain is required")
+	}
+	domainIDs := make(map[string]struct{}, len(c.MemoryDomains))
+	for _, domain := range c.MemoryDomains {
+		id := strings.TrimSpace(domain.ID)
+		if !isSafeID(id) {
+			return fmt.Errorf("memory domain id %q is not a safe id", domain.ID)
+		}
+		if _, exists := domainIDs[id]; exists {
+			return fmt.Errorf("duplicate memory domain id %q", id)
+		}
+		domainIDs[id] = struct{}{}
+		if strings.TrimSpace(domain.Label) == "" {
+			return fmt.Errorf("memory domain %q label is required", id)
+		}
+		if err := validateRequestURL("memory domain "+id+" endpoint", domain.Endpoint); err != nil {
+			return err
+		}
+		if err := validateOptionalRequestURL("memory domain "+id+" health URL", domain.HealthURL); err != nil {
+			return err
+		}
+	}
+	if err := validateMemoryPolicy(c.MemoryPolicy, domainIDs); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateMemoryServices rejects invalid per-domain supervision settings.
+func (c Config) validateMemoryServices() error {
+	domainIDs := make(map[string]struct{}, len(c.MemoryDomains))
+	for _, domain := range c.MemoryDomains {
+		domainIDs[strings.TrimSpace(domain.ID)] = struct{}{}
+	}
+	seen := map[string]struct{}{}
+	for _, service := range c.MemoryServices {
+		domainID := strings.TrimSpace(service.DomainID)
+		if !isSafeID(domainID) {
+			return fmt.Errorf("memory service domain id %q is not a safe id", service.DomainID)
+		}
+		if _, ok := domainIDs[domainID]; !ok {
+			return fmt.Errorf("memory service grants unknown domain %q", domainID)
+		}
+		if _, exists := seen[domainID]; exists {
+			return fmt.Errorf("duplicate memory service for domain %q", domainID)
+		}
+		seen[domainID] = struct{}{}
+		if service.AutoStart && strings.TrimSpace(service.HealthURL) == "" {
+			return fmt.Errorf("memory service %s health_url is required when auto_start is enabled", domainID)
+		}
+		if err := service.ServiceConfig().Validate(); err != nil {
+			return fmt.Errorf("memory service %s: %w", domainID, err)
+		}
+	}
+	return nil
+}
+
+// validateMemoryPolicy rejects incomplete or over-broad active profile grants.
+func validateMemoryPolicy(policy MemoryPolicy, domainIDs map[string]struct{}) error {
+	if strings.TrimSpace(policy.Actor) == "" {
+		return fmt.Errorf("memory policy actor is required")
+	}
+	if !isSafeID(strings.ReplaceAll(policy.Actor, ":", "-")) {
+		return fmt.Errorf("memory policy actor %q is not a safe principal", policy.Actor)
+	}
+	if len(policy.ReadDomains) == 0 {
+		return fmt.Errorf("memory policy read_domains must not be empty")
+	}
+	if len(policy.WriteDomains) == 0 {
+		return fmt.Errorf("memory policy write_domains must not be empty")
+	}
+	if strings.TrimSpace(policy.DefaultWriteDomain) == "" {
+		return fmt.Errorf("memory policy default_write_domain is required")
+	}
+	if len(policy.AllowedSensitivities) == 0 {
+		return fmt.Errorf("memory policy allowed_sensitivities must not be empty")
+	}
+	for _, sensitivity := range policy.AllowedSensitivities {
+		if strings.TrimSpace(sensitivity) == "" {
+			return fmt.Errorf("memory policy allowed_sensitivities contains a blank value")
+		}
+	}
+	if err := validateDomainGrants("read_domains", policy.ReadDomains, domainIDs); err != nil {
+		return err
+	}
+	if err := validateDomainGrants("write_domains", policy.WriteDomains, domainIDs); err != nil {
+		return err
+	}
+	if !containsTrimmed(policy.WriteDomains, policy.DefaultWriteDomain) {
+		return fmt.Errorf("memory policy default_write_domain %q is not writable", policy.DefaultWriteDomain)
+	}
+	for _, flow := range policy.AllowedFlows {
+		if _, ok := domainIDs[strings.TrimSpace(flow.From)]; !ok || !containsTrimmed(policy.ReadDomains, flow.From) {
+			return fmt.Errorf("memory policy flow source %q is not readable", flow.From)
+		}
+		if _, ok := domainIDs[strings.TrimSpace(flow.To)]; !ok || !containsTrimmed(policy.WriteDomains, flow.To) {
+			return fmt.Errorf("memory policy flow target %q is not writable", flow.To)
+		}
+	}
+	return nil
+}
+
+// validateDomainGrants rejects unsafe, duplicate, or unknown domain grants.
+func validateDomainGrants(label string, values []string, domainIDs map[string]struct{}) error {
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		id := strings.TrimSpace(value)
+		if !isSafeID(id) {
+			return fmt.Errorf("memory policy %s value %q is not a safe id", label, value)
+		}
+		if _, ok := domainIDs[id]; !ok {
+			return fmt.Errorf("memory policy %s grants unknown domain %q", label, id)
+		}
+		if _, exists := seen[id]; exists {
+			return fmt.Errorf("memory policy %s contains duplicate domain %q", label, id)
+		}
+		seen[id] = struct{}{}
+	}
+	return nil
+}
+
+// defaultMemoryDomain returns the target-state single-domain install topology.
+func defaultMemoryDomain(mcpURL string) MemoryDomain {
+	return MemoryDomain{
+		ID:        "memory",
+		Label:     "Memory",
+		Endpoint:  mcpURL,
+		HealthURL: memoryHealthURL(mcpURL),
+	}
+}
+
+// defaultMemoryPolicy returns grants for the shipped one-domain agent profile.
+func defaultMemoryPolicy(appName string, domains []MemoryDomain) MemoryPolicy {
+	defaultDomain := "memory"
+	if len(domains) > 0 && strings.TrimSpace(domains[0].ID) != "" {
+		defaultDomain = strings.TrimSpace(domains[0].ID)
+	}
+	return MemoryPolicy{
+		Actor:                defaultActor(appName),
+		ReadDomains:          []string{defaultDomain},
+		WriteDomains:         []string{defaultDomain},
+		DefaultWriteDomain:   defaultDomain,
+		AllowedSensitivities: []string{"public", "internal", "private"},
+	}
+}
+
+// MemoryServiceNameForDomain returns the deterministic service name for a domain.
+func MemoryServiceNameForDomain(domainID string) string {
+	domainID = strings.TrimSpace(domainID)
+	if domainID == "" || domainID == "memory" {
+		return DefaultMemoryServiceName
+	}
+	return DefaultMemoryServiceName + "-" + domainID
+}
+
+// memoryDomainServiceFromServiceConfig maps single-domain flags to target config.
+func memoryDomainServiceFromServiceConfig(domainID string, service ServiceConfig) MemoryDomainService {
+	return MemoryDomainService{
+		DomainID:   strings.TrimSpace(domainID),
+		Name:       service.Name,
+		HealthURL:  service.HealthURL,
+		Command:    service.Command,
+		Arguments:  append([]string(nil), service.Arguments...),
+		WorkingDir: service.WorkingDir,
+		AutoStart:  service.AutoStart,
+	}
+}
+
+// memoryServiceFlagConfigured reports whether single-service process flags are set.
+func memoryServiceFlagConfigured(service ServiceConfig) bool {
+	return service.AutoStart ||
+		strings.TrimSpace(service.Command) != "" ||
+		strings.TrimSpace(service.WorkingDir) != "" ||
+		len(service.Arguments) > 0
+}
+
+// memoryDomainByID returns one configured memory domain by id.
+func (c Config) memoryDomainByID(domainID string) (MemoryDomain, bool) {
+	domainID = strings.TrimSpace(domainID)
+	for _, domain := range c.MemoryDomains {
+		if strings.TrimSpace(domain.ID) == domainID {
+			return domain, true
+		}
+	}
+	return MemoryDomain{}, false
+}
+
+// defaultActor derives the default agent principal from the app name.
+func defaultActor(appName string) string {
+	normalized := strings.Trim(strings.NewReplacer("_", "-", ".", "-", " ", "-").Replace(strings.ToLower(appName)), "-")
+	if normalized == "" {
+		normalized = "agent-awesome"
+	}
+	return "agent:" + normalized
+}
+
+// memoryDomainStatusViews renders sanitized memory domain rows.
+func memoryDomainStatusViews(domains []MemoryDomain) []map[string]any {
+	views := make([]map[string]any, 0, len(domains))
+	for _, domain := range domains {
+		views = append(views, map[string]any{
+			"id":         domain.ID,
+			"label":      domain.Label,
+			"endpoint":   domain.Endpoint,
+			"health_url": domain.HealthURL,
+		})
+	}
+	return views
+}
+
+// memoryServiceStatusViews renders sanitized memory service rows.
+func memoryServiceStatusViews(services []MemoryDomainService) []map[string]any {
+	views := make([]map[string]any, 0, len(services))
+	for _, service := range services {
+		views = append(views, service.StatusView())
+	}
+	return views
+}
+
+// memoryFlowStatusViews renders sanitized information-flow grants.
+func memoryFlowStatusViews(flows []MemoryDomainFlow) []map[string]string {
+	views := make([]map[string]string, 0, len(flows))
+	for _, flow := range flows {
+		views = append(views, map[string]string{"from": flow.From, "to": flow.To})
+	}
+	return views
+}
+
+// defaultMemoryServiceHealthURL returns the health URL for the default memory service.
+func defaultMemoryServiceHealthURL(domains []MemoryDomain, mcpURL string) string {
+	if len(domains) > 0 && strings.TrimSpace(domains[0].HealthURL) != "" {
+		return strings.TrimSpace(domains[0].HealthURL)
+	}
+	return memoryHealthURL(mcpURL)
+}
+
+// containsTrimmed reports whether a list contains a trimmed target value.
+func containsTrimmed(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
+}
+
+// isSafeID reports whether a user-owned id is safe for config and routing.
+func isSafeID(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) == 0 || len(value) > 64 {
+		return false
+	}
+	for index, char := range value {
+		switch {
+		case char >= 'a' && char <= 'z':
+		case char >= '0' && char <= '9':
+		case char == '_' || char == '-':
+			if index == 0 {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // repeatedStrings accumulates repeated string flag values.
@@ -436,6 +889,23 @@ func memoryHealthURL(mcpURL string) string {
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 	return parsed.String()
+}
+
+// gatewayAPIBaseURL derives a loopback gateway API URL for in-process channels.
+func gatewayAPIBaseURL(listenAddress string) string {
+	host, port, err := net.SplitHostPort(listenAddress)
+	if err != nil || strings.TrimSpace(port) == "" {
+		return "http://127.0.0.1:8070/api"
+	}
+	host = strings.Trim(host, "[]")
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return (&url.URL{
+		Scheme: "http",
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/api",
+	}).String()
 }
 
 // isLoopbackListenAddress reports whether an HTTP bind address is loopback-only.

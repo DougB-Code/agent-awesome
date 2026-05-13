@@ -67,14 +67,16 @@ _ChatRuntimeSummary _chatMemoryRuntimeSummary(
   );
 }
 
-/// Returns the first enabled memory server from the active runtime profile.
+/// Returns the default write memory domain from the active runtime profile.
 dynamic _activeMemoryServer(AgentAwesomeAppController controller) {
   final profile = controller.runtimeProfile;
   if (profile == null) {
     return null;
   }
   for (final server in profile.mcpServers) {
-    if (server.enabled && server.kind == 'memory') {
+    if (server.enabled &&
+        server.kind == 'memory' &&
+        server.id == profile.agentMemory.defaultWriteDomain) {
       return server;
     }
   }
@@ -85,12 +87,9 @@ dynamic _activeMemoryServer(AgentAwesomeAppController controller) {
 _ChatRuntimeSummary _chatSessionRuntimeSummary(
   AgentAwesomeAppController controller,
 ) {
-  final gateway = controller.runtimeProfile?.gateway;
   final profile = controller.runtimeProfile;
   final label = profile?.label ?? 'No profile selected';
-  final serviceLabel = gateway != null && gateway.enabled
-      ? gateway.label
-      : profile?.harness.label ?? '';
+  final serviceLabel = profile?.gateway.label ?? '';
   final endpoint = _statusNamed(controller.endpointStatuses, 'Agent API');
   final process = _statusNamed(controller.localProcessStatuses, serviceLabel);
   final state = _combinedRuntimeState(endpoint?.state, process?.state);

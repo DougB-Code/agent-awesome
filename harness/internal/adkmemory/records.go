@@ -55,7 +55,7 @@ func recordAuthor(record memoryRecord) string {
 	if record.Source.System != "" {
 		return record.Source.System
 	}
-	return actorName
+	return "agentawesome-harness"
 }
 
 // recordTimestamp returns the event time when available, then storage time.

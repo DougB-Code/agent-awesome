@@ -41,10 +41,10 @@ They are user-facing only when the profile has already been prepared by a develo
 |Gateway API endpoint used by the UI.
 
 |`AGENT_API_BASE_URL`
-|Direct harness API endpoint for profiles that bypass the gateway.
+|Harness API endpoint used by the gateway as its upstream service.
 
 |`MEMORY_MCP_URL`
-|Memory MCP endpoint used by local context surfaces.
+|Memory MCP endpoint used by the gateway as its upstream memory service.
 
 |`AUTO_START_LOCAL_SERVICES`
 |Whether the UI should start managed local services from the runtime profile.

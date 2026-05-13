@@ -5,6 +5,7 @@ import 'package:yaml/yaml.dart';
 
 import 'config_yaml.dart';
 import 'json_value.dart';
+import 'runtime_profile.dart';
 
 /// Tools currently exposed by the graph-backed memory MCP endpoint.
 const List<String> graphBackedMcpToolNames = <String>[
@@ -53,6 +54,22 @@ const List<String> graphBackedMcpConfirmationToolNames = <String>[
   'link_task_memory',
   'upsert_task_relation',
   'delete_task_relation',
+];
+
+/// Graph-backed memory tools that only read from memory domains.
+const List<String> graphBackedMcpReadOnlyToolNames = <String>[
+  'search_memory',
+  'search_sources',
+  'load_entity_page',
+  'load_timeline',
+  'query_context_graph',
+  'get_task',
+  'list_tasks',
+  'task_graph_projection',
+  'project_executive_summary',
+  'explain_executive_summary_item',
+  'list_task_relations',
+  'traverse_task_relations',
 ];
 
 /// ToolConfigDocument represents one harness tool config YAML file.
@@ -725,32 +742,74 @@ McpServerToolConfig newHttpMcpServerToolConfig({
   );
 }
 
-/// Creates the target-state MCP tool config for one graph-backed memory server.
-ToolConfigDocument graphBackedMemoryToolConfig({
-  required String serverKind,
-  required String serverEndpoint,
+/// Creates target-state tool config for configured memory domains.
+ToolConfigDocument graphBackedMemoryToolConfigForDomains({
+  required List<McpServerRuntime> memoryDomains,
+  required AgentMemoryRuntime agentMemory,
   required LocalExecToolConfig localExec,
-  Map<String, String> headersFromEnv = const <String, String>{},
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
-  final normalizedKind = serverKind.trim();
+  final defaultDomain = memoryDomains.firstWhere(
+    (domain) => domain.id == agentMemory.defaultWriteDomain,
+  );
+  final singleDomain =
+      agentMemory.readDomains.length == 1 &&
+      agentMemory.writeDomains.length == 1 &&
+      agentMemory.defaultWriteDomain == agentMemory.readDomains.single &&
+      agentMemory.defaultWriteDomain == agentMemory.writeDomains.single;
   return ToolConfigDocument(
     localExec: localExec,
     mcp: McpToolConfig(
       enabled: true,
       servers: <McpServerToolConfig>[
         newHttpMcpServerToolConfig(
-          name: normalizedKind.isEmpty ? 'memory' : normalizedKind,
-          endpoint: serverEndpoint,
-          headersFromEnv: headersFromEnv,
+          name: _domainToolServerName(defaultDomain.id),
+          endpoint: defaultDomain.endpoint,
         ).copyWith(
-          requireConfirmationTools: graphBackedMcpConfirmationToolNames,
-          tools: const McpToolFilterConfig(allow: graphBackedMcpToolNames),
+          requireConfirmationTools: singleDomain
+              ? graphBackedMcpConfirmationToolNames
+              : const <String>[],
+          tools: McpToolFilterConfig(
+            allow: singleDomain
+                ? graphBackedMcpToolNames
+                : graphBackedMcpReadOnlyToolNames,
+          ),
         ),
       ],
     ),
-    extra: extra,
+    extra: <String, dynamic>{
+      ...extra,
+      'memory': <String, dynamic>{
+        'actor': agentMemory.actor,
+        'read-domains': <Map<String, dynamic>>[
+          for (final domain in memoryDomains)
+            if (agentMemory.readDomains.contains(domain.id))
+              _memoryDomainToolJson(domain),
+        ],
+        'write-domains': agentMemory.writeDomains,
+        'default-write-domain': agentMemory.defaultWriteDomain,
+        'allowed-sensitivities': agentMemory.allowedSensitivities,
+        if (agentMemory.allowedFlows.isNotEmpty)
+          'allowed-flows': <Map<String, dynamic>>[
+            for (final flow in agentMemory.allowedFlows) flow.toJson(),
+          ],
+      },
+    },
   );
+}
+
+/// Encodes one memory domain for harness-owned ADK memory access.
+Map<String, dynamic> _memoryDomainToolJson(McpServerRuntime domain) {
+  return <String, dynamic>{
+    'id': domain.id,
+    'label': domain.label,
+    'endpoint': domain.endpoint,
+  };
+}
+
+/// Returns the stable MCP server name for one domain-backed toolset.
+String _domainToolServerName(String domainId) {
+  return 'memory_${domainId.replaceAll('-', '_')}';
 }
 
 /// Creates a stdio MCP server entry.

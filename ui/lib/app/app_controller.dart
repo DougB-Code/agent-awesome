@@ -141,9 +141,10 @@ class AgentAwesomeAppController extends ChangeNotifier {
       assistantClient:
           assistantClient ??
           AssistantClient(
-            baseUrl: config.agentApiBaseUrl,
+            baseUrl: config.agentGatewayBaseUrl,
             appName: config.agentAppName,
             userId: config.agentUserId,
+            headers: config.gatewayAuthHeaders,
             logger: effectiveLogger,
           ),
       memoryClient:
@@ -463,6 +464,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Last memory-specific operation message.
   String memoryMessage = 'Memory is ready for review';
 
+  /// Recent memory domain safety decisions.
+  List<MemorySafetyEvent> memorySafetyEvents = const <MemorySafetyEvent>[];
+
   /// Endpoint statuses displayed in settings.
   List<EndpointStatus> endpointStatuses = const <EndpointStatus>[];
 
@@ -568,7 +572,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     endpointStatuses = <EndpointStatus>[
       EndpointStatus(
         name: 'Agent API',
-        url: runtimeProfile!.harness.apiBaseUrl,
+        url: runtimeProfile!.gateway.apiBaseUrl,
         state: ConnectionStateKind.unknown,
       ),
       for (final server in runtimeProfile!.mcpServers.where(
@@ -1406,6 +1410,16 @@ class AgentAwesomeAppController extends ChangeNotifier {
     if (trimmed.isEmpty) {
       return;
     }
+    final server = _primaryGraphServer();
+    if (server == null) {
+      todayState = todayState.copyWith(
+        busy: false,
+        error: 'No graph memory server is configured',
+        selectedExplanationItemId: trimmed,
+      );
+      notifyListeners();
+      return;
+    }
     todayState = todayState.copyWith(
       busy: true,
       error: '',
@@ -1413,8 +1427,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
     notifyListeners();
     try {
-      final explanation = await executiveSummaryClient
-          .explainExecutiveSummaryItem(trimmed);
+      final explanation = await _withExecutiveSummaryClientForServer(server, (
+        client,
+      ) {
+        return client.explainExecutiveSummaryItem(trimmed);
+      });
       todayState = todayState.copyWith(
         busy: false,
         error: '',
@@ -1443,7 +1460,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Loads the memory-owned Today executive summary projection.
   Future<void> _loadToday({bool quiet = false}) async {
     final profile = runtimeProfile;
-    if (profile == null || profile.memoryServers.isEmpty) {
+    final server = _primaryGraphServer();
+    if (profile == null || server == null) {
       todayState = todayState.copyWith(
         busy: false,
         error: 'No graph memory server is configured',
@@ -1459,19 +1477,19 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     try {
       final projection = alignTodayProjectionWithTaskInsights(
-        projection: await executiveSummaryClient.projectExecutiveSummary(),
+        projection: await _withExecutiveSummaryClientForServer(server, (
+          client,
+        ) {
+          return client.projectExecutiveSummary();
+        }),
         index: taskInsightIndex,
       );
       todayState = TodayState(projection: projection);
-      _setEndpoint(
-        profile.memoryServers.first.label,
-        ConnectionStateKind.connected,
-        'Today loaded',
-      );
+      _setEndpoint(server.label, ConnectionStateKind.connected, 'Today loaded');
     } catch (error) {
       todayState = todayState.copyWith(busy: false, error: error.toString());
       _setEndpoint(
-        profile.memoryServers.first.label,
+        server.label,
         ConnectionStateKind.disconnected,
         error.toString(),
       );
@@ -1513,28 +1531,185 @@ class AgentAwesomeAppController extends ChangeNotifier {
     return profile;
   }
 
-  MemoryClient _memoryClientFor(McpServerRuntime _) {
-    return memoryClient;
+  /// Creates a memory client routed through the active control plane domain.
+  MemoryClient _memoryClientFor(McpServerRuntime server) {
+    if (_memoryClientInjected) {
+      return memoryClient;
+    }
+    final profile = _activeRuntimeProfile();
+    return MemoryClient(
+      rpc: GatewayContextClient(
+        baseUrl: _contextBaseUrl(profile),
+        domainId: server.id,
+        headers: _gatewayHeadersForProfile(profile),
+        logger: logger,
+      ),
+    );
   }
 
-  TasksClient _tasksClientFor(McpServerRuntime _) {
-    return tasksClient;
+  /// Runs one memory operation and closes transient control-plane clients.
+  Future<T> _withMemoryClientForServer<T>(
+    McpServerRuntime server,
+    Future<T> Function(MemoryClient client) action,
+  ) async {
+    final client = _memoryClientFor(server);
+    try {
+      return await action(client);
+    } finally {
+      if (!identical(client, memoryClient)) {
+        client.close();
+      }
+    }
+  }
+
+  /// Finds the memory server that owns a returned memory record.
+  McpServerRuntime _memoryServerForRecord(MemoryRecord record) {
+    final domainId = record.domainId.trim();
+    if (domainId.isNotEmpty) {
+      for (final server in _activeRuntimeProfile().memoryServers) {
+        if (server.id == domainId) {
+          return server;
+        }
+      }
+      throw StateError('Memory domain "$domainId" is not available');
+    }
+    final server = _primaryGraphServer();
+    if (server == null) {
+      throw StateError('No memory domain is available');
+    }
+    return server;
+  }
+
+  /// Returns the configured default write memory domain server.
+  McpServerRuntime _defaultWriteMemoryServer() {
+    final profile = _activeRuntimeProfile();
+    final defaultDomain = profile.agentMemory.defaultWriteDomain;
+    for (final server in profile.memoryServers) {
+      if (server.id == defaultDomain) {
+        return server;
+      }
+    }
+    throw StateError(
+      'Default write memory domain "$defaultDomain" is not available',
+    );
+  }
+
+  /// Builds a stable selection key that includes domain provenance.
+  String _memorySelectionKey(MemoryRecord record) {
+    final domainId = record.domainId.trim();
+    return domainId.isEmpty ? record.id : '$domainId:${record.id}';
+  }
+
+  /// Annotates a memory record with the domain that returned it.
+  MemoryRecord _withRecordDomain(MemoryRecord record, McpServerRuntime server) {
+    return record.copyWith(domainId: server.id);
+  }
+
+  /// Annotates a compiled memory page with the domain that returned it.
+  CompiledMemoryPage _withPageDomain(
+    CompiledMemoryPage page,
+    McpServerRuntime server,
+  ) {
+    return page.copyWith(domainId: server.id);
+  }
+
+  /// Returns the profile-scoped memory actor for auditable writes.
+  String _memoryActor() {
+    return _activeRuntimeProfile().agentMemory.actor;
+  }
+
+  /// Creates a task client routed through the active control plane domain.
+  TasksClient _tasksClientFor(McpServerRuntime server) {
+    if (_tasksClientInjected) {
+      return tasksClient;
+    }
+    final profile = _activeRuntimeProfile();
+    return TasksClient(
+      rpc: GatewayContextClient(
+        baseUrl: _contextBaseUrl(profile),
+        domainId: server.id,
+        headers: _gatewayHeadersForProfile(profile),
+        logger: logger,
+      ),
+    );
+  }
+
+  /// Creates a Today projection client routed through one memory domain.
+  ExecutiveSummaryClient _executiveSummaryClientFor(McpServerRuntime server) {
+    if (_executiveSummaryClientInjected) {
+      return executiveSummaryClient;
+    }
+    final profile = _activeRuntimeProfile();
+    return ExecutiveSummaryClient(
+      rpc: GatewayContextClient(
+        baseUrl: _contextBaseUrl(profile),
+        domainId: server.id,
+        headers: _gatewayHeadersForProfile(profile),
+        logger: logger,
+      ),
+    );
+  }
+
+  /// Runs one Today projection operation and closes transient clients.
+  Future<T> _withExecutiveSummaryClientForServer<T>(
+    McpServerRuntime server,
+    Future<T> Function(ExecutiveSummaryClient client) action,
+  ) async {
+    final client = _executiveSummaryClientFor(server);
+    try {
+      return await action(client);
+    } finally {
+      if (!identical(client, executiveSummaryClient)) {
+        client.close();
+      }
+    }
+  }
+
+  /// Returns the graph server that owns a task mutation target.
+  McpServerRuntime? _graphServerForTaskId(String taskId) {
+    final id = taskId.trim();
+    if (id.isEmpty) {
+      return _primaryGraphServer();
+    }
+    for (final task in workspace.tasks) {
+      if (task.id == id && task.sourceId.trim().isNotEmpty) {
+        return _memoryServerForDomainId(task.sourceId);
+      }
+    }
+    return _primaryGraphServer();
+  }
+
+  /// Returns an enabled memory server by configured domain id.
+  McpServerRuntime? _memoryServerForDomainId(String domainId) {
+    final id = domainId.trim();
+    if (id.isEmpty) {
+      return null;
+    }
+    for (final server in _activeRuntimeProfile().memoryServers) {
+      if (server.id == id) {
+        return server;
+      }
+    }
+    return null;
   }
 
   McpServerRuntime? _primaryGraphServer() {
-    final servers = runtimeProfile?.memoryServers ?? const <McpServerRuntime>[];
+    final profile = runtimeProfile;
+    final servers = profile?.memoryServers ?? const <McpServerRuntime>[];
     if (servers.isEmpty) {
       return null;
+    }
+    final defaultWriteDomain = profile?.agentMemory.defaultWriteDomain ?? '';
+    for (final server in servers) {
+      if (server.id == defaultWriteDomain) {
+        return server;
+      }
     }
     return servers.first;
   }
 
   String _primaryMemoryLabel() {
-    final servers = _activeRuntimeProfile().memoryServers;
-    if (servers.isEmpty) {
-      return 'Memory';
-    }
-    return servers.first.label;
+    return _primaryGraphServer()?.label ?? 'Memory';
   }
 
   void _setEndpoint(String name, ConnectionStateKind state, String message) {
@@ -1564,7 +1739,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     endpointStatuses = <EndpointStatus>[
       EndpointStatus(
         name: 'Agent API',
-        url: profile.harness.apiBaseUrl,
+        url: profile.gateway.apiBaseUrl,
         state: ConnectionStateKind.unknown,
         message: 'Profile updated',
       ),

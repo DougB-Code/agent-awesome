@@ -8,7 +8,7 @@ import (
 
 const (
 	defaultAgentAppName      = "agent_awesome"
-	defaultSnapshotKey       = "context-snapshot.tar.gz"
+	defaultSnapshotKey       = "memory/memory/context-snapshot.tar.gz"
 	defaultContextAPIBaseURL = "http://127.0.0.1:8081/api/context"
 	defaultRequestTimeout    = "10m"
 	defaultStartTimeout      = "45s"

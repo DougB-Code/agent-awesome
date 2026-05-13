@@ -44,6 +44,7 @@ type Agent struct {
 type Tools struct {
 	LocalExec LocalExec `koanf:"local-exec"`
 	MCP       MCP       `koanf:"mcp"`
+	Memory    Memory    `koanf:"memory"`
 }
 
 // MCP describes configured Model Context Protocol servers.
@@ -71,6 +72,30 @@ type MCPServer struct {
 // MCPToolFilter describes allowlisted MCP tool names.
 type MCPToolFilter struct {
 	Allow []string `koanf:"allow"`
+}
+
+// Memory describes ADK memory access across configured domains.
+type Memory struct {
+	Actor                string         `koanf:"actor"`
+	ReadDomains          []MemoryDomain `koanf:"read-domains"`
+	WriteDomains         []string       `koanf:"write-domains"`
+	DefaultWriteDomain   string         `koanf:"default-write-domain"`
+	AllowedSensitivities []string       `koanf:"allowed-sensitivities"`
+	AllowedFlows         []MemoryFlow   `koanf:"allowed-flows"`
+}
+
+// MemoryDomain describes one memory domain endpoint available to ADK memory.
+type MemoryDomain struct {
+	ID             string            `koanf:"id"`
+	Label          string            `koanf:"label"`
+	Endpoint       string            `koanf:"endpoint"`
+	HeadersFromEnv map[string]string `koanf:"headers-from-env"`
+}
+
+// MemoryFlow allows information to move from one domain into another.
+type MemoryFlow struct {
+	From string `koanf:"from"`
+	To   string `koanf:"to"`
 }
 
 // LocalExec describes configured local command execution.

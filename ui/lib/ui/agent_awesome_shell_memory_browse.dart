@@ -99,14 +99,22 @@ class _MemoryReviewContent extends StatelessWidget {
                     children: <Widget>[
                       _MemoryRecordTile(
                         record: record,
-                        selected: controller.selectedMemory?.id == record.id,
+                        selected:
+                            controller.selectedMemory != null &&
+                            controller.memorySelectionKey(
+                                  controller.selectedMemory!,
+                                ) ==
+                                controller.memorySelectionKey(record),
                         firewallLabel: controller.memoryFirewallLabel(
                           record.firewall,
                         ),
                         firewallAudience: controller
                             .memoryFirewallAudienceLabel(record.firewall),
-                        onTap: () =>
-                            unawaited(controller.selectMemory(record.id)),
+                        onTap: () => unawaited(
+                          controller.selectMemory(
+                            controller.memorySelectionKey(record),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       Wrap(
@@ -299,8 +307,11 @@ class _MemoryMapContent extends StatelessWidget {
                         ),
                         firewallAudience: controller
                             .memoryFirewallAudienceLabel(record.firewall),
-                        onTap: () =>
-                            unawaited(controller.selectMemory(record.id)),
+                        onTap: () => unawaited(
+                          controller.selectMemory(
+                            controller.memorySelectionKey(record),
+                          ),
+                        ),
                       ),
                     ),
               ],

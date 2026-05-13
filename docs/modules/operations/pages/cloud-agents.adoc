@@ -109,7 +109,7 @@ Expected derived resources for `sister`:
 |`agent-awesome-sister-memory`
 
 |Snapshot key
-|`context-snapshot.tar.gz`
+|`memory/memory/context-snapshot.tar.gz`
 |===
 
 On first deploy, Cloudflare Containers can take several minutes before health checks succeed.

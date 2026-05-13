@@ -224,6 +224,49 @@ sleep 30
 
     expect(matches, isEmpty);
   });
+
+  test('app controller routes domain tools through control plane', () async {
+    final matches = <String>[];
+    final lib = Directory('lib/app');
+    final pattern = RegExp(r'McpJsonRpcClient\s*\(');
+    await for (final entity in lib.list(recursive: true, followLinks: false)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) {
+        continue;
+      }
+      final lines = await entity.readAsLines();
+      for (var index = 0; index < lines.length; index++) {
+        if (pattern.hasMatch(lines[index])) {
+          matches.add('${entity.path}:${index + 1}: ${lines[index].trim()}');
+        }
+      }
+    }
+
+    expect(matches, isEmpty, reason: matches.join('\n'));
+  });
+
+  test('app channel clients target gateway routes', () async {
+    final matches = <String>[];
+    final files = <String>[
+      'lib/app/app_controller.dart',
+      'lib/app/app_controller_runtime_profile.dart',
+    ];
+    final forbidden = <RegExp>[
+      RegExp(r'baseUrl:\s*config\.agentApiBaseUrl'),
+      RegExp(r'baseUrl:\s*profile\.harness\.apiBaseUrl'),
+      RegExp(r'return\s+profile\.harness\.contextApiBaseUrl'),
+      RegExp(r'gateway\s*!=\s*null\s*&&\s*gateway\.enabled'),
+    ];
+    for (final path in files) {
+      final lines = await File(path).readAsLines();
+      for (var index = 0; index < lines.length; index++) {
+        if (forbidden.any((pattern) => pattern.hasMatch(lines[index]))) {
+          matches.add('$path:${index + 1}: ${lines[index].trim()}');
+        }
+      }
+    }
+
+    expect(matches, isEmpty, reason: matches.join('\n'));
+  });
 }
 
 /// Creates a temp root and registers cleanup for one test.

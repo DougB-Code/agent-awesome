@@ -425,6 +425,7 @@ void main() {
             'title': 'Preference',
             'summary': 'Doug likes concise UI.',
             'kind': 'profile_fact',
+            'domain_id': 'memory',
             'firewall': 'acme-client',
             'trust_level': 'user_asserted',
             'sensitivity': 'private',
@@ -455,6 +456,7 @@ void main() {
       });
 
       expect(records.single.title, 'Preference');
+      expect(records.single.domainId, 'memory');
       expect(records.single.firewall, 'acme-client');
       expect(records.single.evidenceId, 'ev-1');
       expect(records.single.trustLevel, 'user_asserted');
@@ -466,6 +468,7 @@ void main() {
     test('parses compiled memory pages', () {
       final page = parseCompiledMemoryPage(<String, dynamic>{
         'id': 'page-1',
+        'domain_id': 'memory',
         'kind': 'timeline',
         'firewall': 'acme-client',
         'title': 'ui',
@@ -477,6 +480,7 @@ void main() {
       });
 
       expect(page.title, 'ui');
+      expect(page.domainId, 'memory');
       expect(page.firewall, 'acme-client');
       expect(page.sourceIds, <String>['ev-1']);
       expect(page.content, '# UI');
@@ -672,6 +676,27 @@ void main() {
       final tools = await client.listToolNames();
 
       expect(tools, <String>['search_memory']);
+    });
+
+    test('sends memory domain selector outside tool arguments', () async {
+      final client = GatewayContextClient(
+        baseUrl: 'http://127.0.0.1:1/api/context',
+        domainId: 'family',
+        httpClient: MockClient((request) async {
+          expect(request.method, 'POST');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['name'], 'list_tasks');
+          expect(body['domain_id'], 'family');
+          expect(body['arguments'], <String, dynamic>{'limit': 5});
+          return http.Response('{"structuredContent":{"tasks":[]}}', 200);
+        }),
+      );
+
+      final content = await client.callTool('list_tasks', <String, dynamic>{
+        'limit': 5,
+      });
+
+      expect(content, <String, dynamic>{'tasks': <dynamic>[]});
     });
   });
 }

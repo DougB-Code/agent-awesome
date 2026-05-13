@@ -21,6 +21,138 @@ func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
 	if cfg.MemoryService.HealthURL != "http://127.0.0.1:8090/healthz" {
 		t.Fatalf("memory health = %q", cfg.MemoryService.HealthURL)
 	}
+	if len(cfg.MemoryDomains) != 1 || cfg.MemoryDomains[0].ID != "memory" || cfg.MemoryDomains[0].Endpoint != "http://127.0.0.1:8090/mcp" {
+		t.Fatalf("memory domains = %#v, want default memory endpoint", cfg.MemoryDomains)
+	}
+	if cfg.MemoryPolicy.Actor != "agent:pilot" || cfg.MemoryPolicy.DefaultWriteDomain != "memory" {
+		t.Fatalf("memory policy = %#v, want default pilot memory grant", cfg.MemoryPolicy)
+	}
+	if len(cfg.MemoryServices) != 1 || cfg.MemoryServices[0].DomainID != "memory" || cfg.MemoryServices[0].HealthURL != "http://127.0.0.1:8090/healthz" {
+		t.Fatalf("memory services = %#v, want default memory service", cfg.MemoryServices)
+	}
+	if cfg.GatewayBaseURL != "http://127.0.0.1:8070/api" {
+		t.Fatalf("gateway base URL = %q", cfg.GatewayBaseURL)
+	}
+}
+
+// TestFromFlagsParsesMemoryTopologyJSON verifies gateway domain policy is explicit config.
+func TestFromFlagsParsesMemoryTopologyJSON(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	cfg, err := FromFlags([]string{
+		"--memory-domains-json", `[
+			{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"},
+			{"id":"project","label":"Project","endpoint":"http://127.0.0.1:8091/mcp","health_url":"http://127.0.0.1:8091/healthz"}
+		]`,
+		"--memory-policy-json", `{
+			"actor":"agent:project",
+			"read_domains":["memory","project"],
+			"write_domains":["project"],
+			"default_write_domain":"project",
+			"allowed_sensitivities":["public","internal"],
+			"allowed_flows":[{"from":"memory","to":"project"}]
+		}`,
+		"--memory-services-json", `[
+			{"domain_id":"memory","health_url":"http://127.0.0.1:8090/healthz","auto_start":false},
+			{"domain_id":"project","health_url":"http://127.0.0.1:8091/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8091"],"auto_start":true}
+		]`,
+	})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if len(cfg.MemoryDomains) != 2 {
+		t.Fatalf("memory domains = %#v, want two domains", cfg.MemoryDomains)
+	}
+	if cfg.MemoryPolicy.Actor != "agent:project" {
+		t.Fatalf("memory policy actor = %q, want project actor", cfg.MemoryPolicy.Actor)
+	}
+	if cfg.MemoryPolicy.DefaultWriteDomain != "project" {
+		t.Fatalf("default write domain = %q, want project", cfg.MemoryPolicy.DefaultWriteDomain)
+	}
+	if len(cfg.MemoryServices) != 2 || cfg.MemoryServices[1].Name != "memory-project" {
+		t.Fatalf("memory services = %#v, want normalized services", cfg.MemoryServices)
+	}
+	if cfg.StatusView()["memory_policy"] == nil || cfg.StatusView()["memory_domains"] == nil {
+		t.Fatalf("status view omitted memory topology: %#v", cfg.StatusView())
+	}
+}
+
+// TestFromFlagsRejectsMultipleDomainsWithSingleServiceFlags avoids accidental shared services.
+func TestFromFlagsRejectsMultipleDomainsWithSingleServiceFlags(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--memory-domains-json", `[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp"},{"id":"project","label":"Project","endpoint":"http://127.0.0.1:8091/mcp"}]`,
+		"--memory-policy-json", `{
+			"actor":"agent:test",
+			"read_domains":["memory","project"],
+			"write_domains":["memory"],
+			"default_write_domain":"memory",
+			"allowed_sensitivities":["public"]
+		}`,
+		"--memory-auto-start",
+		"--memory-command", "/usr/local/bin/memoryd",
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want memory-services-json validation error")
+	}
+}
+
+// TestFromFlagsRejectsUnsafeMemoryDomainIDs verifies route ids stay constrained.
+func TestFromFlagsRejectsUnsafeMemoryDomainIDs(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--memory-domains-json", `[{"id":"bad/domain","label":"Bad","endpoint":"http://127.0.0.1:8090/mcp"}]`,
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want unsafe id validation error")
+	}
+}
+
+// TestFromFlagsRejectsUnknownMemoryGrants verifies active profiles cannot invent domains.
+func TestFromFlagsRejectsUnknownMemoryGrants(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--memory-domains-json", `[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp"}]`,
+		"--memory-policy-json", `{
+			"actor":"agent:test",
+			"read_domains":["other"],
+			"write_domains":["memory"],
+			"default_write_domain":"memory",
+			"allowed_sensitivities":["public"]
+		}`,
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want unknown grant validation error")
+	}
+}
+
+// TestFromFlagsRejectsUnwritableDefaultDomain verifies writes stay grant-scoped.
+func TestFromFlagsRejectsUnwritableDefaultDomain(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--memory-domains-json", `[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp"},{"id":"project","label":"Project","endpoint":"http://127.0.0.1:8091/mcp"}]`,
+		"--memory-policy-json", `{
+			"actor":"agent:test",
+			"read_domains":["memory","project"],
+			"write_domains":["project"],
+			"default_write_domain":"memory",
+			"allowed_sensitivities":["public"]
+		}`,
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want default write validation error")
+	}
+}
+
+// TestFromFlagsDerivesLoopbackGatewayBaseURL verifies channel adapters self-call gateway.
+func TestFromFlagsDerivesLoopbackGatewayBaseURL(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	cfg, err := FromFlags([]string{"--addr", "0.0.0.0:8070", "--auth-token", "secret"})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if cfg.GatewayBaseURL != "http://127.0.0.1:8070/api" {
+		t.Fatalf("gateway base URL = %q, want loopback URL", cfg.GatewayBaseURL)
+	}
 }
 
 // TestValidateRequiresAutoStartCommand verifies auto-start cannot be commandless.
@@ -173,6 +305,9 @@ func clearGatewayAuthEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("AGENTAWESOME_GATEWAY_TOKEN", "")
 	t.Setenv("AGENTAWESOME_CONTEXT_API_TOKEN", "")
+	t.Setenv("AGENTAWESOME_MEMORY_DOMAINS_JSON", "")
+	t.Setenv("AGENTAWESOME_MEMORY_POLICY_JSON", "")
+	t.Setenv("AGENTAWESOME_MEMORY_SERVICES_JSON", "")
 	t.Setenv("AGENTAWESOME_ALLOWED_ORIGIN", "")
 	t.Setenv("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", "true")
 	t.Setenv("AGENTAWESOME_RUNTIME_POLICY_TEXT", "")

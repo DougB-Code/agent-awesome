@@ -71,7 +71,7 @@ curl -fsS \
 mkdir -p ../../../build/ai
 curl -fsS \
   -H "Authorization: Bearer ${PERSISTENCE_TOKEN}" \
-  https://agent-awesome.com/internal/context-snapshot \
+  https://agent-awesome.com/internal/context-snapshot/memory \
   -o ../../../build/ai/cloudflare-context-snapshot.tar.gz
 test -s ../../../build/ai/cloudflare-context-snapshot.tar.gz
 gzip -t ../../../build/ai/cloudflare-context-snapshot.tar.gz

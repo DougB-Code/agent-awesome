@@ -35,5 +35,27 @@
     "auto_start": ${AUTO_START_LOCAL_SERVICES},
     "enabled": true
   },
-  "memory_server_config": "${AGENTAWESOME_WORKSPACE_ROOT}/ui/runtime_profiles/memory/cloudflare_memory.json"
+  "memory_domains": [
+    {
+      "id": "memory",
+      "label": "Cloudflare Memory",
+      "kind": "memory",
+      "endpoint": "https://agent-awesome.com/mcp",
+      "health_url": "https://agent-awesome.com/healthz",
+      "working_directory": "",
+      "package_path": "",
+      "db_path": "",
+      "data_dir": "",
+      "arguments": [],
+      "auto_start": false,
+      "enabled": true
+    }
+  ],
+  "agent_memory": {
+    "actor": "agent:cloudflare-context",
+    "read_domains": ["memory"],
+    "write_domains": ["memory"],
+    "default_write_domain": "memory",
+    "allowed_sensitivities": ["public", "internal", "private"]
+  }
 }

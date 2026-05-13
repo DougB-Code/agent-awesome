@@ -32,18 +32,10 @@ void main() {
       final modelFile = File('${configDirectory.path}/models/model.yaml');
       await modelFile.parent.create(recursive: true);
       await modelFile.writeAsString('');
-      final memoryFile = File('${root.path}/memory.json');
-      await memoryFile.writeAsString(
-        encodeMcpServerRuntimeJson(_memoryServer(root.path)),
-      );
       final profileFile = File('${root.path}/profile.json');
       await profileFile.writeAsString(
         encodeRuntimeProfileJson(
-          _runtimeProfile(
-            root.path,
-            modelConfigPath: modelFile.path,
-            memoryConfigPath: memoryFile.path,
-          ),
+          _runtimeProfile(root.path, modelConfigPath: modelFile.path),
         ),
       );
       final processSupervisor = ProcessSupervisor(
@@ -98,18 +90,10 @@ void main() {
       final modelFile = File('${configDirectory.path}/models/model.yaml');
       await modelFile.parent.create(recursive: true);
       await modelFile.writeAsString('');
-      final memoryFile = File('${root.path}/memory.json');
-      await memoryFile.writeAsString(
-        encodeMcpServerRuntimeJson(_memoryServer(root.path)),
-      );
       final profileFile = File('${root.path}/profile.json');
       await profileFile.writeAsString(
         encodeRuntimeProfileJson(
-          _runtimeProfile(
-            root.path,
-            modelConfigPath: modelFile.path,
-            memoryConfigPath: memoryFile.path,
-          ),
+          _runtimeProfile(root.path, modelConfigPath: modelFile.path),
         ),
       );
       final settingsStore = _MemoryAppSettingsStore();
@@ -165,18 +149,10 @@ providers:
         model: gemma-4-E2B-it
         path: ${root.path}/data/models/litert-lm/gemma-4-e2b-it/gemma-4-E2B-it.litertlm
 ''');
-      final memoryFile = File('${root.path}/memory.json');
-      await memoryFile.writeAsString(
-        encodeMcpServerRuntimeJson(_memoryServer(root.path)),
-      );
       final profileFile = File('${root.path}/profile.json');
       await profileFile.writeAsString(
         encodeRuntimeProfileJson(
-          _runtimeProfile(
-            root.path,
-            modelConfigPath: modelFile.path,
-            memoryConfigPath: memoryFile.path,
-          ),
+          _runtimeProfile(root.path, modelConfigPath: modelFile.path),
         ),
       );
       final settingsStore = _MemoryAppSettingsStore(
@@ -372,11 +348,7 @@ class _TrackingLocalServiceSupervisor extends LocalServiceSupervisor {
   }
 }
 
-RuntimeProfile _runtimeProfile(
-  String root, {
-  required String modelConfigPath,
-  required String memoryConfigPath,
-}) {
+RuntimeProfile _runtimeProfile(String root, {required String modelConfigPath}) {
   return RuntimeProfile(
     id: 'personal',
     label: 'Personal',
@@ -395,8 +367,30 @@ RuntimeProfile _runtimeProfile(
       port: 1,
       autoStart: false,
     ),
-    memoryServerConfigPath: memoryConfigPath,
-    mcpServers: <McpServerRuntime>[_memoryServer(root)],
+    gateway: GatewayRuntime(
+      id: 'gateway',
+      label: 'Gateway',
+      apiBaseUrl: 'http://127.0.0.1:2/api',
+      healthUrl: 'http://127.0.0.1:2/healthz',
+      workingDirectory: '$root/gateway',
+      packagePath: './cmd/agent-gateway',
+      harnessBaseUrl: 'http://127.0.0.1:1/api',
+      contextBaseUrl: 'http://127.0.0.1:8081/api/context',
+      memoryMcpUrl: 'http://127.0.0.1:1/mcp',
+      appName: 'test',
+      userId: 'user',
+      port: 2,
+      autoStart: false,
+      enabled: true,
+    ),
+    memoryDomains: <McpServerRuntime>[_memoryServer(root)],
+    agentMemory: const AgentMemoryRuntime(
+      actor: 'agent:test',
+      readDomains: <String>['memory'],
+      writeDomains: <String>['memory'],
+      defaultWriteDomain: 'memory',
+      allowedSensitivities: <String>['public', 'internal', 'private'],
+    ),
   );
 }
 
@@ -409,6 +403,8 @@ McpServerRuntime _memoryServer(String root) {
     healthUrl: 'http://127.0.0.1:1/healthz',
     workingDirectory: '$root/memory',
     packagePath: './cmd/memoryd',
+    dbPath: '$root/memory.db',
+    dataDir: '$root/memory-files',
     arguments: const <String>[],
     autoStart: false,
     enabled: true,

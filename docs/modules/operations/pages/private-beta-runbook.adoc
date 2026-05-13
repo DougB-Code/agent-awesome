@@ -122,7 +122,7 @@ Before deploy and before rollback, verify that the latest context snapshot exist
 [source,sh]
 ----
 mkdir -p build/ai
-SNAPSHOT_URL="https://<agent-id>.agent-awesome.com/internal/context-snapshot"
+SNAPSHOT_URL="https://<agent-id>.agent-awesome.com/internal/context-snapshot/memory"
 PERSISTENCE_TOKEN="<look up generated persistence token from the operator keyring>"
 curl -fsS \
   -H "Authorization: Bearer ${PERSISTENCE_TOKEN}" \

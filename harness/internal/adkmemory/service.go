@@ -4,10 +4,10 @@ package adkmemory
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
-	"agentawesome/internal/config/schema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
 	adkmemory "google.golang.org/adk/memory"
@@ -16,33 +16,42 @@ import (
 )
 
 const (
-	actorName             = "agentawesome-harness"
 	saveMemoryToolName    = "save_memory_candidate"
 	searchMemoryToolName  = "search_memory"
 	searchSourcesToolName = "search_sources"
 	conversationKind      = "conversation"
-	userScope             = "user"
+	userFirewall          = "user"
 	privateSensitivity    = "private"
 	sourceTrustLevel      = "source_original"
 	defaultSearchLimit    = 12
 )
 
-// Service stores and retrieves ADK chat memory through the memory MCP server.
+// Service stores and retrieves ADK chat memory through memory domains.
 type Service struct {
-	server             schema.MCPServer
-	searchTool         string
-	mu                 sync.Mutex
-	sessionEventCursor map[string]int
+	actor                string
+	domains              []memoryDomain
+	defaultWriteDomain   string
+	writeDomains         map[string]struct{}
+	allowedFlows         map[string]map[string]struct{}
+	allowedSensitivities []string
+	mu                   sync.Mutex
+	sessionEventCursor   map[string]int
+	turnSourceDomains    map[string]map[string]struct{}
 }
 
 var _ adkmemory.Service = (*Service)(nil)
 
-// New creates a memory service backed by one configured MCP server.
-func New(server schema.MCPServer) *Service {
+// New creates a memory service backed by configured memory domains.
+func New(runtime memoryRuntimeConfig) *Service {
 	return &Service{
-		server:             server,
-		searchTool:         preferredSearchTool(server.Tools.Allow),
-		sessionEventCursor: make(map[string]int),
+		actor:                runtime.actor,
+		domains:              runtime.domains,
+		defaultWriteDomain:   runtime.defaultWriteDomain,
+		writeDomains:         runtime.writeDomains,
+		allowedFlows:         runtime.allowedFlows,
+		allowedSensitivities: runtime.allowedSensitivities,
+		sessionEventCursor:   make(map[string]int),
+		turnSourceDomains:    make(map[string]map[string]struct{}),
 	}
 }
 
@@ -57,17 +66,30 @@ func (s *Service) AddSessionToMemory(ctx context.Context, curSession session.Ses
 	}
 	eventCount := events.Len()
 	cursorKey, start := s.nextCaptureStart(curSession, eventCount)
+	writeDomain, ok := s.defaultWriteMemoryDomain()
+	if !ok {
+		return nil
+	}
 	var mcpSession *mcp.ClientSession
 	for index := start; index < eventCount; index++ {
 		event := events.At(index)
-		payload, ok := capturePayload(curSession, event)
+		payload, ok := capturePayload(curSession, event, s.actor)
 		if !ok {
+			s.markCapturedThrough(cursorKey, index+1)
+			continue
+		}
+		sourceDomains, allowed := s.sourceDomainsForEvent(curSession, event)
+		if !allowed || !s.canWriteFromSources(writeDomain.id, sourceDomains) {
+			log.Warn().
+				Str("write_domain", writeDomain.id).
+				Strs("source_domains", setValues(sourceDomains)).
+				Msg("skip ADK memory capture blocked by domain flow policy")
 			s.markCapturedThrough(cursorKey, index+1)
 			continue
 		}
 		if mcpSession == nil {
 			var err error
-			mcpSession, err = s.connect(ctx)
+			mcpSession, err = s.connect(ctx, writeDomain.server)
 			if err != nil {
 				return fmt.Errorf("connect memory MCP: %w", err)
 			}
@@ -78,6 +100,7 @@ func (s *Service) AddSessionToMemory(ctx context.Context, curSession session.Ses
 		}
 		s.markCapturedThrough(cursorKey, index+1)
 	}
+	s.clearTurnSourceDomains(curSession)
 	return nil
 }
 
@@ -124,18 +147,24 @@ func (s *Service) SearchMemory(ctx context.Context, req *adkmemory.SearchRequest
 		return &adkmemory.SearchResponse{}, nil
 	}
 	response := &adkmemory.SearchResponse{}
-	mcpSession, err := s.connect(ctx)
-	if err != nil {
-		log.Warn().Err(err).Msg("search ADK memory unavailable")
-	} else {
-		defer mcpSession.Close()
-		content, err := callTool(ctx, mcpSession, s.searchTool, searchPayload(query))
+	for _, domain := range s.domains {
+		mcpSession, err := s.connect(ctx, domain.server)
 		if err != nil {
-			log.Warn().Err(err).Msg("search ADK memory failed")
+			log.Warn().Err(err).Str("domain", domain.id).Msg("search ADK memory unavailable")
+			continue
+		}
+		defer mcpSession.Close()
+		content, err := callTool(ctx, mcpSession, domain.searchTool, s.searchPayload(query))
+		if err != nil {
+			log.Warn().Err(err).Str("domain", domain.id).Msg("search ADK memory failed")
 		} else if bundle, err := decodeStructured[retrievalBundle](content); err != nil {
-			log.Warn().Err(err).Msg("decode ADK memory search result failed")
+			log.Warn().Err(err).Str("domain", domain.id).Msg("decode ADK memory search result failed")
 		} else {
-			response = searchResponseFromBundle(bundle)
+			domainResponse := searchResponseFromBundle(domain.id, bundle)
+			if len(domainResponse.Memories) > 0 {
+				s.markTurnSourceDomain(req, domain.id)
+			}
+			response.Memories = appendMemoryEntries(response.Memories, domainResponse.Memories...)
 		}
 	}
 	return response, nil
@@ -161,20 +190,124 @@ func appendMemoryEntries(entries []adkmemory.Entry, next ...adkmemory.Entry) []a
 	return entries
 }
 
-// searchPayload builds a memory search request for user-scoped conversations.
-func searchPayload(query string) map[string]any {
+// searchPayload builds a memory search request for granted conversations.
+func (s *Service) searchPayload(query string) map[string]any {
+	allowed := s.allowedSensitivities
+	if len(allowed) == 0 {
+		allowed = []string{"public", "internal", privateSensitivity}
+	}
 	return map[string]any{
-		"actor":                 actorName,
-		"scope":                 userScope,
+		"actor":                 s.actor,
+		"firewall":              userFirewall,
 		"text":                  query,
 		"kinds":                 []string{conversationKind},
-		"allowed_sensitivities": []string{"public", "internal", privateSensitivity},
+		"allowed_sensitivities": allowed,
 		"limit":                 defaultSearchLimit,
 	}
 }
 
+// sourceDomainsForEvent returns memory domains that may have informed an event.
+func (s *Service) sourceDomainsForEvent(curSession session.Session, event *session.Event) (map[string]struct{}, bool) {
+	if eventSpeaker(event) == "user" {
+		return nil, true
+	}
+	sources := s.turnSourcesForSession(curSession)
+	if len(sources) > 0 {
+		return sources, true
+	}
+	if len(s.domains) == 1 {
+		return map[string]struct{}{s.domains[0].id: {}}, true
+	}
+	return nil, false
+}
+
+// canWriteFromSources enforces default-deny cross-domain memory writes.
+func (s *Service) canWriteFromSources(destination string, sources map[string]struct{}) bool {
+	if _, ok := s.writeDomains[destination]; !ok {
+		return false
+	}
+	for source := range sources {
+		if source == destination {
+			continue
+		}
+		if allowed, ok := s.allowedFlows[source]; !ok {
+			return false
+		} else if _, ok := allowed[destination]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// markTurnSourceDomain records a domain that supplied memory to the turn.
+func (s *Service) markTurnSourceDomain(req *adkmemory.SearchRequest, domainID string) {
+	key := searchTurnKey(req.AppName, req.UserID)
+	if key == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.turnSourceDomains == nil {
+		s.turnSourceDomains = make(map[string]map[string]struct{})
+	}
+	if s.turnSourceDomains[key] == nil {
+		s.turnSourceDomains[key] = map[string]struct{}{}
+	}
+	s.turnSourceDomains[key][domainID] = struct{}{}
+}
+
+// turnSourcesForSession returns a copy of domains read during the active turn.
+func (s *Service) turnSourcesForSession(curSession session.Session) map[string]struct{} {
+	key := searchTurnKey(curSession.AppName(), curSession.UserID())
+	if key == "" {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sources := s.turnSourceDomains[key]
+	if len(sources) == 0 {
+		return nil
+	}
+	copy := make(map[string]struct{}, len(sources))
+	for id := range sources {
+		copy[id] = struct{}{}
+	}
+	return copy
+}
+
+// clearTurnSourceDomains drops source provenance after session capture runs.
+func (s *Service) clearTurnSourceDomains(curSession session.Session) {
+	key := searchTurnKey(curSession.AppName(), curSession.UserID())
+	if key == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.turnSourceDomains, key)
+}
+
+// searchTurnKey identifies the current ADK user/app search context.
+func searchTurnKey(appName string, userID string) string {
+	appName = strings.TrimSpace(appName)
+	userID = strings.TrimSpace(userID)
+	if appName == "" || userID == "" {
+		return ""
+	}
+	return appName + ":" + userID
+}
+
+// setValues returns deterministic string values for diagnostics.
+func setValues(values map[string]struct{}) []string {
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // searchResponseFromBundle maps Agent Awesome records into ADK memory entries.
-func searchResponseFromBundle(bundle retrievalBundle) *adkmemory.SearchResponse {
+func searchResponseFromBundle(domainID string, bundle retrievalBundle) *adkmemory.SearchResponse {
 	response := &adkmemory.SearchResponse{
 		Memories: make([]adkmemory.Entry, 0, len(bundle.Primary)),
 	}
@@ -184,11 +317,12 @@ func searchResponseFromBundle(bundle retrievalBundle) *adkmemory.SearchResponse 
 			continue
 		}
 		response.Memories = append(response.Memories, adkmemory.Entry{
-			ID:        record.ID,
+			ID:        domainID + ":" + record.ID,
 			Content:   genai.NewContentFromText(text, genai.RoleUser),
 			Author:    recordAuthor(record),
 			Timestamp: recordTimestamp(record),
 			CustomMetadata: map[string]any{
+				"domain_id":   domainID,
 				"memory_id":   record.ID,
 				"evidence_id": record.EvidenceID,
 				"source":      record.Source,
@@ -196,4 +330,17 @@ func searchResponseFromBundle(bundle retrievalBundle) *adkmemory.SearchResponse 
 		})
 	}
 	return response
+}
+
+// defaultWriteMemoryDomain returns the configured automatic capture domain.
+func (s *Service) defaultWriteMemoryDomain() (memoryDomain, bool) {
+	if _, ok := s.writeDomains[s.defaultWriteDomain]; !ok {
+		return memoryDomain{}, false
+	}
+	for _, domain := range s.domains {
+		if domain.id == s.defaultWriteDomain {
+			return domain, true
+		}
+	}
+	return memoryDomain{}, false
 }

@@ -122,11 +122,13 @@ Run commands from the repository root unless a step changes directories.
 ----
 cd /home/doug/dev/agentawesome/agent
 
+npm config set ignore-scripts true --global
 npm install --cache ./build/npm-cache
 ----
 
 The root npm package owns the Antora documentation build.
 Cloudflare Worker dependencies are installed separately because they belong to `deploy/cloudflare/worker`.
+Disabling npm lifecycle scripts is a local workstation safety setting; explicit commands such as `npm run docs:build` and `npm test` still run when invoked.
 
 [source,sh]
 ----

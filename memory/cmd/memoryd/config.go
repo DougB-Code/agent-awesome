@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"time"
 )
@@ -32,6 +33,7 @@ func parseConfig(args []string) (Config, error) {
 		DBPath:          "memory.db",
 		DataRoot:        "data",
 		WorkerCount:     2,
+		SnapshotToken:   envString("AGENTAWESOME_PERSISTENCE_TOKEN", ""),
 		SnapshotTimeout: 30 * time.Second,
 	}
 	fs := flag.NewFlagSet("memoryd", flag.ContinueOnError)
@@ -71,6 +73,14 @@ func (c Config) Validate() error {
 		return fmt.Errorf("snapshot-token is required when snapshot-url is set")
 	}
 	return nil
+}
+
+// envString returns an environment string or fallback value.
+func envString(key string, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }
 
 // isLoopbackListenAddress reports whether an HTTP bind address is loopback-only.

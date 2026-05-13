@@ -34,11 +34,26 @@ func TestParseConfigAllowsPublicBindWithEscapeHatch(t *testing.T) {
 
 // TestParseConfigRequiresSnapshotURLAndTokenTogether verifies snapshot auth is explicit.
 func TestParseConfigRequiresSnapshotURLAndTokenTogether(t *testing.T) {
+	t.Setenv("AGENTAWESOME_MEMORY_SNAPSHOT_URL", "")
+	t.Setenv("AGENTAWESOME_PERSISTENCE_TOKEN", "")
 	if _, err := parseConfig([]string{"--snapshot-url", "https://example.test/snapshot"}); err == nil {
 		t.Fatalf("parseConfig() error = nil, want missing token validation error")
 	}
 	if _, err := parseConfig([]string{"--snapshot-token", "secret"}); err == nil {
 		t.Fatalf("parseConfig() error = nil, want missing URL validation error")
+	}
+}
+
+// TestParseConfigReadsSnapshotTokenFromEnv verifies cloud services avoid token args.
+func TestParseConfigReadsSnapshotTokenFromEnv(t *testing.T) {
+	t.Setenv("AGENTAWESOME_MEMORY_SNAPSHOT_URL", "")
+	t.Setenv("AGENTAWESOME_PERSISTENCE_TOKEN", "secret")
+	cfg, err := parseConfig([]string{"--snapshot-url", "https://example.test/snapshot"})
+	if err != nil {
+		t.Fatalf("parseConfig() error = %v", err)
+	}
+	if cfg.SnapshotToken != "secret" {
+		t.Fatalf("SnapshotToken = %q, want env secret", cfg.SnapshotToken)
 	}
 }
 

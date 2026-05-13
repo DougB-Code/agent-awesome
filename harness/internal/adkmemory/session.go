@@ -11,7 +11,7 @@ import (
 )
 
 // capturePayload returns a save_memory_candidate payload for one chat event.
-func capturePayload(curSession session.Session, event *session.Event) (map[string]any, bool) {
+func capturePayload(curSession session.Session, event *session.Event, actor string) (map[string]any, bool) {
 	if event == nil || event.LLMResponse.Content == nil || event.LLMResponse.Partial {
 		return nil, false
 	}
@@ -22,13 +22,13 @@ func capturePayload(curSession session.Session, event *session.Event) (map[strin
 	eventID := stableEventID(curSession, event, text)
 	speaker := eventSpeaker(event)
 	payload := map[string]any{
-		"actor":           actorName,
+		"actor":           actor,
 		"content":         text,
 		"media_type":      "text/plain; charset=utf-8",
 		"title":           captureTitle(curSession, speaker),
 		"source":          map[string]any{"system": "google_adk_session", "id": eventID},
 		"kind":            conversationKind,
-		"scope":           userScope,
+		"firewall":        userFirewall,
 		"trust_level":     sourceTrustLevel,
 		"sensitivity":     privateSensitivity,
 		"subjects":        []string{speaker},

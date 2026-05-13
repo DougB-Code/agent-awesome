@@ -13,10 +13,10 @@ type Config struct {
 	AllowedTeamID           string
 	AllowedUserID           string
 	AllowedChannelID        string
-	HarnessBaseURL          string
+	GatewayBaseURL          string
+	GatewayAuthToken        string
 	AppName                 string
 	AgentUserID             string
-	RuntimePolicyText       string
 	RequestTimeout          time.Duration
 	EventDedupTTL           time.Duration
 	MaxConcurrentDispatches int

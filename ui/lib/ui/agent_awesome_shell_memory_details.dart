@@ -59,6 +59,10 @@ class _MemoryOverviewContent extends StatelessWidget {
                   runSpacing: 8,
                   children: <Widget>[
                     _MemoryBadge(label: _memoryLabel(memory.kind)),
+                    if (memory.domainId.isNotEmpty)
+                      _MemoryBadge(
+                        label: controller.memoryDomainLabel(memory.domainId),
+                      ),
                     _MemoryBadge(
                       label: controller.memoryFirewallLabel(memory.firewall),
                     ),
@@ -85,6 +89,10 @@ class _MemoryOverviewContent extends StatelessWidget {
                 _MemoryPanelLabel('Memory'),
                 const SizedBox(height: 10),
                 _MemoryMetadataRow(label: 'Memory id', value: memory.id),
+                _MemoryMetadataRow(
+                  label: 'Domain',
+                  value: controller.memoryDomainLabel(memory.domainId),
+                ),
                 _MemoryMetadataRow(
                   label: 'Source record id',
                   value: memory.evidenceId,
@@ -177,13 +185,34 @@ class _MemorySourceContent extends StatelessWidget {
                   value: memory.rawMediaType,
                 ),
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: controller.memoryBusy
-                      ? null
-                      : () =>
-                            unawaited(controller.hydrateSelectedMemorySource()),
-                  icon: const Icon(Icons.visibility_outlined),
-                  label: const Text('Load Source'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: controller.memoryBusy
+                          ? null
+                          : () => unawaited(
+                              controller.hydrateSelectedMemorySource(),
+                            ),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('Load Source'),
+                    ),
+                    if (controller.canExportMemoryRecord(memory))
+                      FilledButton.icon(
+                        onPressed: controller.memoryBusy
+                            ? null
+                            : () => unawaited(
+                                _exportReviewedMemoryCopy(
+                                  context,
+                                  controller,
+                                  memory,
+                                ),
+                              ),
+                        icon: const Icon(Icons.move_up_outlined),
+                        label: const Text('Export Reviewed Copy'),
+                      ),
+                  ],
                 ),
               ],
             ),
@@ -211,6 +240,116 @@ class _MemorySourceContent extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Opens a reviewed export dialog and writes the approved copy.
+Future<void> _exportReviewedMemoryCopy(
+  BuildContext context,
+  AgentAwesomeAppController controller,
+  MemoryRecord memory,
+) async {
+  final draft = await _showMemoryExportDialog(context, controller, memory);
+  if (draft == null) {
+    return;
+  }
+  await controller.exportMemoryCopyFromUi(memory, draft);
+}
+
+/// Shows the declassification editor for one memory-domain export.
+Future<MemoryExportDraft?> _showMemoryExportDialog(
+  BuildContext context,
+  AgentAwesomeAppController controller,
+  MemoryRecord memory,
+) async {
+  final title = TextEditingController(text: memory.title);
+  final content = TextEditingController(
+    text: memory.rawContent.trim().isEmpty
+        ? memory.summary
+        : memory.rawContent.trim(),
+  );
+  var firewall = memory.firewall;
+  var sensitivity = memory.sensitivity;
+  try {
+    return await showDialog<MemoryExportDraft>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Export Reviewed Copy'),
+              content: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 620),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _MemoryTextField(controller: title, label: 'Title'),
+                      const SizedBox(height: 10),
+                      _MemoryTextField(
+                        controller: content,
+                        label: 'Approved content',
+                        maxLines: 10,
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _MemoryDropdown(
+                              value: firewall,
+                              values: controller.memoryFirewallIds,
+                              tooltip: 'Firewall',
+                              labelForValue:
+                                  controller.memoryFirewallPickerLabel,
+                              onChanged: (value) {
+                                setState(() => firewall = value);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _MemoryDropdown(
+                              value: sensitivity,
+                              values: _memorySensitivities,
+                              tooltip: 'Sensitivity',
+                              onChanged: (value) {
+                                setState(() => sensitivity = value);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(
+                      MemoryExportDraft(
+                        title: title.text.trim(),
+                        content: content.text.trim(),
+                        firewall: firewall,
+                        sensitivity: sensitivity,
+                      ),
+                    );
+                  },
+                  child: const Text('Approve Export'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  } finally {
+    title.dispose();
+    content.dispose();
   }
 }
 

@@ -65,6 +65,12 @@ List<SwitcherPanelArea> _memoryCommandAreas(
           _MemoryReviewContent(controller: controller, query: query),
     ),
     SwitcherPanelArea(
+      title: 'Safety',
+      icon: Icons.policy_outlined,
+      builder: (query) =>
+          _MemorySafetyContent(controller: controller, query: query),
+    ),
+    SwitcherPanelArea(
       title: 'Map',
       icon: Icons.account_tree_outlined,
       builder: (query) =>

@@ -20,7 +20,10 @@ func (c *Tools) Validate() error {
 	if err := validateLocalExec(c.LocalExec); err != nil {
 		return err
 	}
-	return validateMCP(c.MCP)
+	if err := validateMCP(c.MCP); err != nil {
+		return err
+	}
+	return validateMemory(c.Memory)
 }
 
 // DefaultTimeoutDuration returns the configured local exec timeout or the
@@ -275,6 +278,94 @@ func validateHTTPURL(value string) error {
 		return fmt.Errorf("host must not be empty")
 	}
 	return nil
+}
+
+// validateMemory checks ADK memory domain grants and endpoint references.
+func validateMemory(memory Memory) error {
+	if len(memory.ReadDomains) == 0 {
+		return nil
+	}
+	if strings.TrimSpace(memory.Actor) == "" {
+		return fmt.Errorf("memory actor must not be empty when read-domains are configured")
+	}
+	if len(memory.WriteDomains) == 0 {
+		return fmt.Errorf("memory write-domains must not be empty when read-domains are configured")
+	}
+	if strings.TrimSpace(memory.DefaultWriteDomain) == "" {
+		return fmt.Errorf("memory default-write-domain must not be empty when read-domains are configured")
+	}
+	seen := make(map[string]struct{}, len(memory.ReadDomains))
+	for _, domain := range memory.ReadDomains {
+		id, err := validateMCPServerName(domain.ID)
+		if err != nil {
+			return fmt.Errorf("memory domain id: %w", err)
+		}
+		if _, ok := seen[id]; ok {
+			return fmt.Errorf("memory duplicate domain %q", id)
+		}
+		seen[id] = struct{}{}
+		if strings.TrimSpace(domain.Endpoint) == "" {
+			return fmt.Errorf("memory domain %q endpoint must not be empty", id)
+		}
+		if err := validateHTTPURL(domain.Endpoint); err != nil {
+			return fmt.Errorf("memory domain %q endpoint: %w", id, err)
+		}
+		for key, envName := range domain.HeadersFromEnv {
+			if strings.TrimSpace(key) == "" || strings.TrimSpace(envName) == "" {
+				return fmt.Errorf("memory domain %q headers-from-env must not contain empty names", id)
+			}
+		}
+	}
+	for _, id := range append(append([]string{}, memory.WriteDomains...), memory.DefaultWriteDomain) {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		if _, ok := seen[strings.TrimSpace(id)]; !ok {
+			return fmt.Errorf("memory grant references unknown domain %q", id)
+		}
+	}
+	if strings.TrimSpace(memory.DefaultWriteDomain) != "" && !containsString(memory.WriteDomains, memory.DefaultWriteDomain) {
+		return fmt.Errorf("memory default-write-domain must be included in write-domains")
+	}
+	for _, flow := range memory.AllowedFlows {
+		from := strings.TrimSpace(flow.From)
+		to := strings.TrimSpace(flow.To)
+		if _, ok := seen[from]; !ok {
+			return fmt.Errorf("memory flow references unknown source domain %q", flow.From)
+		}
+		if _, ok := seen[to]; !ok {
+			return fmt.Errorf("memory flow references unknown destination domain %q", flow.To)
+		}
+		if !containsMemoryDomain(memory.ReadDomains, from) {
+			return fmt.Errorf("memory flow source %q is not readable", flow.From)
+		}
+		if !containsString(memory.WriteDomains, to) {
+			return fmt.Errorf("memory flow destination %q is not writable", flow.To)
+		}
+	}
+	return nil
+}
+
+// containsMemoryDomain reports whether a memory domain list contains an id.
+func containsMemoryDomain(domains []MemoryDomain, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, domain := range domains {
+		if strings.TrimSpace(domain.ID) == target {
+			return true
+		}
+	}
+	return false
+}
+
+// containsString reports whether values contains target after trimming.
+func containsString(values []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, value := range values {
+		if strings.TrimSpace(value) == target {
+			return true
+		}
+	}
+	return false
 }
 
 // validateMCPFilesystemRoots checks filesystem server root path arguments.

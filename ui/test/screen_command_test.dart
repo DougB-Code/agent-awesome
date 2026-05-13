@@ -309,8 +309,23 @@ RuntimeProfile _profile(String modelConfigPath) {
       port: 1,
       autoStart: false,
     ),
-    memoryServerConfigPath: '/tmp/memory.json',
-    mcpServers: const <McpServerRuntime>[
+    gateway: const GatewayRuntime(
+      id: 'gateway',
+      label: 'Gateway',
+      apiBaseUrl: 'http://127.0.0.1:2/api',
+      healthUrl: 'http://127.0.0.1:2/healthz',
+      workingDirectory: '/tmp/gateway',
+      packagePath: './cmd/agent-gateway',
+      harnessBaseUrl: 'http://127.0.0.1:1/api',
+      contextBaseUrl: 'http://127.0.0.1:8081/api/context',
+      memoryMcpUrl: 'http://127.0.0.1:1/mcp',
+      appName: 'test',
+      userId: 'user',
+      port: 2,
+      autoStart: false,
+      enabled: true,
+    ),
+    memoryDomains: const <McpServerRuntime>[
       McpServerRuntime(
         id: 'memory',
         label: 'Memory',
@@ -319,11 +334,20 @@ RuntimeProfile _profile(String modelConfigPath) {
         healthUrl: 'http://127.0.0.1:1/healthz',
         workingDirectory: '/tmp/memory',
         packagePath: './cmd/memoryd',
+        dbPath: '/tmp/memory.db',
+        dataDir: '/tmp/memory-files',
         arguments: <String>[],
         autoStart: false,
         enabled: true,
       ),
     ],
+    agentMemory: const AgentMemoryRuntime(
+      actor: 'agent:test',
+      readDomains: <String>['memory'],
+      writeDomains: <String>['memory'],
+      defaultWriteDomain: 'memory',
+      allowedSensitivities: <String>['public', 'internal', 'private'],
+    ),
   );
 }
 

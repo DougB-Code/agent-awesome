@@ -69,3 +69,16 @@ mcp:
           - traverse_task_relations
           - upsert_task_relation
           - delete_task_relation
+memory:
+  actor: agent:agent-awesome
+  read-domains:
+    - id: memory
+      label: Memory
+      endpoint: http://127.0.0.1:8090/mcp
+  write-domains:
+    - memory
+  default-write-domain: memory
+  allowed-sensitivities:
+    - public
+    - internal
+    - private

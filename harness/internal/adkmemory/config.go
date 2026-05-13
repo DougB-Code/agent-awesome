@@ -12,16 +12,18 @@ import (
 	"google.golang.org/adk/tool/preloadmemorytool"
 )
 
-// NewFromToolsConfig creates an ADK memory service from configured MCP servers.
+// NewFromToolsConfig creates an ADK memory service from configured domains.
 func NewFromToolsConfig(cfg *schema.Tools) (*Service, bool, error) {
-	server, ok := selectMemoryServer(cfg)
+	runtime, ok := memoryRuntimeFromConfig(cfg)
 	if !ok {
 		return nil, false, nil
 	}
-	if err := mcpclient.ValidateServer(server); err != nil {
-		return nil, true, fmt.Errorf("create memory MCP transport: %w", err)
+	for _, domain := range runtime.domains {
+		if err := mcpclient.ValidateServer(domain.server); err != nil {
+			return nil, true, fmt.Errorf("create memory MCP transport for %s: %w", domain.id, err)
+		}
 	}
-	return New(server), true, nil
+	return New(runtime), true, nil
 }
 
 // RuntimeTools returns ADK tools that search and preload configured memory.
@@ -32,40 +34,72 @@ func RuntimeTools() []tool.Tool {
 	}
 }
 
-// selectMemoryServer finds the MCP server intended to back ADK memory.
-func selectMemoryServer(cfg *schema.Tools) (schema.MCPServer, bool) {
-	if cfg == nil || !cfg.MCP.Enabled {
-		return schema.MCPServer{}, false
-	}
-	for _, server := range cfg.MCP.Servers {
-		if isMemoryServerName(server.Name) {
-			return server, true
-		}
-	}
-	for _, server := range cfg.MCP.Servers {
-		if allowsMemoryTools(server.Tools.Allow) {
-			return server, true
-		}
-	}
-	return schema.MCPServer{}, false
+// memoryRuntimeConfig stores domain grants resolved from tool config.
+type memoryRuntimeConfig struct {
+	actor                string
+	domains              []memoryDomain
+	writeDomains         map[string]struct{}
+	defaultWriteDomain   string
+	allowedSensitivities []string
+	allowedFlows         map[string]map[string]struct{}
 }
 
-// isMemoryServerName reports whether a server name explicitly names memory.
-func isMemoryServerName(name string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(name))
-	return normalized == "memory" || normalized == "agentawesome-memory"
+// memoryDomain stores one ADK memory endpoint.
+type memoryDomain struct {
+	id         string
+	label      string
+	server     schema.MCPServer
+	searchTool string
 }
 
-// allowsMemoryTools reports whether an allowlist exposes the memory primitives.
-func allowsMemoryTools(allowed []string) bool {
-	names := make(map[string]struct{}, len(allowed))
-	for _, name := range allowed {
-		names[strings.TrimSpace(name)] = struct{}{}
+// memoryRuntimeFromConfig resolves ADK memory domains from target config.
+func memoryRuntimeFromConfig(cfg *schema.Tools) (memoryRuntimeConfig, bool) {
+	if cfg == nil || len(cfg.Memory.ReadDomains) == 0 {
+		return memoryRuntimeConfig{}, false
 	}
-	_, hasSave := names[saveMemoryToolName]
-	_, hasSearchMemory := names[searchMemoryToolName]
-	_, hasSearchSources := names[searchSourcesToolName]
-	return hasSave && (hasSearchMemory || hasSearchSources)
+	runtime := memoryRuntimeConfig{
+		actor:                strings.TrimSpace(cfg.Memory.Actor),
+		writeDomains:         make(map[string]struct{}, len(cfg.Memory.WriteDomains)),
+		defaultWriteDomain:   strings.TrimSpace(cfg.Memory.DefaultWriteDomain),
+		allowedSensitivities: cfg.Memory.AllowedSensitivities,
+		allowedFlows:         map[string]map[string]struct{}{},
+	}
+	for _, id := range cfg.Memory.WriteDomains {
+		runtime.writeDomains[strings.TrimSpace(id)] = struct{}{}
+	}
+	for _, flow := range cfg.Memory.AllowedFlows {
+		from := strings.TrimSpace(flow.From)
+		to := strings.TrimSpace(flow.To)
+		if runtime.allowedFlows[from] == nil {
+			runtime.allowedFlows[from] = map[string]struct{}{}
+		}
+		runtime.allowedFlows[from][to] = struct{}{}
+	}
+	for _, domain := range cfg.Memory.ReadDomains {
+		server := schema.MCPServer{
+			Name:           memoryServerName(domain.ID),
+			Transport:      "streamable-http",
+			Endpoint:       strings.TrimSpace(domain.Endpoint),
+			HeadersFromEnv: domain.HeadersFromEnv,
+			Tools:          schema.MCPToolFilter{Allow: []string{saveMemoryToolName, searchMemoryToolName, searchSourcesToolName}},
+		}
+		runtime.domains = append(runtime.domains, memoryDomain{
+			id:         strings.TrimSpace(domain.ID),
+			label:      strings.TrimSpace(domain.Label),
+			server:     server,
+			searchTool: preferredSearchTool(server.Tools.Allow),
+		})
+	}
+	return runtime, true
+}
+
+// memoryServerName returns a deterministic server name for a memory domain.
+func memoryServerName(domainID string) string {
+	normalized := strings.NewReplacer("-", "_").Replace(strings.TrimSpace(domainID))
+	if normalized == "" {
+		return "memory"
+	}
+	return "memory_" + normalized
 }
 
 // preferredSearchTool returns the richest configured memory search tool.

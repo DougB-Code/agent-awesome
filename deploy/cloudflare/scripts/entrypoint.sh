@@ -7,11 +7,18 @@ mkdir -p /app/data /app/logs
 touch /app/logs/harness.log /app/logs/memory.log
 tail -n +1 -F /app/logs/harness.log /app/logs/memory.log &
 
+MEMORY_DOMAINS_JSON=${AGENTAWESOME_MEMORY_DOMAINS_JSON:-'[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"}]'}
+MEMORY_POLICY_JSON=${AGENTAWESOME_MEMORY_POLICY_JSON:-'{"actor":"agent:agent-awesome","read_domains":["memory"],"write_domains":["memory"],"default_write_domain":"memory","allowed_sensitivities":["public","internal","private"]}'}
+MEMORY_SERVICES_JSON=${AGENTAWESOME_MEMORY_SERVICES_JSON:-'[{"domain_id":"memory","name":"memory","health_url":"http://127.0.0.1:8090/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8090","--db","/app/data/memory/memory.db","--data","/app/data/memory/files","--log-file","/app/logs/memory.log"],"auto_start":true}]'}
+
 exec agent-gateway \
   --addr "${AGENTAWESOME_GATEWAY_ADDR:-0.0.0.0:8070}" \
   --harness-base-url "${AGENTAWESOME_HARNESS_API_BASE_URL:-http://127.0.0.1:8080/api}" \
   --context-base-url "${AGENTAWESOME_CONTEXT_API_BASE_URL:-http://127.0.0.1:8081/api/context}" \
   --memory-mcp-url "${AGENTAWESOME_MEMORY_MCP_URL:-http://127.0.0.1:8090/mcp}" \
+  --memory-domains-json "$MEMORY_DOMAINS_JSON" \
+  --memory-policy-json "$MEMORY_POLICY_JSON" \
+  --memory-services-json "$MEMORY_SERVICES_JSON" \
   --app-name "${AGENTAWESOME_APP_NAME:-agent_awesome}" \
   --user-id "${AGENTAWESOME_USER_ID:-doug}" \
   --auth-token "${AGENTAWESOME_GATEWAY_TOKEN:-}" \
@@ -45,18 +52,4 @@ exec agent-gateway \
   --harness-arg 8080 \
   --harness-arg api \
   --harness-arg --webui_address \
-  --harness-arg 127.0.0.1:8080 \
-  --memory-auto-start \
-  --memory-command /usr/local/bin/memoryd \
-  --memory-arg --addr \
-  --memory-arg 127.0.0.1:8090 \
-  --memory-arg --db \
-  --memory-arg /app/data/memory.db \
-  --memory-arg --data \
-  --memory-arg /app/data/memory-artifacts \
-  --memory-arg --log-file \
-  --memory-arg /app/logs/memory.log \
-  --memory-arg --snapshot-url \
-  --memory-arg "${AGENTAWESOME_MEMORY_SNAPSHOT_URL:-}" \
-  --memory-arg --snapshot-token \
-  --memory-arg "${AGENTAWESOME_PERSISTENCE_TOKEN:-}"
+  --harness-arg 127.0.0.1:8080

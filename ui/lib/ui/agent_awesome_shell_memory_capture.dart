@@ -182,7 +182,9 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                         firewallAudience: widget.controller
                             .memoryFirewallAudienceLabel(record.firewall),
                         onTap: () => unawaited(
-                          widget.controller.selectMemory(record.id),
+                          widget.controller.selectMemory(
+                            widget.controller.memorySelectionKey(record),
+                          ),
                         ),
                       ),
                     ),

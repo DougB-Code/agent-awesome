@@ -2,12 +2,17 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"html/template"
+	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -22,13 +27,13 @@ import (
 
 // Server routes gateway-owned endpoints and harness proxy traffic.
 type Server struct {
-	config       config.Config
-	manager      *supervisor.Manager
-	apiProxy     *proxy.Proxy
-	contextProxy *proxy.Proxy
-	memoryProxy  *proxy.Proxy
-	slack        *slack.Adapter
-	httpServer   *http.Server
+	config        config.Config
+	manager       *supervisor.Manager
+	apiProxy      *proxy.Proxy
+	contextProxy  *proxy.Proxy
+	memoryProxies map[string]*proxy.Proxy
+	slack         *slack.Adapter
+	httpServer    *http.Server
 }
 
 // readinessView summarizes whether proxied dependency routes should accept traffic.
@@ -43,7 +48,7 @@ type betaStatusView struct {
 	GeneratedAt string              `json:"generated_at"`
 	Gateway     betaComponentView   `json:"gateway"`
 	Harness     betaComponentView   `json:"harness"`
-	Memory      betaComponentView   `json:"memory"`
+	Memory      []betaComponentView `json:"memory"`
 	Snapshot    betaSnapshotView    `json:"snapshot"`
 	Slack       betaSlackView       `json:"slack"`
 	Model       betaModelStatusView `json:"model"`
@@ -107,6 +112,51 @@ type memorySnapshotOperationView struct {
 	CompletedAt string `json:"completed_at"`
 }
 
+const maxGatewayContextRequestBytes int64 = 1 << 20
+
+const memoryDomainHeader = "X-Agent-Awesome-Memory-Domain"
+
+var errGatewayBodyTooLarge = errors.New("gateway request body too large")
+
+// memoryAccessKind describes the grant required for one memory operation.
+type memoryAccessKind int
+
+const (
+	memoryReadAccess memoryAccessKind = iota
+	memoryWriteAccess
+)
+
+// contextToolCallRequest is the gateway-inspected context API request body.
+type contextToolCallRequest struct {
+	Name      string         `json:"name"`
+	DomainID  string         `json:"domain_id"`
+	Arguments map[string]any `json:"arguments"`
+}
+
+// mcpRPCRequest is the JSON-RPC envelope needed for MCP policy checks.
+type mcpRPCRequest struct {
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params"`
+}
+
+// mcpCallToolParams is the tools/call subset inspected before proxying.
+type mcpCallToolParams struct {
+	Name      string         `json:"name"`
+	DomainID  string         `json:"domain_id"`
+	Arguments map[string]any `json:"arguments"`
+}
+
+// policyError carries an HTTP status for gateway-owned policy denials.
+type policyError struct {
+	status  int
+	message string
+}
+
+// Error returns the human-readable policy denial.
+func (e policyError) Error() string {
+	return e.message
+}
+
 var betaStatusPageTemplate = template.Must(template.New("beta-status").Parse(`<!doctype html>
 <html lang="en">
 <head>
@@ -132,7 +182,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 <tbody>
 {{template "component" .Gateway}}
 {{template "component" .Harness}}
-{{template "component" .Memory}}
+{{range .Memory}}{{template "component" .}}{{end}}
 </tbody>
 </table>
 <table>
@@ -172,17 +222,17 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 	if err != nil {
 		return nil, err
 	}
-	memoryProxy, err := proxy.New(cfg.MemoryMCPURL, "/mcp", cfg.RequestTimeout, proxy.WithRouteGroup("mcp"))
+	memoryProxies, err := memoryDomainProxies(cfg)
 	if err != nil {
 		return nil, err
 	}
 	server := &Server{
-		config:       cfg,
-		manager:      manager,
-		apiProxy:     apiProxy,
-		contextProxy: contextProxy,
-		memoryProxy:  memoryProxy,
-		slack:        slack.NewAdapter(slackConfig(cfg)),
+		config:        cfg,
+		manager:       manager,
+		apiProxy:      apiProxy,
+		contextProxy:  contextProxy,
+		memoryProxies: memoryProxies,
+		slack:         slack.NewAdapter(slackConfig(cfg)),
 	}
 	server.httpServer = &http.Server{
 		Addr:              cfg.ListenAddress,
@@ -190,6 +240,20 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return server, nil
+}
+
+// memoryDomainProxies creates one upstream proxy for each configured domain.
+func memoryDomainProxies(cfg config.Config) (map[string]*proxy.Proxy, error) {
+	proxies := make(map[string]*proxy.Proxy, len(cfg.MemoryDomains))
+	for _, domain := range cfg.MemoryDomains {
+		id := strings.TrimSpace(domain.ID)
+		memoryProxy, err := proxy.New(domain.Endpoint, "/mcp", cfg.RequestTimeout, proxy.WithRouteGroup("mcp:"+id))
+		if err != nil {
+			return nil, fmt.Errorf("memory domain %s: %w", id, err)
+		}
+		proxies[id] = memoryProxy
+	}
+	return proxies, nil
 }
 
 // contextProxyOptions returns gateway-owned headers for the harness context API.
@@ -227,8 +291,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/gateway/beta-status.html", s.authenticated(s.betaStatusPageHandler))
 	mux.HandleFunc("/api/gateway/channels", s.authenticated(s.channelsHandler))
 	mux.HandleFunc("/slack/events", s.slack.EventsHandler)
-	mux.HandleFunc("/mcp", s.authenticated(s.requireServiceReady(s.config.MemoryService.Name, s.memoryProxy.ServeHTTP)))
-	mux.Handle("/api/context/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.contextProxy.ServeHTTP)))
+	mux.HandleFunc("/mcp", s.authenticated(s.memoryMCPHandler))
+	mux.HandleFunc("/mcp/", s.authenticated(s.memoryMCPHandler))
+	mux.HandleFunc("/api/context/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.contextAPIHandler)))
 	mux.Handle("/api/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.apiProxy.ServeHTTP)))
 	return s.cors(mux)
 }
@@ -271,6 +336,103 @@ func (s *Server) channelsHandler(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
+// contextAPIHandler enforces gateway memory-domain policy before proxying calls.
+func (s *Server) contextAPIHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost || r.URL.Path != "/api/context/tools/call" {
+		s.contextProxy.ServeHTTP(w, r)
+		return
+	}
+	body, err := readLimitedBody(w, r, maxGatewayContextRequestBytes)
+	if err != nil {
+		writeBodyReadError(w, err)
+		return
+	}
+	var call contextToolCallRequest
+	if err := json.Unmarshal(body, &call); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "decode context tool call: " + err.Error()})
+		return
+	}
+	if strings.TrimSpace(call.Name) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "context tool name is required"})
+		return
+	}
+	if hasDomainOverride(call.Arguments) {
+		writePolicyError(w, policyError{status: http.StatusForbidden, message: "memory domain overrides must use the gateway domain_id field"})
+		return
+	}
+	domainID, err := s.authorizeMemoryTool(call.Name, call.DomainID)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
+	if !s.memoryDomainReady(w, domainID) {
+		return
+	}
+	call.DomainID = domainID
+	nextBody, err := json.Marshal(call)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "encode context tool call"})
+		return
+	}
+	s.contextProxy.ServeHTTP(w, requestWithBody(r, r.URL.Path, nextBody))
+}
+
+// memoryMCPHandler routes direct MCP traffic to an authorized memory domain.
+func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
+	requestedDomain, err := requestedMemoryDomain(r)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
+	body, err := readLimitedBody(w, r, maxGatewayContextRequestBytes)
+	if err != nil {
+		writeBodyReadError(w, err)
+		return
+	}
+	access, err := memoryAccessFromMCPBody(body)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
+	domainID, err := s.authorizeMemoryAccess(access, requestedDomain)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
+	if !s.memoryDomainReady(w, domainID) {
+		return
+	}
+	memoryProxy, ok := s.memoryProxies[domainID]
+	if !ok {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "memory domain " + domainID + " is not routable"})
+		return
+	}
+	memoryProxy.ServeHTTP(w, requestWithBody(r, "/mcp", body))
+}
+
+// authorizeMemoryTool selects a domain and checks read/write grants for one tool.
+func (s *Server) authorizeMemoryTool(name string, requestedDomain string) (string, error) {
+	access, ok := memoryToolAccessFor(name)
+	if !ok {
+		return "", policyError{status: http.StatusForbidden, message: "memory tool " + strings.TrimSpace(name) + " is not allowed by gateway policy"}
+	}
+	return s.authorizeMemoryAccess(access, requestedDomain)
+}
+
+// authorizeMemoryAccess selects a domain and checks grants for one access type.
+func (s *Server) authorizeMemoryAccess(access memoryAccessKind, requestedDomain string) (string, error) {
+	allowed := s.allowedDomainsForAccess(access)
+	return selectAllowedDomain(strings.TrimSpace(requestedDomain), allowed, access)
+}
+
+// allowedDomainsForAccess returns active profile grants for one memory access type.
+func (s *Server) allowedDomainsForAccess(access memoryAccessKind) []string {
+	if access == memoryWriteAccess {
+		return s.config.MemoryPolicy.WriteDomains
+	}
+	return s.config.MemoryPolicy.ReadDomains
+}
+
 // RunSlackSocketMode runs the Slack Socket Mode loop when configured.
 func (s *Server) RunSlackSocketMode(ctx context.Context) error {
 	return s.slack.RunSocketMode(ctx)
@@ -300,7 +462,7 @@ func (s *Server) betaStatus(ctx context.Context) betaStatusView {
 			Message: "gateway process is serving",
 		},
 		Harness:  s.dependencyStatus(s.config.HarnessService.Name, config.DefaultHarnessServiceName),
-		Memory:   s.dependencyStatus(s.config.MemoryService.Name, config.DefaultMemoryServiceName),
+		Memory:   s.memoryDependencyStatuses(),
 		Snapshot: s.snapshotStatus(ctx, s.memoryHealth(ctx)),
 		Slack:    s.betaSlackStatus(),
 		Model:    s.betaModelStatus(),
@@ -329,6 +491,43 @@ func (s *Server) dependencyStatus(serviceName string, fallbackName string) betaC
 		Ready:   true,
 		Message: "gateway is not supervising this dependency",
 	}
+}
+
+// memoryDependencyStatuses returns one beta status row for each configured domain.
+func (s *Server) memoryDependencyStatuses() []betaComponentView {
+	rows := make([]betaComponentView, 0, len(s.config.MemoryDomains))
+	for _, domain := range s.config.MemoryDomains {
+		name := strings.TrimSpace(domain.Label)
+		if name == "" {
+			name = strings.TrimSpace(domain.ID)
+		}
+		service, ok := s.config.MemoryServiceForDomain(domain.ID)
+		if !ok {
+			rows = append(rows, betaComponentView{
+				Name:    name,
+				State:   "unmanaged",
+				Ready:   true,
+				Message: "gateway is not supervising this memory domain",
+				URL:     domain.HealthURL,
+			})
+			continue
+		}
+		row := s.dependencyStatus(service.Name, name)
+		row.Name = name
+		if row.URL == "" {
+			row.URL = domain.HealthURL
+		}
+		rows = append(rows, row)
+	}
+	if len(rows) == 0 {
+		return []betaComponentView{{
+			Name:    config.DefaultMemoryServiceName,
+			State:   "unmanaged",
+			Ready:   true,
+			Message: "no memory domains are configured",
+		}}
+	}
+	return rows
 }
 
 // betaSlackStatus returns Slack channel status without token fields.
@@ -360,7 +559,7 @@ func (s *Server) betaModelStatus() betaModelStatusView {
 
 // memoryHealth reads memoryd health details when the dependency exposes them.
 func (s *Server) memoryHealth(ctx context.Context) memoryHealthView {
-	healthURL := strings.TrimSpace(s.config.MemoryService.HealthURL)
+	healthURL := strings.TrimSpace(s.defaultWriteDomainHealthURL())
 	if healthURL == "" {
 		return memoryHealthView{}
 	}
@@ -385,13 +584,42 @@ func (s *Server) memoryHealth(ctx context.Context) memoryHealthView {
 	return health
 }
 
+// defaultWriteDomainHealthURL returns the health URL most relevant to snapshot status.
+func (s *Server) defaultWriteDomainHealthURL() string {
+	if service, ok := s.config.MemoryServiceForDomain(s.config.MemoryPolicy.DefaultWriteDomain); ok {
+		return service.HealthURL
+	}
+	if domain, ok := s.memoryDomainByID(s.config.MemoryPolicy.DefaultWriteDomain); ok {
+		return domain.HealthURL
+	}
+	if len(s.config.MemoryServices) > 0 {
+		return s.config.MemoryServices[0].HealthURL
+	}
+	if len(s.config.MemoryDomains) > 0 {
+		return s.config.MemoryDomains[0].HealthURL
+	}
+	return ""
+}
+
+// memoryDomainByID returns one configured gateway memory domain.
+func (s *Server) memoryDomainByID(domainID string) (config.MemoryDomain, bool) {
+	domainID = strings.TrimSpace(domainID)
+	for _, domain := range s.config.MemoryDomains {
+		if strings.TrimSpace(domain.ID) == domainID {
+			return domain, true
+		}
+	}
+	return config.MemoryDomain{}, false
+}
+
 // snapshotStatus returns remote snapshot freshness plus memory restore status.
 func (s *Server) snapshotStatus(ctx context.Context, memoryHealth memoryHealthView) betaSnapshotView {
+	statusURL := s.snapshotStatusURL()
 	status := betaSnapshotView{
-		Enabled:       strings.TrimSpace(s.config.SnapshotStatusURL) != "",
+		Enabled:       statusURL != "",
 		State:         "disabled",
 		Message:       "snapshot endpoint is not configured",
-		URL:           s.config.SnapshotStatusURL,
+		URL:           statusURL,
 		LastRestoreAt: memoryHealth.Snapshot.Restore.CompletedAt,
 	}
 	if !status.Enabled {
@@ -404,7 +632,7 @@ func (s *Server) snapshotStatus(ctx context.Context, memoryHealth memoryHealthVi
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodHead, s.config.SnapshotStatusURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodHead, statusURL, nil)
 	if err != nil {
 		status.State = "unavailable"
 		status.Message = "snapshot status request could not be created"
@@ -438,6 +666,330 @@ func (s *Server) snapshotStatus(ctx context.Context, memoryHealth memoryHealthVi
 		status.Message = "snapshot endpoint returned HTTP " + strconv.Itoa(resp.StatusCode)
 	}
 	return status
+}
+
+// snapshotStatusURL returns the domain-specific snapshot URL for status checks.
+func (s *Server) snapshotStatusURL() string {
+	return snapshotStatusURLForDomain(s.config.SnapshotStatusURL, s.config.MemoryPolicy.DefaultWriteDomain)
+}
+
+// snapshotStatusURLForDomain appends the memory domain to a snapshot base URL.
+func snapshotStatusURLForDomain(base string, domainID string) string {
+	base = strings.TrimSpace(base)
+	domainID = strings.TrimSpace(domainID)
+	if base == "" || domainID == "" {
+		return base
+	}
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+	path := strings.TrimRight(parsed.Path, "/")
+	if strings.HasSuffix(path, "/"+domainID) || path == domainID {
+		return parsed.String()
+	}
+	parsed.Path = path + "/" + domainID
+	parsed.RawPath = ""
+	return parsed.String()
+}
+
+// requestedMemoryDomain reads the gateway-owned domain selector from a request.
+func requestedMemoryDomain(r *http.Request) (string, error) {
+	candidates := make([]string, 0, 3)
+	pathDomain, err := memoryDomainFromPath(r.URL.Path)
+	if err != nil {
+		return "", err
+	}
+	if pathDomain != "" {
+		candidates = append(candidates, pathDomain)
+	}
+	if queryDomain := strings.TrimSpace(r.URL.Query().Get("domain_id")); queryDomain != "" {
+		candidates = append(candidates, queryDomain)
+	}
+	if headerDomain := strings.TrimSpace(r.Header.Get(memoryDomainHeader)); headerDomain != "" {
+		candidates = append(candidates, headerDomain)
+	}
+	if len(candidates) == 0 {
+		return "", nil
+	}
+	first := candidates[0]
+	for _, candidate := range candidates[1:] {
+		if candidate != first {
+			return "", policyError{status: http.StatusBadRequest, message: "conflicting memory domain selectors"}
+		}
+	}
+	return first, nil
+}
+
+// memoryDomainFromPath returns the domain encoded as /mcp/{domain}.
+func memoryDomainFromPath(path string) (string, error) {
+	if path == "/mcp" {
+		return "", nil
+	}
+	const prefix = "/mcp/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", nil
+	}
+	domain := strings.Trim(strings.TrimPrefix(path, prefix), "/")
+	if domain == "" || strings.Contains(domain, "/") {
+		return "", policyError{status: http.StatusBadRequest, message: "invalid memory domain route"}
+	}
+	return domain, nil
+}
+
+// memoryAccessFromMCPBody returns the most restrictive access in an MCP payload.
+func memoryAccessFromMCPBody(body []byte) (memoryAccessKind, error) {
+	if len(bytes.TrimSpace(body)) == 0 {
+		return memoryReadAccess, nil
+	}
+	requests, err := decodeMCPRequests(body)
+	if err != nil {
+		return memoryReadAccess, err
+	}
+	access := memoryReadAccess
+	for _, request := range requests {
+		if strings.TrimSpace(request.Method) != "tools/call" {
+			continue
+		}
+		callAccess, err := memoryAccessFromCallToolParams(request.Params)
+		if err != nil {
+			return memoryReadAccess, err
+		}
+		if callAccess == memoryWriteAccess {
+			access = memoryWriteAccess
+		}
+	}
+	return access, nil
+}
+
+// decodeMCPRequests decodes one JSON-RPC request or a batch request.
+func decodeMCPRequests(body []byte) ([]mcpRPCRequest, error) {
+	if bytes.HasPrefix(bytes.TrimSpace(body), []byte("[")) {
+		var batch []mcpRPCRequest
+		if err := json.Unmarshal(body, &batch); err != nil {
+			return nil, policyError{status: http.StatusBadRequest, message: "decode MCP batch: " + err.Error()}
+		}
+		return batch, nil
+	}
+	var request mcpRPCRequest
+	if err := json.Unmarshal(body, &request); err != nil {
+		return nil, policyError{status: http.StatusBadRequest, message: "decode MCP request: " + err.Error()}
+	}
+	return []mcpRPCRequest{request}, nil
+}
+
+// memoryAccessFromCallToolParams validates a memory tools/call parameter object.
+func memoryAccessFromCallToolParams(params json.RawMessage) (memoryAccessKind, error) {
+	var call mcpCallToolParams
+	if len(bytes.TrimSpace(params)) == 0 {
+		return memoryReadAccess, policyError{status: http.StatusBadRequest, message: "MCP tools/call params are required"}
+	}
+	if err := json.Unmarshal(params, &call); err != nil {
+		return memoryReadAccess, policyError{status: http.StatusBadRequest, message: "decode MCP tools/call params: " + err.Error()}
+	}
+	if strings.TrimSpace(call.DomainID) != "" || hasDomainOverride(call.Arguments) {
+		return memoryReadAccess, policyError{status: http.StatusForbidden, message: "model-supplied memory domain overrides are not allowed"}
+	}
+	access, ok := memoryToolAccessFor(call.Name)
+	if !ok {
+		return memoryReadAccess, policyError{status: http.StatusForbidden, message: "memory tool " + strings.TrimSpace(call.Name) + " is not allowed by gateway policy"}
+	}
+	return access, nil
+}
+
+// hasDomainOverride reports whether tool arguments try to select a domain.
+func hasDomainOverride(arguments map[string]any) bool {
+	if len(arguments) == 0 {
+		return false
+	}
+	_, ok := arguments["domain_id"]
+	return ok
+}
+
+// memoryToolAccessFor classifies known memory tools by required grant type.
+func memoryToolAccessFor(name string) (memoryAccessKind, bool) {
+	name = strings.TrimSpace(name)
+	if memoryReadOnlyTools()[name] {
+		return memoryReadAccess, true
+	}
+	if memoryWriteTools()[name] {
+		return memoryWriteAccess, true
+	}
+	return memoryReadAccess, false
+}
+
+// memoryReadOnlyTools returns memory tools that never mutate storage.
+func memoryReadOnlyTools() map[string]bool {
+	return map[string]bool{
+		"search_memory":                  true,
+		"search_sources":                 true,
+		"load_entity_page":               true,
+		"load_timeline":                  true,
+		"query_context_graph":            true,
+		"get_task":                       true,
+		"list_tasks":                     true,
+		"task_graph_projection":          true,
+		"project_executive_summary":      true,
+		"explain_executive_summary_item": true,
+		"list_task_relations":            true,
+		"traverse_task_relations":        true,
+		"list_commitments":               true,
+		"suggest_task_relationships":     true,
+		"suggest_task_metadata":          true,
+		"suggest_commitments":            true,
+		"get_task_work_breakdowns":       true,
+	}
+}
+
+// memoryWriteTools returns memory tools that require write-domain grants.
+func memoryWriteTools() map[string]bool {
+	return map[string]bool{
+		"remember":                 true,
+		"save_memory_candidate":    true,
+		"refresh_compiled_page":    true,
+		"repair_memory_record":     true,
+		"submit_memory_correction": true,
+		"mutate_context_graph":     true,
+		"create_task":              true,
+		"update_task":              true,
+		"complete_task":            true,
+		"cancel_task":              true,
+		"delete_task":              true,
+		"link_task_memory":         true,
+		"upsert_task_relation":     true,
+		"delete_task_relation":     true,
+	}
+}
+
+// selectAllowedDomain chooses or validates the domain for one access type.
+func selectAllowedDomain(requestedDomain string, allowed []string, access memoryAccessKind) (string, error) {
+	allowed = uniqueTrimmed(allowed)
+	if requestedDomain != "" {
+		if containsDomain(allowed, requestedDomain) {
+			return requestedDomain, nil
+		}
+		return "", policyError{status: http.StatusForbidden, message: "memory domain " + requestedDomain + " is not allowed for " + access.String()}
+	}
+	if len(allowed) == 1 {
+		return allowed[0], nil
+	}
+	if len(allowed) == 0 {
+		return "", policyError{status: http.StatusForbidden, message: "no memory domains are allowed for " + access.String()}
+	}
+	return "", policyError{status: http.StatusBadRequest, message: "memory domain is required when multiple domains are allowed for " + access.String()}
+}
+
+// uniqueTrimmed returns a stable list of non-empty trimmed domain ids.
+func uniqueTrimmed(values []string) []string {
+	seen := map[string]struct{}{}
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
+}
+
+// containsDomain reports whether a domain id is in an allowed grant list.
+func containsDomain(allowed []string, domainID string) bool {
+	domainID = strings.TrimSpace(domainID)
+	for _, value := range allowed {
+		if strings.TrimSpace(value) == domainID {
+			return true
+		}
+	}
+	return false
+}
+
+// readLimitedBody reads a request body and enforces a gateway-owned cap.
+func readLimitedBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, error) {
+	if r.Body == nil {
+		return nil, nil
+	}
+	reader := http.MaxBytesReader(w, r.Body, limit)
+	defer reader.Close()
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, errGatewayBodyTooLarge
+		}
+		return nil, fmt.Errorf("read request body: %w", err)
+	}
+	return body, nil
+}
+
+// requestWithBody clones a request with a rewritten path and restored body.
+func requestWithBody(r *http.Request, path string, body []byte) *http.Request {
+	next := r.Clone(r.Context())
+	nextURL := *r.URL
+	nextURL.Path = path
+	if path == "/mcp" {
+		query := nextURL.Query()
+		query.Del("domain_id")
+		nextURL.RawQuery = query.Encode()
+	}
+	next.URL = &nextURL
+	next.Body = io.NopCloser(bytes.NewReader(body))
+	next.ContentLength = int64(len(body))
+	next.GetBody = func() (io.ReadCloser, error) {
+		return io.NopCloser(bytes.NewReader(body)), nil
+	}
+	next.Header = r.Header.Clone()
+	next.Header.Del(memoryDomainHeader)
+	return next
+}
+
+// writeBodyReadError writes a safe body decode error to the caller.
+func writeBodyReadError(w http.ResponseWriter, err error) {
+	if errors.Is(err, errGatewayBodyTooLarge) {
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "payload too large"})
+		return
+	}
+	writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+}
+
+// writePolicyError writes a policy error without proxying to dependencies.
+func writePolicyError(w http.ResponseWriter, err error) {
+	var policyErr policyError
+	if errors.As(err, &policyErr) {
+		writeJSON(w, policyErr.status, map[string]string{"error": policyErr.message})
+		return
+	}
+	writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+}
+
+// String returns the label used in access-denied messages.
+func (a memoryAccessKind) String() string {
+	if a == memoryWriteAccess {
+		return "write"
+	}
+	return "read"
+}
+
+// memoryDomainReady reports whether a supervised domain dependency is ready.
+func (s *Server) memoryDomainReady(w http.ResponseWriter, domainID string) bool {
+	service, ok := s.config.MemoryServiceForDomain(domainID)
+	if !ok || strings.TrimSpace(service.Name) == "" {
+		return true
+	}
+	if s.serviceReady(service.Name) {
+		return true
+	}
+	writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+		"error":     "memory domain dependency not ready",
+		"domain_id": domainID,
+		"readiness": s.readiness(),
+		"services":  s.manager.Statuses(),
+	})
+	return false
 }
 
 // requireServiceReady blocks proxied routes until their dependency is ready.
@@ -509,19 +1061,19 @@ func (s *Server) readiness() readinessView {
 // slackConfig maps gateway config into the Slack adapter config.
 func slackConfig(cfg config.Config) slack.Config {
 	return slack.Config{
-		Enabled:           cfg.Slack.Enabled,
-		SocketMode:        cfg.Slack.SocketMode,
-		SigningSecret:     cfg.Slack.SigningSecret,
-		BotToken:          cfg.Slack.BotToken,
-		AppToken:          cfg.Slack.AppToken,
-		AllowedTeamID:     cfg.Slack.AllowedTeamID,
-		AllowedUserID:     cfg.Slack.AllowedUserID,
-		AllowedChannelID:  cfg.Slack.AllowedChannelID,
-		HarnessBaseURL:    cfg.HarnessBaseURL,
-		AppName:           cfg.AppName,
-		AgentUserID:       cfg.UserID,
-		RuntimePolicyText: cfg.RuntimePolicyText,
-		RequestTimeout:    cfg.RequestTimeout,
+		Enabled:          cfg.Slack.Enabled,
+		SocketMode:       cfg.Slack.SocketMode,
+		SigningSecret:    cfg.Slack.SigningSecret,
+		BotToken:         cfg.Slack.BotToken,
+		AppToken:         cfg.Slack.AppToken,
+		AllowedTeamID:    cfg.Slack.AllowedTeamID,
+		AllowedUserID:    cfg.Slack.AllowedUserID,
+		AllowedChannelID: cfg.Slack.AllowedChannelID,
+		GatewayBaseURL:   cfg.GatewayBaseURL,
+		GatewayAuthToken: cfg.AuthToken,
+		AppName:          cfg.AppName,
+		AgentUserID:      cfg.UserID,
+		RequestTimeout:   cfg.RequestTimeout,
 	}
 }
 
@@ -549,7 +1101,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.config.AllowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", s.config.AllowedOrigin)
-			w.Header().Set("Access-Control-Allow-Headers", "authorization, content-type")
+			w.Header().Set("Access-Control-Allow-Headers", "authorization, content-type, x-agent-awesome-memory-domain")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		}
 		next.ServeHTTP(w, r)

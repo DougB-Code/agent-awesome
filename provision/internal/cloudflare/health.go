@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -73,11 +74,19 @@ func fetchHealth(ctx context.Context, deployment Deployment, gatewayToken string
 
 // allServicesConnected reports whether all expected gateway services are connected.
 func allServicesConnected(services []ServiceStatus) bool {
-	connected := map[string]bool{}
+	harnessConnected := false
+	memoryCount := 0
 	for _, service := range services {
-		if service.State == "connected" {
-			connected[service.Name] = true
+		if service.Name == "harness" {
+			harnessConnected = service.State == "connected"
+			continue
+		}
+		if service.Name == "memory" || strings.HasPrefix(service.Name, "memory-") {
+			memoryCount++
+			if service.State != "connected" {
+				return false
+			}
 		}
 	}
-	return connected["harness"] && connected["memory"]
+	return harnessConnected && memoryCount > 0
 }

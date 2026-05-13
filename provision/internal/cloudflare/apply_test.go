@@ -105,7 +105,7 @@ func TestDeleteDryRunBuildsCommands(t *testing.T) {
 	if !strings.HasPrefix(result.CommandNames[0], "npx wrangler delete agent-awesome-sister --config ") || !strings.HasSuffix(result.CommandNames[0], " --force") {
 		t.Fatalf("first command = %q", result.CommandNames[0])
 	}
-	if result.CommandNames[1] != "npx wrangler r2 object delete agent-awesome-sister-memory/context-snapshot.tar.gz --remote --force" {
+	if result.CommandNames[1] != "npx wrangler r2 object delete agent-awesome-sister-memory/memory/memory/context-snapshot.tar.gz --remote --force" {
 		t.Fatalf("second command = %q", result.CommandNames[1])
 	}
 	if result.CommandNames[2] != "npx wrangler r2 bucket delete agent-awesome-sister-memory" {
@@ -217,6 +217,20 @@ func TestAllServicesConnectedRequiresHarnessAndMemory(t *testing.T) {
 		{Name: "memory", State: "connected"},
 	}) {
 		t.Fatalf("allServicesConnected() rejected connected services")
+	}
+	if !allServicesConnected([]ServiceStatus{
+		{Name: "harness", State: "connected"},
+		{Name: "memory", State: "connected"},
+		{Name: "memory-project", State: "connected"},
+	}) {
+		t.Fatalf("allServicesConnected() rejected connected multi-memory services")
+	}
+	if allServicesConnected([]ServiceStatus{
+		{Name: "harness", State: "connected"},
+		{Name: "memory", State: "connected"},
+		{Name: "memory-project", State: "starting"},
+	}) {
+		t.Fatalf("allServicesConnected() accepted pending multi-memory service")
 	}
 }
 

@@ -1,4 +1,4 @@
-// This file calls the ADK REST harness on behalf of Slack messages.
+// This file calls the gateway ADK-compatible API on behalf of Slack messages.
 package slack
 
 import (
@@ -22,16 +22,17 @@ const agentRunErrorBodyLimit int64 = 2048
 
 var errSlackConfirmationUnsupported = errors.New("slack tool confirmation is unsupported")
 
-// AgentClient forwards normalized Slack text into the harness REST API.
+// AgentClient forwards normalized Slack text into the gateway REST API.
 type AgentClient struct {
 	client  *http.Client
 	baseURL string
 	appName string
 	userID  string
+	headers map[string]string
 	policy  *policy.Injector
 }
 
-// NewAgentClient creates an ADK REST client without gateway policy injection.
+// NewAgentClient creates an ADK-compatible client without local policy injection.
 func NewAgentClient(client *http.Client, baseURL string, appName string, userID string) *AgentClient {
 	return NewAgentClientWithPolicy(
 		client,
@@ -42,16 +43,38 @@ func NewAgentClient(client *http.Client, baseURL string, appName string, userID 
 	)
 }
 
-// NewAgentClientWithPolicy creates an ADK REST client with configured policy.
+// NewAgentClientWithPolicy creates an ADK-compatible client with configured policy.
 func NewAgentClientWithPolicy(client *http.Client, baseURL string, appName string, userID string, injector *policy.Injector) *AgentClient {
+	return NewAgentClientWithPolicyAndHeaders(
+		client,
+		baseURL,
+		appName,
+		userID,
+		injector,
+		nil,
+	)
+}
+
+// NewAgentClientWithPolicyAndHeaders creates a gateway API client.
+func NewAgentClientWithPolicyAndHeaders(client *http.Client, baseURL string, appName string, userID string, injector *policy.Injector, headers map[string]string) *AgentClient {
 	if client == nil {
 		client = &http.Client{}
+	}
+	if injector == nil {
+		injector = policy.NewInjector(policy.Config{})
+	}
+	copiedHeaders := make(map[string]string, len(headers))
+	for key, value := range headers {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+			copiedHeaders[key] = value
+		}
 	}
 	return &AgentClient{
 		client:  client,
 		baseURL: strings.TrimRight(baseURL, "/"),
 		appName: appName,
 		userID:  userID,
+		headers: copiedHeaders,
 		policy:  injector,
 	}
 }
@@ -69,7 +92,7 @@ func (c *AgentClient) EnsureSession(ctx context.Context, sessionID string) error
 	if err != nil {
 		return err
 	}
-	req, err := newJSONRequest(ctx, c.sessionURL(sessionID), body)
+	req, err := c.newJSONRequest(ctx, c.sessionURL(sessionID), body)
 	if err != nil {
 		return err
 	}
@@ -98,7 +121,7 @@ func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string
 	if err != nil {
 		return "", err
 	}
-	req, err := newJSONRequest(ctx, adk.RunSSEURL(c.baseURL), body)
+	req, err := c.newJSONRequest(ctx, adk.RunSSEURL(c.baseURL), body)
 	if err != nil {
 		return "", err
 	}
@@ -115,7 +138,7 @@ func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string
 
 // sessionExists reports whether an ADK session already exists.
 func (c *AgentClient) sessionExists(ctx context.Context, sessionID string) (bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.sessionURL(sessionID), nil)
+	req, err := c.newRequest(ctx, http.MethodGet, c.sessionURL(sessionID), nil)
 	if err != nil {
 		return false, err
 	}
@@ -150,9 +173,21 @@ func (c *AgentClient) runBody(sessionID string, text string) ([]byte, error) {
 	return adk.RunRequestBody(c.appName, c.userID, sessionID, text)
 }
 
-// newJSONRequest builds one ADK POST request with a JSON body.
-func newJSONRequest(ctx context.Context, targetURL string, body []byte) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
+// newRequest builds one gateway API request with configured channel headers.
+func (c *AgentClient) newRequest(ctx context.Context, method string, targetURL string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, targetURL, body)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range c.headers {
+		req.Header.Set(key, value)
+	}
+	return req, nil
+}
+
+// newJSONRequest builds one gateway API POST request with a JSON body.
+func (c *AgentClient) newJSONRequest(ctx context.Context, targetURL string, body []byte) (*http.Request, error) {
+	req, err := c.newRequest(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}

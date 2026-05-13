@@ -8,4 +8,6 @@
 // High-level examples:
 //   - contextapi.StartWithConfig(ctx, cfg, tools) serves /api/context/tools/list
 //     and /api/context/tools/call for gateway-owned access.
+//   - POST /api/context/tools/call with a domain_id to route memory tools
+//     through active-profile read/write grants instead of frontend MCP access.
 package contextapi
