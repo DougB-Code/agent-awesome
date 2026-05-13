@@ -450,7 +450,7 @@ class McpToolConfig {
   /// Whether MCP toolsets are installed on the agent.
   final bool enabled;
 
-  /// MCP servers exposed as ADK toolsets.
+  /// MCP servers exposed as runtime toolsets.
   final List<McpServerToolConfig> servers;
 
   /// Fields preserved outside the known schema.
@@ -798,7 +798,7 @@ ToolConfigDocument graphBackedMemoryToolConfigForDomains({
   );
 }
 
-/// Encodes one memory domain for harness-owned ADK memory access.
+/// Encodes one memory domain for harness-owned memory access.
 Map<String, dynamic> _memoryDomainToolJson(McpServerRuntime domain) {
   return <String, dynamic>{
     'id': domain.id,

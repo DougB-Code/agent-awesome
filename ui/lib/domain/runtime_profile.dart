@@ -236,10 +236,10 @@ class GatewayRuntime {
   /// Memory MCP URL reported to the gateway.
   final String memoryMcpUrl;
 
-  /// ADK app name passed through gateway status and policy.
+  /// Assistant app name passed through gateway status and policy.
   final String appName;
 
-  /// ADK user id passed through gateway status and policy.
+  /// Assistant user id passed through gateway status and policy.
   final String userId;
 
   /// Non-secret model provider id shown in beta status.
@@ -308,7 +308,7 @@ class GatewayRuntime {
   }
 }
 
-/// HarnessRuntime describes the ADK harness process and active config bundle.
+/// HarnessRuntime describes the assistant harness process and active config bundle.
 class HarnessRuntime {
   /// Creates an immutable harness runtime definition.
   const HarnessRuntime({
@@ -333,16 +333,16 @@ class HarnessRuntime {
   /// Human-readable harness label.
   final String label;
 
-  /// ADK API base URL.
+  /// Assistant API base URL.
   final String apiBaseUrl;
 
   /// Harness-owned context API base URL.
   final String contextApiBaseUrl;
 
-  /// ADK app name hosted by this harness.
+  /// Assistant app name hosted by this harness.
   final String appName;
 
-  /// ADK user id used for session APIs.
+  /// Assistant user id used for session APIs.
   final String userId;
 
   /// Directory where the Go package is built and run.
@@ -598,6 +598,9 @@ void _validateMemoryDomains(List<McpServerRuntime> domains) {
     );
   }
   final ids = <String>{};
+  final managedEndpoints = <String, String>{};
+  final managedDatabasePaths = <String, String>{};
+  final managedDataDirectories = <String, String>{};
   for (final domain in domains) {
     _validateSafeId(domain.id, 'memory domain id');
     if (!ids.add(domain.id)) {
@@ -614,6 +617,39 @@ void _validateMemoryDomains(List<McpServerRuntime> domains) {
         'Managed memory domain "${domain.id}" requires db_path and data_dir',
       );
     }
+    if (domain.autoStart &&
+        (domain.workingDirectory.trim().isEmpty ||
+            domain.packagePath.trim().isEmpty)) {
+      throw FormatException(
+        'Managed memory domain "${domain.id}" requires working_directory and package_path',
+      );
+    }
+    if (domain.autoStart) {
+      _rememberUnique(
+        managedEndpoints,
+        _endpointKey(domain.endpoint),
+        domain.id,
+        'Managed memory domains',
+      );
+      _rememberUnique(
+        managedEndpoints,
+        _endpointKey(domain.healthUrl),
+        domain.id,
+        'Managed memory domain health URLs',
+      );
+      _rememberUnique(
+        managedDatabasePaths,
+        domain.dbPath,
+        domain.id,
+        'Managed memory domain database paths',
+      );
+      _rememberUnique(
+        managedDataDirectories,
+        domain.dataDir,
+        domain.id,
+        'Managed memory domain data directories',
+      );
+    }
   }
 }
 
@@ -624,6 +660,10 @@ void _validateAgentMemory(
 ) {
   _validateSafeId(memory.actor.replaceAll(':', '-'), 'agent memory actor');
   final ids = domains.map((domain) => domain.id).toSet();
+  final enabledIds = domains
+      .where((domain) => domain.enabled)
+      .map((domain) => domain.id)
+      .toSet();
   if (memory.readDomains.isEmpty) {
     throw const FormatException('agent_memory.read_domains must not be empty');
   }
@@ -643,6 +683,9 @@ void _validateAgentMemory(
     if (!ids.contains(domain)) {
       throw FormatException('Unknown memory domain grant "$domain"');
     }
+    if (!enabledIds.contains(domain)) {
+      throw FormatException('Memory domain grant "$domain" is disabled');
+    }
   }
   if (!memory.writeDomains.contains(memory.defaultWriteDomain)) {
     throw FormatException(
@@ -661,6 +704,35 @@ void _validateAgentMemory(
       );
     }
   }
+}
+
+/// Remembers one non-empty domain-owned value and rejects duplicate ownership.
+void _rememberUnique(
+  Map<String, String> seen,
+  String value,
+  String domainId,
+  String label,
+) {
+  final key = value.trim();
+  if (key.isEmpty) {
+    return;
+  }
+  final owner = seen[key];
+  if (owner != null && owner != domainId) {
+    throw FormatException(
+      '$label duplicate "$key" for "$owner" and "$domainId"',
+    );
+  }
+  seen[key] = domainId;
+}
+
+/// Returns a duplicate-detection key for one endpoint URI.
+String _endpointKey(String value) {
+  final uri = Uri.tryParse(value.trim());
+  if (uri == null || uri.host.isEmpty) {
+    return value.trim();
+  }
+  return uri.replace(query: '', fragment: '').toString();
 }
 
 /// Validates one config-owned identifier.

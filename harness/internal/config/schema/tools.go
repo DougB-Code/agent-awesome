@@ -280,7 +280,7 @@ func validateHTTPURL(value string) error {
 	return nil
 }
 
-// validateMemory checks ADK memory domain grants and endpoint references.
+// validateMemory checks runtime memory domain grants and endpoint references.
 func validateMemory(memory Memory) error {
 	if len(memory.ReadDomains) == 0 {
 		return nil

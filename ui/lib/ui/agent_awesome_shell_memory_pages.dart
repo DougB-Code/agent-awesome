@@ -50,17 +50,7 @@ class _MemoryPagesContent extends StatelessWidget {
                         ? null
                         : () => unawaited(controller.loadTimelineFromUi(topic)),
                     icon: const Icon(Icons.timeline_outlined),
-                    label: Text(topic),
-                  ),
-                if (page != null)
-                  OutlinedButton.icon(
-                    onPressed: controller.memoryBusy
-                        ? null
-                        : () => unawaited(
-                            controller.refreshSelectedMemoryPageFromUi(),
-                          ),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh Page'),
+                    label: Text(_memoryLabel(topic)),
                   ),
               ],
             ),

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	mcpClientName    = "agentawesome-adk-memory"
+	mcpClientName    = "agentawesome-memory"
 	mcpClientVersion = "v1.0.0"
 )
 

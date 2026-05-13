@@ -63,8 +63,23 @@ Use the same Slack bot token and signing secret you tested locally. Do not set
 config back to Socket Mode.
 
 The public `workers.dev` URL is disabled. `agent-awesome.com/*` is the configured
-Cloudflare Worker route for the existing domain, and the Worker only forwards
-Slack-signed Events API requests.
+Cloudflare Worker route for the existing domain. The Worker forwards Slack-signed
+Events API requests and bearer-authenticated gateway control-plane requests.
+
+## Desktop UI Check
+
+Run the release binary with the hosted gateway and cloud profile:
+
+```sh
+export AGENT_GATEWAY_BASE_URL=https://agent-awesome.com/api
+export AGENTAWESOME_GATEWAY_TOKEN="<gateway-token>"
+export AGENTAWESOME_RUNTIME_PROFILE="<release-root>/ui/runtime_profiles/cloudflare_context.json"
+export AUTO_START_LOCAL_SERVICES=false
+./agentawesome_ui
+```
+
+The desktop UI should use the same gateway as Slack for chat, memory, and task
+traffic.
 
 ## Security Notes
 

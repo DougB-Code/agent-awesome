@@ -1,4 +1,4 @@
-// This file installs an ADK plugin that captures sessions after each run.
+// This file installs a runtime plugin that captures sessions after each run.
 package adkmemory
 
 import (
@@ -28,6 +28,6 @@ func captureSessionAfterRun(invocation agent.InvocationContext) {
 	ctx, cancel := context.WithTimeout(context.Background(), sessionCaptureTimeout)
 	defer cancel()
 	if err := invocation.Memory().AddSessionToMemory(ctx, invocation.Session()); err != nil {
-		log.Error().Err(err).Msg("persist ADK session to memory")
+		log.Error().Err(err).Msg("persist runtime session to memory")
 	}
 }

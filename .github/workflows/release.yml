@@ -99,7 +99,7 @@ jobs:
           cp -a ui/build/linux/x64/release/bundle/. "$release_root/"
           mkdir -p "${release_root}/ui" "${release_root}/harness" "${release_root}/gateway" "${release_root}/memory"
           cp -a ui/runtime_profiles "${release_root}/ui/"
-          cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml "${release_root}/harness/"
+          cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml harness/tool.cloudflare.yaml "${release_root}/harness/"
           cp -a gateway/slack-manifest.json "${release_root}/gateway/"
           cp deploy/linux/install.sh "${release_root}/install.sh"
           chmod 0755 "${release_root}/install.sh"

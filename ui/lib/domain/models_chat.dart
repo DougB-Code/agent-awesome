@@ -13,16 +13,16 @@ enum ChatRole {
   tool,
 }
 
-/// ChatSession represents the ADK session backing one user-visible chat.
+/// ChatSession represents the runtime session backing one user-visible chat.
 class ChatSession {
-  /// Creates a user-visible chat summary backed by an ADK session.
+  /// Creates a user-visible chat summary backed by a runtime session.
   const ChatSession({
     required this.id,
     required this.title,
     required this.updatedAt,
   });
 
-  /// ADK session identifier.
+  /// Runtime session identifier.
   final String id;
 
   /// Human-readable title.
@@ -47,7 +47,7 @@ class ChatHistoryEntry {
     this.titleError = '',
   });
 
-  /// Runtime profile path that owns the ADK session.
+  /// Runtime profile path that owns the chat session.
   final String profilePath;
 
   /// Runtime profile id captured when the chat was saved.
@@ -56,7 +56,7 @@ class ChatHistoryEntry {
   /// Runtime profile label captured when the chat was saved.
   final String profileLabel;
 
-  /// ADK session id inside the owning profile.
+  /// Chat session id inside the owning profile.
   final String sessionId;
 
   /// App-visible chat title.
@@ -202,7 +202,7 @@ class ToolActivity {
   final String summary;
 }
 
-/// ConfirmationRequest stores an ADK confirmation prompt awaiting user choice.
+/// ConfirmationRequest stores a runtime confirmation prompt awaiting user choice.
 class ConfirmationRequest {
   /// Creates a confirmation request.
   const ConfirmationRequest({
@@ -212,7 +212,7 @@ class ConfirmationRequest {
     this.toolName = '',
   });
 
-  /// ADK function-call id to echo in the response.
+  /// Runtime function-call id to echo in the response.
   final String callId;
 
   /// Human-readable prompt text.
@@ -221,7 +221,7 @@ class ConfirmationRequest {
   /// Available confirmation options.
   final List<ConfirmationOption> options;
 
-  /// Original tool name that requested confirmation, when supplied by ADK.
+  /// Original tool name that requested confirmation, when supplied by the runtime.
   final String toolName;
 }
 
@@ -230,14 +230,14 @@ class ConfirmationOption {
   /// Creates a confirmation option.
   const ConfirmationOption({required this.action, required this.label});
 
-  /// Machine action sent back to ADK.
+  /// Machine action sent back to the runtime.
   final String action;
 
   /// User-facing label.
   final String label;
 }
 
-/// ConfirmationReply is the user's response to an ADK confirmation request.
+/// ConfirmationReply is the user's response to a runtime confirmation request.
 class ConfirmationReply {
   /// Creates a confirmation reply.
   const ConfirmationReply({
@@ -246,7 +246,7 @@ class ConfirmationReply {
     this.action,
   });
 
-  /// ADK function-call id.
+  /// Runtime function-call id.
   final String callId;
 
   /// Whether the action is approved.

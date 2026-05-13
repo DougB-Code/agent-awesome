@@ -130,7 +130,7 @@ request signatures before accepting events.
 - `POST /slack/events` receives Slack Events API webhooks.
 - `POST /mcp` proxies UI-facing memory MCP traffic to the configured memory service.
 - `/api/context/*` proxies harness context tool traffic.
-- `/api/*` proxies ADK-compatible API traffic to the configured harness.
+- `/api/*` proxies assistant API traffic to the configured harness.
 
 `GET /api/gateway/status` includes dependency readiness. While supervised
 dependencies are still starting or failed, `/api/*`, `/api/context/*`, and
@@ -139,7 +139,7 @@ errors. `GET /healthz` stays live for process liveness.
 
 `POST /api/run_sse` forwards user text unchanged by default. Operators can set
 `AGENTAWESOME_RUNTIME_POLICY_TEXT` for explicit deployment-specific guidance,
-but stable tool-call behavior lives in harness agent instructions and ADK
+but stable tool-call behavior lives in harness agent instructions and runtime
 callbacks instead of gateway prompt text.
 
 Gateway proxy request bodies are capped at 8 MiB. Oversized bodies return

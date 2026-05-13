@@ -19,7 +19,7 @@ const maxRequestBodyBytes int64 = 8 << 20
 
 var errRequestBodyTooLarge = errors.New("request body too large")
 
-// Proxy forwards ADK-compatible API traffic to the configured harness.
+// Proxy forwards assistant API traffic to the configured harness.
 type Proxy struct {
 	upstream        *url.URL
 	client          *http.Client

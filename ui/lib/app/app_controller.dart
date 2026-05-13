@@ -87,6 +87,8 @@ class RuntimeProfileFileEntry {
     required this.id,
     required this.label,
     required this.active,
+    this.runtimeKind = '',
+    this.memoryDomainLabels = const <String>[],
   });
 
   /// Profile JSON path.
@@ -100,6 +102,12 @@ class RuntimeProfileFileEntry {
 
   /// Whether the app is currently using this profile.
   final bool active;
+
+  /// Local or cloud runtime hint parsed from profile endpoints.
+  final String runtimeKind;
+
+  /// Memory domain labels parsed from profile JSON.
+  final List<String> memoryDomainLabels;
 }
 
 /// AgentAwesomeAppController stores app state and service orchestration.
@@ -252,7 +260,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Shared owner for all app-started subprocesses.
   final ProcessSupervisor processSupervisor;
 
-  /// ADK assistant client.
+  /// Assistant runtime client.
   AssistantClient assistantClient;
 
   /// Memory MCP client.
@@ -477,7 +485,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Tool names advertised by the active primary memory MCP endpoint.
   Set<String> primaryMemoryToolNames = const <String>{};
 
-  /// Pending ADK confirmation request.
+  /// Pending runtime confirmation request.
   ConfirmationRequest? pendingConfirmation;
 
   /// Whether a message is currently streaming.
@@ -745,11 +753,19 @@ class AgentAwesomeAppController extends ChangeNotifier {
     final paths = await listRuntimeProfilePaths();
     final entries = <RuntimeProfileFileEntry>[];
     for (final path in paths) {
-      entries.add(await _profileEntryForPath(path));
+      entries.add(
+        await _profileEntryForPath(path, activePath: runtimeProfilePath),
+      );
     }
     if (runtimeProfilePath.isNotEmpty &&
         !entries.any((entry) => entry.path == runtimeProfilePath)) {
-      entries.insert(0, await _profileEntryForPath(runtimeProfilePath));
+      entries.insert(
+        0,
+        await _profileEntryForPath(
+          runtimeProfilePath,
+          activePath: runtimeProfilePath,
+        ),
+      );
     }
     return entries;
   }

@@ -117,15 +117,6 @@ class _MemoryFilterBar extends StatelessWidget {
                   icon: const Icon(Icons.travel_explore),
                 ),
               ),
-              const SizedBox(width: 8),
-              Tooltip(
-                message: 'Refresh',
-                child: IconButton.outlined(
-                  onPressed: () =>
-                      unawaited(controller.applyMemoryFilters(filters)),
-                  icon: const Icon(Icons.refresh),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -238,11 +229,6 @@ class _MemoryStatusStrip extends StatelessWidget {
       icon: Icons.error_outline,
       title: 'Memory service unavailable',
       message: controller.memoryMessage,
-      action: OutlinedButton.icon(
-        onPressed: () => unawaited(controller.refreshMemoryFromUi()),
-        icon: const Icon(Icons.refresh),
-        label: const Text('Try again'),
-      ),
     );
   }
 }
@@ -252,13 +238,11 @@ class _RouteNoticePanel extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.message,
-    this.action,
   });
 
   final IconData icon;
   final String title;
   final String message;
-  final Widget? action;
 
   /// Builds a prominent route-level status or error panel.
   @override
@@ -302,10 +286,6 @@ class _RouteNoticePanel extends StatelessWidget {
                   message,
                   style: TextStyle(color: colors.muted, height: 1.4),
                 ),
-                if (action != null) ...<Widget>[
-                  const SizedBox(height: 14),
-                  action!,
-                ],
               ],
             ),
           ),
@@ -337,11 +317,6 @@ class _MemoryUnavailableRoute extends StatelessWidget {
             icon: Icons.error_outline,
             title: 'Connection failed',
             message: controller.memoryMessage,
-            action: OutlinedButton.icon(
-              onPressed: () => unawaited(controller.refreshMemoryFromUi()),
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try again'),
-            ),
           ),
         ],
       ),
@@ -439,7 +414,7 @@ class _MemoryRecordTile extends StatelessWidget {
                                     if (record.status != 'active')
                                       _MemoryBadge(label: record.status),
                                     for (final topic in record.topics.take(3))
-                                      _MemoryBadge(label: topic),
+                                      _MemoryBadge(label: _memoryLabel(topic)),
                                   ],
                                 ),
                               ],
@@ -461,7 +436,7 @@ class _MemoryRecordTile extends StatelessWidget {
                           const SizedBox(width: 7),
                           Expanded(
                             child: Text(
-                              record.sourceLabel,
+                              _memorySourceLabel(record.sourceLabel),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(

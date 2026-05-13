@@ -118,6 +118,29 @@ void main() {
     },
   );
 
+  test('loads cloud profile as an external gateway topology', () async {
+    final profile = await RuntimeProfileLoader(
+      _testConfig(
+        agentGatewayBaseUrl: 'https://agent-awesome.com/api',
+        autoStartLocalServices: false,
+        runtimeProfilePath:
+            '${Directory.current.path}/runtime_profiles/cloudflare_context.json',
+      ),
+    ).load();
+
+    expect(profile.gateway.apiBaseUrl, 'https://agent-awesome.com/api');
+    expect(profile.gateway.memoryMcpUrl, 'https://agent-awesome.com/mcp');
+    expect(profile.gateway.autoStart, isFalse);
+    expect(profile.harness.autoStart, isFalse);
+    expect(
+      profile.memoryServers.single.endpoint,
+      'https://agent-awesome.com/mcp',
+    );
+    expect(profile.memoryServers.single.autoStart, isFalse);
+    expect(profile.agentMemory.actor, 'agent:agent-awesome');
+    expect(profile.agentMemory.readDomains, <String>['memory']);
+  });
+
   test('uses one shared app model config path', () {
     expect(
       defaultModelConfigPath(),
@@ -177,6 +200,85 @@ void main() {
           'write_domains': <String>['memory'],
           'default_write_domain': 'memory',
           'allowed_sensitivities': <String>['public', 'internal', 'private'],
+        },
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('rejects agent memory grants for disabled domains', () {
+    expect(
+      () => RuntimeProfile.fromJson(<String, dynamic>{
+        'id': 'disabled-grant',
+        'label': 'Disabled Grant',
+        'harness': _harnessJson(),
+        'gateway': _gatewayJson(),
+        'memory_domains': <Map<String, dynamic>>[
+          _memoryDomainJson('memory', enabled: false),
+          _memoryDomainJson('shared_project', port: 8091),
+        ],
+        'agent_memory': <String, dynamic>{
+          'actor': 'agent:test',
+          'read_domains': <String>['memory'],
+          'write_domains': <String>['shared_project'],
+          'default_write_domain': 'shared_project',
+          'allowed_sensitivities': <String>['public'],
+        },
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('rejects managed memory domains with duplicate storage paths', () {
+    expect(
+      () => RuntimeProfile.fromJson(<String, dynamic>{
+        'id': 'duplicate-storage',
+        'label': 'Duplicate Storage',
+        'harness': _harnessJson(),
+        'gateway': _gatewayJson(),
+        'memory_domains': <Map<String, dynamic>>[
+          _memoryDomainJson(
+            'memory',
+            autoStart: true,
+            dbPath: '/tmp/shared-memory.db',
+            dataDir: '/tmp/memory-files',
+          ),
+          _memoryDomainJson(
+            'shared_project',
+            port: 8091,
+            autoStart: true,
+            dbPath: '/tmp/shared-memory.db',
+            dataDir: '/tmp/project-files',
+          ),
+        ],
+        'agent_memory': <String, dynamic>{
+          'actor': 'agent:test',
+          'read_domains': <String>['memory'],
+          'write_domains': <String>['memory'],
+          'default_write_domain': 'memory',
+          'allowed_sensitivities': <String>['public'],
+        },
+      }),
+      throwsFormatException,
+    );
+  });
+
+  test('rejects managed memory domains without launch package data', () {
+    expect(
+      () => RuntimeProfile.fromJson(<String, dynamic>{
+        'id': 'missing-package',
+        'label': 'Missing Package',
+        'harness': _harnessJson(),
+        'gateway': _gatewayJson(),
+        'memory_domains': <Map<String, dynamic>>[
+          _memoryDomainJson('memory', autoStart: true, packagePath: ''),
+        ],
+        'agent_memory': <String, dynamic>{
+          'actor': 'agent:test',
+          'read_domains': <String>['memory'],
+          'write_domains': <String>['memory'],
+          'default_write_domain': 'memory',
+          'allowed_sensitivities': <String>['public'],
         },
       }),
       throwsFormatException,
@@ -324,20 +426,30 @@ Map<String, dynamic> _harnessJson() {
   };
 }
 
-Map<String, dynamic> _memoryDomainJson(String id) {
+/// Builds one memory-domain profile JSON fixture.
+Map<String, dynamic> _memoryDomainJson(
+  String id, {
+  int port = 8090,
+  bool autoStart = false,
+  bool enabled = true,
+  String workingDirectory = '/tmp/memory',
+  String packagePath = './cmd/memoryd',
+  String dbPath = '/tmp/memory.db',
+  String dataDir = '/tmp/memory-files',
+}) {
   return <String, dynamic>{
     'id': id,
     'label': 'Memory',
     'kind': 'memory',
-    'endpoint': 'http://127.0.0.1:8090/mcp',
-    'health_url': 'http://127.0.0.1:8090/healthz',
-    'working_directory': '/tmp/memory',
-    'package_path': './cmd/memoryd',
-    'db_path': '/tmp/memory.db',
-    'data_dir': '/tmp/memory-files',
+    'endpoint': 'http://127.0.0.1:$port/mcp',
+    'health_url': 'http://127.0.0.1:$port/healthz',
+    'working_directory': workingDirectory,
+    'package_path': packagePath,
+    'db_path': dbPath,
+    'data_dir': dataDir,
     'arguments': <String>[],
-    'auto_start': false,
-    'enabled': true,
+    'auto_start': autoStart,
+    'enabled': enabled,
   };
 }
 
@@ -360,18 +472,25 @@ Map<String, dynamic> _gatewayJson({bool enabled = true}) {
   };
 }
 
-AppConfig _testConfig({String? workspaceRoot}) {
+/// Builds app config for runtime profile loader tests.
+AppConfig _testConfig({
+  String? workspaceRoot,
+  String agentGatewayBaseUrl = 'http://127.0.0.1:8070/api',
+  bool autoStartLocalServices = true,
+  String? runtimeProfilePath,
+}) {
   final uiRoot = Directory.current.path;
   final resolvedWorkspaceRoot = workspaceRoot ?? Directory.current.parent.path;
   return AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:8080/api',
-    agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
+    agentGatewayBaseUrl: agentGatewayBaseUrl,
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
     agentAppName: 'agent_awesome',
     agentUserId: 'doug',
     workspaceRoot: resolvedWorkspaceRoot,
-    autoStartLocalServices: true,
-    runtimeProfilePath: '$uiRoot/runtime_profiles/agent_awesome.json',
+    autoStartLocalServices: autoStartLocalServices,
+    runtimeProfilePath:
+        runtimeProfilePath ?? '$uiRoot/runtime_profiles/agent_awesome.json',
   );
 }

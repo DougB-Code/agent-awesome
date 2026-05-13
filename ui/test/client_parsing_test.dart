@@ -1,4 +1,4 @@
-/// Tests ADK and MCP response parsing used by the Agent Awesome UI.
+/// Tests assistant and MCP response parsing used by the Agent Awesome UI.
 library;
 
 import 'dart:convert';
@@ -151,7 +151,7 @@ void main() {
       expect(event.partial, isTrue);
     });
 
-    test('deletes sessions through the ADK endpoint', () async {
+    test('deletes sessions through the assistant endpoint', () async {
       final client = AssistantClient(
         baseUrl: 'http://127.0.0.1:1',
         appName: 'test-app',
@@ -461,8 +461,29 @@ void main() {
       expect(records.single.evidenceId, 'ev-1');
       expect(records.single.trustLevel, 'user_asserted');
       expect(records.single.rawContent, 'Doug likes concise UI.');
-      expect(records.single.sourceLabel, 'chat:1');
+      expect(records.single.sourceLabel, 'Chat: 1');
       expect(records.single.relationships.single.type, 'refers_to');
+    });
+
+    test('parses legacy chat memory sources without internal labels', () {
+      final records = parseMemoryRecords(<String, dynamic>{
+        'primary_memory': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'mem-1',
+            'title': 'Chat message',
+            'summary': 'Remember this.',
+            'kind': 'conversation',
+            'topics': <String>['adk_chat'],
+            'source': <String, dynamic>{
+              'system': 'google_adk_session',
+              'id': 'event-1',
+            },
+          },
+        ],
+      });
+
+      expect(records.single.sourceSystem, 'chat_session');
+      expect(records.single.sourceLabel, 'Chat: event-1');
     });
 
     test('parses compiled memory pages', () {

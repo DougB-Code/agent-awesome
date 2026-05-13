@@ -1,7 +1,7 @@
 // Package gateway composes the personal agent gateway HTTP surface.
 //
 // Intended use cases:
-//   - Serve health, status, and ADK-compatible proxy endpoints.
+//   - Serve health, status, and assistant proxy endpoints.
 //   - Keep channel adapters behind one local or cloud deployable binary.
 //
 // High-level examples:

@@ -3,7 +3,7 @@
   "label": "Cloudflare Context",
   "harness": {
     "id": "cloudflare-context-harness",
-    "label": "Cloudflare Context Harness",
+    "label": "Cloudflare Harness",
     "api_base_url": "${AGENT_API_BASE_URL}",
     "context_api_base_url": "${AGENT_CONTEXT_API_BASE_URL}",
     "app_name": "${AGENT_APP_NAME}",
@@ -14,11 +14,11 @@
     "agent_config": "${AGENTAWESOME_WORKSPACE_ROOT}/harness/agent.yaml",
     "tool_config": "${AGENTAWESOME_WORKSPACE_ROOT}/harness/tool.cloudflare.yaml",
     "port": ${AGENT_API_PORT},
-    "auto_start": ${AUTO_START_LOCAL_SERVICES}
+    "auto_start": false
   },
   "gateway": {
     "id": "cloudflare-context-gateway",
-    "label": "Cloudflare Context Gateway",
+    "label": "Cloudflare Gateway",
     "api_base_url": "${AGENT_GATEWAY_BASE_URL}",
     "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
     "status_url": "${AGENT_GATEWAY_STATUS_URL}",
@@ -26,13 +26,13 @@
     "package_path": "./cmd/agent-gateway",
     "harness_base_url": "${AGENT_API_BASE_URL}",
     "context_base_url": "${AGENT_CONTEXT_API_BASE_URL}",
-    "memory_mcp_url": "https://agent-awesome.com/mcp",
+    "memory_mcp_url": "${AGENT_GATEWAY_MCP_URL}",
     "app_name": "${AGENT_APP_NAME}",
     "user_id": "${AGENT_USER_ID}",
-    "model_provider_id": "cloudflare",
-    "model_id": "gemma-4",
+    "model_provider_id": "openai",
+    "model_id": "gpt-mini",
     "port": ${AGENT_GATEWAY_PORT},
-    "auto_start": ${AUTO_START_LOCAL_SERVICES},
+    "auto_start": false,
     "enabled": true
   },
   "memory_domains": [
@@ -40,8 +40,8 @@
       "id": "memory",
       "label": "Cloudflare Memory",
       "kind": "memory",
-      "endpoint": "https://agent-awesome.com/mcp",
-      "health_url": "https://agent-awesome.com/healthz",
+      "endpoint": "${AGENT_GATEWAY_MCP_URL}",
+      "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
       "working_directory": "",
       "package_path": "",
       "db_path": "",
@@ -52,7 +52,7 @@
     }
   ],
   "agent_memory": {
-    "actor": "agent:cloudflare-context",
+    "actor": "agent:agent-awesome",
     "read_domains": ["memory"],
     "write_domains": ["memory"],
     "default_write_domain": "memory",

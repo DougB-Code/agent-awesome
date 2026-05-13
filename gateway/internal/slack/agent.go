@@ -1,4 +1,4 @@
-// This file calls the gateway ADK-compatible API on behalf of Slack messages.
+// This file calls the gateway assistant API on behalf of Slack messages.
 package slack
 
 import (
@@ -32,7 +32,7 @@ type AgentClient struct {
 	policy  *policy.Injector
 }
 
-// NewAgentClient creates an ADK-compatible client without local policy injection.
+// NewAgentClient creates an assistant client without local policy injection.
 func NewAgentClient(client *http.Client, baseURL string, appName string, userID string) *AgentClient {
 	return NewAgentClientWithPolicy(
 		client,
@@ -43,7 +43,7 @@ func NewAgentClient(client *http.Client, baseURL string, appName string, userID 
 	)
 }
 
-// NewAgentClientWithPolicy creates an ADK-compatible client with configured policy.
+// NewAgentClientWithPolicy creates an assistant client with configured policy.
 func NewAgentClientWithPolicy(client *http.Client, baseURL string, appName string, userID string, injector *policy.Injector) *AgentClient {
 	return NewAgentClientWithPolicyAndHeaders(
 		client,
@@ -242,13 +242,13 @@ func decodeAgentSSE(reader io.Reader) (string, error) {
 	return strings.TrimSpace(strings.Join(texts, "\n")), nil
 }
 
-// agentResponseError formats one non-success ADK HTTP response with a body sample.
+// agentResponseError formats one non-success assistant HTTP response with a body sample.
 func agentResponseError(operation string, resp *http.Response, limit int64) error {
 	data, _ := io.ReadAll(io.LimitReader(resp.Body, limit))
 	return agentStatusError(operation, resp.StatusCode, string(data))
 }
 
-// agentStatusError formats one ADK HTTP status without leaking unlimited body data.
+// agentStatusError formats one assistant HTTP status without leaking unlimited body data.
 func agentStatusError(operation string, statusCode int, body string) error {
 	detail := strings.TrimSpace(body)
 	if detail == "" {
@@ -257,7 +257,7 @@ func agentStatusError(operation string, statusCode int, body string) error {
 	return fmt.Errorf("%s: HTTP %d %s", operation, statusCode, detail)
 }
 
-// decodeAgentEvent returns display text from one ADK event payload.
+// decodeAgentEvent returns display text from one assistant event payload.
 func decodeAgentEvent(eventType string, data string) (string, error) {
 	var event agentSSEEvent
 	if err := json.Unmarshal([]byte(data), &event); err != nil {
@@ -290,7 +290,7 @@ func decodeAgentEvent(eventType string, data string) (string, error) {
 	return strings.TrimSpace(strings.Join(parts, "\n")), nil
 }
 
-// agentSSEEvent stores the ADK SSE fields Slack needs to decode.
+// agentSSEEvent stores the assistant SSE fields Slack needs to decode.
 type agentSSEEvent struct {
 	Error        any    `json:"error"`
 	Author       string `json:"author"`
@@ -301,7 +301,7 @@ type agentSSEEvent struct {
 	} `json:"content"`
 }
 
-// agentSSEPart stores one displayable or control part from an ADK event.
+// agentSSEPart stores one displayable or control part from an assistant event.
 type agentSSEPart struct {
 	Text         string             `json:"text"`
 	FunctionCall *agentFunctionCall `json:"functionCall"`
@@ -313,7 +313,7 @@ type agentFunctionCall struct {
 	Args map[string]any `json:"args"`
 }
 
-// firstAgentConfirmationCall finds the ADK confirmation request, if present.
+// firstAgentConfirmationCall finds the runtime confirmation request, if present.
 func firstAgentConfirmationCall(parts []agentSSEPart) *agentFunctionCall {
 	for _, part := range parts {
 		if part.FunctionCall != nil && part.FunctionCall.Name == confirmationFunctionName {

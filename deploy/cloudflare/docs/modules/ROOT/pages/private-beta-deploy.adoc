@@ -59,10 +59,41 @@ Check the authenticated beta status surface after deploy:
 
 [source,sh]
 ----
+curl -fsS https://agent-awesome.com/healthz
 curl -fsS \
   -H "Authorization: Bearer ${GATEWAY_TOKEN}" \
   https://agent-awesome.com/api/gateway/beta-status
+curl -fsS \
+  -H "Authorization: Bearer ${GATEWAY_TOKEN}" \
+  https://agent-awesome.com/api/context/tools/list
 ----
+
+== Desktop UI Check
+
+Run the release binary against the hosted gateway:
+
+[source,sh]
+----
+export AGENT_GATEWAY_BASE_URL=https://agent-awesome.com/api
+export AGENTAWESOME_GATEWAY_TOKEN="${GATEWAY_TOKEN}"
+export AGENTAWESOME_RUNTIME_PROFILE="<release-root>/ui/runtime_profiles/cloudflare_context.json"
+export AUTO_START_LOCAL_SERVICES=false
+./agentawesome_ui
+----
+
+Open chat and memory from the UI.
+Both routes should use the hosted gateway, not direct memory MCP endpoints.
+
+== Slack Check
+
+After Slack Events URL verification succeeds, send one message from the allow-listed user in the allow-listed channel and inspect logs:
+
+[source,sh]
+----
+npx wrangler tail agent-awesome-pilot --format pretty
+----
+
+Slack and the desktop UI should reach the same gateway-backed harness and memory topology.
 
 == Snapshot Check
 

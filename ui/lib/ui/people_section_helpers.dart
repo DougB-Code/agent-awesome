@@ -15,6 +15,28 @@ String _memoryContextLabel(MemoryRecord record) {
   return 'General';
 }
 
+/// Returns a product-facing source label for contact activity rows.
+String _contactSourceLabel(String value) {
+  final trimmed = value.trim();
+  final normalized = trimmed.toLowerCase();
+  if (normalized == 'google_adk_session' ||
+      normalized == 'agent_awesome_chat' ||
+      normalized == 'chat_session') {
+    return 'Chat';
+  }
+  for (final prefix in <String>[
+    'google_adk_session:',
+    'agent_awesome_chat:',
+    'chat_session:',
+  ]) {
+    if (normalized.startsWith(prefix)) {
+      final suffix = trimmed.substring(prefix.length).trim();
+      return suffix.isEmpty ? 'Chat' : 'Chat: $suffix';
+    }
+  }
+  return trimmed;
+}
+
 /// Returns the inferred contact context firewall for a task.
 String _taskContextFirewall(WorkspaceTask task) {
   if (task.project.trim().isNotEmpty) {

@@ -63,3 +63,52 @@ After deploy, wait several minutes for the first Container rollout, then inspect
 npx wrangler containers list
 npx wrangler containers images list
 ----
+
+== Verify Gateway Access
+
+Check public liveness, then check the authenticated gateway surfaces used by the desktop UI:
+
+[source,sh]
+----
+curl -fsS https://agent-awesome.com/healthz
+curl -fsS \
+  -H "Authorization: Bearer ${GATEWAY_TOKEN}" \
+  https://agent-awesome.com/api/gateway/beta-status
+curl -fsS \
+  -H "Authorization: Bearer ${GATEWAY_TOKEN}" \
+  https://agent-awesome.com/api/context/tools/list
+----
+
+== Connect Desktop UI
+
+Start the release binary with the Cloudflare runtime profile and the same gateway token:
+
+[source,sh]
+----
+export AGENT_GATEWAY_BASE_URL=https://agent-awesome.com/api
+export AGENTAWESOME_GATEWAY_TOKEN="${GATEWAY_TOKEN}"
+export AGENTAWESOME_RUNTIME_PROFILE="<release-root>/ui/runtime_profiles/cloudflare_context.json"
+export AUTO_START_LOCAL_SERVICES=false
+./agentawesome_ui
+----
+
+The desktop UI sends chat, memory, and task traffic to the hosted gateway.
+It does not call memory MCP endpoints directly.
+
+== Verify Slack Channel
+
+Keep the Slack Events API request URL at:
+
+[source,text]
+----
+https://agent-awesome.com/slack/events
+----
+
+Send one message from the allow-listed Slack user in the allow-listed channel, then inspect Worker logs:
+
+[source,sh]
+----
+npx wrangler tail agent-awesome-pilot --format pretty
+----
+
+Slack traffic enters through the Worker signature check and then reaches the same hosted gateway as the desktop UI.

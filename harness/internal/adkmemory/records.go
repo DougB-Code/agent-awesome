@@ -1,4 +1,4 @@
-// This file maps graph-backed memory records into ADK memory entries.
+// This file maps graph-backed memory records into runtime memory entries.
 package adkmemory
 
 import "time"
@@ -17,7 +17,7 @@ type rawEvidence struct {
 	Source      sourceRef `json:"source"`
 }
 
-// memoryRecord is the subset of graph memory fields needed by ADK.
+// memoryRecord is the subset of graph memory fields needed by the runtime.
 type memoryRecord struct {
 	ID         string       `json:"id"`
 	EvidenceID string       `json:"evidence_id"`

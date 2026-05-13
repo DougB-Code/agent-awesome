@@ -1,4 +1,4 @@
-// This file implements Google's ADK memory.Service interface.
+// This file implements the runtime memory service interface.
 package adkmemory
 
 import (
@@ -26,7 +26,7 @@ const (
 	defaultSearchLimit    = 12
 )
 
-// Service stores and retrieves ADK chat memory through memory domains.
+// Service stores and retrieves chat memory through memory domains.
 type Service struct {
 	actor                string
 	domains              []memoryDomain
@@ -55,7 +55,7 @@ func New(runtime memoryRuntimeConfig) *Service {
 	}
 }
 
-// AddSessionToMemory persists text chat events from one ADK session.
+// AddSessionToMemory persists text chat events from one runtime session.
 func (s *Service) AddSessionToMemory(ctx context.Context, curSession session.Session) error {
 	if curSession == nil {
 		return nil
@@ -83,7 +83,7 @@ func (s *Service) AddSessionToMemory(ctx context.Context, curSession session.Ses
 			log.Warn().
 				Str("write_domain", writeDomain.id).
 				Strs("source_domains", setValues(sourceDomains)).
-				Msg("skip ADK memory capture blocked by domain flow policy")
+				Msg("skip chat memory capture blocked by domain flow policy")
 			s.markCapturedThrough(cursorKey, index+1)
 			continue
 		}
@@ -104,7 +104,7 @@ func (s *Service) AddSessionToMemory(ctx context.Context, curSession session.Ses
 	return nil
 }
 
-// nextCaptureStart returns the first uncaptured event index for one ADK session.
+// nextCaptureStart returns the first uncaptured event index for one runtime session.
 func (s *Service) nextCaptureStart(curSession session.Session, eventCount int) (string, int) {
 	key := sessionEventCursorKey(curSession)
 	s.mu.Lock()
@@ -120,7 +120,7 @@ func (s *Service) nextCaptureStart(curSession session.Session, eventCount int) (
 	return key, start
 }
 
-// markCapturedThrough advances the captured event cursor for one ADK session.
+// markCapturedThrough advances the captured event cursor for one runtime session.
 func (s *Service) markCapturedThrough(cursorKey string, nextIndex int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -137,7 +137,7 @@ func sessionEventCursorKey(curSession session.Session) string {
 	return curSession.AppName() + ":" + curSession.UserID() + ":" + curSession.ID()
 }
 
-// SearchMemory returns prior chat memories relevant to an ADK query.
+// SearchMemory returns prior chat memories relevant to a runtime query.
 func (s *Service) SearchMemory(ctx context.Context, req *adkmemory.SearchRequest) (*adkmemory.SearchResponse, error) {
 	if req == nil {
 		return &adkmemory.SearchResponse{}, nil
@@ -150,15 +150,15 @@ func (s *Service) SearchMemory(ctx context.Context, req *adkmemory.SearchRequest
 	for _, domain := range s.domains {
 		mcpSession, err := s.connect(ctx, domain.server)
 		if err != nil {
-			log.Warn().Err(err).Str("domain", domain.id).Msg("search ADK memory unavailable")
+			log.Warn().Err(err).Str("domain", domain.id).Msg("search chat memory unavailable")
 			continue
 		}
 		defer mcpSession.Close()
 		content, err := callTool(ctx, mcpSession, domain.searchTool, s.searchPayload(query))
 		if err != nil {
-			log.Warn().Err(err).Str("domain", domain.id).Msg("search ADK memory failed")
+			log.Warn().Err(err).Str("domain", domain.id).Msg("search chat memory failed")
 		} else if bundle, err := decodeStructured[retrievalBundle](content); err != nil {
-			log.Warn().Err(err).Str("domain", domain.id).Msg("decode ADK memory search result failed")
+			log.Warn().Err(err).Str("domain", domain.id).Msg("decode chat memory search result failed")
 		} else {
 			domainResponse := searchResponseFromBundle(domain.id, bundle)
 			if len(domainResponse.Memories) > 0 {
@@ -286,7 +286,7 @@ func (s *Service) clearTurnSourceDomains(curSession session.Session) {
 	delete(s.turnSourceDomains, key)
 }
 
-// searchTurnKey identifies the current ADK user/app search context.
+// searchTurnKey identifies the current runtime user/app search context.
 func searchTurnKey(appName string, userID string) string {
 	appName = strings.TrimSpace(appName)
 	userID = strings.TrimSpace(userID)
@@ -306,7 +306,7 @@ func setValues(values map[string]struct{}) []string {
 	return out
 }
 
-// searchResponseFromBundle maps Agent Awesome records into ADK memory entries.
+// searchResponseFromBundle maps Agent Awesome records into runtime memory entries.
 func searchResponseFromBundle(domainID string, bundle retrievalBundle) *adkmemory.SearchResponse {
 	response := &adkmemory.SearchResponse{
 		Memories: make([]adkmemory.Entry, 0, len(bundle.Primary)),

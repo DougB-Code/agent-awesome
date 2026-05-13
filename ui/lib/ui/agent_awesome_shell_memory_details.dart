@@ -97,7 +97,10 @@ class _MemoryOverviewContent extends StatelessWidget {
                   label: 'Source record id',
                   value: memory.evidenceId,
                 ),
-                _MemoryMetadataRow(label: 'Source', value: memory.sourceLabel),
+                _MemoryMetadataRow(
+                  label: 'Source',
+                  value: _memorySourceLabel(memory.sourceLabel),
+                ),
                 _MemoryMetadataRow(
                   label: 'Created',
                   value: formatOptionalLocalDateTime(memory.createdAt),
@@ -127,7 +130,7 @@ class _MemoryOverviewContent extends StatelessWidget {
                     for (final subject in memory.subjects)
                       _MemoryBadge(label: subject),
                     for (final topic in memory.topics)
-                      _MemoryBadge(label: topic),
+                      _MemoryBadge(label: _memoryLabel(topic)),
                     for (final entity in memory.entityNames)
                       _MemoryBadge(label: entity),
                   ],

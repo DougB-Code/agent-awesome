@@ -30,8 +30,8 @@ _AgentFileItem _fileItemFromRecord(MemoryRecord record) {
     mediaLabel: mediaType.isEmpty ? _extensionLabel(path, sourceId) : mediaType,
     pathLabel: _filePathLabel(path: path, sourceId: sourceId),
     checksumLabel: record.rawChecksum,
-    sourceLabel: record.sourceLabel,
-    sourceSystem: record.sourceSystem,
+    sourceLabel: _fileSourceLabel(record.sourceLabel),
+    sourceSystem: _fileSourceLabel(record.sourceSystem),
     sourceId: sourceId,
     firewall: record.firewall,
     sensitivity: record.sensitivity,
@@ -40,6 +40,28 @@ _AgentFileItem _fileItemFromRecord(MemoryRecord record) {
     topics: record.topics,
     record: record,
   );
+}
+
+/// Returns a product-facing source label for file displays.
+String _fileSourceLabel(String value) {
+  final trimmed = value.trim();
+  final normalized = trimmed.toLowerCase();
+  if (normalized == 'google_adk_session' ||
+      normalized == 'agent_awesome_chat' ||
+      normalized == 'chat_session') {
+    return 'Chat';
+  }
+  for (final prefix in <String>[
+    'google_adk_session:',
+    'agent_awesome_chat:',
+    'chat_session:',
+  ]) {
+    if (normalized.startsWith(prefix)) {
+      final suffix = trimmed.substring(prefix.length).trim();
+      return suffix.isEmpty ? 'Chat' : 'Chat: $suffix';
+    }
+  }
+  return trimmed;
 }
 
 /// Returns a file-oriented title from record metadata.
@@ -170,6 +192,8 @@ bool _isChatLikeMemory(MemoryRecord record) {
       kind == 'chat_message' ||
       title.startsWith('chat message from ') ||
       source.contains('google_adk_session') ||
+      source.contains('agent_awesome_chat') ||
+      source.contains('chat_session') ||
       source.contains('chat:');
 }
 

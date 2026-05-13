@@ -63,5 +63,5 @@ When enabled, review prompts display the workspace and global approval policy fi
 == MCP Tools
 
 MCP servers are configured under `mcp.servers`.
-The harness validates the configuration, creates MCP transports, and passes ADK-compatible MCP toolsets into the runtime.
-ADK owns MCP sessions, tool discovery, invocation, result conversion, and confirmation.
+The harness validates the configuration, creates MCP transports, and passes MCP toolsets into the assistant runtime.
+The assistant runtime owns MCP sessions, tool discovery, invocation, result conversion, and confirmation.

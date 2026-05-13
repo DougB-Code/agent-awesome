@@ -401,7 +401,7 @@ extension AgentAwesomeAppControllerMemory on AgentAwesomeAppController {
     return file;
   }
 
-  /// Builds the text payload used by the current ADK chat endpoint.
+  /// Builds the text payload used by the current chat endpoint.
   String _fileChatPrompt(
     MemoryRecord file,
     ModelFileCapabilities capabilities,

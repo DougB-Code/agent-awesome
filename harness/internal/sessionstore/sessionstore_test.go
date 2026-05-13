@@ -1,4 +1,4 @@
-// This file tests persistent ADK session storage setup.
+// This file tests persistent runtime session storage setup.
 package sessionstore
 
 import (
@@ -34,7 +34,7 @@ func TestDefaultDatabasePathUsesMemoryDBEnv(t *testing.T) {
 	}
 }
 
-// TestOpenPersistsEventsAcrossServices verifies ADK history survives reopen.
+// TestOpenPersistsEventsAcrossServices verifies runtime history survives reopen.
 func TestOpenPersistsEventsAcrossServices(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "sessions.db")

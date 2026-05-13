@@ -1,4 +1,4 @@
-// This file configures ADK sessions inside the memory-backed SQLite store.
+// This file configures runtime sessions inside the memory-backed SQLite store.
 package sessionstore
 
 import (
@@ -39,7 +39,7 @@ func DefaultDataDir() string {
 	return filepath.Join(configDir, schema.AppConfigDirName, "data")
 }
 
-// DefaultDatabasePath returns the default SQLite path for ADK chat sessions.
+// DefaultDatabasePath returns the default SQLite path for chat sessions.
 func DefaultDatabasePath() string {
 	return ResolveDatabasePath("")
 }
@@ -58,7 +58,7 @@ func ResolveDatabasePath(path string) string {
 	return filepath.Join(DefaultDataDir(), memoryDatabaseDirName, memoryDatabaseName)
 }
 
-// Open creates and migrates an ADK session service in the memory database.
+// Open creates and migrates a runtime session service in the memory database.
 func Open(path string) (session.Service, error) {
 	resolved := strings.TrimSpace(path)
 	if resolved == "" {
@@ -69,10 +69,10 @@ func Open(path string) (session.Service, error) {
 	}
 	service, err := database.NewSessionService(sqlite.Open(databaseDSN(resolved)), &gorm.Config{PrepareStmt: true})
 	if err != nil {
-		return nil, fmt.Errorf("open ADK session database %q: %w", resolved, err)
+		return nil, fmt.Errorf("open runtime session database %q: %w", resolved, err)
 	}
 	if err := database.AutoMigrate(service); err != nil {
-		return nil, fmt.Errorf("migrate ADK session database %q: %w", resolved, err)
+		return nil, fmt.Errorf("migrate runtime session database %q: %w", resolved, err)
 	}
 	if strings.TrimSpace(path) == "" {
 		if err := migrateLegacyDefaultDatabase(context.Background(), resolved); err != nil {
@@ -94,14 +94,14 @@ func ensureDatabasePath(path string) error {
 	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create ADK session database directory %q: %w", dir, err)
+		return fmt.Errorf("create runtime session database directory %q: %w", dir, err)
 	}
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
 	if err != nil {
-		return fmt.Errorf("create ADK session database %q: %w", path, err)
+		return fmt.Errorf("create runtime session database %q: %w", path, err)
 	}
 	if err := file.Close(); err != nil {
-		return fmt.Errorf("close ADK session database %q: %w", path, err)
+		return fmt.Errorf("close runtime session database %q: %w", path, err)
 	}
 	return nil
 }
@@ -117,14 +117,14 @@ func migrateLegacyDefaultDatabase(ctx context.Context, targetPath string) error 
 	}
 	db, err := sql.Open("sqlite", databaseDSN(targetPath))
 	if err != nil {
-		return fmt.Errorf("open target ADK session database for migration %q: %w", targetPath, err)
+		return fmt.Errorf("open target runtime session database for migration %q: %w", targetPath, err)
 	}
 	defer db.Close()
 	if _, err := db.ExecContext(ctx, "PRAGMA busy_timeout = 5000"); err != nil {
-		return fmt.Errorf("configure target ADK session database migration: %w", err)
+		return fmt.Errorf("configure target runtime session database migration: %w", err)
 	}
 	if _, err := db.ExecContext(ctx, "ATTACH DATABASE ? AS legacy_sessions", legacyPath); err != nil {
-		return fmt.Errorf("attach legacy ADK session database %q: %w", legacyPath, err)
+		return fmt.Errorf("attach legacy runtime session database %q: %w", legacyPath, err)
 	}
 	defer db.ExecContext(context.Background(), "DETACH DATABASE legacy_sessions")
 	for _, table := range legacyTables() {
@@ -148,7 +148,7 @@ func databaseDSN(path string) string {
 	return path + "?" + values.Encode()
 }
 
-// legacyTables returns the ADK session tables copied from the old default DB.
+// legacyTables returns the runtime session tables copied from the old default DB.
 func legacyTables() []legacyTable {
 	return []legacyTable{
 		{name: "sessions", columns: []string{"app_name", "user_id", "id", "state", "create_time", "update_time"}},
@@ -158,7 +158,7 @@ func legacyTables() []legacyTable {
 	}
 }
 
-// legacyTable describes one ADK session table migration copy.
+// legacyTable describes one runtime session table migration copy.
 type legacyTable struct {
 	name    string
 	columns []string
@@ -174,7 +174,7 @@ func copyLegacyTable(ctx context.Context, db *sql.DB, table legacyTable) error {
 	columns := strings.Join(table.columns, ", ")
 	query := fmt.Sprintf("INSERT OR IGNORE INTO main.%s (%s) SELECT %s FROM legacy_sessions.%s", table.name, columns, columns, table.name)
 	if _, err := db.ExecContext(ctx, query); err != nil {
-		return fmt.Errorf("migrate legacy ADK session table %s: %w", table.name, err)
+		return fmt.Errorf("migrate legacy runtime session table %s: %w", table.name, err)
 	}
 	return nil
 }

@@ -244,7 +244,7 @@ class _MemoryMapContent extends StatelessWidget {
                   spacing: 8,
                   runSpacing: 8,
                   children: <Widget>[
-                    _MemoryBadge(label: memory.sourceLabel),
+                    _MemoryBadge(label: _memorySourceLabel(memory.sourceLabel)),
                     _MemoryBadge(
                       label: controller.memoryFirewallLabel(memory.firewall),
                     ),
@@ -257,7 +257,7 @@ class _MemoryMapContent extends StatelessWidget {
                       ),
                     _MemoryBadge(label: _memoryLabel(memory.kind)),
                     for (final topic in memory.topics)
-                      _MemoryBadge(label: topic),
+                      _MemoryBadge(label: _memoryLabel(topic)),
                     for (final entity in memory.entityNames)
                       _MemoryBadge(label: entity),
                   ],

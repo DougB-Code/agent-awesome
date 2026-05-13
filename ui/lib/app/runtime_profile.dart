@@ -45,7 +45,7 @@ extension HarnessRuntimeLaunch on HarnessRuntime {
     ];
   }
 
-  /// Host and optional port passed to ADK for local REST API CORS headers.
+  /// Host and optional port passed to the assistant API for CORS headers.
   String get webUiAddress {
     final uri = Uri.tryParse(apiBaseUrl);
     if (uri == null || uri.host.isEmpty) {

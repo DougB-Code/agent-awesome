@@ -14,3 +14,5 @@
 - Integrate Codex, Claude Code, Gemini, and Copilot CLIs as tools. Cloud login and credential management may require server deployments.
 - Integrate server provisioning and hardening as tools.
 - Run cleanup passes to eliminate excess logic and duplicate implementations.
+
+- Remove the refresh button from files and people. It should just reload automatically. 

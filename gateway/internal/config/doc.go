@@ -7,7 +7,7 @@
 //
 // High-level examples:
 //   - config.FromFlags(os.Args[1:]) prepares settings for cmd/agent-gateway.
-//   - cfg.HarnessBaseURL identifies the upstream ADK-compatible harness API.
+//   - cfg.HarnessBaseURL identifies the upstream assistant harness API.
 //
 // This package should not start processes or serve HTTP requests.
 package config

@@ -19,7 +19,7 @@ Gateway profiles also name the beta status endpoint and the non-secret model/pro
 |Local memory with the harness pointed at `harness/tool.local.yaml`.
 
 |`runtime_profiles/cloudflare_context.json`
-|Local harness connected to the Cloudflare memory endpoint.
+|External Cloudflare gateway used by the desktop UI without starting local services.
 
 |===
 
@@ -31,3 +31,9 @@ The default shipped profile defines one domain named `memory`.
 The default profile reads model, agent, and tool config from the harness package.
 Keep `harness/model.yaml`, `harness/agent.yaml`, and `harness/tool.local.yaml` present when packaging or distributing the desktop app.
 The gateway status URL resolves to `/api/gateway/beta-status`, which returns authenticated health, Slack scope, snapshot freshness, and model identity without exposing secrets.
+
+== Cloud Gateway Profile
+
+Use `runtime_profiles/cloudflare_context.json` when the desktop UI should talk to a hosted Cloudflare deployment.
+Set `AGENT_GATEWAY_BASE_URL` to the hosted `/api` route, set `AGENTAWESOME_GATEWAY_TOKEN` to the Worker gateway bearer token, and set `AGENTAWESOME_RUNTIME_PROFILE` to the cloud profile path.
+The cloud profile keeps `auto_start` disabled for the harness, gateway, and memory domain because those services are owned by the Cloudflare Container.

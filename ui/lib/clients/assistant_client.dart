@@ -1,4 +1,4 @@
-/// Provides an ADK REST client for assistant sessions and streaming runs.
+/// Provides an assistant API client for sessions and streaming runs.
 library;
 
 import 'dart:async';
@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import '../domain/models.dart';
 import 'client_logger.dart';
 
-/// AssistantException reports an ADK REST or stream parsing failure.
+/// AssistantException reports an assistant API or stream parsing failure.
 class AssistantException implements Exception {
   /// Creates an assistant exception with a display message.
   const AssistantException(this.message);
@@ -22,7 +22,7 @@ class AssistantException implements Exception {
   String toString() => 'AssistantException: $message';
 }
 
-/// AssistantEvent is a normalized ADK runtime event.
+/// AssistantEvent is a normalized assistant runtime event.
 class AssistantEvent {
   /// Creates a normalized assistant event.
   const AssistantEvent({
@@ -38,7 +38,7 @@ class AssistantEvent {
   /// Event id.
   final String id;
 
-  /// ADK event author.
+  /// Runtime event author.
   final String author;
 
   /// Text content, if present.
@@ -57,7 +57,7 @@ class AssistantEvent {
   final String errorMessage;
 }
 
-/// AssistantClient calls the ADK REST API used by the Flutter workspace.
+/// AssistantClient calls the assistant API used by the Flutter workspace.
 class AssistantClient {
   /// Creates an assistant client.
   AssistantClient({
@@ -70,13 +70,13 @@ class AssistantClient {
   }) : headers = Map<String, String>.unmodifiable(headers),
        _http = httpClient ?? http.Client();
 
-  /// Base URL of the ADK REST API.
+  /// Base URL of the assistant API.
   final String baseUrl;
 
-  /// ADK app name.
+  /// Assistant app name.
   final String appName;
 
-  /// ADK user id.
+  /// Assistant user id.
   final String userId;
 
   /// Headers applied to every assistant API request.
@@ -85,7 +85,7 @@ class AssistantClient {
   final http.Client _http;
   final ClientLogger? logger;
 
-  /// Lists existing ADK sessions for the configured user.
+  /// Lists existing assistant sessions for the configured user.
   Future<List<ChatSession>> listSessions() async {
     final uri = _uri('/apps/$appName/users/$userId/sessions');
     await _log('GET $uri');
@@ -104,7 +104,7 @@ class AssistantClient {
         .toList();
   }
 
-  /// Creates a new ADK session.
+  /// Creates a new assistant session.
   Future<ChatSession> createSession() async {
     final uri = _uri('/apps/$appName/users/$userId/sessions');
     await _log('POST $uri create session');
@@ -120,7 +120,7 @@ class AssistantClient {
     return parseChatSession(jsonDecode(response.body));
   }
 
-  /// Deletes an ADK session.
+  /// Deletes an assistant session.
   Future<void> deleteSession(String sessionId) async {
     final uri = _uri('/apps/$appName/users/$userId/sessions/$sessionId');
     await _log('DELETE $uri');
@@ -133,7 +133,7 @@ class AssistantClient {
     }
   }
 
-  /// Loads normalized events for one ADK session.
+  /// Loads normalized events for one assistant session.
   Future<List<AssistantEvent>> loadSessionEvents(String sessionId) async {
     final uri = _uri('/apps/$appName/users/$userId/sessions/$sessionId');
     await _log('GET $uri load session events');
@@ -156,7 +156,7 @@ class AssistantClient {
         .toList();
   }
 
-  /// Sends a user message or confirmation reply and streams ADK events.
+  /// Sends a user message or confirmation reply and streams assistant events.
   Stream<AssistantEvent> sendMessage({
     required String sessionId,
     String text = '',
@@ -255,7 +255,7 @@ class AssistantClient {
         : <String, dynamic>{
             'functionResponse': <String, dynamic>{
               'id': confirmation.callId,
-              'name': 'adk_request_confirmation',
+              'name': _runtimeConfirmationFunctionName,
               'response': <String, dynamic>{
                 'confirmed': confirmation.confirmed,
                 if (confirmation.confirmed && confirmation.action != null)
@@ -294,7 +294,7 @@ AssistantEvent parseSseAssistantEvent(String eventType, String data) {
   return parseAssistantEvent(event);
 }
 
-/// Parses a session returned by the ADK sessions API.
+/// Parses a session returned by the assistant sessions API.
 ChatSession parseChatSession(dynamic value) {
   final map = value is Map<String, dynamic> ? value : <String, dynamic>{};
   final id = stringFrom(map['id'], fallback: 'session');
@@ -305,7 +305,7 @@ ChatSession parseChatSession(dynamic value) {
   return ChatSession(id: id, title: titleFromSession(id), updatedAt: updatedAt);
 }
 
-/// Parses one ADK runtime event into a UI event.
+/// Parses one assistant runtime event into a UI event.
 AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
   if (event['error'] != null) {
     return AssistantEvent(
@@ -333,13 +333,14 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
       final functionCall = rawPart['functionCall'];
       if (functionCall is Map<String, dynamic>) {
         final name = stringFrom(functionCall['name'], fallback: 'tool');
-        if (name == 'adk_request_confirmation') {
+        if (name == _runtimeConfirmationFunctionName) {
           confirmation = parseConfirmation(functionCall);
         } else {
+          final displayName = _displayToolName(name);
           toolActivity = ToolActivity(
             name: name,
             status: 'requested',
-            summary: 'Agent Awesome requested $name',
+            summary: 'Agent Awesome requested $displayName',
           );
         }
       }
@@ -350,16 +351,20 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
         final responseMap = response is Map<String, dynamic>
             ? response
             : <String, dynamic>{};
+        if (name == _runtimeConfirmationFunctionName) {
+          continue;
+        }
+        final displayName = _displayToolName(name);
         final error = stringFrom(responseMap['error']);
         if (error.isNotEmpty && errorMessage.isEmpty) {
-          errorMessage = 'Tool $name failed: $error';
+          errorMessage = 'Tool $displayName failed: $error';
         }
         toolActivity = ToolActivity(
           name: name,
           status: error.isEmpty ? 'completed' : 'failed',
           summary: error.isEmpty
               ? 'Tool response received'
-              : 'Tool $name failed: $error',
+              : 'Tool $displayName failed: $error',
         );
       }
     }
@@ -378,7 +383,7 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
   );
 }
 
-/// Parses an ADK confirmation function call.
+/// Parses an assistant confirmation function call.
 ConfirmationRequest parseConfirmation(Map<String, dynamic> functionCall) {
   final args = functionCall['args'];
   final argsMap = args is Map<String, dynamic> ? args : <String, dynamic>{};
@@ -414,6 +419,17 @@ ConfirmationRequest parseConfirmation(Map<String, dynamic> functionCall) {
     options: options,
     toolName: stringFrom(originalCallMap['name']),
   );
+}
+
+/// Internal confirmation function name used by the assistant runtime protocol.
+const String _runtimeConfirmationFunctionName = 'adk_request_confirmation';
+
+/// Returns a user-facing tool name for activity summaries.
+String _displayToolName(String name) {
+  return switch (name.trim()) {
+    _runtimeConfirmationFunctionName => 'confirmation request',
+    _ => name,
+  };
 }
 
 /// Prefix used to strip persisted runtime policy text from older transcripts.

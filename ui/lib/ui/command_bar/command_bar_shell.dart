@@ -73,6 +73,7 @@ class _CommandBarState extends State<CommandBar> {
   final LayerLink _fieldLink = LayerLink();
   OverlayEntry? _quickAccessEntry;
   bool _quickAccessRebuildScheduled = false;
+  bool _profileSwitching = false;
   String _profilePathForNextChat = '';
 
   /// Cleans up quick-access overlay and text focus resources.
@@ -134,8 +135,6 @@ class _CommandBarState extends State<CommandBar> {
                   ),
                 ),
                 SizedBox(width: compact ? 10 : 16),
-                if (!compact && !widget.appController.hasConfiguredModel)
-                  _SetupStatusButton(onTap: _handleOpenSetup),
                 _CommandChromeButton(
                   icon: Icons.add,
                   label: actionCompact ? '' : 'New chat',
@@ -143,6 +142,23 @@ class _CommandBarState extends State<CommandBar> {
                   size: _buttonSize,
                   onTap: _handleNewChat,
                 ),
+                SizedBox(width: compact ? 8 : 10),
+                _CommandProfilePicker(
+                  profiles: _profileEntries(),
+                  activePath: widget.appController.runtimeProfilePath,
+                  defaultPath: widget.appController.defaultChatProfilePath,
+                  compact: actionCompact,
+                  switching: _profileSwitching,
+                  size: _buttonSize,
+                  onChanged: _profileSwitching
+                      ? null
+                      : (path) => unawaited(_handleActiveProfileChanged(path)),
+                  onManageProfiles: _handleManageProfiles,
+                  onOpen: _handleExternalControlOpened,
+                ),
+                SizedBox(width: compact ? 8 : 10),
+                if (!compact && !widget.appController.hasConfiguredModel)
+                  _SetupStatusButton(onTap: _handleOpenSetup),
                 if (roomy) ...const <Widget>[SizedBox(width: 8), _ThemeBadge()],
               ],
             ),
@@ -190,6 +206,49 @@ class _CommandBarState extends State<CommandBar> {
     _clearProfilePathForNextChat();
     _removeQuickAccess();
     widget.onOpenSetup();
+  }
+
+  /// Closes command-input affordances when another top-bar control opens.
+  void _handleExternalControlOpened() {
+    _focusNode.unfocus();
+    _removeQuickAccess();
+  }
+
+  /// Switches the active runtime profile from the top-bar picker.
+  Future<void> _handleActiveProfileChanged(String profilePath) async {
+    if (profilePath.trim().isEmpty ||
+        profilePath == widget.appController.runtimeProfilePath ||
+        _profileSwitching) {
+      return;
+    }
+    _clearProfilePathForNextChat();
+    _removeQuickAccess();
+    setState(() {
+      _profileSwitching = true;
+    });
+    try {
+      await widget.appController.loadRuntimeProfileFromPath(profilePath);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _profileSwitching = false;
+        });
+      }
+    }
+  }
+
+  /// Opens profile settings from point-of-use profile controls.
+  void _handleManageProfiles() {
+    _clearProfilePathForNextChat();
+    _removeQuickAccess();
+    widget.onOpenSettingsSection('Profiles');
+  }
+
+  /// Opens the full chat workspace from recent-chat quick access.
+  void _handleOpenAllChats() {
+    _clearProfilePathForNextChat();
+    _removeQuickAccess();
+    widget.onOpenSection(AppSections.chat);
   }
 
   /// Opens quick access while the command input is not carrying a message.
@@ -297,18 +356,16 @@ class _CommandBarState extends State<CommandBar> {
         icon: Icons.manage_accounts_outlined,
         emptyLabel: 'No profiles configured',
         actions: _profileActions(),
+        linkLabel: 'Manage',
+        onLinkTap: _handleManageProfiles,
       ),
       QuickAccessGroup(
         title: 'Recent chats',
         icon: Icons.chat_bubble_outline,
         emptyLabel: 'No recent chats',
         actions: _chatActions(),
-      ),
-      QuickAccessGroup(
-        title: 'Workspaces',
-        icon: Icons.dashboard_customize_outlined,
-        emptyLabel: '',
-        actions: _workspaceActions(),
+        linkLabel: 'All Chats',
+        onLinkTap: _handleOpenAllChats,
       ),
       QuickAccessGroup(
         title: 'Settings',
@@ -441,29 +498,6 @@ class _CommandBarState extends State<CommandBar> {
           },
         ),
     ];
-  }
-
-  /// Builds quick workspace navigation actions.
-  List<QuickAccessAction> _workspaceActions() {
-    return <QuickAccessAction>[
-      _workspaceAction(AppSections.chat, Icons.forum_outlined),
-      _workspaceAction(AppSections.backlog, Icons.task_alt_outlined),
-      _workspaceAction(AppSections.memory, Icons.chat_bubble_outline),
-    ];
-  }
-
-  /// Builds one workspace navigation action.
-  QuickAccessAction _workspaceAction(String section, IconData icon) {
-    return QuickAccessAction(
-      label: section,
-      detail: '',
-      icon: icon,
-      onTap: () {
-        _clearProfilePathForNextChat();
-        _removeQuickAccess();
-        widget.onOpenSection(section);
-      },
-    );
   }
 
   /// Builds app settings navigation actions.

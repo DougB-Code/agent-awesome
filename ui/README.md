@@ -43,6 +43,9 @@ The UI reads these optional `--dart-define` values:
 - `AGENTAWESOME_RUNTIME_PROFILE`, default empty, which loads
   `runtime_profiles/agent_awesome.json`
 
+The Linux release build also reads those values from the process environment,
+so one downloaded binary can point at either a local or hosted gateway.
+
 When services are unavailable, the app marks the relevant connections as
 disconnected and shows empty states.
 
@@ -65,10 +68,11 @@ responses for the UI.
 
 - `runtime_profiles/local_dev.json` starts local memory and points the harness
   at `harness/tool.local.yaml`.
-- `runtime_profiles/cloudflare_context.json` points the local harness at
-  `harness/tool.cloudflare.yaml`, which reaches `https://agent-awesome.com/mcp`
-  with auth headers from the environment.
+- `runtime_profiles/cloudflare_context.json` points the desktop UI at a hosted
+  Cloudflare gateway. It does not start local harness, gateway, or memory
+  binaries.
 
-For the Cloudflare profile, set `AGENTAWESOME_CLOUDFLARE_GATEWAY_AUTHORIZATION`
-to the full `Bearer ...` gateway authorization header. When Cloudflare Access is
-enabled, also set `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`.
+For the Cloudflare profile, set `AGENT_GATEWAY_BASE_URL`,
+`AGENTAWESOME_GATEWAY_TOKEN`, and `AGENTAWESOME_RUNTIME_PROFILE` before starting
+the release binary. The UI sends chat, memory, and task requests through that
+gateway.

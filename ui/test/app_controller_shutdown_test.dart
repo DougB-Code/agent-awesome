@@ -146,7 +146,7 @@ class _TrackingLocalServiceSupervisor extends LocalServiceSupervisor {
   }
 }
 
-/// Rejecting client simulates an ADK session id missing after harness restart.
+/// Rejecting client simulates a runtime session id missing after harness restart.
 class _RejectingAssistantClient extends AssistantClient {
   /// Creates a rejecting assistant client.
   _RejectingAssistantClient()

@@ -23,12 +23,13 @@ MemoryRecord parseMemoryRecord(dynamic content) {
   final source = record['source'];
   final raw = record['raw'];
   final metadata = record['metadata'];
-  final sourceSystem = source is Map<String, dynamic>
+  final rawSourceSystem = source is Map<String, dynamic>
       ? stringValue(source['system'], fallback: 'source')
       : 'source';
   final sourceId = source is Map<String, dynamic>
       ? stringValue(source['id'])
       : '';
+  final sourceSystem = _displayMemorySourceSystem(rawSourceSystem);
   final rawMap = raw is Map<String, dynamic> ? raw : <String, dynamic>{};
   final metadataMap = metadata is Map<String, dynamic>
       ? metadata
@@ -53,7 +54,7 @@ MemoryRecord parseMemoryRecord(dynamic content) {
     entityNames: stringList(record['entity_names']),
     sourceSystem: sourceSystem,
     sourceId: sourceId,
-    sourceLabel: sourceId.isEmpty ? sourceSystem : '$sourceSystem:$sourceId',
+    sourceLabel: _displayMemorySourceLabel(rawSourceSystem, sourceId),
     rawPath: stringValue(rawMap['path']),
     rawChecksum: stringValue(rawMap['checksum']),
     rawMediaType: stringValue(rawMap['media_type']),
@@ -63,6 +64,43 @@ MemoryRecord parseMemoryRecord(dynamic content) {
     createdAt: parseOptionalDateTime(record['created_at']),
     updatedAt: parseOptionalDateTime(record['updated_at']),
   );
+}
+
+/// Returns a product-facing source system label for memory display.
+String _displayMemorySourceSystem(String value) {
+  return switch (value.trim().toLowerCase()) {
+    'google_adk_session' || 'adk_session' => 'chat_session',
+    'agent_awesome_chat' => 'chat',
+    _ => value,
+  };
+}
+
+/// Returns a product-facing source record label for memory display.
+String _displayMemorySourceLabel(String system, String id) {
+  final displaySystem = _displayMemorySourceSystem(system);
+  final label = _memorySourceDisplayName(displaySystem);
+  if (id.trim().isEmpty) {
+    return label;
+  }
+  return '$label: ${id.trim()}';
+}
+
+/// Returns a readable label for one source system value.
+String _memorySourceDisplayName(String value) {
+  return switch (value.trim().toLowerCase()) {
+    'chat' || 'chat_session' => 'Chat',
+    _ => _memoryParserTitleCase(value),
+  };
+}
+
+/// Converts source system identifiers into readable fallback labels.
+String _memoryParserTitleCase(String value) {
+  return value
+      .trim()
+      .split('_')
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
 }
 
 /// Parses relationship edges from memory records.

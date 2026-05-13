@@ -105,38 +105,22 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
     );
   }
 
-  /// Builds refresh and add-contact actions for the contact library header.
+  /// Builds add-contact actions for the contact library header.
   Widget _buildAreaActions(BuildContext context, SwitcherPanelArea area) {
     final colors = context.agentAwesomeColors;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Tooltip(
-          message: 'Refresh contacts',
-          child: IconButton.outlined(
-            visualDensity: VisualDensity.compact,
-            onPressed: widget.controller.memoryBusy
-                ? null
-                : widget.controller.refreshMemoryFromUi,
-            icon: Icon(Icons.refresh, color: colors.muted),
-          ),
+    return Tooltip(
+      message: 'Add contact',
+      child: IconButton.filled(
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          backgroundColor: colors.green,
+          foregroundColor: colors.surface,
         ),
-        const SizedBox(width: 8),
-        Tooltip(
-          message: 'Add contact',
-          child: IconButton.filled(
-            visualDensity: VisualDensity.compact,
-            style: IconButton.styleFrom(
-              backgroundColor: colors.green,
-              foregroundColor: colors.surface,
-            ),
-            onPressed: widget.controller.memoryBusy
-                ? null
-                : () => _showContactCaptureDialog(context, widget.controller),
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-          ),
-        ),
-      ],
+        onPressed: widget.controller.memoryBusy
+            ? null
+            : () => _showContactCaptureDialog(context, widget.controller),
+        icon: const Icon(Icons.person_add_alt_1_outlined),
+      ),
     );
   }
 

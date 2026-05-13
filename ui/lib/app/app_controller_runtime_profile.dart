@@ -229,6 +229,22 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     _notifyControllerListeners();
   }
 
+  /// Refreshes local service health for the active runtime profile.
+  Future<void> refreshRuntimeServiceStatuses() async {
+    final profile = _activeRuntimeProfile();
+    localProcessStatuses = await localServices.startRequiredServices(profile);
+    statusMessage = 'Runtime service status refreshed';
+    _notifyControllerListeners();
+  }
+
+  /// Restarts managed memory services for the active runtime profile.
+  Future<void> restartMemoryRuntimeServices() async {
+    final profile = _activeRuntimeProfile();
+    localProcessStatuses = await localServices.restartMemoryServices(profile);
+    statusMessage = 'Memory services restarted';
+    _notifyControllerListeners();
+  }
+
   /// Saves agent-profile memory access grants.
   Future<void> saveAgentMemoryRuntime(AgentMemoryRuntime agentMemory) async {
     final profile = _activeRuntimeProfile().copyWith(agentMemory: agentMemory);
@@ -764,7 +780,10 @@ Future<String> _uniqueRuntimeProfilePath(
   return candidate;
 }
 
-Future<RuntimeProfileFileEntry> _profileEntryForPath(String path) async {
+Future<RuntimeProfileFileEntry> _profileEntryForPath(
+  String path, {
+  String activePath = '',
+}) async {
   try {
     final decoded = jsonDecode(await File(path).readAsString());
     if (decoded is Map<String, dynamic>) {
@@ -775,7 +794,9 @@ Future<RuntimeProfileFileEntry> _profileEntryForPath(String path) async {
           decoded['label'],
           fallback: _profileIdFromPath(path),
         ),
-        active: false,
+        active: _sameProfilePath(path, activePath),
+        runtimeKind: _profileRuntimeKind(decoded),
+        memoryDomainLabels: _profileMemoryDomainLabels(decoded),
       );
     }
   } catch (_) {
@@ -785,8 +806,52 @@ Future<RuntimeProfileFileEntry> _profileEntryForPath(String path) async {
     path: path,
     id: _profileIdFromPath(path),
     label: _profileIdFromPath(path),
-    active: false,
+    active: _sameProfilePath(path, activePath),
   );
+}
+
+/// _sameProfilePath compares runtime profile paths after filesystem cleanup.
+bool _sameProfilePath(String left, String right) {
+  if (left.trim().isEmpty || right.trim().isEmpty) {
+    return false;
+  }
+  return File(left).absolute.path == File(right).absolute.path;
+}
+
+/// _profileRuntimeKind summarizes whether a profile points to local or cloud APIs.
+String _profileRuntimeKind(Map<String, dynamic> profile) {
+  final gateway = profile['gateway'];
+  if (gateway is! Map<String, dynamic>) {
+    return '';
+  }
+  final url = _optionalString(gateway['api_base_url'], fallback: '');
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    return '';
+  }
+  final host = uri.host.toLowerCase();
+  if (host == 'localhost' || host == '127.0.0.1' || host == '::1') {
+    return 'Local';
+  }
+  return 'Cloud';
+}
+
+/// _profileMemoryDomainLabels returns readable memory domain names.
+List<String> _profileMemoryDomainLabels(Map<String, dynamic> profile) {
+  final domains = profile['memory_domains'];
+  if (domains is! List) {
+    return const <String>[];
+  }
+  return domains
+      .whereType<Map<String, dynamic>>()
+      .map((domain) {
+        return _optionalString(
+          domain['label'],
+          fallback: _optionalString(domain['id'], fallback: 'memory'),
+        );
+      })
+      .where((label) => label.trim().isNotEmpty)
+      .toList();
 }
 
 Future<String?> _copyConfigIntoAppDirectory({

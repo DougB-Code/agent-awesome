@@ -1,4 +1,4 @@
-// This file tests the ADK memory adapter against a minimal MCP endpoint.
+// This file tests the runtime memory adapter against a minimal MCP endpoint.
 package adkmemory
 
 import (
@@ -76,8 +76,8 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	if got := calls[0].arguments["firewall"]; got != userFirewall {
 		t.Fatalf("firewall = %q, want user", got)
 	}
-	if got := calls[0].arguments["idempotency_key"]; got != "adk:agent_awesome:doug:session-1234567890:event-user" {
-		t.Fatalf("idempotency = %q, want ADK event key", got)
+	if got := calls[0].arguments["idempotency_key"]; got != "agent_awesome_chat:agent_awesome:doug:session-1234567890:event-user" {
+		t.Fatalf("idempotency = %q, want chat event key", got)
 	}
 	if got := calls[1].arguments["content"]; got != "Got it." {
 		t.Fatalf("model content = %q, want final model text", got)
@@ -284,7 +284,7 @@ func TestAddSessionToMemoryCapturesOnlyNewEvents(t *testing.T) {
 		t.Fatalf("MCP calls after append = %d, want one new call", len(calls))
 	}
 	last := calls[len(calls)-1]
-	if got := last.arguments["idempotency_key"]; got != "adk:agent_awesome:doug:long-session:event-100" {
+	if got := last.arguments["idempotency_key"]; got != "agent_awesome_chat:agent_awesome:doug:long-session:event-100" {
 		t.Fatalf("last idempotency = %q, want appended event key", got)
 	}
 	if got := last.arguments["content"]; got != "brand new detail" {
@@ -292,7 +292,7 @@ func TestAddSessionToMemoryCapturesOnlyNewEvents(t *testing.T) {
 	}
 }
 
-// TestSearchMemoryMapsSourceRecords verifies ADK search response mapping.
+// TestSearchMemoryMapsSourceRecords verifies runtime search response mapping.
 func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 	stamp := time.Date(2026, 5, 8, 11, 0, 0, 0, time.UTC)
 	server := newMemoryMCPTestServer(t, map[string]any{
@@ -305,12 +305,12 @@ func TestSearchMemoryMapsSourceRecords(t *testing.T) {
 				"event_time":  stamp.Format(time.RFC3339Nano),
 				"created_at":  stamp.Format(time.RFC3339Nano),
 				"updated_at":  stamp.Format(time.RFC3339Nano),
-				"source":      map[string]any{"system": "google_adk_session", "id": "event-user"},
+				"source":      map[string]any{"system": "agent_awesome_chat", "id": "event-user"},
 				"raw": map[string]any{
 					"id":           "evidence_1",
 					"content_text": "Remember that I like green tea.",
 					"created_at":   stamp.Format(time.RFC3339Nano),
-					"source":       map[string]any{"system": "google_adk_session", "id": "event-user"},
+					"source":       map[string]any{"system": "agent_awesome_chat", "id": "event-user"},
 				},
 			},
 		},
@@ -517,7 +517,7 @@ func capturableEvent(id string, text string, timestamp time.Time) *session.Event
 	}
 }
 
-// stubSession implements the ADK session interface for adapter tests.
+// stubSession implements the runtime session interface for adapter tests.
 type stubSession struct {
 	id      string
 	appName string
@@ -543,7 +543,7 @@ func (s stubSession) Events() session.Events { return stubEvents(s.events) }
 // LastUpdateTime returns zero because memory capture does not inspect it.
 func (s stubSession) LastUpdateTime() time.Time { return time.Time{} }
 
-// stubEvents implements ADK session.Events for adapter tests.
+// stubEvents implements runtime session events for adapter tests.
 type stubEvents []*session.Event
 
 // All returns each event in insertion order.

@@ -24,7 +24,7 @@ Agent Awesome now treats memory as configurable runtime-profile domains rather t
 - The UI routes read actions to the record's domain and routes new writes to `default_write_domain`.
 - Memory settings allow creation, editing, disabling, and deletion of configurable domains.
 - Agent access settings allow readable domains, writable domains, default write domain, sensitivities, and explicit domain flows.
-- The harness ADK memory service fans search across all configured read domains and annotates returned memories with `domain_id`, `memory_id`, `evidence_id`, and source metadata.
+- The harness memory service fans search across all configured read domains and annotates returned memories with `domain_id`, `memory_id`, `evidence_id`, and source metadata.
 - Model-exposed MCP tools are read-only when an agent reads multiple domains; writes are limited to the default write domain.
 - Automatic assistant-event capture tracks memory search source domains and writes generated content only when every source domain is the write domain or an explicit flow permits it.
 - Selected memory can be exported as a user-reviewed copy into the default write domain when the configured flow permits the source-to-destination movement.

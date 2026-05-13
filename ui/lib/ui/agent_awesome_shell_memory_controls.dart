@@ -396,10 +396,20 @@ String _coerceDropdownValue(
 
 /// Converts controlled vocabulary to readable labels.
 String _memoryLabel(String value) {
-  if (value.isEmpty) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty) {
     return '';
   }
+  if (normalized == 'adk_chat' ||
+      normalized == 'agent_awesome_chat' ||
+      normalized == 'chat_session' ||
+      normalized == 'google_adk_session' ||
+      normalized.startsWith('google_adk_session:') ||
+      normalized.startsWith('agent_awesome_chat:')) {
+    return 'Chat';
+  }
   return value
+      .trim()
       .split('_')
       .map(
         (part) => part.isEmpty
@@ -407,6 +417,28 @@ String _memoryLabel(String value) {
             : '${part[0].toUpperCase()}${part.substring(1)}',
       )
       .join(' ');
+}
+
+/// Converts internal source identifiers to user-facing labels.
+String _memorySourceLabel(String value) {
+  final trimmed = value.trim();
+  final normalized = trimmed.toLowerCase();
+  if (normalized == 'google_adk_session' ||
+      normalized == 'agent_awesome_chat' ||
+      normalized == 'chat_session') {
+    return 'Chat';
+  }
+  for (final prefix in <String>[
+    'google_adk_session:',
+    'agent_awesome_chat:',
+    'chat_session:',
+  ]) {
+    if (normalized.startsWith(prefix)) {
+      final suffix = trimmed.substring(prefix.length).trim();
+      return suffix.isEmpty ? 'Chat' : 'Chat: $suffix';
+    }
+  }
+  return trimmed;
 }
 
 Future<bool> _confirmWrite(BuildContext context, String message) async {

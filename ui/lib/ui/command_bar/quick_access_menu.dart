@@ -13,6 +13,8 @@ class QuickAccessGroup {
     required this.icon,
     required this.actions,
     required this.emptyLabel,
+    this.linkLabel = '',
+    this.onLinkTap,
   });
 
   /// Column title.
@@ -26,6 +28,12 @@ class QuickAccessGroup {
 
   /// Text shown when no actions are available.
   final String emptyLabel;
+
+  /// Optional compact navigation label shown at the bottom of the column.
+  final String linkLabel;
+
+  /// Optional callback for the compact group-level navigation link.
+  final VoidCallback? onLinkTap;
 }
 
 /// QuickAccessAction describes one executable quick-access row.
@@ -70,6 +78,9 @@ class QuickAccessMenu extends StatelessWidget {
   /// Opens the settings workspace from the menu footer.
   final VoidCallback onViewSettings;
 
+  static const double _compactColumnWidth = 220;
+  static const double _wideColumnWidth = 320;
+
   /// Builds the global quick-access dropdown.
   @override
   Widget build(BuildContext context) {
@@ -97,21 +108,48 @@ class QuickAccessMenu extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final columnCount = constraints.maxWidth < 860 ? 2 : 4;
+                    final maxColumns = constraints.maxWidth < 860 ? 2 : 4;
+                    final columnCount = groups.isEmpty
+                        ? 1
+                        : groups.length < maxColumns
+                        ? groups.length
+                        : maxColumns;
                     final spacing = columnCount == 2 ? 18.0 : 24.0;
-                    final columnWidth =
+                    final fallbackColumnWidth =
                         (constraints.maxWidth - spacing * (columnCount - 1)) /
                         columnCount;
-                    return Wrap(
-                      spacing: spacing,
-                      runSpacing: 18,
-                      children: <Widget>[
-                        for (final group in groups)
-                          SizedBox(
-                            width: columnWidth.clamp(180.0, 320.0).toDouble(),
-                            child: _QuickAccessColumn(group: group),
-                          ),
-                      ],
+                    final preferredWidths = <double>[
+                      for (final group in groups) _preferredColumnWidth(group),
+                    ];
+                    final preferredTotal =
+                        preferredWidths.fold<double>(
+                          0,
+                          (sum, width) => sum + width,
+                        ) +
+                        spacing * (preferredWidths.length - 1);
+                    final usePreferredWidths =
+                        constraints.maxWidth >= 860 &&
+                        preferredTotal <= constraints.maxWidth;
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Wrap(
+                        alignment: WrapAlignment.start,
+                        runAlignment: WrapAlignment.start,
+                        crossAxisAlignment: WrapCrossAlignment.start,
+                        spacing: spacing,
+                        runSpacing: 18,
+                        children: <Widget>[
+                          for (var index = 0; index < groups.length; index++)
+                            SizedBox(
+                              width: usePreferredWidths
+                                  ? preferredWidths[index]
+                                  : fallbackColumnWidth
+                                        .clamp(180.0, _wideColumnWidth)
+                                        .toDouble(),
+                              child: _QuickAccessColumn(group: groups[index]),
+                            ),
+                        ],
+                      ),
                     );
                   },
                 ),
@@ -124,6 +162,21 @@ class QuickAccessMenu extends StatelessWidget {
       ),
     );
   }
+
+  /// Estimates a stable quick-access column width from visible text.
+  double _preferredColumnWidth(QuickAccessGroup group) {
+    final maxTextLength = <int>[
+      group.title.length,
+      group.linkLabel.length,
+      group.emptyLabel.length,
+      for (final action in group.actions) action.label.length,
+      for (final action in group.actions) action.detail.length,
+    ].fold<int>(0, (max, length) => length > max ? length : max);
+    final estimatedWidth = 56 + maxTextLength * 8.2;
+    return estimatedWidth
+        .clamp(_compactColumnWidth, _wideColumnWidth)
+        .toDouble();
+  }
 }
 
 class _QuickAccessColumn extends StatelessWidget {
@@ -135,33 +188,86 @@ class _QuickAccessColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final content = <Widget>[
+      Row(
+        children: <Widget>[
+          Icon(group.icon, size: 16, color: colors.green),
+          const SizedBox(width: 8),
+          Expanded(child: _QuickAccessLabel(group.title.toUpperCase())),
+        ],
+      ),
+      const SizedBox(height: 8),
+    ];
+    final link = group.linkLabel.isNotEmpty && group.onLinkTap != null
+        ? _QuickAccessGroupLink(label: group.linkLabel, onTap: group.onLinkTap!)
+        : null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Row(
-          children: <Widget>[
-            Icon(group.icon, size: 16, color: colors.green),
-            const SizedBox(width: 8),
-            Expanded(child: _QuickAccessLabel(group.title.toUpperCase())),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (group.actions.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              group.emptyLabel,
-              style: TextStyle(color: colors.muted, fontSize: 13),
-            ),
-          )
-        else
-          for (final action in group.actions)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: _QuickAccessItem(action: action),
-            ),
+        ...content,
+        _QuickAccessActionList(group: group),
+        ?link,
       ],
+    );
+  }
+}
+
+class _QuickAccessActionList extends StatelessWidget {
+  const _QuickAccessActionList({required this.group});
+
+  final QuickAccessGroup group;
+
+  /// Builds the action rows within a quick-access group.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    if (group.actions.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          group.emptyLabel,
+          style: TextStyle(color: colors.muted, fontSize: 13),
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        for (final action in group.actions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: _QuickAccessItem(action: action),
+          ),
+      ],
+    );
+  }
+}
+
+class _QuickAccessGroupLink extends StatelessWidget {
+  const _QuickAccessGroupLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  /// Builds a compact group-level quick-access link.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Padding(
+      padding: const EdgeInsets.only(left: 36),
+      child: TextButton(
+        onPressed: onTap,
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 28),
+          padding: EdgeInsets.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          foregroundColor: colors.green,
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        child: Text(label),
+      ),
     );
   }
 }

@@ -97,7 +97,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     await selectSession(target.sessionId);
   }
 
-  /// Deletes a saved chat and its backing ADK session.
+  /// Deletes a saved chat and its backing runtime session.
   Future<void> deleteHistoryChat(String chatKey) async {
     await _ensureInitialized();
     await _log('delete chat requested $chatKey');
@@ -290,7 +290,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     await _streamRun(sessionId: sessionId, text: trimmed);
   }
 
-  /// Responds to a pending ADK confirmation request.
+  /// Responds to a pending runtime confirmation request.
   Future<void> answerConfirmation(ConfirmationOption option) async {
     final confirmation = pendingConfirmation;
     final sessionId = selectedSessionId;
@@ -306,7 +306,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     );
   }
 
-  /// Sends an ADK confirmation response back to the active assistant session.
+  /// Sends a runtime confirmation response back to the active assistant session.
   Future<void> _sendConfirmationReply({
     required String sessionId,
     required ConfirmationRequest confirmation,
@@ -364,7 +364,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     }
   }
 
-  /// Merges active-profile ADK sessions into the local chat history.
+  /// Merges active-profile runtime sessions into the local chat history.
   Future<void> _mergeHistorySessions(List<ChatSession> loaded) async {
     var changed = false;
     final entriesByKey = <String, ChatHistoryEntry>{

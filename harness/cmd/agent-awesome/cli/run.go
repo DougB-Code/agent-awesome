@@ -58,7 +58,7 @@ AA runtime syntax:
 	cmd.Flags().StringVar(&opts.LogFilePath, "log-file", opts.LogFilePath, "log file path")
 	cmd.Flags().StringVar(&opts.ContextAPIAddr, "context-api-addr", opts.ContextAPIAddr, "optional harness-owned context API listen address")
 	cmd.Flags().StringVar(&opts.ContextAPIToken, "context-api-token", opts.ContextAPIToken, "optional bearer token for direct context API requests")
-	cmd.Flags().StringVar(&opts.SessionDatabase, "session-db", opts.SessionDatabase, "ADK session SQLite database path; defaults to the memory database")
+	cmd.Flags().StringVar(&opts.SessionDatabase, "session-db", opts.SessionDatabase, "assistant session SQLite database path; defaults to the memory database")
 	cmd.Flags().SetInterspersed(false)
 	return cmd
 }
@@ -67,6 +67,6 @@ AA runtime syntax:
 func runtimeSyntax() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Agent Awesome console:\n%s\n", console.Syntax())
-	fmt.Fprintf(&b, "Delegated ADK runtime modes:\n%s", runtime.Syntax())
+	fmt.Fprintf(&b, "Assistant runtime modes:\n%s", runtime.Syntax())
 	return b.String()
 }

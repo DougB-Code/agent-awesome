@@ -221,7 +221,7 @@ class _ContactMemoryTile extends StatelessWidget {
                 PanelBadge(label: _memoryContextLabel(record)),
                 PanelBadge(label: record.sensitivity),
                 if (record.sourceLabel.isNotEmpty)
-                  PanelBadge(label: record.sourceLabel),
+                  PanelBadge(label: _contactSourceLabel(record.sourceLabel)),
               ],
             ),
           ],

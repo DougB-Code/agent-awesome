@@ -86,7 +86,7 @@ class _TranscriptAssistantClient extends AssistantClient {
   _TranscriptAssistantClient()
     : super(baseUrl: 'http://127.0.0.1:1/api', appName: 'test', userId: 'user');
 
-  /// Loads a transcript without reaching a real ADK service.
+  /// Loads a transcript without reaching a real assistant service.
   @override
   Future<List<AssistantEvent>> loadSessionEvents(String sessionId) async {
     return const <AssistantEvent>[

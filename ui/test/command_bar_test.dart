@@ -4,6 +4,7 @@ library;
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
 import 'package:agentawesome_ui/app/theme.dart';
+import 'package:agentawesome_ui/domain/models.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_bar.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_context.dart';
 import 'package:agentawesome_ui/ui/shell/app_sections.dart';
@@ -120,6 +121,215 @@ void main() {
     expect(setupOpenCount, 1);
   });
 
+  testWidgets('shows active runtime profile picker in the top bar', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    final openedSettingsSections = <String>[];
+    controller.runtimeProfilePath = '/tmp/personal.json';
+    controller.availableProfiles = const <RuntimeProfileFileEntry>[
+      RuntimeProfileFileEntry(
+        path: '/tmp/personal.json',
+        id: 'personal',
+        label: 'Personal',
+        active: true,
+        runtimeKind: 'Local',
+        memoryDomainLabels: <String>['memory'],
+      ),
+      RuntimeProfileFileEntry(
+        path: '/tmp/work.json',
+        id: 'work',
+        label: 'Work',
+        active: false,
+        runtimeKind: 'Cloud',
+        memoryDomainLabels: <String>['work'],
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: TextEditingController(),
+        appController: controller,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+        onOpenSettingsSection: openedSettingsSections.add,
+      ),
+    );
+
+    expect(find.byTooltip('Active profile'), findsOneWidget);
+    expect(find.text('Personal'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Active profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Work'), findsOneWidget);
+    expect(find.textContaining('Cloud'), findsOneWidget);
+    expect(find.textContaining('memory'), findsOneWidget);
+
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+
+    expect(openedSettingsSections, <String>['Profiles']);
+  });
+
+  testWidgets('quick access links profile management and all chats', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final openedSections = <String>[];
+    final openedSettingsSections = <String>[];
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.runtimeProfilePath = '/tmp/personal.json';
+    controller.availableProfiles = const <RuntimeProfileFileEntry>[
+      RuntimeProfileFileEntry(
+        path: '/tmp/personal.json',
+        id: 'personal',
+        label: 'Agent Awesome',
+        active: true,
+        runtimeKind: 'Local',
+        memoryDomainLabels: <String>['memory'],
+      ),
+    ];
+    controller.chatHistory = <ChatHistoryEntry>[
+      ChatHistoryEntry(
+        profilePath: '/tmp/personal.json',
+        profileId: 'personal',
+        profileLabel: 'Agent Awesome',
+        sessionId: 'chat-1',
+        title: 'Weather information limitation',
+        updatedAt: DateTime(2026, 5, 13, 9),
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: TextEditingController(),
+        appController: controller,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+        onOpenSection: openedSections.add,
+        onOpenSettingsSection: openedSettingsSections.add,
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('global-command-input')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('PROFILES'), findsOneWidget);
+    expect(find.text('RECENT CHATS'), findsOneWidget);
+    expect(find.text('WORKSPACES'), findsNothing);
+    expect(find.text('SETTINGS'), findsOneWidget);
+    expect(find.text('Manage'), findsOneWidget);
+    expect(find.text('All Chats'), findsOneWidget);
+    expect(
+      (tester.getTopLeft(find.text('Manage')).dx -
+              tester.getTopLeft(find.text('Agent Awesome').last).dx)
+          .abs(),
+      lessThan(12),
+    );
+    expect(
+      (tester.getTopLeft(find.text('All Chats')).dx -
+              tester.getTopLeft(find.text('Weather information limitation')).dx)
+          .abs(),
+      lessThan(12),
+    );
+    final profileGap =
+        tester.getTopLeft(find.text('RECENT CHATS')).dx -
+        tester.getTopRight(find.text('Default profile')).dx;
+    final recentGap =
+        tester.getTopLeft(find.text('SETTINGS')).dx -
+        tester.getTopRight(find.text('Weather information limitation')).dx;
+    expect(profileGap, lessThan(140));
+    expect((profileGap - recentGap).abs(), lessThan(80));
+    expect(
+      tester.getTopLeft(find.text('Manage')).dy -
+          tester.getBottomLeft(find.text('Agent Awesome').last).dy,
+      allOf(greaterThan(0), lessThan(48)),
+    );
+    expect(
+      tester.getTopLeft(find.text('All Chats')).dy -
+          tester.getBottomLeft(find.text('Weather information limitation')).dy,
+      allOf(greaterThan(0), lessThan(48)),
+    );
+
+    await tester.tap(find.text('All Chats'));
+    await tester.pumpAndSettle();
+
+    expect(openedSections, <String>[AppSections.chat]);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('global-command-input')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+
+    expect(openedSettingsSections, <String>['Profiles']);
+  });
+
+  testWidgets('profile picker closes the command quick-access menu', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.runtimeProfilePath = '/tmp/personal.json';
+    controller.availableProfiles = const <RuntimeProfileFileEntry>[
+      RuntimeProfileFileEntry(
+        path: '/tmp/personal.json',
+        id: 'personal',
+        label: 'Agent Awesome',
+        active: true,
+        runtimeKind: 'Local',
+        memoryDomainLabels: <String>['memory'],
+      ),
+      RuntimeProfileFileEntry(
+        path: '/tmp/work.json',
+        id: 'work',
+        label: 'Work',
+        active: false,
+        runtimeKind: 'Cloud',
+        memoryDomainLabels: <String>['work'],
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: TextEditingController(),
+        appController: controller,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('global-command-input')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('RECENT CHATS'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Active profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('RECENT CHATS'), findsNothing);
+    expect(find.text('Work'), findsOneWidget);
+  });
+
   testWidgets('theme badge toggles between light and dark themes', (
     tester,
   ) async {
@@ -146,15 +356,25 @@ class _CommandBarHarness extends StatelessWidget {
     required this.commandController,
     required this.onScreenCommand,
     required this.onNewChatSubmit,
+    this.appController,
     this.onOpenSetup,
+    this.onOpenSection,
+    this.onOpenSettingsSection,
   });
 
   final TextEditingController commandController;
   final ValueChanged<CommandContext> onScreenCommand;
   final VoidCallback onNewChatSubmit;
+  final AgentAwesomeAppController? appController;
 
   /// Optional setup callback used by tests that exercise the status action.
   final VoidCallback? onOpenSetup;
+
+  /// Optional workspace navigation callback used by quick-access tests.
+  final ValueChanged<String>? onOpenSection;
+
+  /// Optional settings navigation callback used by quick-access tests.
+  final ValueChanged<String>? onOpenSettingsSection;
 
   /// Builds a minimal shell around the command bar.
   @override
@@ -163,7 +383,8 @@ class _CommandBarHarness extends StatelessWidget {
       home: Scaffold(
         body: CommandBar(
           commandController: commandController,
-          appController: AgentAwesomeAppController(config: _testConfig()),
+          appController:
+              appController ?? AgentAwesomeAppController(config: _testConfig()),
           commandContext: (text, {String profilePath = ''}) => CommandContext(
             section: AppSections.backlog,
             area: 'Stream',
@@ -175,8 +396,8 @@ class _CommandBarHarness extends StatelessWidget {
           onNewChat: () {},
           onStartChatWithProfile: (_) {},
           onSelectHistoryChat: (_) {},
-          onOpenSection: (_) {},
-          onOpenSettingsSection: (_) {},
+          onOpenSection: onOpenSection ?? (_) {},
+          onOpenSettingsSection: onOpenSettingsSection ?? (_) {},
           onOpenSettings: () {},
           onOpenSetup: onOpenSetup ?? () {},
         ),

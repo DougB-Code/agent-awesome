@@ -209,7 +209,9 @@ bool _chatContextRecordIsChatMessage(MemoryRecord record) {
       kind == 'chat' ||
       kind == 'chat_message' ||
       title.startsWith('chat message from ') ||
-      source.contains('google_adk_session');
+      source.contains('google_adk_session') ||
+      source.contains('agent_awesome_chat') ||
+      source.contains('chat_session');
 }
 
 /// Reports whether a memory record represents a file context item.

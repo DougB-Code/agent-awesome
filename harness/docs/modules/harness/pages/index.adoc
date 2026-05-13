@@ -11,7 +11,7 @@ It loads model, agent, and tool configuration, creates the configured model prov
 * Validate agent identity, provider capabilities, and tool declarations.
 * Create model clients through provider adapters.
 * Build local execution and MCP toolsets.
-* Start console or ADK-compatible web runtimes.
+* Start console or assistant web runtimes.
 
 The harness should not own desktop UI behavior, memory persistence, gateway request policy, or cloud provisioning.
 

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// DefaultHarnessServiceName is the supervisor name for the ADK harness.
+	// DefaultHarnessServiceName is the supervisor name for the assistant harness.
 	DefaultHarnessServiceName = "harness"
 	// DefaultMemoryServiceName is the supervisor name for memoryd.
 	DefaultMemoryServiceName = "memory"
@@ -172,12 +172,12 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&memoryDomainsJSON, "memory-domains-json", memoryDomainsJSON, "JSON memory domain list for gateway routing")
 	fs.StringVar(&memoryPolicyJSON, "memory-policy-json", memoryPolicyJSON, "JSON memory access policy for the active agent profile")
 	fs.StringVar(&memoryServicesJSON, "memory-services-json", memoryServicesJSON, "JSON memory service list for per-domain supervision")
-	fs.StringVar(&cfg.AppName, "app-name", cfg.AppName, "default ADK app name")
-	fs.StringVar(&cfg.UserID, "user-id", cfg.UserID, "default ADK user id")
+	fs.StringVar(&cfg.AppName, "app-name", cfg.AppName, "default assistant app name")
+	fs.StringVar(&cfg.UserID, "user-id", cfg.UserID, "default assistant user id")
 	fs.StringVar(&cfg.AuthToken, "auth-token", cfg.AuthToken, "optional bearer token required for gateway API requests")
 	fs.StringVar(&cfg.AllowedOrigin, "allowed-origin", cfg.AllowedOrigin, "optional CORS origin for browser clients")
 	fs.BoolVar(&cfg.AllowUnauthenticatedLoopbackOnly, "allow-unauthenticated-loopback-only", cfg.AllowUnauthenticatedLoopbackOnly, "allow tokenless protected routes only when the gateway bind and CORS origin are loopback-only")
-	fs.StringVar(&cfg.RuntimePolicyText, "runtime-policy-text", cfg.RuntimePolicyText, "optional operator policy text injected into ADK run requests")
+	fs.StringVar(&cfg.RuntimePolicyText, "runtime-policy-text", cfg.RuntimePolicyText, "optional operator policy text injected into assistant run requests")
 	fs.StringVar(&cfg.SnapshotStatusURL, "snapshot-status-url", cfg.SnapshotStatusURL, "optional authenticated snapshot endpoint used for beta status freshness")
 	fs.StringVar(&cfg.SnapshotStatusToken, "snapshot-status-token", cfg.SnapshotStatusToken, "bearer token for the beta status snapshot endpoint")
 	fs.StringVar(&cfg.ModelProviderID, "model-provider-id", cfg.ModelProviderID, "current non-secret model provider identifier for beta status")

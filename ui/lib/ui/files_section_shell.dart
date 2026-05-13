@@ -82,38 +82,22 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
     );
   }
 
-  /// Builds refresh and add-file actions for the file library header.
+  /// Builds add-file actions for the file library header.
   Widget _buildAreaActions(BuildContext context, SwitcherPanelArea area) {
     final colors = context.agentAwesomeColors;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Tooltip(
-          message: 'Refresh files',
-          child: IconButton.outlined(
-            visualDensity: VisualDensity.compact,
-            onPressed: widget.controller.memoryBusy
-                ? null
-                : widget.controller.refreshMemoryFromUi,
-            icon: Icon(Icons.refresh, color: colors.muted),
-          ),
+    return Tooltip(
+      message: 'Add file',
+      child: IconButton.filled(
+        visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          backgroundColor: colors.green,
+          foregroundColor: colors.surface,
         ),
-        const SizedBox(width: 8),
-        Tooltip(
-          message: 'Add file',
-          child: IconButton.filled(
-            visualDensity: VisualDensity.compact,
-            style: IconButton.styleFrom(
-              backgroundColor: colors.green,
-              foregroundColor: colors.surface,
-            ),
-            onPressed: widget.controller.memoryBusy
-                ? null
-                : widget.controller.importFileFromUi,
-            icon: const Icon(Icons.add),
-          ),
-        ),
-      ],
+        onPressed: widget.controller.memoryBusy
+            ? null
+            : widget.controller.importFileFromUi,
+        icon: const Icon(Icons.add),
+      ),
     );
   }
 

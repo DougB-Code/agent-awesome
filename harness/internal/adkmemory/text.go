@@ -1,4 +1,4 @@
-// This file sanitizes ADK chat text before storage or memory search.
+// This file sanitizes chat text before storage or memory search.
 package adkmemory
 
 import (

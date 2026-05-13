@@ -694,7 +694,7 @@ void main() {
     expect(find.text('OpenAI / gpt-5.4-mini - GPT-5.4 Mini'), findsOneWidget);
     expect(find.text('Memory'), findsWidgets);
     expect(find.text('Profile'), findsOneWidget);
-    expect(find.text('Personal'), findsOneWidget);
+    expect(find.text('Personal'), findsWidgets);
     expect(find.text('Local Harness'), findsNothing);
     expect(find.text('Agent API'), findsNothing);
     expect(find.text('Local processes'), findsNothing);
@@ -712,8 +712,10 @@ void main() {
     await tester.pump();
     expect(find.text('PROFILES'), findsOneWidget);
     expect(find.text('RECENT CHATS'), findsOneWidget);
-    expect(find.text('WORKSPACES'), findsOneWidget);
+    expect(find.text('WORKSPACES'), findsNothing);
     expect(find.text('SETTINGS'), findsOneWidget);
+    expect(find.text('Manage'), findsOneWidget);
+    expect(find.text('All Chats'), findsOneWidget);
     expect(find.text('Personal'), findsWidgets);
     await tester.tap(find.text('Personal').last);
     await tester.pumpAndSettle();
@@ -820,6 +822,12 @@ void main() {
     expect(find.text('OVERVIEW'), findsOneWidget);
     expect(find.text('Preference'), findsWidgets);
     expect(find.text('MEMORY'), findsOneWidget);
+    expect(find.byTooltip('Refresh'), findsNothing);
+    await tester.tap(find.byTooltip('Browse'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Adk Chat'), findsNothing);
+    expect(find.text('Chat'), findsWidgets);
   });
 
   testWidgets('shows memory safety event history', (tester) async {
@@ -877,7 +885,7 @@ void main() {
     expect(find.text('Memory service unavailable'), findsOneWidget);
     expect(find.text('Connection failed'), findsOneWidget);
     expect(find.textContaining('HTTP 401'), findsOneWidget);
-    expect(find.text('Try again'), findsOneWidget);
+    expect(find.text('Try again'), findsNothing);
     expect(find.text('SEARCH'), findsNothing);
     expect(find.text('OVERVIEW'), findsNothing);
     expect(find.text('No memory records'), findsNothing);
@@ -909,6 +917,7 @@ void main() {
     expect(find.text('No files indexed yet'), findsWidgets);
     expect(find.textContaining('PDFs, spreadsheets, images'), findsWidgets);
     expect(find.text('Add file'), findsOneWidget);
+    expect(find.byTooltip('Refresh files'), findsNothing);
     expect(find.text('Immutable source material from memory.'), findsNothing);
     expect(find.text('No source content loaded'), findsNothing);
 
@@ -1053,6 +1062,7 @@ void main() {
     expect(find.text('Sources 2'), findsOneWidget);
     expect(find.text('Mina'), findsWidgets);
     expect(find.text('Sam'), findsWidgets);
+    expect(find.byTooltip('Refresh contacts'), findsNothing);
 
     await tester.enterText(
       find.byKey(const ValueKey<String>('command-subshell-filter')),
@@ -1770,6 +1780,17 @@ ProjectWorkspace _memoryWorkspace() {
         sourceLabel: 'chat:1',
         sourceSystem: 'chat',
         sourceId: '1',
+      ),
+      MemoryRecord(
+        id: 'chat-1',
+        evidenceId: 'chat-ev-1',
+        title: 'Chat message from user in session',
+        summary: 'A remembered chat row.',
+        kind: 'conversation',
+        topics: <String>['adk_chat'],
+        sourceLabel: 'google_adk_session:event-1',
+        sourceSystem: 'google_adk_session',
+        sourceId: 'event-1',
       ),
     ],
   );

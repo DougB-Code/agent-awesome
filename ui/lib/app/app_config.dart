@@ -24,29 +24,53 @@ class AppConfig {
   /// Builds configuration from Flutter compile-time environment values.
   factory AppConfig.fromEnvironment() {
     return AppConfig(
-      agentApiBaseUrl: const String.fromEnvironment(
-        'AGENT_API_BASE_URL',
-        defaultValue: 'http://127.0.0.1:8080/api',
+      agentApiBaseUrl: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENT_API_BASE_URL',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENT_API_BASE_URL',
+        fallback: 'http://127.0.0.1:8080/api',
       ),
-      agentGatewayBaseUrl: const String.fromEnvironment(
-        'AGENT_GATEWAY_BASE_URL',
-        defaultValue: 'http://127.0.0.1:8070/api',
+      agentGatewayBaseUrl: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENT_GATEWAY_BASE_URL',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENT_GATEWAY_BASE_URL',
+        fallback: 'http://127.0.0.1:8070/api',
       ),
-      agentContextApiBaseUrl: const String.fromEnvironment(
-        'AGENT_CONTEXT_API_BASE_URL',
-        defaultValue: 'http://127.0.0.1:8081/api/context',
+      agentContextApiBaseUrl: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENT_CONTEXT_API_BASE_URL',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENT_CONTEXT_API_BASE_URL',
+        fallback: 'http://127.0.0.1:8081/api/context',
       ),
-      memoryMcpUrl: const String.fromEnvironment(
-        'MEMORY_MCP_URL',
-        defaultValue: 'http://127.0.0.1:8090/mcp',
+      memoryMcpUrl: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'MEMORY_MCP_URL',
+          defaultValue: '',
+        ),
+        runtimeName: 'MEMORY_MCP_URL',
+        fallback: 'http://127.0.0.1:8090/mcp',
       ),
-      agentAppName: const String.fromEnvironment(
-        'AGENT_APP_NAME',
-        defaultValue: 'agent_awesome',
+      agentAppName: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENT_APP_NAME',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENT_APP_NAME',
+        fallback: 'agent_awesome',
       ),
-      agentUserId: const String.fromEnvironment(
-        'AGENT_USER_ID',
-        defaultValue: 'doug',
+      agentUserId: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENT_USER_ID',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENT_USER_ID',
+        fallback: 'doug',
       ),
       workspaceRoot: _environmentValue(
         compiled: const String.fromEnvironment(
@@ -56,13 +80,21 @@ class AppConfig {
         runtimeName: 'AGENTAWESOME_WORKSPACE_ROOT',
         fallback: _defaultWorkspaceRoot(),
       ),
-      autoStartLocalServices: const bool.fromEnvironment(
-        'AUTO_START_LOCAL_SERVICES',
-        defaultValue: true,
+      autoStartLocalServices: _boolEnvironmentValue(
+        compiled: const String.fromEnvironment(
+          'AUTO_START_LOCAL_SERVICES',
+          defaultValue: '',
+        ),
+        runtimeName: 'AUTO_START_LOCAL_SERVICES',
+        fallback: true,
       ),
-      runtimeProfilePath: const String.fromEnvironment(
-        'AGENTAWESOME_RUNTIME_PROFILE',
-        defaultValue: '',
+      runtimeProfilePath: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENTAWESOME_RUNTIME_PROFILE',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENTAWESOME_RUNTIME_PROFILE',
+        fallback: '',
       ),
       litertLmExecutable: _environmentValue(
         compiled: const String.fromEnvironment(
@@ -84,7 +116,7 @@ class AppConfig {
     );
   }
 
-  /// Base URL for the ADK REST API.
+  /// Base URL for the assistant API.
   final String agentApiBaseUrl;
 
   /// Base URL for the Agent Awesome gateway API.
@@ -108,10 +140,10 @@ class AppConfig {
   /// Direct memory MCP JSON-RPC endpoint used as the gateway upstream.
   final String memoryMcpUrl;
 
-  /// ADK app name that hosts the configured agent.
+  /// Assistant app name that hosts the configured agent.
   final String agentAppName;
 
-  /// ADK user id used for local sessions.
+  /// Assistant user id used for local sessions.
   final String agentUserId;
 
   /// Root directory containing app service packages or release bundle files.
@@ -184,6 +216,23 @@ String _environmentValue({
     return fromRuntime;
   }
   return fallback;
+}
+
+/// Reads a boolean from compile-time config, runtime env, or a fallback.
+bool _boolEnvironmentValue({
+  required String compiled,
+  required String runtimeName,
+  required bool fallback,
+}) {
+  final value = _environmentValue(
+    compiled: compiled,
+    runtimeName: runtimeName,
+    fallback: fallback.toString(),
+  ).trim();
+  if (value.isEmpty) {
+    return fallback;
+  }
+  return value.toLowerCase() == 'true';
 }
 
 /// Reads gateway auth from compile-time or desktop runtime environment values.

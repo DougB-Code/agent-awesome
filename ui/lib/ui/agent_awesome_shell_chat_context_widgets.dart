@@ -63,7 +63,7 @@ class _ChatMemoryContextTile extends StatelessWidget {
               _MemoryBadge(label: record.kind),
               _MemoryBadge(label: record.sensitivity),
               if (record.sourceLabel.isNotEmpty)
-                _MemoryBadge(label: record.sourceLabel),
+                _MemoryBadge(label: _memorySourceLabel(record.sourceLabel)),
             ],
           ),
         ],

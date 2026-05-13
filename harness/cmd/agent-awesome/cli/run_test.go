@@ -167,13 +167,13 @@ func TestRunCommandUsesExpectedConfigPathFlags(t *testing.T) {
 	}
 }
 
-func TestRuntimeSyntaxSeparatesHarnessConsoleFromDelegatedADKModes(t *testing.T) {
+func TestRuntimeSyntaxSeparatesHarnessConsoleFromAssistantModes(t *testing.T) {
 	syntax := runtimeSyntax()
 	for _, want := range []string{
 		"Agent Awesome console:",
 		"console - runs an agent in Agent Awesome console mode.",
 		"-streaming_mode",
-		"Delegated ADK runtime modes:",
+		"Assistant runtime modes:",
 		"web - starts web server",
 	} {
 		if !strings.Contains(syntax, want) {
@@ -181,6 +181,6 @@ func TestRuntimeSyntaxSeparatesHarnessConsoleFromDelegatedADKModes(t *testing.T)
 		}
 	}
 	if strings.Contains(syntax, "Console shutdown timeout") {
-		t.Fatalf("runtimeSyntax() includes ADK console-only flags: %q", syntax)
+		t.Fatalf("runtimeSyntax() includes delegated console-only flags: %q", syntax)
 	}
 }

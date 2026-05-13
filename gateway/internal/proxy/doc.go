@@ -1,7 +1,7 @@
 // Package proxy forwards gateway API requests to the configured agent harness.
 //
 // Intended use cases:
-//   - Preserve ADK-compatible Flutter traffic through a stable gateway URL.
+//   - Preserve Flutter assistant traffic through a stable gateway URL.
 //   - Apply caller-provided body transformers before upstream forwarding.
 //
 // High-level examples:

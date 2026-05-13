@@ -1,4 +1,4 @@
-// This file selects memory MCP configuration and exposes ADK memory tools.
+// This file selects memory MCP configuration and exposes runtime memory tools.
 package adkmemory
 
 import (
@@ -12,7 +12,7 @@ import (
 	"google.golang.org/adk/tool/preloadmemorytool"
 )
 
-// NewFromToolsConfig creates an ADK memory service from configured domains.
+// NewFromToolsConfig creates a runtime memory service from configured domains.
 func NewFromToolsConfig(cfg *schema.Tools) (*Service, bool, error) {
 	runtime, ok := memoryRuntimeFromConfig(cfg)
 	if !ok {
@@ -26,7 +26,7 @@ func NewFromToolsConfig(cfg *schema.Tools) (*Service, bool, error) {
 	return New(runtime), true, nil
 }
 
-// RuntimeTools returns ADK tools that search and preload configured memory.
+// RuntimeTools returns runtime tools that search and preload configured memory.
 func RuntimeTools() []tool.Tool {
 	return []tool.Tool{
 		preloadmemorytool.New(),
@@ -44,7 +44,7 @@ type memoryRuntimeConfig struct {
 	allowedFlows         map[string]map[string]struct{}
 }
 
-// memoryDomain stores one ADK memory endpoint.
+// memoryDomain stores one memory endpoint.
 type memoryDomain struct {
 	id         string
 	label      string
@@ -52,7 +52,7 @@ type memoryDomain struct {
 	searchTool string
 }
 
-// memoryRuntimeFromConfig resolves ADK memory domains from target config.
+// memoryRuntimeFromConfig resolves memory domains from target config.
 func memoryRuntimeFromConfig(cfg *schema.Tools) (memoryRuntimeConfig, bool) {
 	if cfg == nil || len(cfg.Memory.ReadDomains) == 0 {
 		return memoryRuntimeConfig{}, false

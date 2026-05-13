@@ -1,4 +1,4 @@
-// This file converts ADK session events into memory capture requests.
+// This file converts runtime session events into memory capture requests.
 package adkmemory
 
 import (
@@ -8,6 +8,12 @@ import (
 	"strings"
 
 	"google.golang.org/adk/session"
+)
+
+const (
+	chatMemorySourceSystem = "agent_awesome_chat"
+	chatMemoryTopic        = "chat"
+	chatMemoryKeyPrefix    = "agent_awesome_chat"
 )
 
 // capturePayload returns a save_memory_candidate payload for one chat event.
@@ -26,7 +32,7 @@ func capturePayload(curSession session.Session, event *session.Event, actor stri
 		"content":         text,
 		"media_type":      "text/plain; charset=utf-8",
 		"title":           captureTitle(curSession, speaker),
-		"source":          map[string]any{"system": "google_adk_session", "id": eventID},
+		"source":          map[string]any{"system": chatMemorySourceSystem, "id": eventID},
 		"kind":            conversationKind,
 		"firewall":        userFirewall,
 		"trust_level":     sourceTrustLevel,
@@ -41,7 +47,7 @@ func capturePayload(curSession session.Session, event *session.Event, actor stri
 	return payload, true
 }
 
-// stableEventID returns the ADK event ID or a deterministic content hash.
+// stableEventID returns the runtime event ID or a deterministic content hash.
 func stableEventID(curSession session.Session, event *session.Event, text string) string {
 	if strings.TrimSpace(event.ID) != "" {
 		return strings.TrimSpace(event.ID)
@@ -77,19 +83,19 @@ func captureTitle(curSession session.Session, speaker string) string {
 	return fmt.Sprintf("Chat message from %s in %s", speaker, sessionID)
 }
 
-// captureTopics returns stable tags for ADK conversation memory.
+// captureTopics returns stable tags for captured conversation memory.
 func captureTopics(curSession session.Session) []string {
-	topics := []string{"adk_chat"}
+	topics := []string{chatMemoryTopic}
 	if appName := strings.TrimSpace(curSession.AppName()); appName != "" {
 		topics = append(topics, appName)
 	}
 	return topics
 }
 
-// idempotencyKey returns a repeatable key for a captured ADK event.
+// idempotencyKey returns a repeatable key for a captured runtime event.
 func idempotencyKey(curSession session.Session, eventID string) string {
 	return strings.Join([]string{
-		"adk",
+		chatMemoryKeyPrefix,
 		curSession.AppName(),
 		curSession.UserID(),
 		curSession.ID(),

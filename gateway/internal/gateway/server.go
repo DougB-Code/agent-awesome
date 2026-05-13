@@ -328,7 +328,7 @@ func (s *Server) betaStatusPageHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) channelsHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"channels": []map[string]any{
-			{"name": "flutter", "state": "active", "description": "ADK-compatible API traffic through /api/*"},
+			{"name": "flutter", "state": "active", "description": "Assistant API traffic through /api/*"},
 			{"name": "slack", "state": s.slackState(), "description": "Inbound message adapter for Slack Events API and Socket Mode"},
 			{"name": "sms", "state": "planned", "description": "Inbound message adapter for future SMS provider webhooks"},
 			{"name": "email", "state": "planned", "description": "Inbound message adapter for future email ingestion"},

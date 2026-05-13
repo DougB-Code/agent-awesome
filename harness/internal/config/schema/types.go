@@ -74,7 +74,7 @@ type MCPToolFilter struct {
 	Allow []string `koanf:"allow"`
 }
 
-// Memory describes ADK memory access across configured domains.
+// Memory describes runtime memory access across configured domains.
 type Memory struct {
 	Actor                string         `koanf:"actor"`
 	ReadDomains          []MemoryDomain `koanf:"read-domains"`
@@ -84,7 +84,7 @@ type Memory struct {
 	AllowedFlows         []MemoryFlow   `koanf:"allowed-flows"`
 }
 
-// MemoryDomain describes one memory domain endpoint available to ADK memory.
+// MemoryDomain describes one memory domain endpoint available to runtime memory.
 type MemoryDomain struct {
 	ID             string            `koanf:"id"`
 	Label          string            `koanf:"label"`
