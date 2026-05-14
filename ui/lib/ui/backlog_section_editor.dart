@@ -48,6 +48,7 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           PanelSectionBlock(
+            title: 'Task',
             child: Column(
               children: <Widget>[
                 _TaskTextField(controller: _title, label: 'Title'),
@@ -277,7 +278,8 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          PanelSectionBlock(
+          PanelSectionBlock.plain(
+            title: 'Task',
             child: Column(
               children: <Widget>[
                 _TaskTextField(controller: _title, label: 'Title'),

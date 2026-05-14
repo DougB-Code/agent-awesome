@@ -39,44 +39,40 @@ class _TaskGraphDetailsBlock extends StatelessWidget {
           suggestion: suggestion,
         ),
     ];
-    return PanelSectionBlock(
+    return PanelSectionBlock.gradient(
+      title: 'Graph',
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (canUpsertRelation)
+            Tooltip(
+              message: 'Add relation',
+              child: IconButton(
+                onPressed: controller.tasksBusy
+                    ? null
+                    : () => unawaited(
+                        _showTaskRelationDialog(context, controller, task),
+                      ),
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+              ),
+            ),
+          if (canUpsertCommitment)
+            Tooltip(
+              message: 'Add commitment',
+              child: IconButton(
+                onPressed: controller.tasksBusy
+                    ? null
+                    : () => unawaited(
+                        _showTaskCommitmentDialog(context, controller, task),
+                      ),
+                icon: const Icon(Icons.handshake_outlined, size: 18),
+              ),
+            ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Expanded(child: _TaskPanelLabel('Graph')),
-              if (canUpsertRelation)
-                Tooltip(
-                  message: 'Add relation',
-                  child: IconButton(
-                    onPressed: controller.tasksBusy
-                        ? null
-                        : () => unawaited(
-                            _showTaskRelationDialog(context, controller, task),
-                          ),
-                    icon: const Icon(Icons.account_tree_outlined, size: 18),
-                  ),
-                ),
-              if (canUpsertCommitment)
-                Tooltip(
-                  message: 'Add commitment',
-                  child: IconButton(
-                    onPressed: controller.tasksBusy
-                        ? null
-                        : () => unawaited(
-                            _showTaskCommitmentDialog(
-                              context,
-                              controller,
-                              task,
-                            ),
-                          ),
-                    icon: const Icon(Icons.handshake_outlined, size: 18),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
           _TaskGraphSubsection(
             title: 'Suggestions',
             emptyLabel: 'No graph suggestions',

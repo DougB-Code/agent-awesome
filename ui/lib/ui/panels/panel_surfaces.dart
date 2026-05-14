@@ -19,6 +19,7 @@ class PanelSurface extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.style = PanelSurfaceStyle.primary,
     this.selected = false,
+    this.showBorder = true,
     this.fillWidth = false,
     this.clipBehavior = Clip.none,
   });
@@ -34,6 +35,9 @@ class PanelSurface extends StatelessWidget {
 
   /// Whether the surface represents an active selection.
   final bool selected;
+
+  /// Whether the surface should paint its outer border.
+  final bool showBorder;
 
   /// Whether the surface should expand horizontally.
   final bool fillWidth;
@@ -52,7 +56,9 @@ class PanelSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: selected ? colors.greenSoft : colors.surface,
         gradient: _gradient(context),
-        border: Border.all(color: selected ? colors.green : colors.border),
+        border: showBorder
+            ? Border.all(color: selected ? colors.green : colors.border)
+            : null,
         borderRadius: BorderRadius.circular(8),
       ),
       child: child,

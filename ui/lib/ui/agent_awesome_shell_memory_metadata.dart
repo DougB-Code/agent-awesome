@@ -76,7 +76,8 @@ class _MemoryMetadataContentState extends State<_MemoryMetadataContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          PanelSectionBlock(
+          PanelSectionBlock.plain(
+            title: 'Metadata Repair',
             child: Column(
               children: <Widget>[
                 _MemoryTextField(controller: _title, label: 'Title'),

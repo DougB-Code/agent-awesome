@@ -223,6 +223,7 @@ void main() {
       sources: <SourceItem>[],
       memoryRecords: <MemoryRecord>[],
     );
+    controller.selectedTaskId = 'task-brief';
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
@@ -252,6 +253,7 @@ void main() {
     );
     expect(find.text('INSPECTOR'), findsOneWidget);
     expect(find.text('Draft task brief'), findsWidgets);
+    expect(find.text('TASK'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Stream'));
     await tester.pumpAndSettle();
@@ -853,6 +855,17 @@ void main() {
     expect(find.text('Preference'), findsWidgets);
     expect(find.text('MEMORY'), findsOneWidget);
     expect(find.byTooltip('Refresh'), findsNothing);
+    await tester.tap(find.byTooltip('Metadata'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('METADATA REPAIR'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Pages'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PAGE TOOLS'), findsOneWidget);
+    expect(find.text('No compiled page loaded'), findsOneWidget);
+
     await tester.tap(find.byTooltip('Browse'));
     await tester.pumpAndSettle();
 

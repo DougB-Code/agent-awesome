@@ -1,28 +1,121 @@
 /// Shared panel labels, badges, status rows, and chat panels.
 part of 'panels.dart';
 
+/// PanelContentSectionStyle selects the shared content-section treatment.
+enum PanelContentSectionStyle {
+  /// Plain sections use pane spacing without a gradient card or section border.
+  plain,
+
+  /// Gradient sections use the shared card gradient and section border.
+  gradient,
+}
+
+/// PanelSectionBlock renders shared plain or gradient content sections.
 class PanelSectionBlock extends StatelessWidget {
-  /// Creates a compact reusable section block.
+  /// Creates a reusable gradient section block.
   const PanelSectionBlock({
     super.key,
     required this.child,
+    this.title = '',
+    this.trailing,
     this.padding = const EdgeInsets.all(14),
+    this.style = PanelContentSectionStyle.gradient,
   });
+
+  /// Creates a pane-native section without a gradient background or border.
+  const PanelSectionBlock.plain({
+    super.key,
+    required this.child,
+    this.title = '',
+    this.trailing,
+    this.padding = EdgeInsets.zero,
+  }) : style = PanelContentSectionStyle.plain;
+
+  /// Creates a card-like section with the shared gradient background and border.
+  const PanelSectionBlock.gradient({
+    super.key,
+    required this.child,
+    this.title = '',
+    this.trailing,
+    this.padding = const EdgeInsets.all(14),
+  }) : style = PanelContentSectionStyle.gradient;
 
   /// Content shown inside the block.
   final Widget child;
 
+  /// Optional uppercase title shown above the section content.
+  final String title;
+
+  /// Optional action or status widget aligned with the section title.
+  final Widget? trailing;
+
   /// Inner spacing around the block content.
   final EdgeInsetsGeometry padding;
 
-  /// Builds the shared bordered panel surface.
+  /// Visual treatment for the section.
+  final PanelContentSectionStyle style;
+
+  /// Builds the shared section layout.
   @override
   Widget build(BuildContext context) {
-    return PanelSurface(
-      fillWidth: true,
-      padding: padding,
-      style: PanelSurfaceStyle.card,
-      child: child,
+    final content = _buildContent();
+    return switch (style) {
+      PanelContentSectionStyle.plain => Padding(
+        padding: padding,
+        child: content,
+      ),
+      PanelContentSectionStyle.gradient => PanelSurface(
+        fillWidth: true,
+        padding: padding,
+        style: PanelSurfaceStyle.card,
+        child: content,
+      ),
+    };
+  }
+
+  /// Builds the title row and section child.
+  Widget _buildContent() {
+    final titleText = title.trim();
+    if (titleText.isEmpty && trailing == null) {
+      return child;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _PanelSectionHeader(title: titleText, trailing: trailing),
+        const SizedBox(height: 12),
+        child,
+      ],
+    );
+  }
+}
+
+/// _PanelSectionHeader renders the optional section title and action row.
+class _PanelSectionHeader extends StatelessWidget {
+  /// Creates a shared content-section header.
+  const _PanelSectionHeader({required this.title, required this.trailing});
+
+  /// Uppercase section title.
+  final String title;
+
+  /// Optional widget aligned to the trailing edge.
+  final Widget? trailing;
+
+  /// Builds the shared header row.
+  @override
+  Widget build(BuildContext context) {
+    final trailingWidget = trailing;
+    if (trailingWidget == null) {
+      return PanelSectionLabel(title);
+    }
+    return Row(
+      children: <Widget>[
+        if (title.isEmpty)
+          const Spacer()
+        else
+          Expanded(child: PanelSectionLabel(title)),
+        trailingWidget,
+      ],
     );
   }
 }

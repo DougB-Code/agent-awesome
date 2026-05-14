@@ -21,12 +21,11 @@ class _TaskInsightDetailsBlock extends StatelessWidget {
     final plan = index.unblockPlanFor(taskId);
     final gaps = index.metadataGapsFor(taskId);
     final handoff = index.candidateForTask(taskId, TaskInsightIds.agentHandoff);
-    return PanelSectionBlock(
+    return PanelSectionBlock.gradient(
+      title: 'Insights',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const _TaskPanelLabel('Insights'),
-          const SizedBox(height: 10),
           Text(
             TaskInsightExplanations.whyThisMatters(
               task: task,

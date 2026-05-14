@@ -299,17 +299,12 @@ class FormSectionCard extends StatelessWidget {
   /// Builds one settings-style form group.
   @override
   Widget build(BuildContext context) {
-    return PanelSectionBlock(
+    return PanelSectionBlock.gradient(
+      title: title,
       padding: SettingsFormMetrics.sectionPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          if (title.isNotEmpty) ...<Widget>[
-            PanelSectionLabel(title),
-            const SizedBox(height: 14),
-          ],
-          ...children,
-        ],
+        children: children,
       ),
     );
   }

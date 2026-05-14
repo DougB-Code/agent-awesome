@@ -31,7 +31,8 @@ class _MemoryPagesContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          PanelSectionBlock(
+          PanelSectionBlock.gradient(
+            title: 'Page Tools',
             child: Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -59,7 +60,8 @@ class _MemoryPagesContent extends StatelessWidget {
           if (page == null)
             const PanelEmptyBlock(label: 'No compiled page loaded')
           else
-            PanelSectionBlock(
+            PanelSectionBlock.gradient(
+              title: 'Compiled Page',
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[

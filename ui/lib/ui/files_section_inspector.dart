@@ -248,15 +248,12 @@ class _InspectorBlock extends StatelessWidget {
   /// Builds one bordered inspector group.
   @override
   Widget build(BuildContext context) {
-    return PanelSectionBlock(
+    return PanelSectionBlock.gradient(
+      title: label,
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          PanelSectionLabel(label),
-          const SizedBox(height: 12),
-          child,
-        ],
+        children: <Widget>[child],
       ),
     );
   }

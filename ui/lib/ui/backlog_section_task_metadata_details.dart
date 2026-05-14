@@ -10,27 +10,22 @@ class _TaskMetadataBlock extends StatelessWidget {
   /// Builds context metadata details.
   @override
   Widget build(BuildContext context) {
-    return PanelSectionBlock(
+    return PanelSectionBlock.gradient(
+      title: 'Metadata',
+      trailing: Tooltip(
+        message: 'Edit graph metadata',
+        child: IconButton(
+          onPressed: controller.tasksBusy
+              ? null
+              : () => unawaited(
+                  _showTaskMetadataDialog(context, controller, task),
+                ),
+          icon: const Icon(Icons.tune_outlined, size: 18),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Expanded(child: _TaskPanelLabel('Metadata')),
-              Tooltip(
-                message: 'Edit graph metadata',
-                child: IconButton(
-                  onPressed: controller.tasksBusy
-                      ? null
-                      : () => unawaited(
-                          _showTaskMetadataDialog(context, controller, task),
-                        ),
-                  icon: const Icon(Icons.tune_outlined, size: 18),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           _TaskMetadataRow(
             label: 'Estimate',
             value: task.estimateMinutes <= 0
@@ -92,27 +87,20 @@ class _TaskWbsBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final workBreakdown = task.workBreakdown;
     final hasContent = taskWbsHasContent(workBreakdown);
-    return PanelSectionBlock(
+    return PanelSectionBlock.gradient(
+      title: 'WBS',
+      trailing: Tooltip(
+        message: 'Edit WBS',
+        child: IconButton(
+          onPressed: controller.tasksBusy
+              ? null
+              : () => unawaited(_showTaskWbsDialog(context, controller, task)),
+          icon: const Icon(Icons.account_tree_outlined, size: 18),
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              const Expanded(child: _TaskPanelLabel('WBS')),
-              Tooltip(
-                message: 'Edit WBS',
-                child: IconButton(
-                  onPressed: controller.tasksBusy
-                      ? null
-                      : () => unawaited(
-                          _showTaskWbsDialog(context, controller, task),
-                        ),
-                  icon: const Icon(Icons.account_tree_outlined, size: 18),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           if (!hasContent)
             Text(
               'No WBS metadata',
