@@ -47,10 +47,12 @@ Signed events from the installed Slack app route to the default profile unless p
 
 [source,sh]
 ----
-cd deploy/cloudflare/worker
-npx wrangler r2 bucket create agent-awesome-beta-context
-npx wrangler deploy
+nvm use
+npm run cloudflare:r2:create
+npm run cloudflare:deploy
 ----
+
+Run those commands from the repository root. If you first `cd deploy/cloudflare/worker`, use `npm run r2:create` and `npm run deploy` instead.
 
 After Slack is enabled, set the Slack Events API request URL to:
 

@@ -8,8 +8,10 @@
   },
   "scripts": {
     "check": "tsc --noEmit",
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
+    "deploy:dry-run": "node scripts/run-wrangler.mjs deploy --dry-run",
+    "deploy": "node scripts/run-wrangler.mjs deploy",
+    "dev": "node scripts/run-wrangler.mjs dev",
+    "r2:create": "node scripts/run-wrangler.mjs r2 bucket create agent-awesome-beta-context",
     "smoke": "node scripts/smoke-test.mjs",
     "test": "npm run smoke"
   },

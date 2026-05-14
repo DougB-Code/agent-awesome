@@ -47,10 +47,13 @@ The gateway refuses to start Slack ingress without a team, user, and channel all
 
 [source,sh]
 ----
-npm run check
-npx wrangler deploy --dry-run
-npx wrangler deploy
+nvm use
+npm run cloudflare:check
+npm run cloudflare:deploy:dry-run
+npm run cloudflare:deploy
 ----
+
+Run those commands from the repository root. If your shell is already in `deploy/cloudflare/worker`, use `npm run check`, `npm run deploy:dry-run`, and `npm run deploy`.
 
 After deployment, verify the Slack request URL and send a message in the allow-listed channel.
 If Slack accepts events but the gateway ignores messages, check the allow-list values first.

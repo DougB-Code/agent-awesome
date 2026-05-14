@@ -44,6 +44,7 @@ type Config struct {
 	SnapshotStatusToken              string
 	ModelProviderID                  string
 	ModelID                          string
+	LogFile                          string
 	CheckConfig                      bool
 	RequestTimeout                   time.Duration
 	ServiceStartTimeout              time.Duration
@@ -156,6 +157,7 @@ func FromFlags(args []string) (Config, error) {
 		SnapshotStatusToken:              envString("AGENTAWESOME_PERSISTENCE_TOKEN", ""),
 		ModelProviderID:                  envString("AGENTAWESOME_MODEL_PROVIDER_ID", ""),
 		ModelID:                          envString("AGENTAWESOME_MODEL_ID", ""),
+		LogFile:                          envString("AGENTAWESOME_GATEWAY_LOG_FILE", ""),
 		RequestTimeout:                   envDuration("AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT", 10*time.Minute),
 		ServiceStartTimeout:              envDuration("AGENTAWESOME_SERVICE_START_TIMEOUT", 30*time.Second),
 	}
@@ -209,6 +211,7 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.SnapshotStatusToken, "snapshot-status-token", cfg.SnapshotStatusToken, "bearer token for the beta status snapshot endpoint")
 	fs.StringVar(&cfg.ModelProviderID, "model-provider-id", cfg.ModelProviderID, "current non-secret model provider identifier for beta status")
 	fs.StringVar(&cfg.ModelID, "model-id", cfg.ModelID, "current non-secret model identifier for beta status")
+	fs.StringVar(&cfg.LogFile, "log-file", cfg.LogFile, "optional gateway log file path")
 	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit without starting the gateway")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "maximum upstream request duration")
 	fs.DurationVar(&cfg.ServiceStartTimeout, "service-start-timeout", cfg.ServiceStartTimeout, "maximum local service readiness wait")
@@ -385,6 +388,7 @@ func (c Config) StatusView() map[string]any {
 			"provider_id": c.ModelProviderID,
 			"model_id":    c.ModelID,
 		},
+		"has_log_file":    strings.TrimSpace(c.LogFile) != "",
 		"check_config":    c.CheckConfig,
 		"harness_service": c.HarnessService.StatusView(),
 		"memory_service":  c.MemoryService.StatusView(),

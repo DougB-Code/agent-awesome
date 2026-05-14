@@ -19,16 +19,15 @@ import (
 
 // main loads configuration, starts optional local services, and serves HTTP.
 func main() {
-	closeLog, err := logging.Configure("")
-	if err != nil {
-		log.Fatal().Err(err).Msg("configure logging")
-	}
-	defer closeLog()
-
 	cfg, err := config.FromFlags(os.Args[1:])
 	if err != nil {
 		log.Fatal().Err(err).Msg("load config")
 	}
+	closeLog, err := logging.Configure(cfg.LogFile)
+	if err != nil {
+		log.Fatal().Err(err).Msg("configure logging")
+	}
+	defer closeLog()
 	if cfg.CheckConfig {
 		log.Info().Msg("gateway config ok")
 		return

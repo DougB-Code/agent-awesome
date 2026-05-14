@@ -40,6 +40,32 @@ func TestRunRequestBodyBuildsNonStreamingTextRun(t *testing.T) {
 	}
 }
 
+// TestRunConfirmationResponseBodyBuildsFunctionResponse verifies approval replies.
+func TestRunConfirmationResponseBodyBuildsFunctionResponse(t *testing.T) {
+	body, err := RunConfirmationResponseBody("app", "user", "session-1", "confirm-1", false)
+	if err != nil {
+		t.Fatalf("RunConfirmationResponseBody() error = %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if decoded["streaming"] != false {
+		t.Fatalf("streaming = %#v, want false", decoded["streaming"])
+	}
+	message := decoded["newMessage"].(map[string]any)
+	parts := message["parts"].([]any)
+	response := parts[0].(map[string]any)["functionResponse"].(map[string]any)
+	if response["id"] != "confirm-1" || response["name"] != ConfirmationFunctionName {
+		t.Fatalf("functionResponse = %#v, want confirmation response", response)
+	}
+	payload := response["response"].(map[string]any)
+	if payload["confirmed"] != false {
+		t.Fatalf("confirmed = %#v, want false", payload["confirmed"])
+	}
+}
+
 // TestSessionCreateBodyBuildsEmptyState verifies the ADK session bootstrap body.
 func TestSessionCreateBodyBuildsEmptyState(t *testing.T) {
 	body, err := SessionCreateBody()

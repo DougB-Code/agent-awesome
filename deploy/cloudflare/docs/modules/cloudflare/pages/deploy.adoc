@@ -45,14 +45,19 @@ PERSISTENCE_TOKEN="$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=')"
 
 [source,sh]
 ----
-npm install --cache ../../../build/npm-cache
-npm test
-npx wrangler r2 bucket create agent-awesome-beta-context
-printf '%s\n' "$GATEWAY_TOKEN" | npx wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
-printf '%s\n' "$PERSISTENCE_TOKEN" | npx wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
-npx wrangler secret put OPENAI_API_KEY
-npx wrangler deploy
+nvm use
+npm --prefix deploy/cloudflare/worker install --cache ../../build/npm-cache
+npm run cloudflare:test
+npm run cloudflare:r2:create
+printf '%s\n' "$GATEWAY_TOKEN" | npm --prefix deploy/cloudflare/worker exec wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
+printf '%s\n' "$PERSISTENCE_TOKEN" | npm --prefix deploy/cloudflare/worker exec wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
+npm --prefix deploy/cloudflare/worker exec wrangler secret put OPENAI_API_KEY
+npm run cloudflare:deploy
 ----
+
+Run those commands from the repository root. If your shell is already in `deploy/cloudflare/worker`, use `npm test`, `npm run r2:create`, `npx wrangler secret put ...`, and `npm run deploy` instead. Do not combine `cd deploy/cloudflare/worker` with `--config deploy/cloudflare/worker/wrangler.jsonc`; Wrangler resolves that relative path under the Worker directory.
+
+The package deploy scripts run Wrangler from the Worker directory and keep Wrangler and Docker state under `build/`, so they also work in shells where home-directory config paths are read-only.
 
 If you use an API token instead of `wrangler login`, export these values before the Wrangler commands:
 

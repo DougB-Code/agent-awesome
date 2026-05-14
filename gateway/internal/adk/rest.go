@@ -9,6 +9,9 @@ import (
 
 const runSSEPath = "/run_sse"
 
+// ConfirmationFunctionName is the ADK runtime function used for tool approvals.
+const ConfirmationFunctionName = "adk_request_confirmation"
+
 // RunSSEPath returns the ADK REST path used for SSE run requests.
 func RunSSEPath() string {
 	return runSSEPath
@@ -43,6 +46,28 @@ func RunRequestBody(appName string, userID string, sessionID string, text string
 	})
 }
 
+// RunConfirmationResponseBody builds the JSON body for a tool-confirmation reply.
+func RunConfirmationResponseBody(appName string, userID string, sessionID string, callID string, confirmed bool) ([]byte, error) {
+	return json.Marshal(runRequest{
+		AppName:   appName,
+		UserID:    userID,
+		SessionID: sessionID,
+		Streaming: false,
+		NewMessage: runMessage{
+			Role: "user",
+			Parts: []runPart{{
+				FunctionResponse: &runFunctionResponse{
+					ID:   callID,
+					Name: ConfirmationFunctionName,
+					Response: map[string]any{
+						"confirmed": confirmed,
+					},
+				},
+			}},
+		},
+	})
+}
+
 // SessionCreateBody builds the JSON body for creating an empty ADK session.
 func SessionCreateBody() ([]byte, error) {
 	return json.Marshal(sessionCreateRequest{
@@ -67,7 +92,15 @@ type runMessage struct {
 
 // runPart stores one text part in an ADK message.
 type runPart struct {
-	Text string `json:"text"`
+	Text             string               `json:"text,omitempty"`
+	FunctionResponse *runFunctionResponse `json:"functionResponse,omitempty"`
+}
+
+// runFunctionResponse stores one ADK function response part.
+type runFunctionResponse struct {
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Response map[string]any `json:"response"`
 }
 
 // sessionCreateRequest stores the ADK REST session creation shape.

@@ -18,6 +18,7 @@ type Config struct {
 	DefaultProfileID        string
 	AppName                 string
 	AgentUserID             string
+	RuntimePolicyText       string
 	ProfileBindings         []ProfileBinding
 	RequestTimeout          time.Duration
 	EventDedupTTL           time.Duration

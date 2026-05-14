@@ -61,6 +61,8 @@ function assertRequiredDeploymentAssets() {
     resolve(workerRoot, "scripts/smoke-test.mjs"),
     resolve(workerRoot, "../config/tool.doug.yaml"),
     resolve(workerRoot, "../config/tool.family.yaml"),
+    resolve(workerRoot, "../config/tool.slack.doug.yaml"),
+    resolve(workerRoot, "../config/tool.slack.family.yaml"),
     resolve(workerRoot, "../../../Dockerfile.cloudflare"),
   ]) {
     assert.ok(existsSync(path), `${path} must exist`);
@@ -90,9 +92,22 @@ function assertPackageScripts() {
   assert.equal(packageJSON.scripts?.smoke, "node scripts/smoke-test.mjs");
   assert.equal(packageJSON.scripts?.test, "npm run smoke");
   assert.equal(packageJSON.scripts?.check, "tsc --noEmit");
+  assert.equal(packageJSON.scripts?.deploy, "node scripts/run-wrangler.mjs deploy");
+  assert.equal(
+    packageJSON.scripts?.["deploy:dry-run"],
+    "node scripts/run-wrangler.mjs deploy --dry-run",
+  );
+  assert.equal(
+    packageJSON.scripts?.["r2:create"],
+    "node scripts/run-wrangler.mjs r2 bucket create agent-awesome-beta-context",
+  );
   assert.ok(
     existsSync(resolve(workerRoot, packageJSON.scripts.smoke.replace("node ", ""))),
     "smoke script must point to an existing file",
+  );
+  assert.ok(
+    existsSync(resolve(workerRoot, "scripts/run-wrangler.mjs")),
+    "Wrangler wrapper script must exist",
   );
 }
 
@@ -185,6 +200,8 @@ function assertContainerConfiguration(config) {
   assert.equal(r2.bucket_name, "agent-awesome-beta-context");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_ID, "gpt-5.4-mini");
+  assert.equal(config.vars?.AGENTAWESOME_GATEWAY_LOG_FILE, "/app/logs/gateway.log");
+  assert.equal(config.vars?.AGENTAWESOME_SLACK_READ_ONLY_TOOLS, "true");
   const modelConfig = readFileSync(resolve(workerRoot, "../config/model.yaml"), "utf8");
   assert.ok(
     modelConfig.includes("default: openai:gpt-5.4-mini"),
@@ -219,6 +236,7 @@ function assertContainerEnvironment(app) {
   assert.equal(mapped.AGENTAWESOME_PERSISTENCE_TOKEN, "persistence-token");
   assert.equal(mapped.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
   assert.equal(mapped.AGENTAWESOME_MODEL_ID, "gpt-5.4-mini");
+  assert.equal(mapped.AGENTAWESOME_GATEWAY_LOG_FILE, "/app/logs/gateway.log");
   assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"doug"'));
   assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"family"'));
   assert.ok(mapped.AGENTAWESOME_MEMORY_POLICY_JSON.includes('"default_write_domain":"doug"'));
@@ -226,6 +244,7 @@ function assertContainerEnvironment(app) {
   assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes('"--snapshot-url"'));
   assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/doug"));
   assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/family"));
+  assert.equal(mapped.AGENTAWESOME_SLACK_READ_ONLY_TOOLS, "true");
   assert.equal(mapped.SLACK_SIGNING_SECRET, "slack-secret");
   assert.equal(mapped.SLACK_ENABLED, "true");
   assert.equal(mapped.SLACK_SOCKET_MODE, "false");

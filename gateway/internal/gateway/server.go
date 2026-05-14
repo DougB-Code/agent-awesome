@@ -1221,20 +1221,21 @@ func (s *Server) readiness() readinessView {
 // slackConfig maps gateway config into the Slack adapter config.
 func slackConfig(cfg config.Config) slack.Config {
 	slackCfg := slack.Config{
-		Enabled:          cfg.Slack.Enabled,
-		SocketMode:       cfg.Slack.SocketMode,
-		SigningSecret:    cfg.Slack.SigningSecret,
-		BotToken:         cfg.Slack.BotToken,
-		AppToken:         cfg.Slack.AppToken,
-		AllowedTeamID:    cfg.Slack.AllowedTeamID,
-		AllowedUserID:    cfg.Slack.AllowedUserID,
-		AllowedChannelID: cfg.Slack.AllowedChannelID,
-		GatewayBaseURL:   cfg.GatewayBaseURL,
-		GatewayAuthToken: cfg.AuthToken,
-		AppName:          cfg.AppName,
-		AgentUserID:      cfg.UserID,
-		ProfileBindings:  slackProfileBindings(cfg.AgentProfiles),
-		RequestTimeout:   cfg.RequestTimeout,
+		Enabled:           cfg.Slack.Enabled,
+		SocketMode:        cfg.Slack.SocketMode,
+		SigningSecret:     cfg.Slack.SigningSecret,
+		BotToken:          cfg.Slack.BotToken,
+		AppToken:          cfg.Slack.AppToken,
+		AllowedTeamID:     cfg.Slack.AllowedTeamID,
+		AllowedUserID:     cfg.Slack.AllowedUserID,
+		AllowedChannelID:  cfg.Slack.AllowedChannelID,
+		GatewayBaseURL:    cfg.GatewayBaseURL,
+		GatewayAuthToken:  cfg.AuthToken,
+		AppName:           cfg.AppName,
+		AgentUserID:       cfg.UserID,
+		RuntimePolicyText: cfg.RuntimePolicyText,
+		ProfileBindings:   slackProfileBindings(cfg.AgentProfiles),
+		RequestTimeout:    cfg.RequestTimeout,
 	}
 	if profile, ok := cfg.DefaultProfile(); ok {
 		slackCfg.DefaultProfileID = profile.ID

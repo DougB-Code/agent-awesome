@@ -372,6 +372,35 @@ func TestNewAdapterRoutesLegacySlackThroughDefaultProfile(t *testing.T) {
 	if adapter.agent.headers["X-Agent-Awesome-Profile"] != "doug" {
 		t.Fatalf("profile header = %q, want doug", adapter.agent.headers["X-Agent-Awesome-Profile"])
 	}
+	if !adapter.agent.policy.Enabled() {
+		t.Fatalf("Slack runtime policy is disabled")
+	}
+}
+
+// TestNewAdapterCombinesOperatorAndSlackPolicy verifies channel safety rules.
+func TestNewAdapterCombinesOperatorAndSlackPolicy(t *testing.T) {
+	adapter := NewAdapter(Config{
+		GatewayBaseURL:    "http://gateway.test/api",
+		AppName:           "app",
+		AgentUserID:       "user",
+		RuntimePolicyText: "Use the operator policy.",
+	})
+	body, err := adapter.agent.runBody("slack-1", "hello")
+	if err != nil {
+		t.Fatalf("runBody() error = %v", err)
+	}
+
+	next, changed, err := adapter.agent.policy.Inject(body)
+	if err != nil {
+		t.Fatalf("Inject() error = %v", err)
+	}
+	if !changed {
+		t.Fatalf("Inject() changed = false, want true")
+	}
+	text := string(next)
+	if !strings.Contains(text, "Use the operator policy.") || !strings.Contains(text, "Slack cannot present tool confirmation prompts") {
+		t.Fatalf("policy body = %q, want operator and Slack policy text", text)
+	}
 }
 
 // TestNewAdapterCreatesProfileAgentClients verifies profile headers reach gateway.
@@ -403,6 +432,9 @@ func TestNewAdapterCreatesProfileAgentClients(t *testing.T) {
 	}
 	if agent.userID != "family" {
 		t.Fatalf("agent user = %q, want family", agent.userID)
+	}
+	if !agent.policy.Enabled() {
+		t.Fatalf("profile Slack runtime policy is disabled")
 	}
 }
 

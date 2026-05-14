@@ -13,6 +13,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const logComponentEnv = "LOG_COMPONENT"
+
 // Configure initializes zerolog and bridges standard-library logs into it.
 func Configure(logFile string) (func(), error) {
 	level, err := zerolog.ParseLevel(strings.ToLower(logLevelName()))
@@ -36,7 +38,10 @@ func Configure(logFile string) (func(), error) {
 		closeOutput = func() { _ = file.Close() }
 	}
 
-	log.Logger = zerolog.New(outputWriter(out)).With().Timestamp().Logger()
+	log.Logger = zerolog.New(outputWriter(out)).With().
+		Timestamp().
+		Str("component", componentName(logFile, "memory")).
+		Logger()
 	stdlog.SetFlags(0)
 	stdlog.SetOutput(standardLogWriter{logger: log.Logger})
 	return closeOutput, nil
@@ -64,6 +69,22 @@ func logLevelName() string {
 		return "info"
 	}
 	return level
+}
+
+// componentName returns the stable process name attached to every log line.
+func componentName(logFile string, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(logComponentEnv)); value != "" {
+		return value
+	}
+	base := strings.TrimSpace(filepath.Base(logFile))
+	if base == "" || base == "." {
+		return fallback
+	}
+	name := strings.TrimSuffix(base, filepath.Ext(base))
+	if strings.TrimSpace(name) == "" {
+		return fallback
+	}
+	return name
 }
 
 // outputWriter returns a JSON or plain-text zerolog writer.

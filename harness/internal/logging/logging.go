@@ -12,6 +12,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const logComponentEnv = "LOG_COMPONENT"
+
 // Configure initializes process-wide zerolog and standard-library log output.
 func Configure(logFile string) error {
 	levelName := firstNonEmpty(os.Getenv("LOG_LEVEL"), "info")
@@ -36,13 +38,19 @@ func Configure(logFile string) error {
 	}
 
 	if strings.EqualFold(firstNonEmpty(os.Getenv("LOG_FORMAT"), "text"), "json") {
-		log.Logger = zerolog.New(out).With().Timestamp().Logger()
+		log.Logger = zerolog.New(out).With().
+			Timestamp().
+			Str("component", componentName(logFile, "harness")).
+			Logger()
 	} else {
-		log.Logger = log.Output(zerolog.ConsoleWriter{
+		log.Logger = zerolog.New(zerolog.ConsoleWriter{
 			Out:        out,
 			TimeFormat: time.Kitchen,
 			NoColor:    true,
-		})
+		}).With().
+			Timestamp().
+			Str("component", componentName(logFile, "harness")).
+			Logger()
 	}
 
 	stdlog.SetFlags(0)
@@ -73,4 +81,20 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// componentName returns the stable process name attached to every log line.
+func componentName(logFile string, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(logComponentEnv)); value != "" {
+		return value
+	}
+	base := strings.TrimSpace(filepath.Base(logFile))
+	if base == "" || base == "." {
+		return fallback
+	}
+	name := strings.TrimSuffix(base, filepath.Ext(base))
+	if strings.TrimSpace(name) == "" {
+		return fallback
+	}
+	return name
 }

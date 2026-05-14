@@ -17,13 +17,33 @@ import (
 	"agentgateway/internal/policy"
 )
 
-const confirmationFunctionName = "adk_request_confirmation"
+const confirmationFunctionName = adk.ConfirmationFunctionName
 const agentSessionErrorBodyLimit int64 = 1024
 const agentRunErrorBodyLimit int64 = 2048
 const agentDependencyRetryDelay = 500 * time.Millisecond
+const maxSlackConfirmationDenials = 3
 
 var errSlackConfirmationUnsupported = errors.New("slack tool confirmation is unsupported")
 var errAgentDependencyNotReady = errors.New("agent dependency not ready")
+
+// slackConfirmationUnsupportedError identifies a confirmation Slack must deny.
+type slackConfirmationUnsupportedError struct {
+	CallID   string
+	ToolName string
+}
+
+// Error returns a concise diagnostic for logs and tests.
+func (e *slackConfirmationUnsupportedError) Error() string {
+	if strings.TrimSpace(e.ToolName) == "" {
+		return errSlackConfirmationUnsupported.Error()
+	}
+	return fmt.Sprintf("%s for %s", errSlackConfirmationUnsupported, e.ToolName)
+}
+
+// Unwrap preserves errors.Is compatibility with errSlackConfirmationUnsupported.
+func (e *slackConfirmationUnsupportedError) Unwrap() error {
+	return errSlackConfirmationUnsupported
+}
 
 // AgentClient forwards normalized Slack text into the gateway REST API.
 type AgentClient struct {
@@ -123,10 +143,46 @@ func (c *AgentClient) ensureSessionOnce(ctx context.Context, sessionID string) e
 
 // RunText sends one message to the agent and returns final assistant text.
 func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string) (string, error) {
+	reply, err := c.runTextWithRetry(ctx, sessionID, text)
+	deniedToolName := ""
+	for denials := 0; ; denials++ {
+		confirmation, ok := slackConfirmationError(err)
+		if !ok {
+			return reply, err
+		}
+		if strings.TrimSpace(confirmation.ToolName) != "" {
+			deniedToolName = confirmation.ToolName
+		}
+		if strings.TrimSpace(confirmation.CallID) == "" {
+			return "", err
+		}
+		if denials >= maxSlackConfirmationDenials {
+			return slackConfirmationUnavailableReply(deniedToolName), nil
+		}
+		reply, err = c.runDeniedConfirmationWithRetry(ctx, sessionID, confirmation.CallID)
+		if err == nil && strings.TrimSpace(reply) == "" {
+			return slackConfirmationUnavailableReply(deniedToolName), nil
+		}
+	}
+}
+
+// runTextWithRetry sends one text turn while tolerating gateway cold starts.
+func (c *AgentClient) runTextWithRetry(ctx context.Context, sessionID string, text string) (string, error) {
 	var reply string
 	err := retryAgentDependency(ctx, func() error {
 		var err error
 		reply, err = c.runTextOnce(ctx, sessionID, text)
+		return err
+	})
+	return reply, err
+}
+
+// runDeniedConfirmationWithRetry resumes a paused run by safely denying approval.
+func (c *AgentClient) runDeniedConfirmationWithRetry(ctx context.Context, sessionID string, callID string) (string, error) {
+	var reply string
+	err := retryAgentDependency(ctx, func() error {
+		var err error
+		reply, err = c.runConfirmationResponseOnce(ctx, sessionID, callID, false)
 		return err
 	})
 	return reply, err
@@ -138,6 +194,21 @@ func (c *AgentClient) runTextOnce(ctx context.Context, sessionID string, text st
 	if err != nil {
 		return "", err
 	}
+	return c.runBodyOnce(ctx, body)
+}
+
+// runConfirmationResponseOnce sends one tool-confirmation response run.
+func (c *AgentClient) runConfirmationResponseOnce(ctx context.Context, sessionID string, callID string, confirmed bool) (string, error) {
+	body, err := adk.RunConfirmationResponseBody(c.appName, c.userID, sessionID, callID, confirmed)
+	if err != nil {
+		return "", err
+	}
+	return c.runBodyOnce(ctx, body)
+}
+
+// runBodyOnce sends one prepared ADK run_sse request body.
+func (c *AgentClient) runBodyOnce(ctx context.Context, body []byte) (string, error) {
+	var err error
 	body, _, err = c.policy.Inject(body)
 	if err != nil {
 		return "", err
@@ -328,10 +399,7 @@ func decodeAgentEvent(eventType string, data string) (string, error) {
 	}
 	if call := firstAgentConfirmationCall(event.Content.Parts); call != nil {
 		toolName := confirmationToolName(call)
-		if toolName == "" {
-			return "", errSlackConfirmationUnsupported
-		}
-		return "", fmt.Errorf("%w for %s", errSlackConfirmationUnsupported, toolName)
+		return "", &slackConfirmationUnsupportedError{CallID: strings.TrimSpace(call.ID), ToolName: toolName}
 	}
 	var parts []string
 	for _, part := range event.Content.Parts {
@@ -363,6 +431,7 @@ type agentSSEPart struct {
 
 // agentFunctionCall stores the function-call fields needed by Slack.
 type agentFunctionCall struct {
+	ID   string         `json:"id"`
 	Name string         `json:"name"`
 	Args map[string]any `json:"args"`
 }
@@ -388,6 +457,27 @@ func confirmationToolName(call *agentFunctionCall) string {
 	}
 	name, _ := original["name"].(string)
 	return strings.TrimSpace(name)
+}
+
+// slackConfirmationError returns the typed unsupported confirmation request.
+func slackConfirmationError(err error) (*slackConfirmationUnsupportedError, bool) {
+	var confirmation *slackConfirmationUnsupportedError
+	if errors.As(err, &confirmation) {
+		return confirmation, true
+	}
+	if errors.Is(err, errSlackConfirmationUnsupported) {
+		return &slackConfirmationUnsupportedError{}, true
+	}
+	return nil, false
+}
+
+// slackConfirmationUnavailableReply explains that Slack safely denied a write.
+func slackConfirmationUnavailableReply(toolName string) string {
+	toolName = strings.TrimSpace(toolName)
+	if toolName == "" {
+		return "That action requires tool confirmation, but Slack approvals are not available yet. I denied the tool call and did not make changes."
+	}
+	return fmt.Sprintf("I can't use `%s` from Slack because it requires tool confirmation, and Slack approvals are not available yet. I denied the tool call and did not make changes.", toolName)
 }
 
 // looksLikeLocalToolMarkup reports whether text contains local model control tokens.

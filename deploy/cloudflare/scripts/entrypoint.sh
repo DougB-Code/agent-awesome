@@ -71,20 +71,29 @@ EOF
 }
 
 mkdir -p /app/data /app/data/sessions /app/logs /app/runtime
+export LOG_FORMAT="${LOG_FORMAT:-json}"
 write_model_config
-touch /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log
-tail -n +1 -F /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log &
+touch /app/logs/gateway.log /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log
+tail -n +1 -F /app/logs/gateway.log /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log &
 
 MEMORY_DOMAINS_JSON=${AGENTAWESOME_MEMORY_DOMAINS_JSON:-'[{"id":"doug","label":"Doug Memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"},{"id":"family","label":"Family Memory","endpoint":"http://127.0.0.1:8091/mcp","health_url":"http://127.0.0.1:8091/healthz"}]'}
 MEMORY_POLICY_JSON=${AGENTAWESOME_MEMORY_POLICY_JSON:-'{"actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","internal","private"]}'}
 AGENT_PROFILES_JSON=${AGENTAWESOME_AGENT_PROFILES_JSON:-'[{"id":"doug","label":"Doug","app_name":"agent_awesome","user_id":"doug","harness_base_url":"http://127.0.0.1:8080/api","context_base_url":"http://127.0.0.1:8081/api/context","actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","internal","private"]},{"id":"family","label":"Family","app_name":"agent_awesome","user_id":"family","harness_base_url":"http://127.0.0.1:8082/api","context_base_url":"http://127.0.0.1:8083/api/context","actor":"agent:family","read_domains":["family"],"write_domains":["family"],"default_write_domain":"family","allowed_sensitivities":["public","internal","private"]}]'}
 MEMORY_SERVICES_JSON=${AGENTAWESOME_MEMORY_SERVICES_JSON:-'[{"domain_id":"doug","name":"memory-doug","health_url":"http://127.0.0.1:8090/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8090","--db","/app/data/memory/doug/memory.db","--data","/app/data/memory/doug/files","--log-file","/app/logs/memory-doug.log","--snapshot-url","https://agent-awesome.com/internal/context-snapshot/doug"],"auto_start":true},{"domain_id":"family","name":"memory-family","health_url":"http://127.0.0.1:8091/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8091","--db","/app/data/memory/family/memory.db","--data","/app/data/memory/family/files","--log-file","/app/logs/memory-family.log","--snapshot-url","https://agent-awesome.com/internal/context-snapshot/family"],"auto_start":true}]'}
+DOUG_TOOL_CONFIG=/app/config/tool.doug.yaml
+FAMILY_TOOL_CONFIG=/app/config/tool.family.yaml
+SLACK_READ_ONLY_TOOLS=${AGENTAWESOME_SLACK_READ_ONLY_TOOLS:-${SLACK_ENABLED:-false}}
+if [[ "${SLACK_READ_ONLY_TOOLS,,}" == "true" ]]; then
+  DOUG_TOOL_CONFIG=/app/config/tool.slack.doug.yaml
+  FAMILY_TOOL_CONFIG=/app/config/tool.slack.family.yaml
+  echo "Slack read-only tool profile enabled for cloud harnesses" >&2
+fi
 
 agent-awesome \
   run \
   --model /app/runtime/model.yaml \
   --agent /app/config/agent.yaml \
-  --tool /app/config/tool.doug.yaml \
+  --tool "$DOUG_TOOL_CONFIG" \
   --context-api-addr 127.0.0.1:8081 \
   --session-db /app/data/sessions/doug.db \
   --log-file /app/logs/harness-doug.log \
@@ -98,7 +107,7 @@ agent-awesome \
   run \
   --model /app/runtime/model.yaml \
   --agent /app/config/agent.yaml \
-  --tool /app/config/tool.family.yaml \
+  --tool "$FAMILY_TOOL_CONFIG" \
   --context-api-addr 127.0.0.1:8083 \
   --session-db /app/data/sessions/family.db \
   --log-file /app/logs/harness-family.log \
@@ -124,6 +133,7 @@ exec agent-gateway \
   --user-id "${AGENTAWESOME_USER_ID:-doug}" \
   --model-provider-id "${AGENTAWESOME_MODEL_PROVIDER_ID:-openai}" \
   --model-id "${AGENTAWESOME_MODEL_ID:-gpt-5.4-mini}" \
+  --log-file "${AGENTAWESOME_GATEWAY_LOG_FILE:-/app/logs/gateway.log}" \
   --auth-token "${AGENTAWESOME_GATEWAY_TOKEN:-}" \
   --request-timeout "${AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT:-10m}" \
   --service-start-timeout "${AGENTAWESOME_SERVICE_START_TIMEOUT:-45s}" \

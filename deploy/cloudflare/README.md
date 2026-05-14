@@ -75,17 +75,27 @@ provider, launches the Flutter desktop UI, and verifies a chat round trip:
 ./e2e/run-release-e2e.sh
 ```
 
-Run these commands from `deploy/cloudflare/worker`:
+Run these commands from the repository root:
 
 ```sh
-npm install --cache ../../../build/npm-cache
-npm test
-npx wrangler r2 bucket create agent-awesome-beta-context
-npx wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
-npx wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
-npx wrangler secret put OPENAI_API_KEY
-npx wrangler deploy
+nvm use
+npm --prefix deploy/cloudflare/worker install --cache ../../build/npm-cache
+npm run cloudflare:test
+npm run cloudflare:r2:create
+npm --prefix deploy/cloudflare/worker exec wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
+npm --prefix deploy/cloudflare/worker exec wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
+npm --prefix deploy/cloudflare/worker exec wrangler secret put OPENAI_API_KEY
+npm run cloudflare:deploy
 ```
+
+From `deploy/cloudflare/worker`, use the shorter package-local commands:
+`npm test`, `npx wrangler secret put ...`, and `npm run deploy`.
+Do not pass the repository-root config path after `cd deploy/cloudflare/worker`;
+`--config deploy/cloudflare/worker/wrangler.jsonc` resolves to a duplicated
+`deploy/cloudflare/worker/deploy/cloudflare/worker/wrangler.jsonc` path.
+The package deploy scripts run Wrangler from the Worker directory and keep
+Wrangler/Docker state under `build/`, which avoids read-only home-directory
+failures in constrained environments.
 
 The R2 bucket command requires a Cloudflare API token or OAuth session with
 `Workers R2 Storage Write`. If Wrangler asks for `CLOUDFLARE_API_TOKEN`, create a

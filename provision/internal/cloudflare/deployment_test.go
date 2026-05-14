@@ -50,8 +50,14 @@ func TestWranglerIncludesSlackSecretsWhenEnabled(t *testing.T) {
 	if wrangler.Vars["SLACK_ENABLED"] != "true" {
 		t.Fatalf("SLACK_ENABLED = %q, want true", wrangler.Vars["SLACK_ENABLED"])
 	}
+	if wrangler.Vars["AGENTAWESOME_SLACK_READ_ONLY_TOOLS"] != "true" {
+		t.Fatalf("AGENTAWESOME_SLACK_READ_ONLY_TOOLS = %q, want true", wrangler.Vars["AGENTAWESOME_SLACK_READ_ONLY_TOOLS"])
+	}
 	if wrangler.Vars["AGENTAWESOME_MODEL_PROVIDER_ID"] != "openai" || wrangler.Vars["AGENTAWESOME_MODEL_ID"] != "gpt-mini" {
 		t.Fatalf("model status vars = %#v", wrangler.Vars)
+	}
+	if wrangler.Vars["AGENTAWESOME_GATEWAY_LOG_FILE"] != "/app/logs/gateway.log" {
+		t.Fatalf("gateway log file = %q, want /app/logs/gateway.log", wrangler.Vars["AGENTAWESOME_GATEWAY_LOG_FILE"])
 	}
 	if wrangler.Vars["AGENTAWESOME_MEMORY_DOMAINS_JSON"] != `[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"}]` {
 		t.Fatalf("memory domains var = %q", wrangler.Vars["AGENTAWESOME_MEMORY_DOMAINS_JSON"])

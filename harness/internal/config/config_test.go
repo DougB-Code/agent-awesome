@@ -457,6 +457,56 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 	}
 }
 
+// TestStaticSlackMemoryToolConfigsAreReadOnly keeps Slack from seeing writes.
+func TestStaticSlackMemoryToolConfigsAreReadOnly(t *testing.T) {
+	expectedAllow := []string{
+		"search_memory",
+		"search_sources",
+		"load_entity_page",
+		"load_timeline",
+		"query_context_graph",
+		"get_task",
+		"list_tasks",
+		"task_graph_projection",
+		"project_executive_summary",
+		"explain_executive_summary_item",
+		"list_task_relations",
+		"traverse_task_relations",
+	}
+	root := repoRoot(t)
+	paths := []string{
+		filepath.Join(root, "deploy", "cloudflare", "config", "tool.slack.doug.yaml"),
+		filepath.Join(root, "deploy", "cloudflare", "config", "tool.slack.family.yaml"),
+	}
+
+	for _, path := range paths {
+		t.Run(filepath.ToSlash(path), func(t *testing.T) {
+			cfg, err := LoadTools(path, true)
+			if err != nil {
+				t.Fatalf("LoadTools() error = %v", err)
+			}
+			server, ok := memoryMCPServer(cfg.MCP.Servers)
+			if !ok {
+				t.Fatalf("memory MCP server not configured")
+			}
+			if got := server.Tools.Allow; !reflect.DeepEqual(got, expectedAllow) {
+				t.Fatalf("Tools.Allow = %#v, want read-only tools %#v", got, expectedAllow)
+			}
+			if len(server.RequireConfirmationTools) != 0 || server.RequireConfirmation {
+				t.Fatalf("Slack config requires confirmation: all=%v tools=%#v", server.RequireConfirmation, server.RequireConfirmationTools)
+			}
+			if len(cfg.Memory.ReadDomains) != 0 {
+				t.Fatalf("Slack config enabled runtime memory capture: %#v", cfg.Memory.ReadDomains)
+			}
+			for _, tool := range []string{"remember", "save_memory_candidate", "create_task", "update_task", "mutate_context_graph"} {
+				if allowsTool(server, tool) {
+					t.Fatalf("Slack config allows write tool %q", tool)
+				}
+			}
+		})
+	}
+}
+
 func TestLoadToolsRejectsUnknownFields(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:

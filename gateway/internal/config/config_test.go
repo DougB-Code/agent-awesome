@@ -35,6 +35,21 @@ func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
 	}
 }
 
+// TestFromFlagsParsesGatewayLogFile verifies cloud launchers can persist logs.
+func TestFromFlagsParsesGatewayLogFile(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	cfg, err := FromFlags([]string{"--log-file", "/tmp/agent-gateway.log"})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if cfg.LogFile != "/tmp/agent-gateway.log" {
+		t.Fatalf("LogFile = %q, want configured path", cfg.LogFile)
+	}
+	if cfg.StatusView()["has_log_file"] != true {
+		t.Fatalf("has_log_file = %#v, want true", cfg.StatusView()["has_log_file"])
+	}
+}
+
 // TestFromFlagsParsesMemoryTopologyJSON verifies gateway domain policy is explicit config.
 func TestFromFlagsParsesMemoryTopologyJSON(t *testing.T) {
 	clearGatewayAuthEnv(t)
@@ -358,6 +373,7 @@ func clearGatewayAuthEnv(t *testing.T) {
 	t.Setenv("AGENTAWESOME_ALLOWED_ORIGIN", "")
 	t.Setenv("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", "true")
 	t.Setenv("AGENTAWESOME_RUNTIME_POLICY_TEXT", "")
+	t.Setenv("AGENTAWESOME_GATEWAY_LOG_FILE", "")
 	t.Setenv("SLACK_ENABLED", "")
 	t.Setenv("SLACK_SOCKET_MODE", "")
 	t.Setenv("SLACK_SIGNING_SECRET", "")

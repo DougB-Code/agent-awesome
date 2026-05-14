@@ -95,6 +95,7 @@ func TestSlackConfigRoutesThroughGateway(t *testing.T) {
 	cfg := testConfig(func(cfg *config.Config) {
 		cfg.AuthToken = "secret"
 		cfg.GatewayBaseURL = "http://gateway.test/api"
+		cfg.RuntimePolicyText = "Operator policy."
 		cfg.Slack = config.SlackConfig{Enabled: true}
 	})
 
@@ -108,6 +109,9 @@ func TestSlackConfigRoutesThroughGateway(t *testing.T) {
 	}
 	if slackCfg.DefaultProfileID != "test" {
 		t.Fatalf("DefaultProfileID = %q, want test", slackCfg.DefaultProfileID)
+	}
+	if slackCfg.RuntimePolicyText != "Operator policy." {
+		t.Fatalf("RuntimePolicyText = %q, want configured operator policy", slackCfg.RuntimePolicyText)
 	}
 }
 

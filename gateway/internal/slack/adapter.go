@@ -22,6 +22,7 @@ import (
 const maxSlackRequestBytes = 1 << 20
 const defaultMaxConcurrentDispatches = 4
 const slackFailurePostTimeout = 10 * time.Second
+const slackRuntimePolicyText = "Slack cannot present tool confirmation prompts. Use read-only tools when helpful. Do not call tools that create, update, delete, remember, save, repair, refresh, submit corrections, mutate context graphs, or otherwise require confirmation from Slack; for those requests, say the action is unavailable from Slack and that no changes were made."
 
 var errSlackDispatchThrottled = errors.New("slack dispatch throttled")
 
@@ -59,7 +60,7 @@ func NewAdapter(config Config) *Adapter {
 			config.GatewayBaseURL,
 			config.AppName,
 			config.AgentUserID,
-			policy.NewInjector(policy.Config{}),
+			slackRuntimePolicy(config.RuntimePolicyText),
 			gatewayHeaders(config.GatewayAuthToken, config.DefaultProfileID),
 		),
 		agents:  profileAgentClients(client, config),
@@ -101,11 +102,20 @@ func profileAgentClients(client *http.Client, config Config) map[string]*AgentCl
 			config.GatewayBaseURL,
 			binding.AppName,
 			binding.AgentUserID,
-			policy.NewInjector(policy.Config{}),
+			slackRuntimePolicy(config.RuntimePolicyText),
 			gatewayHeaders(config.GatewayAuthToken, profileID),
 		)
 	}
 	return agents
+}
+
+// slackRuntimePolicy returns the Slack-specific model-facing safety policy.
+func slackRuntimePolicy(runtimePolicyText string) *policy.Injector {
+	runtimePolicyText = strings.TrimSpace(runtimePolicyText)
+	if runtimePolicyText == "" {
+		return policy.NewInjector(policy.Config{Text: slackRuntimePolicyText})
+	}
+	return policy.NewInjector(policy.Config{Text: runtimePolicyText + "\n\n" + slackRuntimePolicyText})
 }
 
 // Enabled reports whether Slack channel handling is configured.
@@ -392,6 +402,10 @@ func (a *Adapter) dispatch(parent context.Context, teamID string, event MessageE
 	reply, err := agent.RunText(ctx, sessionID, event.Text)
 	if err != nil {
 		log.Error().Err(err).Msg("slack run agent")
+		if message := slackRunErrorReply(err); message != "" {
+			a.postFailureMessage(parent, event, message)
+			return
+		}
 		a.postFailure(parent, event)
 		return
 	}
@@ -420,11 +434,25 @@ func (a *Adapter) agentForEvent(event MessageEvent) *AgentClient {
 
 // postFailure posts a generic Slack failure without exposing internal details.
 func (a *Adapter) postFailure(parent context.Context, event MessageEvent) {
+	a.postFailureMessage(parent, event, "The agent run failed before Slack could recover it. Check the gateway container logs for the `slack run agent` or `slack ensure session` entry for this thread.")
+}
+
+// postFailureMessage posts a Slack failure message with a fresh short timeout.
+func (a *Adapter) postFailureMessage(parent context.Context, event MessageEvent, message string) {
 	ctx, cancel := context.WithTimeout(parent, slackFailurePostTimeout)
 	defer cancel()
-	if err := a.slack.PostMessage(ctx, event.Channel, ReplyThreadTS(event), "I hit an error running the agent. Check the gateway logs for details."); err != nil {
+	if err := a.slack.PostMessage(ctx, event.Channel, ReplyThreadTS(event), message); err != nil {
 		log.Error().Err(err).Msg("slack post failure")
 	}
+}
+
+// slackRunErrorReply returns a user-safe message for expected run errors.
+func slackRunErrorReply(err error) string {
+	if errors.Is(err, errSlackConfirmationUnsupported) {
+		confirmation, _ := slackConfirmationError(err)
+		return slackConfirmationUnavailableReply(confirmation.ToolName)
+	}
+	return ""
 }
 
 // SessionIDForMessage returns a stable ADK session id for one Slack thread.
