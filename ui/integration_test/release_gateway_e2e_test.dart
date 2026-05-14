@@ -81,6 +81,8 @@ void main() {
     for (final request in chatRequests) {
       _expectOpenAiRequest(request);
     }
+    _expectChatTranscriptProgression(chatRequests);
+    _expectTaskToolRoundTrip(chatRequests.last);
     expect(_requestsContain(chatRequests, _prompt), isTrue);
     expect(_requestsContain(chatRequests, _followUpPrompt), isTrue);
     expect(_requestsContain(chatRequests, _taskPrompt), isTrue);
@@ -263,6 +265,128 @@ void _expectOpenAiRequest(Map<String, dynamic> request) {
   expect(typedBody['model'], _wireModel);
   expect(typedBody['stream'], isFalse);
   expect(typedBody['messages'], isA<List<dynamic>>());
+  _expectToolDeclaration(typedBody, 'create_task');
+  _expectToolDeclaration(typedBody, 'load_memory');
+  _expectToolDeclaration(typedBody, 'remember');
+}
+
+/// Verifies each UI prompt was sent with the expected accumulated context.
+void _expectChatTranscriptProgression(List<Map<String, dynamic>> requests) {
+  final first = _messagesForRequest(requests[0]);
+  final second = _messagesForRequest(requests[1]);
+  final third = _messagesForRequest(requests[2]);
+  final fourth = _messagesForRequest(requests[3]);
+
+  _expectLatestUser(first, _prompt);
+  _expectLatestUser(second, _followUpPrompt);
+  _expectLatestUser(third, _taskPrompt);
+  expect(_messageContents(second), contains('$_responsePhrase: $_prompt'));
+  expect(
+    _messageContents(third),
+    contains('$_responsePhrase: $_followUpPrompt'),
+  );
+  expect(_messageContents(fourth), contains(contains(_taskTitle)));
+  expect(_roleCount(fourth, 'tool'), 1);
+}
+
+/// Verifies the mock task tool call was executed and returned to the model.
+void _expectTaskToolRoundTrip(Map<String, dynamic> request) {
+  final messages = _messagesForRequest(request);
+  final toolCall = _toolCallById(messages, _toolCallId);
+  final function = toolCall['function'];
+  expect(function, isA<Map<String, dynamic>>());
+  final typedFunction = function as Map<String, dynamic>;
+  expect(typedFunction['name'], 'create_task');
+  final arguments = jsonDecode(typedFunction['arguments'] as String);
+  expect(arguments, isA<Map<String, dynamic>>());
+  final typedArguments = arguments as Map<String, dynamic>;
+  expect(typedArguments['title'], _taskTitle);
+  expect(
+    typedArguments['description'],
+    'Created by the release E2E mock provider.',
+  );
+  expect(typedArguments['idempotency_key'], 'release-e2e-verified-task');
+
+  final toolMessage = _toolMessageByCallId(messages, _toolCallId);
+  final output = jsonDecode(toolMessage['content'] as String);
+  expect(output, isA<Map<String, dynamic>>());
+  final typedOutput = output as Map<String, dynamic>;
+  expect(typedOutput['output'], isA<Map<String, dynamic>>());
+  final task = typedOutput['output'] as Map<String, dynamic>;
+  expect(task['title'], _taskTitle);
+  expect(task['status'], 'open');
+  expect(task['idempotency_key'], 'release-e2e-verified-task');
+}
+
+/// Verifies the gateway exposed one named tool to the model request.
+void _expectToolDeclaration(Map<String, dynamic> body, String name) {
+  final tools = body['tools'];
+  expect(tools, isA<List<dynamic>>());
+  final encodedTools = jsonEncode(tools);
+  expect(encodedTools, contains('"name":"$name"'));
+}
+
+/// Returns typed OpenAI messages from one recorded provider request.
+List<Map<String, dynamic>> _messagesForRequest(Map<String, dynamic> request) {
+  final body = request['body'];
+  expect(body, isA<Map<String, dynamic>>());
+  final messages = (body as Map<String, dynamic>)['messages'];
+  expect(messages, isA<List<dynamic>>());
+  return (messages as List<dynamic>).cast<Map<String, dynamic>>();
+}
+
+/// Verifies the latest user turn matches the expected prompt text.
+void _expectLatestUser(List<Map<String, dynamic>> messages, String text) {
+  final latestUser = messages.lastWhere(
+    (message) => message['role'] == 'user',
+    orElse: () => <String, dynamic>{},
+  );
+  expect(latestUser['content'], text);
+}
+
+/// Returns all message content values as strings for transcript assertions.
+List<String> _messageContents(List<Map<String, dynamic>> messages) {
+  return messages
+      .map((message) => message['content'])
+      .whereType<String>()
+      .toList(growable: false);
+}
+
+/// Counts messages with one OpenAI role.
+int _roleCount(List<Map<String, dynamic>> messages, String role) {
+  return messages.where((message) => message['role'] == role).length;
+}
+
+/// Returns the assistant tool call with a matching id.
+Map<String, dynamic> _toolCallById(
+  List<Map<String, dynamic>> messages,
+  String id,
+) {
+  for (final message in messages) {
+    final toolCalls = message['tool_calls'];
+    if (toolCalls is! List<dynamic>) {
+      continue;
+    }
+    for (final toolCall in toolCalls.cast<Map<String, dynamic>>()) {
+      if (toolCall['id'] == id) {
+        return toolCall;
+      }
+    }
+  }
+  fail('Expected tool call $id in transcript');
+}
+
+/// Returns the tool result message for one assistant tool-call id.
+Map<String, dynamic> _toolMessageByCallId(
+  List<Map<String, dynamic>> messages,
+  String id,
+) {
+  for (final message in messages) {
+    if (message['role'] == 'tool' && message['tool_call_id'] == id) {
+      return message;
+    }
+  }
+  fail('Expected tool response for $id in transcript');
 }
 
 /// Reports whether any recorded request contains the encoded marker.

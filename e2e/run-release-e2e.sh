@@ -17,6 +17,7 @@ gateway_root_url=""
 auth_header=""
 export DOCKER_CONFIG="${DOCKER_CONFIG:-${repo_root}/build/docker-config}"
 export BUILDX_CONFIG="${BUILDX_CONFIG:-${repo_root}/build/docker-buildx}"
+export PUB_CACHE="${PUB_CACHE:-${repo_root}/build/pub-cache}"
 
 # cleanup collects container logs and removes Docker resources created by the run.
 cleanup() {
@@ -196,7 +197,7 @@ require_command flutter
 require_command python3
 require_ui_display
 
-mkdir -p "${artifact_dir}" "${ui_config_home}" "${DOCKER_CONFIG}" "${BUILDX_CONFIG}"
+mkdir -p "${artifact_dir}" "${ui_config_home}" "${DOCKER_CONFIG}" "${BUILDX_CONFIG}" "${PUB_CACHE}"
 
 docker network create "${network_name}" >/dev/null
 docker build --file "${repo_root}/e2e/mockllm/Dockerfile" --tag "${mock_image}" "${repo_root}/e2e/mockllm"
