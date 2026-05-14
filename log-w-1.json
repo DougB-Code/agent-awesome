@@ -1,0 +1,1711 @@
+[
+  {
+    "source": {
+      "level": "info",
+      "message": "2026-05-14T11:00:52.772Z"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:52.814Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:52.772Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "canceled",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "CH3ONCOSY4AUDD6M",
+      "wallTimeMs": 46,
+      "cpuTimeMs": 0
+    },
+    "$metadata": {
+      "id": "01KRK2B0EEVN68KVZTHQAFH496",
+      "requestId": "CH3ONCOSY4AUDD6M",
+      "trigger": "2026-05-14T11:00:52.772Z",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "2026-05-14T11:00:52.772Z",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "<DATETIME>"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "2026-05-14T11:00:52.751Z"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:52.792Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:52.751Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "canceled",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "U7KHRO91KLQ44N72",
+      "wallTimeMs": 117,
+      "cpuTimeMs": 0
+    },
+    "$metadata": {
+      "id": "01KRK2B0DRH3WXGSKT80CF07BX",
+      "requestId": "U7KHRO91KLQ44N72",
+      "trigger": "2026-05-14T11:00:52.751Z",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "2026-05-14T11:00:52.751Z",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "<DATETIME>"
+    }
+  },
+  {
+    "source": {
+      "message": "Agent Awesome pilot container stopped",
+      "reason": "exit",
+      "exitCode": 0
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:52.792Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:28.017Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "Z3GJ1P0ZOENJH1ZE"
+    },
+    "$metadata": {
+      "id": "01KRK2B0DRH3WXGSKT80CF07BT",
+      "requestId": "Z3GJ1P0ZOENJH1ZE",
+      "trigger": "2026-05-14T11:00:28.017Z",
+      "service": "agent-awesome-pilot",
+      "message": "Agent Awesome pilot container stopped",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "Agent Awesome pilot container stopped"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "2026-05-14T11:00:28.017Z"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:52.751Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:28.017Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "Z3GJ1P0ZOENJH1ZE",
+      "wallTimeMs": 42,
+      "cpuTimeMs": 0
+    },
+    "$metadata": {
+      "id": "01KRK2B0CFTD323Y6NHZVPK3SF",
+      "requestId": "Z3GJ1P0ZOENJH1ZE",
+      "trigger": "2026-05-14T11:00:28.017Z",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "2026-05-14T11:00:28.017Z",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "<DATETIME>"
+    }
+  },
+  {
+    "source": {
+      "level": "error",
+      "message": "Agent Awesome pilot container error Error: Runtime signalled the container to exit due to a new version rollout: 0"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:52.751Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "path": "/slack/events"
+        }
+      },
+      "outcome": "ok",
+      "scriptName": "agent-awesome-pilot",
+      "eventType": "fetch",
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb966a69951c967"
+    },
+    "$metadata": {
+      "id": "01KRK2B0CFTD323Y6NHZVPK3SA",
+      "requestId": "9fb966a69951c967",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "level": "error",
+      "error": "Agent Awesome pilot container error Error: Runtime signalled the container to exit due to a new version rollout: 0",
+      "message": "Agent Awesome pilot container error Error: Runtime signalled the container to exit due to a new version rollout: 0",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "d2bf140f4bf62a2d47e0c1ebff005e5c",
+      "origin": "fetch",
+      "messageTemplate": "Agent Awesome pilot container error Error: Runtime signalled the container to exit due to a new version rollout: 0"
+    }
+  },
+  {
+    "source": {
+      "message": "Slack request forwarded to gateway",
+      "statusText": "OK",
+      "status": 200
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:45.550Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "path": "/slack/events"
+        }
+      },
+      "outcome": "ok",
+      "scriptName": "agent-awesome-pilot",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb966a69951c967"
+    },
+    "$metadata": {
+      "id": "01KRK2ASBEYPE289Z41A5ZQ141",
+      "requestId": "9fb966a69951c967",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "message": "Slack request forwarded to gateway",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "Slack request <*> <*> <*>"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:45.376Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "headers": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cf-connecting-ip": "32.192.81.225",
+            "cf-ipcountry": "US",
+            "cf-ray": "9fb966a69951c967",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "content-type": "application/json",
+            "host": "agent-awesome.com",
+            "user-agent": "Slackbot 1.0 (+https://api.slack.com/robots)",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "32.192.81.225",
+            "x-slack-request-timestamp": "1778756445",
+            "x-slack-signature": "v0=fa2585c635d2dc395f6755bdc7ffc37507e1b424ad530b0c7f62f7a90b5d24f1"
+          },
+          "path": "/slack/events"
+        },
+        "rayId": "9fb966a69951c967",
+        "response": {
+          "status": 200
+        }
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "durableObject",
+      "entrypoint": "AgentAwesomeContainer",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb966a69951c967",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 7367
+    },
+    "$metadata": {
+      "id": "01KRK2AZKDY3QPBSMJMXVWY3B5",
+      "requestId": "9fb966a69951c967",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "POST https://agent-awesome.com/slack/events"
+    }
+  },
+  {
+    "source": {
+      "message": "Agent Awesome pilot container started"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:45.376Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "rpcMethod": "startAndWaitForPorts"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "rpc",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "0QMS4UWENCEJ9GX6"
+    },
+    "$metadata": {
+      "id": "01KRK2AS60P0YY3TX7C3VDGNQM",
+      "requestId": "0QMS4UWENCEJ9GX6",
+      "trigger": "default.startAndWaitForPorts",
+      "service": "agent-awesome-pilot",
+      "message": "Agent Awesome pilot container started",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "rpc",
+      "messageTemplate": "Agent Awesome pilot container started"
+    }
+  },
+  {
+    "source": {
+      "message": "Port 8070 is ready"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:45.376Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "rpcMethod": "startAndWaitForPorts"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "rpc",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "0QMS4UWENCEJ9GX6"
+    },
+    "$metadata": {
+      "id": "01KRK2AS60P0YY3TX7C3VDGNQK",
+      "requestId": "0QMS4UWENCEJ9GX6",
+      "trigger": "default.startAndWaitForPorts",
+      "service": "agent-awesome-pilot",
+      "message": "Port 8070 is ready",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "rpc",
+      "messageTemplate": "Port 8070 is ready"
+    }
+  },
+  {
+    "source": {
+      "message": "Slack request verified by Worker"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:45.228Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "path": "/slack/events"
+        }
+      },
+      "outcome": "ok",
+      "scriptName": "agent-awesome-pilot",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb966a69951c967"
+    },
+    "$metadata": {
+      "id": "01KRK2AS4H12J222RNXQXB7B8Z",
+      "requestId": "9fb966a69951c967",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "message": "Slack request verified by Worker",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "Slack request <*> <*> <*>"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:45.220Z",
+    "$workers": {
+      "event": {
+        "request": {
+          "cf": {
+            "isEUCountry": false,
+            "tlsClientAuth": {
+              "certRFC9440TooLarge": false,
+              "certChainRFC9440TooLarge": false,
+              "certPresented": "0",
+              "certVerified": "NONE",
+              "certRevoked": "0",
+              "certIssuerDN": "",
+              "certSubjectDN": "",
+              "certIssuerDNRFC2253": "",
+              "certSubjectDNRFC2253": "",
+              "certIssuerDNLegacy": "",
+              "certSubjectDNLegacy": "",
+              "certSerial": "",
+              "certIssuerSerial": "",
+              "certSKI": "",
+              "certIssuerSKI": "",
+              "certFingerprintSHA1": "",
+              "certFingerprintSHA256": "",
+              "certNotBefore": "",
+              "certNotAfter": "",
+              "certRFC9440": "",
+              "certChainRFC9440": ""
+            },
+            "httpProtocol": "HTTP/1.1",
+            "clientAcceptEncoding": "gzip, deflate",
+            "requestPriority": "",
+            "colo": "IAD",
+            "asOrganization": "Amazon.com, Inc.",
+            "country": "US",
+            "city": "Ashburn",
+            "continent": "NA",
+            "region": "Virginia",
+            "regionCode": "VA",
+            "timezone": "America/New_York",
+            "longitude": "-77.48749",
+            "latitude": "39.04372",
+            "postalCode": "20147",
+            "metroCode": "511",
+            "tlsVersion": "TLSv1.3",
+            "tlsCipher": "AEAD-AES256-GCM-SHA384",
+            "tlsClientRandom": "g3WX/zSUu1EI06Ey5Etm/LJtdHg4cQafJx4eLrGxnXo=",
+            "tlsClientCiphersSha1": "GXSPDLP4G3X+prK73a4wBuOaHRc=",
+            "tlsClientExtensionsSha1": "bJfDPn82Ud8taZ6+PSOSubkqDGs=",
+            "tlsClientExtensionsSha1Le": "7zIpdDU5pvFPPBI2/PCzqbaXnRA=",
+            "tlsExportedAuthenticator": {
+              "clientHandshake": "5a074d0e6e49dc070bd82b37d86f506fca82bf36b926b34b91f99dff37520615813081d2975972fc289e25d9f24a68c3",
+              "serverHandshake": "8c2e71e6829695a31018ef73f132c79beec40640972eb7a0c01603f0ac2ae84bd2b24799760cfe86c8178d49ce37c0e2",
+              "clientFinished": "0967ec3cae33e4f26faf4d4ce6f755164ffbadcd7284af64c0c9e4e45f782ae9fd29915c9b36ec2cb53d1d94d83d6003",
+              "serverFinished": "ab8339e588929ff3f54880512a19d5915b99add61259b86f4dbdd68f1886805f9bc74520c59d83e71f05f6198ec60ce5"
+            },
+            "tlsClientHelloLength": "508",
+            "verifiedBotCategory": "Webhooks",
+            "edgeRequestKeepAliveStatus": 1,
+            "clientTcpRtt": 0,
+            "clientQuicRtt": 0,
+            "asn": 14618,
+            "edgeL4": {
+              "deliveryRate": 3403055
+            }
+          },
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "headers": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cf-connecting-ip": "32.192.81.225",
+            "cf-ipcountry": "US",
+            "cf-ray": "9fb966a69951c967",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "content-length": "1549",
+            "content-type": "application/json",
+            "host": "agent-awesome.com",
+            "user-agent": "Slackbot 1.0 (+https://api.slack.com/robots)",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "32.192.81.225",
+            "x-slack-request-timestamp": "1778756445",
+            "x-slack-signature": "v0=fa2585c635d2dc395f6755bdc7ffc37507e1b424ad530b0c7f62f7a90b5d24f1"
+          },
+          "path": "/slack/events"
+        },
+        "rayId": "9fb966a69951c967",
+        "response": {
+          "status": 200
+        }
+      },
+      "truncated": false,
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb966a69951c967",
+      "cpuTimeMs": 2,
+      "wallTimeMs": 324
+    },
+    "$metadata": {
+      "id": "01KRK2AS4H12J222RNXQXB7B8Y",
+      "requestId": "9fb966a69951c967",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "POST https://agent-awesome.com/slack/events"
+    }
+  },
+  {
+    "source": {
+      "message": "Slack request forwarded to gateway",
+      "statusText": "OK",
+      "status": 200
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:41.667Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "path": "/slack/events"
+        }
+      },
+      "outcome": "ok",
+      "scriptName": "agent-awesome-pilot",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb9668e49b92899"
+    },
+    "$metadata": {
+      "id": "01KRK2ANJ3M4GTYNCD0HDJWQ4R",
+      "requestId": "9fb9668e49b92899",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "message": "Slack request forwarded to gateway",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "Slack request <*> <*> <*>"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "startAndWaitForPorts"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:41.662Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "rpcMethod": "startAndWaitForPorts"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "rpc",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "0QMS4UWENCEJ9GX6",
+      "wallTimeMs": 166,
+      "cpuTimeMs": 0
+    },
+    "$metadata": {
+      "id": "01KRK2ARQX3MZ3VEZAAGJDPPBA",
+      "requestId": "0QMS4UWENCEJ9GX6",
+      "trigger": "default.startAndWaitForPorts",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "startAndWaitForPorts",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "rpc",
+      "messageTemplate": "startAndWaitForPorts"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:41.497Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "headers": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cf-connecting-ip": "34.226.193.32",
+            "cf-ipcountry": "US",
+            "cf-ray": "9fb9668e49b92899",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "content-type": "application/json",
+            "host": "agent-awesome.com",
+            "user-agent": "Slackbot 1.0 (+https://api.slack.com/robots)",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "34.226.193.32",
+            "x-slack-request-timestamp": "1778756441",
+            "x-slack-signature": "v0=ebba83b699ee3191a1831b205ebfe9792ab4f249175f94a0ced319b8afdc841c"
+          },
+          "path": "/slack/events"
+        },
+        "rayId": "9fb9668e49b92899",
+        "response": {
+          "status": 200
+        }
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "durableObject",
+      "entrypoint": "AgentAwesomeContainer",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb9668e49b92899",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 3710
+    },
+    "$metadata": {
+      "id": "01KRK2ARQX3MZ3VEZAAGJDPPB9",
+      "requestId": "9fb9668e49b92899",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "POST https://agent-awesome.com/slack/events"
+    }
+  },
+  {
+    "source": {
+      "message": "Agent Awesome pilot container started"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:41.497Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "rpcMethod": "startAndWaitForPorts"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "rpc",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "17ACFOYEXR1QUNSM"
+    },
+    "$metadata": {
+      "id": "01KRK2ANCS4XEATBYME95EEP0G",
+      "requestId": "17ACFOYEXR1QUNSM",
+      "trigger": "default.startAndWaitForPorts",
+      "service": "agent-awesome-pilot",
+      "message": "Agent Awesome pilot container started",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "rpc",
+      "messageTemplate": "Agent Awesome pilot container started"
+    }
+  },
+  {
+    "source": {
+      "message": "Port 8070 is ready"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:41.497Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "rpcMethod": "startAndWaitForPorts"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "rpc",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "17ACFOYEXR1QUNSM"
+    },
+    "$metadata": {
+      "id": "01KRK2ANCS4XEATBYME95EEP0F",
+      "requestId": "17ACFOYEXR1QUNSM",
+      "trigger": "default.startAndWaitForPorts",
+      "service": "agent-awesome-pilot",
+      "message": "Port 8070 is ready",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "rpc",
+      "messageTemplate": "Port 8070 is ready"
+    }
+  },
+  {
+    "source": {
+      "message": "Slack request verified by Worker"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:41.343Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "path": "/slack/events"
+        }
+      },
+      "outcome": "ok",
+      "scriptName": "agent-awesome-pilot",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb9668e49b92899"
+    },
+    "$metadata": {
+      "id": "01KRK2AN7ZSXGQ9ZV564SWKDG1",
+      "requestId": "9fb9668e49b92899",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "message": "Slack request verified by Worker",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "Slack request <*> <*> <*>"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:41.337Z",
+    "$workers": {
+      "event": {
+        "request": {
+          "cf": {
+            "isEUCountry": false,
+            "tlsClientAuth": {
+              "certRFC9440TooLarge": false,
+              "certChainRFC9440TooLarge": false,
+              "certPresented": "0",
+              "certVerified": "NONE",
+              "certRevoked": "0",
+              "certIssuerDN": "",
+              "certSubjectDN": "",
+              "certIssuerDNRFC2253": "",
+              "certSubjectDNRFC2253": "",
+              "certIssuerDNLegacy": "",
+              "certSubjectDNLegacy": "",
+              "certSerial": "",
+              "certIssuerSerial": "",
+              "certSKI": "",
+              "certIssuerSKI": "",
+              "certFingerprintSHA1": "",
+              "certFingerprintSHA256": "",
+              "certNotBefore": "",
+              "certNotAfter": "",
+              "certRFC9440": "",
+              "certChainRFC9440": ""
+            },
+            "httpProtocol": "HTTP/1.1",
+            "clientAcceptEncoding": "gzip, deflate",
+            "requestPriority": "",
+            "colo": "IAD",
+            "asOrganization": "Amazon Technologies Inc.",
+            "country": "US",
+            "city": "Ashburn",
+            "continent": "NA",
+            "region": "Virginia",
+            "regionCode": "VA",
+            "timezone": "America/New_York",
+            "longitude": "-77.48749",
+            "latitude": "39.04372",
+            "postalCode": "20147",
+            "metroCode": "511",
+            "tlsVersion": "TLSv1.3",
+            "tlsCipher": "AEAD-AES256-GCM-SHA384",
+            "tlsClientRandom": "8S2hvCw+bfF5TeGoiD7DWntCTJj9BfFfhr9UEcXdFak=",
+            "tlsClientCiphersSha1": "GXSPDLP4G3X+prK73a4wBuOaHRc=",
+            "tlsClientExtensionsSha1": "bJfDPn82Ud8taZ6+PSOSubkqDGs=",
+            "tlsClientExtensionsSha1Le": "7zIpdDU5pvFPPBI2/PCzqbaXnRA=",
+            "tlsExportedAuthenticator": {
+              "clientHandshake": "ebe04f55a59b4a494ef1d85d197e95d034933a4b9c0136090c91404903dcbd7ca9a38490316130998cb6d478160a016e",
+              "serverHandshake": "36d52e4b15a485fa1f7d004c01e296210f0e2ac16b14723ad473d50b3db55e5a432191e142dd6f0dc57e897f895d8989",
+              "clientFinished": "e3255d7aebb9a1123f120c82b9645759920cae205789a89127d0ade023d7e7480a45d2eb0d9252ac6dc925616fbe6173",
+              "serverFinished": "a89f8fc2a20e060e3a031f9e989fefe3455aad19998378dbb1ba0b90378064869ea638a7e443d77f6a62845a52f692fe"
+            },
+            "tlsClientHelloLength": "508",
+            "verifiedBotCategory": "Webhooks",
+            "edgeRequestKeepAliveStatus": 1,
+            "clientTcpRtt": 1,
+            "clientQuicRtt": 0,
+            "asn": 14618,
+            "edgeL4": {
+              "deliveryRate": 2033707
+            }
+          },
+          "url": "https://agent-awesome.com/slack/events",
+          "method": "POST",
+          "headers": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cf-connecting-ip": "34.226.193.32",
+            "cf-ipcountry": "US",
+            "cf-ray": "9fb9668e49b92899",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "content-length": "942",
+            "content-type": "application/json",
+            "host": "agent-awesome.com",
+            "user-agent": "Slackbot 1.0 (+https://api.slack.com/robots)",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "34.226.193.32",
+            "x-slack-request-timestamp": "1778756441",
+            "x-slack-signature": "v0=ebba83b699ee3191a1831b205ebfe9792ab4f249175f94a0ced319b8afdc841c"
+          },
+          "path": "/slack/events"
+        },
+        "rayId": "9fb9668e49b92899",
+        "response": {
+          "status": 200
+        }
+      },
+      "truncated": false,
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb9668e49b92899",
+      "cpuTimeMs": 3,
+      "wallTimeMs": 326
+    },
+    "$metadata": {
+      "id": "01KRK2AN7S9M8QKB9WW244ZXZM",
+      "requestId": "9fb9668e49b92899",
+      "trigger": "POST /slack/events",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "POST https://agent-awesome.com/slack/events",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "POST https://agent-awesome.com/slack/events"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "startAndWaitForPorts"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:33.919Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "rpcMethod": "startAndWaitForPorts"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "rpc",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "17ACFOYEXR1QUNSM",
+      "wallTimeMs": 166,
+      "cpuTimeMs": 0
+    },
+    "$metadata": {
+      "id": "01KRK2ANCCMQHC3MF8QHRM32MS",
+      "requestId": "17ACFOYEXR1QUNSM",
+      "trigger": "default.startAndWaitForPorts",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "startAndWaitForPorts",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "rpc",
+      "messageTemplate": "startAndWaitForPorts"
+    }
+  },
+  {
+    "source": {
+      "message": "Agent Awesome pilot container started"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:29.088Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:27.887Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "AMHSSY1DLIG7601I"
+    },
+    "$metadata": {
+      "id": "01KRK2B0CFTD323Y6NHZVPK3SE",
+      "requestId": "AMHSSY1DLIG7601I",
+      "trigger": "2026-05-14T11:00:27.887Z",
+      "service": "agent-awesome-pilot",
+      "message": "Agent Awesome pilot container started",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "Agent Awesome pilot container started"
+    }
+  },
+  {
+    "source": {
+      "message": "Port 8070 is ready"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:29.088Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:27.887Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "AMHSSY1DLIG7601I"
+    },
+    "$metadata": {
+      "id": "01KRK2B0CFTD323Y6NHZVPK3SD",
+      "requestId": "AMHSSY1DLIG7601I",
+      "trigger": "2026-05-14T11:00:27.887Z",
+      "service": "agent-awesome-pilot",
+      "message": "Port 8070 is ready",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "Port 8070 is ready"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "GET https://agent-awesome.com/healthz"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:29.088Z",
+    "$workers": {
+      "event": {
+        "request": {
+          "cf": {
+            "isEUCountry": false,
+            "tlsClientAuth": {
+              "certRFC9440TooLarge": false,
+              "certChainRFC9440TooLarge": false,
+              "certPresented": "0",
+              "certVerified": "NONE",
+              "certRevoked": "0",
+              "certIssuerDN": "",
+              "certSubjectDN": "",
+              "certIssuerDNRFC2253": "",
+              "certSubjectDNRFC2253": "",
+              "certIssuerDNLegacy": "",
+              "certSubjectDNLegacy": "",
+              "certSerial": "",
+              "certIssuerSerial": "",
+              "certSKI": "",
+              "certIssuerSKI": "",
+              "certFingerprintSHA1": "",
+              "certFingerprintSHA256": "",
+              "certNotBefore": "",
+              "certNotAfter": "",
+              "certRFC9440": "",
+              "certChainRFC9440": ""
+            },
+            "httpProtocol": "HTTP/2",
+            "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+            "colo": "YYZ",
+            "asOrganization": "Rogers Communications Canada Inc.",
+            "country": "CA",
+            "city": "Toronto",
+            "continent": "NA",
+            "region": "Ontario",
+            "regionCode": "ON",
+            "timezone": "America/Toronto",
+            "longitude": "-79.39864",
+            "latitude": "43.70643",
+            "postalCode": "M5A",
+            "tlsVersion": "TLSv1.3",
+            "tlsCipher": "AEAD-AES256-GCM-SHA384",
+            "tlsClientRandom": "VJ/KiEAuvV2EYrNuDYgx0FQmsIM7X3U/TMhbFZvGr0U=",
+            "tlsClientCiphersSha1": "GXSPDLP4G3X+prK73a4wBuOaHRc=",
+            "tlsClientExtensionsSha1": "tlH5gnoC5Z1HF45J5OgHEi338V0=",
+            "tlsClientExtensionsSha1Le": "mRCkyUCRFDTLCNHGQsZNFhkU1/4=",
+            "tlsExportedAuthenticator": {
+              "clientHandshake": "4b9c455b24be42b0fed367b8265bab078abf074386890b9b1e06345839ecd8037514589c348f7894456e8244ac68d918",
+              "serverHandshake": "f325727b04e94c0be08141cd973c644a851b97f9b387301ece80f5daca2e519c00d2a0dd3c96203cbb41c6c9728c5059",
+              "clientFinished": "4dd0c341c0bfedcebbaec9ef700a3a4407de39e8d932586ded15280478732cdaefff66ec3cfd00c616bb6e6c9fe56257",
+              "serverFinished": "4fba5c910b76ed882704439c9f5d7e63fd8a3cc9a4ac854279f07d627cdb29abe9d8ac979da2b952091ccf74028717b7"
+            },
+            "tlsClientHelloLength": "508",
+            "verifiedBotCategory": "",
+            "edgeRequestKeepAliveStatus": 1,
+            "clientTcpRtt": 35,
+            "clientQuicRtt": 0,
+            "asn": 812,
+            "edgeL4": {
+              "deliveryRate": 102521
+            }
+          },
+          "url": "https://agent-awesome.com/healthz",
+          "method": "GET",
+          "headers": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cf-connecting-ip": "2605:8d80:6de0:fc66:b49c:b4f4:ec83:e3ab",
+            "cf-ipcountry": "CA",
+            "cf-ray": "9fb9662faf5eaa71",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "host": "agent-awesome.com",
+            "user-agent": "curl/8.5.0",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "2605:8d80:6de0:fc66:b49c:b4f4:ec83:e3ab"
+          },
+          "path": "/healthz"
+        },
+        "rayId": "9fb9662faf5eaa71",
+        "response": {
+          "status": 200
+        }
+      },
+      "truncated": false,
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "durableObject",
+      "entrypoint": "AgentAwesomeContainer",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb9662faf5eaa71",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 12237
+    },
+    "$metadata": {
+      "id": "01KRK2AN4X4XYHFGZQDJP6Q3DE",
+      "requestId": "9fb9662faf5eaa71",
+      "trigger": "GET /healthz",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "GET https://agent-awesome.com/healthz",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "GET https://agent-awesome.com/healthz"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "GET https://agent-awesome.com/internal/context-snapshot/family"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:28.853Z",
+    "$workers": {
+      "event": {
+        "request": {
+          "cf": {
+            "isEUCountry": false,
+            "tlsClientAuth": {
+              "certRFC9440TooLarge": false,
+              "certChainRFC9440TooLarge": false,
+              "certPresented": "0",
+              "certVerified": "NONE",
+              "certRevoked": "0",
+              "certIssuerDN": "",
+              "certSubjectDN": "",
+              "certIssuerDNRFC2253": "",
+              "certSubjectDNRFC2253": "",
+              "certIssuerDNLegacy": "",
+              "certSubjectDNLegacy": "",
+              "certSerial": "",
+              "certIssuerSerial": "",
+              "certSKI": "",
+              "certIssuerSKI": "",
+              "certFingerprintSHA1": "",
+              "certFingerprintSHA256": "",
+              "certNotBefore": "",
+              "certNotAfter": "",
+              "certRFC9440": "",
+              "certChainRFC9440": ""
+            },
+            "httpProtocol": "HTTP/2",
+            "clientAcceptEncoding": "gzip",
+            "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+            "colo": "YVR",
+            "asOrganization": "Cloudflare, Inc.",
+            "country": "CA",
+            "city": "Richmond",
+            "continent": "NA",
+            "region": "British Columbia",
+            "regionCode": "BC",
+            "timezone": "America/Vancouver",
+            "longitude": "-123.13683",
+            "latitude": "49.17003",
+            "postalCode": "V6Y",
+            "tlsVersion": "TLSv1.3",
+            "tlsCipher": "AEAD-AES128-GCM-SHA256",
+            "tlsClientRandom": "ktwPswfJi12Z01ohCQ4plk+Lf9/P7M1fYPjuTLAeAiI=",
+            "tlsClientCiphersSha1": "QrF6UadKW3vtNOqdNqbd4frxxxE=",
+            "tlsClientExtensionsSha1": "4bG1Y8rLaQO7Zz8LsR9/kLSZA1k=",
+            "tlsClientExtensionsSha1Le": "pMUsb7QtBZ73yrr4pkFYSqVzFlU=",
+            "tlsExportedAuthenticator": {
+              "clientHandshake": "53ba1fa1f891fd0d41f819e4cfc7ad37f4ccca341a10de474b41ed725ac9ec94",
+              "serverHandshake": "9c96c3778e253e95f195af5b71f515264e5b2f3f76bcba510718c51fd371571f",
+              "clientFinished": "b9ee6274c1acc4f25cbc6eef3008014fc0d1fa545fcdd832f30253556e946ecc",
+              "serverFinished": "87ac30fe6c048914c1554413d6124b30f286c0db60000aaed91cd18bee6e46d2"
+            },
+            "tlsClientHelloLength": "1518",
+            "verifiedBotCategory": "",
+            "edgeRequestKeepAliveStatus": 1,
+            "clientTcpRtt": 0,
+            "clientQuicRtt": 0,
+            "asn": 13335,
+            "edgeL4": {
+              "deliveryRate": 0
+            }
+          },
+          "url": "https://agent-awesome.com/internal/context-snapshot/family",
+          "method": "GET",
+          "headers": {
+            "accept-encoding": "gzip, br",
+            "authorization": "********",
+            "cf-connecting-ip": "104.28.153.29",
+            "cf-ipcountry": "CA",
+            "cf-ray": "9fb966405f7f9bc6",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "host": "agent-awesome.com",
+            "user-agent": "Go-http-client/2.0",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "104.28.153.29"
+          },
+          "path": "/internal/context-snapshot/family"
+        },
+        "rayId": "9fb966405f7f9bc6",
+        "response": {
+          "status": 404
+        }
+      },
+      "truncated": false,
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb966405f7f9bc6",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 88
+    },
+    "$metadata": {
+      "id": "01KRK2A91NSP6SB1XF9AGA9PCD",
+      "requestId": "9fb966405f7f9bc6",
+      "trigger": "GET /internal/context-snapshot/family",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "GET https://agent-awesome.com/internal/context-snapshot/family",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "GET https://agent-awesome.com/internal/context-snapshot/family"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "GET https://agent-awesome.com/internal/context-snapshot/doug"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:28.661Z",
+    "$workers": {
+      "event": {
+        "request": {
+          "cf": {
+            "isEUCountry": false,
+            "tlsClientAuth": {
+              "certRFC9440TooLarge": false,
+              "certChainRFC9440TooLarge": false,
+              "certPresented": "0",
+              "certVerified": "NONE",
+              "certRevoked": "0",
+              "certIssuerDN": "",
+              "certSubjectDN": "",
+              "certIssuerDNRFC2253": "",
+              "certSubjectDNRFC2253": "",
+              "certIssuerDNLegacy": "",
+              "certSubjectDNLegacy": "",
+              "certSerial": "",
+              "certIssuerSerial": "",
+              "certSKI": "",
+              "certIssuerSKI": "",
+              "certFingerprintSHA1": "",
+              "certFingerprintSHA256": "",
+              "certNotBefore": "",
+              "certNotAfter": "",
+              "certRFC9440": "",
+              "certChainRFC9440": ""
+            },
+            "httpProtocol": "HTTP/2",
+            "clientAcceptEncoding": "gzip",
+            "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+            "colo": "YVR",
+            "asOrganization": "Cloudflare, Inc.",
+            "country": "CA",
+            "city": "Richmond",
+            "continent": "NA",
+            "region": "British Columbia",
+            "regionCode": "BC",
+            "timezone": "America/Vancouver",
+            "longitude": "-123.13683",
+            "latitude": "49.17003",
+            "postalCode": "V6Y",
+            "tlsVersion": "TLSv1.3",
+            "tlsCipher": "AEAD-AES128-GCM-SHA256",
+            "tlsClientRandom": "PJkXkZIDc0Zqw7tl+mQu1bbdrahHZj9RlYVyruhQaHc=",
+            "tlsClientCiphersSha1": "QrF6UadKW3vtNOqdNqbd4frxxxE=",
+            "tlsClientExtensionsSha1": "4bG1Y8rLaQO7Zz8LsR9/kLSZA1k=",
+            "tlsClientExtensionsSha1Le": "pMUsb7QtBZ73yrr4pkFYSqVzFlU=",
+            "tlsExportedAuthenticator": {
+              "clientHandshake": "d059ac3556d098f0043b683bc245d6cf9c2e5e59f90906aad81ca42ff185098b",
+              "serverHandshake": "9259c62d6adaeeea2d70425f95a6665eae9b394591fb8485095a5a45aa316c28",
+              "clientFinished": "339759660ac2f29d6c0169e27254ad18c318eaac6b4a20e630299e9045ce0393",
+              "serverFinished": "d4efa461c9db9b6ce563eba2e7f3c54211ed16b8a6e1ebb9b9475c2d20543e40"
+            },
+            "tlsClientHelloLength": "1518",
+            "verifiedBotCategory": "",
+            "edgeRequestKeepAliveStatus": 1,
+            "clientTcpRtt": 0,
+            "clientQuicRtt": 0,
+            "asn": 13335,
+            "edgeL4": {
+              "deliveryRate": 0
+            }
+          },
+          "url": "https://agent-awesome.com/internal/context-snapshot/doug",
+          "method": "GET",
+          "headers": {
+            "accept-encoding": "gzip, br",
+            "authorization": "********",
+            "cf-connecting-ip": "104.28.153.29",
+            "cf-ipcountry": "CA",
+            "cf-ray": "9fb9663f1ea59bc6",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "host": "agent-awesome.com",
+            "user-agent": "Go-http-client/2.0",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "104.28.153.29"
+          },
+          "path": "/internal/context-snapshot/doug"
+        },
+        "rayId": "9fb9663f1ea59bc6",
+        "response": {
+          "status": 404
+        }
+      },
+      "truncated": false,
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb9663f1ea59bc6",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 99
+    },
+    "$metadata": {
+      "id": "01KRK2A8VN26M2ZXES1AZW2CK0",
+      "requestId": "9fb9663f1ea59bc6",
+      "trigger": "GET /internal/context-snapshot/doug",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "GET https://agent-awesome.com/internal/context-snapshot/doug",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "GET https://agent-awesome.com/internal/context-snapshot/doug"
+    }
+  },
+  {
+    "source": {
+      "level": "debug",
+      "message": "Error checking 8070: The container is not listening in the TCP address 10.0.0.1:8070"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:28.419Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:27.887Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "AMHSSY1DLIG7601I"
+    },
+    "$metadata": {
+      "id": "01KRK2B0CFTD323Y6NHZVPK3SC",
+      "requestId": "AMHSSY1DLIG7601I",
+      "trigger": "2026-05-14T11:00:27.887Z",
+      "service": "agent-awesome-pilot",
+      "level": "debug",
+      "message": "Error checking 8070: The container is not listening in the TCP address 10.0.0.1:8070",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "Error checking 8070: The container is not listening in the TCP address <IP4>:8070"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "2026-05-14T11:00:27.887Z"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:26.887Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "scheduledTime": "2026-05-14T11:00:27.887Z"
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "alarm",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "AMHSSY1DLIG7601I",
+      "wallTimeMs": 24884,
+      "cpuTimeMs": 3
+    },
+    "$metadata": {
+      "id": "01KRK2B0CFTD323Y6NHZVPK3SB",
+      "requestId": "AMHSSY1DLIG7601I",
+      "trigger": "2026-05-14T11:00:27.887Z",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "2026-05-14T11:00:27.887Z",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "alarm",
+      "messageTemplate": "<DATETIME>"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": ""
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:26.231Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "rpcMethod": ""
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "rpc",
+      "entrypoint": "AgentAwesomeContainer",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "executionModel": "durableObject",
+      "durableObjectId": "4633b2534f258150e9b6af21e11463f306cab6d42759f5b04d96fdf59f18add0",
+      "requestId": "1C529CNZDVBM7NPT",
+      "wallTimeMs": 2882,
+      "cpuTimeMs": 1
+    },
+    "$metadata": {
+      "id": "01KRK2A94ANN4PXB5HVJMYVTJT",
+      "requestId": "1C529CNZDVBM7NPT",
+      "trigger": "default.",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "rpc"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "GET https://agent-awesome.com/healthz"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T11:00:26.191Z",
+    "$workers": {
+      "event": {
+        "request": {
+          "cf": {
+            "isEUCountry": false,
+            "tlsClientAuth": {
+              "certRFC9440TooLarge": false,
+              "certChainRFC9440TooLarge": false,
+              "certPresented": "0",
+              "certVerified": "NONE",
+              "certRevoked": "0",
+              "certIssuerDN": "",
+              "certSubjectDN": "",
+              "certIssuerDNRFC2253": "",
+              "certSubjectDNRFC2253": "",
+              "certIssuerDNLegacy": "",
+              "certSubjectDNLegacy": "",
+              "certSerial": "",
+              "certIssuerSerial": "",
+              "certSKI": "",
+              "certIssuerSKI": "",
+              "certFingerprintSHA1": "",
+              "certFingerprintSHA256": "",
+              "certNotBefore": "",
+              "certNotAfter": "",
+              "certRFC9440": "",
+              "certChainRFC9440": ""
+            },
+            "httpProtocol": "HTTP/2",
+            "requestPriority": "weight=16;exclusive=0;group=0;group-weight=0",
+            "colo": "YYZ",
+            "asOrganization": "Rogers Communications Canada Inc.",
+            "country": "CA",
+            "city": "Toronto",
+            "continent": "NA",
+            "region": "Ontario",
+            "regionCode": "ON",
+            "timezone": "America/Toronto",
+            "longitude": "-79.39864",
+            "latitude": "43.70643",
+            "postalCode": "M5A",
+            "tlsVersion": "TLSv1.3",
+            "tlsCipher": "AEAD-AES256-GCM-SHA384",
+            "tlsClientRandom": "VJ/KiEAuvV2EYrNuDYgx0FQmsIM7X3U/TMhbFZvGr0U=",
+            "tlsClientCiphersSha1": "GXSPDLP4G3X+prK73a4wBuOaHRc=",
+            "tlsClientExtensionsSha1": "tlH5gnoC5Z1HF45J5OgHEi338V0=",
+            "tlsClientExtensionsSha1Le": "mRCkyUCRFDTLCNHGQsZNFhkU1/4=",
+            "tlsExportedAuthenticator": {
+              "clientHandshake": "4b9c455b24be42b0fed367b8265bab078abf074386890b9b1e06345839ecd8037514589c348f7894456e8244ac68d918",
+              "serverHandshake": "f325727b04e94c0be08141cd973c644a851b97f9b387301ece80f5daca2e519c00d2a0dd3c96203cbb41c6c9728c5059",
+              "clientFinished": "4dd0c341c0bfedcebbaec9ef700a3a4407de39e8d932586ded15280478732cdaefff66ec3cfd00c616bb6e6c9fe56257",
+              "serverFinished": "4fba5c910b76ed882704439c9f5d7e63fd8a3cc9a4ac854279f07d627cdb29abe9d8ac979da2b952091ccf74028717b7"
+            },
+            "tlsClientHelloLength": "508",
+            "verifiedBotCategory": "",
+            "edgeRequestKeepAliveStatus": 1,
+            "clientTcpRtt": 35,
+            "clientQuicRtt": 0,
+            "asn": 812,
+            "edgeL4": {
+              "deliveryRate": 102521
+            }
+          },
+          "url": "https://agent-awesome.com/healthz",
+          "method": "GET",
+          "headers": {
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cf-connecting-ip": "2605:8d80:6de0:fc66:b49c:b4f4:ec83:e3ab",
+            "cf-ipcountry": "CA",
+            "cf-ray": "9fb9662faf5eaa71",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "connection": "Keep-Alive",
+            "host": "agent-awesome.com",
+            "user-agent": "curl/8.5.0",
+            "x-forwarded-proto": "https",
+            "x-real-ip": "2605:8d80:6de0:fc66:b49c:b4f4:ec83:e3ab"
+          },
+          "path": "/healthz"
+        },
+        "rayId": "9fb9662faf5eaa71",
+        "response": {
+          "status": 200
+        }
+      },
+      "truncated": false,
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "dba8f97b-2b44-4562-b7e0-9b89d2e8453e"
+      },
+      "requestId": "9fb9662faf5eaa71",
+      "cpuTimeMs": 1,
+      "wallTimeMs": 3082
+    },
+    "$metadata": {
+      "id": "01KRK2A6EFK7DSFFR78JG2R6JD",
+      "requestId": "9fb9662faf5eaa71",
+      "trigger": "GET /healthz",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "GET https://agent-awesome.com/healthz",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "GET https://agent-awesome.com/healthz"
+    }
+  },
+  {
+    "source": {
+      "level": "info",
+      "message": "GET http://agent-awesome.com/wp-admin/install.php?step=1"
+    },
+    "dataset": "cloudflare-workers",
+    "timestamp": "2026-05-14T10:44:42.143Z",
+    "$workers": {
+      "truncated": false,
+      "event": {
+        "request": {
+          "url": "http://agent-awesome.com/wp-admin/install.php?step=1",
+          "method": "GET",
+          "headers": {
+            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "accept-encoding": "gzip",
+            "accept-language": "en-us,en;q=0.8,fr;q=0.5,fr-ca;q=0.3",
+            "cache-control": "no-cache",
+            "cf-connecting-ip": "2a06:98c0:3600::103",
+            "cf-ipcountry": "DE",
+            "cf-ray": "9fb94f2343ffe5a3",
+            "cf-visitor": "{\"scheme\":\"http\"}",
+            "cf-worker": "awaregray.workers.dev",
+            "connection": "Keep-Alive",
+            "host": "agent-awesome.com",
+            "pragma": "no-cache",
+            "user-agent": "http://agent-awesome.com/wp-admin/install.php?step=1",
+            "x-forwarded-proto": "http",
+            "x-real-ip": "2a06:98c0:3600::103"
+          },
+          "cf": {
+            "httpProtocol": "HTTP/1.1",
+            "tlsCipher": "",
+            "continent": "EU",
+            "verifiedBotCategory": "",
+            "country": "DE",
+            "isEUCountry": "1",
+            "region": "Hesse",
+            "tlsClientCiphersSha1": "",
+            "tlsClientAuth": {
+              "certIssuerDNLegacy": "",
+              "certIssuerSKI": "",
+              "certSubjectDNRFC2253": "",
+              "certSubjectDNLegacy": "",
+              "certFingerprintSHA256": "",
+              "certNotBefore": "",
+              "certSKI": "",
+              "certSerial": "",
+              "certIssuerDN": "",
+              "certVerified": "NONE",
+              "certNotAfter": "",
+              "certSubjectDN": "",
+              "certPresented": "0",
+              "certRevoked": "0",
+              "certIssuerSerial": "",
+              "certIssuerDNRFC2253": "",
+              "certFingerprintSHA1": ""
+            },
+            "tlsClientRandom": "",
+            "tlsClientHelloLength": "",
+            "colo": "FRA",
+            "timezone": "Europe/Berlin",
+            "longitude": "8.68290",
+            "latitude": "50.11090",
+            "requestPriority": "",
+            "postalCode": "60280",
+            "city": "Frankfurt am Main",
+            "tlsVersion": "",
+            "regionCode": "HE",
+            "asOrganization": "Cloudflare, Inc.",
+            "tlsClientExtensionsSha1Le": "",
+            "tlsClientExtensionsSha1": "",
+            "asn": 13335,
+            "edgeRequestKeepAliveStatus": 1
+          },
+          "path": "/wp-admin/install.php",
+          "search": {
+            "step": 1
+          }
+        },
+        "rayId": "9fb94f2343ffe5a3",
+        "response": {
+          "status": 404
+        }
+      },
+      "scriptName": "agent-awesome-pilot",
+      "outcome": "ok",
+      "eventType": "fetch",
+      "executionModel": "stateless",
+      "scriptVersion": {
+        "id": "f72e2005-4bea-426a-abc0-69933c978335"
+      },
+      "requestId": "9fb94f2343ffe5a3",
+      "cpuTimeMs": 0,
+      "wallTimeMs": 0
+    },
+    "$metadata": {
+      "id": "01KRK1DCGZ3PPASKR99JFC852Q",
+      "requestId": "9fb94f2343ffe5a3",
+      "trigger": "GET /wp-admin/install.php",
+      "service": "agent-awesome-pilot",
+      "level": "info",
+      "message": "GET http://agent-awesome.com/wp-admin/install.php?step=1",
+      "account": "765086e5de33c15e72005f558c2591a0",
+      "type": "cf-worker-event",
+      "fingerprint": "2a46749ca6abb78a5cfc4b9888a2c229",
+      "origin": "fetch",
+      "messageTemplate": "GET http://agent-awesome.com/wp-admin/install.php?step=1"
+    }
+  }
+]

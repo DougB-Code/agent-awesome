@@ -154,7 +154,7 @@ func (d Deployment) vars() map[string]string {
 		"AGENTAWESOME_GATEWAY_LOG_FILE":        "/app/logs/gateway.log",
 		"AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT": defaultRequestTimeout,
 		"AGENTAWESOME_SERVICE_START_TIMEOUT":   defaultStartTimeout,
-		"AGENTAWESOME_SLACK_READ_ONLY_TOOLS":   boolString(d.SlackEnabled),
+		"AGENTAWESOME_SLACK_MEMORY_TOOLS":      boolString(d.SlackEnabled),
 		"SLACK_ENABLED":                        boolString(d.SlackEnabled),
 		"SLACK_SOCKET_MODE":                    "false",
 		"SLACK_ALLOWED_TEAM_ID":                d.SlackAllowedTeamID,

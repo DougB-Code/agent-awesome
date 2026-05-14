@@ -398,7 +398,7 @@ func TestNewAdapterCombinesOperatorAndSlackPolicy(t *testing.T) {
 		t.Fatalf("Inject() changed = false, want true")
 	}
 	text := string(next)
-	if !strings.Contains(text, "Use the operator policy.") || !strings.Contains(text, "Slack cannot present tool confirmation prompts") {
+	if !strings.Contains(text, "Use the operator policy.") || !strings.Contains(text, "Slack can use the configured memory tools") {
 		t.Fatalf("policy body = %q, want operator and Slack policy text", text)
 	}
 }

@@ -22,7 +22,7 @@ import (
 const maxSlackRequestBytes = 1 << 20
 const defaultMaxConcurrentDispatches = 4
 const slackFailurePostTimeout = 10 * time.Second
-const slackRuntimePolicyText = "Slack cannot present tool confirmation prompts. Use read-only tools when helpful. Do not call tools that create, update, delete, remember, save, repair, refresh, submit corrections, mutate context graphs, or otherwise require confirmation from Slack; for those requests, say the action is unavailable from Slack and that no changes were made."
+const slackRuntimePolicyText = "Slack can use the configured memory tools for shared memory and task operations when the authorized Slack user asks for them. Slack cannot present interactive tool confirmation prompts; if the runtime unexpectedly requests confirmation, deny that confirmation and tell the user no changes were made."
 
 var errSlackDispatchThrottled = errors.New("slack dispatch throttled")
 

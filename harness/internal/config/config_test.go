@@ -457,22 +457,9 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 	}
 }
 
-// TestStaticSlackMemoryToolConfigsAreReadOnly keeps Slack from seeing writes.
-func TestStaticSlackMemoryToolConfigsAreReadOnly(t *testing.T) {
-	expectedAllow := []string{
-		"search_memory",
-		"search_sources",
-		"load_entity_page",
-		"load_timeline",
-		"query_context_graph",
-		"get_task",
-		"list_tasks",
-		"task_graph_projection",
-		"project_executive_summary",
-		"explain_executive_summary_item",
-		"list_task_relations",
-		"traverse_task_relations",
-	}
+// TestStaticSlackMemoryToolConfigsExposeMemoryServer keeps Slack scoped to the
+// memory MCP server while allowing the server's full tool surface.
+func TestStaticSlackMemoryToolConfigsExposeMemoryServer(t *testing.T) {
 	root := repoRoot(t)
 	paths := []string{
 		filepath.Join(root, "deploy", "cloudflare", "config", "tool.slack.doug.yaml"),
@@ -489,19 +476,22 @@ func TestStaticSlackMemoryToolConfigsAreReadOnly(t *testing.T) {
 			if !ok {
 				t.Fatalf("memory MCP server not configured")
 			}
-			if got := server.Tools.Allow; !reflect.DeepEqual(got, expectedAllow) {
-				t.Fatalf("Tools.Allow = %#v, want read-only tools %#v", got, expectedAllow)
+			if len(cfg.MCP.Servers) != 1 {
+				t.Fatalf("MCP.Servers = %#v, want only memory server", cfg.MCP.Servers)
+			}
+			if len(server.Tools.Allow) != 0 {
+				t.Fatalf("Tools.Allow = %#v, want all memory server tools", server.Tools.Allow)
+			}
+			for _, tool := range []string{"remember", "save_memory_candidate", "create_task", "update_task", "mutate_context_graph", "delete_task_relation"} {
+				if !toolVisibleFromMCPServer(server, tool) {
+					t.Fatalf("Slack config filters memory tool %q", tool)
+				}
 			}
 			if len(server.RequireConfirmationTools) != 0 || server.RequireConfirmation {
 				t.Fatalf("Slack config requires confirmation: all=%v tools=%#v", server.RequireConfirmation, server.RequireConfirmationTools)
 			}
 			if len(cfg.Memory.ReadDomains) != 0 {
 				t.Fatalf("Slack config enabled runtime memory capture: %#v", cfg.Memory.ReadDomains)
-			}
-			for _, tool := range []string{"remember", "save_memory_candidate", "create_task", "update_task", "mutate_context_graph"} {
-				if allowsTool(server, tool) {
-					t.Fatalf("Slack config allows write tool %q", tool)
-				}
 			}
 		})
 	}
@@ -975,6 +965,11 @@ func memoryMCPServer(servers []schema.MCPServer) (schema.MCPServer, bool) {
 // allowsTool reports whether an MCP server allowlist includes a tool.
 func allowsTool(server schema.MCPServer, tool string) bool {
 	return containsString(server.Tools.Allow, tool)
+}
+
+// toolVisibleFromMCPServer reports whether a tool survives the optional allowlist.
+func toolVisibleFromMCPServer(server schema.MCPServer, tool string) bool {
+	return len(server.Tools.Allow) == 0 || containsString(server.Tools.Allow, tool)
 }
 
 // requiresConfirmation reports whether an MCP server confirmation list includes a tool.

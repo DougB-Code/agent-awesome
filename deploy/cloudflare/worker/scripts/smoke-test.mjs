@@ -201,7 +201,7 @@ function assertContainerConfiguration(config) {
   assert.equal(config.vars?.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_ID, "gpt-5.4-mini");
   assert.equal(config.vars?.AGENTAWESOME_GATEWAY_LOG_FILE, "/app/logs/gateway.log");
-  assert.equal(config.vars?.AGENTAWESOME_SLACK_READ_ONLY_TOOLS, "true");
+  assert.equal(config.vars?.AGENTAWESOME_SLACK_MEMORY_TOOLS, "true");
   const modelConfig = readFileSync(resolve(workerRoot, "../config/model.yaml"), "utf8");
   assert.ok(
     modelConfig.includes("default: openai:gpt-5.4-mini"),
@@ -244,7 +244,7 @@ function assertContainerEnvironment(app) {
   assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes('"--snapshot-url"'));
   assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/doug"));
   assert.ok(mapped.AGENTAWESOME_MEMORY_SERVICES_JSON.includes("/internal/context-snapshot/family"));
-  assert.equal(mapped.AGENTAWESOME_SLACK_READ_ONLY_TOOLS, "true");
+  assert.equal(mapped.AGENTAWESOME_SLACK_MEMORY_TOOLS, "true");
   assert.equal(mapped.SLACK_SIGNING_SECRET, "slack-secret");
   assert.equal(mapped.SLACK_ENABLED, "true");
   assert.equal(mapped.SLACK_SOCKET_MODE, "false");

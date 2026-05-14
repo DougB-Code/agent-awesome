@@ -73,8 +73,11 @@ EOF
 mkdir -p /app/data /app/data/sessions /app/logs /app/runtime
 export LOG_FORMAT="${LOG_FORMAT:-json}"
 write_model_config
-touch /app/logs/gateway.log /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log
-tail -n +1 -F /app/logs/gateway.log /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log &
+# Reset ephemeral log files so Cloudflare captures only this container lifecycle.
+for log_file in /app/logs/gateway.log /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log; do
+  : > "${log_file}"
+done
+tail -n 0 -q -F /app/logs/gateway.log /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log &
 
 MEMORY_DOMAINS_JSON=${AGENTAWESOME_MEMORY_DOMAINS_JSON:-'[{"id":"doug","label":"Doug Memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"},{"id":"family","label":"Family Memory","endpoint":"http://127.0.0.1:8091/mcp","health_url":"http://127.0.0.1:8091/healthz"}]'}
 MEMORY_POLICY_JSON=${AGENTAWESOME_MEMORY_POLICY_JSON:-'{"actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","internal","private"]}'}
@@ -82,11 +85,11 @@ AGENT_PROFILES_JSON=${AGENTAWESOME_AGENT_PROFILES_JSON:-'[{"id":"doug","label":"
 MEMORY_SERVICES_JSON=${AGENTAWESOME_MEMORY_SERVICES_JSON:-'[{"domain_id":"doug","name":"memory-doug","health_url":"http://127.0.0.1:8090/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8090","--db","/app/data/memory/doug/memory.db","--data","/app/data/memory/doug/files","--log-file","/app/logs/memory-doug.log","--snapshot-url","https://agent-awesome.com/internal/context-snapshot/doug"],"auto_start":true},{"domain_id":"family","name":"memory-family","health_url":"http://127.0.0.1:8091/healthz","command":"/usr/local/bin/memoryd","arguments":["--addr","127.0.0.1:8091","--db","/app/data/memory/family/memory.db","--data","/app/data/memory/family/files","--log-file","/app/logs/memory-family.log","--snapshot-url","https://agent-awesome.com/internal/context-snapshot/family"],"auto_start":true}]'}
 DOUG_TOOL_CONFIG=/app/config/tool.doug.yaml
 FAMILY_TOOL_CONFIG=/app/config/tool.family.yaml
-SLACK_READ_ONLY_TOOLS=${AGENTAWESOME_SLACK_READ_ONLY_TOOLS:-${SLACK_ENABLED:-false}}
-if [[ "${SLACK_READ_ONLY_TOOLS,,}" == "true" ]]; then
+SLACK_MEMORY_TOOLS=${AGENTAWESOME_SLACK_MEMORY_TOOLS:-${SLACK_ENABLED:-false}}
+if [[ "${SLACK_MEMORY_TOOLS,,}" == "true" ]]; then
   DOUG_TOOL_CONFIG=/app/config/tool.slack.doug.yaml
   FAMILY_TOOL_CONFIG=/app/config/tool.slack.family.yaml
-  echo "Slack read-only tool profile enabled for cloud harnesses" >&2
+  echo "Slack memory tool profile enabled for cloud harnesses" >&2
 fi
 
 agent-awesome \

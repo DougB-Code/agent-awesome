@@ -50,8 +50,8 @@ func TestWranglerIncludesSlackSecretsWhenEnabled(t *testing.T) {
 	if wrangler.Vars["SLACK_ENABLED"] != "true" {
 		t.Fatalf("SLACK_ENABLED = %q, want true", wrangler.Vars["SLACK_ENABLED"])
 	}
-	if wrangler.Vars["AGENTAWESOME_SLACK_READ_ONLY_TOOLS"] != "true" {
-		t.Fatalf("AGENTAWESOME_SLACK_READ_ONLY_TOOLS = %q, want true", wrangler.Vars["AGENTAWESOME_SLACK_READ_ONLY_TOOLS"])
+	if wrangler.Vars["AGENTAWESOME_SLACK_MEMORY_TOOLS"] != "true" {
+		t.Fatalf("AGENTAWESOME_SLACK_MEMORY_TOOLS = %q, want true", wrangler.Vars["AGENTAWESOME_SLACK_MEMORY_TOOLS"])
 	}
 	if wrangler.Vars["AGENTAWESOME_MODEL_PROVIDER_ID"] != "openai" || wrangler.Vars["AGENTAWESOME_MODEL_ID"] != "gpt-mini" {
 		t.Fatalf("model status vars = %#v", wrangler.Vars)
