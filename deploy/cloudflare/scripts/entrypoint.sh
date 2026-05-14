@@ -1,9 +1,77 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
 # Starts the Cloudflare pilot container with profile-specific harnesses and
 # gateway-supervised memory services.
-set -eu
+set -euo pipefail
 
-mkdir -p /app/data /app/data/sessions /app/logs
+# wait_for_tcp blocks until a colocated service accepts TCP connections.
+wait_for_tcp() {
+  host="$1"
+  port="$2"
+  deadline_seconds="$3"
+  end_at=$((SECONDS + deadline_seconds))
+  while ((SECONDS < end_at)); do
+    if timeout 1 bash -c ":</dev/tcp/${host}/${port}" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "Timed out waiting for ${host}:${port}" >&2
+  return 1
+}
+
+# require_safe_model_value rejects shell/YAML metacharacters in model settings.
+require_safe_model_value() {
+  name="$1"
+  value="$2"
+  if [[ ! "$value" =~ ^[A-Za-z0-9._:-]+$ ]]; then
+    echo "${name} contains unsupported characters" >&2
+    return 1
+  fi
+}
+
+# require_safe_provider_url rejects characters that would break generated YAML.
+require_safe_provider_url() {
+  name="$1"
+  value="$2"
+  pattern='^https?://[A-Za-z0-9._:/%?&=+-]+$'
+  if [[ ! "$value" =~ $pattern ]]; then
+    echo "${name} contains an unsupported provider URL" >&2
+    return 1
+  fi
+}
+
+# write_model_config renders the cloud model config from Worker vars.
+write_model_config() {
+  provider_id="${AGENTAWESOME_MODEL_PROVIDER_ID:-openai}"
+  model_id="${AGENTAWESOME_MODEL_ID:-gpt-5.4-mini}"
+  wire_model="${AGENTAWESOME_OPENAI_MODEL:-$model_id}"
+  provider_url="${AGENTAWESOME_OPENAI_CHAT_COMPLETIONS_URL:-https://api.openai.com/v1/chat/completions}"
+  if [[ "$provider_id" != "openai" ]]; then
+    echo "Unsupported cloud model provider: ${provider_id}" >&2
+    return 1
+  fi
+  require_safe_model_value "AGENTAWESOME_MODEL_ID" "$model_id"
+  require_safe_model_value "AGENTAWESOME_OPENAI_MODEL" "$wire_model"
+  require_safe_provider_url "AGENTAWESOME_OPENAI_CHAT_COMPLETIONS_URL" "$provider_url"
+  cat > /app/runtime/model.yaml <<EOF
+# Generated at container startup from Cloudflare Worker model vars.
+default: openai:${model_id}
+providers:
+  openai:
+    adapter: openai
+    auth: required
+    api-key: OPENAI_API_KEY
+    default: ${model_id}
+    url: ${provider_url}
+    models:
+      - id: ${model_id}
+        model: ${wire_model}
+EOF
+  echo "Cloudflare model config provider=openai model_id=${model_id} model=${wire_model} url=${provider_url}" >&2
+}
+
+mkdir -p /app/data /app/data/sessions /app/logs /app/runtime
+write_model_config
 touch /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log
 tail -n +1 -F /app/logs/harness-doug.log /app/logs/harness-family.log /app/logs/memory-doug.log /app/logs/memory-family.log &
 
@@ -14,7 +82,7 @@ MEMORY_SERVICES_JSON=${AGENTAWESOME_MEMORY_SERVICES_JSON:-'[{"domain_id":"doug",
 
 agent-awesome \
   run \
-  --model /app/config/model.yaml \
+  --model /app/runtime/model.yaml \
   --agent /app/config/agent.yaml \
   --tool /app/config/tool.doug.yaml \
   --context-api-addr 127.0.0.1:8081 \
@@ -28,7 +96,7 @@ agent-awesome \
 
 agent-awesome \
   run \
-  --model /app/config/model.yaml \
+  --model /app/runtime/model.yaml \
   --agent /app/config/agent.yaml \
   --tool /app/config/tool.family.yaml \
   --context-api-addr 127.0.0.1:8083 \
@@ -39,6 +107,9 @@ agent-awesome \
   --port 8082 \
   api \
   --webui_address 127.0.0.1:8082 &
+
+wait_for_tcp 127.0.0.1 8080 "${AGENTAWESOME_HARNESS_START_TIMEOUT_SECONDS:-30}"
+wait_for_tcp 127.0.0.1 8082 "${AGENTAWESOME_HARNESS_START_TIMEOUT_SECONDS:-30}"
 
 exec agent-gateway \
   --addr "${AGENTAWESOME_GATEWAY_ADDR:-0.0.0.0:8070}" \
@@ -51,10 +122,12 @@ exec agent-gateway \
   --memory-services-json "$MEMORY_SERVICES_JSON" \
   --app-name "${AGENTAWESOME_APP_NAME:-agent_awesome}" \
   --user-id "${AGENTAWESOME_USER_ID:-doug}" \
+  --model-provider-id "${AGENTAWESOME_MODEL_PROVIDER_ID:-openai}" \
+  --model-id "${AGENTAWESOME_MODEL_ID:-gpt-5.4-mini}" \
   --auth-token "${AGENTAWESOME_GATEWAY_TOKEN:-}" \
   --request-timeout "${AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT:-10m}" \
   --service-start-timeout "${AGENTAWESOME_SERVICE_START_TIMEOUT:-45s}" \
-  --slack-enabled="${SLACK_ENABLED:-true}" \
+  --slack-enabled="${SLACK_ENABLED:-false}" \
   --slack-socket-mode="${SLACK_SOCKET_MODE:-false}" \
   --slack-signing-secret "${SLACK_SIGNING_SECRET:-}" \
   --slack-bot-token "${SLACK_BOT_TOKEN:-}" \

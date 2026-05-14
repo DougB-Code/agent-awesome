@@ -393,7 +393,7 @@ providers:
     default: gpt-mini
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
 ''';
 
 class _FakeTasksClient extends TasksClient {

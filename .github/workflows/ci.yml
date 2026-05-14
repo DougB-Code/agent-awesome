@@ -164,3 +164,37 @@ jobs:
 
       - name: Build container image
         run: docker build --file Dockerfile.cloudflare --tag agent-awesome-cloudflare:ci .
+
+  release-e2e:
+    name: Release E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake libgtk-3-dev liblzma-dev ninja-build pkg-config xvfb
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Prepare build caches
+        run: mkdir -p "$DOCKER_CONFIG" "$BUILDX_CONFIG" "$PUB_CACHE"
+
+      - name: Run release E2E suite
+        run: ./e2e/run-release-e2e.sh
+
+      - name: Upload release E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-artifacts
+          path: build/e2e
+          if-no-files-found: ignore

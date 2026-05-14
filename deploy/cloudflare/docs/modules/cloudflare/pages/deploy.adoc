@@ -5,6 +5,34 @@ Run deployment commands from `deploy/cloudflare/worker`.
 Use Node.js 22 or newer for Wrangler.
 Make sure Docker is running before `wrangler deploy`; Wrangler builds and pushes the configured Container image during deployment.
 
+The beta container defaults to OpenAI `gpt-5.4-mini`. If you edit
+`AGENTAWESOME_MODEL_ID` in `deploy/cloudflare/worker/wrangler.jsonc`, verify the
+deployed `OPENAI_API_KEY` can access that model before deploying. The container
+renders `/app/runtime/model.yaml` from Worker vars at startup and logs the actual
+provider/model pair.
+
+== Local Container Check
+
+Run these commands from the repository root before deploying:
+
+[source,sh]
+----
+docker build --file Dockerfile.cloudflare --tag agent-awesome-cloudflare:debug .
+docker run --rm -d \
+  --name agent-awesome-cloudflare-debug \
+  -p 8070:8070 \
+  -e AGENTAWESOME_GATEWAY_TOKEN=test \
+  -e AGENTAWESOME_PERSISTENCE_TOKEN=test \
+  -e OPENAI_API_KEY="${OPENAI_API_KEY:-test}" \
+  -e SLACK_ENABLED=false \
+  agent-awesome-cloudflare:debug
+curl -fsS http://127.0.0.1:8070/healthz
+curl -fsS \
+  -H "Authorization: Bearer test" \
+  http://127.0.0.1:8070/api/gateway/beta-status
+docker stop agent-awesome-cloudflare-debug
+----
+
 == Install And Deploy
 
 Generate the two internal bearer tokens before setting Worker secrets:
@@ -22,8 +50,6 @@ npm test
 npx wrangler r2 bucket create agent-awesome-beta-context
 printf '%s\n' "$GATEWAY_TOKEN" | npx wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
 printf '%s\n' "$PERSISTENCE_TOKEN" | npx wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
-npx wrangler secret put SLACK_SIGNING_SECRET
-npx wrangler secret put SLACK_BOT_TOKEN
 npx wrangler secret put OPENAI_API_KEY
 npx wrangler deploy
 ----
@@ -36,17 +62,19 @@ export CLOUDFLARE_ACCOUNT_ID=<account-id>
 export CLOUDFLARE_API_TOKEN=<token>
 ----
 
-After first deployment, set the Slack Events API request URL to:
+After first deployment, enable Slack only when channel routing is configured, then set the Slack Events API request URL to:
 
 [source,text]
 ----
 https://agent-awesome.com/slack/events
 ----
 
-For multi-profile Slack, edit `AGENTAWESOME_AGENT_PROFILES_JSON` in `wrangler.jsonc` and add `slack_bindings` to the profile that owns the channel.
+Slack is disabled by default so the gateway can deploy before channel routing is configured.
+For the workspace-scoped beta, upload `SLACK_ENABLED`, `SLACK_SIGNING_SECRET`, and `SLACK_BOT_TOKEN` as Worker secrets.
+Signed events from the installed Slack app route to the default `doug` profile.
+For multi-profile Slack, set `SLACK_ENABLED` to `true`, edit `AGENTAWESOME_AGENT_PROFILES_JSON` in `wrangler.jsonc`, and add `slack_bindings` to the profile that owns the channel.
 Each binding must include `team_id`, `channel_id`, and `allowed_user_ids`.
-The older `SLACK_ALLOWED_TEAM_ID`, `SLACK_ALLOWED_USER_ID`, and `SLACK_ALLOWED_CHANNEL_ID` values scope Slack to the default profile only.
-The gateway refuses to start Slack ingress unless either a profile binding or a complete legacy allow-list is configured.
+The older `SLACK_ALLOWED_TEAM_ID`, `SLACK_ALLOWED_USER_ID`, and `SLACK_ALLOWED_CHANNEL_ID` values still optionally scope Slack to the default profile.
 
 The public `workers.dev` URL is disabled.
 The configured production route is `agent-awesome.com/*`.
@@ -108,7 +136,7 @@ Keep the Slack Events API request URL at:
 https://agent-awesome.com/slack/events
 ----
 
-Send one message from the allow-listed Slack user in the allow-listed channel, then inspect Worker logs:
+Send one message to the installed Slack app, then inspect Worker logs:
 
 [source,sh]
 ----

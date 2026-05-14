@@ -68,6 +68,7 @@ class _ChatComposer extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: IconButton.filled(
+                  key: const ValueKey<String>('chat-thread-send-button'),
                   style: IconButton.styleFrom(
                     backgroundColor: colors.green,
                     foregroundColor: Colors.white,

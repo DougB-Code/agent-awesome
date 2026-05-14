@@ -37,10 +37,10 @@ void main() {
         defaultModel: 'main',
         url: '',
         models: <ModelConfigModel>[
-          ModelConfigModel(id: 'main', model: 'gpt-5.4-mini'),
+          ModelConfigModel(id: 'main', model: 'gpt-5-mini'),
         ],
       ),
-      model: const ModelConfigModel(id: 'main', model: 'gpt-5.4-mini'),
+      model: const ModelConfigModel(id: 'main', model: 'gpt-5-mini'),
     );
 
     expect(capabilities.nativeFileParts, isTrue);

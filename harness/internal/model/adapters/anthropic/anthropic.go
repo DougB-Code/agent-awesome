@@ -150,7 +150,13 @@ func (m *anthropicModel) generate(ctx context.Context, req *llmapi.LLMRequest) (
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, adapter.NewProviderError(m.provider, body.Model, resp.StatusCode, resp.Status)
+		return nil, adapter.NewProviderErrorWithDetail(
+			m.provider,
+			body.Model,
+			resp.StatusCode,
+			resp.Status,
+			adapter.ProviderErrorDetail(respBody),
+		)
 	}
 
 	var decoded anthropicResponse

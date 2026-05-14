@@ -63,7 +63,7 @@ providers:
     url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
   xai:
     adapter: openai
     auth: required

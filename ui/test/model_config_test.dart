@@ -18,9 +18,9 @@ providers:
     url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
       - id: gpt-nano
-        model: gpt-5.4-nano
+        model: gpt-5-nano
   cloudflare:
     name: Cloudflare
     adapter: openai
@@ -41,7 +41,7 @@ providers:
     ]);
     expect(document.providers.first.name, 'OpenAI');
     expect(document.providers.last.displayName, 'Cloudflare');
-    expect(document.providers.first.models.last.model, 'gpt-5.4-nano');
+    expect(document.providers.first.models.last.model, 'gpt-5-nano');
     expect(document.providers.last.models.single.extra['capabilities'], {
       'streaming': true,
     });
@@ -59,7 +59,7 @@ providers:
     url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
         capabilities:
           streaming: true
 ''');
@@ -71,7 +71,7 @@ providers:
           defaultModel: 'gpt-nano',
           models: <ModelConfigModel>[
             ...provider.models,
-            const ModelConfigModel(id: 'gpt-nano', model: 'gpt-5.4-nano'),
+            const ModelConfigModel(id: 'gpt-nano', model: 'gpt-5-nano'),
           ],
         ),
       ],
@@ -82,11 +82,11 @@ providers:
     expect(encoded, contains('name: OpenAI'));
     expect(
       encoded,
-      contains('      - id: gpt-mini\n        model: gpt-5.4-mini'),
+      contains('      - id: gpt-mini\n        model: gpt-5-mini'),
     );
     expect(
       encoded,
-      contains('      - id: gpt-nano\n        model: gpt-5.4-nano'),
+      contains('      - id: gpt-nano\n        model: gpt-5-nano'),
     );
     expect(encoded, isNot(contains('      -\n        id:')));
     expect(encoded, contains('id: gpt-nano'));
@@ -103,9 +103,9 @@ providers:
     default: gpt-mini
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
       - id: gpt-mini
-        model: gpt-5.4-nano
+        model: gpt-5-nano
 ''');
 
     expect(
@@ -124,7 +124,7 @@ providers:
     default: gpt-mini
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
 ''');
 
     expect(displayName, 'OpenAI');
@@ -139,7 +139,7 @@ providers:
     default: gpt-mini
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
 ''');
 
     expect(document.providers.single.id, 'openai');
@@ -166,7 +166,7 @@ providers:
     default: gpt-mini
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
 ''');
     final provider = newModelProviderConfig('provider');
     final next = document.copyWith(
@@ -188,7 +188,7 @@ providers:
     default: gpt-mini
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
   cloudflare:
     name: Cloudflare
     adapter: openai
@@ -235,9 +235,9 @@ providers:
     default: gpt-mini
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
       - id: gpt-nano
-        model: gpt-5.4-nano
+        model: gpt-5-nano
 ''');
 
     expect(choices.map((choice) => choice.ref), <String>[

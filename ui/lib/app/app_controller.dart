@@ -548,6 +548,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       }
       await _refreshConfigCollections();
       _configureClientsForRuntimeProfile(runtimeProfile!);
+      await _completeSetupFromExternalGatewayIfConfigured();
       final restoredLocalModel = await _restoreLocalModelIfAvailable(
         allowDefaultModel:
             !appSettings.gettingStartedCompleted || !hasConfiguredModel,
@@ -611,6 +612,19 @@ class AgentAwesomeAppController extends ChangeNotifier {
     await _startRuntimeServicesAndLoadData();
     _initialized = true;
     await _log('initialize complete');
+  }
+
+  /// Completes first-run setup when a cloud gateway owns model configuration.
+  Future<void> _completeSetupFromExternalGatewayIfConfigured() async {
+    final profile = runtimeProfile;
+    if (profile == null ||
+        appSettings.gettingStartedCompleted ||
+        !_externalGatewayModelConfigured(profile)) {
+      return;
+    }
+    appSettings = appSettings.copyWith(gettingStartedCompleted: true);
+    await appSettingsStore.save(appSettings);
+    await _log('completed setup from external gateway model metadata');
   }
 
   /// Starts model-backed services and loads data after setup is complete.
@@ -1050,6 +1064,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
     if (profile == null) {
       return false;
     }
+    if (_externalGatewayModelConfigured(profile)) {
+      return true;
+    }
     final modelConfigPath = profile.harness.modelConfigPath.trim();
     if (modelConfigPath.isEmpty) {
       return false;
@@ -1060,6 +1077,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
       }
     }
     return false;
+  }
+
+  /// Reports whether an external gateway owns the active model selection.
+  bool _externalGatewayModelConfigured(RuntimeProfile profile) {
+    final gateway = profile.gateway;
+    return gateway.enabled &&
+        !gateway.autoStart &&
+        gateway.modelProviderId.trim().isNotEmpty &&
+        gateway.modelId.trim().isNotEmpty;
   }
 
   /// Returns whether the UI should allow user-initiated chat entry points.

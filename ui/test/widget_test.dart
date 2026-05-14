@@ -342,7 +342,7 @@ void main() {
             providerId: 'openai',
             providerName: 'openai',
             modelId: 'gpt-mini',
-            modelName: 'gpt-5.4-mini',
+            modelName: 'gpt-5-mini',
             isDefault: true,
           ),
         ],
@@ -691,7 +691,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Chat model'), findsOneWidget);
-    expect(find.text('OpenAI / gpt-5.4-mini - GPT-5.4 Mini'), findsOneWidget);
+    expect(find.text('OpenAI / gpt-5-mini - GPT-5 Mini'), findsOneWidget);
     expect(find.text('Memory'), findsWidgets);
     expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Personal'), findsWidgets);
@@ -1481,8 +1481,8 @@ AgentAwesomeAppController _readyController({AgentFileImporter? fileImporter}) {
         ModelConfigChoice(
           providerId: 'openai',
           providerName: 'OpenAI',
-          modelId: 'gpt-5.4-mini',
-          modelName: 'GPT-5.4 Mini',
+          modelId: 'gpt-5-mini',
+          modelName: 'GPT-5 Mini',
           isDefault: true,
         ),
       ],

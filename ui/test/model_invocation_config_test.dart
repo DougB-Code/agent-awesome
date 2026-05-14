@@ -17,7 +17,7 @@ providers:
     base_url: https://example.test/v1/
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
 ''';
 
     final config = resolveModelInvocationConfig(
@@ -30,7 +30,7 @@ providers:
     expect(config.adapter, 'openai');
     expect(config.url, 'https://example.test/v1/chat/completions');
     expect(config.apiKey, 'test-key');
-    expect(config.model, 'gpt-5.4-mini');
+    expect(config.model, 'gpt-5-mini');
   });
 
   test('keeps explicit unknown model refs as direct wire models', () async {
@@ -43,7 +43,7 @@ providers:
     url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
 ''';
 
     final config = resolveModelInvocationConfig(
@@ -81,7 +81,7 @@ providers:
   });
 
   test('detects completion token limit models', () {
-    expect(usesCompletionTokenLimit('gpt-5.4-mini'), isTrue);
+    expect(usesCompletionTokenLimit('gpt-5-mini'), isTrue);
     expect(usesCompletionTokenLimit('o4-mini'), isTrue);
     expect(usesCompletionTokenLimit('gpt-4o'), isFalse);
   });

@@ -422,19 +422,22 @@ func TestSlackEnvUsesPlainSlackNames(t *testing.T) {
 	}
 }
 
-// TestSlackRequiresAllowLists verifies beta Slack ingress cannot start broadly scoped.
-func TestSlackRequiresAllowLists(t *testing.T) {
+// TestSlackAllowsWorkspaceScopedEvents verifies Slack can trust signed workspace installs.
+func TestSlackAllowsWorkspaceScopedEvents(t *testing.T) {
 	clearGatewayAuthEnv(t)
-	_, err := FromFlags([]string{
+	cfg, err := FromFlags([]string{
 		"--slack-enabled",
 		"--slack-signing-secret", "secret",
 		"--slack-bot-token", "xoxb-test",
 	})
-	if err == nil {
-		t.Fatalf("FromFlags() error = nil, want Slack allow-list validation error")
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	if !cfg.Slack.Enabled {
+		t.Fatalf("Slack enabled = false, want true")
 	}
 
-	cfg, err := FromFlags([]string{
+	cfg, err = FromFlags([]string{
 		"--slack-enabled",
 		"--slack-signing-secret", "secret",
 		"--slack-bot-token", "xoxb-test",

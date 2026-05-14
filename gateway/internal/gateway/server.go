@@ -403,6 +403,9 @@ func (s *Server) apiHandler(w http.ResponseWriter, r *http.Request) {
 		writePolicyError(w, err)
 		return
 	}
+	if !s.profileMemoryDomainsReady(w, exec.Profile) {
+		return
+	}
 	s.apiProxyForProfile(exec.Profile.ID).ServeHTTP(w, requestWithExecutionContext(r, exec))
 }
 
@@ -1114,6 +1117,41 @@ func (s *Server) memoryDomainReady(w http.ResponseWriter, domainID string) bool 
 	return false
 }
 
+// profileMemoryDomainsReady reports whether a profile's memory dependencies are usable.
+func (s *Server) profileMemoryDomainsReady(w http.ResponseWriter, profile config.AgentProfile) bool {
+	for _, domainID := range profileMemoryDomainIDs(profile) {
+		if !s.memoryDomainReady(w, domainID) {
+			return false
+		}
+	}
+	return true
+}
+
+// profileMemoryDomainIDs returns the profile domain set needed by one agent turn.
+func profileMemoryDomainIDs(profile config.AgentProfile) []string {
+	seen := make(map[string]struct{})
+	var ids []string
+	add := func(domainID string) {
+		domainID = strings.TrimSpace(domainID)
+		if domainID == "" {
+			return
+		}
+		if _, ok := seen[domainID]; ok {
+			return
+		}
+		seen[domainID] = struct{}{}
+		ids = append(ids, domainID)
+	}
+	for _, domainID := range profile.ReadDomains {
+		add(domainID)
+	}
+	for _, domainID := range profile.WriteDomains {
+		add(domainID)
+	}
+	add(profile.DefaultWriteDomain)
+	return ids
+}
+
 // requireServiceReady blocks proxied routes until their dependency is ready.
 func (s *Server) requireServiceReady(serviceName string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -1182,7 +1220,7 @@ func (s *Server) readiness() readinessView {
 
 // slackConfig maps gateway config into the Slack adapter config.
 func slackConfig(cfg config.Config) slack.Config {
-	return slack.Config{
+	slackCfg := slack.Config{
 		Enabled:          cfg.Slack.Enabled,
 		SocketMode:       cfg.Slack.SocketMode,
 		SigningSecret:    cfg.Slack.SigningSecret,
@@ -1198,6 +1236,12 @@ func slackConfig(cfg config.Config) slack.Config {
 		ProfileBindings:  slackProfileBindings(cfg.AgentProfiles),
 		RequestTimeout:   cfg.RequestTimeout,
 	}
+	if profile, ok := cfg.DefaultProfile(); ok {
+		slackCfg.DefaultProfileID = profile.ID
+		slackCfg.AppName = profile.AppName
+		slackCfg.AgentUserID = profile.UserID
+	}
+	return slackCfg
 }
 
 // slackProfileBindings maps gateway profile config into Slack adapter config.

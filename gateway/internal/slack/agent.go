@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"agentgateway/internal/adk"
 	"agentgateway/internal/policy"
@@ -19,8 +20,10 @@ import (
 const confirmationFunctionName = "adk_request_confirmation"
 const agentSessionErrorBodyLimit int64 = 1024
 const agentRunErrorBodyLimit int64 = 2048
+const agentDependencyRetryDelay = 500 * time.Millisecond
 
 var errSlackConfirmationUnsupported = errors.New("slack tool confirmation is unsupported")
+var errAgentDependencyNotReady = errors.New("agent dependency not ready")
 
 // AgentClient forwards normalized Slack text into the gateway REST API.
 type AgentClient struct {
@@ -81,6 +84,13 @@ func NewAgentClientWithPolicyAndHeaders(client *http.Client, baseURL string, app
 
 // EnsureSession creates a session when the Slack thread has not been seen yet.
 func (c *AgentClient) EnsureSession(ctx context.Context, sessionID string) error {
+	return retryAgentDependency(ctx, func() error {
+		return c.ensureSessionOnce(ctx, sessionID)
+	})
+}
+
+// ensureSessionOnce performs one session lookup/create attempt.
+func (c *AgentClient) ensureSessionOnce(ctx context.Context, sessionID string) error {
 	exists, err := c.sessionExists(ctx, sessionID)
 	if err != nil {
 		return err
@@ -113,6 +123,17 @@ func (c *AgentClient) EnsureSession(ctx context.Context, sessionID string) error
 
 // RunText sends one message to the agent and returns final assistant text.
 func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string) (string, error) {
+	var reply string
+	err := retryAgentDependency(ctx, func() error {
+		var err error
+		reply, err = c.runTextOnce(ctx, sessionID, text)
+		return err
+	})
+	return reply, err
+}
+
+// runTextOnce sends one agent turn without retrying gateway readiness.
+func (c *AgentClient) runTextOnce(ctx context.Context, sessionID string, text string) (string, error) {
 	body, err := c.runBody(sessionID, text)
 	if err != nil {
 		return "", err
@@ -158,6 +179,10 @@ func (c *AgentClient) sessionExists(ctx context.Context, sessionID string) (bool
 		if strings.Contains(strings.ToLower(string(data)), "not found") {
 			return false, nil
 		}
+		return false, agentStatusError("get agent session", resp.StatusCode, string(data))
+	}
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, agentSessionErrorBodyLimit))
 		return false, agentStatusError("get agent session", resp.StatusCode, string(data))
 	}
 	return false, fmt.Errorf("get agent session: HTTP %d", resp.StatusCode)
@@ -251,10 +276,39 @@ func agentResponseError(operation string, resp *http.Response, limit int64) erro
 // agentStatusError formats one assistant HTTP status without leaking unlimited body data.
 func agentStatusError(operation string, statusCode int, body string) error {
 	detail := strings.TrimSpace(body)
+	if statusCode == http.StatusServiceUnavailable && isAgentDependencyNotReadyBody(detail) {
+		if detail == "" {
+			return fmt.Errorf("%s: %w: HTTP %d", operation, errAgentDependencyNotReady, statusCode)
+		}
+		return fmt.Errorf("%s: %w: HTTP %d %s", operation, errAgentDependencyNotReady, statusCode, detail)
+	}
 	if detail == "" {
 		return fmt.Errorf("%s: HTTP %d", operation, statusCode)
 	}
 	return fmt.Errorf("%s: HTTP %d %s", operation, statusCode, detail)
+}
+
+// isAgentDependencyNotReadyBody recognizes gateway readiness responses.
+func isAgentDependencyNotReadyBody(body string) bool {
+	body = strings.ToLower(body)
+	return strings.Contains(body, "dependency not ready")
+}
+
+// retryAgentDependency waits through transient gateway dependency startup.
+func retryAgentDependency(ctx context.Context, operation func() error) error {
+	for {
+		err := operation()
+		if !errors.Is(err, errAgentDependencyNotReady) {
+			return err
+		}
+		timer := time.NewTimer(agentDependencyRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // decodeAgentEvent returns display text from one assistant event payload.

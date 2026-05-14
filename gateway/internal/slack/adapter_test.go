@@ -359,6 +359,21 @@ func TestNewAdapterRoutesAgentTurnsThroughGateway(t *testing.T) {
 	}
 }
 
+// TestNewAdapterRoutesLegacySlackThroughDefaultProfile verifies single-channel Slack still selects a gateway profile.
+func TestNewAdapterRoutesLegacySlackThroughDefaultProfile(t *testing.T) {
+	adapter := NewAdapter(Config{
+		GatewayBaseURL:   "http://gateway.test/api",
+		GatewayAuthToken: "secret",
+		DefaultProfileID: "doug",
+		AppName:          "app",
+		AgentUserID:      "doug",
+	})
+
+	if adapter.agent.headers["X-Agent-Awesome-Profile"] != "doug" {
+		t.Fatalf("profile header = %q, want doug", adapter.agent.headers["X-Agent-Awesome-Profile"])
+	}
+}
+
 // TestNewAdapterCreatesProfileAgentClients verifies profile headers reach gateway.
 func TestNewAdapterCreatesProfileAgentClients(t *testing.T) {
 	adapter := NewAdapter(Config{

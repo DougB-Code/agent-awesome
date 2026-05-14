@@ -21,7 +21,7 @@ void main() {
         );
         expect(request.headers['Authorization'], 'Bearer test-key');
         final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'gpt-5.4-mini');
+        expect(body['model'], 'gpt-5-mini');
         expect(body['max_completion_tokens'], 24);
         expect(body.containsKey('max_tokens'), isFalse);
         expect(jsonEncode(body['messages']), contains('Need to buy coffee'));
@@ -60,7 +60,7 @@ void main() {
       environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
       httpClient: MockClient((request) async {
         final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'gpt-5.4-nano');
+        expect(body['model'], 'gpt-5-nano');
         expect(body['max_completion_tokens'], 24);
         expect(body.containsKey('max_tokens'), isFalse);
         return http.Response(
@@ -186,9 +186,9 @@ providers:
     url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
       - id: gpt-nano
-        model: gpt-5.4-nano
+        model: gpt-5-nano
 ''';
 
 final DateTime _testTime = DateTime(2026, 4, 30, 12);

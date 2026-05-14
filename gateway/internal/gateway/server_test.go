@@ -106,6 +106,9 @@ func TestSlackConfigRoutesThroughGateway(t *testing.T) {
 	if slackCfg.GatewayAuthToken != "secret" {
 		t.Fatalf("GatewayAuthToken = %q, want gateway auth token", slackCfg.GatewayAuthToken)
 	}
+	if slackCfg.DefaultProfileID != "test" {
+		t.Fatalf("DefaultProfileID = %q, want test", slackCfg.DefaultProfileID)
+	}
 }
 
 // TestStatusRequiresBearerToken verifies optional personal cloud auth.
@@ -302,6 +305,42 @@ func TestAPIProxyWaitsForHarnessReadiness(t *testing.T) {
 	}
 	if !strings.Contains(recorder.Body.String(), "dependency not ready") {
 		t.Fatalf("body = %q, want dependency readiness error", recorder.Body.String())
+	}
+}
+
+// TestAPIProxyWaitsForProfileMemoryReadiness verifies cold agent turns wait for memory.
+func TestAPIProxyWaitsForProfileMemoryReadiness(t *testing.T) {
+	upstreamCalled := false
+	harness := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer harness.Close()
+	manager := supervisor.New(0)
+	manager.Expect(supervisor.Service{Name: "memory-memory", HealthURL: "http://127.0.0.1:2/healthz"})
+	server := newTestServer(t, manager, func(cfg *config.Config) {
+		cfg.HarnessBaseURL = harness.URL + "/api"
+		cfg.MemoryServices = []config.MemoryDomainService{
+			{
+				DomainID:  "memory",
+				Name:      "memory-memory",
+				HealthURL: "http://127.0.0.1:2/healthz",
+			},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/run_sse", strings.NewReader(`{}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", recorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("harness upstream was called before profile memory readiness")
+	}
+	if !strings.Contains(recorder.Body.String(), "memory domain dependency not ready") {
+		t.Fatalf("body = %q, want memory readiness error", recorder.Body.String())
 	}
 }
 

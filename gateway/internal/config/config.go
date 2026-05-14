@@ -662,7 +662,6 @@ func (c Config) validateAgentProfiles() error {
 		domainIDs[strings.TrimSpace(domain.ID)] = struct{}{}
 	}
 	seen := map[string]struct{}{}
-	hasSlackBindings := false
 	for _, profile := range c.AgentProfiles {
 		id := strings.TrimSpace(profile.ID)
 		if !isSafeID(id) {
@@ -690,15 +689,9 @@ func (c Config) validateAgentProfiles() error {
 		if err := validateMemoryPolicy(profile.MemoryPolicy(), domainIDs); err != nil {
 			return fmt.Errorf("agent profile %q: %w", id, err)
 		}
-		if len(profile.SlackBindings) > 0 {
-			hasSlackBindings = true
-		}
 		if err := validateSlackBindings(profile.ID, profile.SlackBindings); err != nil {
 			return err
 		}
-	}
-	if c.Slack.Enabled && !hasSlackBindings && !c.Slack.hasCompleteLegacyAllowList() {
-		return fmt.Errorf("slack profile binding or legacy allow-list is required when Slack is enabled")
 	}
 	return nil
 }

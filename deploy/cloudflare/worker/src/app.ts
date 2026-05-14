@@ -42,9 +42,10 @@ export interface Env {
   OPENAI_API_KEY?: string;
 }
 
-/** RouteDependencies injects the container fetcher for production and tests. */
+/** RouteDependencies injects edge runtime hooks for production and tests. */
 export interface RouteDependencies<TEnv extends Env> {
   fetchGateway(request: Request, env: TEnv): Promise<Response>;
+  waitUntil?(promise: Promise<unknown>): void;
 }
 
 /** buildContainerEnv maps Worker vars and secrets into process env variables. */
@@ -70,12 +71,12 @@ export function buildContainerEnv(env: Env): Record<string, string> {
       env.AGENTAWESOME_MEMORY_SNAPSHOT_URL ??
       "https://agent-awesome.com/internal/context-snapshot",
     AGENTAWESOME_MODEL_PROVIDER_ID: env.AGENTAWESOME_MODEL_PROVIDER_ID ?? "openai",
-    AGENTAWESOME_MODEL_ID: env.AGENTAWESOME_MODEL_ID ?? "gpt-mini",
+    AGENTAWESOME_MODEL_ID: env.AGENTAWESOME_MODEL_ID ?? "gpt-5.4-mini",
     AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT:
       env.AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT ?? "10m",
     AGENTAWESOME_SERVICE_START_TIMEOUT:
       env.AGENTAWESOME_SERVICE_START_TIMEOUT ?? "45s",
-    SLACK_ENABLED: env.SLACK_ENABLED ?? "true",
+    SLACK_ENABLED: env.SLACK_ENABLED ?? "false",
     SLACK_SOCKET_MODE: env.SLACK_SOCKET_MODE ?? "false",
     SLACK_SIGNING_SECRET: env.SLACK_SIGNING_SECRET ?? "",
     SLACK_BOT_TOKEN: env.SLACK_BOT_TOKEN ?? "",
@@ -114,7 +115,19 @@ export async function routeRequest<TEnv extends Env>(
     return new Response("Not found\n", { status: 404 });
   }
   console.log("Slack request verified by Worker");
-  return dependencies.fetchGateway(rebuildRequest(request, signedBody.body), env);
+  const challenge = slackURLVerificationChallenge(signedBody.body);
+  if (challenge !== null) {
+    return new Response(challenge, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+      status: 200,
+    });
+  }
+  const slackRequest = rebuildRequest(request, signedBody.body);
+  if (dependencies.waitUntil !== undefined) {
+    dependencies.waitUntil(forwardSlackRequest(slackRequest, env, dependencies));
+    return new Response("OK\n", { status: 200 });
+  }
+  return dependencies.fetchGateway(slackRequest, env);
 }
 
 /** isHealthRequest reports whether the request targets public liveness. */
@@ -410,6 +423,50 @@ function rebuildRequest(request: Request, body: ArrayBuffer): Request {
     method: request.method,
     redirect: request.redirect,
   });
+}
+
+/** slackURLVerificationChallenge extracts Slack's install-time challenge response. */
+function slackURLVerificationChallenge(body: ArrayBuffer): string | null {
+  try {
+    const payload = JSON.parse(new TextDecoder().decode(body));
+    if (
+      payload !== null &&
+      typeof payload === "object" &&
+      "type" in payload &&
+      payload.type === "url_verification" &&
+      "challenge" in payload &&
+      typeof payload.challenge === "string"
+    ) {
+      return payload.challenge;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** forwardSlackRequest sends a verified Slack request to the container asynchronously. */
+async function forwardSlackRequest<TEnv extends Env>(
+  request: Request,
+  env: TEnv,
+  dependencies: RouteDependencies<TEnv>,
+): Promise<void> {
+  try {
+    const response = await dependencies.fetchGateway(request, env);
+    await response.arrayBuffer();
+    console.log("Slack request forwarded to gateway", {
+      status: response.status,
+      statusText: response.statusText,
+    });
+    if (!response.ok) {
+      console.error("Slack request forwarding failed", {
+        status: response.status,
+        statusText: response.statusText,
+      });
+    }
+  } catch (error) {
+    console.error("Slack request forwarding failed", error);
+  }
 }
 
 /** isFreshSlackTimestamp rejects old signed requests that could be replayed. */

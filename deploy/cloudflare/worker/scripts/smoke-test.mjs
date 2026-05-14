@@ -21,6 +21,7 @@ async function main() {
   mkdirSync(buildDir, { recursive: true });
   assertRequiredDeploymentAssets();
   assertPackageScripts();
+  assertCloudEntrypointModelConfig();
   assertTypeScriptCoverage(parseTSConfig());
   runLocalBin("tsc", ["--noEmit"]);
   runLocalBin("esbuild", [
@@ -64,6 +65,23 @@ function assertRequiredDeploymentAssets() {
   ]) {
     assert.ok(existsSync(path), `${path} must exist`);
   }
+}
+
+/** assertCloudEntrypointModelConfig proves model vars control the harness model file. */
+function assertCloudEntrypointModelConfig() {
+  const source = readFileSync(resolve(workerRoot, "../scripts/entrypoint.sh"), "utf8");
+  assert.ok(
+    source.includes("write_model_config"),
+    "entrypoint must render the runtime model config",
+  );
+  assert.ok(
+    source.includes("AGENTAWESOME_OPENAI_MODEL"),
+    "entrypoint must allow the deployed wire model to be explicit",
+  );
+  assert.ok(
+    source.includes("--model /app/runtime/model.yaml"),
+    "harness processes must use the generated runtime model config",
+  );
 }
 
 /** assertPackageScripts verifies package.json points to shipped check files. */
@@ -166,7 +184,16 @@ function assertContainerConfiguration(config) {
   assert.equal(r2.binding, "CONTEXT_SNAPSHOTS");
   assert.equal(r2.bucket_name, "agent-awesome-beta-context");
   assert.equal(config.vars?.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
-  assert.equal(config.vars?.AGENTAWESOME_MODEL_ID, "gpt-mini");
+  assert.equal(config.vars?.AGENTAWESOME_MODEL_ID, "gpt-5.4-mini");
+  const modelConfig = readFileSync(resolve(workerRoot, "../config/model.yaml"), "utf8");
+  assert.ok(
+    modelConfig.includes("default: openai:gpt-5.4-mini"),
+    "cloud model config default must match Worker model metadata",
+  );
+  assert.ok(
+    modelConfig.includes("model: gpt-5.4-mini"),
+    "cloud model config must target the deployed OpenAI model",
+  );
   assert.ok(config.vars?.AGENTAWESOME_MEMORY_DOMAINS_JSON?.includes('"id":"doug"'));
   assert.ok(config.vars?.AGENTAWESOME_MEMORY_DOMAINS_JSON?.includes('"id":"family"'));
   assert.ok(config.vars?.AGENTAWESOME_MEMORY_POLICY_JSON?.includes('"read_domains":["doug"]'));
@@ -191,7 +218,7 @@ function assertContainerEnvironment(app) {
   assert.equal(mapped.AGENTAWESOME_GATEWAY_TOKEN, "gateway-token");
   assert.equal(mapped.AGENTAWESOME_PERSISTENCE_TOKEN, "persistence-token");
   assert.equal(mapped.AGENTAWESOME_MODEL_PROVIDER_ID, "openai");
-  assert.equal(mapped.AGENTAWESOME_MODEL_ID, "gpt-mini");
+  assert.equal(mapped.AGENTAWESOME_MODEL_ID, "gpt-5.4-mini");
   assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"doug"'));
   assert.ok(mapped.AGENTAWESOME_MEMORY_DOMAINS_JSON.includes('"id":"family"'));
   assert.ok(mapped.AGENTAWESOME_MEMORY_POLICY_JSON.includes('"default_write_domain":"doug"'));
@@ -343,15 +370,47 @@ async function assertSnapshotHeadMetadata(app) {
   assert.deepEqual(keys, ["beta-pilot/memory/project/context-snapshot.tar.gz"]);
 }
 
-/** assertSlackIngressReachesGateway proves only signed Slack events are forwarded. */
+/** assertSlackIngressReachesGateway proves signed Slack traffic is acknowledged safely. */
 async function assertSlackIngressReachesGateway(app) {
-  const body = JSON.stringify({
+  const challengeBody = JSON.stringify({
     type: "url_verification",
     challenge: "challenge-token",
   });
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const signature = await slackSignature("slack-secret", timestamp, body);
+  const challengeSignature = await slackSignature("slack-secret", timestamp, challengeBody);
   const recorder = createGatewayRecorder();
+  const challengeResponse = await withMutedWorkerLogs(() =>
+    app.routeRequest(
+      new Request("https://agent-awesome.com/slack/events", {
+        body: challengeBody,
+        headers: {
+          "content-type": "application/json",
+          "x-slack-request-timestamp": timestamp,
+          "x-slack-signature": challengeSignature,
+        },
+        method: "POST",
+      }),
+      createEnv(),
+      recorder.dependencies,
+    ),
+  );
+  assert.equal(challengeResponse.status, 200);
+  assert.equal(await challengeResponse.text(), "challenge-token");
+  assert.equal(recorder.calls.length, 0);
+
+  const body = JSON.stringify({
+    type: "event_callback",
+    team_id: "T1",
+    event_id: "Ev1",
+    event: {
+      type: "app_mention",
+      channel: "C1",
+      user: "U1",
+      text: "create a task",
+    },
+  });
+  const signature = await slackSignature("slack-secret", timestamp, body);
+  const asyncRecorder = createGatewayRecorder({ responseDelayMS: 25 });
   const response = await withMutedWorkerLogs(() =>
     app.routeRequest(
       new Request("https://agent-awesome.com/slack/events", {
@@ -364,13 +423,17 @@ async function assertSlackIngressReachesGateway(app) {
         method: "POST",
       }),
       createEnv(),
-      recorder.dependencies,
+      asyncRecorder.dependencies,
     ),
   );
   assert.equal(response.status, 200);
-  assert.equal(recorder.calls.length, 1);
-  assert.equal(recorder.calls[0].pathname, "/slack/events");
-  assert.equal(recorder.calls[0].body, body);
+  assert.equal(await response.text(), "OK\n");
+  assert.equal(asyncRecorder.calls.length, 0);
+  assert.equal(asyncRecorder.waitUntilPromises.length, 1);
+  await Promise.all(asyncRecorder.waitUntilPromises);
+  assert.equal(asyncRecorder.calls.length, 1);
+  assert.equal(asyncRecorder.calls[0].pathname, "/slack/events");
+  assert.equal(asyncRecorder.calls[0].body, body);
 
   const rejected = createGatewayRecorder();
   const rejectedResponse = await withMutedWorkerLogs(() =>
@@ -406,12 +469,17 @@ async function withMutedWorkerLogs(fn) {
 }
 
 /** createGatewayRecorder captures requests that would be sent to the container. */
-function createGatewayRecorder() {
+function createGatewayRecorder(options = {}) {
   const calls = [];
+  const waitUntilPromises = [];
   return {
     calls,
+    waitUntilPromises,
     dependencies: {
       async fetchGateway(request) {
+        if (options.responseDelayMS !== undefined) {
+          await sleep(options.responseDelayMS);
+        }
         const clone = request.clone();
         calls.push({
           body: await clone.text(),
@@ -420,8 +488,18 @@ function createGatewayRecorder() {
         });
         return new Response("gateway ok\n", { status: 200 });
       },
+      waitUntil(promise) {
+        waitUntilPromises.push(promise);
+      },
     },
   };
+}
+
+/** sleep pauses smoke checks long enough to prove asynchronous ACK behavior. */
+function sleep(milliseconds) {
+  return new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, milliseconds);
+  });
 }
 
 /** createEnv returns the minimum Worker environment needed by smoke checks. */
@@ -429,6 +507,7 @@ function createEnv(overrides = {}) {
   return {
     AGENTAWESOME_GATEWAY_TOKEN: "gateway-token",
     AGENTAWESOME_PERSISTENCE_TOKEN: "persistence-token",
+    SLACK_ENABLED: "true",
     SLACK_SIGNING_SECRET: "slack-secret",
     SLACK_ALLOWED_TEAM_ID: "T1",
     SLACK_ALLOWED_USER_ID: "U1",

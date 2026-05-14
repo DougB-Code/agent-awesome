@@ -103,17 +103,16 @@ SLACK_ENABLED=true \
 SLACK_SOCKET_MODE=true \
 SLACK_APP_TOKEN=xapp-... \
 SLACK_BOT_TOKEN=xoxb-... \
-SLACK_ALLOWED_TEAM_ID=T... \
-SLACK_ALLOWED_USER_ID=U... \
-SLACK_ALLOWED_CHANNEL_ID=C... \
 go run ./cmd/agent-gateway
 ```
 
 The Slack app needs Socket Mode enabled, an app-level token with
 `connections:write`, a bot token with `chat:write`, and message event
 subscriptions such as `message.channels` for channel pilots. Slack startup
-requires either a complete team/user/channel allow-list for the default profile
-or profile-specific `slack_bindings` inside `AGENTAWESOME_AGENT_PROFILES_JSON`.
+trusts Slack-signed events from the installed app by default. Add a complete
+team/user/channel allow-list for the default profile, or profile-specific
+`slack_bindings` inside `AGENTAWESOME_AGENT_PROFILES_JSON`, when you need
+narrower routing.
 Use profile bindings when one gateway serves more than one profile; the adapter
 selects the profile before it calls `/api/*`.
 

@@ -58,7 +58,10 @@ async function fetchPilotContainer(
 
 export default {
   /** fetch handles Worker HTTP requests and delegates service routes to the container. */
-  fetch(request: Request, env: Env): Promise<Response> {
-    return routeRequest(request, env, { fetchGateway: fetchPilotContainer });
+  fetch(request: Request, env: Env, context: ExecutionContext): Promise<Response> {
+    return routeRequest(request, env, {
+      fetchGateway: fetchPilotContainer,
+      waitUntil: context.waitUntil.bind(context),
+    });
   },
 } satisfies ExportedHandler<Env>;

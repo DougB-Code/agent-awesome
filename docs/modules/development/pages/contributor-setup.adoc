@@ -237,6 +237,53 @@ Flutter writes the bundle to:
 ui/build/linux/x64/release/bundle
 ----
 
+== Check Release E2E
+
+The release E2E suite builds the Cloudflare release container, starts a mock
+OpenAI-compatible provider, launches the rendered Flutter desktop UI, and drives
+chat plus task-creation requests through the UI.
+It writes logs and request captures under `build/e2e`.
+
+Install the Linux desktop and headless display packages used by CI:
+
+[source,sh]
+----
+sudo apt-get update
+sudo apt-get install -y clang cmake libgtk-3-dev liblzma-dev ninja-build pkg-config xvfb
+----
+
+Make sure Docker is running and the current user can run `docker` without an
+interactive sudo prompt.
+If Flutter Linux desktop support is not already enabled, enable it once:
+
+[source,sh]
+----
+flutter config --enable-linux-desktop
+flutter doctor
+----
+
+Run the suite from the repository root:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+./e2e/run-release-e2e.sh
+----
+
+When `DISPLAY` is set, the suite uses the current desktop display.
+On headless Linux, installing `xvfb` is enough; the script detects `xvfb-run`
+and wraps `flutter drive` in `xvfb-run -a`.
+If neither `DISPLAY` nor `xvfb-run` is available, the script exits before the
+expensive builds and prints:
+
+[source,text]
+----
+DISPLAY is not set and xvfb-run is unavailable; install Xvfb or run from a desktop session.
+----
+
+CI installs the same Xvfb and Linux desktop build dependencies before running
+the `release-e2e` job.
+
 == Build Local Binaries
 
 Create local binaries under `build/package/bin`:

@@ -15,6 +15,7 @@ type Config struct {
 	AllowedChannelID        string
 	GatewayBaseURL          string
 	GatewayAuthToken        string
+	DefaultProfileID        string
 	AppName                 string
 	AgentUserID             string
 	ProfileBindings         []ProfileBinding

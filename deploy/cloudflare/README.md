@@ -32,9 +32,48 @@ container.
 - `worker/wrangler.jsonc` declares the Container, Durable Object binding,
   observability, non-secret vars, and required secrets.
 
+The checked-in cloud model config defaults to OpenAI `gpt-5.4-mini`. If you
+switch the beta container model, set `AGENTAWESOME_MODEL_ID` in
+`worker/wrangler.jsonc` and confirm that the deployed `OPENAI_API_KEY` has
+access to that model before deploying. The container renders
+`/app/runtime/model.yaml` from these Worker vars on startup and logs the actual
+provider/model pair.
+
+For isolated release tests, set `AGENTAWESOME_OPENAI_CHAT_COMPLETIONS_URL` to an
+OpenAI-compatible mock endpoint. Production deployments should leave it unset so
+the container uses `https://api.openai.com/v1/chat/completions`.
+
 ## Deploy
 
 Use Node.js `22` or newer for Wrangler.
+
+## Local Container Check
+
+Build and run the Cloudflare container locally before deploying:
+
+```sh
+docker build --file Dockerfile.cloudflare --tag agent-awesome-cloudflare:debug .
+docker run --rm -d \
+  --name agent-awesome-cloudflare-debug \
+  -p 8070:8070 \
+  -e AGENTAWESOME_GATEWAY_TOKEN=test \
+  -e AGENTAWESOME_PERSISTENCE_TOKEN=test \
+  -e OPENAI_API_KEY="${OPENAI_API_KEY:-test}" \
+  -e SLACK_ENABLED=false \
+  agent-awesome-cloudflare:debug
+curl -fsS http://127.0.0.1:8070/healthz
+curl -fsS \
+  -H "Authorization: Bearer test" \
+  http://127.0.0.1:8070/api/gateway/beta-status
+docker stop agent-awesome-cloudflare-debug
+```
+
+The automated release E2E suite builds this image, runs it against a mock LLM
+provider, launches the Flutter desktop UI, and verifies a chat round trip:
+
+```sh
+./e2e/run-release-e2e.sh
+```
 
 Run these commands from `deploy/cloudflare/worker`:
 
@@ -44,8 +83,6 @@ npm test
 npx wrangler r2 bucket create agent-awesome-beta-context
 npx wrangler secret put AGENTAWESOME_GATEWAY_TOKEN
 npx wrangler secret put AGENTAWESOME_PERSISTENCE_TOKEN
-npx wrangler secret put SLACK_SIGNING_SECRET
-npx wrangler secret put SLACK_BOT_TOKEN
 npx wrangler secret put OPENAI_API_KEY
 npx wrangler deploy
 ```
@@ -55,19 +92,23 @@ The R2 bucket command requires a Cloudflare API token or OAuth session with
 temporary token with that permission, export it for the command, then unset it.
 
 After the first deployment, wait for the container application to finish
-provisioning, then set the Slack app Event Request URL to:
+provisioning. When Slack is enabled, set the Slack app Event Request URL to:
 
 ```text
 https://agent-awesome.com/slack/events
 ```
 
-Use the same Slack bot token and signing secret you tested locally. Do not set
-`SLACK_APP_TOKEN` for this deployment unless you deliberately switch the cloud
-config back to Socket Mode.
+Use the same Slack bot token and signing secret you tested locally. Upload
+`SLACK_SIGNING_SECRET` and `SLACK_BOT_TOKEN` before setting `SLACK_ENABLED=true`.
+Do not set `SLACK_APP_TOKEN` for this deployment unless you deliberately switch
+the cloud config back to Socket Mode.
 
 The public `workers.dev` URL is disabled. `agent-awesome.com/*` is the configured
-Cloudflare Worker route for the existing domain. The Worker forwards Slack-signed
-Events API requests and bearer-authenticated gateway control-plane requests.
+Cloudflare Worker route for the existing domain. The Worker forwards bearer-authenticated
+gateway control-plane requests. Slack is disabled by default; enabling it trusts
+Slack-signed events from the installed app and routes accepted messages to the
+default `doug` profile. Add profile bindings or legacy allow-list values only
+when you need narrower routing.
 
 ## Desktop UI Check
 

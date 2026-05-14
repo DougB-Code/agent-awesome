@@ -21,7 +21,7 @@ void main() {
         );
         expect(request.headers['Authorization'], 'Bearer test-key');
         final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'gpt-5.4-mini');
+        expect(body['model'], 'gpt-5-mini');
         expect(body['max_completion_tokens'], 1600);
         expect(body.containsKey('max_tokens'), isFalse);
         expect(jsonEncode(body['messages']), contains('Draft schema'));
@@ -74,5 +74,5 @@ providers:
     url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
-        model: gpt-5.4-mini
+        model: gpt-5-mini
 ''';

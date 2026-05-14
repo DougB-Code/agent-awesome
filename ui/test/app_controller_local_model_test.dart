@@ -76,6 +76,63 @@ void main() {
   );
 
   test(
+    'startup completes setup for externally configured gateway profiles',
+    () async {
+      final root = await Directory.systemTemp.createTemp(
+        'agentawesome-controller-external-gateway-',
+      );
+      addTearDown(() async {
+        if (await root.exists()) {
+          await root.delete(recursive: true);
+        }
+      });
+      final profileFile = File('${root.path}/profile.json');
+      await profileFile.writeAsString(
+        encodeRuntimeProfileJson(
+          _runtimeProfile(
+            root.path,
+            modelConfigPath: '${root.path}/external-model.yaml',
+            externalGatewayModel: true,
+          ),
+        ),
+      );
+      final settingsStore = _MemoryAppSettingsStore();
+      final processSupervisor = ProcessSupervisor(
+        logDirectory: '${root.path}/logs',
+        workspaceRoot: root.path,
+      );
+      final localServices = _TrackingLocalServiceSupervisor(
+        config: _testConfig(
+          workspaceRoot: root.path,
+          runtimeProfilePath: profileFile.path,
+        ),
+        processSupervisor: processSupervisor,
+      );
+      final controller = AgentAwesomeAppController(
+        config: _testConfig(
+          workspaceRoot: root.path,
+          runtimeProfilePath: profileFile.path,
+        ),
+        appSettingsStore: settingsStore,
+        localModels: const _MissingLocalModelRuntime(),
+        localServices: localServices,
+        processSupervisor: processSupervisor,
+      );
+      addTearDown(() async {
+        await controller.close();
+      });
+
+      await controller.initialize();
+
+      expect(controller.gettingStartedCompleted, isTrue);
+      expect(settingsStore.saved.gettingStartedCompleted, isTrue);
+      expect(controller.hasConfiguredModel, isTrue);
+      expect(controller.statusMessage, isNot('Model setup required'));
+      expect(localServices.startCount, 1);
+    },
+  );
+
+  test(
     'startup completes setup when the managed local model verifies',
     () async {
       final root = await Directory.systemTemp.createTemp(
@@ -444,7 +501,11 @@ class _TrackingLocalServiceSupervisor extends LocalServiceSupervisor {
   }
 }
 
-RuntimeProfile _runtimeProfile(String root, {required String modelConfigPath}) {
+RuntimeProfile _runtimeProfile(
+  String root, {
+  required String modelConfigPath,
+  bool externalGatewayModel = false,
+}) {
   return RuntimeProfile(
     id: 'personal',
     label: 'Personal',
@@ -475,6 +536,9 @@ RuntimeProfile _runtimeProfile(String root, {required String modelConfigPath}) {
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',
       appName: 'test',
       userId: 'user',
+      profileId: externalGatewayModel ? 'personal' : '',
+      modelProviderId: externalGatewayModel ? 'openai' : '',
+      modelId: externalGatewayModel ? 'gpt-5.4-mini' : '',
       port: 2,
       autoStart: false,
       enabled: true,

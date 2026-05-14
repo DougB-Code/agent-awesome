@@ -31,15 +31,11 @@
 		"AGENTAWESOME_MEMORY_SNAPSHOT_URL": "https://agent-awesome.com/internal/context-snapshot",
 		"AGENTAWESOME_MEMORY_SNAPSHOT_PREFIX": "beta-pilot",
 		"AGENTAWESOME_MODEL_PROVIDER_ID": "openai",
-		"AGENTAWESOME_MODEL_ID": "gpt-mini",
+		"AGENTAWESOME_MODEL_ID": "gpt-5.4-mini",
 		"AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT": "10m",
 		"AGENTAWESOME_SERVICE_START_TIMEOUT": "45s",
 		"SLACK_ENABLED": "true",
-		"SLACK_SOCKET_MODE": "false",
-		// Fill all three Slack allow-list ids before deploying a beta Worker.
-		"SLACK_ALLOWED_TEAM_ID": "",
-		"SLACK_ALLOWED_USER_ID": "",
-		"SLACK_ALLOWED_CHANNEL_ID": ""
+		"SLACK_SOCKET_MODE": "false"
 	},
 	"secrets": {
 		"required": [

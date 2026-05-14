@@ -60,7 +60,7 @@ func NewAdapter(config Config) *Adapter {
 			config.AppName,
 			config.AgentUserID,
 			policy.NewInjector(policy.Config{}),
-			gatewayHeaders(config.GatewayAuthToken, ""),
+			gatewayHeaders(config.GatewayAuthToken, config.DefaultProfileID),
 		),
 		agents:  profileAgentClients(client, config),
 		client:  client,

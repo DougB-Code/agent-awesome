@@ -31,7 +31,7 @@
     "user_id": "family",
     "profile_id": "family",
     "model_provider_id": "openai",
-    "model_id": "gpt-mini",
+    "model_id": "gpt-5.4-mini",
     "port": ${AGENT_GATEWAY_PORT},
     "auto_start": false,
     "enabled": true

@@ -98,6 +98,33 @@ func TestRunTextInjectsConfiguredRuntimePolicy(t *testing.T) {
 	}
 }
 
+// TestRunTextRetriesGatewayDependencyReadiness verifies Slack waits through cold start.
+func TestRunTextRetriesGatewayDependencyReadiness(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts == 1 {
+			http.Error(w, `{"error":"memory domain dependency not ready"}`, http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte("data: {\"author\":\"assistant\",\"content\":{\"parts\":[{\"text\":\"ready\"}]}}\n\n"))
+	}))
+	defer server.Close()
+	client := NewAgentClient(server.Client(), server.URL, "app", "user")
+
+	reply, err := client.RunText(t.Context(), "slack-1", "hello")
+	if err != nil {
+		t.Fatalf("RunText() error = %v", err)
+	}
+	if reply != "ready" {
+		t.Fatalf("reply = %q, want ready", reply)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want one readiness retry", attempts)
+	}
+}
+
 // TestDecodeAgentEventSuppressesLocalToolMarkup keeps leaked tool tokens out of Slack.
 func TestDecodeAgentEventSuppressesLocalToolMarkup(t *testing.T) {
 	text, err := decodeAgentEvent("message", `{"author":"assistant","content":{"parts":[{"text":"<|tool_call>call:tool_call{create_task{title:<|\"|>Buy Milk<|\"|>}}<tool_call|>"}]}}`)

@@ -3,8 +3,10 @@ library;
 
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
+import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/theme.dart';
 import 'package:agentawesome_ui/domain/models.dart';
+import 'package:agentawesome_ui/domain/runtime_profile.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_bar.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_context.dart';
 import 'package:agentawesome_ui/ui/shell/app_sections.dart';
@@ -119,6 +121,37 @@ void main() {
     await tester.pump();
 
     expect(setupOpenCount, 1);
+  });
+
+  testWidgets('hides setup badge for external gateway model metadata', (
+    tester,
+  ) async {
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.runtimeProfilePath = '/tmp/cloudflare_context.json';
+    controller.runtimeProfile = _externalGatewayProfile();
+    controller.availableModelConfigs = const <ConfigFileEntry>[];
+    controller.availableProfiles = const <RuntimeProfileFileEntry>[
+      RuntimeProfileFileEntry(
+        path: '/tmp/cloudflare_context.json',
+        id: 'cloudflare-doug',
+        label: 'Cloudflare Doug',
+        active: true,
+        runtimeKind: 'Cloud',
+        memoryDomainLabels: <String>['Doug Memory'],
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: TextEditingController(),
+        appController: controller,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+      ),
+    );
+
+    expect(controller.hasConfiguredModel, isTrue);
+    expect(find.text('Setup incomplete'), findsNothing);
   });
 
   testWidgets('shows active runtime profile picker in the top bar', (
@@ -479,5 +512,70 @@ AppConfig _testConfig() {
     workspaceRoot: '/tmp/agentawesome-command-bar-test',
     autoStartLocalServices: false,
     runtimeProfilePath: '',
+  );
+}
+
+/// Returns a cloud-style profile whose model is selected by the gateway.
+RuntimeProfile _externalGatewayProfile() {
+  return const RuntimeProfile(
+    id: 'cloudflare-doug',
+    label: 'Cloudflare Doug',
+    harness: HarnessRuntime(
+      id: 'cloudflare-harness',
+      label: 'Cloudflare Harness',
+      apiBaseUrl: 'http://127.0.0.1:18070/api',
+      contextApiBaseUrl: 'http://127.0.0.1:18070/api/context',
+      appName: 'agent_awesome',
+      userId: 'doug',
+      workingDirectory: '/tmp/harness',
+      packagePath: './cmd/agent-awesome',
+      modelConfigPath: '/tmp/external-model.yaml',
+      agentConfigPath: '/tmp/agent.yaml',
+      toolConfigPath: '/tmp/tool.yaml',
+      port: 18070,
+      autoStart: false,
+    ),
+    gateway: GatewayRuntime(
+      id: 'cloudflare-gateway',
+      label: 'Cloudflare Gateway',
+      apiBaseUrl: 'http://127.0.0.1:18070/api',
+      healthUrl: 'http://127.0.0.1:18070/healthz',
+      workingDirectory: '/tmp/gateway',
+      packagePath: './cmd/agent-gateway',
+      harnessBaseUrl: 'http://127.0.0.1:18070/api',
+      contextBaseUrl: 'http://127.0.0.1:18070/api/context',
+      memoryMcpUrl: 'http://127.0.0.1:18070/mcp',
+      appName: 'agent_awesome',
+      userId: 'doug',
+      profileId: 'doug',
+      modelProviderId: 'openai',
+      modelId: 'gpt-5.4-mini',
+      port: 18070,
+      autoStart: false,
+      enabled: true,
+    ),
+    memoryDomains: <McpServerRuntime>[
+      McpServerRuntime(
+        id: 'doug',
+        label: 'Doug Memory',
+        kind: 'memory',
+        endpoint: 'http://127.0.0.1:18070/mcp/doug',
+        healthUrl: 'http://127.0.0.1:18070/healthz',
+        workingDirectory: '',
+        packagePath: '',
+        dbPath: '',
+        dataDir: '',
+        arguments: <String>[],
+        autoStart: false,
+        enabled: true,
+      ),
+    ],
+    agentMemory: AgentMemoryRuntime(
+      actor: 'agent:doug',
+      readDomains: <String>['doug'],
+      writeDomains: <String>['doug'],
+      defaultWriteDomain: 'doug',
+      allowedSensitivities: <String>['public', 'internal', 'private'],
+    ),
   );
 }
