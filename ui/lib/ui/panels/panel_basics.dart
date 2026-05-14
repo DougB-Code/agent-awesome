@@ -15,33 +15,6 @@ class PanelSplit {
   final double max;
 }
 
-/// SectionLayout describes one two-panel app section composition.
-class SectionLayout {
-  /// Creates a section layout with reusable panels.
-  const SectionLayout({
-    required this.split,
-    required this.left,
-    required this.right,
-    this.third,
-    this.outerSplit = const PanelSplit(left: 0.72, min: 0.5, max: 0.86),
-  });
-
-  /// Split ratio configuration.
-  final PanelSplit split;
-
-  /// Left panel widget.
-  final Widget left;
-
-  /// Right panel widget.
-  final Widget right;
-
-  /// Optional third panel shown to the right of the two-panel workspace.
-  final Widget? third;
-
-  /// Split ratio between the two-panel workspace and optional third panel.
-  final PanelSplit outerSplit;
-}
-
 /// PanelCollapseDirection identifies which edge a panel collapses toward.
 enum PanelCollapseDirection {
   /// Collapse toward the left edge.

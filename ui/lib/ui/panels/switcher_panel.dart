@@ -59,26 +59,29 @@ class _SwitcherPanelState extends State<SwitcherPanel> {
   Widget build(BuildContext context) {
     final areas = widget.areas;
     final boundedIndex = _selectedIndex.clamp(0, areas.length - 1);
-    return CollectionSwitcherPanel<SwitcherPanelArea>(
-      title: areas[boundedIndex].title,
-      selectedId: boundedIndex.toString(),
-      items: <CollectionPanelItem<SwitcherPanelArea>>[
-        for (var index = 0; index < areas.length; index++)
-          CollectionPanelItem<SwitcherPanelArea>(
-            id: index.toString(),
-            label: areas[index].title,
-            icon: areas[index].icon,
-            value: areas[index],
-          ),
-      ],
-      onSelect: (id) => _selectArea(int.parse(id)),
-      builder: (area, query) => area.builder(query),
-      titleControl: widget.titleControl,
-      onTitleTap: areas.length > 1 ? _selectNextArea : null,
-      showQuickSelect: widget.showAreaQuickSelect,
-      selectionWidth: 150,
-      filterHint: 'Filter...',
-      filterKeyBuilder: (item) => 'command-panel-filter-${item?.label}',
+    return PanelSurface(
+      clipBehavior: Clip.antiAlias,
+      child: CollectionSwitcherPanel<SwitcherPanelArea>(
+        title: areas[boundedIndex].title,
+        selectedId: boundedIndex.toString(),
+        items: <CollectionPanelItem<SwitcherPanelArea>>[
+          for (var index = 0; index < areas.length; index++)
+            CollectionPanelItem<SwitcherPanelArea>(
+              id: index.toString(),
+              label: areas[index].title,
+              icon: areas[index].icon,
+              value: areas[index],
+            ),
+        ],
+        onSelect: (id) => _selectArea(int.parse(id)),
+        builder: (area, query) => area.builder(query),
+        titleControl: widget.titleControl,
+        onTitleTap: areas.length > 1 ? _selectNextArea : null,
+        showQuickSelect: widget.showAreaQuickSelect,
+        selectionWidth: 150,
+        filterHint: 'Filter...',
+        filterKeyBuilder: (item) => 'command-panel-filter-${item?.label}',
+      ),
     );
   }
 

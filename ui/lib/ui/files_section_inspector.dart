@@ -248,16 +248,8 @@ class _InspectorBlock extends StatelessWidget {
   /// Builds one bordered inspector group.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Container(
-      width: double.infinity,
+    return PanelSectionBlock(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        gradient: context.agentAwesomeCardGradient,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

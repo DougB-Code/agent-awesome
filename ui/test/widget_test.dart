@@ -21,6 +21,7 @@ import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs widget tests for the shell.
@@ -39,6 +40,35 @@ void main() {
     expect(find.text("TODAY'S ATTENTION"), findsOneWidget);
     expect(find.text('RISKS & COVERAGE'), findsOneWidget);
     expect(find.text('Prepare investor meeting brief'), findsNothing);
+  });
+
+  testWidgets('makes Today errors selectable and copyable', (tester) async {
+    const error =
+        'ClientException with SocketException: Connection refused, uri=http://127.0.0.1:8070/api/context/tools/call';
+    var copied = '';
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            final data = call.arguments as Map<dynamic, dynamic>;
+            copied = data['text'] as String? ?? '';
+          }
+          return null;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+    final controller = _readyController()
+      ..todayState = const TodayState(error: error);
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Copy error'));
+
+    expect(find.widgetWithText(SelectableText, error), findsOneWidget);
+    expect(copied, error);
   });
 
   testWidgets('renders populated Today lower sections without overflow', (

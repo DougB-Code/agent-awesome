@@ -3,23 +3,25 @@ part of 'panels.dart';
 
 class PanelSectionBlock extends StatelessWidget {
   /// Creates a compact reusable section block.
-  const PanelSectionBlock({super.key, required this.child});
+  const PanelSectionBlock({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(14),
+  });
 
   /// Content shown inside the block.
   final Widget child;
 
+  /// Inner spacing around the block content.
+  final EdgeInsetsGeometry padding;
+
   /// Builds the shared bordered panel surface.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        gradient: context.agentAwesomeSurfaceGradient,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
+    return PanelSurface(
+      fillWidth: true,
+      padding: padding,
+      style: PanelSurfaceStyle.card,
       child: child,
     );
   }
@@ -107,14 +109,10 @@ class PanelEmptyBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    return Container(
-      width: double.infinity,
+    return PanelSurface(
+      fillWidth: true,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
+      style: PanelSurfaceStyle.card,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(22),

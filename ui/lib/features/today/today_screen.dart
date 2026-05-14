@@ -2,6 +2,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
@@ -195,9 +196,23 @@ class _TodayErrorBanner extends StatelessWidget {
         border: Border.all(color: colors.warningBorder),
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        message,
-        style: TextStyle(color: colors.warningText, fontSize: 13),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: SelectableText(
+              message,
+              style: TextStyle(color: colors.warningText, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Copy error',
+            icon: Icon(Icons.copy, size: 18, color: colors.warningText),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: message));
+            },
+          ),
+        ],
       ),
     );
   }

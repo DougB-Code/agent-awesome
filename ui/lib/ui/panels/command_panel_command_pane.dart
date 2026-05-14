@@ -39,13 +39,7 @@ class _CommandSubShellCommandPane extends StatelessWidget {
         collapseScope: collapseScope!,
       );
     }
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        gradient: context.agentAwesomeSurfaceGradient,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
+    return PanelSurface(
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -35,35 +35,167 @@ const List<({String label, IconData icon, String detail})> _settingsSections =
       ),
     ];
 
-/// SettingsMenuPanel renders the left settings section navigation.
-class SettingsMenuPanel extends StatelessWidget {
-  /// Creates a settings section navigation panel.
-  const SettingsMenuPanel({
+/// SettingsCommandSubShell renders settings in the shared command-panel shell.
+class SettingsCommandSubShell extends StatelessWidget {
+  /// Creates a command-style settings workspace.
+  const SettingsCommandSubShell({
     super.key,
+    required this.controller,
+    required this.selectedSection,
+    required this.onSectionSelected,
+    this.onAreaChanged,
+  });
+
+  /// Shared app controller.
+  final AgentAwesomeAppController controller;
+
+  /// Currently selected settings section.
+  final String selectedSection;
+
+  /// Selects a settings section from the navigation panel.
+  final ValueChanged<String> onSectionSelected;
+
+  /// Reports the active command area to the app shell.
+  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
+
+  /// Builds the settings command panel and selected editor.
+  @override
+  Widget build(BuildContext context) {
+    final selected = _selectedSection();
+    return CommandPanelSubShell(
+      areas: <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          id: 'settings',
+          title: 'Settings',
+          icon: Icons.tune,
+          builder: (query) => _SettingsSectionList(
+            query: query,
+            selected: selected.label,
+            onSelected: onSectionSelected,
+          ),
+        ),
+      ],
+      detailTitle: selected.label,
+      detailModes: const <CommandPanelDetailMode>[],
+      selectedDetailModeId: '',
+      onDetailModeSelected: (_) {},
+      detailBuilder: (_) =>
+          SettingsDetailsPanel(controller: controller, section: selected.label),
+      onAreaChanged: onAreaChanged,
+      filterHint: 'Filter settings...',
+      split: const PanelSplit(left: 0.27, min: 0.22, max: 0.42),
+      showDetailHeader: false,
+    );
+  }
+
+  /// Returns a valid settings section record for the selected label.
+  ({String label, IconData icon, String detail}) _selectedSection() {
+    for (final section in _settingsSections) {
+      if (section.label == selectedSection) {
+        return section;
+      }
+    }
+    return _settingsSections.first;
+  }
+}
+
+/// _SettingsSectionList renders filtered settings section navigation.
+class _SettingsSectionList extends StatelessWidget {
+  const _SettingsSectionList({
+    required this.query,
     required this.selected,
     required this.onSelected,
   });
 
+  final String query;
   final String selected;
   final ValueChanged<String> onSelected;
 
-  /// Builds the settings sub-menu picker.
+  /// Builds the filtered settings section list.
   @override
   Widget build(BuildContext context) {
-    return MenuPanel(
-      title: 'Settings',
-      subtitle: 'App defaults, profiles, models, memory, and tools.',
-      selectedKey: selected,
-      onSelected: onSelected,
-      items: <MenuPanelItem>[
-        for (final section in _settingsSections)
-          MenuPanelItem(
-            key: section.label,
+    final matches = _settingsSections.where((section) {
+      return SettingsQuery.matches(query, <String>[
+        section.label,
+        section.detail,
+      ]);
+    }).toList();
+    if (matches.isEmpty) {
+      return PanelEmptyState(query: query);
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        for (final section in matches)
+          _SettingsSectionTile(
             label: section.label,
             icon: section.icon,
             detail: section.detail,
+            selected: selected == section.label,
+            onTap: () => onSelected(section.label),
           ),
       ],
+    );
+  }
+}
+
+/// _SettingsSectionTile renders one settings section picker row.
+class _SettingsSectionTile extends StatelessWidget {
+  const _SettingsSectionTile({
+    required this.label,
+    required this.icon,
+    required this.detail,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final String detail;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// Builds a compact command-panel navigation tile.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: PanelSurface(
+          fillWidth: true,
+          padding: const EdgeInsets.all(12),
+          style: PanelSurfaceStyle.card,
+          selected: selected,
+          child: Row(
+            children: <Widget>[
+              Icon(icon, color: selected ? colors.green : colors.muted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      label,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.muted),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: colors.muted),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -93,6 +225,7 @@ class SettingsDetailsPanel extends StatelessWidget {
     return _buildSection(profile);
   }
 
+  /// Builds the selected settings editor for a loaded runtime profile.
   Widget _buildSection(RuntimeProfile profile) {
     return switch (section) {
       'App' => _SettingsAppContent(controller: controller, profile: profile),

@@ -151,8 +151,7 @@ class _CollectionSwitcherPanelState<T>
         onCreate: widget.onCreate,
       );
     }
-    return ColoredBox(
-      color: colors.surface,
+    return PanelBodySurface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -408,9 +407,7 @@ class _CollectionCollapsedRail<T> extends StatelessWidget {
   /// Builds the collapsed command-panel rail with vertical quick selectors.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return ColoredBox(
-      color: colors.surface,
+    return PanelBodySurface(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
         child: Column(
@@ -437,12 +434,10 @@ class _CollectionCollapsedRail<T> extends StatelessWidget {
             ),
             if (onCreate != null) ...<Widget>[
               const SizedBox(height: 10),
-              Tooltip(
-                message: 'Add',
-                child: IconButton.outlined(
-                  onPressed: onCreate,
-                  icon: const Icon(Icons.add, size: 18),
-                ),
+              PanelIconButton(
+                icon: Icons.add,
+                tooltip: 'Add',
+                onPressed: onCreate,
               ),
             ],
           ],
@@ -553,30 +548,11 @@ class _CollectionQuickSelect extends StatelessWidget {
   /// Builds one compact selector for a collection item.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onPressed,
-        child: Container(
-          height: 36,
-          width: 36,
-          decoration: BoxDecoration(
-            color: selected ? colors.greenSoft : colors.panel,
-            gradient: selected
-                ? context.agentAwesomeSelectedGradient
-                : context.agentAwesomeControlGradient,
-            border: Border.all(color: selected ? colors.green : colors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: selected ? colors.green : colors.muted,
-          ),
-        ),
-      ),
+    return PanelIconButton(
+      icon: icon,
+      tooltip: tooltip,
+      selected: selected,
+      onPressed: onPressed,
     );
   }
 }
@@ -597,12 +573,10 @@ class _CollectionActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 8),
-      child: Tooltip(
-        message: tooltip,
-        child: IconButton.outlined(
-          onPressed: onPressed,
-          icon: Icon(icon, size: 18),
-        ),
+      child: PanelIconButton(
+        icon: icon,
+        tooltip: tooltip,
+        onPressed: onPressed,
       ),
     );
   }

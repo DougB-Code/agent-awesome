@@ -86,30 +86,11 @@ class _CommandSubShellIconTab extends StatelessWidget {
   /// Builds one icon-only command tab.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          height: 36,
-          width: 36,
-          decoration: BoxDecoration(
-            color: selected ? colors.greenSoft : colors.panel,
-            gradient: selected
-                ? context.agentAwesomeSelectedGradient
-                : context.agentAwesomeControlGradient,
-            border: Border.all(color: selected ? colors.green : colors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: selected ? colors.green : colors.muted,
-          ),
-        ),
-      ),
+    return PanelIconButton(
+      icon: icon,
+      tooltip: tooltip,
+      selected: selected,
+      onPressed: onTap,
     );
   }
 }

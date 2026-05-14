@@ -338,6 +338,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   Future<void>? _localModelsCloseFuture;
   Future<void>? _runtimeStartup;
   Future<void>? _closeFuture;
+  Map<String, String> _runtimeGatewayHeaders = const <String, String>{};
   bool _closing = false;
 
   /// All known chat sessions.
@@ -547,7 +548,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
         await _saveMemoryFirewallPolicyForActiveProfile();
       }
       await _refreshConfigCollections();
-      _configureClientsForRuntimeProfile(runtimeProfile!);
+      await _configureClientsForRuntimeProfile(runtimeProfile!);
       await _completeSetupFromExternalGatewayIfConfigured();
       final restoredLocalModel = await _restoreLocalModelIfAvailable(
         allowDefaultModel:
@@ -856,7 +857,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       runtimeProfile = await RuntimeProfileLoader(
         config,
       ).loadFile(File(runtimeProfilePath));
-      _configureClientsForRuntimeProfile(runtimeProfile!);
+      await _configureClientsForRuntimeProfile(runtimeProfile!);
       await _log('local model restored: ${descriptor.id}');
       return true;
     } else {
@@ -1668,7 +1669,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       rpc: GatewayContextClient(
         baseUrl: _contextBaseUrl(profile),
         domainId: server.id,
-        headers: _gatewayHeadersForProfile(profile),
+        headers: _runtimeGatewayHeaders,
         logger: logger,
       ),
     );
@@ -1755,7 +1756,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       rpc: GatewayContextClient(
         baseUrl: _contextBaseUrl(profile),
         domainId: server.id,
-        headers: _gatewayHeadersForProfile(profile),
+        headers: _runtimeGatewayHeaders,
         logger: logger,
       ),
     );
@@ -1771,7 +1772,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       rpc: GatewayContextClient(
         baseUrl: _contextBaseUrl(profile),
         domainId: server.id,
-        headers: _gatewayHeadersForProfile(profile),
+        headers: _runtimeGatewayHeaders,
         logger: logger,
       ),
     );

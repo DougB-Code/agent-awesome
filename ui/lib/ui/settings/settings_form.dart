@@ -299,14 +299,8 @@ class FormSectionCard extends StatelessWidget {
   /// Builds one settings-style form group.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Container(
+    return PanelSectionBlock(
       padding: SettingsFormMetrics.sectionPadding,
-      decoration: BoxDecoration(
-        color: colors.surface,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

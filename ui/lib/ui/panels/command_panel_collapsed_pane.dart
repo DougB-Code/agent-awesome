@@ -17,13 +17,7 @@ class _CommandSubShellCollapsedPane extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        gradient: context.agentAwesomeSurfaceGradient,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
+    return PanelSurface(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
         child: Column(

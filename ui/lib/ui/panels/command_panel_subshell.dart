@@ -19,6 +19,7 @@ class CommandPanelSubShell extends StatefulWidget {
     this.padding = const EdgeInsets.fromLTRB(28, 18, 28, 24),
     this.filterHint = 'Filter...',
     this.emptyLabel = 'No command areas configured',
+    this.showDetailHeader = true,
   });
 
   /// Selectable command areas shown in the left panel.
@@ -59,6 +60,9 @@ class CommandPanelSubShell extends StatefulWidget {
 
   /// Empty-state label when there are no command areas.
   final String emptyLabel;
+
+  /// Whether the detail pane renders its own title and mode tabs.
+  final bool showDetailHeader;
 
   @override
   State<CommandPanelSubShell> createState() => _CommandPanelSubShellState();
@@ -134,6 +138,7 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
           modes: widget.detailModes,
           selectedMode: detailMode,
           onModeSelected: (mode) => widget.onDetailModeSelected(mode.id),
+          showHeader: widget.showDetailHeader,
           onTitleTap: widget.detailModes.length > 1
               ? () => _selectNextDetailMode(detailMode)
               : null,

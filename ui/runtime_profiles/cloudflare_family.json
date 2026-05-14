@@ -30,6 +30,7 @@
     "app_name": "${AGENT_APP_NAME}",
     "user_id": "family",
     "profile_id": "family",
+    "auth_credential": "AGENTAWESOME_GATEWAY_TOKEN",
     "model_provider_id": "openai",
     "model_id": "gpt-5.4-mini",
     "port": ${AGENT_GATEWAY_PORT},

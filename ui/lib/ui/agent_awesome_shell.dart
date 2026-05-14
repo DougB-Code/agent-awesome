@@ -113,29 +113,11 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     unawaited(widget.controller.setGettingStartedCompleted(false));
   }
 
+  /// Builds the selected top-level workspace content.
   Widget _buildContent(BuildContext context) {
     if (_memoryMessageIsError(widget.controller) &&
         _memoryBackedSectionUnavailable(_section)) {
       return _MemoryUnavailableRoute(controller: widget.controller);
-    }
-    final panelLayout = _buildPanelLayout();
-    if (panelLayout != null) {
-      if (panelLayout.third != null) {
-        return SplitPanelShell(
-          split: panelLayout.outerSplit,
-          left: SplitPanelShell(
-            split: panelLayout.split,
-            left: panelLayout.left,
-            right: panelLayout.right,
-          ),
-          right: panelLayout.third!,
-        );
-      }
-      return SplitPanelShell(
-        split: panelLayout.split,
-        left: panelLayout.left,
-        right: panelLayout.right,
-      );
     }
     switch (_section) {
       case AppSections.today:
@@ -184,6 +166,13 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           controller: widget.controller,
           onAreaChanged: _rememberArea(AppSections.people),
         );
+      case AppSections.settings:
+        return SettingsCommandSubShell(
+          controller: widget.controller,
+          selectedSection: _settingsSection,
+          onSectionSelected: _selectSettingsSection,
+          onAreaChanged: _rememberArea(AppSections.settings),
+        );
       default:
         return HomeWorkspace(
           controller: widget.controller,
@@ -192,30 +181,7 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     }
   }
 
-  /// Builds the reusable two-panel layout for sections that use command panels.
-  SectionLayout? _buildPanelLayout() {
-    switch (_section) {
-      case AppSections.settings:
-        return SectionLayout(
-          split: const PanelSplit(left: 0.25, min: 0.2, max: 0.45),
-          left: SettingsMenuPanel(
-            selected: _settingsSection,
-            onSelected: (section) {
-              setState(() {
-                _settingsSection = section;
-              });
-            },
-          ),
-          right: SettingsDetailsPanel(
-            controller: widget.controller,
-            section: _settingsSection,
-          ),
-        );
-      default:
-        return null;
-    }
-  }
-
+  /// Selects a top-level app section from sidebar or command navigation.
   void _selectSection(String section) {
     setState(() {
       _section = section;
@@ -379,6 +345,14 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     });
   }
 
+  /// Selects a settings section from the command subshell.
+  void _selectSettingsSection(String section) {
+    setState(() {
+      _settingsSection = section;
+    });
+  }
+
+  /// Toggles the primary workspace sidebar.
   void _toggleSidebar() {
     setState(() {
       _sidebarExpanded = !_sidebarExpanded;

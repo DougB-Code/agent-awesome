@@ -17,6 +17,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	gatewayShutdownTimeout = 5 * time.Second
+	serviceShutdownTimeout = 45 * time.Second
+)
+
 // main loads configuration, starts optional local services, and serves HTTP.
 func main() {
 	cfg, err := config.FromFlags(os.Args[1:])
@@ -54,12 +59,14 @@ func main() {
 	}
 	go func() {
 		<-ctx.Done()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), gatewayShutdownTimeout)
 		if err := server.HTTPServer().Shutdown(shutdownCtx); err != nil {
 			log.Error().Err(err).Msg("shutdown gateway")
 		}
-		if err := manager.Close(shutdownCtx); err != nil && !errors.Is(err, context.Canceled) {
+		cancelShutdown()
+		closeCtx, cancelClose := context.WithTimeout(context.Background(), serviceShutdownTimeout)
+		defer cancelClose()
+		if err := manager.Close(closeCtx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Error().Err(err).Msg("shutdown services")
 		}
 	}()

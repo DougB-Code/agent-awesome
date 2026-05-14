@@ -200,6 +200,7 @@ class GatewayRuntime {
     required this.appName,
     required this.userId,
     this.profileId = '',
+    this.authCredential = '',
     this.modelProviderId = '',
     this.modelId = '',
     required this.port,
@@ -246,6 +247,9 @@ class GatewayRuntime {
   /// Server-side gateway profile selected for this UI runtime.
   final String profileId;
 
+  /// Credential reference used to resolve the gateway bearer token.
+  final String authCredential;
+
   /// Non-secret model provider id shown in beta status.
   final String modelProviderId;
 
@@ -277,6 +281,7 @@ class GatewayRuntime {
       'app_name': appName,
       'user_id': userId,
       if (profileId.isNotEmpty) 'profile_id': profileId,
+      if (authCredential.isNotEmpty) 'auth_credential': authCredential,
       if (modelProviderId.isNotEmpty) 'model_provider_id': modelProviderId,
       if (modelId.isNotEmpty) 'model_id': modelId,
       'port': port,
@@ -305,6 +310,7 @@ class GatewayRuntime {
       appName: _requiredString(json, 'app_name'),
       userId: _requiredString(json, 'user_id'),
       profileId: _optionalString(json['profile_id']),
+      authCredential: _optionalString(json['auth_credential']),
       modelProviderId: _optionalString(json['model_provider_id']),
       modelId: _optionalString(json['model_id']),
       port: _requiredInt(json, 'port'),

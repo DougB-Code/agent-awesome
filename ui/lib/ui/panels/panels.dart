@@ -9,8 +9,9 @@ import '../../app/theme.dart';
 import '../../domain/models.dart';
 
 part 'panel_basics.dart';
+part 'panel_surfaces.dart';
+part 'panel_buttons.dart';
 part 'split_panel_shell.dart';
-part 'command_panel_shell.dart';
 part 'command_panel_collapsed_pane.dart';
 part 'command_panel_command_pane.dart';
 part 'command_panel_detail_pane.dart';
@@ -21,5 +22,5 @@ part 'command_panel_tabs.dart';
 part 'switcher_panel.dart';
 part 'search_picker.dart';
 part 'collection_switcher.dart';
-part 'menu_panel.dart';
+part 'panel_empty_state.dart';
 part 'panel_status_widgets.dart';

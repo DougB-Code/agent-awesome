@@ -107,20 +107,12 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
 
   /// Builds add-contact actions for the contact library header.
   Widget _buildAreaActions(BuildContext context, SwitcherPanelArea area) {
-    final colors = context.agentAwesomeColors;
-    return Tooltip(
-      message: 'Add contact',
-      child: IconButton.filled(
-        visualDensity: VisualDensity.compact,
-        style: IconButton.styleFrom(
-          backgroundColor: colors.green,
-          foregroundColor: colors.surface,
-        ),
-        onPressed: widget.controller.memoryBusy
-            ? null
-            : () => _showContactCaptureDialog(context, widget.controller),
-        icon: const Icon(Icons.person_add_alt_1_outlined),
-      ),
+    return PanelIconButton(
+      icon: Icons.person_add_alt_1_outlined,
+      tooltip: 'Add contact',
+      onPressed: widget.controller.memoryBusy
+          ? null
+          : () => _showContactCaptureDialog(context, widget.controller),
     );
   }
 

@@ -84,20 +84,12 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
 
   /// Builds add-file actions for the file library header.
   Widget _buildAreaActions(BuildContext context, SwitcherPanelArea area) {
-    final colors = context.agentAwesomeColors;
-    return Tooltip(
-      message: 'Add file',
-      child: IconButton.filled(
-        visualDensity: VisualDensity.compact,
-        style: IconButton.styleFrom(
-          backgroundColor: colors.green,
-          foregroundColor: colors.surface,
-        ),
-        onPressed: widget.controller.memoryBusy
-            ? null
-            : widget.controller.importFileFromUi,
-        icon: const Icon(Icons.add),
-      ),
+    return PanelIconButton(
+      icon: Icons.add,
+      tooltip: 'Add file',
+      onPressed: widget.controller.memoryBusy
+          ? null
+          : widget.controller.importFileFromUi,
     );
   }
 

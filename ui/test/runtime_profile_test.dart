@@ -139,6 +139,7 @@ void main() {
     expect(profile.gateway.autoStart, isFalse);
     expect(profile.harness.autoStart, isFalse);
     expect(profile.gateway.profileId, 'doug');
+    expect(profile.gateway.authCredential, 'AGENTAWESOME_GATEWAY_TOKEN');
     expect(profile.memoryServers.single.id, 'doug');
     expect(
       profile.memoryServers.single.endpoint,

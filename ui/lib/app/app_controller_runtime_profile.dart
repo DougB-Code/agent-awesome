@@ -17,7 +17,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       await _saveMemoryFirewallPolicyForActiveProfile();
     }
     await _refreshConfigCollections();
-    _configureClientsForRuntimeProfile(profile);
+    await _configureClientsForRuntimeProfile(profile);
     _refreshEndpointSkeleton(profile);
     statusMessage = 'Runtime profile saved';
     _notifyControllerListeners();
@@ -36,7 +36,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       await _saveMemoryFirewallPolicyForActiveProfile();
     }
     await _refreshConfigCollections();
-    _configureClientsForRuntimeProfile(profile);
+    await _configureClientsForRuntimeProfile(profile);
     _refreshEndpointSkeleton(profile);
     statusMessage = 'Runtime profile loaded';
     _notifyControllerListeners();
@@ -710,14 +710,18 @@ extension AgentAwesomeAppControllerRuntimeProfiles
   }
 
   /// Rebuilds owned service clients from the active runtime profile.
-  void _configureClientsForRuntimeProfile(RuntimeProfile profile) {
+  Future<void> _configureClientsForRuntimeProfile(
+    RuntimeProfile profile,
+  ) async {
+    final headers = await _gatewayHeadersForProfile(profile);
+    _runtimeGatewayHeaders = headers;
     if (!_assistantClientInjected) {
       assistantClient.close();
       assistantClient = AssistantClient(
         baseUrl: profile.gateway.apiBaseUrl,
         appName: profile.harness.appName,
         userId: profile.harness.userId,
-        headers: _gatewayHeadersForProfile(profile),
+        headers: headers,
         logger: logger,
       );
     }
@@ -726,7 +730,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       memoryClient = MemoryClient(
         rpc: GatewayContextClient(
           baseUrl: _contextBaseUrl(profile),
-          headers: _gatewayHeadersForProfile(profile),
+          headers: headers,
           logger: logger,
         ),
       );
@@ -736,7 +740,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       tasksClient = TasksClient(
         rpc: GatewayContextClient(
           baseUrl: _contextBaseUrl(profile),
-          headers: _gatewayHeadersForProfile(profile),
+          headers: headers,
           logger: logger,
         ),
       );
@@ -746,7 +750,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       executiveSummaryClient = ExecutiveSummaryClient(
         rpc: GatewayContextClient(
           baseUrl: _contextBaseUrl(profile),
-          headers: _gatewayHeadersForProfile(profile),
+          headers: headers,
           logger: logger,
         ),
       );
@@ -760,8 +764,17 @@ extension AgentAwesomeAppControllerRuntimeProfiles
   }
 
   /// Returns headers needed to call protected gateway routes.
-  Map<String, String> _gatewayHeadersForProfile(RuntimeProfile profile) {
+  Future<Map<String, String>> _gatewayHeadersForProfile(
+    RuntimeProfile profile,
+  ) async {
     final headers = <String, String>{...config.gatewayAuthHeaders};
+    final credential = profile.gateway.authCredential.trim();
+    if (!headers.containsKey('Authorization') && credential.isNotEmpty) {
+      final lookup = await credentialStore.lookup(credential);
+      if (lookup.found && lookup.secretValue.trim().isNotEmpty) {
+        headers['Authorization'] = 'Bearer ${lookup.secretValue.trim()}';
+      }
+    }
     final profileId = profile.gateway.profileId.trim();
     if (profileId.isNotEmpty) {
       headers['X-Agent-Awesome-Profile'] = profileId;
