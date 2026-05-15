@@ -176,7 +176,7 @@ func NormalizeSearchNodesQuery(q SearchNodesQuery) (SearchNodesQuery, error) {
 // ValidNodeKind reports whether kind is in the controlled vocabulary.
 func ValidNodeKind(kind NodeKind) bool {
 	switch kind {
-	case KindArtifact, KindCommitment, KindEvidence, KindEntity, KindEvent, KindList, KindLocation, KindMemory, KindPerson, KindProject, KindRequirement, KindRisk, KindSource, KindTask, KindTopic:
+	case KindArtifact, KindEvidence, KindEntity, KindEvent, KindList, KindLocation, KindMemory, KindPerson, KindProject, KindRequirement, KindRisk, KindSource, KindTask, KindTopic:
 		return true
 	default:
 		return false

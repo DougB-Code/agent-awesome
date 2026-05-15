@@ -57,13 +57,33 @@ String _taskQueueDescription(WorkspaceTask task) {
   if (task.description.trim().isNotEmpty) {
     return task.description.trim();
   }
-  if (task.detail.trim().isNotEmpty) {
-    return task.detail.trim();
+  final detail = _taskQueueDetailWithoutStatus(task);
+  if (detail.isNotEmpty) {
+    return detail;
   }
   if (task.dueAt == null && task.scheduledAt == null) {
     return 'No date is attached yet.';
   }
   return '';
+}
+
+/// Returns secondary queue text without duplicating the status badge.
+String _taskQueueDetailWithoutStatus(WorkspaceTask task) {
+  final detail = task.detail.trim();
+  if (detail.isEmpty) {
+    return '';
+  }
+  final statusLabels = <String>{
+    task.status.trim().toLowerCase(),
+    _taskLabel(task.status).trim().toLowerCase(),
+  };
+  final parts = detail
+      .split('•')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .where((part) => !statusLabels.contains(part.toLowerCase()))
+      .toList();
+  return parts.join(' • ');
 }
 
 /// Returns memory links filtered by the panel query.

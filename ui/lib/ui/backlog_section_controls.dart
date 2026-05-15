@@ -91,7 +91,7 @@ class _TaskBadge extends StatelessWidget {
 
   final String label;
 
-  /// Builds a dense context metadata badge.
+  /// Builds a dense task metadata badge.
   @override
   Widget build(BuildContext context) {
     return PanelBadge(label: _taskLabel(label));

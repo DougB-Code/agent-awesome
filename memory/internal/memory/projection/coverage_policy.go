@@ -18,11 +18,6 @@ func buildCoverageProjection(index taskIndex) domain.CoverageProjection {
 	} else if len(index.tasks) > 0 {
 		partial = append(partial, "No task relations recorded")
 	}
-	if hasCommitmentSignal(index) {
-		good = append(good, "Commitments")
-	} else if len(index.tasks) > 0 {
-		partial = append(partial, "Some missing commitment context")
-	}
 	if hasPeopleSignal(index) {
 		good = append(good, "People & contacts")
 	} else if len(index.tasks) > 0 {
@@ -65,16 +60,6 @@ func buildProjectionQuality(index taskIndex, coverage domain.CoverageProjection)
 		UnknownDomains:   coverage.NotConnected,
 		Limits:           limits,
 	}
-}
-
-// hasCommitmentSignal reports whether tasks contain visible promise metadata.
-func hasCommitmentSignal(index taskIndex) bool {
-	for _, task := range index.tasks {
-		if task.Person != "" || task.FollowUpAt != nil || containsAny(task.Source+" "+task.Context, []string{"promise", "commitment"}) {
-			return true
-		}
-	}
-	return false
 }
 
 // hasPeopleSignal reports whether the graph has person metadata.

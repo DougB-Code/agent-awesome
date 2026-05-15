@@ -68,7 +68,7 @@ const (
 	TaskRelationRelated TaskRelationType = "related_to"
 )
 
-// Task stores an operational commitment or todo projected from the context graph.
+// Task stores an operational todo projected from the context graph.
 type Task struct {
 	ID              TaskID            `json:"id"`
 	Title           string            `json:"title"`
@@ -80,18 +80,11 @@ type Task struct {
 	FollowUpAt      *time.Time        `json:"follow_up_at,omitempty"`
 	Topics          []string          `json:"topics,omitempty"`
 	EstimateMinutes int               `json:"estimate_minutes,omitempty"`
-	EnergyRequired  string            `json:"energy_required,omitempty"`
-	Effort          float64           `json:"effort,omitempty"`
-	Value           float64           `json:"value,omitempty"`
 	Urgency         float64           `json:"urgency,omitempty"`
 	Risk            float64           `json:"risk,omitempty"`
-	Context         string            `json:"context,omitempty"`
-	View            string            `json:"view,omitempty"`
 	Project         string            `json:"project,omitempty"`
 	Location        string            `json:"location,omitempty"`
 	Person          string            `json:"person,omitempty"`
-	Source          string            `json:"source,omitempty"`
-	Confidence      float64           `json:"confidence,omitempty"`
 	Actor           string            `json:"actor"`
 	IdempotencyKey  string            `json:"idempotency_key,omitempty"`
 	CreatedAt       time.Time         `json:"created_at"`
@@ -175,18 +168,10 @@ type CreateTaskRequest struct {
 	FollowUpAt      *time.Time          `json:"follow_up_at,omitempty"`
 	Topics          []string            `json:"topics,omitempty"`
 	EstimateMinutes int                 `json:"estimate_minutes,omitempty"`
-	EnergyRequired  string              `json:"energy_required,omitempty"`
-	Effort          float64             `json:"effort,omitempty"`
-	Value           float64             `json:"value,omitempty"`
 	Urgency         float64             `json:"urgency,omitempty"`
-	Risk            float64             `json:"risk,omitempty"`
-	Context         string              `json:"context,omitempty"`
-	View            string              `json:"view,omitempty"`
 	Project         string              `json:"project,omitempty"`
 	Location        string              `json:"location,omitempty"`
 	Person          string              `json:"person,omitempty"`
-	Source          string              `json:"source,omitempty"`
-	Confidence      float64             `json:"confidence,omitempty"`
 	MemoryLinks     []MemoryLinkRequest `json:"memory_links,omitempty"`
 	WorkBreakdown   TaskWorkBreakdown   `json:"work_breakdown,omitempty"`
 	IdempotencyKey  string              `json:"idempotency_key,omitempty"`
@@ -208,18 +193,10 @@ type UpdateTaskRequest struct {
 	ClearFollowUpAt  bool               `json:"clear_follow_up_at,omitempty"`
 	Topics           []string           `json:"topics,omitempty"`
 	EstimateMinutes  *int               `json:"estimate_minutes,omitempty"`
-	EnergyRequired   *string            `json:"energy_required,omitempty"`
-	Effort           *float64           `json:"effort,omitempty"`
-	Value            *float64           `json:"value,omitempty"`
 	Urgency          *float64           `json:"urgency,omitempty"`
-	Risk             *float64           `json:"risk,omitempty"`
-	Context          *string            `json:"context,omitempty"`
-	View             *string            `json:"view,omitempty"`
 	Project          *string            `json:"project,omitempty"`
 	Location         *string            `json:"location,omitempty"`
 	Person           *string            `json:"person,omitempty"`
-	Source           *string            `json:"source,omitempty"`
-	Confidence       *float64           `json:"confidence,omitempty"`
 	WorkBreakdown    *TaskWorkBreakdown `json:"work_breakdown,omitempty"`
 }
 

@@ -6,13 +6,11 @@ class _TaskMemoryLinkScaffold extends StatelessWidget {
     required this.selectedMemory,
     required this.links,
     required this.onLink,
-    required this.onUnlink,
   });
 
   final MemoryRecord? selectedMemory;
   final List<TaskMemoryLink> links;
   final VoidCallback? onLink;
-  final ValueChanged<TaskMemoryLink>? onUnlink;
 
   /// Builds reusable selected-memory and linked-memory sections.
   @override
@@ -38,7 +36,7 @@ class _TaskMemoryLinkScaffold extends StatelessWidget {
           const SizedBox(height: 10),
           _TaskSelectedMemoryBlock(memory: selectedMemory),
           const SizedBox(height: 12),
-          _TaskMemoryLinksBlock(links: links, onUnlink: onUnlink),
+          _TaskMemoryLinksBlock(links: links),
         ],
       ),
     );

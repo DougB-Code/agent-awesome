@@ -15,8 +15,6 @@ class TaskInsightPolicy {
     this.obligationThreshold = 0.55,
     this.quickUnblockEffortCeiling = 0.40,
     this.quickUnblockDownstreamThreshold = 0.50,
-    this.confidenceFloor = 0.45,
-    this.metadataCompletenessFloor = 0.68,
     this.downstreamMaxDepth = 3,
     this.downstreamMaxVisited = 40,
     this.relationConfidenceFloor = 0.30,
@@ -51,12 +49,6 @@ class TaskInsightPolicy {
 
   /// Minimum downstream value for quick unblock candidates.
   final double quickUnblockDownstreamThreshold;
-
-  /// Minimum confidence for most insight candidates.
-  final double confidenceFloor;
-
-  /// Metadata completeness floor before a gap is emitted.
-  final double metadataCompletenessFloor;
 
   /// Maximum traversal depth for downstream value.
   final int downstreamMaxDepth;

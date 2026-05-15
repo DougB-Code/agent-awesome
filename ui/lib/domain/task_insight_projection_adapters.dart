@@ -22,16 +22,6 @@ class TaskInsightProjectionAdapters {
       final workspaceTask = index.workspaceTasksById[taskId];
       final projectionTask = index.projectionTasksById[taskId];
       final laneId = _laneIdFor(index, taskId);
-      final context = _firstNonEmpty(<String>[
-        index.facetLabelForTask(taskId, 'context'),
-        workspaceTask?.context ?? '',
-        projectionTask?.context ?? '',
-      ]);
-      final flowLane = _firstNonEmpty(<String>[
-        index.facetLabelForTask(taskId, 'attention'),
-        context,
-        'Personal',
-      ]);
       final card = TaskStreamCard(
         taskId: taskId,
         title: index.titleForTaskId(taskId),
@@ -39,12 +29,6 @@ class TaskInsightProjectionAdapters {
         priority: _priorityFor(index, taskId),
         dueAt: _dueAtFor(index, taskId),
         scheduledAt: _scheduledAtFor(index, taskId),
-        context: context,
-        domain: _firstNonEmpty(<String>[
-          index.facetLabelForTask(taskId, 'view'),
-          workspaceTask?.domain ?? '',
-          projectionTask?.domain ?? '',
-        ]),
         project: _firstNonEmpty(<String>[
           index.facetLabelForTask(taskId, 'project'),
           workspaceTask?.project ?? '',
@@ -56,12 +40,11 @@ class TaskInsightProjectionAdapters {
           workspaceTask?.owner ?? '',
           projectionTask?.owner ?? '',
         ]),
-        flowLane: flowLane,
         streamId: _normalizeId(
           _firstNonEmpty(<String>[
             index.workspaceTasksById[taskId]?.sourceLabel ?? '',
-            index.projectionTasksById[taskId]?.source ?? '',
-            context,
+            index.projectionTasksById[taskId]?.project ?? '',
+            index.facetLabelForTask(taskId, 'topic'),
             'general',
           ]),
         ),
@@ -72,7 +55,7 @@ class TaskInsightProjectionAdapters {
         spendLabel: _spendLabelForIndexedTask(workspaceTask, projectionTask),
         spendScore: _spendScoreForIndexedTask(workspaceTask, projectionTask),
         bottleneckScore: scores?.unblockLeverage ?? scores?.risk ?? 0,
-        confidence: scores?.confidence ?? 0,
+        confidence: 0,
         explanation: index.explainTaskInsight(
           taskId,
           _primaryInsightId(index, taskId),
@@ -166,7 +149,7 @@ class TaskInsightProjectionAdapters {
           y: _clamp01(0.5 + math.sin(angle) * radius),
           size: _constellationSize(index, taskId, mode),
           urgency: scores?.pressure ?? 0,
-          confidence: scores?.confidence ?? 0,
+          confidence: 0,
           explanation: _constellationExplanation(index, taskId, mode),
         ),
       );

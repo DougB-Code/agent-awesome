@@ -294,12 +294,12 @@ String _resourceSummary(TaskResourceRequirement resource) {
 String _emptyTerrainLabel(TaskTerrainInsightMode mode) {
   return switch (mode) {
     TaskTerrainInsightMode.agentHandoff =>
-      'No agent handoff candidates found. Add safety, obligation, and context metadata to enable handoff analysis.',
+      'No agent handoff candidates found. Add risk, estimate, task notes, or linked memory to enable handoff analysis.',
     TaskTerrainInsightMode.nextWeekHighValue =>
-      'No high-value next-week backlog items found. Add due dates, value type, consequence, or commitments to improve this view.',
+      'No high-value next-week backlog items found. Add due dates, priority, or risk to improve this view.',
     TaskTerrainInsightMode.unblockLeverage =>
       'No quick unblocks found. Add dependency relations or mark waiting/blocking backlog items to enable unblock analysis.',
-    TaskTerrainInsightMode.riskConfidence =>
+    TaskTerrainInsightMode.riskFocus =>
       'No risk confidence gaps found. Low-confidence or high-risk backlog items will appear here.',
     TaskTerrainInsightMode.priorityFocus =>
       'No terrain projection available. The graph service did not return a canonical insight graph, or there are no active backlog items.',

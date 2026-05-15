@@ -18,12 +18,6 @@ class TaskInsightPresetRegistry {
       iconName: 'all',
     ),
     TaskInsightPreset(
-      id: TaskInsightIds.todayActions,
-      label: 'Execute',
-      question: 'Which backlog items are ready for concrete execution?',
-      iconName: 'actions',
-    ),
-    TaskInsightPreset(
       id: TaskInsightIds.todayDecisions,
       label: 'Decide',
       question: 'Which backlog items need human judgment or approval?',
@@ -41,12 +35,6 @@ class TaskInsightPresetRegistry {
       question: 'What low-value must-do work can I safely hand off?',
       iconName: 'agent',
     ),
-    TaskInsightPreset(
-      id: TaskInsightIds.metadataGaps,
-      label: 'Data quality',
-      question: 'Which data gaps limit backlog insights?',
-      iconName: 'quality',
-    ),
   ];
 
   /// Returns the selected terrain preset, falling back to the all preset.
@@ -59,17 +47,44 @@ class TaskInsightPresetRegistry {
     return terrainPresets.first;
   }
 
+  /// Returns a short label for any known task insight id.
+  static String labelForInsightId(String insightId) {
+    for (final preset in terrainPresets) {
+      if (preset.id == insightId) {
+        return preset.label;
+      }
+    }
+    return switch (insightId) {
+      TaskInsightIds.nextWeekHighValue => 'Next week value',
+      TaskInsightIds.quickUnblocks => 'Quick unblocks',
+      TaskInsightIds.highRiskLowConfidence => 'Risk focus',
+      TaskInsightIds.capacityCollision => 'Capacity collision',
+      _ => insightId.replaceAll('_', ' '),
+    };
+  }
+
+  /// Returns a compact explanation for one insight candidate.
+  static String candidateReason(TaskInsightCandidate candidate) {
+    if (candidate.explanation.trim().isNotEmpty) {
+      return candidate.explanation.trim();
+    }
+    if (candidate.missingRules.isNotEmpty) {
+      return 'Missing ${candidate.missingRules.first.replaceAll('_', ' ')}';
+    }
+    if (candidate.matchedRules.isNotEmpty) {
+      return candidate.matchedRules.first.replaceAll('_', ' ');
+    }
+    return labelForInsightId(candidate.insightId);
+  }
+
   /// Returns a Material icon for a preset icon name.
   static IconData iconFor(String iconName) {
     return switch (iconName) {
-      'actions' => Icons.check_box_outlined,
       'decisions' => Icons.balance_outlined,
       'followups' => Icons.forum_outlined,
       'agent' => Icons.smart_toy_outlined,
       'calendar' => Icons.calendar_month_outlined,
       'unlock' => Icons.lock_open_outlined,
-      'metadata' => Icons.manage_search_outlined,
-      'quality' => Icons.fact_check_outlined,
       'risk' => Icons.report_problem_outlined,
       _ => Icons.all_inbox_outlined,
     };

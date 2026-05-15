@@ -75,16 +75,11 @@ class TodaysAttentionCard extends StatelessWidget {
 /// _AttentionLaneCounts stores dashboard-level attention counts by action type.
 class _AttentionLaneCounts {
   /// Creates lane counts for the attention summary.
-  const _AttentionLaneCounts({
-    required this.decide,
-    required this.execute,
-    required this.followUps,
-  });
+  const _AttentionLaneCounts({required this.decide, required this.followUps});
 
   /// Builds counts from the current attention items.
   factory _AttentionLaneCounts.fromItems(List<ExecutiveSummaryItem> items) {
     var decide = 0;
-    var execute = 0;
     var followUps = 0;
     for (final item in items) {
       switch (item.lane) {
@@ -92,27 +87,16 @@ class _AttentionLaneCounts {
         case 'monitor':
           decide++;
           break;
-        case 'do':
-        case 'protect':
-          execute++;
-          break;
         case 'follow_up':
           followUps++;
           break;
       }
     }
-    return _AttentionLaneCounts(
-      decide: decide,
-      execute: execute,
-      followUps: followUps,
-    );
+    return _AttentionLaneCounts(decide: decide, followUps: followUps);
   }
 
   /// Number of decisions or monitoring calls needing user judgment.
   final int decide;
-
-  /// Number of actions ready to execute.
-  final int execute;
 
   /// Number of relationship or promise follow-ups.
   final int followUps;
@@ -141,15 +125,7 @@ class _AttentionSummaryStrip extends StatelessWidget {
             count: counts.decide,
             icon: Icons.balance_outlined,
             severity: 'attention',
-            route: '/attention?metric=decide',
-            onOpenLink: onOpenLink,
-          ),
-          _AttentionSummaryCell(
-            label: 'Execute',
-            count: counts.execute,
-            icon: Icons.check_box_outlined,
-            severity: 'good',
-            route: '/attention?metric=actions',
+            route: '/attention?metric=decisions',
             onOpenLink: onOpenLink,
           ),
           _AttentionSummaryCell(

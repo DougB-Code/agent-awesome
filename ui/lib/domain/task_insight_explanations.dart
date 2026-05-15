@@ -36,15 +36,12 @@ class TaskInsightExplanations {
   /// Explains why a task appears in next-week high value.
   static String nextWeekHighValue({
     required WorkspaceTask? workspaceTask,
-    required TaskProjectionTask? projectionTask,
     required TaskInsightScoreProfile scores,
   }) {
-    final valueType = projectionTask?.valueType ?? '';
     final parts = <String>[
       'due next week',
       if (scores.reward >= 0.68) 'high reward',
       if (scores.consequence >= 0.60) 'meaningful consequence',
-      if (valueType.isNotEmpty) valueType.replaceAll('_', ' '),
     ];
     return _sentence(parts, fallback: 'High-value work coming next week.');
   }
@@ -58,14 +55,6 @@ class TaskInsightExplanations {
     return '$downstreamCount downstream task${downstreamCount == 1 ? '' : 's'} can move after about ${minutes == 0 ? 15 : minutes}m of unblock work.';
   }
 
-  /// Explains why a metadata gap matters.
-  static String metadataGap(TaskMetadataGapRecord gap) {
-    if (gap.message.isNotEmpty) {
-      return gap.message;
-    }
-    return 'Missing ${gap.field.replaceAll('_', ' ')} limits ${gap.blocksInsights.join(', ')} insight quality.';
-  }
-
   /// Returns a short generic task importance summary.
   static String whyThisMatters({
     required WorkspaceTask task,
@@ -74,7 +63,6 @@ class TaskInsightExplanations {
   }) {
     final matched = candidates.map((candidate) {
       return switch (candidate.insightId) {
-        TaskInsightIds.todayActions => 'execute',
         TaskInsightIds.todayDecisions => 'decision',
         TaskInsightIds.todayRelationships => 'follow-up',
         TaskInsightIds.agentHandoff => 'agent handoff',
@@ -85,10 +73,7 @@ class TaskInsightExplanations {
       };
     }).toSet();
     if (matched.isNotEmpty) {
-      return 'This task is showing up for ${matched.join(', ')} because its scores or follow-up signals need attention.';
-    }
-    if (scores != null && scores.pressure >= 0.68) {
-      return 'This task has meaningful pressure and is worth sequencing deliberately.';
+      return 'This task is showing up for ${matched.join(', ')} because its graph signals need attention.';
     }
     return 'This task is available in the graph-backed queue and insight views.';
   }

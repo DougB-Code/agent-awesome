@@ -27,20 +27,14 @@ enum TaskStreamAxisDimension {
   /// Backend task priority.
   priority,
 
-  /// Suggested execution context.
-  context,
-
   /// Owning project when supplied by the task stream backend.
   project,
-
-  /// Global cross-cutting view when supplied by the task stream backend.
-  view,
 
   /// Responsible person when supplied by the task stream backend.
   person,
 
   /// Estimated duration bucket.
-  effort,
+  estimate,
 
   /// Spend bucket from explicit monetary task data.
   spend,
@@ -109,11 +103,9 @@ class TaskStreamAxisProjector {
         TaskStreamAxisDimension.due,
         TaskStreamAxisDimension.scheduled,
         TaskStreamAxisDimension.priority,
-        TaskStreamAxisDimension.context,
         TaskStreamAxisDimension.project,
-        TaskStreamAxisDimension.view,
         TaskStreamAxisDimension.person,
-        TaskStreamAxisDimension.effort,
+        TaskStreamAxisDimension.estimate,
         TaskStreamAxisDimension.spend,
       ];
 
@@ -122,12 +114,10 @@ class TaskStreamAxisProjector {
       <TaskStreamAxisDimension>[
         TaskStreamAxisDimension.project,
         TaskStreamAxisDimension.person,
-        TaskStreamAxisDimension.view,
-        TaskStreamAxisDimension.context,
         TaskStreamAxisDimension.priority,
         TaskStreamAxisDimension.due,
         TaskStreamAxisDimension.scheduled,
-        TaskStreamAxisDimension.effort,
+        TaskStreamAxisDimension.estimate,
         TaskStreamAxisDimension.spend,
       ];
 
@@ -165,16 +155,12 @@ class TaskStreamAxisProjector {
         return 'Status';
       case TaskStreamAxisDimension.priority:
         return 'Priority';
-      case TaskStreamAxisDimension.context:
-        return 'Context';
       case TaskStreamAxisDimension.project:
         return 'Project';
-      case TaskStreamAxisDimension.view:
-        return 'View';
       case TaskStreamAxisDimension.person:
         return 'Person';
-      case TaskStreamAxisDimension.effort:
-        return 'Effort';
+      case TaskStreamAxisDimension.estimate:
+        return 'Estimate';
       case TaskStreamAxisDimension.spend:
         return 'Spend';
       case TaskStreamAxisDimension.blockers:
@@ -195,13 +181,11 @@ class TaskStreamAxisProjector {
       TaskStreamAxisDimension.attention ||
       TaskStreamAxisDimension.status ||
       TaskStreamAxisDimension.priority ||
-      TaskStreamAxisDimension.effort ||
+      TaskStreamAxisDimension.estimate ||
       TaskStreamAxisDimension.spend ||
       TaskStreamAxisDimension.blockers => true,
       TaskStreamAxisDimension.time ||
-      TaskStreamAxisDimension.context ||
       TaskStreamAxisDimension.project ||
-      TaskStreamAxisDimension.view ||
       TaskStreamAxisDimension.person => false,
     };
   }
@@ -215,11 +199,9 @@ class TaskStreamAxisProjector {
       TaskStreamAxisDimension.attention => Icons.auto_awesome_outlined,
       TaskStreamAxisDimension.status => Icons.task_alt_outlined,
       TaskStreamAxisDimension.priority => Icons.flag_outlined,
-      TaskStreamAxisDimension.context => Icons.workspaces_outline,
       TaskStreamAxisDimension.project => Icons.folder_outlined,
-      TaskStreamAxisDimension.view => Icons.layers_outlined,
       TaskStreamAxisDimension.person => Icons.person_outline,
-      TaskStreamAxisDimension.effort => Icons.timer_outlined,
+      TaskStreamAxisDimension.estimate => Icons.timer_outlined,
       TaskStreamAxisDimension.spend => Icons.price_change_outlined,
       TaskStreamAxisDimension.blockers => Icons.lock_outline,
     };
@@ -261,7 +243,7 @@ class TaskStreamAxisProjector {
     return _dynamicBucket(
       value: card.project,
       fallback: 'No project',
-      subtitle: card.context,
+      subtitle: card.status,
       icon: Icons.folder_outlined,
       paletteIndex: 1,
     );
@@ -304,40 +286,24 @@ class TaskStreamAxisProjector {
         return _statusBucket(card.status);
       case TaskStreamAxisDimension.priority:
         return _priorityBucket(card.priority);
-      case TaskStreamAxisDimension.context:
-        return _dynamicBucket(
-          value: card.context,
-          fallback: 'No context',
-          subtitle: card.status,
-          icon: Icons.workspaces_outline,
-          paletteIndex: 0,
-        );
       case TaskStreamAxisDimension.project:
         return _dynamicBucket(
           value: card.project,
           fallback: 'No project',
-          subtitle: card.context,
+          subtitle: card.status,
           icon: Icons.folder_outlined,
           paletteIndex: 1,
-        );
-      case TaskStreamAxisDimension.view:
-        return _dynamicBucket(
-          value: card.domain,
-          fallback: 'No view',
-          subtitle: card.context,
-          icon: Icons.layers_outlined,
-          paletteIndex: 2,
         );
       case TaskStreamAxisDimension.person:
         return _dynamicBucket(
           value: card.owner,
           fallback: 'Unassigned',
-          subtitle: card.context,
+          subtitle: card.status,
           icon: Icons.person_outline,
           paletteIndex: 3,
         );
-      case TaskStreamAxisDimension.effort:
-        return _effortBucket(card.estimateMinutes);
+      case TaskStreamAxisDimension.estimate:
+        return _estimateBucket(card.estimateMinutes);
       case TaskStreamAxisDimension.spend:
         return _spendBucket(card);
       case TaskStreamAxisDimension.blockers:
@@ -383,13 +349,12 @@ class TaskStreamAxisProjector {
   static int _bucketOrder(String id, TaskStreamAxisDimension dimension) {
     final order = switch (dimension) {
       TaskStreamAxisDimension.attention => const <String>[
-        'focus',
-        'deep-focus',
-        'deep-work',
-        'admin',
-        'errands',
+        'blocked',
         'waiting',
-        'personal',
+        'urgent',
+        'due-soon',
+        'ready',
+        'general',
       ],
       TaskStreamAxisDimension.status => const <String>[
         'open',
@@ -406,7 +371,7 @@ class TaskStreamAxisProjector {
         'low',
         'unknown-priority',
       ],
-      TaskStreamAxisDimension.effort => const <String>[
+      TaskStreamAxisDimension.estimate => const <String>[
         'quick',
         'short',
         'medium',
@@ -496,45 +461,17 @@ class _ProjectedLane {
 
 /// Returns the inferred attention bucket for a task card.
 TaskStreamAxisBucket _attentionBucket(TaskStreamCard card) {
-  final label = _attentionLabel(card);
-  final normalized = label.toLowerCase();
-  if (normalized.contains('focus')) {
-    return TaskStreamAxisBucket(
-      id: _slug(label, fallback: 'focus'),
-      title: label,
-      subtitle: 'Focus time',
-      color: const Color(0xff5f94c9),
-      icon: Icons.rocket_launch_outlined,
-    );
-  }
-  if (normalized.contains('deep')) {
+  final normalizedStatus = _normalizedStatusId(card.status);
+  if (normalizedStatus == 'blocked') {
     return const TaskStreamAxisBucket(
-      id: 'deep-work',
-      title: 'Deep Work',
-      subtitle: 'Focus time',
-      color: Color(0xff5f94c9),
-      icon: Icons.rocket_launch_outlined,
+      id: 'blocked',
+      title: 'Blocked',
+      subtitle: 'Needs unblock',
+      color: AgentAwesomeColors.coral,
+      icon: Icons.lock_outline,
     );
   }
-  if (normalized.contains('admin')) {
-    return const TaskStreamAxisBucket(
-      id: 'admin',
-      title: 'Admin',
-      subtitle: 'Operations',
-      color: Color(0xff6f9b62),
-      icon: Icons.settings_suggest_outlined,
-    );
-  }
-  if (normalized.contains('errand') || normalized.contains('shopping')) {
-    return const TaskStreamAxisBucket(
-      id: 'errands',
-      title: 'Errands',
-      subtitle: 'Out & about',
-      color: Color(0xffd7a246),
-      icon: Icons.local_mall_outlined,
-    );
-  }
-  if (normalized.contains('waiting') || normalized.contains('blocked')) {
+  if (normalizedStatus == 'waiting') {
     return const TaskStreamAxisBucket(
       id: 'waiting',
       title: 'Waiting',
@@ -543,37 +480,51 @@ TaskStreamAxisBucket _attentionBucket(TaskStreamCard card) {
       icon: Icons.hourglass_empty_outlined,
     );
   }
-  if (normalized.contains('personal')) {
+  if (card.priority == 'urgent') {
     return const TaskStreamAxisBucket(
-      id: 'personal',
-      title: 'Personal',
-      subtitle: 'Life & growth',
-      color: Color(0xffd8798c),
-      icon: Icons.navigation_outlined,
+      id: 'urgent',
+      title: 'Urgent',
+      subtitle: 'Priority',
+      color: AgentAwesomeColors.coral,
+      icon: Icons.priority_high,
     );
   }
-  return _dynamicBucket(
-    value: label,
-    fallback: 'Personal',
-    subtitle: card.status,
+  if (_dueSoon(card.dueAt)) {
+    return const TaskStreamAxisBucket(
+      id: 'due-soon',
+      title: 'Due soon',
+      subtitle: 'Due date',
+      color: Color(0xffd7a246),
+      icon: Icons.event_available_outlined,
+    );
+  }
+  if (card.readyNow) {
+    return const TaskStreamAxisBucket(
+      id: 'ready',
+      title: 'Ready',
+      subtitle: 'Open now',
+      color: AgentAwesomeColors.green,
+      icon: Icons.play_arrow_outlined,
+    );
+  }
+  return const TaskStreamAxisBucket(
+    id: 'general',
+    title: 'General',
+    subtitle: 'No immediate signal',
+    color: AgentAwesomeColors.muted,
     icon: Icons.auto_awesome_outlined,
-    paletteIndex: 4,
   );
 }
 
-/// Returns the attention label inferred from card metadata.
-String _attentionLabel(TaskStreamCard card) {
-  if (card.flowLane.trim().isNotEmpty) {
-    return taskStreamDisplayLabel(card.flowLane);
+/// Returns whether a due timestamp is overdue or within the next day.
+bool _dueSoon(DateTime? dueAt) {
+  if (dueAt == null) {
+    return false;
   }
-  if (card.context.trim().isNotEmpty) {
-    return taskStreamDisplayLabel(card.context);
-  }
-  final normalizedStatus = _normalizedStatusId(card.status);
-  if (normalizedStatus == 'waiting' || normalizedStatus == 'blocked') {
-    return taskStreamDisplayLabel(normalizedStatus);
-  }
-  return card.readyNow ? 'Deep Work' : 'Personal';
+  final now = DateTime.now();
+  final dueDay = _startOfDay(dueAt.toLocal());
+  final today = _startOfDay(now.toLocal());
+  return dueDay.difference(today).inDays <= 1;
 }
 
 /// Returns a status bucket for a backend lifecycle value.
@@ -769,7 +720,7 @@ DateTime _startOfDay(DateTime value) {
 }
 
 /// Returns a duration bucket for an estimate in minutes.
-TaskStreamAxisBucket _effortBucket(int minutes) {
+TaskStreamAxisBucket _estimateBucket(int minutes) {
   if (minutes <= 0) {
     return const TaskStreamAxisBucket(
       id: 'unestimated',

@@ -21,14 +21,6 @@ class TaskProjectionAdapters {
     final visibleCards = <String, TaskStreamCard>{};
     for (final task in graph.tasks) {
       final laneId = _facetIDSuffixForTask(task, facets, 'time', 'next');
-      final context = _firstNonEmpty(<String>[
-        _facetLabelForTask(task, facets, 'context'),
-        task.context,
-      ]);
-      final flowLane = _firstNonEmpty(<String>[
-        _facetLabelForTask(task, facets, 'attention'),
-        'Personal',
-      ]);
       final card = TaskStreamCard(
         taskId: task.taskId,
         title: task.title,
@@ -36,11 +28,6 @@ class TaskProjectionAdapters {
         priority: task.priority,
         dueAt: task.dueAt,
         scheduledAt: task.scheduledAt,
-        context: context,
-        domain: _firstNonEmpty(<String>[
-          _facetLabelForTask(task, facets, 'view'),
-          task.domain,
-        ]),
         project: _firstNonEmpty(<String>[
           _facetLabelForTask(task, facets, 'project'),
           task.project,
@@ -50,8 +37,7 @@ class TaskProjectionAdapters {
           _facetLabelForTask(task, facets, 'person'),
           task.owner,
         ]),
-        flowLane: flowLane,
-        streamId: _streamId(task, facets, context),
+        streamId: _streamId(task, facets),
         readyNow: task.status == 'open' && laneId == 'now',
         nextBestAction: _nextBestAction(task),
         batchScore: _clamp01((relationCounts[task.taskId] ?? 0) / 4),
@@ -60,8 +46,7 @@ class TaskProjectionAdapters {
         spendScore: _spendScoreForProjectionTask(task),
         bottleneckScore: task.scores.risk,
         confidence: task.confidence,
-        explanation:
-            'Placed in $laneId as $flowLane from canonical context facets.',
+        explanation: 'Placed in $laneId from explicit task timing facts.',
         relatedTaskCount: relationCounts[task.taskId] ?? 0,
         estimateMinutes: task.estimateMinutes,
       );
@@ -166,7 +151,6 @@ class TaskProjectionAdapters {
     final nodes = <TaskConstellationNode>[];
     for (final task in graph.tasks) {
       final category = _firstNonEmpty(<String>[
-        _facetLabelForTask(task, facets, 'context'),
         _facetLabelForTask(task, facets, 'attention'),
         'General',
       ]);
@@ -192,8 +176,7 @@ class TaskProjectionAdapters {
               task.scores.humanEffort * 0.12,
           urgency: task.scores.pressure,
           confidence: task.confidence,
-          explanation:
-              'Placed by canonical time, context, and sparse backlog relations.',
+          explanation: 'Placed by canonical time and sparse backlog relations.',
         ),
       );
     }

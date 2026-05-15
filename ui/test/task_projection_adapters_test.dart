@@ -20,7 +20,7 @@ void main() {
         },
         'tasks': <Map<String, dynamic>>[
           <String, dynamic>{
-            'task_id': 'task-a',
+            'id': 'task-a',
             'title': 'Draft proposal',
             'description': 'Write the first version.',
             'status': 'open',
@@ -28,10 +28,6 @@ void main() {
             'due_at': '2026-05-04T12:00:00Z',
             'topics': <String>['proposal'],
             'estimate_minutes': 45,
-            'energy_required': 'focus',
-            'context': 'Focus',
-            'view': 'Work',
-            'source': 'Pilot',
             'work_breakdown': <String, dynamic>{
               'code': '1.1',
               'deliverable': 'Proposal draft',
@@ -63,7 +59,7 @@ void main() {
         'facets': <Map<String, dynamic>>[
           <String, dynamic>{
             'id': 'time:now',
-            'dimension': 'time',
+            'kind': 'time',
             'label': 'Now',
             'source': 'derived',
             'confidence': 0.9,
@@ -78,11 +74,11 @@ void main() {
             'confidence': 0.9,
           },
         ],
-        'edges': <Map<String, dynamic>>[
+        'relations': <Map<String, dynamic>>[
           <String, dynamic>{
             'from_task_id': 'task-b',
             'to_task_id': 'task-a',
-            'relation_type': 'enables',
+            'type': 'enables',
             'source': 'explicit',
             'confidence': 0.8,
             'explanation': 'B enables A.',
@@ -135,7 +131,6 @@ void main() {
 
       expect(nowLane.cards.map((card) => card.taskId), contains('task-a'));
       expect(nextLane.cards.map((card) => card.taskId), contains('task-b'));
-      expect(nowLane.cards.single.flowLane, 'Deep Work');
       expect(stream.links, hasLength(1));
       expect(stream.links.single.fromTaskId, 'task-b');
       expect(stream.links.single.toTaskId, 'task-a');
@@ -234,9 +229,6 @@ TaskProjectionGraph _projectionGraph() {
         priority: 'high',
         description: 'Write the first version.',
         estimateMinutes: 45,
-        context: 'Focus',
-        domain: 'Work',
-        source: 'Pilot',
         scores: TaskProjectionScores(
           reward: 0.84,
           pressure: 0.68,
@@ -247,13 +239,7 @@ TaskProjectionGraph _projectionGraph() {
           elevation: 0.74,
           terrainZone: 'agent-opportunity',
         ),
-        facetIds: <String>[
-          'time:now',
-          'attention:deep-work',
-          'context:focus',
-          'view:work',
-          'topic:proposal',
-        ],
+        facetIds: <String>['time:now', 'attention:deep-work', 'topic:proposal'],
         confidence: 0.9,
       ),
       TaskProjectionTask(
@@ -262,9 +248,6 @@ TaskProjectionGraph _projectionGraph() {
         status: 'open',
         priority: 'normal',
         estimateMinutes: 20,
-        context: 'Admin',
-        domain: 'Work',
-        source: 'Pilot',
         scores: TaskProjectionScores(
           reward: 0.44,
           pressure: 0.32,
@@ -275,12 +258,7 @@ TaskProjectionGraph _projectionGraph() {
           elevation: 0.42,
           terrainZone: 'quick-win',
         ),
-        facetIds: <String>[
-          'time:next',
-          'attention:admin',
-          'context:admin',
-          'view:work',
-        ],
+        facetIds: <String>['time:next', 'attention:admin', 'view:work'],
         confidence: 0.8,
       ),
     ],
@@ -308,24 +286,6 @@ TaskProjectionGraph _projectionGraph() {
         dimension: 'attention',
         label: 'Admin',
         source: 'derived',
-      ),
-      TaskProjectionFacet(
-        id: 'context:focus',
-        dimension: 'context',
-        label: 'Focus',
-        source: 'task',
-      ),
-      TaskProjectionFacet(
-        id: 'context:admin',
-        dimension: 'context',
-        label: 'Admin',
-        source: 'task',
-      ),
-      TaskProjectionFacet(
-        id: 'view:work',
-        dimension: 'view',
-        label: 'Work',
-        source: 'task',
       ),
       TaskProjectionFacet(
         id: 'topic:proposal',

@@ -242,5 +242,5 @@ Never call tools. Never claim a change was applied.
 Classify informational requests as {"intent":"question"} and ambiguous mutation requests as {"intent":"clarification"}.
 For mutations, use only task ids from the provided visible_tasks unless creating a task.
 Use operation names exactly as specified in the schema.
-Use field names from the graph task API: title, description, status, priority, due_at, scheduled_at, follow_up_at, clear_due_at, clear_scheduled_at, clear_follow_up_at, topics, estimate_minutes, energy_required, effort, value, urgency, risk, context, view, project, location, person, source, confidence.
+Use field names from the graph task API: title, description, status, priority, due_at, scheduled_at, follow_up_at, clear_due_at, clear_scheduled_at, clear_follow_up_at, topics, estimate_minutes, urgency, project, location, person.
 ''';

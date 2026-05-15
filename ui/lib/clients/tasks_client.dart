@@ -43,13 +43,7 @@ class TasksClient {
     DateTime? followUpAt,
     List<String> topics = const <String>[],
     int estimateMinutes = 0,
-    String energyRequired = '',
-    double effort = 0,
-    double value = 0,
     double urgency = 0,
-    double risk = 0,
-    String context = '',
-    String domain = '',
     String project = '',
     String location = '',
     String owner = '',
@@ -57,9 +51,7 @@ class TasksClient {
     int earnCents = 0,
     int saveCents = 0,
     String currency = '',
-    String source = '',
     TaskWorkBreakdown workBreakdown = const TaskWorkBreakdown(),
-    double confidence = 0,
     List<TaskMemoryLinkDraft> memoryLinks = const <TaskMemoryLinkDraft>[],
     String actor = 'agent_awesome_ui',
   }) async {
@@ -85,13 +77,7 @@ class TasksClient {
     _addTaskMetadataArguments(
       arguments,
       estimateMinutes: estimateMinutes,
-      energyRequired: energyRequired,
-      effort: effort,
-      value: value,
       urgency: urgency,
-      risk: risk,
-      context: context,
-      domain: domain,
       project: project,
       location: location,
       owner: owner,
@@ -99,8 +85,6 @@ class TasksClient {
       earnCents: earnCents,
       saveCents: saveCents,
       currency: currency,
-      source: source,
-      confidence: confidence,
     );
     _addTaskWorkBreakdownArgument(arguments, workBreakdown);
     if (memoryLinks.isNotEmpty) {
@@ -128,13 +112,7 @@ class TasksClient {
     List<String>? topics,
     bool replaceTopics = false,
     int? estimateMinutes,
-    String? energyRequired,
-    double? effort,
-    double? value,
     double? urgency,
-    double? risk,
-    String? context,
-    String? domain,
     String? project,
     String? location,
     String? owner,
@@ -142,9 +120,7 @@ class TasksClient {
     int? earnCents,
     int? saveCents,
     String? currency,
-    String? source,
     TaskWorkBreakdown? workBreakdown,
-    double? confidence,
     String actor = 'agent_awesome_ui',
   }) async {
     final arguments = <String, dynamic>{'task_id': taskId, 'actor': actor};
@@ -185,13 +161,7 @@ class TasksClient {
     _addOptionalTaskMetadataArguments(
       arguments,
       estimateMinutes: estimateMinutes,
-      energyRequired: energyRequired,
-      effort: effort,
-      value: value,
       urgency: urgency,
-      risk: risk,
-      context: context,
-      domain: domain,
       project: project,
       location: location,
       owner: owner,
@@ -199,8 +169,6 @@ class TasksClient {
       earnCents: earnCents,
       saveCents: saveCents,
       currency: currency,
-      source: source,
-      confidence: confidence,
     );
     if (workBreakdown != null) {
       arguments['work_breakdown'] = _taskWorkBreakdownPayload(workBreakdown);
@@ -256,17 +224,6 @@ class TasksClient {
     return parseTaskMemoryLink(content);
   }
 
-  /// Unlinks memory from an operational task.
-  Future<void> unlinkTaskMemory({
-    required String taskId,
-    required String linkId,
-  }) async {
-    await _rpc.callTool('unlink_task_memory', <String, dynamic>{
-      'task_id': taskId,
-      'link_id': linkId,
-    });
-  }
-
   /// Lists explicit task relation records.
   Future<List<TaskRelationRecord>> listTaskRelations() async {
     final content = await _rpc.callTool('list_task_relations');
@@ -302,96 +259,6 @@ class TasksClient {
   }) async {
     await _rpc.callTool('delete_task_relation', <String, dynamic>{
       'relation_id': relationId,
-      'actor': actor,
-    });
-  }
-
-  /// Lists first-class task commitments.
-  Future<List<TaskCommitment>> listCommitments() async {
-    final content = await _rpc.callTool('list_commitments');
-    return parseTaskCommitments(content);
-  }
-
-  /// Creates or updates one first-class task commitment.
-  Future<TaskCommitment> upsertCommitment({
-    String commitmentId = '',
-    required String taskId,
-    List<String> people = const <String>[],
-    String domain = '',
-    String project = '',
-    String timeWindow = '',
-    String responsibility = '',
-    String promiseSource = '',
-    String hardness = '',
-    String consequence = '',
-    String actor = 'agent_awesome_ui',
-  }) async {
-    final arguments = <String, dynamic>{
-      'task_id': taskId,
-      'people': people,
-      'view': domain,
-      'project': project,
-      'time_window': timeWindow,
-      'responsibility': responsibility,
-      'promise_source': promiseSource,
-      'hardness': hardness,
-      'consequence': consequence,
-      'actor': actor,
-    };
-    if (commitmentId.isNotEmpty) {
-      arguments['commitment_id'] = commitmentId;
-    }
-    final content = await _rpc.callTool('upsert_commitment', arguments);
-    return parseTaskCommitment(content);
-  }
-
-  /// Deletes one first-class task commitment.
-  Future<void> deleteCommitment(
-    String commitmentId, {
-    String actor = 'agent_awesome_ui',
-  }) async {
-    await _rpc.callTool('delete_commitment', <String, dynamic>{
-      'commitment_id': commitmentId,
-      'actor': actor,
-    });
-  }
-
-  /// Lists inferred task relation suggestions.
-  Future<List<TaskRelationSuggestion>> suggestTaskRelationships() async {
-    final content = await _rpc.callTool('suggest_task_relationships');
-    return parseTaskRelationSuggestions(content);
-  }
-
-  /// Lists inferred task metadata suggestions.
-  Future<List<TaskMetadataSuggestion>> suggestTaskMetadata() async {
-    final content = await _rpc.callTool('suggest_task_metadata');
-    return parseTaskMetadataSuggestions(content);
-  }
-
-  /// Lists inferred task commitment suggestions.
-  Future<List<TaskCommitmentSuggestion>> suggestCommitments() async {
-    final content = await _rpc.callTool('suggest_commitments');
-    return parseTaskCommitmentSuggestions(content);
-  }
-
-  /// Accepts one inferred task suggestion.
-  Future<void> applyTaskSuggestion(
-    String suggestionId, {
-    String actor = 'agent_awesome_ui',
-  }) async {
-    await _rpc.callTool('apply_task_suggestion', <String, dynamic>{
-      'suggestion_id': suggestionId,
-      'actor': actor,
-    });
-  }
-
-  /// Dismisses one inferred task suggestion.
-  Future<void> dismissTaskSuggestion(
-    String suggestionId, {
-    String actor = 'agent_awesome_ui',
-  }) async {
-    await _rpc.callTool('dismiss_task_suggestion', <String, dynamic>{
-      'suggestion_id': suggestionId,
       'actor': actor,
     });
   }

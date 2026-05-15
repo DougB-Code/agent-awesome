@@ -97,7 +97,6 @@ func projectedTaskNodes(tasks []domain.Task) []domain.TaskGraphProjectionNode {
 				"project":  task.Project,
 				"person":   task.Person,
 				"risk":     fmt.Sprintf("%.3g", task.Risk),
-				"value":    fmt.Sprintf("%.3g", task.Value),
 				"urgency":  fmt.Sprintf("%.3g", task.Urgency),
 			},
 		})

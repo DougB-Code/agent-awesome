@@ -7,7 +7,7 @@ import 'task_projection_adapters.dart';
 
 /// TaskGraphQueryGroup identifies the best visual grouping for query results.
 enum TaskGraphQueryGroup {
-  /// Group by task metadata and context.
+  /// Group by task metadata.
   metadata,
 
   /// Group by owning project or delivery stream.
@@ -564,10 +564,6 @@ Object? _nodeFieldValue(
     'person' => node.owner.isNotEmpty ? node.owner : _ownerFor(index, taskId),
     'project' =>
       node.project.isNotEmpty ? node.project : _projectFor(index, taskId),
-    'context' => _contextFor(index, taskId),
-    'view' || 'domain' => _viewFor(index, taskId),
-    'source' =>
-      workspace?.sourceLabel ?? workspace?.source ?? projection?.source ?? '',
     'due_at' || 'due' => workspace?.dueAt ?? projection?.dueAt,
     'scheduled_at' ||
     'scheduled' => workspace?.scheduledAt ?? projection?.scheduledAt,
@@ -579,18 +575,9 @@ Object? _nodeFieldValue(
           workspace?.urgency ??
           projection?.scores.pressure ??
           0,
-    'reward' || 'value' =>
-      scores?.reward ?? workspace?.value ?? projection?.scores.reward ?? 0,
-    'effort' =>
-      scores?.humanEffort ??
-          workspace?.effort ??
-          projection?.scores.humanEffort ??
-          0,
-    'confidence' =>
-      scores?.confidence ??
-          workspace?.confidence ??
-          projection?.confidence ??
-          0,
+    'reward' => scores?.reward ?? projection?.scores.reward ?? 0,
+    'human_effort' =>
+      scores?.humanEffort ?? projection?.scores.humanEffort ?? 0,
     'downstream_count' ||
     'downstream' => index.downstreamTasksFor(taskId).length,
     'blocker_count' || 'upstream' => index.blockersFor(taskId).length,
@@ -602,7 +589,7 @@ Object? _nodeFieldValue(
 Object? _edgeFieldValue(TaskProjectionEdge edge, String field) {
   return switch (field) {
     'id' => _projectionEdgeKey(edge),
-    'type' || 'relation_type' => edge.relationType,
+    'type' => edge.relationType,
     'from_id' || 'from_node_id' => edge.fromTaskId,
     'to_id' || 'to_node_id' => edge.toTaskId,
     'confidence' => edge.confidence,
@@ -771,24 +758,6 @@ String _projectFor(TaskInsightIndex index, String taskId) {
       ? index.facetLabelForTask(taskId, 'project')
       : index.workspaceTasksById[taskId]?.project ??
             index.projectionTasksById[taskId]?.project ??
-            '';
-}
-
-/// Returns the context label for one task.
-String _contextFor(TaskInsightIndex index, String taskId) {
-  return index.facetLabelForTask(taskId, 'context').isNotEmpty
-      ? index.facetLabelForTask(taskId, 'context')
-      : index.workspaceTasksById[taskId]?.context ??
-            index.projectionTasksById[taskId]?.context ??
-            '';
-}
-
-/// Returns the view label for one task.
-String _viewFor(TaskInsightIndex index, String taskId) {
-  return index.facetLabelForTask(taskId, 'view').isNotEmpty
-      ? index.facetLabelForTask(taskId, 'view')
-      : index.workspaceTasksById[taskId]?.domain ??
-            index.projectionTasksById[taskId]?.domain ??
             '';
 }
 

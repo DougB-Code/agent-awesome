@@ -316,7 +316,6 @@ func TestCreateTaskWritesGraphFacts(t *testing.T) {
 		EstimateMinutes: 90,
 		Project:         "Forecasting",
 		Person:          "Doug",
-		Source:          "test",
 		WorkBreakdown: domain.TaskWorkBreakdown{
 			Code:               "1.1",
 			Deliverable:        "Forecast readout",
@@ -435,7 +434,6 @@ func TestUpdateTaskPatchesGraphFacts(t *testing.T) {
 		Title:   "Draft readout",
 		Topics:  []string{"draft"},
 		Project: "Old project",
-		Source:  "manual",
 	})
 	if err != nil {
 		t.Fatalf("create task: %v", err)
@@ -453,7 +451,6 @@ func TestUpdateTaskPatchesGraphFacts(t *testing.T) {
 	title := "Finalize readout"
 	description := "Updated execution notes."
 	project := "Forecasting"
-	source := "planner"
 	estimate := 0
 	priority := domain.TaskPriorityUrgent
 	updated, err := repo.UpdateTask(ctx, domain.UpdateTaskRequest{
@@ -463,20 +460,19 @@ func TestUpdateTaskPatchesGraphFacts(t *testing.T) {
 		Priority:        &priority,
 		Topics:          []string{"forecast"},
 		Project:         &project,
-		Source:          &source,
 		EstimateMinutes: &estimate,
 	})
 	if err != nil {
 		t.Fatalf("update task: %v", err)
 	}
-	if updated.Title != title || updated.Description != description || updated.Priority != priority || updated.Project != project || updated.Source != source {
+	if updated.Title != title || updated.Description != description || updated.Priority != priority || updated.Project != project {
 		t.Fatalf("updated task = %#v", updated)
 	}
 	if updated.EstimateMinutes != 0 || !reflect.DeepEqual(updated.Topics, []string{"forecast"}) {
 		t.Fatalf("updated numeric/topics = %#v", updated)
 	}
 	if len(updated.MemoryLinks) != 1 || updated.MemoryLinks[0].MemoryID != string(memory.MemoryID) {
-		t.Fatalf("memory links after source replacement = %#v, want memory link preserved", updated.MemoryLinks)
+		t.Fatalf("memory links after metadata update = %#v, want memory link preserved", updated.MemoryLinks)
 	}
 }
 
@@ -655,8 +651,6 @@ func TestTaskGraphProjectionReturnsNodesEdgesAndFacets(t *testing.T) {
 		Project: "Context Graph",
 		Person:  "Doug",
 		Topics:  []string{"graph", "query"},
-		Risk:    0.4,
-		Value:   0.9,
 	})
 	if err != nil {
 		t.Fatalf("create readout: %v", err)

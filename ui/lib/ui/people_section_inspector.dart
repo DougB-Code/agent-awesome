@@ -361,10 +361,6 @@ class _ContactContextCard extends StatelessWidget {
               PanelBadge(label: '${this.context.sourceCount} sources'),
               if (this.context.openTaskCount > 0)
                 PanelBadge(label: '${this.context.openTaskCount} active tasks'),
-              if (this.context.commitmentCount > 0)
-                PanelBadge(
-                  label: '${this.context.commitmentCount} commitments',
-                ),
               for (final topic in this.context.topics.take(3))
                 PanelBadge(label: topic),
             ],
@@ -375,7 +371,7 @@ class _ContactContextCard extends StatelessWidget {
   }
 }
 
-/// _ContactActivityDetails renders tasks and commitments for a contact.
+/// _ContactActivityDetails renders tasks for a contact.
 class _ContactActivityDetails extends StatelessWidget {
   /// Creates contact activity details.
   const _ContactActivityDetails({required this.contact});
@@ -383,7 +379,7 @@ class _ContactActivityDetails extends StatelessWidget {
   /// Selected contact.
   final _ContactItem contact;
 
-  /// Builds work and commitment activity.
+  /// Builds work activity.
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -399,18 +395,6 @@ class _ContactActivityDetails extends StatelessWidget {
                   children: <Widget>[
                     for (final task in contact.tasks)
                       _ContactTaskTile(task: task),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 12),
-        _ContactInspectorBlock(
-          label: 'Commitments',
-          child: contact.commitments.isEmpty
-              ? const _ContactMutedText('No commitments')
-              : Column(
-                  children: <Widget>[
-                    for (final commitment in contact.commitments)
-                      _ContactCommitmentTile(commitment: commitment),
                   ],
                 ),
         ),

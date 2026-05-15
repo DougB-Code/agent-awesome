@@ -131,7 +131,6 @@ TaskProjectionGraph _relationshipGraph() {
         estimateMinutes: 180,
         owner: 'Priya',
         project: 'Platform',
-        source: 'Platform',
         scores: const TaskProjectionScores(
           reward: 0.86,
           pressure: 0.82,
@@ -149,7 +148,6 @@ TaskProjectionGraph _relationshipGraph() {
         estimateMinutes: 90,
         owner: 'Priya',
         project: 'Platform',
-        source: 'Platform',
         scores: TaskProjectionScores(
           reward: 0.74,
           pressure: 0.7,
@@ -167,7 +165,6 @@ TaskProjectionGraph _relationshipGraph() {
         estimateMinutes: 240,
         owner: 'Mina',
         project: 'Mobile',
-        source: 'Mobile',
         scores: TaskProjectionScores(
           reward: 0.95,
           pressure: 0.9,
@@ -185,7 +182,6 @@ TaskProjectionGraph _relationshipGraph() {
         estimateMinutes: 45,
         owner: 'Noor',
         project: 'Enablement',
-        source: 'Enablement',
         scores: TaskProjectionScores(
           reward: 0.4,
           pressure: 0.2,

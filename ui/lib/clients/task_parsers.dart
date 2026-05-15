@@ -45,13 +45,8 @@ WorkspaceTask parseWorkspaceTask(dynamic content) {
     overdue: boolValue(task['overdue']),
     memoryLinks: parseTaskMemoryLinks(task['memory_links']),
     estimateMinutes: intValue(task['estimate_minutes']),
-    energyRequired: stringValue(task['energy_required']),
-    effort: doubleValue(task['effort']),
-    value: doubleValue(task['value']),
     urgency: doubleValue(task['urgency']),
     risk: doubleValue(task['risk']),
-    context: stringValue(task['context']),
-    domain: stringValue(task['view']),
     project: stringValue(task['project']),
     location: stringValue(task['location']),
     owner: stringValue(task['person']),
@@ -59,9 +54,7 @@ WorkspaceTask parseWorkspaceTask(dynamic content) {
     earnCents: intValue(task['earn_cents']),
     saveCents: intValue(task['save_cents']),
     currency: stringValue(task['currency']),
-    source: stringValue(task['source']),
     workBreakdown: parseTaskWorkBreakdown(task['work_breakdown']),
-    confidence: doubleValue(task['confidence']),
     createdAt: parseOptionalDateTime(task['created_at']),
     updatedAt: parseOptionalDateTime(task['updated_at']),
     completedAt: parseOptionalDateTime(task['completed_at']),
@@ -98,10 +91,7 @@ Map<String, TaskWorkBreakdown> parseTaskWorkBreakdownRows(dynamic content) {
   }
   final values = <String, TaskWorkBreakdown>{};
   for (final row in rows.whereType<Map<String, dynamic>>()) {
-    final taskId = stringValue(
-      row['id'],
-      fallback: stringValue(row['task_id']),
-    );
+    final taskId = stringValue(row['id']);
     if (taskId.isEmpty) {
       continue;
     }
@@ -206,10 +196,7 @@ TaskRelationRecord parseTaskRelation(dynamic content) {
     id: stringValue(relation['id']),
     fromTaskId: stringValue(relation['from_task_id']),
     toTaskId: stringValue(relation['to_task_id']),
-    relationType: stringValue(
-      relation['relation_type'],
-      fallback: 'related_to',
-    ),
+    relationType: stringValue(relation['type']),
     confidence: doubleValue(relation['confidence']),
     source: stringValue(relation['source']),
     explanation: stringValue(relation['explanation']),
@@ -219,122 +206,16 @@ TaskRelationRecord parseTaskRelation(dynamic content) {
   );
 }
 
-/// Parses inferred task relation suggestions.
-List<TaskRelationSuggestion> parseTaskRelationSuggestions(dynamic content) {
-  if (content is! List) {
-    return const <TaskRelationSuggestion>[];
-  }
-  return content.whereType<Map<String, dynamic>>().map((suggestion) {
-    return TaskRelationSuggestion(
-      id: stringValue(suggestion['id']),
-      fromTaskId: stringValue(suggestion['from_task_id']),
-      toTaskId: stringValue(suggestion['to_task_id']),
-      relationType: stringValue(
-        suggestion['relation_type'],
-        fallback: 'related_to',
-      ),
-      confidence: doubleValue(suggestion['confidence']),
-      explanation: stringValue(suggestion['explanation']),
-    );
-  }).toList();
-}
-
-/// Parses inferred task metadata suggestions.
-List<TaskMetadataSuggestion> parseTaskMetadataSuggestions(dynamic content) {
-  if (content is! List) {
-    return const <TaskMetadataSuggestion>[];
-  }
-  return content.whereType<Map<String, dynamic>>().map((suggestion) {
-    return TaskMetadataSuggestion(
-      id: stringValue(suggestion['id']),
-      taskId: stringValue(suggestion['task_id']),
-      estimateMinutes: intValue(suggestion['estimate_minutes']),
-      energyRequired: stringValue(suggestion['energy_required']),
-      effort: doubleValue(suggestion['effort']),
-      value: doubleValue(suggestion['value']),
-      urgency: doubleValue(suggestion['urgency']),
-      risk: doubleValue(suggestion['risk']),
-      context: stringValue(suggestion['context']),
-      domain: stringValue(suggestion['view']),
-      project: stringValue(suggestion['project']),
-      location: stringValue(suggestion['location']),
-      owner: stringValue(suggestion['person']),
-      source: stringValue(suggestion['source']),
-      confidence: doubleValue(suggestion['confidence']),
-      explanation: stringValue(suggestion['explanation']),
-    );
-  }).toList();
-}
-
-/// Parses inferred task commitment suggestions.
-List<TaskCommitmentSuggestion> parseTaskCommitmentSuggestions(dynamic content) {
-  if (content is! List) {
-    return const <TaskCommitmentSuggestion>[];
-  }
-  return content.whereType<Map<String, dynamic>>().map((suggestion) {
-    return TaskCommitmentSuggestion(
-      id: stringValue(suggestion['id']),
-      taskId: stringValue(suggestion['task_id']),
-      people: stringList(suggestion['people']),
-      domain: stringValue(suggestion['view']),
-      project: stringValue(suggestion['project']),
-      timeWindow: stringValue(suggestion['time_window']),
-      responsibility: stringValue(suggestion['responsibility']),
-      promiseSource: stringValue(suggestion['promise_source']),
-      hardness: stringValue(suggestion['hardness']),
-      consequence: stringValue(suggestion['consequence']),
-      confidence: doubleValue(suggestion['confidence']),
-      explanation: stringValue(suggestion['explanation']),
-    );
-  }).toList();
-}
-
-/// Parses stored task commitments.
-List<TaskCommitment> parseTaskCommitments(dynamic content) {
-  if (content is! List) {
-    return const <TaskCommitment>[];
-  }
-  return content
-      .whereType<Map<String, dynamic>>()
-      .map(parseTaskCommitment)
-      .toList();
-}
-
-/// Parses one stored task commitment.
-TaskCommitment parseTaskCommitment(dynamic content) {
-  final commitment = content is Map<String, dynamic>
-      ? content
-      : <String, dynamic>{};
-  return TaskCommitment(
-    id: stringValue(commitment['id']),
-    taskId: stringValue(commitment['task_id']),
-    people: stringList(commitment['people']),
-    domain: stringValue(commitment['view']),
-    project: stringValue(commitment['project']),
-    timeWindow: stringValue(commitment['time_window']),
-    responsibility: stringValue(commitment['responsibility']),
-    promiseSource: stringValue(commitment['promise_source']),
-    hardness: stringValue(commitment['hardness']),
-    consequence: stringValue(commitment['consequence']),
-    actor: stringValue(commitment['actor']),
-    createdAt: parseOptionalDateTime(commitment['created_at']),
-    updatedAt: parseOptionalDateTime(commitment['updated_at']),
-  );
-}
-
 /// Parses a canonical task projection graph.
 TaskProjectionGraph parseTaskProjectionGraph(dynamic content) {
   final graph = content is Map<String, dynamic> ? content : <String, dynamic>{};
-  final edges = graph['relations'] ?? graph['edges'];
   return TaskProjectionGraph(
-    schemaVersion: stringValue(graph['schema_version'], fallback: '1.0'),
+    schemaVersion: stringValue(graph['schema_version']),
     generatedAt: parseOptionalDateTime(graph['generated_at']),
     tasks: parseTaskProjectionTasks(graph['tasks']),
     facets: parseTaskProjectionFacets(graph['facets']),
     memberships: parseTaskProjectionMemberships(graph['memberships']),
-    edges: parseTaskProjectionEdges(edges),
-    commitments: parseTaskCommitments(graph['commitments']),
-    metadataGaps: parseTaskMetadataGapRecords(graph['metadata_gaps']),
+    edges: parseTaskProjectionEdges(graph['relations']),
     insightSummaries: parseTaskInsightSummaries(graph['insight_summaries']),
     quality: parseTaskProjectionQuality(graph['quality']),
   );
@@ -347,7 +228,6 @@ TaskProjectionQuality parseTaskProjectionQuality(dynamic content) {
       : <String, dynamic>{};
   return TaskProjectionQuality(
     schemaConfidence: doubleValue(quality['schema_confidence']),
-    metadataCompleteness: doubleValue(quality['metadata_completeness']),
     relationCoverage: doubleValue(quality['relation_coverage']),
     warnings: stringList(quality['warnings']),
   );
@@ -359,87 +239,27 @@ List<TaskProjectionTask> parseTaskProjectionTasks(dynamic content) {
     return const <TaskProjectionTask>[];
   }
   return content.whereType<Map<String, dynamic>>().map((task) {
-    final raw = jsonObject(task['raw']);
-    final normalized = jsonObject(task['normalized']);
-    final quality = jsonObject(task['quality']);
     return TaskProjectionTask(
-      taskId: stringValue(task['task_id'], fallback: stringValue(task['id'])),
-      title: stringValue(
-        task['title'],
-        fallback: stringValue(raw['title'], fallback: 'Untitled task'),
-      ),
-      description: stringValue(
-        task['description'],
-        fallback: stringValue(raw['description']),
-      ),
-      status: stringValue(
-        task['status'],
-        fallback: stringValue(
-          normalized['status'],
-          fallback: stringValue(raw['status'], fallback: 'open'),
-        ),
-      ),
-      priority: stringValue(
-        task['priority'],
-        fallback: stringValue(
-          normalized['priority'],
-          fallback: stringValue(raw['priority'], fallback: 'normal'),
-        ),
-      ),
-      dueAt: parseOptionalDateTime(task['due_at'] ?? raw['due_at']),
-      scheduledAt: parseOptionalDateTime(
-        task['scheduled_at'] ?? raw['scheduled_at'],
-      ),
-      topics: stringList(task['topics']).isNotEmpty
-          ? stringList(task['topics'])
-          : stringList(raw['topics']),
-      estimateMinutes: intValue(
-        task['estimate_minutes'],
-        fallback: intValue(raw['estimate_minutes']),
-      ),
-      energyRequired: stringValue(
-        task['energy_required'],
-        fallback: stringValue(raw['energy_required']),
-      ),
-      context: stringValue(
-        task['context'],
-        fallback: stringValue(raw['context']),
-      ),
-      domain: stringValue(task['view'], fallback: stringValue(raw['view'])),
-      project: stringValue(
-        task['project'],
-        fallback: stringValue(raw['project']),
-      ),
-      location: stringValue(
-        task['location'],
-        fallback: stringValue(raw['location']),
-      ),
-      owner: stringValue(task['person'], fallback: stringValue(raw['person'])),
-      source: stringValue(task['source'], fallback: stringValue(raw['source'])),
-      workBreakdown: parseTaskWorkBreakdown(
-        task['work_breakdown'] ?? raw['work_breakdown'],
-      ),
-      projectId: stringValue(normalized['project_id']),
-      workstreamId: stringValue(normalized['workstream_id']),
-      valueType: stringValue(normalized['value_type']),
-      obligationLevel: stringValue(normalized['obligation_level']),
-      consequenceSeverity: stringValue(normalized['consequence_severity']),
-      agentSafety: stringValue(normalized['agent_safety']),
-      handoffReadiness: stringValue(normalized['handoff_readiness']),
-      dependencyState: stringValue(normalized['dependency_state']),
+      taskId: stringValue(task['id']),
+      title: stringValue(task['title']),
+      description: stringValue(task['description']),
+      status: stringValue(task['status']),
+      priority: stringValue(task['priority']),
+      dueAt: parseOptionalDateTime(task['due_at']),
+      scheduledAt: parseOptionalDateTime(task['scheduled_at']),
+      topics: stringList(task['topics']),
+      estimateMinutes: intValue(task['estimate_minutes']),
+      project: stringValue(task['project']),
+      location: stringValue(task['location']),
+      owner: stringValue(task['person']),
+      workBreakdown: parseTaskWorkBreakdown(task['work_breakdown']),
       scores: parseTaskProjectionScores(task['scores']),
       scoreComponents: parseTaskScoreComponents(task['score_components']),
       facetIds: stringList(task['facet_ids']),
       evidenceIds: stringList(task['evidence_ids']),
-      missingFields: stringList(quality['missing_fields']),
-      confidence: doubleValue(
-        task['confidence'],
-        fallback: doubleValue(quality['confidence']),
-      ),
-      explanation: stringValue(
-        task['explanation'],
-        fallback: stringValue(quality['explanation']),
-      ),
+      missingFields: stringList(task['missing_fields']),
+      confidence: doubleValue(task['confidence']),
+      explanation: stringValue(task['explanation']),
     );
   }).toList();
 }
@@ -457,10 +277,7 @@ TaskProjectionScores parseTaskProjectionScores(dynamic content) {
     humanEffort: doubleValue(scores['human_effort']),
     agentFit: doubleValue(scores['agent_fit']),
     obligation: doubleValue(scores['obligation']),
-    consequenceSeverity: doubleValue(
-      scores['consequence_severity'],
-      fallback: doubleValue(scores['consequence']),
-    ),
+    consequenceSeverity: doubleValue(scores['consequence_severity']),
     agentSafety: doubleValue(scores['agent_safety']),
     handoffReadiness: doubleValue(scores['handoff_readiness']),
     contextReadiness: doubleValue(scores['context_readiness']),
@@ -468,9 +285,7 @@ TaskProjectionScores parseTaskProjectionScores(dynamic content) {
     downstreamValue: doubleValue(scores['downstream_value']),
     blockerEffort: doubleValue(scores['blocker_effort']),
     unblockLeverage: doubleValue(scores['unblock_leverage']),
-    metadataCompleteness: doubleValue(scores['metadata_completeness']),
     staleness: doubleValue(scores['staleness']),
-    commitmentHardness: doubleValue(scores['commitment_hardness']),
     elevation: doubleValue(scores['elevation']),
     terrainZone: stringValue(scores['terrain_zone']),
   );
@@ -511,7 +326,7 @@ List<TaskProjectionFacet> parseTaskProjectionFacets(dynamic content) {
   return content.whereType<Map<String, dynamic>>().map((facet) {
     return TaskProjectionFacet(
       id: stringValue(facet['id']),
-      dimension: stringValue(facet['dimension']),
+      dimension: stringValue(facet['kind']),
       label: stringValue(facet['label']),
       description: stringValue(facet['description']),
       source: stringValue(facet['source']),
@@ -550,10 +365,7 @@ List<TaskProjectionEdge> parseTaskProjectionEdges(dynamic content) {
       id: stringValue(edge['id']),
       fromTaskId: stringValue(edge['from_task_id']),
       toTaskId: stringValue(edge['to_task_id']),
-      relationType: stringValue(
-        edge['relation_type'],
-        fallback: stringValue(edge['type']),
-      ),
+      relationType: stringValue(edge['type']),
       directionSemantics: stringValue(edge['direction_semantics']),
       source: stringValue(edge['source']),
       sourceKind: stringValue(edge['source_kind']),
@@ -567,26 +379,6 @@ List<TaskProjectionEdge> parseTaskProjectionEdges(dynamic content) {
       updatedAt: parseOptionalDateTime(edge['updated_at']),
       confirmedAt: parseOptionalDateTime(edge['confirmed_at']),
       dismissedAt: parseOptionalDateTime(edge['dismissed_at']),
-    );
-  }).toList();
-}
-
-/// Parses source-provided metadata gaps.
-List<TaskMetadataGapRecord> parseTaskMetadataGapRecords(dynamic content) {
-  if (content is! List) {
-    return const <TaskMetadataGapRecord>[];
-  }
-  return content.whereType<Map<String, dynamic>>().map((gap) {
-    return TaskMetadataGapRecord(
-      id: stringValue(gap['id']),
-      taskId: stringValue(gap['task_id']),
-      field: stringValue(gap['field']),
-      severity: stringValue(gap['severity'], fallback: 'info'),
-      blocksInsights: stringList(gap['blocks_insights']),
-      message: stringValue(gap['message']),
-      proposedAction: stringValue(gap['proposed_action']),
-      suggestedValues: stringList(gap['suggested_values']),
-      confidence: doubleValue(gap['confidence']),
     );
   }).toList();
 }

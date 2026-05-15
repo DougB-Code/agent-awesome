@@ -13,7 +13,6 @@ class _ContactItem {
     required this.openTaskCount,
     required this.memoryRecords,
     required this.tasks,
-    required this.commitments,
     required this.contexts,
     required this.firewallLabels,
     required this.topics,
@@ -46,9 +45,6 @@ class _ContactItem {
   /// Tasks owned by this contact.
   final List<WorkspaceTask> tasks;
 
-  /// Commitments involving this contact.
-  final List<TaskCommitment> commitments;
-
   /// Firewall context slices for this contact.
   final List<_ContactContext> contexts;
 
@@ -79,10 +75,8 @@ class _ContactContext {
     required this.sensitivityLabel,
     required this.sourceCount,
     required this.openTaskCount,
-    required this.commitmentCount,
     required this.memoryRecords,
     required this.tasks,
-    required this.commitments,
     required this.topics,
     required this.lastUpdatedAt,
   });
@@ -108,17 +102,11 @@ class _ContactContext {
   /// Open task count.
   final int openTaskCount;
 
-  /// Commitment count.
-  final int commitmentCount;
-
   /// Memory records in this context.
   final List<MemoryRecord> memoryRecords;
 
   /// Tasks in this context.
   final List<WorkspaceTask> tasks;
-
-  /// Commitments in this context.
-  final List<TaskCommitment> commitments;
 
   /// Topic labels in this context.
   final List<String> topics;
@@ -152,9 +140,6 @@ class _ContactAggregate {
   /// Tasks owned by this contact.
   final List<WorkspaceTask> tasks = <WorkspaceTask>[];
 
-  /// Commitments involving this contact.
-  final List<TaskCommitment> commitments = <TaskCommitment>[];
-
   /// Topic labels gathered from records and work.
   final Set<String> topics = <String>{};
 }
@@ -183,9 +168,6 @@ class _ContactContextAggregate {
   /// Tasks in this context.
   final List<WorkspaceTask> tasks = <WorkspaceTask>[];
 
-  /// Commitments in this context.
-  final List<TaskCommitment> commitments = <TaskCommitment>[];
-
   /// Topics gathered for this context.
   final Set<String> topics = <String>{};
 
@@ -203,9 +185,6 @@ enum _ContactFilter {
 
   /// Contacts with source-backed memory.
   sources('Sources', Icons.source_outlined),
-
-  /// Contacts with first-class commitments.
-  commitments('Commitments', Icons.handshake_outlined),
 
   /// Contacts with more than one firewall/context slice.
   multiContext('Multi-context', Icons.account_tree_outlined),

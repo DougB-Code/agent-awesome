@@ -186,7 +186,7 @@ func TestToolCallFromTextAcceptsUnterminatedGemmaCreateTaskMarkup(t *testing.T) 
 			},
 		},
 	}
-	text := `<|tool_call>call:create_task{actor: "user", confidence: 0.9, context: "Need to buy milk.", description: "Purchase milk.", due_at: null, effort: 5, energy_required: 1, estimate_minutes: 10, idempotency_key: "agent_awesome:a1bce6ac-f46c-4606-b82d-d76c3411808e:buy_milk", location: "Grocery store", memory_links: [], person: "user", priority: "medium", project: "Groceries", risk: 0.1, scheduled_at: null, status: "pending", title: "Buy Milk", topics: ["groceries", "errand"], urgency: "low", value: 10, view: "list", work_breakdown: ["Go to store", "Select milk", "Pay"]}`
+	text := `<|tool_call>call:create_task{actor: "user", confidence: 0.9, context: "Need to buy milk.", description: "Purchase milk.", due_at: null, estimate_minutes: 10, idempotency_key: "agent_awesome:a1bce6ac-f46c-4606-b82d-d76c3411808e:buy_milk", location: "Grocery store", memory_links: [], person: "user", priority: "medium", project: "Groceries", risk: 0.1, scheduled_at: null, status: "pending", title: "Buy Milk", topics: ["groceries", "errand"], urgency: "low", view: "list", work_breakdown: ["Go to store", "Select milk", "Pay"]}`
 
 	call := toolCallFromText(text, req)
 	if call == nil {

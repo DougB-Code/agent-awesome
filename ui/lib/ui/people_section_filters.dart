@@ -21,7 +21,6 @@ bool _matchesContactFilter(_ContactItem contact, _ContactFilter filter) {
     _ContactFilter.all => true,
     _ContactFilter.active => contact.openTaskCount > 0,
     _ContactFilter.sources => contact.memoryRecords.isNotEmpty,
-    _ContactFilter.commitments => contact.commitments.isNotEmpty,
     _ContactFilter.multiContext => contact.contexts.length > 1,
     _ContactFilter.taskOwners =>
       contact.tasks.isNotEmpty && contact.memoryRecords.isEmpty,
@@ -38,8 +37,7 @@ bool _matchesContactQuery(_ContactItem contact, String query) {
       '${contact.name} ${contact.summary} ${contact.statusLabel} '
               '${contact.topics.join(' ')} '
               '${contact.contexts.map((item) => item.displayLabel).join(' ')} '
-              '${contact.tasks.map((task) => task.title).join(' ')} '
-              '${contact.commitments.map((item) => item.project).join(' ')}'
+              '${contact.tasks.map((task) => task.title).join(' ')}'
           .toLowerCase();
   var cursor = 0;
   for (final codeUnit in normalizedQuery.codeUnits) {
@@ -69,14 +67,6 @@ int _contactContextCount(List<_ContactItem> contacts) {
   return contacts.fold<int>(
     0,
     (count, contact) => count + contact.contexts.length,
-  );
-}
-
-/// Counts commitments across all contacts.
-int _contactCommitmentCount(List<_ContactItem> contacts) {
-  return contacts.fold<int>(
-    0,
-    (count, contact) => count + contact.commitments.length,
   );
 }
 

@@ -47,8 +47,8 @@ The model-facing payload is intentionally small:
 * `scheduled_at`: optional start or reminder timestamp when the user gives one.
 * `topics`, `idempotency_key`, and `actor`: optional control fields.
 
-The transport still tolerates legacy rich task metadata from older local-model prompts, but the schema no longer asks the model to fill planning fields such as effort, value, urgency, energy, project, location, memory links, or work-breakdown metadata during creation.
-Those richer fields belong to explicit task updates or UI editing flows.
+The transport only maps those schema fields during creation.
+Richer planning fields such as urgency, project, location, memory links, and work-breakdown metadata belong to explicit task updates or UI editing flows.
 
 Created open tasks with no due or scheduled time receive a `follow_up_at` stale-review timestamp seven days later.
 That keeps an inbox-style task actionable immediately while giving the UI and task queries a concrete time to surface aging clutter.

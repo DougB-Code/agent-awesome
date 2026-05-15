@@ -28,8 +28,6 @@ class TaskInsightIndex {
     this.incomingRelationsByTaskId = const <String, List<TaskProjectionEdge>>{},
     this.blockersByTaskId = const <String, List<String>>{},
     this.blockedByTaskId = const <String, List<String>>{},
-    this.commitmentsByTaskId = const <String, List<TaskCommitment>>{},
-    this.metadataGapsByTaskId = const <String, List<TaskMetadataGapRecord>>{},
     this.scoresByTaskId = const <String, TaskInsightScoreProfile>{},
     this.insightCandidatesByInsightId =
         const <String, List<TaskInsightCandidate>>{},
@@ -79,12 +77,6 @@ class TaskInsightIndex {
   /// Direct downstream blocked task ids keyed by blocker task id.
   final Map<String, List<String>> blockedByTaskId;
 
-  /// Commitments keyed by graph task id.
-  final Map<String, List<TaskCommitment>> commitmentsByTaskId;
-
-  /// Metadata gaps keyed by graph task id.
-  final Map<String, List<TaskMetadataGapRecord>> metadataGapsByTaskId;
-
   /// Query-ready normalized scores keyed by graph task id.
   final Map<String, TaskInsightScoreProfile> scoresByTaskId;
 
@@ -101,10 +93,6 @@ class TaskInsightIndex {
   factory TaskInsightIndex.build({
     required List<WorkspaceTask> workspaceTasks,
     required TaskProjectionGraph graph,
-    List<TaskRelationRecord> taskRelations = const <TaskRelationRecord>[],
-    List<TaskCommitment> taskCommitments = const <TaskCommitment>[],
-    List<TaskMetadataSuggestion> metadataSuggestions =
-        const <TaskMetadataSuggestion>[],
     TaskInsightPolicy policy = const TaskInsightPolicy(),
     DateTime? now,
   }) {
@@ -130,10 +118,7 @@ class TaskInsightIndex {
           .putIfAbsent(membership.taskId, () => <TaskProjectionMembership>[])
           .add(membership);
     }
-    final normalizedEdges = _normalizeRelationRecords(
-      graphEdges: graph.edges,
-      taskRelations: taskRelations,
-    );
+    final normalizedEdges = graph.edges;
     final outgoing = <String, List<TaskProjectionEdge>>{};
     final incoming = <String, List<TaskProjectionEdge>>{};
     final blockers = <String, LinkedHashSet<String>>{};
@@ -147,17 +132,6 @@ class TaskInsightIndex {
           .add(edge);
       _indexBlockingDirection(edge, blockers, blocked, policy);
     }
-    final cycleTaskIds = _dependencyCycleTaskIds(normalizedEdges, policy);
-    final allCommitments = <TaskCommitment>[
-      ...graph.commitments,
-      ...taskCommitments,
-    ];
-    final commitmentsByTaskId = <String, List<TaskCommitment>>{};
-    for (final commitment in allCommitments) {
-      commitmentsByTaskId
-          .putIfAbsent(commitment.taskId, () => <TaskCommitment>[])
-          .add(commitment);
-    }
     final downstreamValues = <String, double>{};
     for (final taskId in _allTaskIds(workspaceTasksById, projectionTasksById)) {
       downstreamValues[taskId] = _downstreamValue(
@@ -169,9 +143,6 @@ class TaskInsightIndex {
     }
     final scoreProfiles = <String, TaskInsightScoreProfile>{};
     for (final taskId in _allTaskIds(workspaceTasksById, projectionTasksById)) {
-      final commitmentHardness = _commitmentHardness(
-        commitmentsByTaskId[taskId] ?? const <TaskCommitment>[],
-      );
       final blockerEffort = _blockerEffort(
         workspaceTasksById[taskId],
         projectionTasksById[taskId],
@@ -184,26 +155,14 @@ class TaskInsightIndex {
         projectionTask: projectionTasksById[taskId],
         downstreamValue: downstream,
         unblockLeverage: leverage,
-        commitmentHardness: commitmentHardness,
       );
     }
-    final gapsByTaskId = _metadataGapsByTaskId(
-      graphGaps: graph.metadataGaps,
-      metadataSuggestions: metadataSuggestions,
-      workspaceTasksById: workspaceTasksById,
-      projectionTasksById: projectionTasksById,
-      scoresByTaskId: scoreProfiles,
-      policy: policy,
-      cycleTaskIds: cycleTaskIds,
-    );
     final candidates = _buildCandidates(
       workspaceTasksById: workspaceTasksById,
       projectionTasksById: projectionTasksById,
       scoresByTaskId: scoreProfiles,
       blockedByTaskId: blocked,
       blockersByTaskId: blockers,
-      commitmentsByTaskId: commitmentsByTaskId,
-      metadataGapsByTaskId: gapsByTaskId,
       policy: policy,
       now: referenceTime,
     );
@@ -236,11 +195,6 @@ class TaskInsightIndex {
           Map<String, List<TaskProjectionEdge>>.unmodifiable(incoming),
       blockersByTaskId: _freezeSetMap(blockers),
       blockedByTaskId: _freezeSetMap(blocked),
-      commitmentsByTaskId: Map<String, List<TaskCommitment>>.unmodifiable(
-        commitmentsByTaskId,
-      ),
-      metadataGapsByTaskId:
-          Map<String, List<TaskMetadataGapRecord>>.unmodifiable(gapsByTaskId),
       scoresByTaskId: Map<String, TaskInsightScoreProfile>.unmodifiable(
         scoreProfiles,
       ),
@@ -297,11 +251,6 @@ class TaskInsightIndex {
     return null;
   }
 
-  /// Returns metadata gaps for a task.
-  List<TaskMetadataGapRecord> metadataGapsFor(String taskId) {
-    return metadataGapsByTaskId[taskId] ?? const <TaskMetadataGapRecord>[];
-  }
-
   /// Returns blockers for a task.
   List<String> blockersFor(String taskId) {
     return blockersByTaskId[taskId] ?? const <String>[];
@@ -334,7 +283,6 @@ class TaskInsightIndex {
     final downstream = primaryBlockerId.isEmpty
         ? downstreamTasksFor(taskId)
         : downstreamTasksFor(primaryBlockerId);
-    final gaps = metadataGapsFor(taskId);
     final agentOptions = _agentAssistOptions(
       scoresByTaskId[primaryBlockerId] ?? scoresByTaskId[taskId],
     );
@@ -359,7 +307,7 @@ class TaskInsightIndex {
         status,
       ),
       agentAssistOptions: agentOptions,
-      missingContext: gaps.map((gap) => gap.field).toList(),
+      missingContext: const <String>[],
       evidenceIds: <String>{
         for (final edge in relationEdges) ...edge.evidenceIds,
         ...?projectionTask?.evidenceIds,
@@ -380,10 +328,6 @@ class TaskInsightIndex {
     final candidate = candidateForTask(taskId, insightId);
     if (candidate != null && candidate.explanation.isNotEmpty) {
       return candidate.explanation;
-    }
-    final gaps = metadataGapsFor(taskId);
-    if (gaps.isNotEmpty) {
-      return TaskInsightExplanations.metadataGap(gaps.first);
     }
     return 'No specific insight explanation is available for this backlog item yet.';
   }
@@ -434,35 +378,6 @@ Set<String> _allTaskIds(
   return <String>{...workspaceTasksById.keys, ...projectionTasksById.keys};
 }
 
-/// Converts explicit relation records into canonical projection edges.
-List<TaskProjectionEdge> _normalizeRelationRecords({
-  required List<TaskProjectionEdge> graphEdges,
-  required List<TaskRelationRecord> taskRelations,
-}) {
-  final output = <TaskProjectionEdge>[...graphEdges];
-  for (final relation in taskRelations) {
-    if (relation.fromTaskId.isEmpty || relation.toTaskId.isEmpty) {
-      continue;
-    }
-    output.add(
-      TaskProjectionEdge(
-        id: relation.id,
-        fromTaskId: relation.fromTaskId,
-        toTaskId: relation.toTaskId,
-        relationType: relation.relationType,
-        source: relation.source.isEmpty ? 'explicit' : relation.source,
-        sourceKind: 'explicit',
-        confidence: relation.confidence,
-        explanation: relation.explanation,
-        actor: relation.actor,
-        createdAt: relation.createdAt,
-        updatedAt: relation.updatedAt,
-      ),
-    );
-  }
-  return output;
-}
-
 /// Records relation direction in blocker and downstream adjacency maps.
 void _indexBlockingDirection(
   TaskProjectionEdge edge,
@@ -505,68 +420,6 @@ void _indexBlockingDirection(
   }
 }
 
-/// Returns task ids that participate in a blocking dependency cycle.
-Set<String> _dependencyCycleTaskIds(
-  List<TaskProjectionEdge> edges,
-  TaskInsightPolicy policy,
-) {
-  final graph = <String, List<String>>{};
-  void add(String fromTaskId, String toTaskId, TaskProjectionEdge edge) {
-    if (fromTaskId.isEmpty ||
-        toTaskId.isEmpty ||
-        fromTaskId == toTaskId ||
-        (edge.confidence > 0 &&
-            edge.confidence < policy.relationConfidenceFloor &&
-            edge.source != 'explicit')) {
-      return;
-    }
-    graph.putIfAbsent(fromTaskId, () => <String>[]).add(toTaskId);
-  }
-
-  for (final edge in edges) {
-    switch (edge.relationType) {
-      case 'depends_on':
-      case 'waiting_on':
-      case 'requires_context_from':
-        add(edge.fromTaskId, edge.toTaskId, edge);
-        break;
-      case 'blocks':
-      case 'unblocks':
-      case 'enables':
-        add(edge.toTaskId, edge.fromTaskId, edge);
-        break;
-    }
-  }
-
-  final visiting = <String>{};
-  final visited = <String>{};
-  final cycles = <String>{};
-  void visit(String taskId, List<String> path) {
-    if (visiting.contains(taskId)) {
-      final start = path.indexOf(taskId);
-      if (start >= 0) {
-        cycles.addAll(path.skip(start));
-      }
-      cycles.add(taskId);
-      return;
-    }
-    if (visited.contains(taskId)) {
-      return;
-    }
-    visiting.add(taskId);
-    for (final next in graph[taskId] ?? const <String>[]) {
-      visit(next, <String>[...path, taskId]);
-    }
-    visiting.remove(taskId);
-    visited.add(taskId);
-  }
-
-  for (final taskId in graph.keys) {
-    visit(taskId, const <String>[]);
-  }
-  return cycles;
-}
-
 /// Returns downstream value unlocked by a task.
 double _downstreamValue({
   required String taskId,
@@ -605,26 +458,6 @@ class _TraversalNode {
   final int depth;
 }
 
-/// Returns a numeric commitment hardness score.
-double _commitmentHardness(List<TaskCommitment> commitments) {
-  var score = 0.0;
-  for (final commitment in commitments) {
-    final hardness = commitment.hardness.toLowerCase();
-    final consequence = commitment.consequence.toLowerCase();
-    if (hardness.contains('hard') || hardness.contains('must')) {
-      score = math.max(score, 0.82);
-    } else if (hardness.contains('soft')) {
-      score = math.max(score, 0.48);
-    }
-    if (consequence.contains('legal') || consequence.contains('client')) {
-      score = math.max(score, 0.76);
-    } else if (consequence.isNotEmpty) {
-      score = math.max(score, 0.55);
-    }
-  }
-  return score;
-}
-
 /// Returns blocker effort from estimate and projection score.
 double _blockerEffort(WorkspaceTask? workspaceTask, TaskProjectionTask? task) {
   final score = task?.scores.blockerEffort ?? task?.scores.humanEffort ?? 0;
@@ -638,127 +471,6 @@ double _blockerEffort(WorkspaceTask? workspaceTask, TaskProjectionTask? task) {
   return _clamp01(estimate / 180);
 }
 
-/// Builds metadata gap maps from source and derived gaps.
-Map<String, List<TaskMetadataGapRecord>> _metadataGapsByTaskId({
-  required List<TaskMetadataGapRecord> graphGaps,
-  required List<TaskMetadataSuggestion> metadataSuggestions,
-  required Map<String, WorkspaceTask> workspaceTasksById,
-  required Map<String, TaskProjectionTask> projectionTasksById,
-  required Map<String, TaskInsightScoreProfile> scoresByTaskId,
-  required TaskInsightPolicy policy,
-  required Set<String> cycleTaskIds,
-}) {
-  final gaps = <String, List<TaskMetadataGapRecord>>{};
-  for (final gap in graphGaps) {
-    gaps.putIfAbsent(gap.taskId, () => <TaskMetadataGapRecord>[]).add(gap);
-  }
-  for (final taskId in cycleTaskIds) {
-    gaps
-        .putIfAbsent(taskId, () => <TaskMetadataGapRecord>[])
-        .add(
-          TaskMetadataGapRecord(
-            id: 'gap:$taskId:dependency_cycle',
-            taskId: taskId,
-            field: 'dependency_cycle',
-            severity: 'high',
-            blocksInsights: const <String>[TaskInsightIds.quickUnblocks],
-            message: 'Dependency cycle prevents reliable unblock analysis.',
-            proposedAction: 'Review dependency directions and break the cycle.',
-            confidence: 0.90,
-          ),
-        );
-  }
-  for (final suggestion in metadataSuggestions) {
-    final taskId = suggestion.taskId;
-    if (suggestion.owner.isNotEmpty ||
-        suggestion.context.isNotEmpty ||
-        suggestion.domain.isNotEmpty) {
-      gaps
-          .putIfAbsent(taskId, () => <TaskMetadataGapRecord>[])
-          .add(
-            TaskMetadataGapRecord(
-              id: 'gap:$taskId:suggested_metadata',
-              taskId: taskId,
-              field: 'metadata_review',
-              severity: 'info',
-              blocksInsights: const <String>[TaskInsightIds.metadataGaps],
-              message: suggestion.explanation,
-              proposedAction: 'Review suggested context metadata.',
-              confidence: suggestion.confidence,
-            ),
-          );
-    }
-  }
-  for (final entry in scoresByTaskId.entries) {
-    final taskId = entry.key;
-    final score = entry.value;
-    final workspaceTask = workspaceTasksById[taskId];
-    final projectionTask = projectionTasksById[taskId];
-    if (score.metadataCompleteness < policy.metadataCompletenessFloor) {
-      for (final field in _missingFields(workspaceTask, projectionTask)) {
-        gaps
-            .putIfAbsent(taskId, () => <TaskMetadataGapRecord>[])
-            .add(
-              TaskMetadataGapRecord(
-                id: 'gap:$taskId:$field',
-                taskId: taskId,
-                field: field,
-                severity: field == 'agent_safety' ? 'medium' : 'info',
-                blocksInsights: _insightsBlockedByField(field),
-                message:
-                    'Missing ${field.replaceAll('_', ' ')} limits insight quality.',
-                proposedAction: 'Add ${field.replaceAll('_', ' ')} metadata.',
-                confidence: 0.70,
-              ),
-            );
-      }
-    }
-  }
-  return gaps;
-}
-
-/// Returns derived missing fields for known task models.
-List<String> _missingFields(
-  WorkspaceTask? task,
-  TaskProjectionTask? projection,
-) {
-  final missing = <String>[];
-  if ((task?.owner ?? projection?.owner ?? '').isEmpty) {
-    missing.add('person');
-  }
-  if ((task?.context ?? projection?.context ?? '').isEmpty) {
-    missing.add('context');
-  }
-  if ((task?.estimateMinutes ?? projection?.estimateMinutes ?? 0) <= 0) {
-    missing.add('estimate_minutes');
-  }
-  if ((projection?.valueType ?? '').isEmpty) {
-    missing.add('value_type');
-  }
-  if ((projection?.obligationLevel ?? '').isEmpty) {
-    missing.add('obligation');
-  }
-  if ((projection?.agentSafety ?? '').isEmpty) {
-    missing.add('agent_safety');
-  }
-  return missing;
-}
-
-/// Returns insight ids blocked by one metadata field.
-List<String> _insightsBlockedByField(String field) {
-  return switch (field) {
-    'person' => const <String>[TaskInsightIds.quickUnblocks],
-    'estimate_minutes' => const <String>[
-      TaskInsightIds.agentHandoff,
-      TaskInsightIds.quickUnblocks,
-    ],
-    'value_type' => const <String>[TaskInsightIds.nextWeekHighValue],
-    'obligation' => const <String>[TaskInsightIds.agentHandoff],
-    'agent_safety' => const <String>[TaskInsightIds.agentHandoff],
-    _ => const <String>[TaskInsightIds.metadataGaps],
-  };
-}
-
 /// Builds all named insight candidates.
 Map<String, List<TaskInsightCandidate>> _buildCandidates({
   required Map<String, WorkspaceTask> workspaceTasksById,
@@ -766,18 +478,14 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
   required Map<String, TaskInsightScoreProfile> scoresByTaskId,
   required Map<String, LinkedHashSet<String>> blockedByTaskId,
   required Map<String, LinkedHashSet<String>> blockersByTaskId,
-  required Map<String, List<TaskCommitment>> commitmentsByTaskId,
-  required Map<String, List<TaskMetadataGapRecord>> metadataGapsByTaskId,
   required TaskInsightPolicy policy,
   required DateTime now,
 }) {
-  final todayActions = <TaskInsightCandidate>[];
   final todayDecisions = <TaskInsightCandidate>[];
   final todayRelationships = <TaskInsightCandidate>[];
   final agent = <TaskInsightCandidate>[];
   final nextWeek = <TaskInsightCandidate>[];
   final unblocks = <TaskInsightCandidate>[];
-  final gaps = <TaskInsightCandidate>[];
   final highRisk = <TaskInsightCandidate>[];
   for (final taskId in _allTaskIds(workspaceTasksById, projectionTasksById)) {
     final workspaceTask = workspaceTasksById[taskId];
@@ -786,12 +494,9 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
     if (scores == null || !_isActive(workspaceTask, projectionTask)) {
       continue;
     }
-    final taskGaps =
-        metadataGapsByTaskId[taskId] ?? const <TaskMetadataGapRecord>[];
     final followUpRules = _todayFollowUpRules(
       workspaceTask: workspaceTask,
       projectionTask: projectionTask,
-      commitments: commitmentsByTaskId[taskId] ?? const <TaskCommitment>[],
       now: now,
     );
     if (followUpRules.isNotEmpty) {
@@ -803,7 +508,6 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
           severity: 'warning',
           matchedRules: followUpRules,
           explanation: _todayFollowUpExplanation(followUpRules),
-          confidence: scores.confidence,
         ),
       );
     }
@@ -825,33 +529,6 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
           severity: 'warning',
           matchedRules: decisionRules,
           explanation: _todayDecisionExplanation(decisionRules),
-          confidence: scores.confidence,
-        ),
-      );
-    }
-    final actionRules =
-        followUpRules.isEmpty &&
-            decisionRules.isEmpty &&
-            !_isMonitorTask(workspaceTask, projectionTask) &&
-            !_isAgentHandoffCandidate(scores, policy)
-        ? _todayActionRules(
-            workspaceTask: workspaceTask,
-            projectionTask: projectionTask,
-            scores: scores,
-            now: now,
-          )
-        : const <String>[];
-    if (actionRules.isNotEmpty) {
-      todayActions.add(
-        _candidate(
-          insightId: TaskInsightIds.todayActions,
-          taskId: taskId,
-          score: _todayActionRank(scores, actionRules),
-          severity: _todayActionSeverity(workspaceTask, projectionTask, now),
-          matchedRules: actionRules,
-          missingRules: _todayActionMissingRules(workspaceTask, projectionTask),
-          explanation: _todayActionExplanation(actionRules),
-          confidence: scores.confidence,
         ),
       );
     }
@@ -872,22 +549,21 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
             if (scores.humanEffort <= 0.45) 'low_human_effort',
           ],
           missingRules: <String>[
-            if (scores.agentSafety < policy.safeAgentThreshold) 'agent_safety',
+            if (scores.agentSafety < policy.safeAgentThreshold) 'risk',
             if (scores.handoffReadiness < policy.handoffReadinessThreshold)
-              'handoff_context',
+              'supporting_context',
           ],
           explanation: TaskInsightExplanations.agentHandoff(
             workspaceTask: workspaceTask,
             projectionTask: projectionTask,
             scores: scores,
           ),
-          confidence: scores.confidence,
         ),
       );
     }
     if (_dueWindow(workspaceTask?.dueAt ?? projectionTask?.dueAt, now) ==
             'next-week' &&
-        _isHighValue(scores, projectionTask, policy)) {
+        _isHighValue(scores, policy)) {
       nextWeek.add(
         _candidate(
           insightId: TaskInsightIds.nextWeekHighValue,
@@ -897,18 +573,15 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
           matchedRules: <String>['next_week', 'high_value'],
           explanation: TaskInsightExplanations.nextWeekHighValue(
             workspaceTask: workspaceTask,
-            projectionTask: projectionTask,
             scores: scores,
           ),
-          confidence: scores.confidence,
         ),
       );
     }
     final downstream = blockedByTaskId[taskId] ?? <String>{};
     if (downstream.isNotEmpty &&
         scores.blockerEffort <= policy.quickUnblockEffortCeiling &&
-        scores.downstreamValue >= policy.quickUnblockDownstreamThreshold &&
-        scores.confidence >= policy.confidenceFloor) {
+        scores.downstreamValue >= policy.quickUnblockDownstreamThreshold) {
       unblocks.add(
         _candidate(
           insightId: TaskInsightIds.quickUnblocks,
@@ -920,157 +593,30 @@ Map<String, List<TaskInsightCandidate>> _buildCandidates({
             downstreamCount: downstream.length,
             scores: scores,
           ),
-          confidence: scores.confidence,
         ),
       );
     }
-    if (taskGaps.isNotEmpty) {
-      gaps.add(
-        _candidate(
-          insightId: TaskInsightIds.metadataGaps,
-          taskId: taskId,
-          score: 1 - scores.metadataCompleteness,
-          severity: taskGaps.any((gap) => gap.severity == 'medium')
-              ? 'warning'
-              : 'info',
-          matchedRules: const <String>['missing_metadata'],
-          missingRules: taskGaps.map((gap) => gap.field).toSet().toList(),
-          explanation: TaskInsightExplanations.metadataGap(taskGaps.first),
-          confidence: scores.confidence,
-        ),
-      );
-    }
-    if (scores.risk >= policy.highRiskThreshold &&
-        scores.confidence < policy.confidenceFloor + 0.10) {
+    if (scores.risk >= policy.highRiskThreshold) {
       highRisk.add(
         _candidate(
           insightId: TaskInsightIds.highRiskLowConfidence,
           taskId: taskId,
-          score: scores.risk * (1 - scores.confidence),
+          score: scores.risk,
           severity: 'warning',
-          matchedRules: const <String>['high_risk', 'low_confidence'],
-          explanation:
-              'High risk with low confidence. Confirm context metadata before relying on downstream insights.',
-          confidence: scores.confidence,
+          matchedRules: const <String>['high_risk'],
+          explanation: 'High due-date risk. Review timing, blockers, or scope.',
         ),
       );
     }
   }
   return <String, List<TaskInsightCandidate>>{
-    TaskInsightIds.todayActions: _rank(todayActions),
     TaskInsightIds.todayDecisions: _rank(todayDecisions),
     TaskInsightIds.todayRelationships: _rank(todayRelationships),
     TaskInsightIds.agentHandoff: _rank(agent),
     TaskInsightIds.nextWeekHighValue: _rank(nextWeek),
     TaskInsightIds.quickUnblocks: _rank(unblocks),
-    TaskInsightIds.metadataGaps: _rank(gaps),
     TaskInsightIds.highRiskLowConfidence: _rank(highRisk),
   };
-}
-
-/// Returns rules for tasks that match the server's execute lanes.
-List<String> _todayActionRules({
-  required WorkspaceTask? workspaceTask,
-  required TaskProjectionTask? projectionTask,
-  required TaskInsightScoreProfile scores,
-  required DateTime now,
-}) {
-  final rules = <String>{};
-  final dueAt = workspaceTask?.dueAt ?? projectionTask?.dueAt;
-  final scheduledAt = workspaceTask?.scheduledAt ?? projectionTask?.scheduledAt;
-  final dueWindow = _dueWindow(dueAt, now);
-  if (dueWindow == 'overdue') {
-    rules.add('overdue');
-  } else if (dueWindow == 'today') {
-    rules.add('due_today');
-  }
-  final scheduledWindow = _dueWindow(scheduledAt, now);
-  if (scheduledWindow == 'overdue' || scheduledWindow == 'today') {
-    rules.add('scheduled_now');
-  }
-  if (_shouldProtectTask(workspaceTask, projectionTask, scores, now)) {
-    rules.add('protect_focus');
-  }
-  if (dueAt == null && scheduledAt == null) {
-    rules.add('unscheduled');
-  }
-  if (_taskDescription(workspaceTask, projectionTask).isEmpty) {
-    rules.add('missing_details');
-  }
-  if (scores.pressure >= 0.70 || scores.timePressure >= 0.70) {
-    rules.add('high_pressure');
-  }
-  if (rules.isEmpty) {
-    rules.add('ready_open');
-  }
-  return rules.toList();
-}
-
-/// Returns missing next-action inputs visible in the queue card.
-List<String> _todayActionMissingRules(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-) {
-  final missing = <String>[];
-  if ((workspaceTask?.dueAt ?? projectionTask?.dueAt) == null &&
-      (workspaceTask?.scheduledAt ?? projectionTask?.scheduledAt) == null &&
-      workspaceTask?.followUpAt == null) {
-    missing.add('schedule');
-  }
-  if (_taskDescription(workspaceTask, projectionTask).isEmpty) {
-    missing.add('details');
-  }
-  if (_taskProject(workspaceTask, projectionTask).isEmpty) {
-    missing.add('project');
-  }
-  return missing;
-}
-
-/// Returns warning severity for protected execution items.
-String _todayActionSeverity(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-  DateTime now,
-) {
-  final priority = _taskPriority(workspaceTask, projectionTask);
-  final dueWindow = _dueWindow(
-    workspaceTask?.dueAt ?? projectionTask?.dueAt,
-    now,
-  );
-  if (dueWindow == 'overdue' || priority == 'urgent' || priority == 'high') {
-    return 'warning';
-  }
-  return 'info';
-}
-
-/// Returns the Today action ranking score.
-double _todayActionRank(
-  TaskInsightScoreProfile scores,
-  List<String> matchedRules,
-) {
-  var rank =
-      0.28 +
-      0.22 * scores.pressure +
-      0.18 * scores.timePressure +
-      0.12 * scores.risk +
-      0.10 * (1 - scores.metadataCompleteness);
-  if (matchedRules.contains('overdue')) {
-    rank += 0.20;
-  }
-  if (matchedRules.contains('due_today') ||
-      matchedRules.contains('scheduled_now')) {
-    rank += 0.14;
-  }
-  if (matchedRules.contains('unscheduled')) {
-    rank += 0.08;
-  }
-  if (matchedRules.contains('protect_focus')) {
-    rank += 0.12;
-  }
-  if (matchedRules.contains('missing_details')) {
-    rank += 0.06;
-  }
-  return _clamp01(rank);
 }
 
 /// Returns matching Today decision rules for one active task.
@@ -1081,9 +627,6 @@ List<String> _todayDecisionRules({
   required TaskInsightPolicy policy,
 }) {
   final rules = <String>{};
-  if (_containsDecisionLanguage(workspaceTask, projectionTask)) {
-    rules.add('decision_language');
-  }
   if (scores.humanJudgmentNeed >= 0.70) {
     rules.add('human_judgment');
   }
@@ -1093,9 +636,6 @@ List<String> _todayDecisionRules({
   final priority = _taskPriority(workspaceTask, projectionTask);
   if (priority == 'urgent') {
     rules.add('urgent');
-  }
-  if (_isUnsafeTask(workspaceTask, projectionTask)) {
-    rules.add('approval_required');
   }
   return rules.toList();
 }
@@ -1109,65 +649,27 @@ double _todayDecisionRank(
       0.24 +
       0.30 * scores.humanJudgmentNeed +
       0.22 * scores.risk +
-      0.14 * (1 - scores.confidence) +
       0.10 * scores.consequence;
-  if (matchedRules.contains('decision_language')) {
-    rank += 0.12;
-  }
-  if (matchedRules.contains('urgent_unclear')) {
-    rank += 0.10;
-  }
   return _clamp01(rank);
 }
 
-/// Returns rules for due person, promise, reply, or check-in loops.
+/// Returns rules for explicit follow-up metadata.
 List<String> _todayFollowUpRules({
   required WorkspaceTask? workspaceTask,
   required TaskProjectionTask? projectionTask,
-  required List<TaskCommitment> commitments,
   required DateTime now,
 }) {
   final rules = <String>[];
   final followUpAt = workspaceTask?.followUpAt;
   final hasPerson = _taskPerson(workspaceTask, projectionTask).isNotEmpty;
-  final text = _taskTextForPolicy(workspaceTask, projectionTask);
-  final hasPromiseText = _containsAnyText(text, const <String>[
-    'promise',
-    'commitment',
-    'reply',
-    'follow up',
-    'follow-up',
-    'check in',
-    'check-in',
-  ]);
-  if (commitments.isNotEmpty) {
-    rules.add('promise_or_commitment');
-  }
   if (hasPerson) {
     rules.add('person_context');
-  }
-  if (hasPromiseText) {
-    rules.add('reply_or_promise');
   }
   if (followUpAt != null &&
       !followUpAt.isAfter(now.add(const Duration(days: 1)))) {
     rules.add('follow_up_due');
   }
-  if (followUpAt == null &&
-      hasPerson &&
-      _containsAnyText(text, const <String>[
-        'reply',
-        'follow up',
-        'follow-up',
-        'check in',
-        'check-in',
-      ])) {
-    rules.add('check_in_needed');
-  }
-  if (rules.contains('follow_up_due') ||
-      rules.contains('check_in_needed') ||
-      (rules.contains('promise_or_commitment') &&
-          (hasPerson || hasPromiseText))) {
+  if (rules.contains('follow_up_due') && hasPerson) {
     return rules;
   }
   return const <String>[];
@@ -1178,15 +680,12 @@ double _todayFollowUpRank(
   TaskInsightScoreProfile scores,
   List<String> matchedRules,
 ) {
-  var rank = 0.34 + 0.20 * scores.pressure + 0.18 * scores.commitmentHardness;
+  var rank = 0.34 + 0.20 * scores.pressure;
   if (matchedRules.contains('follow_up_due')) {
     rank += 0.22;
   }
   if (matchedRules.contains('person_context')) {
     rank += 0.10;
-  }
-  if (matchedRules.contains('promise_or_commitment')) {
-    rank += 0.12;
   }
   return _clamp01(rank);
 }
@@ -1200,70 +699,6 @@ bool _isMonitorTask(
   return status == 'blocked' || status == 'waiting';
 }
 
-/// Returns whether task metadata calls for protected focus.
-bool _shouldProtectTask(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-  TaskInsightScoreProfile scores,
-  DateTime now,
-) {
-  final scheduledAt = workspaceTask?.scheduledAt ?? projectionTask?.scheduledAt;
-  if (_dueWindow(scheduledAt, now) == 'today') {
-    return true;
-  }
-  final estimate =
-      workspaceTask?.estimateMinutes ?? projectionTask?.estimateMinutes ?? 0;
-  if (scores.reward >= 0.75 && (scores.risk >= 0.35 || estimate >= 60)) {
-    return true;
-  }
-  return _taskPriority(workspaceTask, projectionTask) == 'high' &&
-      estimate >= 45;
-}
-
-/// Returns whether task text suggests approval-gated external action.
-bool _isUnsafeTask(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-) {
-  final text = _taskTextForPolicy(workspaceTask, projectionTask);
-  return _containsAnyText(text, const <String>[
-    'payment',
-    'bank',
-    'bill',
-    'wire',
-    'transfer',
-    'delete',
-    'remove',
-    'send email',
-    'send message',
-    'external',
-  ]);
-}
-
-/// Returns whether text contains any case-insensitive needle.
-bool _containsAnyText(String text, List<String> needles) {
-  final normalized = text.toLowerCase();
-  for (final needle in needles) {
-    if (normalized.contains(needle.toLowerCase())) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Returns policy text from task title, description, context, and source.
-String _taskTextForPolicy(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-) {
-  return <String>[
-    workspaceTask?.title ?? projectionTask?.title ?? '',
-    workspaceTask?.description ?? projectionTask?.description ?? '',
-    workspaceTask?.context ?? projectionTask?.context ?? '',
-    workspaceTask?.source ?? projectionTask?.source ?? '',
-  ].join(' ').toLowerCase();
-}
-
 /// Returns task person text from owner metadata.
 String _taskPerson(
   WorkspaceTask? workspaceTask,
@@ -1275,35 +710,15 @@ String _taskPerson(
   ]);
 }
 
-/// Returns a short action insight explanation.
-String _todayActionExplanation(List<String> matchedRules) {
-  return _insightRuleSentence(
-    'Ready to execute',
-    matchedRules,
-    const <String, String>{
-      'overdue': 'overdue',
-      'due_today': 'due today',
-      'scheduled_now': 'scheduled now',
-      'unscheduled': 'not scheduled',
-      'missing_details': 'missing details',
-      'protect_focus': 'protect focus',
-      'ready_open': 'open',
-      'high_pressure': 'high pressure',
-    },
-  );
-}
-
 /// Returns a short decision insight explanation.
 String _todayDecisionExplanation(List<String> matchedRules) {
   return _insightRuleSentence(
     'Likely needs a human decision',
     matchedRules,
     const <String, String>{
-      'decision_language': 'decision language',
       'human_judgment': 'high judgment need',
       'high_risk': 'high risk',
       'urgent': 'urgent',
-      'approval_required': 'approval required',
     },
   );
 }
@@ -1314,11 +729,8 @@ String _todayFollowUpExplanation(List<String> matchedRules) {
     'Needs follow-up',
     matchedRules,
     const <String, String>{
-      'promise_or_commitment': 'linked to a promise',
       'person_context': 'person context',
-      'reply_or_promise': 'reply or promise language',
       'follow_up_due': 'follow-up is due',
-      'check_in_needed': 'check-in needed',
     },
   );
 }
@@ -1333,24 +745,6 @@ String _insightRuleSentence(
       .map((rule) => labels[rule] ?? rule.replaceAll('_', ' '))
       .join(', ');
   return text.isEmpty ? '$prefix.' : '$prefix: $text.';
-}
-
-/// Returns true when task text explicitly asks for a decision.
-bool _containsDecisionLanguage(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-) {
-  final text =
-      '${workspaceTask?.title ?? projectionTask?.title ?? ''} '
-              '${workspaceTask?.description ?? projectionTask?.description ?? ''} '
-              '${workspaceTask?.detail ?? ''}'
-          .toLowerCase();
-  return text.contains('decide') ||
-      text.contains('decision') ||
-      text.contains('approve') ||
-      text.contains('approval') ||
-      text.contains('choose') ||
-      text.contains('confirm');
 }
 
 /// Returns the normalized task status.
@@ -1368,29 +762,6 @@ String _taskPriority(
 ) {
   return (workspaceTask?.priority ?? projectionTask?.priority ?? '')
       .toLowerCase();
-}
-
-/// Returns task description text.
-String _taskDescription(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-) {
-  return _firstNonEmptyTaskValue(<String>[
-    workspaceTask?.description ?? '',
-    projectionTask?.description ?? '',
-  ]);
-}
-
-/// Returns task project text.
-String _taskProject(
-  WorkspaceTask? workspaceTask,
-  TaskProjectionTask? projectionTask,
-) {
-  return _firstNonEmptyTaskValue(<String>[
-    workspaceTask?.project ?? '',
-    projectionTask?.project ?? '',
-    projectionTask?.projectId ?? '',
-  ]);
 }
 
 /// Returns the first non-empty task value.
@@ -1424,27 +795,13 @@ bool _isAgentHandoffCandidate(
       (scores.reward <= policy.lowHumanValueCeiling ||
           scores.humanEffort <= 0.45) &&
       scores.agentFit >= policy.agentFitThreshold &&
-      scores.risk <= 0.70 &&
-      scores.confidence >= policy.confidenceFloor;
+      scores.risk <= 0.70;
 }
 
-/// Returns whether scores or controlled values indicate high value.
-bool _isHighValue(
-  TaskInsightScoreProfile scores,
-  TaskProjectionTask? projectionTask,
-  TaskInsightPolicy policy,
-) {
-  final valueType = projectionTask?.valueType ?? '';
+/// Returns whether calculated scores indicate high value.
+bool _isHighValue(TaskInsightScoreProfile scores, TaskInsightPolicy policy) {
   return scores.reward >= policy.highRewardThreshold ||
-      scores.consequence >= 0.70 ||
-      scores.commitmentHardness >= 0.70 ||
-      const <String>{
-        'revenue',
-        'legal',
-        'client',
-        'safety',
-        'reputation',
-      }.contains(valueType);
+      scores.consequence >= 0.70;
 }
 
 /// Builds an unranked candidate.
@@ -1516,7 +873,6 @@ double _nextWeekRank(TaskInsightScoreProfile scores) {
   return _clamp01(
     0.35 * scores.reward +
         0.25 * scores.consequence +
-        0.20 * scores.commitmentHardness +
         0.10 * scores.pressure +
         0.10 * scores.downstreamValue,
   );
@@ -1528,7 +884,6 @@ double _quickUnblockRank(TaskInsightScoreProfile scores) {
     0.45 * scores.unblockLeverage +
         0.25 * scores.downstreamValue +
         0.15 * scores.pressure +
-        0.10 * scores.confidence -
         0.15 * scores.blockerEffort,
   );
 }
@@ -1539,18 +894,14 @@ List<TaskInsightQuerySummary> _buildSummaries({
   required Map<String, WorkspaceTask> workspaceTasksById,
 }) {
   const labels = <String, String>{
-    TaskInsightIds.todayActions: 'Execute',
     TaskInsightIds.todayDecisions: 'Decide',
     TaskInsightIds.todayRelationships: 'Follow-ups',
     TaskInsightIds.agentHandoff: 'Agent handoff',
     TaskInsightIds.nextWeekHighValue: 'Next week high value',
     TaskInsightIds.quickUnblocks: 'Quick unblocks',
-    TaskInsightIds.metadataGaps: 'Metadata gaps',
     TaskInsightIds.highRiskLowConfidence: 'Risk gaps',
   };
   const questions = <String, String>{
-    TaskInsightIds.todayActions:
-        'Which backlog items are ready for concrete execution?',
     TaskInsightIds.todayDecisions:
         'Which backlog items need human judgment or approval?',
     TaskInsightIds.todayRelationships:
@@ -1560,8 +911,6 @@ List<TaskInsightQuerySummary> _buildSummaries({
     TaskInsightIds.nextWeekHighValue:
         'What high-value work is coming up next week?',
     TaskInsightIds.quickUnblocks: 'What can I unblock quickly?',
-    TaskInsightIds.metadataGaps:
-        'What prevents Agent Awesome from giving better insights?',
     TaskInsightIds.highRiskLowConfidence: 'What looks risky but uncertain?',
   };
   return <TaskInsightQuerySummary>[
@@ -1782,7 +1131,7 @@ String _smallestNextAction(
     return 'Name the blocker and add or confirm the dependency relation.';
   }
   if ((selectedTask?.description ?? '').isNotEmpty) {
-    return 'Use the context notes to choose the next concrete action.';
+    return 'Use the task notes to choose the next concrete action.';
   }
   return 'Start by turning the title into one concrete next action.';
 }
@@ -1793,12 +1142,12 @@ double _planConfidence(
   TaskInsightScoreProfile? scores,
 ) {
   if (relations.isEmpty) {
-    return scores?.confidence ?? 0.35;
+    return 0;
   }
   final relationConfidence = relations
       .map((edge) => edge.confidence == 0 ? 0.60 : edge.confidence)
       .reduce(math.max);
-  return math.min(relationConfidence, scores?.confidence ?? relationConfidence);
+  return relationConfidence;
 }
 
 /// Builds a compact unblock plan explanation.

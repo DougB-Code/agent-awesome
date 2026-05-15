@@ -545,17 +545,11 @@ void main() {
           'idempotency_key': 'agent_awesome:session-live:draft-brief',
           'topics': <String>['brief'],
           'estimate_minutes': 45,
-          'energy_required': 'deep',
-          'effort': 0.6,
-          'value': 0.8,
           'urgency': 0.7,
           'risk': 0.2,
           'context': 'Focus',
-          'view': 'Work',
           'location': 'Desk',
           'person': 'Doug',
-          'source': 'Personal Tasks',
-          'confidence': 0.9,
           'work_breakdown': <String, dynamic>{
             'code': '1.2',
             'deliverable': 'Draft brief',
@@ -596,8 +590,6 @@ void main() {
       expect(tasks.first.priority, 'high');
       expect(tasks.first.followUpAt?.toUtc(), DateTime.utc(2026, 5, 15, 12));
       expect(tasks.first.estimateMinutes, 45);
-      expect(tasks.first.context, 'Focus');
-      expect(tasks.first.confidence, 0.9);
       expect(tasks.first.workBreakdown.code, '1.2');
       expect(tasks.first.workBreakdown.acceptanceCriteria, <String>[
         'Rubric checked',
@@ -608,85 +600,20 @@ void main() {
       expect(tasks.last.done, isTrue);
     });
 
-    test('parses task graph corrections', () {
+    test('parses task graph relations', () {
       final relations = parseTaskRelations(<Map<String, dynamic>>[
         <String, dynamic>{
           'id': 'relation-1',
           'from_task_id': 'task-1',
           'to_task_id': 'task-2',
-          'relation_type': 'depends_on',
+          'type': 'depends_on',
           'confidence': 0.75,
           'source': 'explicit',
           'explanation': 'Draft before review.',
         },
       ]);
-      final suggestions = parseTaskRelationSuggestions(<Map<String, dynamic>>[
-        <String, dynamic>{
-          'id': 'suggestion-1',
-          'from_task_id': 'task-1',
-          'to_task_id': 'task-3',
-          'relation_type': 'same_context',
-          'confidence': 0.65,
-          'explanation': 'Both are focus work.',
-        },
-      ]);
-      final metadataSuggestions = parseTaskMetadataSuggestions(
-        <Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': 'suggestion-metadata-1',
-            'task_id': 'task-1',
-            'estimate_minutes': 45,
-            'energy_required': 'deep',
-            'context': 'Focus',
-            'view': 'Work',
-            'confidence': 0.72,
-            'explanation': 'Inferred from task text.',
-          },
-        ],
-      );
-      final commitmentSuggestions = parseTaskCommitmentSuggestions(
-        <Map<String, dynamic>>[
-          <String, dynamic>{
-            'id': 'suggestion-commitment-1',
-            'task_id': 'task-1',
-            'people': <String>['Doug'],
-            'view': 'Work',
-            'project': 'Proposal',
-            'time_window': 'This week',
-            'responsibility': 'owned',
-            'promise_source': 'Task',
-            'hardness': 'soft',
-            'consequence': 'Commitment may be forgotten.',
-            'confidence': 0.64,
-            'explanation': 'Inferred from due date.',
-          },
-        ],
-      );
-      final commitments = parseTaskCommitments(<Map<String, dynamic>>[
-        <String, dynamic>{
-          'id': 'commitment-1',
-          'task_id': 'task-1',
-          'people': <String>['Doug', 'Family'],
-          'view': 'Errands',
-          'project': 'Groceries',
-          'time_window': 'This week',
-          'responsibility': 'owned',
-          'promise_source': 'Personal Tasks',
-          'hardness': 'soft',
-          'consequence': 'No breakfast.',
-        },
-      ]);
-
       expect(relations.single.relationType, 'depends_on');
       expect(relations.single.confidence, 0.75);
-      expect(suggestions.single.id, 'suggestion-1');
-      expect(suggestions.single.relationType, 'same_context');
-      expect(metadataSuggestions.single.context, 'Focus');
-      expect(metadataSuggestions.single.estimateMinutes, 45);
-      expect(commitmentSuggestions.single.project, 'Proposal');
-      expect(commitmentSuggestions.single.confidence, 0.64);
-      expect(commitments.single.people, <String>['Doug', 'Family']);
-      expect(commitments.single.project, 'Groceries');
     });
 
     test('parses WBS rows from graph query results', () {

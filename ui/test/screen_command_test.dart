@@ -274,18 +274,11 @@ WorkspaceTask _copyTask(
     followUpAt: clearFollowUpAt ? null : followUpAt ?? task.followUpAt,
     topics: topics ?? task.topics,
     estimateMinutes: task.estimateMinutes,
-    energyRequired: task.energyRequired,
-    effort: task.effort,
-    value: task.value,
     urgency: task.urgency,
     risk: task.risk,
-    context: task.context,
-    domain: task.domain,
     project: task.project,
     location: task.location,
     owner: task.owner,
-    source: task.source,
-    confidence: task.confidence,
   );
 }
 
@@ -442,12 +435,8 @@ class _FakeTasksClient extends TasksClient {
     List<String>? topics,
     bool replaceTopics = false,
     int? estimateMinutes,
-    String? energyRequired,
-    double? effort,
-    double? value,
     double? urgency,
     double? risk,
-    String? context,
     String? domain,
     String? project,
     String? location,
@@ -456,7 +445,6 @@ class _FakeTasksClient extends TasksClient {
     int? earnCents,
     int? saveCents,
     String? currency,
-    String? source,
     TaskWorkBreakdown? workBreakdown,
     double? confidence,
     String actor = 'agent_awesome_ui',
@@ -521,29 +509,5 @@ class _FakeTasksClient extends TasksClient {
   @override
   Future<List<TaskRelationRecord>> listTaskRelations() async {
     return const <TaskRelationRecord>[];
-  }
-
-  /// Returns no fake relation suggestions.
-  @override
-  Future<List<TaskRelationSuggestion>> suggestTaskRelationships() async {
-    return const <TaskRelationSuggestion>[];
-  }
-
-  /// Returns no fake metadata suggestions.
-  @override
-  Future<List<TaskMetadataSuggestion>> suggestTaskMetadata() async {
-    return const <TaskMetadataSuggestion>[];
-  }
-
-  /// Returns no fake commitment suggestions.
-  @override
-  Future<List<TaskCommitmentSuggestion>> suggestCommitments() async {
-    return const <TaskCommitmentSuggestion>[];
-  }
-
-  /// Returns no fake commitments.
-  @override
-  Future<List<TaskCommitment>> listCommitments() async {
-    return const <TaskCommitment>[];
   }
 }

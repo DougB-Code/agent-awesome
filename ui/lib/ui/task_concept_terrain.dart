@@ -38,16 +38,13 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
         ),
       );
     }
-    final presetProjection = _terrainProjectionForInsightPreset(
-      projection,
-      controller,
-    );
+    final lens = _TerrainInsightLens.fromController(controller);
     final filterModel = TaskTerrainFilterProjector.build(
       streamProjection: controller.taskStreamProjection,
-      terrainProjection: presetProjection,
+      terrainProjection: projection,
     );
     final selection = _effectiveTerrainFilterSelection(filterModel);
-    final filteredProjection = filterModel.apply(presetProjection, selection);
+    final filteredProjection = filterModel.apply(projection, selection);
     final filterControls = _buildTerrainFilterControls(filterModel, selection);
     final activeFilterCount = _activeTerrainFilterCount(selection);
     return Column(
@@ -91,7 +88,7 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
         Expanded(
           child: filteredProjection.points.isEmpty
               ? const PanelEmptyBlock(
-                  label: 'No terrain items match this insight',
+                  label: 'No terrain items match these overlays',
                 )
               : PanelSectionBlock(
                   child: LayoutBuilder(
@@ -119,6 +116,7 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
                               _PositionedTerrainCard(
                                 placement: card,
                                 selected: selectedTaskId == card.point.taskId,
+                                lens: lens,
                                 onTap: () =>
                                     controller.selectTask(card.point.taskId),
                               ),
@@ -126,6 +124,7 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
                             _PositionedTerrainCluster(
                               cluster: cluster,
                               expanded: _isTerrainClusterRevealed(cluster),
+                              lens: lens,
                               onTap: () {
                                 _toggleTerrainReveal(
                                   cluster.points.map((point) => point.taskId),
@@ -140,6 +139,7 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
                               expanded: _revealedTerrainTaskIds.contains(
                                 pin.point.taskId,
                               ),
+                              lens: lens,
                               onTap: () {
                                 _toggleTerrainReveal(<String>[
                                   pin.point.taskId,
@@ -172,28 +172,6 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
                   ),
                 ),
         ),
-      ],
-    );
-  }
-
-  /// Applies the active semantic insight preset to a terrain projection.
-  PriorityTerrainProjection _terrainProjectionForInsightPreset(
-    PriorityTerrainProjection projection,
-    AgentAwesomeAppController controller,
-  ) {
-    if (controller.taskInsightPresetId == TaskInsightIds.all) {
-      return projection;
-    }
-    final taskIds = controller.taskInsightIndex
-        .tasksForInsight(controller.taskInsightPresetId)
-        .map((candidate) => candidate.taskId)
-        .toSet();
-    return PriorityTerrainProjection(
-      generatedAt: projection.generatedAt,
-      bands: projection.bands,
-      points: <PriorityTerrainPoint>[
-        for (final point in projection.points)
-          if (taskIds.contains(point.taskId)) point,
       ],
     );
   }
@@ -443,6 +421,106 @@ class _TerrainInsightPresetMenu extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Describes active terrain insight highlighting without hiding other work.
+class _TerrainInsightLens {
+  const _TerrainInsightLens({
+    required this.preset,
+    required this.activeCandidatesByTaskId,
+    required this.candidatesByTaskId,
+  });
+
+  final TaskInsightPreset preset;
+  final Map<String, TaskInsightCandidate> activeCandidatesByTaskId;
+  final Map<String, List<TaskInsightCandidate>> candidatesByTaskId;
+
+  /// Creates a lens from the shared task insight index.
+  factory _TerrainInsightLens.fromController(
+    AgentAwesomeAppController controller,
+  ) {
+    final preset = TaskInsightPresetRegistry.selectedTerrainPreset(
+      controller.taskInsightPresetId,
+    );
+    final candidatesByTaskId = <String, List<TaskInsightCandidate>>{};
+    for (final terrainPreset in TaskInsightPresetRegistry.terrainPresets) {
+      if (terrainPreset.id == TaskInsightIds.all) {
+        continue;
+      }
+      for (final candidate in controller.taskInsightIndex.tasksForInsight(
+        terrainPreset.id,
+      )) {
+        candidatesByTaskId
+            .putIfAbsent(candidate.taskId, () => <TaskInsightCandidate>[])
+            .add(candidate);
+      }
+    }
+    final activeCandidatesByTaskId = <String, TaskInsightCandidate>{};
+    if (preset.id != TaskInsightIds.all) {
+      for (final candidate in controller.taskInsightIndex.tasksForInsight(
+        preset.id,
+      )) {
+        activeCandidatesByTaskId[candidate.taskId] = candidate;
+      }
+    }
+    return _TerrainInsightLens(
+      preset: preset,
+      activeCandidatesByTaskId: activeCandidatesByTaskId,
+      candidatesByTaskId: candidatesByTaskId,
+    );
+  }
+
+  /// Whether the selected preset should visually emphasize matching tasks.
+  bool get hasActivePreset => preset.id != TaskInsightIds.all;
+
+  /// Returns true when a task belongs to the selected insight.
+  bool highlights(String taskId) {
+    return !hasActivePreset || activeCandidatesByTaskId.containsKey(taskId);
+  }
+
+  /// Returns the selected insight candidate for a task.
+  TaskInsightCandidate? activeCandidateFor(String taskId) {
+    return activeCandidatesByTaskId[taskId];
+  }
+
+  /// Returns all terrain insight candidates attached to one task.
+  List<TaskInsightCandidate> candidatesFor(String taskId) {
+    return candidatesByTaskId[taskId] ?? const <TaskInsightCandidate>[];
+  }
+
+  /// Returns display opacity for a task in the active lens.
+  double opacityFor(String taskId) {
+    return highlights(taskId) ? 1 : 0.36;
+  }
+
+  /// Counts highlighted points in a point collection.
+  int highlightedPointCount(Iterable<PriorityTerrainPoint> points) {
+    if (!hasActivePreset) {
+      return 0;
+    }
+    return points.where((point) => highlights(point.taskId)).length;
+  }
+
+  /// Returns a tooltip that names the selected insight reason when available.
+  String tooltipFor(PriorityTerrainPoint point, String fallback) {
+    final active = activeCandidateFor(point.taskId);
+    if (active != null) {
+      return '${point.title}\n${preset.label}: ${TaskInsightPresetRegistry.candidateReason(active)}';
+    }
+    final candidates = candidatesFor(point.taskId);
+    if (candidates.isNotEmpty && !hasActivePreset) {
+      final labels = candidates
+          .take(3)
+          .map((candidate) {
+            return TaskInsightPresetRegistry.labelForInsightId(
+              candidate.insightId,
+            );
+          })
+          .join(', ');
+      return '${point.title}\nInsights: $labels';
+    }
+    return fallback;
   }
 }
 
@@ -731,16 +809,47 @@ TextStyle _terrainDropdownTextStyle(BuildContext context) {
   );
 }
 
+/// Renders a tiny count for tasks with attached insight membership.
+class _TerrainInsightCountPill extends StatelessWidget {
+  const _TerrainInsightCountPill({required this.count, required this.color});
+
+  final int count;
+  final Color color;
+
+  /// Builds a compact count chip inside terrain markers.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        border: Border.all(color: color.withValues(alpha: 0.34)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        count == 1 ? '1 insight' : '$count insights',
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
 /// Renders one full terrain task card from computed layout geometry.
 class _PositionedTerrainCard extends StatelessWidget {
   const _PositionedTerrainCard({
     required this.placement,
     required this.selected,
+    required this.lens,
     required this.onTap,
   });
 
   final TaskTerrainCardPlacement placement;
   final bool selected;
+  final _TerrainInsightLens lens;
   final VoidCallback onTap;
 
   /// Builds one promoted task card on the terrain.
@@ -749,106 +858,149 @@ class _PositionedTerrainCard extends StatelessWidget {
     final point = placement.point;
     final color = placement.color;
     final colors = context.agentAwesomeColors;
+    final activeCandidate = lens.activeCandidateFor(point.taskId);
+    final candidates = lens.candidatesFor(point.taskId);
+    final opacity = lens.opacityFor(point.taskId);
+    final highlight = activeCandidate != null;
     return Positioned(
       left: placement.rect.left,
       top: placement.rect.top,
       width: placement.rect.width,
       height: placement.rect.height,
       child: Tooltip(
-        message: point.explanation,
+        message: lens.tooltipFor(point, point.explanation),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: selected ? colors.panelStrong : colors.surface,
-              gradient: context.agentAwesomeCardGradient,
-              border: Border.all(color: selected ? colors.borderStrong : color),
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  blurRadius: point.riskScore >= 0.6 ? 18 : 12,
-                  offset: const Offset(0, 5),
-                  color: color.withValues(
-                    alpha: point.riskScore >= 0.6 ? 0.24 : 0.15,
-                  ),
+          child: Opacity(
+            opacity: opacity,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? colors.panelStrong : colors.surface,
+                gradient: context.agentAwesomeCardGradient,
+                border: Border.all(
+                  color: selected || highlight ? colors.borderStrong : color,
+                  width: highlight ? 1.8 : 1,
                 ),
-              ],
-            ),
-            child: Row(
-              children: <Widget>[
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: color.withValues(alpha: 0.12),
-                  child: Text(
-                    (point.elevation * 9 + 1).round().toString(),
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    blurRadius: highlight
+                        ? 22
+                        : point.riskScore >= 0.6
+                        ? 18
+                        : 12,
+                    offset: const Offset(0, 5),
+                    color: color.withValues(
+                      alpha: highlight
+                          ? 0.34
+                          : point.riskScore >= 0.6
+                          ? 0.24
+                          : 0.15,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Text(
-                        point.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.ink,
-                          fontWeight: FontWeight.w900,
-                        ),
+                ],
+              ),
+              child: Row(
+                children: <Widget>[
+                  CircleAvatar(
+                    radius: 14,
+                    backgroundColor: color.withValues(alpha: 0.12),
+                    child: Text(
+                      (point.elevation * 9 + 1).round().toString(),
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
                       ),
-                      Text(
-                        placement.cue,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Row(
-                        children: <Widget>[
-                          Flexible(
-                            child: Text(
-                              point.dueAt == null
-                                  ? placement.zone.label
-                                  : 'Due ${formatOptionalLocalMonthDay(point.dueAt)}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                point.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colors.ink,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
+                            if (highlight)
+                              Icon(
+                                Icons.center_focus_strong,
+                                size: 14,
+                                color: color,
+                              ),
+                          ],
+                        ),
+                        Text(
+                          activeCandidate == null
+                              ? placement.cue
+                              : TaskInsightPresetRegistry.candidateReason(
+                                  activeCandidate,
+                                ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: activeCandidate == null
+                                ? colors.muted
+                                : color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
                           ),
-                          if (point.agentFitScore >= 0.58) ...<Widget>[
-                            const SizedBox(width: 6),
-                            Icon(Icons.auto_awesome, size: 12, color: color),
-                          ],
-                          if (point.riskScore >= 0.6) ...<Widget>[
-                            const SizedBox(width: 6),
-                            Icon(
-                              Icons.warning_amber_rounded,
-                              size: 13,
-                              color: color,
+                        ),
+                        Row(
+                          children: <Widget>[
+                            Flexible(
+                              child: Text(
+                                point.dueAt == null
+                                    ? placement.zone.label
+                                    : 'Due ${formatOptionalLocalMonthDay(point.dueAt)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
                             ),
+                            if (candidates.isNotEmpty) ...<Widget>[
+                              const SizedBox(width: 6),
+                              _TerrainInsightCountPill(
+                                count: candidates.length,
+                                color: color,
+                              ),
+                            ],
+                            if (point.agentFitScore >= 0.58) ...<Widget>[
+                              const SizedBox(width: 6),
+                              Icon(Icons.auto_awesome, size: 12, color: color),
+                            ],
+                            if (point.riskScore >= 0.6) ...<Widget>[
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 13,
+                                color: color,
+                              ),
+                            ],
                           ],
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -863,12 +1015,14 @@ class _PositionedTerrainPin extends StatelessWidget {
     required this.pin,
     required this.selected,
     required this.expanded,
+    required this.lens,
     required this.onTap,
   });
 
   final TaskTerrainPinPlacement pin;
   final bool selected;
   final bool expanded;
+  final _TerrainInsightLens lens;
   final VoidCallback onTap;
 
   /// Builds one low-detail task pin.
@@ -877,37 +1031,45 @@ class _PositionedTerrainPin extends StatelessWidget {
     final point = pin.point;
     final color = pin.color;
     final colors = context.agentAwesomeColors;
+    final highlight = lens.activeCandidateFor(point.taskId) != null;
+    final opacity = lens.opacityFor(point.taskId);
     return Positioned(
       left: pin.center.dx - 14,
       top: pin.center.dy - 14,
       width: 28,
       height: 28,
       child: Tooltip(
-        message: '${point.title}\n${pin.zone.label}',
+        message: lens.tooltipFor(point, '${point.title}\n${pin.zone.label}'),
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: selected || expanded
-                  ? colors.green
-                  : color.withValues(alpha: 0.9),
-              border: Border.all(
-                color: expanded ? colors.ink : colors.surface,
-                width: expanded ? 2.4 : 2,
+          child: Opacity(
+            opacity: opacity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: selected || expanded
+                    ? colors.green
+                    : color.withValues(alpha: highlight ? 1 : 0.9),
+                border: Border.all(
+                  color: highlight || expanded ? colors.ink : colors.surface,
+                  width: highlight || expanded ? 2.6 : 2,
+                ),
+                shape: BoxShape.circle,
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    blurRadius: highlight ? 16 : 8,
+                    color: color.withValues(alpha: highlight ? 0.38 : 0.2),
+                  ),
+                ],
               ),
-              shape: BoxShape.circle,
-              boxShadow: <BoxShadow>[
-                BoxShadow(blurRadius: 8, color: color.withValues(alpha: 0.2)),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                pin.label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
+              child: Center(
+                child: Text(
+                  pin.label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ),
@@ -923,11 +1085,13 @@ class _PositionedTerrainCluster extends StatelessWidget {
   const _PositionedTerrainCluster({
     required this.cluster,
     required this.expanded,
+    required this.lens,
     required this.onTap,
   });
 
   final TaskTerrainClusterPlacement cluster;
   final bool expanded;
+  final _TerrainInsightLens lens;
   final VoidCallback onTap;
 
   /// Builds one count badge for clustered low-detail tasks.
@@ -935,6 +1099,9 @@ class _PositionedTerrainCluster extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = cluster.color;
     final colors = context.agentAwesomeColors;
+    final highlightedCount = lens.highlightedPointCount(cluster.points);
+    final highlight = highlightedCount > 0;
+    final opacity = lens.hasActivePreset && !highlight ? 0.36 : 1.0;
     final label =
         '${cluster.zone.label}\n${cluster.points.take(5).map((point) => point.title).join('\n')}';
     return Positioned(
@@ -947,25 +1114,33 @@ class _PositionedTerrainCluster extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(18),
           onTap: onTap,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: expanded ? colors.green : color.withValues(alpha: 0.9),
-              border: Border.all(
-                color: expanded ? colors.ink : colors.surface,
-                width: expanded ? 2.4 : 2,
+          child: Opacity(
+            opacity: opacity,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: expanded ? colors.green : color.withValues(alpha: 0.9),
+                border: Border.all(
+                  color: expanded || highlight ? colors.ink : colors.surface,
+                  width: expanded || highlight ? 2.6 : 2,
+                ),
+                shape: BoxShape.circle,
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    blurRadius: highlight ? 16 : 10,
+                    color: color.withValues(alpha: highlight ? 0.36 : 0.22),
+                  ),
+                ],
               ),
-              shape: BoxShape.circle,
-              boxShadow: <BoxShadow>[
-                BoxShadow(blurRadius: 10, color: color.withValues(alpha: 0.22)),
-              ],
-            ),
-            child: Center(
-              child: Text(
-                cluster.points.length.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
+              child: Center(
+                child: Text(
+                  highlight
+                      ? '$highlightedCount/${cluster.points.length}'
+                      : cluster.points.length.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
             ),

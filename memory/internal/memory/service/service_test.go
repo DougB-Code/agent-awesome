@@ -154,7 +154,6 @@ func TestBetaTaskFlowUpdatesCompletesListsAndProjects(t *testing.T) {
 	created, err := service.CreateTask(ctx, domain.CreateTaskRequest{
 		Title:  "Send beta welcome note",
 		Topics: []string{"beta"},
-		Value:  0.7,
 	})
 	if err != nil {
 		t.Fatalf("create beta task: %v", err)
@@ -189,7 +188,7 @@ func TestBetaTaskFlowUpdatesCompletesListsAndProjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("project beta summary: %v", err)
 	}
-	if len(summary.Metrics) != 5 {
+	if len(summary.Metrics) != 4 {
 		t.Fatalf("summary metrics = %#v, want beta projection metrics", summary.Metrics)
 	}
 }
@@ -207,7 +206,7 @@ func TestProjectExecutiveSummaryReturnsEmptyUsefulProjection(t *testing.T) {
 	if summary.SchemaVersion != domain.ExecutiveSummarySchemaVersion || summary.Title != "Today" {
 		t.Fatalf("summary identity = %q/%q, want Today schema", summary.SchemaVersion, summary.Title)
 	}
-	if len(summary.Metrics) != 5 || len(summary.OpenLoops.Categories) == 0 || len(summary.TimeHorizon.Buckets) != 5 {
+	if len(summary.Metrics) != 4 || len(summary.OpenLoops.Categories) == 0 || len(summary.TimeHorizon.Buckets) != 5 {
 		t.Fatalf("summary sections missing: metrics=%d open_loops=%d horizon=%d", len(summary.Metrics), len(summary.OpenLoops.Categories), len(summary.TimeHorizon.Buckets))
 	}
 	if summary.Quality.Label != "Sparse" || !containsTestString(summary.Coverage.NotConnected, "Calendar") {
@@ -222,24 +221,22 @@ func TestProjectExecutiveSummaryClassifiesTaskGraph(t *testing.T) {
 	now := time.Date(2026, 5, 9, 9, 24, 0, 0, time.UTC)
 	yesterday := now.Add(-24 * time.Hour)
 	decision, err := service.CreateTask(ctx, domain.CreateTaskRequest{
-		Title:   "Approve vendor payment prep",
-		Context: "Financial decision needs approval",
-		Risk:    0.9,
-		Value:   0.7,
+		Title: "Approve vendor payment prep",
+		DueAt: &yesterday,
 	})
 	if err != nil {
 		t.Fatalf("create decision: %v", err)
 	}
 	if _, err := service.CreateTask(ctx, domain.CreateTaskRequest{
-		Title:   "Draft Jordan follow-up",
-		Context: "Draft a safe note for review",
-		Project: "Relationships",
+		Title:           "Draft Jordan follow-up",
+		Description:     "Safe note for review",
+		Project:         "Relationships",
+		EstimateMinutes: 30,
 	}); err != nil {
 		t.Fatalf("create delegation: %v", err)
 	}
 	if _, err := service.CreateTask(ctx, domain.CreateTaskRequest{
 		Title:      "Reply to Sarah",
-		Context:    "Promise follow up",
 		Person:     "Sarah",
 		FollowUpAt: &yesterday,
 	}); err != nil {
@@ -257,8 +254,6 @@ func TestProjectExecutiveSummaryClassifiesTaskGraph(t *testing.T) {
 	blocked, err := service.CreateTask(ctx, domain.CreateTaskRequest{
 		Title:  "Budget decision",
 		Status: blockedStatus,
-		Risk:   0.7,
-		Value:  0.8,
 	})
 	if err != nil {
 		t.Fatalf("create blocked: %v", err)

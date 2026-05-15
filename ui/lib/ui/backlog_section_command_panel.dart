@@ -164,7 +164,7 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
   }
 }
 
-/// Builds an empty area for non-area detail-mode fallback calls.
+/// Builds an empty area for detail-mode calls that do not supply an area.
 Widget _emptyBacklogAreaBuilder(String query) {
   return const SizedBox.shrink();
 }

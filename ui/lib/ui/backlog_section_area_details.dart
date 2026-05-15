@@ -22,7 +22,7 @@ class _BacklogStreamDetailPanel extends StatelessWidget {
               _BacklogMetric('Tasks', taskIds.length.toString()),
               _BacklogMetric('Links', projection.links.length.toString()),
               _BacklogMetric(
-                'Effort',
+                'Estimate',
                 _formatBacklogMinutes(_streamEstimateMinutes(cards)),
               ),
             ],
@@ -151,7 +151,7 @@ class _BacklogWbsDetailPanel extends StatelessWidget {
               _BacklogMetric('Roots', roots.length.toString()),
               _BacklogMetric('Packages', tasks.length.toString()),
               _BacklogMetric(
-                'Effort',
+                'Estimate',
                 _formatBacklogMinutes(_taskMinutes(tasks)),
               ),
               _BacklogMetric('Spend', _formatBacklogWbsSpend(tasks)),
@@ -478,7 +478,7 @@ List<TaskStreamCard> _backlogStreamCards(TaskStreamProjection projection) {
   return <TaskStreamCard>[for (final lane in projection.lanes) ...lane.cards];
 }
 
-/// Returns the total estimated stream effort in minutes.
+/// Returns the total estimated stream duration in minutes.
 int _streamEstimateMinutes(List<TaskStreamCard> cards) {
   return cards.fold<int>(0, (total, card) => total + card.estimateMinutes);
 }

@@ -147,11 +147,6 @@ String _streamLinkID(
   if (edge.relationType == 'blocks') {
     return 'blockers';
   }
-  if (from.flowLane.isNotEmpty &&
-      to.flowLane.isNotEmpty &&
-      from.flowLane != to.flowLane) {
-    return _normalizeId('${from.flowLane}-to-${to.flowLane}');
-  }
   return _firstNonEmpty(<String>[
     from.streamId,
     to.streamId,
@@ -159,17 +154,14 @@ String _streamLinkID(
   ]);
 }
 
-/// Returns a stable stream id from task source, domain, context, or topic.
+/// Returns a stable stream id from task domain or topic.
 String _streamId(
   TaskProjectionTask task,
   Map<String, TaskProjectionFacet> facets,
-  String context,
 ) {
   return _normalizeId(
     _firstNonEmpty(<String>[
-      task.source,
-      task.domain,
-      context,
+      task.project,
       _facetLabelForTask(task, facets, 'topic'),
       'general',
     ]),
@@ -230,9 +222,9 @@ String _nextBestAction(TaskProjectionTask task) {
     return 'Remove the blocker or clarify the dependency.';
   }
   if (task.description.isNotEmpty) {
-    return 'Open the context notes and continue.';
+    return 'Open the task notes and continue.';
   }
-  return 'Start with the context title as the next action.';
+  return 'Start with the task title as the next action.';
 }
 
 /// Returns the explicit spend label for a projection-only task.

@@ -16,23 +16,16 @@ import (
 const (
 	propertyCanceledAt      = "canceled_at"
 	propertyCompletedAt     = "completed_at"
-	propertyConfidence      = "confidence"
-	propertyContext         = "context"
 	propertyDescription     = "description"
 	propertyDueAt           = "due_at"
-	propertyEffort          = "effort"
-	propertyEnergyRequired  = "energy_required"
 	propertyEstimateMinutes = "estimate_minutes"
 	propertyFollowUpAt      = "follow_up_at"
 	propertyLagMinutes      = "lag_minutes"
 	propertyLinkNote        = "note"
 	propertyPriority        = "priority"
-	propertyRisk            = "risk"
 	propertyScheduledAt     = "scheduled_at"
 	propertyStatus          = "status"
 	propertyUrgency         = "urgency"
-	propertyValue           = "value"
-	propertyView            = "view"
 	propertyWorkBreakdown   = "work_breakdown"
 )
 
@@ -471,15 +464,8 @@ func (r *Repository) writeTaskProperties(ctx context.Context, nodeID graph.NodeI
 		taskTextProperty(nodeID, propertyDescription, req.Description, req.Actor),
 		taskTextProperty(nodeID, propertyStatus, string(req.Status), req.Actor),
 		taskTextProperty(nodeID, propertyPriority, string(req.Priority), req.Actor),
-		taskTextProperty(nodeID, propertyEnergyRequired, req.EnergyRequired, req.Actor),
-		taskTextProperty(nodeID, propertyContext, req.Context, req.Actor),
-		taskTextProperty(nodeID, propertyView, req.View, req.Actor),
 		taskNumberProperty(nodeID, propertyEstimateMinutes, float64(req.EstimateMinutes), req.Actor),
-		taskNumberProperty(nodeID, propertyEffort, req.Effort, req.Actor),
-		taskNumberProperty(nodeID, propertyValue, req.Value, req.Actor),
 		taskNumberProperty(nodeID, propertyUrgency, req.Urgency, req.Actor),
-		taskNumberProperty(nodeID, propertyRisk, req.Risk, req.Actor),
-		taskNumberProperty(nodeID, propertyConfidence, req.Confidence, req.Actor),
 	}
 	if req.IdempotencyKey != "" {
 		properties = append(properties, taskTextProperty(nodeID, propertyIdempotencyKey, req.IdempotencyKey, req.Actor))
@@ -578,31 +564,11 @@ func (r *Repository) writeTaskPatchProperties(ctx context.Context, nodeID graph.
 			return err
 		}
 	}
-	stringProperties := []struct {
-		key   string
-		value *string
-	}{
-		{key: propertyEnergyRequired, value: req.EnergyRequired},
-		{key: propertyContext, value: req.Context},
-		{key: propertyView, value: req.View},
-	}
-	for _, property := range stringProperties {
-		if property.value == nil {
-			continue
-		}
-		if err := r.upsertTaskProperty(ctx, taskTextProperty(nodeID, property.key, *property.value, req.Actor)); err != nil {
-			return err
-		}
-	}
 	numberProperties := []struct {
 		key   string
 		value *float64
 	}{
-		{key: propertyEffort, value: req.Effort},
-		{key: propertyValue, value: req.Value},
 		{key: propertyUrgency, value: req.Urgency},
-		{key: propertyRisk, value: req.Risk},
-		{key: propertyConfidence, value: req.Confidence},
 	}
 	for _, property := range numberProperties {
 		if property.value == nil {
@@ -650,7 +616,6 @@ func (r *Repository) writeTaskFacetEdges(ctx context.Context, taskID graph.NodeI
 		{kind: graph.KindProject, stable: "project:" + strings.ToLower(req.Project), title: req.Project, relation: graph.RelationPartOf},
 		{kind: graph.KindPerson, stable: "person:" + strings.ToLower(req.Person), title: req.Person, relation: graph.RelationAssignedTo},
 		{kind: graph.KindLocation, stable: "location:" + strings.ToLower(req.Location), title: req.Location, relation: graph.RelationLocatedAt},
-		{kind: graph.KindSource, stable: "source:" + strings.ToLower(req.Source), title: req.Source, relation: graph.RelationSourcedFrom},
 	}
 	for _, facet := range facets {
 		if strings.TrimSpace(facet.title) == "" {
@@ -688,7 +653,6 @@ func (r *Repository) writeTaskPatchFacets(ctx context.Context, taskID graph.Node
 		{kind: graph.KindProject, stable: "project:", title: req.Project, relation: graph.RelationPartOf},
 		{kind: graph.KindPerson, stable: "person:", title: req.Person, relation: graph.RelationAssignedTo},
 		{kind: graph.KindLocation, stable: "location:", title: req.Location, relation: graph.RelationLocatedAt},
-		{kind: graph.KindSource, stable: "source:", title: req.Source, relation: graph.RelationSourcedFrom},
 	}
 	for _, facet := range facets {
 		if facet.title == nil {
@@ -777,14 +741,7 @@ func (r *Repository) taskFromNode(ctx context.Context, node graph.Node, includeL
 		ScheduledAt:     propertyTime(properties[propertyScheduledAt]),
 		FollowUpAt:      propertyTime(properties[propertyFollowUpAt]),
 		EstimateMinutes: int(propertyNumber(properties[propertyEstimateMinutes])),
-		EnergyRequired:  propertyText(properties[propertyEnergyRequired], ""),
-		Effort:          propertyNumber(properties[propertyEffort]),
-		Value:           propertyNumber(properties[propertyValue]),
 		Urgency:         propertyNumber(properties[propertyUrgency]),
-		Risk:            propertyNumber(properties[propertyRisk]),
-		Context:         propertyText(properties[propertyContext], ""),
-		View:            propertyText(properties[propertyView], ""),
-		Confidence:      propertyNumber(properties[propertyConfidence]),
 		Actor:           node.Actor,
 		IdempotencyKey:  propertyText(properties[propertyIdempotencyKey], ""),
 		CreatedAt:       node.CreatedAt,
@@ -800,8 +757,8 @@ func (r *Repository) taskFromNode(ctx context.Context, node graph.Node, includeL
 	task.Project = firstTitleOfKind(ctx, r, node.ID, graph.RelationPartOf, graph.KindProject)
 	task.Person = firstTitleOfKind(ctx, r, node.ID, graph.RelationAssignedTo, graph.KindPerson)
 	task.Location = firstTitleOfKind(ctx, r, node.ID, graph.RelationLocatedAt, graph.KindLocation)
-	task.Source = firstTitleOfKind(ctx, r, node.ID, graph.RelationSourcedFrom, graph.KindSource)
 	task.Overdue = task.DueAt != nil && task.DueAt.Before(time.Now().UTC()) && !domain.TerminalTaskStatus(task.Status)
+	task.Risk = domain.CalculateTaskRisk(task, time.Now().UTC())
 	if includeLinks {
 		task.MemoryLinks, err = r.taskMemoryLinks(ctx, node.ID)
 		if err != nil {

@@ -1,4 +1,4 @@
-/// Workspace task, task metadata, relation, and commitment data models.
+/// Workspace task, task metadata, and relation data models.
 part of 'models.dart';
 
 /// WorkspaceTask represents a task or plan step in the UI.
@@ -17,13 +17,8 @@ class WorkspaceTask {
     this.followUpAt,
     this.topics = const <String>[],
     this.estimateMinutes = 0,
-    this.energyRequired = '',
-    this.effort = 0,
-    this.value = 0,
     this.urgency = 0,
     this.risk = 0,
-    this.context = '',
-    this.domain = '',
     this.project = '',
     this.location = '',
     this.owner = '',
@@ -31,9 +26,7 @@ class WorkspaceTask {
     this.earnCents = 0,
     this.saveCents = 0,
     this.currency = '',
-    this.source = '',
     this.workBreakdown = const TaskWorkBreakdown(),
-    this.confidence = 0,
     this.overdue = false,
     this.memoryLinks = const <TaskMemoryLink>[],
     this.createdAt,
@@ -82,26 +75,11 @@ class WorkspaceTask {
   /// Estimated task duration in minutes.
   final int estimateMinutes;
 
-  /// Required energy mode.
-  final String energyRequired;
-
-  /// Effort score from 0 to 1.
-  final double effort;
-
-  /// Value score from 0 to 1.
-  final double value;
-
   /// Urgency score from 0 to 1.
   final double urgency;
 
   /// Risk score from 0 to 1.
   final double risk;
-
-  /// Execution context.
-  final String context;
-
-  /// Cross-cutting task view.
-  final String domain;
 
   /// Project the task belongs to.
   final String project;
@@ -124,14 +102,8 @@ class WorkspaceTask {
   /// Currency code for spend, earnings, and savings.
   final String currency;
 
-  /// Task source.
-  final String source;
-
   /// Optional WBS planning metadata.
   final TaskWorkBreakdown workBreakdown;
-
-  /// Metadata confidence from 0 to 1.
-  final double confidence;
 
   /// Whether the task is past due.
   final bool overdue;
@@ -182,13 +154,8 @@ class WorkspaceTask {
       followUpAt: followUpAt,
       topics: topics,
       estimateMinutes: estimateMinutes,
-      energyRequired: energyRequired,
-      effort: effort,
-      value: value,
       urgency: urgency,
       risk: risk,
-      context: context,
-      domain: domain,
       project: project,
       location: location,
       owner: owner,
@@ -196,9 +163,7 @@ class WorkspaceTask {
       earnCents: earnCents,
       saveCents: saveCents,
       currency: currency,
-      source: source,
       workBreakdown: workBreakdown ?? this.workBreakdown,
-      confidence: confidence,
       overdue: overdue,
       memoryLinks: memoryLinks,
       createdAt: createdAt,
@@ -437,222 +402,6 @@ class TaskRelationRecord {
 
   /// Human-readable explanation.
   final String explanation;
-
-  /// Last actor.
-  final String actor;
-
-  /// Creation timestamp.
-  final DateTime? createdAt;
-
-  /// Last update timestamp.
-  final DateTime? updatedAt;
-}
-
-/// TaskRelationSuggestion stores one inferred relation recommendation.
-class TaskRelationSuggestion {
-  /// Creates a task relation suggestion.
-  const TaskRelationSuggestion({
-    required this.id,
-    required this.fromTaskId,
-    required this.toTaskId,
-    required this.relationType,
-    this.confidence = 0,
-    this.explanation = '',
-  });
-
-  /// Stable suggestion id.
-  final String id;
-
-  /// Source task id.
-  final String fromTaskId;
-
-  /// Target task id.
-  final String toTaskId;
-
-  /// Relationship type.
-  final String relationType;
-
-  /// Suggestion confidence.
-  final double confidence;
-
-  /// Suggestion explanation.
-  final String explanation;
-}
-
-/// TaskMetadataSuggestion stores one inferred metadata recommendation.
-class TaskMetadataSuggestion {
-  /// Creates a task metadata suggestion.
-  const TaskMetadataSuggestion({
-    required this.id,
-    required this.taskId,
-    this.estimateMinutes = 0,
-    this.energyRequired = '',
-    this.effort = 0,
-    this.value = 0,
-    this.urgency = 0,
-    this.risk = 0,
-    this.context = '',
-    this.domain = '',
-    this.project = '',
-    this.location = '',
-    this.owner = '',
-    this.source = '',
-    this.confidence = 0,
-    this.explanation = '',
-  });
-
-  /// Stable suggestion id.
-  final String id;
-
-  /// Task receiving metadata.
-  final String taskId;
-
-  /// Estimated task duration.
-  final int estimateMinutes;
-
-  /// Suggested energy mode.
-  final String energyRequired;
-
-  /// Suggested effort score.
-  final double effort;
-
-  /// Suggested value score.
-  final double value;
-
-  /// Suggested urgency score.
-  final double urgency;
-
-  /// Suggested risk score.
-  final double risk;
-
-  /// Suggested execution context.
-  final String context;
-
-  /// Suggested cross-cutting task view.
-  final String domain;
-
-  /// Suggested project.
-  final String project;
-
-  /// Suggested location.
-  final String location;
-
-  /// Suggested responsible person.
-  final String owner;
-
-  /// Suggested source.
-  final String source;
-
-  /// Suggestion confidence.
-  final double confidence;
-
-  /// Human-readable explanation.
-  final String explanation;
-}
-
-/// TaskCommitmentSuggestion stores one inferred commitment recommendation.
-class TaskCommitmentSuggestion {
-  /// Creates a task commitment suggestion.
-  const TaskCommitmentSuggestion({
-    required this.id,
-    required this.taskId,
-    this.people = const <String>[],
-    this.domain = '',
-    this.project = '',
-    this.timeWindow = '',
-    this.responsibility = '',
-    this.promiseSource = '',
-    this.hardness = '',
-    this.consequence = '',
-    this.confidence = 0,
-    this.explanation = '',
-  });
-
-  /// Stable suggestion id.
-  final String id;
-
-  /// Task represented by this suggested commitment.
-  final String taskId;
-
-  /// Suggested affected people.
-  final List<String> people;
-
-  /// Suggested cross-cutting task view.
-  final String domain;
-
-  /// Suggested project.
-  final String project;
-
-  /// Suggested time window.
-  final String timeWindow;
-
-  /// Suggested responsibility state.
-  final String responsibility;
-
-  /// Suggested promise source.
-  final String promiseSource;
-
-  /// Suggested soft or hard commitment.
-  final String hardness;
-
-  /// Suggested consequence if ignored.
-  final String consequence;
-
-  /// Suggestion confidence.
-  final double confidence;
-
-  /// Human-readable explanation.
-  final String explanation;
-}
-
-/// TaskCommitment stores one first-class task commitment.
-class TaskCommitment {
-  /// Creates a task commitment.
-  const TaskCommitment({
-    required this.id,
-    required this.taskId,
-    this.people = const <String>[],
-    this.domain = '',
-    this.project = '',
-    this.timeWindow = '',
-    this.responsibility = '',
-    this.promiseSource = '',
-    this.hardness = '',
-    this.consequence = '',
-    this.actor = '',
-    this.createdAt,
-    this.updatedAt,
-  });
-
-  /// Stable commitment id.
-  final String id;
-
-  /// Referenced task id.
-  final String taskId;
-
-  /// Affected people.
-  final List<String> people;
-
-  /// Cross-cutting task view.
-  final String domain;
-
-  /// Project name.
-  final String project;
-
-  /// Time window label.
-  final String timeWindow;
-
-  /// Responsibility state.
-  final String responsibility;
-
-  /// Source of promise.
-  final String promiseSource;
-
-  /// Soft or hard commitment.
-  final String hardness;
-
-  /// Consequence if ignored.
-  final String consequence;
 
   /// Last actor.
   final String actor;

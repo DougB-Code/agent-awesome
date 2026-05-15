@@ -46,7 +46,6 @@ void main() {
         person: 'Bob',
         estimateMinutes: 90,
         project: 'Crazy',
-        view: 'Work',
         priority: 'high',
       );
 

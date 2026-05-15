@@ -8,9 +8,6 @@ class TaskInsightIds {
   /// Operational all-tasks preset.
   static const String all = 'all';
 
-  /// Today work that is ready for concrete execution.
-  static const String todayActions = 'today_actions';
-
   /// Today work that requires human judgment or approval.
   static const String todayDecisions = 'today_decisions';
 
@@ -25,9 +22,6 @@ class TaskInsightIds {
 
   /// Low-effort work that unlocks valuable downstream tasks.
   static const String quickUnblocks = 'quick_unblocks';
-
-  /// Missing metadata that blocks better insight quality.
-  static const String metadataGaps = 'metadata_gaps';
 
   /// Risky work with low metadata confidence.
   static const String highRiskLowConfidence = 'high_risk_low_confidence';

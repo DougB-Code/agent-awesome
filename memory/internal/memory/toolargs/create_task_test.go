@@ -6,18 +6,14 @@ import (
 	"testing"
 )
 
-// TestDecodeCreateTaskRequestCoercesLegacyModelMetadata verifies tolerant scalar parsing.
-func TestDecodeCreateTaskRequestCoercesLegacyModelMetadata(t *testing.T) {
+// TestDecodeCreateTaskRequestReadsModelPayload verifies the create_task schema fields.
+func TestDecodeCreateTaskRequestReadsModelPayload(t *testing.T) {
 	payload, err := json.Marshal(map[string]any{
-		"title":            "Buy Milk",
-		"description":      "Purchase milk.",
-		"status":           "pending",
-		"priority":         "medium",
-		"energy_required":  1,
-		"effort":           5,
-		"urgency":          "low",
-		"value":            10,
-		"estimate_minutes": 10,
+		"title":           "Buy Milk",
+		"description":     "Purchase milk.",
+		"priority":        "medium",
+		"topics":          []string{"Errands", "errands"},
+		"idempotency_key": "buy-milk",
 	})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -31,34 +27,13 @@ func TestDecodeCreateTaskRequestCoercesLegacyModelMetadata(t *testing.T) {
 	if req.Title != "Buy Milk" || req.Description != "Purchase milk." {
 		t.Fatalf("task text = %q/%q, want decoded title and description", req.Title, req.Description)
 	}
-	if req.Status != "open" || req.Priority != "normal" {
-		t.Fatalf("status/priority = %q/%q, want open/normal", req.Status, req.Priority)
+	if req.Priority != "normal" {
+		t.Fatalf("priority = %q, want normal", req.Priority)
 	}
-	if req.EnergyRequired != "1" || req.Urgency != 0.25 || req.Value != 1 {
-		t.Fatalf("metadata = energy %q urgency %.2f value %.2f, want coerced values", req.EnergyRequired, req.Urgency, req.Value)
+	if len(req.Topics) != 1 || req.Topics[0] != "errands" {
+		t.Fatalf("topics = %#v, want normalized errands", req.Topics)
 	}
-}
-
-// TestDecodeCreateTaskRequestRecoversMalformedKeys verifies model-emitted field keys are repaired.
-func TestDecodeCreateTaskRequestRecoversMalformedKeys(t *testing.T) {
-	payload, err := json.Marshal(map[string]any{
-		`title:<|"|>Buy milk<|"|>`:                         nil,
-		`description:<|"|>Buy milk<|"|>`:                   nil,
-		`idempotency_key:<|"|>agent_awesome:session:<|"|>`: nil,
-	})
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
-
-	req, err := DecodeCreateTaskRequest(payload)
-	if err != nil {
-		t.Fatalf("decode create task request: %v", err)
-	}
-
-	if req.Title != "Buy milk" || req.Description != "Buy milk" {
-		t.Fatalf("task text = %q/%q, want recovered fields", req.Title, req.Description)
-	}
-	if req.IdempotencyKey != "agent_awesome:session:" {
-		t.Fatalf("idempotency key = %q, want recovered key", req.IdempotencyKey)
+	if req.IdempotencyKey != "buy-milk" {
+		t.Fatalf("idempotency key = %q, want buy-milk", req.IdempotencyKey)
 	}
 }

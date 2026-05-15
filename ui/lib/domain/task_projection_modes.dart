@@ -14,8 +14,8 @@ enum TaskTerrainInsightMode {
   /// Low-effort blockers with high downstream value.
   unblockLeverage,
 
-  /// Risky tasks with low confidence or metadata gaps.
-  riskConfidence,
+  /// Risky tasks that need timing or blocker review.
+  riskFocus,
 }
 
 /// TaskConstellationInsightMode identifies relationship diagnosis modes.

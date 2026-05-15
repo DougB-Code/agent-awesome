@@ -12,8 +12,7 @@ void main() {
       _task(
         id: 'packet',
         title: 'Prep packet',
-        domain: 'Work',
-        context: 'Focus',
+        sourceLabel: 'Focus',
         code: '1.1.1',
         minutes: 60,
         cost: 7500,
@@ -21,8 +20,7 @@ void main() {
       _task(
         id: 'notes',
         title: 'Finish notes',
-        domain: 'Work',
-        context: 'Focus',
+        sourceLabel: 'Focus',
         code: '1.1.2',
         minutes: 30,
         cost: 3750,
@@ -30,8 +28,7 @@ void main() {
       _task(
         id: 'tax',
         title: 'Pay tax',
-        domain: 'Finance',
-        context: 'Admin',
+        sourceLabel: 'Admin',
         code: '2.1.1',
         minutes: 15,
         cost: 1875,
@@ -39,7 +36,7 @@ void main() {
     ]);
 
     expect(roots.map((node) => node.code), <String>['1', '2']);
-    expect(roots.first.title, 'Work');
+    expect(roots.first.title, 'WBS 1');
     expect(roots.first.children.single.code, '1.1');
     expect(roots.first.children.single.title, 'Focus');
     expect(roots.first.children.single.children.length, 2);
@@ -54,8 +51,7 @@ void main() {
       _task(
         id: 'deep',
         title: 'Wire nested agent loop',
-        domain: 'Agent',
-        context: 'Runtime',
+        sourceLabel: 'Runtime',
         code: '1.2.3.4.5.6',
         minutes: 45,
         cost: 5625,
@@ -85,8 +81,7 @@ void main() {
 WorkspaceTask _task({
   required String id,
   required String title,
-  required String domain,
-  required String context,
+  required String sourceLabel,
   required String code,
   required int minutes,
   required int cost,
@@ -100,8 +95,7 @@ WorkspaceTask _task({
     status: 'open',
     priority: 'normal',
     estimateMinutes: minutes,
-    context: context,
-    domain: domain,
+    sourceLabel: sourceLabel,
     active: true,
     workBreakdown: TaskWorkBreakdown(
       code: code,

@@ -59,7 +59,7 @@ enum TaskGraphAttentionTarget {
   /// Remove an explicit blocker edge first.
   clearBlocker,
 
-  /// Protect a slipping or overdue commitment.
+  /// Protect slipping or overdue work.
   deadlineRisk,
 
   /// Review spend before committing more resources.

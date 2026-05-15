@@ -43,7 +43,7 @@ void main() {
         containsAll(<TaskStreamAxisDimension>[
           TaskStreamAxisDimension.due,
           TaskStreamAxisDimension.scheduled,
-          TaskStreamAxisDimension.effort,
+          TaskStreamAxisDimension.estimate,
           TaskStreamAxisDimension.spend,
           TaskStreamAxisDimension.person,
           TaskStreamAxisDimension.project,
@@ -72,7 +72,6 @@ void main() {
                   title: 'Clean up status metadata',
                   status: 'Deep Focus',
                   priority: 'normal',
-                  flowLane: 'Deep Focus',
                 ),
               ],
             ),
@@ -82,7 +81,7 @@ void main() {
         rowAxis: TaskStreamAxisDimension.status,
       );
 
-      expect(view.lanes.single.title, 'Deep Focus');
+      expect(view.lanes.single.title, 'General');
       expect(view.rowBucketsByTaskId['bad-status']!.title, 'Other status');
       expect(view.rowBucketsByTaskId['bad-status']!.title, isNot('Deep Focus'));
     });
@@ -101,10 +100,7 @@ const _projection = TaskStreamProjection(
           title: 'Draft proposal',
           status: 'open',
           priority: 'high',
-          context: 'Focus',
-          flowLane: 'Deep Work',
           project: 'Pilot',
-          domain: 'Work',
           owner: 'Doug',
           spendScore: 0.2,
           estimateMinutes: 45,
@@ -121,8 +117,6 @@ const _projection = TaskStreamProjection(
           title: 'Follow up on approval',
           status: 'waiting',
           priority: 'normal',
-          context: 'Admin',
-          flowLane: 'Waiting',
           spendLabel: 'High switch',
           spendScore: 0.8,
           estimateMinutes: 10,

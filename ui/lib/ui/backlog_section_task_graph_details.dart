@@ -7,38 +7,13 @@ class _TaskGraphDetailsBlock extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
-  /// Builds relationship, suggestion, and commitment controls.
+  /// Builds relationship controls.
   @override
   Widget build(BuildContext context) {
-    final relationSuggestions = controller.selectedTaskRelationSuggestions;
-    final metadataSuggestions = controller.selectedTaskMetadataSuggestions;
-    final commitmentSuggestions = controller.selectedTaskCommitmentSuggestions;
     final relations = controller.selectedTaskRelations;
-    final commitments = controller.selectedTaskCommitments;
     final canUpsertRelation = controller.primaryMemoryToolAvailable(
       'upsert_task_relation',
     );
-    final canUpsertCommitment = controller.primaryMemoryToolAvailable(
-      'upsert_commitment',
-    );
-    final suggestionWidgets = <Widget>[
-      for (final suggestion in relationSuggestions)
-        _TaskRelationSuggestionTile(
-          controller: controller,
-          task: task,
-          suggestion: suggestion,
-        ),
-      for (final suggestion in metadataSuggestions)
-        _TaskMetadataSuggestionTile(
-          controller: controller,
-          suggestion: suggestion,
-        ),
-      for (final suggestion in commitmentSuggestions)
-        _TaskCommitmentSuggestionTile(
-          controller: controller,
-          suggestion: suggestion,
-        ),
-    ];
     return PanelSectionBlock.gradient(
       title: 'Graph',
       trailing: Row(
@@ -56,29 +31,11 @@ class _TaskGraphDetailsBlock extends StatelessWidget {
                 icon: const Icon(Icons.account_tree_outlined, size: 18),
               ),
             ),
-          if (canUpsertCommitment)
-            Tooltip(
-              message: 'Add commitment',
-              child: IconButton(
-                onPressed: controller.tasksBusy
-                    ? null
-                    : () => unawaited(
-                        _showTaskCommitmentDialog(context, controller, task),
-                      ),
-                icon: const Icon(Icons.handshake_outlined, size: 18),
-              ),
-            ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _TaskGraphSubsection(
-            title: 'Suggestions',
-            emptyLabel: 'No graph suggestions',
-            children: suggestionWidgets,
-          ),
-          const Divider(height: 22),
           _TaskGraphSubsection(
             title: 'Relations',
             emptyLabel: 'No explicit relations',
@@ -88,19 +45,6 @@ class _TaskGraphDetailsBlock extends StatelessWidget {
                   controller: controller,
                   task: task,
                   relation: relation,
-                ),
-            ],
-          ),
-          const Divider(height: 22),
-          _TaskGraphSubsection(
-            title: 'Commitments',
-            emptyLabel: 'No first-class commitments',
-            children: <Widget>[
-              for (final commitment in commitments)
-                _TaskCommitmentTile(
-                  controller: controller,
-                  task: task,
-                  commitment: commitment,
                 ),
             ],
           ),

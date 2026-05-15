@@ -24,8 +24,6 @@ type NodeKind string
 const (
 	// KindArtifact represents a generated or imported artifact.
 	KindArtifact NodeKind = "artifact"
-	// KindCommitment represents an obligation or promise.
-	KindCommitment NodeKind = "commitment"
 	// KindEvidence represents source-backed content.
 	KindEvidence NodeKind = "evidence"
 	// KindEntity represents a generic named entity.

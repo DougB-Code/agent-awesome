@@ -110,12 +110,6 @@ class _ContactSummaryStrip extends StatelessWidget {
             accent: context.agentAwesomeColors.green,
           ),
           _ContactMetricCard(
-            label: 'Commitments',
-            value: _contactCommitmentCount(contacts).toString(),
-            icon: Icons.handshake_outlined,
-            accent: context.agentAwesomeWarningAccent,
-          ),
-          _ContactMetricCard(
             label: 'Sources',
             value: _contactSourceCount(contacts).toString(),
             icon: Icons.source_outlined,
@@ -414,11 +408,6 @@ class _ContactCard extends StatelessWidget {
                         _ContactMetadataBadge(
                           icon: Icons.task_alt_outlined,
                           label: '${contact.openTaskCount} active tasks',
-                        ),
-                      if (contact.commitments.isNotEmpty)
-                        _ContactMetadataBadge(
-                          icon: Icons.handshake_outlined,
-                          label: '${contact.commitments.length} commitments',
                         ),
                       for (final topic in contact.topics.take(2))
                         _ContactMetadataBadge(

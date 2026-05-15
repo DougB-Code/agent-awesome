@@ -52,33 +52,6 @@ const List<String> _requiredTaskProjectionTools = <String>[
   'task_graph_projection',
 ];
 
-/// _TaskGraphCorrectionState groups user-correctable graph records per source.
-class _TaskGraphCorrectionState {
-  /// Creates graph correction records returned by one graph-backed source.
-  const _TaskGraphCorrectionState({
-    this.relations = const <TaskRelationRecord>[],
-    this.commitments = const <TaskCommitment>[],
-    this.relationSuggestions = const <TaskRelationSuggestion>[],
-    this.metadataSuggestions = const <TaskMetadataSuggestion>[],
-    this.commitmentSuggestions = const <TaskCommitmentSuggestion>[],
-  });
-
-  /// Explicit relation records.
-  final List<TaskRelationRecord> relations;
-
-  /// First-class commitments.
-  final List<TaskCommitment> commitments;
-
-  /// Inferred relation suggestions.
-  final List<TaskRelationSuggestion> relationSuggestions;
-
-  /// Inferred metadata suggestions.
-  final List<TaskMetadataSuggestion> metadataSuggestions;
-
-  /// Inferred commitment suggestions.
-  final List<TaskCommitmentSuggestion> commitmentSuggestions;
-}
-
 /// RuntimeProfileFileEntry describes one editable profile JSON file.
 class RuntimeProfileFileEntry {
   /// Creates a runtime profile file entry.
@@ -409,21 +382,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Explicit task relations loaded from the task graph service.
   List<TaskRelationRecord> taskRelations = const <TaskRelationRecord>[];
-
-  /// First-class commitments loaded from the task graph service.
-  List<TaskCommitment> taskCommitments = const <TaskCommitment>[];
-
-  /// Inferred relation suggestions awaiting user review.
-  List<TaskRelationSuggestion> taskRelationSuggestions =
-      const <TaskRelationSuggestion>[];
-
-  /// Inferred metadata suggestions awaiting user review.
-  List<TaskMetadataSuggestion> taskMetadataSuggestions =
-      const <TaskMetadataSuggestion>[];
-
-  /// Inferred commitment suggestions awaiting user review.
-  List<TaskCommitmentSuggestion> taskCommitmentSuggestions =
-      const <TaskCommitmentSuggestion>[];
 
   /// Currently selected graph backlog item id.
   String? selectedTaskId;

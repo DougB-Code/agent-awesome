@@ -979,7 +979,7 @@ String _nodeMetaLabel(TaskConstellationNode node) {
     if (node.status.trim().isNotEmpty) _taskConceptLabel(node.status),
   ];
   if (parts.isEmpty) {
-    return 'Context';
+    return 'Task';
   }
   return parts.take(2).join(' • ');
 }

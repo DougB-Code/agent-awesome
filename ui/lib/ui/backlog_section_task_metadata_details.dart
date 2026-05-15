@@ -7,9 +7,10 @@ class _TaskMetadataBlock extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final WorkspaceTask task;
 
-  /// Builds context metadata details.
+  /// Builds task metadata details.
   @override
   Widget build(BuildContext context) {
+    final rows = _taskMetadataRows(task);
     return PanelSectionBlock.gradient(
       title: 'Metadata',
       trailing: Tooltip(
@@ -26,54 +27,56 @@ class _TaskMetadataBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _TaskMetadataRow(
-            label: 'Estimate',
-            value: task.estimateMinutes <= 0
-                ? ''
-                : '${task.estimateMinutes} min',
-          ),
-          _TaskMetadataRow(label: 'Energy', value: task.energyRequired),
-          _TaskMetadataRow(label: 'Context', value: task.context),
-          _TaskMetadataRow(label: 'View', value: task.domain),
-          _TaskMetadataRow(label: 'Location', value: task.location),
-          _TaskMetadataRow(label: 'Person', value: task.owner),
-          _TaskMetadataRow(label: 'Source', value: task.source),
-          _TaskMetadataRow(
-            label: 'Effort',
-            value: _formatTaskScore(task.effort),
-          ),
-          _TaskMetadataRow(label: 'Value', value: _formatTaskScore(task.value)),
-          _TaskMetadataRow(
-            label: 'Urgency',
-            value: _formatTaskScore(task.urgency),
-          ),
-          _TaskMetadataRow(label: 'Risk', value: _formatTaskScore(task.risk)),
-          _TaskMetadataRow(
-            label: 'Confidence',
-            value: _formatTaskScore(task.confidence),
-          ),
-          _TaskMetadataRow(label: 'Backlog id', value: task.id),
-          _TaskMetadataRow(label: 'Server', value: task.sourceLabel),
-          _TaskMetadataRow(
-            label: 'Created',
-            value: formatOptionalLocalDateTime(task.createdAt),
-          ),
-          _TaskMetadataRow(
-            label: 'Updated',
-            value: formatOptionalLocalDateTime(task.updatedAt),
-          ),
-          _TaskMetadataRow(
-            label: 'Completed',
-            value: formatOptionalLocalDateTime(task.completedAt),
-          ),
-          _TaskMetadataRow(
-            label: 'Canceled',
-            value: formatOptionalLocalDateTime(task.canceledAt),
-          ),
+          for (final row in rows)
+            _TaskMetadataRow(label: row.label, value: row.value),
         ],
       ),
     );
   }
+}
+
+class _TaskMetadataDisplayRow {
+  const _TaskMetadataDisplayRow({required this.label, required this.value});
+
+  /// Display label.
+  final String label;
+
+  /// Displayed metadata value.
+  final String value;
+}
+
+/// Builds task metadata rows from the selected task fields.
+List<_TaskMetadataDisplayRow> _taskMetadataRows(WorkspaceTask task) {
+  return <_TaskMetadataDisplayRow>[
+    _TaskMetadataDisplayRow(
+      label: 'Estimate',
+      value: task.estimateMinutes <= 0 ? '' : '${task.estimateMinutes} min',
+    ),
+    _TaskMetadataDisplayRow(label: 'Location', value: task.location),
+    _TaskMetadataDisplayRow(label: 'Person', value: task.owner),
+    _TaskMetadataDisplayRow(
+      label: 'Urgency',
+      value: _formatTaskScore(task.urgency),
+    ),
+    _TaskMetadataDisplayRow(label: 'Risk', value: _formatTaskScore(task.risk)),
+    _TaskMetadataDisplayRow(label: 'Server', value: task.sourceLabel),
+    _TaskMetadataDisplayRow(
+      label: 'Created',
+      value: formatOptionalLocalDateTime(task.createdAt),
+    ),
+    _TaskMetadataDisplayRow(
+      label: 'Updated',
+      value: formatOptionalLocalDateTime(task.updatedAt),
+    ),
+    _TaskMetadataDisplayRow(
+      label: 'Completed',
+      value: formatOptionalLocalDateTime(task.completedAt),
+    ),
+    _TaskMetadataDisplayRow(
+      label: 'Canceled',
+      value: formatOptionalLocalDateTime(task.canceledAt),
+    ),
+  ];
 }
 
 class _TaskWbsBlock extends StatelessWidget {

@@ -25,9 +25,6 @@ enum _AttentionFilter {
   /// Shows every item in the route scope.
   all,
 
-  /// Shows concrete execution and protection work.
-  execute,
-
   /// Shows items missing enough detail to act cleanly.
   clarify,
 

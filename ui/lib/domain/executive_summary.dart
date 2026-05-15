@@ -17,7 +17,6 @@ class ExecutiveSummaryProjection {
     this.metrics = const <SummaryMetric>[],
     this.attention = const AttentionProjection(),
     this.openLoops = const OpenLoopProjection(),
-    this.commitments = const CommitmentProjection(),
     this.timeHorizon = const TimeHorizonProjection(),
     this.delegation = const DelegationProjection(),
     this.riskUnblocks = const RiskUnblockProjection(),
@@ -59,9 +58,6 @@ class ExecutiveSummaryProjection {
   /// Open-loop category summary.
   final OpenLoopProjection openLoops;
 
-  /// Relationship and promise loops.
-  final CommitmentProjection commitments;
-
   /// Time horizon buckets.
   final TimeHorizonProjection timeHorizon;
 
@@ -92,7 +88,6 @@ class ExecutiveSummaryProjection {
     List<SummaryMetric>? metrics,
     AttentionProjection? attention,
     OpenLoopProjection? openLoops,
-    CommitmentProjection? commitments,
     TimeHorizonProjection? timeHorizon,
     DelegationProjection? delegation,
     RiskUnblockProjection? riskUnblocks,
@@ -111,7 +106,6 @@ class ExecutiveSummaryProjection {
       metrics: metrics ?? this.metrics,
       attention: attention ?? this.attention,
       openLoops: openLoops ?? this.openLoops,
-      commitments: commitments ?? this.commitments,
       timeHorizon: timeHorizon ?? this.timeHorizon,
       delegation: delegation ?? this.delegation,
       riskUnblocks: riskUnblocks ?? this.riskUnblocks,
@@ -386,21 +380,6 @@ class OpenLoopCategory {
   final ProjectionLink link;
 }
 
-/// CommitmentProjection stores visible commitment items.
-class CommitmentProjection {
-  /// Creates a commitment projection.
-  const CommitmentProjection({
-    this.items = const <ExecutiveSummaryItem>[],
-    this.link = const ProjectionLink(),
-  });
-
-  /// Commitment rows.
-  final List<ExecutiveSummaryItem> items;
-
-  /// Section link.
-  final ProjectionLink link;
-}
-
 /// TimeHorizonProjection stores fixed near-term buckets.
 class TimeHorizonProjection {
   /// Creates a time horizon projection.
@@ -647,7 +626,6 @@ ExecutiveSummaryProjection parseExecutiveSummaryProjection(dynamic content) {
     metrics: _parseMetrics(object['metrics']),
     attention: _parseAttention(object['attention']),
     openLoops: _parseOpenLoops(object['open_loops']),
-    commitments: _parseCommitments(object['commitments']),
     timeHorizon: _parseTimeHorizon(object['time_horizon']),
     delegation: _parseDelegation(object['delegation']),
     riskUnblocks: _parseRiskUnblocks(object['risk_unblocks']),
@@ -713,15 +691,6 @@ OpenLoopProjection _parseOpenLoops(dynamic content) {
   final object = jsonObject(content);
   return OpenLoopProjection(
     categories: _parseOpenLoopCategories(object['categories']),
-    link: _parseLink(object['link']),
-  );
-}
-
-/// Parses relationship and promise commitments.
-CommitmentProjection _parseCommitments(dynamic content) {
-  final object = jsonObject(content);
-  return CommitmentProjection(
-    items: _parseItems(object['items']),
     link: _parseLink(object['link']),
   );
 }

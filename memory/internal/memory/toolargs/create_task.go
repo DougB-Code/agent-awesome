@@ -12,25 +12,6 @@ import (
 	"memory/internal/memory/normalize"
 )
 
-var taskStatusTokens = map[string]domain.TaskStatus{
-	"blocked":     domain.TaskStatusBlocked,
-	"canceled":    domain.TaskStatusCanceled,
-	"cancelled":   domain.TaskStatusCanceled,
-	"complete":    domain.TaskStatusDone,
-	"completed":   domain.TaskStatusDone,
-	"done":        domain.TaskStatusDone,
-	"open":        domain.TaskStatusOpen,
-	"pending":     domain.TaskStatusOpen,
-	"todo":        domain.TaskStatusOpen,
-	"to_do":       domain.TaskStatusOpen,
-	"new":         domain.TaskStatusOpen,
-	"backlog":     domain.TaskStatusOpen,
-	"in_progress": domain.TaskStatusOpen,
-	"doing":       domain.TaskStatusOpen,
-	"waiting":     domain.TaskStatusWaiting,
-	"waiting_on":  domain.TaskStatusWaiting,
-}
-
 var taskPriorityTokens = map[string]domain.TaskPriority{
 	"high":     domain.TaskPriorityHigh,
 	"low":      domain.TaskPriorityLow,
@@ -41,16 +22,7 @@ var taskPriorityTokens = map[string]domain.TaskPriority{
 	"critical": domain.TaskPriorityUrgent,
 }
 
-var qualitativeScoreTokens = map[string]float64{
-	"low":      0.25,
-	"medium":   0.5,
-	"normal":   0.5,
-	"high":     0.75,
-	"urgent":   1,
-	"critical": 1,
-}
-
-// DecodeCreateTaskRequest accepts a tiny create_task payload plus legacy extras.
+// DecodeCreateTaskRequest accepts the model-facing create_task payload.
 func DecodeCreateTaskRequest(args json.RawMessage) (domain.CreateTaskRequest, error) {
 	if len(args) == 0 || string(args) == "null" {
 		args = []byte("{}")
@@ -59,97 +31,17 @@ func DecodeCreateTaskRequest(args json.RawMessage) (domain.CreateTaskRequest, er
 	if err := json.Unmarshal(args, &raw); err != nil {
 		return domain.CreateTaskRequest{}, fmt.Errorf("invalid arguments: %w", err)
 	}
-	raw = normalizeCreateTaskArgs(raw)
 	req := domain.CreateTaskRequest{
-		Actor:           stringArg(raw["actor"]),
-		Title:           firstStringArg(raw, "title", "text", "task"),
-		Description:     firstStringArg(raw, "description", "note"),
-		Status:          taskStatusArg(raw["status"]),
-		Priority:        taskPriorityArg(raw["priority"]),
-		DueAt:           timeArg(raw["due_at"]),
-		ScheduledAt:     timeArg(raw["scheduled_at"]),
-		FollowUpAt:      timeArg(raw["follow_up_at"]),
-		Topics:          stringListArg(raw["topics"]),
-		EstimateMinutes: intArg(raw["estimate_minutes"]),
-		EnergyRequired:  stringArg(raw["energy_required"]),
-		Effort:          scoreArg(raw["effort"]),
-		Value:           scoreArg(raw["value"]),
-		Urgency:         scoreArg(raw["urgency"]),
-		Risk:            scoreArg(raw["risk"]),
-		Context:         stringArg(raw["context"]),
-		View:            stringArg(raw["view"]),
-		Project:         stringArg(raw["project"]),
-		Location:        stringArg(raw["location"]),
-		Person:          firstStringArg(raw, "person", "owner", "assignee"),
-		Source:          stringArg(raw["source"]),
-		Confidence:      scoreArg(raw["confidence"]),
-		IdempotencyKey:  stringArg(raw["idempotency_key"]),
-	}
-	if links, ok := memoryLinksArg(raw["memory_links"]); ok {
-		req.MemoryLinks = links
-	}
-	if workBreakdown, ok := taskWorkBreakdownArg(raw["work_breakdown"]); ok {
-		req.WorkBreakdown = workBreakdown
+		Actor:          stringArg(raw["actor"]),
+		Title:          stringArg(raw["title"]),
+		Description:    stringArg(raw["description"]),
+		Priority:       taskPriorityArg(raw["priority"]),
+		DueAt:          timeArg(raw["due_at"]),
+		ScheduledAt:    timeArg(raw["scheduled_at"]),
+		Topics:         stringListArg(raw["topics"]),
+		IdempotencyKey: stringArg(raw["idempotency_key"]),
 	}
 	return req, nil
-}
-
-// normalizeCreateTaskArgs recovers model-emitted field:value keys.
-func normalizeCreateTaskArgs(raw map[string]any) map[string]any {
-	for key, value := range raw {
-		if value != nil {
-			continue
-		}
-		field, fieldValue, ok := splitMalformedCreateTaskKey(key)
-		if !ok {
-			continue
-		}
-		if _, exists := raw[field]; !exists {
-			raw[field] = fieldValue
-		}
-	}
-	return raw
-}
-
-// splitMalformedCreateTaskKey parses keys like title:<|"|>Buy milk<|"|>.
-func splitMalformedCreateTaskKey(key string) (string, string, bool) {
-	left, right, ok := strings.Cut(strings.TrimSpace(key), ":")
-	if !ok {
-		return "", "", false
-	}
-	field := strings.TrimSpace(left)
-	if !knownCreateTaskField(field) {
-		return "", "", false
-	}
-	value := strings.TrimSpace(right)
-	value = strings.NewReplacer(`<|"|>`, `"`, `<|'|>`, `'`).Replace(value)
-	value = strings.Trim(value, `"'`)
-	value = strings.TrimSpace(value)
-	if value == "" || strings.EqualFold(value, "null") {
-		return "", "", false
-	}
-	return field, value, true
-}
-
-// knownCreateTaskField reports whether a field belongs to create_task input.
-func knownCreateTaskField(field string) bool {
-	switch field {
-	case "actor", "title", "description", "status", "priority", "due_at", "scheduled_at", "follow_up_at", "topics", "estimate_minutes", "energy_required", "effort", "value", "urgency", "risk", "context", "view", "project", "location", "person", "owner", "assignee", "source", "confidence", "idempotency_key":
-		return true
-	default:
-		return false
-	}
-}
-
-// firstStringArg returns the first non-empty scalar string from named fields.
-func firstStringArg(raw map[string]any, keys ...string) string {
-	for _, key := range keys {
-		value := stringArg(raw[key])
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 // stringArg returns a trimmed scalar value suitable for string task fields.
@@ -190,11 +82,6 @@ func stringArg(value any) string {
 	default:
 		return ""
 	}
-}
-
-// taskStatusArg maps loose model vocabulary onto supported task statuses.
-func taskStatusArg(value any) domain.TaskStatus {
-	return taskStatusTokens[tokenArg(value)]
 }
 
 // taskPriorityArg maps loose model vocabulary onto supported priorities.
@@ -242,106 +129,4 @@ func stringListArg(value any) []string {
 		}
 	}
 	return domain.NormalizeStrings(values)
-}
-
-// intArg reads a non-negative integer-like model field.
-func intArg(value any) int {
-	number, ok := numberArg(value)
-	if !ok || number <= 0 {
-		return 0
-	}
-	return int(number)
-}
-
-// scoreArg reads numeric or qualitative 0..1 scores from legacy task fields.
-func scoreArg(value any) float64 {
-	if number, ok := numberArg(value); ok {
-		if number < 0 {
-			return 0
-		}
-		if number > 1 {
-			return 1
-		}
-		return number
-	}
-	if score, ok := qualitativeScoreTokens[tokenArg(value)]; ok {
-		return score
-	}
-	return 0
-}
-
-// numberArg reads scalar numeric values from JSON-decoded arguments.
-func numberArg(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case float64:
-		return typed, true
-	case float32:
-		return float64(typed), true
-	case int:
-		return float64(typed), true
-	case int8:
-		return float64(typed), true
-	case int16:
-		return float64(typed), true
-	case int32:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	case uint:
-		return float64(typed), true
-	case uint8:
-		return float64(typed), true
-	case uint16:
-		return float64(typed), true
-	case uint32:
-		return float64(typed), true
-	case uint64:
-		return float64(typed), true
-	case json.Number:
-		number, err := typed.Float64()
-		return number, err == nil
-	case string:
-		number, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
-		return number, err == nil
-	default:
-		return 0, false
-	}
-}
-
-// memoryLinksArg decodes valid memory links and ignores unrelated shapes.
-func memoryLinksArg(value any) ([]domain.MemoryLinkRequest, bool) {
-	if value == nil {
-		return nil, false
-	}
-	if _, ok := value.([]any); !ok {
-		return nil, false
-	}
-	bytes, err := json.Marshal(value)
-	if err != nil {
-		return nil, false
-	}
-	var links []domain.MemoryLinkRequest
-	if err := json.Unmarshal(bytes, &links); err != nil {
-		return nil, false
-	}
-	return links, true
-}
-
-// taskWorkBreakdownArg decodes object-shaped WBS metadata from advanced callers.
-func taskWorkBreakdownArg(value any) (domain.TaskWorkBreakdown, bool) {
-	if value == nil {
-		return domain.TaskWorkBreakdown{}, false
-	}
-	if _, ok := value.(map[string]any); !ok {
-		return domain.TaskWorkBreakdown{}, false
-	}
-	bytes, err := json.Marshal(value)
-	if err != nil {
-		return domain.TaskWorkBreakdown{}, false
-	}
-	var workBreakdown domain.TaskWorkBreakdown
-	if err := json.Unmarshal(bytes, &workBreakdown); err != nil {
-		return domain.TaskWorkBreakdown{}, false
-	}
-	return workBreakdown, true
 }

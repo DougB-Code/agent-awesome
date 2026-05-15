@@ -11,8 +11,6 @@ class TaskProjectionGraph {
     this.facets = const <TaskProjectionFacet>[],
     this.memberships = const <TaskProjectionMembership>[],
     this.edges = const <TaskProjectionEdge>[],
-    this.commitments = const <TaskCommitment>[],
-    this.metadataGaps = const <TaskMetadataGapRecord>[],
     this.insightSummaries = const <TaskInsightSummary>[],
     this.quality = const TaskProjectionQuality(),
   });
@@ -35,12 +33,6 @@ class TaskProjectionGraph {
   /// Sparse meaningful task-to-task edges.
   final List<TaskProjectionEdge> edges;
 
-  /// First-class commitments included in v2 graph responses.
-  final List<TaskCommitment> commitments;
-
-  /// Source or derived metadata gaps included in v2 graph responses.
-  final List<TaskMetadataGapRecord> metadataGaps;
-
   /// Precomputed insight summaries included in v2 graph responses.
   final List<TaskInsightSummary> insightSummaries;
 
@@ -53,16 +45,12 @@ class TaskProjectionQuality {
   /// Creates graph quality metrics.
   const TaskProjectionQuality({
     this.schemaConfidence = 0,
-    this.metadataCompleteness = 0,
     this.relationCoverage = 0,
     this.warnings = const <String>[],
   });
 
   /// Confidence that the graph matches the expected schema.
   final double schemaConfidence;
-
-  /// Aggregate metadata completeness from 0 to 1.
-  final double metadataCompleteness;
 
   /// Aggregate relation coverage from 0 to 1.
   final double relationCoverage;
@@ -84,22 +72,11 @@ class TaskProjectionTask {
     this.scheduledAt,
     this.topics = const <String>[],
     this.estimateMinutes = 0,
-    this.energyRequired = '',
-    this.context = '',
-    this.domain = '',
     this.project = '',
     this.location = '',
     this.owner = '',
-    this.source = '',
     this.workBreakdown = const TaskWorkBreakdown(),
     this.projectId = '',
-    this.workstreamId = '',
-    this.valueType = '',
-    this.obligationLevel = '',
-    this.consequenceSeverity = '',
-    this.agentSafety = '',
-    this.handoffReadiness = '',
-    this.dependencyState = '',
     this.scores = const TaskProjectionScores(),
     this.scoreComponents = const <String, List<TaskScoreComponent>>{},
     this.facetIds = const <String>[],
@@ -136,15 +113,6 @@ class TaskProjectionTask {
   /// Estimated duration in minutes.
   final int estimateMinutes;
 
-  /// Required energy mode.
-  final String energyRequired;
-
-  /// Execution context.
-  final String context;
-
-  /// Cross-cutting task view.
-  final String domain;
-
   /// Project name from explicit task metadata.
   final String project;
 
@@ -154,35 +122,11 @@ class TaskProjectionTask {
   /// Responsible person.
   final String owner;
 
-  /// Task source.
-  final String source;
-
   /// Optional WBS planning metadata.
   final TaskWorkBreakdown workBreakdown;
 
   /// Normalized owning project id.
   final String projectId;
-
-  /// Normalized workstream id.
-  final String workstreamId;
-
-  /// Controlled primary value type.
-  final String valueType;
-
-  /// Controlled obligation level.
-  final String obligationLevel;
-
-  /// Controlled consequence severity.
-  final String consequenceSeverity;
-
-  /// Controlled agent safety state.
-  final String agentSafety;
-
-  /// Controlled handoff readiness state.
-  final String handoffReadiness;
-
-  /// Controlled dependency state.
-  final String dependencyState;
 
   /// Derived projection scores.
   final TaskProjectionScores scores;
@@ -216,22 +160,11 @@ class TaskProjectionTask {
     DateTime? scheduledAt,
     List<String>? topics,
     int? estimateMinutes,
-    String? energyRequired,
-    String? context,
-    String? domain,
     String? project,
     String? location,
     String? owner,
-    String? source,
     TaskWorkBreakdown? workBreakdown,
     String? projectId,
-    String? workstreamId,
-    String? valueType,
-    String? obligationLevel,
-    String? consequenceSeverity,
-    String? agentSafety,
-    String? handoffReadiness,
-    String? dependencyState,
     TaskProjectionScores? scores,
     Map<String, List<TaskScoreComponent>>? scoreComponents,
     List<String>? facetIds,
@@ -250,22 +183,11 @@ class TaskProjectionTask {
       scheduledAt: scheduledAt ?? this.scheduledAt,
       topics: topics ?? this.topics,
       estimateMinutes: estimateMinutes ?? this.estimateMinutes,
-      energyRequired: energyRequired ?? this.energyRequired,
-      context: context ?? this.context,
-      domain: domain ?? this.domain,
       project: project ?? this.project,
       location: location ?? this.location,
       owner: owner ?? this.owner,
-      source: source ?? this.source,
       workBreakdown: workBreakdown ?? this.workBreakdown,
       projectId: projectId ?? this.projectId,
-      workstreamId: workstreamId ?? this.workstreamId,
-      valueType: valueType ?? this.valueType,
-      obligationLevel: obligationLevel ?? this.obligationLevel,
-      consequenceSeverity: consequenceSeverity ?? this.consequenceSeverity,
-      agentSafety: agentSafety ?? this.agentSafety,
-      handoffReadiness: handoffReadiness ?? this.handoffReadiness,
-      dependencyState: dependencyState ?? this.dependencyState,
       scores: scores ?? this.scores,
       scoreComponents: scoreComponents ?? this.scoreComponents,
       facetIds: facetIds ?? this.facetIds,
@@ -296,9 +218,7 @@ class TaskProjectionScores {
     this.downstreamValue = 0,
     this.blockerEffort = 0,
     this.unblockLeverage = 0,
-    this.metadataCompleteness = 0,
     this.staleness = 0,
-    this.commitmentHardness = 0,
     this.elevation = 0,
     this.terrainZone = '',
   });
@@ -348,14 +268,8 @@ class TaskProjectionScores {
   /// Downstream value per unit of blocker effort.
   final double unblockLeverage;
 
-  /// Metadata completeness score.
-  final double metadataCompleteness;
-
   /// Staleness score.
   final double staleness;
-
-  /// Commitment hardness score.
-  final double commitmentHardness;
 
   /// Overall importance score.
   final double elevation;
@@ -401,7 +315,7 @@ class TaskProjectionFacet {
   /// Stable facet id.
   final String id;
 
-  /// Facet dimension such as time or context.
+  /// Facet dimension such as time, project, or person.
   final String dimension;
 
   /// User-facing label.
@@ -410,7 +324,7 @@ class TaskProjectionFacet {
   /// Short dimension explanation.
   final String description;
 
-  /// Fact source such as task, derived, or commitment.
+  /// Fact source such as task, relation, or derived.
   final String source;
 
   /// Controlled vocabulary version.
@@ -617,64 +531,6 @@ class TaskProjectionEdge {
   }
 }
 
-/// TaskMetadataGapRecord stores a source or derived insight-blocking gap.
-class TaskMetadataGapRecord {
-  /// Creates one metadata gap.
-  const TaskMetadataGapRecord({
-    required this.id,
-    required this.taskId,
-    required this.field,
-    this.severity = 'info',
-    this.blocksInsights = const <String>[],
-    this.message = '',
-    this.proposedAction = '',
-    this.suggestedValues = const <String>[],
-    this.confidence = 0,
-  });
-
-  /// Stable gap id.
-  final String id;
-
-  /// Referenced task id.
-  final String taskId;
-
-  /// Missing or low-confidence field.
-  final String field;
-
-  /// Severity such as info, medium, or high.
-  final String severity;
-
-  /// Insight ids blocked by this gap.
-  final List<String> blocksInsights;
-
-  /// User-facing gap message.
-  final String message;
-
-  /// User-facing repair action.
-  final String proposedAction;
-
-  /// Controlled suggested values.
-  final List<String> suggestedValues;
-
-  /// Gap confidence from 0 to 1.
-  final double confidence;
-
-  /// Returns this gap with a new task id.
-  TaskMetadataGapRecord copyWith({String? id, String? taskId}) {
-    return TaskMetadataGapRecord(
-      id: id ?? this.id,
-      taskId: taskId ?? this.taskId,
-      field: field,
-      severity: severity,
-      blocksInsights: blocksInsights,
-      message: message,
-      proposedAction: proposedAction,
-      suggestedValues: suggestedValues,
-      confidence: confidence,
-    );
-  }
-}
-
 /// TaskInsightSummary stores one precomputed or derived insight count.
 class TaskInsightSummary {
   /// Creates one insight summary.
@@ -766,11 +622,8 @@ class TaskStreamCard {
     required this.priority,
     this.dueAt,
     this.scheduledAt,
-    this.context = '',
-    this.domain = '',
     this.project = '',
     this.owner = '',
-    this.flowLane = '',
     this.streamId = '',
     this.readyNow = false,
     this.nextBestAction = '',
@@ -803,20 +656,11 @@ class TaskStreamCard {
   /// Optional scheduled timestamp.
   final DateTime? scheduledAt;
 
-  /// Best inferred context.
-  final String context;
-
-  /// Cross-cutting task view when supplied by the task stream backend.
-  final String domain;
-
   /// Owning project when supplied by the task stream backend.
   final String project;
 
   /// Responsible person when supplied by the task stream backend.
   final String owner;
-
-  /// Optional backend flow lane used for relation coloring.
-  final String flowLane;
 
   /// Stable route identifier for coloring related flow edges.
   final String streamId;

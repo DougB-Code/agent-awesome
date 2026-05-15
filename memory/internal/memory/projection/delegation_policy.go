@@ -55,15 +55,14 @@ func delegationBucket(q domain.ExecutiveSummaryQuery, index taskIndex, id string
 // delegationItem converts one task into a delegation row.
 func delegationItem(q domain.ExecutiveSummaryQuery, index taskIndex, task domain.Task, bucket string) domain.ExecutiveSummaryItem {
 	item := domain.ExecutiveSummaryItem{
-		ID:         "delegation:" + bucket + ":" + string(task.ID),
-		Kind:       "task",
-		Title:      task.Title,
-		Subtitle:   delegationSubtitle(bucket, task),
-		Reason:     delegationReason(bucket),
-		Score:      attentionScore(q, index, task),
-		Confidence: taskConfidence(task),
-		Status:     string(task.Status),
-		TaskID:     task.ID,
+		ID:       "delegation:" + bucket + ":" + string(task.ID),
+		Kind:     "task",
+		Title:    task.Title,
+		Subtitle: delegationSubtitle(bucket, task),
+		Reason:   delegationReason(bucket),
+		Score:    attentionScore(q, index, task),
+		Status:   string(task.Status),
+		TaskID:   task.ID,
 	}
 	if q.IncludeEvidenceEnabled() {
 		item.Evidence = sourceHandlesForTask(task)
@@ -86,22 +85,19 @@ func completedRecently(q domain.ExecutiveSummaryQuery, task domain.Task) bool {
 	return task.UpdatedAt.After(threshold)
 }
 
-// maybeDelegableButMissingContext reports safe-looking work that lacks enough context.
+// maybeDelegableButMissingContext reports bounded low-risk work that lacks task context.
 func maybeDelegableButMissingContext(task domain.Task) bool {
 	if task.Status != domain.TaskStatusOpen || unsafeTask(task) || task.Risk >= 0.65 {
 		return false
 	}
-	if task.Context != "" || task.Description != "" || len(task.MemoryLinks) > 0 {
+	if task.Description != "" || len(task.MemoryLinks) > 0 {
 		return false
 	}
-	return containsAny(task.Title, []string{"draft", "summarize", "research", "organize", "plan", "outline", "prepare", "collect"})
+	return task.EstimateMinutes > 0 && task.EstimateMinutes <= 60
 }
 
 // delegationSubtitle returns concise status text for an agent bucket item.
 func delegationSubtitle(bucket string, task domain.Task) string {
-	if task.Context != "" {
-		return task.Context
-	}
 	if task.Project != "" {
 		return task.Project
 	}
@@ -112,11 +108,11 @@ func delegationSubtitle(bucket string, task domain.Task) string {
 func delegationReason(bucket string) string {
 	switch bucket {
 	case "can_do_now":
-		return "Safe preparation work has enough context to proceed."
+		return "Low-risk bounded work has enough context to proceed."
 	case "needs_approval":
-		return "Sensitive, financial, risky, or external action needs approval."
+		return "High-risk work needs approval."
 	case "needs_context":
-		return "The task looks delegable but lacks supporting context."
+		return "The task is bounded and low risk, but lacks supporting context."
 	case "running":
 		return "Task is already waiting on another actor or process."
 	case "done":

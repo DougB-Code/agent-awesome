@@ -175,35 +175,35 @@ class TaskTerrainAtlas {
         ),
       ];
 
-  /// Risk and confidence definitions for the risk insight atlas.
-  static const List<TaskTerrainZoneDefinition> riskConfidenceZones =
+  /// Risk definitions for the risk insight atlas.
+  static const List<TaskTerrainZoneDefinition> riskFocusZones =
       <TaskTerrainZoneDefinition>[
         TaskTerrainZoneDefinition(
           kind: TaskTerrainZoneKind.confidenceGap,
-          id: 'confidence-gap',
-          label: 'Confidence gaps',
-          description: 'Low confidence, lower immediate risk',
+          id: 'low-risk',
+          label: 'Low risk',
+          description: 'Lower due-date risk',
           color: _amber,
         ),
         TaskTerrainZoneDefinition(
           kind: TaskTerrainZoneKind.stableKnown,
-          id: 'stable-known',
-          label: 'Known stable',
-          description: 'Higher confidence and lower risk',
+          id: 'rising-risk',
+          label: 'Watch risk',
+          description: 'Timing pressure is rising',
           color: _green,
         ),
         TaskTerrainZoneDefinition(
           kind: TaskTerrainZoneKind.riskBlindSpot,
-          id: 'risk-blind-spot',
-          label: 'Risk blind spots',
-          description: 'Risky and uncertain',
+          id: 'high-risk',
+          label: 'High risk',
+          description: 'Due-date risk is high',
           color: _coral,
         ),
         TaskTerrainZoneDefinition(
           kind: TaskTerrainZoneKind.knownRisk,
-          id: 'known-risk',
-          label: 'Known risks',
-          description: 'Risky enough to act on',
+          id: 'urgent-risk',
+          label: 'Urgent risk',
+          description: 'Immediate timing pressure',
           color: _purple,
         ),
       ];
@@ -279,8 +279,8 @@ class TaskTerrainAtlas {
     PriorityTerrainProjection projection,
   ) {
     final ids = projection.bands.map((band) => band.id).toSet();
-    if (ids.contains('risk-blind-spot') || ids.contains('known-risk')) {
-      return riskConfidenceZones;
+    if (ids.contains('high-risk') || ids.contains('urgent-risk')) {
+      return riskFocusZones;
     }
     if (ids.contains('ready-for-agent') || ids.contains('human-judgment')) {
       return agentHandoffZones;
@@ -329,7 +329,7 @@ class TaskTerrainAtlas {
     final allDefinitions = <TaskTerrainZoneDefinition>[
       ...priorityZones,
       ...agentHandoffZones,
-      ...riskConfidenceZones,
+      ...riskFocusZones,
       ...nextWeekZones,
       ...unblockZones,
     ];
@@ -366,13 +366,13 @@ class TaskTerrainAtlas {
         return TaskTerrainZoneKind.humanJudgment;
       case 'agent-candidate':
         return TaskTerrainZoneKind.agentCandidate;
-      case 'risk-blind-spot':
+      case 'high-risk':
         return TaskTerrainZoneKind.riskBlindSpot;
-      case 'known-risk':
+      case 'urgent-risk':
         return TaskTerrainZoneKind.knownRisk;
-      case 'confidence-gap':
+      case 'low-risk':
         return TaskTerrainZoneKind.confidenceGap;
-      case 'stable-known':
+      case 'rising-risk':
         return TaskTerrainZoneKind.stableKnown;
       case 'high-value-next-week':
         return TaskTerrainZoneKind.highValueNextWeek;
@@ -633,8 +633,8 @@ class TaskTerrainLayout {
     PriorityTerrainProjection projection,
   ) {
     final ids = projection.bands.map((band) => band.id).toSet();
-    if (ids.contains('risk-blind-spot') || ids.contains('known-risk')) {
-      return (x: 'Confidence', y: 'Risk');
+    if (ids.contains('high-risk') || ids.contains('urgent-risk')) {
+      return (x: 'Time pressure', y: 'Risk');
     }
     if (ids.contains('ready-for-agent') || ids.contains('human-judgment')) {
       return (x: 'Handoff readiness', y: 'Obligation');

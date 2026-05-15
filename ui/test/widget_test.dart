@@ -171,7 +171,9 @@ void main() {
     expect(find.text('No scheduled items today'), findsOneWidget);
   });
 
-  testWidgets('opens Today attention view from execute metric', (tester) async {
+  testWidgets('opens Today attention view from decision metric', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -184,16 +186,13 @@ void main() {
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Execute').first);
+    await tester.tap(find.text('Decide').first);
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('3 items ready to execute'), findsOneWidget);
-    expect(find.text('Buy Socks'), findsWidgets);
-    expect(
-      find.text('Small isolated errand with no date. Easy to forget.'),
-      findsWidgets,
-    );
+    expect(find.text('1 decision require your input'), findsOneWidget);
+    expect(find.text('Budget decision'), findsWidgets);
+    expect(find.text('Needs your approval.'), findsWidgets);
     expect(find.text('ATTENTION DETAILS'), findsOneWidget);
     expect(find.text('Why this surfaced'), findsOneWidget);
     expect(find.text('QUEUE'), findsNothing);
@@ -1149,9 +1148,7 @@ void main() {
     expect(find.text('Sheets 1'), findsOneWidget);
   });
 
-  testWidgets('shows contact manager from memory tasks and commitments', (
-    tester,
-  ) async {
+  testWidgets('shows contact manager from memory and tasks', (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -1201,17 +1198,6 @@ void main() {
         ),
       ],
     );
-    controller.taskCommitments = const <TaskCommitment>[
-      TaskCommitment(
-        id: 'commit-sam',
-        taskId: 'task-sam',
-        people: <String>['Sam'],
-        project: 'Launch',
-        responsibility: 'Reviews the customer promise',
-        hardness: 'hard',
-      ),
-    ];
-
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
@@ -1223,11 +1209,8 @@ void main() {
     expect(find.text('PROFILE'), findsWidgets);
     expect(find.text('All contacts 3'), findsOneWidget);
     expect(find.text('Active 1'), findsOneWidget);
-    expect(find.text('Multi-context 1'), findsOneWidget);
-    expect(find.text('Commitments 1'), findsOneWidget);
     expect(find.text('Sources 2'), findsOneWidget);
     expect(find.text('Mina'), findsWidgets);
-    expect(find.text('Sam'), findsWidgets);
     expect(find.byTooltip('Refresh contacts'), findsNothing);
 
     await tester.enterText(
@@ -1249,7 +1232,6 @@ void main() {
 
     await tester.tap(find.byTooltip('Contexts'));
     await tester.pumpAndSettle();
-    expect(find.text('Project / Launch'), findsWidgets);
     expect(find.text('User / Fishing trip'), findsWidgets);
     expect(find.text('Sam is bringing the canoe.'), findsWidgets);
 
@@ -1330,7 +1312,6 @@ void main() {
               title: 'Analyze stream layout',
               status: 'open',
               priority: 'high',
-              context: 'Focus',
               readyNow: true,
               estimateMinutes: 45,
             ),
@@ -1346,7 +1327,6 @@ void main() {
               title: 'Review canvas polish',
               status: 'open',
               priority: 'normal',
-              context: 'Admin',
               estimateMinutes: 20,
             ),
           ],
@@ -1374,7 +1354,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('STREAM'), findsWidgets);
     expect(find.text('STREAM PROJECTION'), findsOneWidget);
-    expect(find.text('Focus'), findsOneWidget);
     expect(find.text('Analyze stream layout'), findsOneWidget);
     expect(find.text('Backlog Stream'), findsNothing);
     expect(find.text('Workload'), findsNothing);
@@ -1680,12 +1659,6 @@ ExecutiveSummaryProjection _populatedTodayProjection() {
         subtitle: 'Need your judgment',
       ),
       SummaryMetric(
-        id: 'actions',
-        label: 'Execute',
-        value: '0',
-        subtitle: 'Ready to act',
-      ),
-      SummaryMetric(
         id: 'relationships',
         label: 'Follow-ups',
         value: '0',
@@ -1734,7 +1707,7 @@ ExecutiveSummaryProjection _populatedTodayProjection() {
       ],
     ),
     coverage: CoverageProjection(
-      good: <String>['Tasks & projects', 'Commitments'],
+      good: <String>['Tasks & projects'],
       partial: <String>[
         'No task relations recorded',
         'Some missing people context',
@@ -1763,13 +1736,6 @@ ExecutiveSummaryProjection _attentionTodayProjection() {
         value: '1',
         subtitle: 'Need your judgment',
         link: ProjectionLink(route: '/attention?metric=decisions'),
-      ),
-      SummaryMetric(
-        id: 'actions',
-        label: 'Execute',
-        value: '3',
-        subtitle: 'Ready to act',
-        link: ProjectionLink(route: '/attention?metric=actions'),
       ),
       SummaryMetric(
         id: 'relationships',

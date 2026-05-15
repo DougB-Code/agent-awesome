@@ -25,14 +25,12 @@ import 'shell/app_shell_frame.dart';
 import 'string_list_values.dart';
 import 'workspace/workspace_widgets.dart';
 
-part 'agent_awesome_shell_chat.dart';
 part 'agent_awesome_shell_chat_composer.dart';
 part 'agent_awesome_shell_chat_context_helpers.dart';
 part 'agent_awesome_shell_chat_context_widgets.dart';
 part 'agent_awesome_shell_chat_conversation.dart';
 part 'agent_awesome_shell_chat_runtime.dart';
 part 'agent_awesome_shell_chat_shell.dart';
-part 'agent_awesome_shell_memory.dart';
 part 'agent_awesome_shell_memory_browse.dart';
 part 'agent_awesome_shell_memory_capture.dart';
 part 'agent_awesome_shell_memory_controls.dart';

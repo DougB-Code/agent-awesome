@@ -108,54 +108,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     }).toList();
   }
 
-  /// Returns inferred relation suggestions connected to the selected task.
-  List<TaskRelationSuggestion> get selectedTaskRelationSuggestions {
-    final task = selectedTask;
-    if (task == null) {
-      return const <TaskRelationSuggestion>[];
-    }
-    final taskId = task.id;
-    return taskRelationSuggestions.where((suggestion) {
-      return suggestion.fromTaskId == taskId || suggestion.toTaskId == taskId;
-    }).toList();
-  }
-
-  /// Returns inferred metadata suggestions connected to the selected task.
-  List<TaskMetadataSuggestion> get selectedTaskMetadataSuggestions {
-    final task = selectedTask;
-    if (task == null) {
-      return const <TaskMetadataSuggestion>[];
-    }
-    final taskId = task.id;
-    return taskMetadataSuggestions.where((suggestion) {
-      return suggestion.taskId == taskId;
-    }).toList();
-  }
-
-  /// Returns inferred commitment suggestions connected to the selected task.
-  List<TaskCommitmentSuggestion> get selectedTaskCommitmentSuggestions {
-    final task = selectedTask;
-    if (task == null) {
-      return const <TaskCommitmentSuggestion>[];
-    }
-    final taskId = task.id;
-    return taskCommitmentSuggestions.where((suggestion) {
-      return suggestion.taskId == taskId;
-    }).toList();
-  }
-
-  /// Returns first-class commitments represented by the selected task.
-  List<TaskCommitment> get selectedTaskCommitments {
-    final task = selectedTask;
-    if (task == null) {
-      return const <TaskCommitment>[];
-    }
-    final taskId = task.id;
-    return taskCommitments.where((commitment) {
-      return commitment.taskId == taskId;
-    }).toList();
-  }
-
   /// Returns the selected constellation edge when the inspector is in edge mode.
   TaskConstellationEdge? get selectedConstellationEdge {
     if (taskSelectionKind != 'constellation_edge') {
@@ -344,18 +296,10 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     bool clearScheduledAt = false,
     List<String>? topics,
     int? estimateMinutes,
-    String? energyRequired,
-    double? effort,
-    double? value,
     double? urgency,
-    double? risk,
-    String? context,
-    String? domain,
     String? location,
     String? owner,
-    String? source,
     TaskWorkBreakdown? workBreakdown,
-    double? confidence,
   }) async {
     final server = _graphServerForTaskId(taskId);
     if (server == null) {
@@ -385,18 +329,10 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
           topics: topics,
           replaceTopics: topics != null,
           estimateMinutes: estimateMinutes,
-          energyRequired: energyRequired,
-          effort: effort,
-          value: value,
           urgency: urgency,
-          risk: risk,
-          context: context,
-          domain: domain,
           location: location,
           owner: owner,
-          source: source,
           workBreakdown: workBreakdown,
-          confidence: confidence,
           actor: _memoryActor(),
         );
       });
@@ -457,82 +393,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
       successMessage: 'Backlog relation deleted',
       action: (client) async {
         await client.deleteTaskRelation(relation.id, actor: _memoryActor());
-      },
-    );
-  }
-
-  /// Accepts an inferred task relation suggestion as explicit metadata.
-  Future<void> applyTaskSuggestionFromUi(String suggestionId) async {
-    final taskId = _taskIdForSuggestion(suggestionId);
-    await _mutateTaskGraphFromUi(
-      server: _graphServerForTaskId(taskId ?? ''),
-      selectedTaskAfter: taskId,
-      busyMessage: 'Accepting backlog suggestion',
-      successMessage: 'Backlog suggestion accepted',
-      action: (client) async {
-        await client.applyTaskSuggestion(suggestionId);
-      },
-    );
-  }
-
-  /// Dismisses an inferred task relation suggestion.
-  Future<void> dismissTaskSuggestionFromUi(String suggestionId) async {
-    final taskId = _taskIdForSuggestion(suggestionId);
-    await _mutateTaskGraphFromUi(
-      server: _graphServerForTaskId(taskId ?? ''),
-      selectedTaskAfter: taskId,
-      busyMessage: 'Dismissing backlog suggestion',
-      successMessage: 'Backlog suggestion dismissed',
-      action: (client) async {
-        await client.dismissTaskSuggestion(suggestionId);
-      },
-    );
-  }
-
-  /// Creates or updates a first-class task commitment from the inspector.
-  Future<void> upsertTaskCommitmentFromUi({
-    String commitmentId = '',
-    required String taskId,
-    List<String> people = const <String>[],
-    String domain = '',
-    String project = '',
-    String timeWindow = '',
-    String responsibility = '',
-    String promiseSource = '',
-    String hardness = '',
-    String consequence = '',
-  }) async {
-    await _mutateTaskGraphFromUi(
-      server: _graphServerForTaskId(taskId),
-      selectedTaskAfter: taskId,
-      busyMessage: 'Saving backlog commitment',
-      successMessage: 'Backlog commitment saved',
-      action: (client) async {
-        await client.upsertCommitment(
-          commitmentId: commitmentId,
-          taskId: taskId,
-          people: people,
-          domain: domain,
-          project: project,
-          timeWindow: timeWindow,
-          responsibility: responsibility,
-          promiseSource: promiseSource,
-          hardness: hardness,
-          consequence: consequence,
-        );
-      },
-    );
-  }
-
-  /// Deletes one first-class task commitment from the inspector.
-  Future<void> deleteTaskCommitmentFromUi(TaskCommitment commitment) async {
-    await _mutateTaskGraphFromUi(
-      server: _graphServerForTaskId(commitment.taskId),
-      selectedTaskAfter: commitment.taskId,
-      busyMessage: 'Deleting backlog commitment',
-      successMessage: 'Backlog commitment deleted',
-      action: (client) async {
-        await client.deleteCommitment(commitment.id);
       },
     );
   }
@@ -644,40 +504,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
         'Memory linked',
       );
       tasksMessage = 'Memory linked';
-    } catch (error) {
-      tasksMessage = error.toString();
-      _setEndpoint(
-        server.label,
-        ConnectionStateKind.disconnected,
-        error.toString(),
-      );
-    } finally {
-      tasksBusy = false;
-      _notifyControllerListeners();
-    }
-  }
-
-  /// Unlinks memory from a task.
-  Future<void> unlinkTaskMemoryFromUi({
-    required String taskId,
-    required String linkId,
-  }) async {
-    final server = _graphServerForTaskId(taskId);
-    if (server == null) {
-      return;
-    }
-    tasksBusy = true;
-    tasksMessage = 'Unlinking memory';
-    _notifyControllerListeners();
-    try {
-      await _withTasksClientForGraphServer(server, (client) {
-        return client.unlinkTaskMemory(taskId: taskId, linkId: linkId);
-      });
-      selectedTaskId = taskId;
-      taskSelectionKind = 'task';
-      await _loadTasks();
-      tasksMessage = 'Memory unlinked';
-      _setEndpoint(server.label, ConnectionStateKind.connected, tasksMessage);
     } catch (error) {
       tasksMessage = error.toString();
       _setEndpoint(
@@ -805,10 +631,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     final failures = <String>[];
     var projectionGraph = const TaskProjectionGraph();
     final relationRecords = <TaskRelationRecord>[];
-    final commitments = <TaskCommitment>[];
-    final relationSuggestions = <TaskRelationSuggestion>[];
-    final metadataSuggestions = <TaskMetadataSuggestion>[];
-    final commitmentSuggestions = <TaskCommitmentSuggestion>[];
     final server = servers.first;
     final missing = await _missingGraphProjectionTools(server);
     if (missing.isNotEmpty) {
@@ -827,24 +649,16 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
         failures.add('${server.label} Projection Graph: $error');
       }
     }
-    final corrections = await _loadTaskGraphCorrectionsForGraphServer(server);
-    relationRecords.addAll(corrections.relations);
-    commitments.addAll(corrections.commitments);
-    relationSuggestions.addAll(corrections.relationSuggestions);
-    metadataSuggestions.addAll(corrections.metadataSuggestions);
-    commitmentSuggestions.addAll(corrections.commitmentSuggestions);
+    try {
+      relationRecords.addAll(await _loadTaskRelationsForGraphServer(server));
+    } catch (error) {
+      failures.add('${server.label} Task Relations: $error');
+    }
     taskProjectionGraph = projectionGraph;
     taskRelations = relationRecords;
-    taskCommitments = commitments;
-    taskRelationSuggestions = relationSuggestions;
-    taskMetadataSuggestions = metadataSuggestions;
-    taskCommitmentSuggestions = commitmentSuggestions;
     taskInsightIndex = TaskInsightIndex.build(
       workspaceTasks: workspaceTasks,
       graph: taskProjectionGraph,
-      taskRelations: taskRelations,
-      taskCommitments: taskCommitments,
-      metadataSuggestions: taskMetadataSuggestions,
     );
     taskInsightSummaries = taskInsightIndex.insightSummaries;
     taskStreamProjection = TaskInsightProjectionAdapters.stream(
@@ -885,94 +699,16 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     }
   }
 
-  /// Loads user-correctable graph state from one memory graph endpoint.
-  Future<_TaskGraphCorrectionState> _loadTaskGraphCorrectionsForGraphServer(
+  /// Loads explicit task relations from one memory graph endpoint.
+  Future<List<TaskRelationRecord>> _loadTaskRelationsForGraphServer(
     McpServerRuntime server,
   ) async {
-    final relations = await _optionalTaskToolResult(
-      server,
-      'list_task_relations',
-      const <TaskRelationRecord>[],
-      (client) {
-        return client.listTaskRelations();
-      },
-    );
-    final commitments = await _optionalTaskToolResult(
-      server,
-      'list_commitments',
-      const <TaskCommitment>[],
-      (client) {
-        return client.listCommitments();
-      },
-    );
-    final suggestions = await _optionalTaskToolResult(
-      server,
-      'suggest_task_relationships',
-      const <TaskRelationSuggestion>[],
-      (client) {
-        return client.suggestTaskRelationships();
-      },
-    );
-    final metadataSuggestions = await _optionalTaskToolResult(
-      server,
-      'suggest_task_metadata',
-      const <TaskMetadataSuggestion>[],
-      (client) {
-        return client.suggestTaskMetadata();
-      },
-    );
-    final commitmentSuggestions = await _optionalTaskToolResult(
-      server,
-      'suggest_commitments',
-      const <TaskCommitmentSuggestion>[],
-      (client) {
-        return client.suggestCommitments();
-      },
-    );
-    return _TaskGraphCorrectionState(
-      relations: relations,
-      commitments: commitments,
-      relationSuggestions: suggestions,
-      metadataSuggestions: metadataSuggestions,
-      commitmentSuggestions: commitmentSuggestions,
-    );
+    return _withTasksClientForGraphServer(server, (client) {
+      return client.listTaskRelations();
+    });
   }
 
-  /// Returns whether a memory graph endpoint advertises one optional task tool.
-  Future<bool> _taskToolAvailable(
-    McpServerRuntime server,
-    String toolName,
-  ) async {
-    try {
-      final names = await _withTasksClientForGraphServer(server, (client) {
-        return client.listToolNames();
-      });
-      return names.contains(toolName);
-    } catch (error) {
-      await _log('task tool availability check failed: $error');
-      return true;
-    }
-  }
-
-  /// Loads optional task graph data when the endpoint advertises the tool.
-  Future<T> _optionalTaskToolResult<T>(
-    McpServerRuntime server,
-    String toolName,
-    T fallback,
-    Future<T> Function(TasksClient client) action,
-  ) async {
-    if (!await _taskToolAvailable(server, toolName)) {
-      return fallback;
-    }
-    try {
-      return await _withTasksClientForGraphServer(server, action);
-    } catch (error) {
-      await _log('${server.label} optional task tool $toolName failed: $error');
-      return fallback;
-    }
-  }
-
-  /// Clears read-only task projection and graph correction state.
+  /// Clears read-only task projection and relation state.
   void _clearTaskProjections() {
     taskProjectionGraph = const TaskProjectionGraph();
     taskInsightIndex = TaskInsightIndex.empty;
@@ -983,10 +719,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     taskProjectionMessage = '';
     taskInsightMessage = '';
     taskRelations = const <TaskRelationRecord>[];
-    taskCommitments = const <TaskCommitment>[];
-    taskRelationSuggestions = const <TaskRelationSuggestion>[];
-    taskMetadataSuggestions = const <TaskMetadataSuggestion>[];
-    taskCommitmentSuggestions = const <TaskCommitmentSuggestion>[];
   }
 
   /// Reloads tasks and associates newly created tasks with the active chat.
@@ -1014,6 +746,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
+  /// Runs a task graph mutation and refreshes derived task views.
   Future<void> _mutateTaskGraphFromUi({
     required McpServerRuntime? server,
     required String busyMessage,
@@ -1055,25 +788,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     }
   }
 
-  String? _taskIdForSuggestion(String suggestionId) {
-    for (final suggestion in taskRelationSuggestions) {
-      if (suggestion.id == suggestionId) {
-        return suggestion.fromTaskId;
-      }
-    }
-    for (final suggestion in taskMetadataSuggestions) {
-      if (suggestion.id == suggestionId) {
-        return suggestion.taskId;
-      }
-    }
-    for (final suggestion in taskCommitmentSuggestions) {
-      if (suggestion.id == suggestionId) {
-        return suggestion.taskId;
-      }
-    }
-    return null;
-  }
-
+  /// Runs a task client action against one graph server and closes temp clients.
   Future<T> _withTasksClientForGraphServer<T>(
     McpServerRuntime server,
     Future<T> Function(TasksClient client) action,
@@ -1088,6 +803,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     }
   }
 
+  /// Creates memory link drafts from the selected memory when domains match.
   List<TaskMemoryLinkDraft> _selectedMemoryLinkDrafts(String relationship) {
     final memory = selectedMemory;
     if (memory == null) {

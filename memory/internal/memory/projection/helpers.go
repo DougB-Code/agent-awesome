@@ -2,25 +2,10 @@ package projection
 
 import (
 	"math"
-	"strings"
 	"time"
 
 	"memory/internal/memory/domain"
 )
-
-// buildCommitmentProjection collects relationship follow-up items for compatibility.
-func buildCommitmentProjection(attention domain.AttentionProjection) domain.CommitmentProjection {
-	items := []domain.ExecutiveSummaryItem{}
-	for _, item := range attention.Items {
-		if item.Lane == "follow_up" {
-			items = append(items, item)
-		}
-	}
-	return domain.CommitmentProjection{
-		Items: items,
-		Link:  domain.ProjectionLink{Label: "View commitments", Route: "/attention?lane=follow_up"},
-	}
-}
 
 // compareTasks provides a stable order for projection inputs.
 func compareTasks(left domain.Task, right domain.Task) bool {
@@ -43,17 +28,6 @@ func taskSortTime(task domain.Task) time.Time {
 		return task.UpdatedAt
 	}
 	return task.CreatedAt
-}
-
-// containsAny reports whether text contains any case-insensitive needle.
-func containsAny(text string, needles []string) bool {
-	text = strings.ToLower(text)
-	for _, needle := range needles {
-		if strings.Contains(text, strings.ToLower(needle)) {
-			return true
-		}
-	}
-	return false
 }
 
 // clamp01 constrains a score to the inclusive 0..1 range.

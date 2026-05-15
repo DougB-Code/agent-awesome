@@ -259,7 +259,6 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
           followUpAt: _screenDateValue(task.followUpAt),
           topics: task.topics,
           estimateMinutes: task.estimateMinutes,
-          context: task.context,
           owner: task.owner,
         );
       }).toList(),
@@ -384,7 +383,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
               toTaskId: _stringField(change.fields, 'to_task_id'),
               relationType: _stringField(
                 change.fields,
-                'relation_type',
+                'type',
                 fallback: 'related_to',
               ),
               confidence: _doubleField(change.fields, 'confidence'),
@@ -465,18 +464,10 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       followUpAt: _dateField(fields, 'follow_up_at'),
       topics: _stringListField(fields, 'topics'),
       estimateMinutes: _intField(fields, 'estimate_minutes'),
-      energyRequired: _stringField(fields, 'energy_required'),
-      effort: _doubleField(fields, 'effort'),
-      value: _doubleField(fields, 'value'),
       urgency: _doubleField(fields, 'urgency'),
-      risk: _doubleField(fields, 'risk'),
-      context: _stringField(fields, 'context'),
-      domain: _stringField(fields, 'view'),
       project: _stringField(fields, 'project'),
       location: _stringField(fields, 'location'),
       owner: _stringField(fields, 'person'),
-      source: _stringField(fields, 'source'),
-      confidence: _doubleField(fields, 'confidence'),
       actor: _memoryActor(),
     );
   }
@@ -506,24 +497,12 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       estimateMinutes: fields.containsKey('estimate_minutes')
           ? _intField(fields, 'estimate_minutes')
           : null,
-      energyRequired: _optionalStringField(fields, 'energy_required'),
-      effort: fields.containsKey('effort')
-          ? _doubleField(fields, 'effort')
-          : null,
-      value: fields.containsKey('value') ? _doubleField(fields, 'value') : null,
       urgency: fields.containsKey('urgency')
           ? _doubleField(fields, 'urgency')
           : null,
-      risk: fields.containsKey('risk') ? _doubleField(fields, 'risk') : null,
-      context: _optionalStringField(fields, 'context'),
-      domain: _optionalStringField(fields, 'view'),
       project: _optionalStringField(fields, 'project'),
       location: _optionalStringField(fields, 'location'),
       owner: _optionalStringField(fields, 'person'),
-      source: _optionalStringField(fields, 'source'),
-      confidence: fields.containsKey('confidence')
-          ? _doubleField(fields, 'confidence')
-          : null,
       actor: _memoryActor(),
     );
   }
@@ -615,18 +594,11 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
     );
   }
 
-  /// Normalizes field aliases in a screen-change payload.
+  /// Trims field names in a screen-change payload.
   Map<String, dynamic> _normalizedScreenFields(Map<String, dynamic> fields) {
     final normalized = <String, dynamic>{};
     for (final entry in fields.entries) {
-      final key = switch (entry.key.trim()) {
-        'owner' => 'person',
-        'domain' => 'view',
-        'type' => 'relation_type',
-        'explanation' => 'note',
-        _ => entry.key.trim(),
-      };
-      normalized[key] = entry.value;
+      normalized[entry.key.trim()] = entry.value;
     }
     return normalized;
   }
@@ -645,7 +617,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       ScreenChangeOperation.upsertTaskRelation => const <String>{
         'from_task_id',
         'to_task_id',
-        'relation_type',
+        'type',
         'note',
         'confidence',
       },
@@ -766,18 +738,10 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       'follow_up_at' => _screenDateValue(task.followUpAt),
       'topics' => task.topics,
       'estimate_minutes' => task.estimateMinutes,
-      'energy_required' => task.energyRequired,
-      'effort' => task.effort,
-      'value' => task.value,
       'urgency' => task.urgency,
-      'risk' => task.risk,
-      'context' => task.context,
-      'view' => task.domain,
       'project' => task.project,
       'location' => task.location,
       'person' => task.owner,
-      'source' => task.source,
-      'confidence' => task.confidence,
       'clear_due_at' => task.dueAt == null,
       'clear_scheduled_at' => task.scheduledAt == null,
       'clear_follow_up_at' => task.followUpAt == null,
@@ -835,18 +799,10 @@ const Set<String> _taskScreenChangeFields = <String>{
   'clear_follow_up_at',
   'topics',
   'estimate_minutes',
-  'energy_required',
-  'effort',
-  'value',
   'urgency',
-  'risk',
-  'context',
-  'view',
   'project',
   'location',
   'person',
-  'source',
-  'confidence',
 };
 
 const Set<String> _taskStatusValues = <String>{

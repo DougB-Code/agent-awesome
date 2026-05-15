@@ -193,7 +193,7 @@ class _TaskStreamControls extends StatelessWidget {
                   ),
               ],
             ),
-            _TaskStreamEffortSummary(model: filterModel),
+            _TaskStreamEstimateSummary(model: filterModel),
           ],
         ),
       ],
@@ -201,8 +201,8 @@ class _TaskStreamControls extends StatelessWidget {
   }
 }
 
-/// Formats stream effort minutes for compact filter summaries.
-String _formatStreamEffort(int minutes) {
+/// Formats stream estimate minutes for compact filter summaries.
+String _formatStreamEstimate(int minutes) {
   if (minutes <= 0) {
     return '0m';
   }
@@ -219,12 +219,12 @@ int _streamFilterActiveCount(TaskStreamFilterSelection filters) {
 
 /// Returns compact dropdown summary text for active stream filters.
 String _streamFilterSummary(TaskStreamFilterModel model) {
-  return '${model.taskCount} items · ${_formatStreamEffort(model.estimateMinutes)}';
+  return '${model.taskCount} items · ${_formatStreamEstimate(model.estimateMinutes)}';
 }
 
 /// Returns compact option metadata for one stream filter value.
 String _streamFilterOptionDetail(TaskStreamFilterOption option) {
-  return '${option.taskCount} · ${_formatStreamEffort(option.estimateMinutes)}';
+  return '${option.taskCount} · ${_formatStreamEstimate(option.estimateMinutes)}';
 }
 
 /// Returns the unfiltered label for one stream filter dimension.
@@ -236,11 +236,9 @@ String _streamFilterAllLabel(TaskStreamAxisDimension dimension) {
     TaskStreamAxisDimension.attention => 'All attention',
     TaskStreamAxisDimension.status => 'All statuses',
     TaskStreamAxisDimension.priority => 'All priorities',
-    TaskStreamAxisDimension.context => 'All contexts',
     TaskStreamAxisDimension.project => 'All projects',
-    TaskStreamAxisDimension.view => 'All views',
     TaskStreamAxisDimension.person => 'All people',
-    TaskStreamAxisDimension.effort => 'All effort',
+    TaskStreamAxisDimension.estimate => 'All estimates',
     TaskStreamAxisDimension.spend => 'All spend',
     TaskStreamAxisDimension.blockers => 'All blockers',
   };
@@ -319,12 +317,12 @@ class _TaskStreamAxisSelector extends StatelessWidget {
   }
 }
 
-class _TaskStreamEffortSummary extends StatelessWidget {
-  const _TaskStreamEffortSummary({required this.model});
+class _TaskStreamEstimateSummary extends StatelessWidget {
+  const _TaskStreamEstimateSummary({required this.model});
 
   final TaskStreamFilterModel model;
 
-  /// Builds the aggregate effort answer for the active stream filters.
+  /// Builds the aggregate estimate answer for the active stream filters.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
@@ -336,7 +334,7 @@ class _TaskStreamEffortSummary extends StatelessWidget {
           Icon(Icons.timer_outlined, size: 15, color: colors.muted),
           const SizedBox(width: 6),
           Text(
-            '${model.taskCount} items · ${_formatStreamEffort(model.estimateMinutes)}',
+            '${model.taskCount} items · ${_formatStreamEstimate(model.estimateMinutes)}',
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: colors.muted,

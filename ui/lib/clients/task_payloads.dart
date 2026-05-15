@@ -34,13 +34,7 @@ Map<String, dynamic> _taskQueryArguments({
 void _addTaskMetadataArguments(
   Map<String, dynamic> arguments, {
   required int estimateMinutes,
-  required String energyRequired,
-  required double effort,
-  required double value,
   required double urgency,
-  required double risk,
-  required String context,
-  required String domain,
   required String project,
   required String location,
   required String owner,
@@ -48,32 +42,12 @@ void _addTaskMetadataArguments(
   required int earnCents,
   required int saveCents,
   required String currency,
-  required String source,
-  required double confidence,
 }) {
   if (estimateMinutes > 0) {
     arguments['estimate_minutes'] = estimateMinutes;
   }
-  if (energyRequired.trim().isNotEmpty) {
-    arguments['energy_required'] = energyRequired.trim();
-  }
-  if (effort > 0) {
-    arguments['effort'] = effort;
-  }
-  if (value > 0) {
-    arguments['value'] = value;
-  }
   if (urgency > 0) {
     arguments['urgency'] = urgency;
-  }
-  if (risk > 0) {
-    arguments['risk'] = risk;
-  }
-  if (context.trim().isNotEmpty) {
-    arguments['context'] = context.trim();
-  }
-  if (domain.trim().isNotEmpty) {
-    arguments['view'] = domain.trim();
   }
   if (project.trim().isNotEmpty) {
     arguments['project'] = project.trim();
@@ -96,12 +70,6 @@ void _addTaskMetadataArguments(
   if (currency.trim().isNotEmpty) {
     arguments['currency'] = currency.trim();
   }
-  if (source.trim().isNotEmpty) {
-    arguments['source'] = source.trim();
-  }
-  if (confidence > 0) {
-    arguments['confidence'] = confidence;
-  }
 }
 
 /// Adds WBS metadata to a create payload when any WBS field exists.
@@ -119,13 +87,7 @@ void _addTaskWorkBreakdownArgument(
 void _addOptionalTaskMetadataArguments(
   Map<String, dynamic> arguments, {
   required int? estimateMinutes,
-  required String? energyRequired,
-  required double? effort,
-  required double? value,
   required double? urgency,
-  required double? risk,
-  required String? context,
-  required String? domain,
   required String? project,
   required String? location,
   required String? owner,
@@ -133,32 +95,12 @@ void _addOptionalTaskMetadataArguments(
   required int? earnCents,
   required int? saveCents,
   required String? currency,
-  required String? source,
-  required double? confidence,
 }) {
   if (estimateMinutes != null) {
     arguments['estimate_minutes'] = estimateMinutes;
   }
-  if (energyRequired != null) {
-    arguments['energy_required'] = energyRequired.trim();
-  }
-  if (effort != null) {
-    arguments['effort'] = effort;
-  }
-  if (value != null) {
-    arguments['value'] = value;
-  }
   if (urgency != null) {
     arguments['urgency'] = urgency;
-  }
-  if (risk != null) {
-    arguments['risk'] = risk;
-  }
-  if (context != null) {
-    arguments['context'] = context.trim();
-  }
-  if (domain != null) {
-    arguments['view'] = domain.trim();
   }
   if (project != null) {
     arguments['project'] = project.trim();
@@ -180,12 +122,6 @@ void _addOptionalTaskMetadataArguments(
   }
   if (currency != null) {
     arguments['currency'] = currency.trim();
-  }
-  if (source != null) {
-    arguments['source'] = source.trim();
-  }
-  if (confidence != null) {
-    arguments['confidence'] = confidence;
   }
 }
 

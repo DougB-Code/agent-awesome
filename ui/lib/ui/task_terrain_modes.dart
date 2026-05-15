@@ -15,7 +15,7 @@ class TaskTerrainModeRegistry {
     TaskTerrainInsightMode.agentHandoff,
     TaskTerrainInsightMode.nextWeekHighValue,
     TaskTerrainInsightMode.unblockLeverage,
-    TaskTerrainInsightMode.riskConfidence,
+    TaskTerrainInsightMode.riskFocus,
   ];
 
   /// Returns a short label for one terrain mode.
@@ -25,7 +25,7 @@ class TaskTerrainModeRegistry {
       TaskTerrainInsightMode.agentHandoff => 'Agent handoff',
       TaskTerrainInsightMode.nextWeekHighValue => 'Next week value',
       TaskTerrainInsightMode.unblockLeverage => 'Unblock leverage',
-      TaskTerrainInsightMode.riskConfidence => 'Risk confidence',
+      TaskTerrainInsightMode.riskFocus => 'Risk focus',
     };
   }
 
@@ -38,8 +38,7 @@ class TaskTerrainModeRegistry {
       TaskTerrainInsightMode.nextWeekHighValue =>
         'What high-value work is coming up next week?',
       TaskTerrainInsightMode.unblockLeverage => 'What can I unblock quickly?',
-      TaskTerrainInsightMode.riskConfidence =>
-        'What looks risky but uncertain?',
+      TaskTerrainInsightMode.riskFocus => 'What is most at risk?',
     };
   }
 
@@ -50,7 +49,7 @@ class TaskTerrainModeRegistry {
       TaskTerrainInsightMode.agentHandoff => Icons.smart_toy_outlined,
       TaskTerrainInsightMode.nextWeekHighValue => Icons.calendar_month_outlined,
       TaskTerrainInsightMode.unblockLeverage => Icons.lock_open_outlined,
-      TaskTerrainInsightMode.riskConfidence => Icons.report_problem_outlined,
+      TaskTerrainInsightMode.riskFocus => Icons.report_problem_outlined,
     };
   }
 }

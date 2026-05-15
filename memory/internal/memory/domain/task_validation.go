@@ -37,16 +37,12 @@ func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error
 		req.FollowUpAt = &followUpAt
 	}
 	req.Topics = NormalizeStrings(req.Topics)
-	req.EnergyRequired = strings.TrimSpace(req.EnergyRequired)
-	req.Context = strings.TrimSpace(req.Context)
-	req.View = strings.TrimSpace(req.View)
 	req.Project = strings.TrimSpace(req.Project)
 	req.Location = strings.TrimSpace(req.Location)
 	req.Person = strings.TrimSpace(req.Person)
-	req.Source = strings.TrimSpace(req.Source)
 	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
 	req.WorkBreakdown = NormalizeTaskWorkBreakdown(req.WorkBreakdown)
-	if err := validateTaskMetadata(req.EstimateMinutes, req.Effort, req.Value, req.Urgency, req.Risk, req.Confidence); err != nil {
+	if err := validateTaskMetadata(req.EstimateMinutes, req.Urgency); err != nil {
 		return req, err
 	}
 	if err := normalizeTaskMemoryLinks(req.MemoryLinks, &req.MemoryLinks); err != nil {
@@ -69,13 +65,9 @@ func NormalizeUpdateTaskRequest(req UpdateTaskRequest) (UpdateTaskRequest, error
 		req.Title = &value
 	}
 	trimStringPointer(req.Description)
-	trimStringPointer(req.EnergyRequired)
-	trimStringPointer(req.Context)
-	trimStringPointer(req.View)
 	trimStringPointer(req.Project)
 	trimStringPointer(req.Location)
 	trimStringPointer(req.Person)
-	trimStringPointer(req.Source)
 	if req.WorkBreakdown != nil {
 		value := NormalizeTaskWorkBreakdown(*req.WorkBreakdown)
 		req.WorkBreakdown = &value
@@ -89,7 +81,7 @@ func NormalizeUpdateTaskRequest(req UpdateTaskRequest) (UpdateTaskRequest, error
 	if req.Topics != nil {
 		req.Topics = NormalizeStrings(req.Topics)
 	}
-	if err := validateTaskMetadataPointers(req.EstimateMinutes, req.Effort, req.Value, req.Urgency, req.Risk, req.Confidence); err != nil {
+	if err := validateTaskMetadataPointers(req.EstimateMinutes, req.Urgency); err != nil {
 		return req, err
 	}
 	if !taskUpdateHasChanges(req) {
@@ -262,29 +254,21 @@ func TerminalTaskStatus(status TaskStatus) bool {
 	return status == TaskStatusCanceled || status == TaskStatusDone
 }
 
-// validateTaskMetadata checks numeric task scores.
-func validateTaskMetadata(estimate int, effort float64, value float64, urgency float64, risk float64, confidence float64) error {
+// validateTaskMetadata checks numeric task fields authored by callers.
+func validateTaskMetadata(estimate int, urgency float64) error {
 	return validateTaskMetadataValues(estimate, map[string]float64{
-		"effort":     effort,
-		"value":      value,
-		"urgency":    urgency,
-		"risk":       risk,
-		"confidence": confidence,
+		"urgency": urgency,
 	})
 }
 
-// validateTaskMetadataPointers checks optional numeric task scores.
-func validateTaskMetadataPointers(estimate *int, effort *float64, value *float64, urgency *float64, risk *float64, confidence *float64) error {
+// validateTaskMetadataPointers checks optional numeric task fields authored by callers.
+func validateTaskMetadataPointers(estimate *int, urgency *float64) error {
 	if estimate != nil && *estimate < 0 {
 		return errors.New("estimate_minutes must be zero or greater")
 	}
 	scores := map[string]float64{}
 	for label, score := range map[string]*float64{
-		"effort":     effort,
-		"value":      value,
-		"urgency":    urgency,
-		"risk":       risk,
-		"confidence": confidence,
+		"urgency": urgency,
 	} {
 		if score != nil {
 			scores[label] = *score
@@ -339,18 +323,10 @@ func taskUpdateHasChanges(req UpdateTaskRequest) bool {
 		req.ClearFollowUpAt ||
 		req.Topics != nil ||
 		req.EstimateMinutes != nil ||
-		req.EnergyRequired != nil ||
-		req.Effort != nil ||
-		req.Value != nil ||
 		req.Urgency != nil ||
-		req.Risk != nil ||
-		req.Context != nil ||
-		req.View != nil ||
 		req.Project != nil ||
 		req.Location != nil ||
 		req.Person != nil ||
-		req.Source != nil ||
-		req.Confidence != nil ||
 		req.WorkBreakdown != nil
 }
 

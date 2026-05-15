@@ -102,7 +102,6 @@ void main() {
       expect(compact.compact, isTrue);
       expect(compact.cardHeight, lessThan(regular.cardHeight));
       expect(compact.cardStackStep, lessThan(regular.cardStackStep));
-      expect(compact.size.height, lessThan(regular.size.height));
     });
 
     test('compact focus hides unrelated cards and unused rows', () {
@@ -118,7 +117,7 @@ void main() {
       expect(taskIds, containsAll(<String>['draft', 'budget']));
       expect(taskIds, isNot(contains('groceries')));
       expect(taskIds, isNot(contains('readout')));
-      expect(rowTitles, containsAll(<String>['Deep Work', 'Admin']));
+      expect(rowTitles, contains('General'));
       expect(rowTitles, isNot(contains('Errands')));
       expect(compact.links, hasLength(1));
     });
@@ -152,7 +151,6 @@ TaskStreamCanvasLayout _buildFocusLayout({
           title: 'Draft launch plan',
           status: 'open',
           priority: 'normal',
-          flowLane: 'Deep Work',
           streamId: 'work-release',
         ),
         TaskStreamCard(
@@ -160,7 +158,6 @@ TaskStreamCanvasLayout _buildFocusLayout({
           title: 'Buy groceries',
           status: 'open',
           priority: 'normal',
-          flowLane: 'Errands',
           streamId: 'errand-loop',
         ),
       ],
@@ -174,7 +171,6 @@ TaskStreamCanvasLayout _buildFocusLayout({
           title: 'Update launch budget',
           status: 'open',
           priority: 'normal',
-          flowLane: 'Admin',
           streamId: 'work-release',
         ),
         TaskStreamCard(
@@ -182,7 +178,6 @@ TaskStreamCanvasLayout _buildFocusLayout({
           title: 'Prepare release readout',
           status: 'open',
           priority: 'normal',
-          flowLane: 'Deep Work',
           streamId: 'work-release',
         ),
       ],

@@ -22,12 +22,9 @@ List<String> _terrainTaskIds(
           .tasksForInsight(TaskInsightIds.quickUnblocks)
           .map((candidate) => candidate.taskId)
           .toList(),
-    TaskTerrainInsightMode.riskConfidence => <String>{
+    TaskTerrainInsightMode.riskFocus => <String>{
       ...index
           .tasksForInsight(TaskInsightIds.highRiskLowConfidence)
-          .map((candidate) => candidate.taskId),
-      ...index
-          .tasksForInsight(TaskInsightIds.metadataGaps)
           .map((candidate) => candidate.taskId),
     }.toList(),
   };
@@ -70,7 +67,7 @@ PriorityTerrainPoint _terrainPoint(
     y: coordinates.y,
     elevation: _terrainElevation(scores, mode),
     recommendedNextStep: _indexNextBestAction(index, taskId),
-    confidence: scores.confidence,
+    confidence: 0,
     explanation: _terrainExplanation(index, taskId, mode),
   );
 }
@@ -97,8 +94,8 @@ math.Point<double> _terrainCoordinates(
       scores.unblockLeverage,
       scores.blockerEffort,
     ),
-    TaskTerrainInsightMode.riskConfidence => math.Point<double>(
-      scores.confidence,
+    TaskTerrainInsightMode.riskFocus => math.Point<double>(
+      scores.timePressure,
       scores.risk,
     ),
   };
@@ -120,7 +117,7 @@ String _terrainZoneForMode(
     ),
     TaskTerrainInsightMode.nextWeekHighValue => _nextWeekZone(scores),
     TaskTerrainInsightMode.unblockLeverage => _unblockZone(scores),
-    TaskTerrainInsightMode.riskConfidence => _riskConfidenceZone(scores),
+    TaskTerrainInsightMode.riskFocus => _riskFocusZone(scores),
   };
 }
 
@@ -146,7 +143,7 @@ String _agentHandoffZone(
 String _nextWeekZone(TaskInsightScoreProfile scores) {
   final consequence = math.max(scores.consequence, scores.timePressure);
   if (scores.reward >= 0.58 && scores.risk >= 0.58) {
-    return 'watch-risk';
+    return 'rising-risk';
   }
   if (scores.reward >= 0.62 && consequence >= 0.50) {
     return 'high-value-next-week';
@@ -172,20 +169,19 @@ String _unblockZone(TaskInsightScoreProfile scores) {
   return 'costly-blocker';
 }
 
-/// Returns the risk-confidence atlas zone for one task.
-String _riskConfidenceZone(TaskInsightScoreProfile scores) {
-  final confidence = scores.confidence;
+/// Returns the risk atlas zone for one task.
+String _riskFocusZone(TaskInsightScoreProfile scores) {
   final risk = scores.risk;
-  if (risk >= 0.58 && confidence < 0.58) {
-    return 'risk-blind-spot';
+  if (risk >= 0.70 && scores.timePressure >= 0.70) {
+    return 'urgent-risk';
   }
   if (risk >= 0.58) {
-    return 'known-risk';
+    return 'high-risk';
   }
-  if (confidence < 0.58) {
-    return 'confidence-gap';
+  if (scores.timePressure >= 0.58) {
+    return 'watch-risk';
   }
-  return 'stable-known';
+  return 'low-risk';
 }
 
 /// Returns mode-specific point elevation.
@@ -204,17 +200,12 @@ double _terrainElevation(
           0.15 * scores.agentFit,
     ),
     TaskTerrainInsightMode.nextWeekHighValue => _clamp01(
-      0.45 * scores.reward +
-          0.30 * scores.consequence +
-          0.15 * scores.commitmentHardness +
-          0.10 * scores.pressure,
+      0.45 * scores.reward + 0.30 * scores.consequence + 0.10 * scores.pressure,
     ),
     TaskTerrainInsightMode.unblockLeverage => _clamp01(
       0.60 * scores.unblockLeverage + 0.25 * scores.downstreamValue,
     ),
-    TaskTerrainInsightMode.riskConfidence => _clamp01(
-      scores.risk * (1 - scores.confidence + 0.25),
-    ),
+    TaskTerrainInsightMode.riskFocus => _clamp01(scores.risk),
   };
 }
 
@@ -229,8 +220,7 @@ String _terrainExplanation(
     TaskTerrainInsightMode.nextWeekHighValue =>
       TaskInsightIds.nextWeekHighValue,
     TaskTerrainInsightMode.unblockLeverage => TaskInsightIds.quickUnblocks,
-    TaskTerrainInsightMode.riskConfidence =>
-      TaskInsightIds.highRiskLowConfidence,
+    TaskTerrainInsightMode.riskFocus => TaskInsightIds.highRiskLowConfidence,
     TaskTerrainInsightMode.priorityFocus => _primaryInsightId(index, taskId),
   };
   return index.explainTaskInsight(taskId, insightId);
@@ -305,7 +295,7 @@ List<PriorityTerrainBand> _terrainBandsForMode(TaskTerrainInsightMode mode) {
         description: 'Valuable work with room to schedule.',
       ),
       PriorityTerrainBand(
-        id: 'watch-risk',
+        id: 'rising-risk',
         title: 'Watch Risk',
         description: 'Valuable work that could slip.',
       ),
@@ -337,26 +327,26 @@ List<PriorityTerrainBand> _terrainBandsForMode(TaskTerrainInsightMode mode) {
         description: 'Worth effort because it unlocks work.',
       ),
     ],
-    TaskTerrainInsightMode.riskConfidence => const <PriorityTerrainBand>[
+    TaskTerrainInsightMode.riskFocus => const <PriorityTerrainBand>[
       PriorityTerrainBand(
-        id: 'confidence-gap',
-        title: 'Confidence Gaps',
-        description: 'Low-confidence, lower immediate risk work.',
+        id: 'low-risk',
+        title: 'Low Risk',
+        description: 'Lower due-date risk.',
       ),
       PriorityTerrainBand(
-        id: 'stable-known',
-        title: 'Known Stable',
-        description: 'Higher confidence and lower risk.',
+        id: 'watch-risk',
+        title: 'Watch Risk',
+        description: 'Timing pressure is rising.',
       ),
       PriorityTerrainBand(
-        id: 'risk-blind-spot',
-        title: 'Risk Blind Spots',
-        description: 'Risky work with weak confidence.',
+        id: 'high-risk',
+        title: 'High Risk',
+        description: 'Due-date risk is high.',
       ),
       PriorityTerrainBand(
-        id: 'known-risk',
-        title: 'Known Risks',
-        description: 'Risky enough to act on.',
+        id: 'urgent-risk',
+        title: 'Urgent Risk',
+        description: 'High risk with immediate timing pressure.',
       ),
     ],
   };

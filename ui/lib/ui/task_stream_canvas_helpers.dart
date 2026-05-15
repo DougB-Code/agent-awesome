@@ -37,7 +37,6 @@ IconData _cardIcon(TaskStreamCard card) {
 /// Returns compact metadata text for a task card.
 String _cardSubtitle(TaskStreamCard card) {
   final parts = <String>[
-    if (card.context.isNotEmpty) taskStreamDisplayLabel(card.context),
     if (card.owner.isNotEmpty) taskStreamDisplayLabel(card.owner),
     if (card.estimateMinutes > 0) '${card.estimateMinutes}m',
     if (card.dueAt != null) 'Due ${formatLocalDate(card.dueAt!)}',

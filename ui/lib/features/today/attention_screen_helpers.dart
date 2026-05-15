@@ -7,13 +7,6 @@ _AttentionScope _attentionScopeForRoute(String route) {
   final metric = uri.queryParameters['metric'] ?? '';
   final lane = uri.queryParameters['lane'] ?? '';
   final itemId = uri.queryParameters['item'] ?? '';
-  if (metric == 'actions') {
-    return _AttentionScope(
-      metric: metric,
-      lanes: const <String>{'protect', 'do'},
-      itemId: itemId,
-    );
-  }
   if (metric == 'decisions') {
     return _AttentionScope(
       metric: metric,
@@ -25,13 +18,6 @@ _AttentionScope _attentionScopeForRoute(String route) {
     return _AttentionScope(
       metric: metric,
       lanes: const <String>{'follow_up'},
-      itemId: itemId,
-    );
-  }
-  if (lane == 'do') {
-    return _AttentionScope(
-      metric: 'actions',
-      lanes: const <String>{'protect', 'do'},
       itemId: itemId,
     );
   }
@@ -73,10 +59,6 @@ List<ExecutiveSummaryItem> _itemsForFilter(
   switch (filter) {
     case _AttentionFilter.all:
       return items;
-    case _AttentionFilter.execute:
-      return items.where((item) {
-        return item.lane == 'do' || item.lane == 'protect';
-      }).toList();
     case _AttentionFilter.clarify:
       return items.where(_itemNeedsClarification).toList();
     case _AttentionFilter.schedule:
@@ -138,8 +120,6 @@ bool _itemNeedsSchedule(ExecutiveSummaryItem item) {
 /// _titleForScope creates the page title for the current route scope.
 String _titleForScope(_AttentionScope scope, int count) {
   switch (scope.metric) {
-    case 'actions':
-      return '$count ${_plural(count, 'item')} ready to execute';
     case 'decisions':
     case 'decide':
       return '$count ${_plural(count, 'decision')} require your input';
@@ -154,8 +134,6 @@ String _titleForScope(_AttentionScope scope, int count) {
 /// _subtitleForScope returns supporting copy for the current route scope.
 String _subtitleForScope(_AttentionScope scope) {
   switch (scope.metric) {
-    case 'actions':
-      return 'These tasks are ready for concrete execution today or soon.';
     case 'decisions':
     case 'decide':
       return 'These tasks need a choice before work can move cleanly.';
@@ -177,8 +155,6 @@ String _filterLabel(_AttentionFilter filter) {
   switch (filter) {
     case _AttentionFilter.all:
       return 'All';
-    case _AttentionFilter.execute:
-      return 'Execute now';
     case _AttentionFilter.clarify:
       return 'Clarify';
     case _AttentionFilter.schedule:
@@ -193,8 +169,6 @@ String _filterSubtitle(_AttentionFilter filter) {
   switch (filter) {
     case _AttentionFilter.all:
       return 'Everything';
-    case _AttentionFilter.execute:
-      return 'Concrete action';
     case _AttentionFilter.clarify:
       return 'Needs more info';
     case _AttentionFilter.schedule:
@@ -209,8 +183,6 @@ IconData _filterIcon(_AttentionFilter filter) {
   switch (filter) {
     case _AttentionFilter.all:
       return Icons.inbox_outlined;
-    case _AttentionFilter.execute:
-      return Icons.task_alt;
     case _AttentionFilter.clarify:
       return Icons.edit_note;
     case _AttentionFilter.schedule:
@@ -228,7 +200,6 @@ String _filterSeverity(_AttentionFilter filter) {
       return 'attention';
     case _AttentionFilter.schedule:
       return 'warning';
-    case _AttentionFilter.execute:
     case _AttentionFilter.all:
       return 'good';
   }

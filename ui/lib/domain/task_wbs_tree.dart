@@ -215,10 +215,8 @@ String _taskSegment(WorkspaceTask task) {
 
 /// Returns the root bucket title for a task.
 String _rootTitle(WorkspaceTask task, String code) {
-  final domain = task.domain.trim();
-  if (domain.isNotEmpty) {
-    return domain;
-  }
+  final project = task.project.trim();
+  if (project.isNotEmpty) return project;
   if (code == 'uncoded') {
     return 'Uncoded work';
   }
@@ -227,12 +225,7 @@ String _rootTitle(WorkspaceTask task, String code) {
 
 /// Returns an intermediate bucket title for a task.
 String _bucketTitle(WorkspaceTask task, String code) {
-  for (final value in <String>[
-    task.context,
-    task.sourceLabel,
-    task.source,
-    task.domain,
-  ]) {
+  for (final value in <String>[task.sourceLabel, task.project]) {
     final trimmed = value.trim();
     if (trimmed.isNotEmpty) {
       return trimmed;

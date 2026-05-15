@@ -26,7 +26,6 @@ func (e Engine) Project(q domain.ExecutiveSummaryQuery, graph domain.TaskGraphPr
 	timeHorizon := buildTimeHorizonProjection(q, index)
 	coverage := buildCoverageProjection(index)
 	quality := buildProjectionQuality(index, coverage)
-	commitments := buildCommitmentProjection(attention)
 	metrics := buildSummaryMetrics(attention, delegation, coverage, quality)
 	return domain.ExecutiveSummaryProjection{
 		SchemaVersion:    domain.ExecutiveSummarySchemaVersion,
@@ -39,7 +38,6 @@ func (e Engine) Project(q domain.ExecutiveSummaryQuery, graph domain.TaskGraphPr
 		Metrics:          metrics,
 		Attention:        attention,
 		OpenLoops:        openLoops,
-		Commitments:      commitments,
 		TimeHorizon:      timeHorizon,
 		Delegation:       delegation,
 		RiskUnblocks:     riskUnblocks,
@@ -91,15 +89,13 @@ func projectionLinks() []domain.ProjectionLink {
 	}
 }
 
-// buildSummaryMetrics creates the five top-level Today counters.
+// buildSummaryMetrics creates the top-level Today counters.
 func buildSummaryMetrics(attention domain.AttentionProjection, delegation domain.DelegationProjection, coverage domain.CoverageProjection, quality domain.ProjectionQualitySummary) []domain.SummaryMetric {
 	decisions := countAttentionLane(attention, "decide")
-	actions := countAttentionLane(attention, "protect") + countAttentionLane(attention, "do")
 	followUps := countAttentionLane(attention, "follow_up")
 	agentCanHandle := delegationBucketCount(delegation, "can_do_now")
 	return []domain.SummaryMetric{
 		{ID: "decisions", Label: "Decide", Value: fmt.Sprint(decisions), Subtitle: "Need your judgment", Severity: severityForCount(decisions, "attention"), Link: domain.ProjectionLink{Route: "/attention?metric=decisions"}},
-		{ID: "actions", Label: "Execute", Value: fmt.Sprint(actions), Subtitle: "Ready to act", Severity: severityForCount(actions, "normal"), Link: domain.ProjectionLink{Route: "/attention?metric=actions"}},
 		{ID: "relationships", Label: "Follow-ups", Value: fmt.Sprint(followUps), Subtitle: "People or promises", Severity: severityForCount(followUps, "warning"), Link: domain.ProjectionLink{Route: "/attention?metric=relationships"}},
 		{ID: "agent_can_handle", Label: "Agent can handle", Value: fmt.Sprint(agentCanHandle), Subtitle: "Ready to act", Severity: severityForCount(agentCanHandle, "good"), Link: domain.ProjectionLink{Route: "/delegation"}},
 		{ID: "picture_quality", Label: "Picture quality", Value: quality.Label, Subtitle: pictureQualitySubtitle(quality, coverage), Severity: pictureQualitySeverity(quality), Link: domain.ProjectionLink{Route: "/memory/coverage"}},
@@ -164,8 +160,8 @@ func narrativeSummary(metrics []domain.SummaryMetric) string {
 	for _, metric := range metrics {
 		values[metric.ID] = metric.Value
 	}
-	return fmt.Sprintf("You have %s decisions, %s execution items, %s follow-ups, and %s items Agent Awesome can handle.",
-		values["decisions"], values["actions"], values["relationships"], values["agent_can_handle"])
+	return fmt.Sprintf("You have %s decisions, %s follow-ups, and %s items Agent Awesome can handle.",
+		values["decisions"], values["relationships"], values["agent_can_handle"])
 }
 
 // executiveSummaryItems flattens explainable items from all primary sections.

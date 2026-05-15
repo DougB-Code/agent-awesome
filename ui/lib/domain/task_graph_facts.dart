@@ -35,7 +35,6 @@ class TaskGraphNode {
     this.saveCents = 0,
     this.currency = '',
     this.project = '',
-    this.view = '',
     this.priority = 'normal',
     this.createdAt,
     this.updatedAt,
@@ -78,9 +77,6 @@ class TaskGraphNode {
 
   /// Owning project label.
   final String project;
-
-  /// Global cross-cutting view label.
-  final String view;
 
   /// User-authored priority value.
   final String priority;

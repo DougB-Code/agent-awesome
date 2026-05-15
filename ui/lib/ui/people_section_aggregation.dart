@@ -1,4 +1,4 @@
-/// Aggregates contacts from memory records, tasks, commitments, and pages.
+/// Aggregates contacts from memory records, tasks, and pages.
 part of 'people_section.dart';
 
 Future<void> _showContactCaptureDialog(
@@ -19,7 +19,7 @@ Future<void> _showContactCaptureDialog(
   );
 }
 
-/// Builds contact records from memory, task owners, and commitments.
+/// Builds contact records from memory and task owners.
 List<_ContactItem> _contactItemsFromController(
   AgentAwesomeAppController controller,
 ) {
@@ -49,28 +49,9 @@ List<_ContactItem> _contactItemsFromController(
     final aggregate = _contactAggregateFor(aggregates, owner);
     aggregate.tasks.add(task);
     aggregate.topics.addAll(task.topics.where(_isUsableTopic));
-    for (final label in <String>[task.domain, task.project, task.context]) {
+    for (final label in <String>[task.project]) {
       if (_isUsableTopic(label)) {
         aggregate.topics.add(label.trim());
-      }
-    }
-  }
-  for (final commitment in controller.taskCommitments) {
-    for (final person in commitment.people) {
-      if (!_isUsableContactName(person)) {
-        continue;
-      }
-      final aggregate = _contactAggregateFor(aggregates, person);
-      aggregate.commitments.add(commitment);
-      for (final label in <String>[
-        commitment.domain,
-        commitment.project,
-        commitment.responsibility,
-        commitment.hardness,
-      ]) {
-        if (_isUsableTopic(label)) {
-          aggregate.topics.add(label.trim());
-        }
       }
     }
   }
@@ -96,12 +77,10 @@ _ContactAggregate _contactAggregateFor(
 _ContactItem _contactItemFromAggregate(_ContactAggregate aggregate) {
   final records = _sortedContactRecords(aggregate.memoryRecords);
   final tasks = _sortedContactTasks(aggregate.tasks);
-  final commitments = _sortedContactCommitments(aggregate.commitments);
   final primary = _primaryContactMemory(records);
   final contexts = _contactContextsFromAggregate(
     records: records,
     tasks: tasks,
-    commitments: commitments,
   );
   final firewallLabels = _firewallLabelsForContexts(contexts);
   final openTaskCount = tasks.where(_contactTaskIsOpen).length;
@@ -114,23 +93,20 @@ _ContactItem _contactItemFromAggregate(_ContactAggregate aggregate) {
       primary: primary,
       openTaskCount: openTaskCount,
       sourceCount: records.length,
-      commitmentCount: commitments.length,
     ),
     statusLabel: _contactStatusLabel(
       openTaskCount: openTaskCount,
-      commitmentCount: commitments.length,
       sourceCount: records.length,
     ),
     openTaskCount: openTaskCount,
     memoryRecords: records,
     tasks: tasks,
-    commitments: commitments,
     contexts: contexts,
     firewallLabels: firewallLabels,
     topics: aggregate.topics.toList()..sort(),
     primaryMemory: primary,
     primaryContext: contexts.isEmpty ? null : contexts.first,
-    lastUpdatedAt: _latestContactTimestamp(records, tasks, commitments),
+    lastUpdatedAt: _latestContactTimestamp(records, tasks),
   );
 }
 
@@ -138,7 +114,6 @@ _ContactItem _contactItemFromAggregate(_ContactAggregate aggregate) {
 List<_ContactContext> _contactContextsFromAggregate({
   required List<MemoryRecord> records,
   required List<WorkspaceTask> tasks,
-  required List<TaskCommitment> commitments,
 }) {
   final aggregates = <String, _ContactContextAggregate>{};
   for (final record in records) {
@@ -162,25 +137,7 @@ List<_ContactContext> _contactContextsFromAggregate({
     );
     aggregate.tasks.add(task);
     aggregate.topics.addAll(task.topics.where(_isUsableTopic));
-    for (final label in <String>[task.domain, task.project, task.context]) {
-      if (_isUsableTopic(label)) {
-        aggregate.topics.add(label.trim());
-      }
-    }
-  }
-  for (final commitment in commitments) {
-    final aggregate = _contextAggregateFor(
-      aggregates,
-      firewall: _commitmentContextFirewall(commitment),
-      label: _commitmentContextLabel(commitment),
-    );
-    aggregate.commitments.add(commitment);
-    for (final label in <String>[
-      commitment.domain,
-      commitment.project,
-      commitment.responsibility,
-      commitment.hardness,
-    ]) {
+    for (final label in <String>[task.project]) {
       if (_isUsableTopic(label)) {
         aggregate.topics.add(label.trim());
       }
@@ -216,7 +173,6 @@ _ContactContext _contactContextFromAggregate(
 ) {
   final records = _sortedContactRecords(aggregate.memoryRecords);
   final tasks = _sortedContactTasks(aggregate.tasks);
-  final commitments = _sortedContactCommitments(aggregate.commitments);
   final openTaskCount = tasks.where(_contactTaskIsOpen).length;
   return _ContactContext(
     id: aggregate.id,
@@ -226,17 +182,14 @@ _ContactContext _contactContextFromAggregate(
       label: aggregate.label,
       records: records,
       tasks: tasks,
-      commitments: commitments,
     ),
     sensitivityLabel: _contextSensitivityLabel(aggregate.sensitivities),
     sourceCount: records.length,
     openTaskCount: openTaskCount,
-    commitmentCount: commitments.length,
     memoryRecords: records,
     tasks: tasks,
-    commitments: commitments,
     topics: aggregate.topics.toList()..sort(),
-    lastUpdatedAt: _latestContactTimestamp(records, tasks, commitments),
+    lastUpdatedAt: _latestContactTimestamp(records, tasks),
   );
 }
 
@@ -245,7 +198,6 @@ String _contactContextSummary({
   required String label,
   required List<MemoryRecord> records,
   required List<WorkspaceTask> tasks,
-  required List<TaskCommitment> commitments,
 }) {
   final primary = _primaryContactMemory(records);
   if (primary != null && primary.summary.trim().isNotEmpty) {
@@ -254,7 +206,6 @@ String _contactContextSummary({
   final openTaskCount = tasks.where(_contactTaskIsOpen).length;
   final parts = <String>[
     if (openTaskCount > 0) '$openTaskCount active tasks',
-    if (commitments.isNotEmpty) '${commitments.length} commitments',
     if (records.isNotEmpty) '${records.length} source records',
   ];
   if (parts.isEmpty) {
@@ -290,12 +241,6 @@ int _compareContactContexts(_ContactContext left, _ContactContext right) {
   if (activeCompare != 0) {
     return activeCompare;
   }
-  final commitmentCompare = right.commitmentCount.compareTo(
-    left.commitmentCount,
-  );
-  if (commitmentCompare != 0) {
-    return commitmentCompare;
-  }
   final sourceCompare = right.sourceCount.compareTo(left.sourceCount);
   if (sourceCompare != 0) {
     return sourceCompare;
@@ -313,7 +258,6 @@ String _contactSummary({
   required MemoryRecord? primary,
   required int openTaskCount,
   required int sourceCount,
-  required int commitmentCount,
 }) {
   final summary = primary?.summary.trim() ?? '';
   if (summary.isNotEmpty) {
@@ -321,7 +265,6 @@ String _contactSummary({
   }
   final parts = <String>[
     if (openTaskCount > 0) '$openTaskCount active tasks',
-    if (commitmentCount > 0) '$commitmentCount commitments',
     if (sourceCount > 0) '$sourceCount source records',
   ];
   if (parts.isEmpty) {
@@ -333,14 +276,10 @@ String _contactSummary({
 /// Returns the status label for one contact.
 String _contactStatusLabel({
   required int openTaskCount,
-  required int commitmentCount,
   required int sourceCount,
 }) {
   if (openTaskCount > 0) {
     return 'Active';
-  }
-  if (commitmentCount > 0) {
-    return 'Committed';
   }
   if (sourceCount > 0) {
     return 'Known';
@@ -404,35 +343,11 @@ List<WorkspaceTask> _sortedContactTasks(List<WorkspaceTask> tasks) {
   return sorted;
 }
 
-/// Sorts commitments by recency and project label.
-List<TaskCommitment> _sortedContactCommitments(
-  List<TaskCommitment> commitments,
-) {
-  final sorted = List<TaskCommitment>.from(commitments);
-  sorted.sort((left, right) {
-    final timeCompare = _compareDateDesc(left.updatedAt, right.updatedAt);
-    if (timeCompare != 0) {
-      return timeCompare;
-    }
-    return _firstNonEmpty(<String>[
-      left.project,
-      left.domain,
-    ]).compareTo(_firstNonEmpty(<String>[right.project, right.domain]));
-  });
-  return sorted;
-}
-
 /// Compares contacts for library display.
 int _compareContacts(_ContactItem left, _ContactItem right) {
   final activeCompare = right.openTaskCount.compareTo(left.openTaskCount);
   if (activeCompare != 0) {
     return activeCompare;
-  }
-  final commitmentCompare = right.commitments.length.compareTo(
-    left.commitments.length,
-  );
-  if (commitmentCompare != 0) {
-    return commitmentCompare;
   }
   final sourceCompare = right.memoryRecords.length.compareTo(
     left.memoryRecords.length,

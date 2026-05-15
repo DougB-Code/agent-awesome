@@ -17,14 +17,14 @@ void main() {
       );
       final selection = const TaskTerrainFilterSelection()
           .withAreaFilter(TaskStreamAxisDimension.project, 'new-project')
-          .withAreaFilter(TaskStreamAxisDimension.effort, 'medium');
+          .withAreaFilter(TaskStreamAxisDimension.estimate, 'medium');
 
       final filtered = model.apply(_terrainProjection(), selection);
 
       expect(filtered.points.map((point) => point.taskId), <String>['task-1']);
     });
 
-    test('keeps spend separate from work effort', () {
+    test('keeps spend separate from estimates', () {
       final model = TaskTerrainFilterProjector.build(
         streamProjection: _streamProjection(),
         terrainProjection: _terrainProjection(),
@@ -35,7 +35,7 @@ void main() {
         contains('high-spend'),
       );
       expect(
-        _optionIds(model, TaskStreamAxisDimension.effort),
+        _optionIds(model, TaskStreamAxisDimension.estimate),
         contains('deep'),
       );
 
@@ -43,10 +43,8 @@ void main() {
         TaskStreamAxisDimension.spend,
         'high-spend',
       );
-      final effortSelection = const TaskTerrainFilterSelection().withAreaFilter(
-        TaskStreamAxisDimension.effort,
-        'deep',
-      );
+      final estimateSelection = const TaskTerrainFilterSelection()
+          .withAreaFilter(TaskStreamAxisDimension.estimate, 'deep');
 
       expect(
         model
@@ -57,7 +55,7 @@ void main() {
       );
       expect(
         model
-            .apply(_terrainProjection(), effortSelection)
+            .apply(_terrainProjection(), estimateSelection)
             .points
             .map((point) => point.taskId),
         <String>['task-2'],
@@ -90,7 +88,7 @@ List<String> _optionIds(
   ];
 }
 
-/// Builds task stream cards with mixed project, effort, and spend categories.
+/// Builds task stream cards with mixed project, estimate, and spend categories.
 TaskStreamProjection _streamProjection() {
   return TaskStreamProjection(
     lanes: <TaskStreamLane>[
@@ -101,7 +99,6 @@ TaskStreamProjection _streamProjection() {
           _streamCard(
             taskId: 'task-1',
             title: 'Draft launch plan',
-            flowLane: 'Deep focus',
             project: 'New Project',
             estimateMinutes: 45,
             spendScore: 0.2,
@@ -109,7 +106,6 @@ TaskStreamProjection _streamProjection() {
           _streamCard(
             taskId: 'task-2',
             title: 'Review migration notes',
-            flowLane: 'Admin',
             project: 'New Project',
             estimateMinutes: 90,
             spendScore: 0.1,
@@ -117,7 +113,6 @@ TaskStreamProjection _streamProjection() {
           _streamCard(
             taskId: 'task-3',
             title: 'Approve vendor spend',
-            flowLane: 'Admin',
             project: 'Operations',
             estimateMinutes: 20,
             spendScore: 0.82,
@@ -132,7 +127,6 @@ TaskStreamProjection _streamProjection() {
 TaskStreamCard _streamCard({
   required String taskId,
   required String title,
-  required String flowLane,
   required String project,
   required int estimateMinutes,
   required double spendScore,
@@ -142,10 +136,7 @@ TaskStreamCard _streamCard({
     title: title,
     status: 'open',
     priority: 'normal',
-    flowLane: flowLane,
     project: project,
-    context: 'work',
-    domain: 'Product',
     owner: 'Doug',
     estimateMinutes: estimateMinutes,
     spendScore: spendScore,

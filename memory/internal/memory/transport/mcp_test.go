@@ -58,7 +58,7 @@ func TestMCPCreateTaskSchemaIsLowFriction(t *testing.T) {
 			t.Fatalf("create_task properties missing %q: %#v", key, properties)
 		}
 	}
-	for _, key := range []string{"status", "energy_required", "effort", "value", "urgency", "risk", "work_breakdown", "memory_links"} {
+	for _, key := range []string{"status", "urgency", "risk", "confidence", "work_breakdown", "memory_links"} {
 		if _, ok := properties[key]; ok {
 			t.Fatalf("create_task exposes advanced field %q in %#v", key, properties)
 		}
@@ -231,8 +231,8 @@ func TestMCPCreateTaskAcceptsMinimalTodo(t *testing.T) {
 	}
 }
 
-// TestMCPCreateTaskCoercesLegacyModelMetadata verifies stale local-model calls survive.
-func TestMCPCreateTaskCoercesLegacyModelMetadata(t *testing.T) {
+// TestMCPCreateTaskReadsModelPayload verifies the model-facing task schema.
+func TestMCPCreateTaskReadsModelPayload(t *testing.T) {
 	server := newTestMCPServer(t)
 	create := postRPC(t, server, map[string]any{
 		"jsonrpc": "2.0",
@@ -241,18 +241,10 @@ func TestMCPCreateTaskCoercesLegacyModelMetadata(t *testing.T) {
 		"params": map[string]any{
 			"name": "create_task",
 			"arguments": map[string]any{
-				"title":            "Buy Milk",
-				"description":      "Purchase milk.",
-				"status":           "pending",
-				"priority":         "medium",
-				"energy_required":  1,
-				"effort":           5,
-				"urgency":          "low",
-				"value":            10,
-				"memory_links":     []any{},
-				"work_breakdown":   []string{"Go to store", "Select milk", "Pay"},
-				"idempotency_key":  "buy-milk-legacy",
-				"estimate_minutes": 10,
+				"title":           "Buy Milk",
+				"description":     "Purchase milk.",
+				"priority":        "medium",
+				"idempotency_key": "buy-milk",
 			},
 		},
 	})
@@ -262,15 +254,15 @@ func TestMCPCreateTaskCoercesLegacyModelMetadata(t *testing.T) {
 	}
 	task := createResult["structuredContent"].(map[string]any)
 	if task["status"] != "open" || task["priority"] != "normal" {
-		t.Fatalf("task status/priority = %#v/%#v, want coerced open/normal", task["status"], task["priority"])
+		t.Fatalf("task status/priority = %#v/%#v, want default open/normal", task["status"], task["priority"])
 	}
-	if task["energy_required"] != "1" || task["urgency"] != 0.25 || task["value"] != 1.0 {
-		t.Fatalf("task metadata = %#v, want tolerant scalar coercion", task)
+	if _, ok := task["urgency"]; ok {
+		t.Fatalf("task urgency = %#v, want create_task to ignore non-schema metadata", task["urgency"])
 	}
 }
 
-// TestMCPCreateTaskRecoversMalformedGemmaKeys verifies memory accepts bad keys.
-func TestMCPCreateTaskRecoversMalformedGemmaKeys(t *testing.T) {
+// TestMCPCreateTaskRejectsMalformedKeys verifies bad model arguments are not repaired.
+func TestMCPCreateTaskRejectsMalformedKeys(t *testing.T) {
 	server := newTestMCPServer(t)
 	create := postRPC(t, server, map[string]any{
 		"jsonrpc": "2.0",
@@ -286,15 +278,8 @@ func TestMCPCreateTaskRecoversMalformedGemmaKeys(t *testing.T) {
 		},
 	})
 	createResult := create["result"].(map[string]any)
-	if createResult["isError"].(bool) {
-		t.Fatalf("create task returned tool error: %#v", createResult)
-	}
-	task := createResult["structuredContent"].(map[string]any)
-	if task["title"] != "Buy milk" || task["description"] != "Buy milk" {
-		t.Fatalf("task = %#v, want recovered title and description", task)
-	}
-	if task["idempotency_key"] != "agent_awesome:session:" {
-		t.Fatalf("task idempotency key = %#v, want recovered key", task["idempotency_key"])
+	if !createResult["isError"].(bool) {
+		t.Fatalf("create task succeeded with malformed keys: %#v", createResult)
 	}
 }
 
@@ -440,7 +425,7 @@ func TestMCPGraphTaskTools(t *testing.T) {
 		t.Fatalf("executive summary returned tool error: %#v", executiveResult)
 	}
 	summary := executiveResult["structuredContent"].(map[string]any)
-	if summary["schema_version"] != "agent-awesome/executive-summary/v1" || len(summary["metrics"].([]any)) != 5 {
+	if summary["schema_version"] != "agent-awesome/executive-summary/v1" || len(summary["metrics"].([]any)) != 4 {
 		t.Fatalf("executive summary = %#v, want v1 metrics", summary)
 	}
 	explain := postRPC(t, server, map[string]any{

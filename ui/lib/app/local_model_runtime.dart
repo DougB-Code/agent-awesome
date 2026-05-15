@@ -23,11 +23,8 @@ const List<String> _localToolArgumentFields = <String>[
   'actor',
   'assignee',
   'confidence',
-  'context',
   'description',
   'due_at',
-  'effort',
-  'energy_required',
   'estimate_minutes',
   'follow_up_at',
   'idempotency_key',
@@ -37,7 +34,6 @@ const List<String> _localToolArgumentFields = <String>[
   'person',
   'priority',
   'project',
-  'risk',
   'scheduled_at',
   'source',
   'status',
@@ -46,8 +42,6 @@ const List<String> _localToolArgumentFields = <String>[
   'title',
   'topics',
   'urgency',
-  'value',
-  'view',
 ];
 
 const _linuxX64LiteRtCliArtifact = LocalModelRuntimeArtifact(

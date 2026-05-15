@@ -250,7 +250,6 @@ class BacklogScreenTaskSnapshot {
     this.followUpAt = '',
     this.topics = const <String>[],
     this.estimateMinutes = 0,
-    this.context = '',
     this.owner = '',
   });
 
@@ -284,9 +283,6 @@ class BacklogScreenTaskSnapshot {
   /// Estimated minutes.
   final int estimateMinutes;
 
-  /// Execution context.
-  final String context;
-
   /// Responsible person.
   final String owner;
 
@@ -303,7 +299,6 @@ class BacklogScreenTaskSnapshot {
       if (followUpAt.isNotEmpty) 'follow_up_at': followUpAt,
       if (topics.isNotEmpty) 'topics': topics,
       if (estimateMinutes > 0) 'estimate_minutes': estimateMinutes,
-      if (context.isNotEmpty) 'context': context,
       if (owner.isNotEmpty) 'person': owner,
     };
   }

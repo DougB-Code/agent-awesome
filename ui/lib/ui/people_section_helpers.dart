@@ -42,38 +42,12 @@ String _taskContextFirewall(WorkspaceTask task) {
   if (task.project.trim().isNotEmpty) {
     return 'project';
   }
-  if (task.domain.trim().isNotEmpty) {
-    return 'user';
-  }
   return 'user';
 }
 
 /// Returns the contact context label for a task.
 String _taskContextLabel(WorkspaceTask task) {
-  return _firstNonEmpty(<String>[
-    task.project,
-    task.context,
-    task.domain,
-    'Task ownership',
-  ]);
-}
-
-/// Returns the inferred contact context firewall for a commitment.
-String _commitmentContextFirewall(TaskCommitment commitment) {
-  if (commitment.project.trim().isNotEmpty) {
-    return 'project';
-  }
-  return 'user';
-}
-
-/// Returns the contact context label for a commitment.
-String _commitmentContextLabel(TaskCommitment commitment) {
-  return _firstNonEmpty(<String>[
-    commitment.project,
-    commitment.domain,
-    commitment.responsibility,
-    'Commitment',
-  ]);
+  return _firstNonEmpty(<String>[task.project, 'Task ownership']);
 }
 
 /// Reports whether a label can identify a contact context.
@@ -127,14 +101,11 @@ String _contactContextDisplayLabel(
 DateTime? _latestContactTimestamp(
   List<MemoryRecord> records,
   List<WorkspaceTask> tasks,
-  List<TaskCommitment> commitments,
 ) {
   DateTime? latest;
   for (final value in <DateTime?>[
     for (final record in records) record.updatedAt ?? record.createdAt,
     for (final task in tasks) task.updatedAt ?? task.createdAt,
-    for (final commitment in commitments)
-      commitment.updatedAt ?? commitment.createdAt,
   ]) {
     if (value == null) {
       continue;
@@ -186,7 +157,6 @@ Summary: ${contact.summary}
 Topics: ${contact.topics.join(', ')}
 Contexts: ${contact.contexts.map((item) => _contactContextDisplayLabel(controller, item)).join(', ')}
 Open tasks: ${contact.openTaskCount}
-Commitments: ${contact.commitments.length}
 Sources: ${contact.memoryRecords.length}
 '''
       .trim();
@@ -197,9 +167,6 @@ Color _contactAccent(BuildContext context, _ContactItem contact) {
   final colors = context.agentAwesomeColors;
   if (contact.openTaskCount > 0) {
     return colors.green;
-  }
-  if (contact.commitments.isNotEmpty) {
-    return context.agentAwesomeWarningAccent;
   }
   if (contact.memoryRecords.isNotEmpty) {
     return context.agentAwesomeLowAccent;
@@ -287,16 +254,6 @@ String _contactNoteTitle({
   return note.trim().isEmpty
       ? '$name profile$contextSuffix'
       : 'Contact note: $name$contextSuffix';
-}
-
-/// Joins non-empty values into one readable string.
-String _joinNonEmpty(List<String> values) {
-  return values
-      .map((value) => value.trim())
-      .where((value) {
-        return value.isNotEmpty;
-      })
-      .join(' | ');
 }
 
 /// Returns the first non-empty value from a list.

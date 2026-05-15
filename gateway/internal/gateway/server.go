@@ -949,11 +949,6 @@ func memoryReadOnlyTools() map[string]bool {
 		"explain_executive_summary_item": true,
 		"list_task_relations":            true,
 		"traverse_task_relations":        true,
-		"list_commitments":               true,
-		"suggest_task_relationships":     true,
-		"suggest_task_metadata":          true,
-		"suggest_commitments":            true,
-		"get_task_work_breakdowns":       true,
 	}
 }
 

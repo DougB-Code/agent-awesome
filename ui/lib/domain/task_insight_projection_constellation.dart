@@ -256,7 +256,6 @@ String _constellationCategory(
   final scores = index.scoresFor(taskId);
   return switch (mode) {
     TaskConstellationInsightMode.map => _firstNonEmpty(<String>[
-      index.facetLabelForTask(taskId, 'context'),
       index.facetLabelForTask(taskId, 'attention'),
       'General',
     ]),
@@ -352,7 +351,7 @@ String _constellationExplanation(
 ) {
   return switch (mode) {
     TaskConstellationInsightMode.map =>
-      'Placed by context facets and sparse relations.',
+      'Placed by task facets and sparse relations.',
     TaskConstellationInsightMode.criticalPath =>
       'Part of the longest active dependency path by estimated effort and risk.',
     TaskConstellationInsightMode.unblock => index.explainTaskInsight(

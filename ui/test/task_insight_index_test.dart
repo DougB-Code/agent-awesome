@@ -20,8 +20,6 @@ void main() {
           title: 'Review vendor invoices',
           description: 'Compare duplicate source numbers.',
           estimateMinutes: 25,
-          context: 'Admin',
-          domain: 'Work',
         ),
       ],
       graph: TaskProjectionGraph(
@@ -38,7 +36,6 @@ void main() {
               obligation: 0.75,
               agentSafety: 0.68,
               handoffReadiness: 0.62,
-              metadataCompleteness: 0.82,
             ),
           ),
         ],
@@ -63,8 +60,6 @@ void main() {
           title: 'Send vendor payment',
           description: 'Prepare the payment note.',
           estimateMinutes: 20,
-          context: 'Admin',
-          domain: 'Finance',
         ),
       ],
       graph: TaskProjectionGraph(
@@ -81,7 +76,6 @@ void main() {
               obligation: 0.78,
               agentSafety: 0.42,
               handoffReadiness: 0.40,
-              metadataCompleteness: 0.76,
             ),
           ),
         ],
@@ -93,7 +87,7 @@ void main() {
 
     expect(candidate.taskId, 'payment');
     expect(candidate.severity, 'warning');
-    expect(candidate.missingRules, contains('agent_safety'));
+    expect(candidate.missingRules, contains('risk'));
   });
 
   test('includes high-value work due next week', () {
@@ -104,8 +98,6 @@ void main() {
           title: 'Prepare client renewal packet',
           dueAt: DateTime.parse('2026-05-10T12:00:00Z'),
           estimateMinutes: 90,
-          context: 'Focus',
-          domain: 'Work',
         ),
       ],
       graph: TaskProjectionGraph(
@@ -114,13 +106,10 @@ void main() {
             id: 'renewal',
             title: 'Prepare client renewal packet',
             dueAt: DateTime.parse('2026-05-10T12:00:00Z'),
-            valueType: 'client',
             scores: const TaskProjectionScores(
               reward: 0.72,
               pressure: 0.50,
               consequenceSeverity: 0.76,
-              commitmentHardness: 0.74,
-              metadataCompleteness: 0.80,
             ),
           ),
         ],
@@ -160,7 +149,6 @@ void main() {
               reward: 0.42,
               pressure: 0.45,
               humanEffort: 0.12,
-              metadataCompleteness: 0.78,
             ),
           ),
           _projectionTask(
@@ -171,7 +159,6 @@ void main() {
               reward: 0.92,
               pressure: 0.92,
               risk: 0.70,
-              metadataCompleteness: 0.78,
             ),
           ),
         ],
@@ -197,7 +184,7 @@ void main() {
     expect(index.unblockPlanFor('review').primaryBlockerId, 'collect');
   });
 
-  test('surfaces Today execute, decide, and follow-up presets', () {
+  test('surfaces Today decide and follow-up presets', () {
     final index = TaskInsightIndex.build(
       workspaceTasks: <WorkspaceTask>[
         _workspaceTask(id: 'socks', title: 'Buy Socks'),
@@ -216,7 +203,6 @@ void main() {
         _workspaceTask(
           id: 'reply',
           title: 'Reply to Sarah',
-          context: 'Promise follow up',
           owner: 'Sarah',
           followUpAt: now.subtract(const Duration(days: 1)),
         ),
@@ -226,7 +212,7 @@ void main() {
           _projectionTask(
             id: 'socks',
             title: 'Buy Socks',
-            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+            scores: const TaskProjectionScores(),
           ),
           _projectionTask(
             id: 'budget',
@@ -234,24 +220,23 @@ void main() {
             scores: const TaskProjectionScores(
               humanJudgmentNeed: 0.82,
               risk: 0.62,
-              metadataCompleteness: 0.90,
             ),
           ),
           _projectionTask(
             id: 'collect',
             title: 'Collect forecast inputs',
-            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+            scores: const TaskProjectionScores(),
           ),
           _projectionTask(
             id: 'review',
             title: 'Review May budget',
             status: 'blocked',
-            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+            scores: const TaskProjectionScores(),
           ),
           _projectionTask(
             id: 'reply',
             title: 'Reply to Sarah',
-            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
+            scores: const TaskProjectionScores(),
           ),
         ],
         edges: const <TaskProjectionEdge>[
@@ -267,10 +252,6 @@ void main() {
       now: now,
     );
 
-    expect(
-      index.tasksForInsight(TaskInsightIds.todayActions),
-      hasLength(greaterThanOrEqualTo(1)),
-    );
     expect(
       index
           .tasksForInsight(TaskInsightIds.todayDecisions)
@@ -295,11 +276,7 @@ void main() {
       graph: TaskProjectionGraph(
         tasks: <TaskProjectionTask>[
           for (final taskId in <String>['socks', 'watch', 'coffee'])
-            _projectionTask(
-              id: taskId,
-              title: taskId,
-              scores: const TaskProjectionScores(metadataCompleteness: 0.90),
-            ),
+            _projectionTask(id: taskId, title: taskId),
         ],
       ),
       now: now,
@@ -313,11 +290,7 @@ void main() {
       for (final metric in projection.metrics) metric.id: metric,
     };
 
-    expect(metrics['actions']?.value, '3');
-    expect(
-      metrics['actions']?.link.route,
-      '/backlog?insight=${TaskInsightIds.todayActions}',
-    );
+    expect(metrics.containsKey('actions'), isFalse);
     expect(metrics['decisions']?.value, '0');
     expect(metrics['relationships']?.value, '0');
   });
@@ -365,55 +338,6 @@ void main() {
 
     expect(index.projectionCoverageMessage, isEmpty);
   });
-
-  test('reports dependency cycles as metadata gaps', () {
-    final index = TaskInsightIndex.build(
-      workspaceTasks: <WorkspaceTask>[
-        _workspaceTask(id: 'task-a', title: 'Task A'),
-        _workspaceTask(id: 'task-b', title: 'Task B'),
-      ],
-      graph: TaskProjectionGraph(
-        tasks: <TaskProjectionTask>[
-          _projectionTask(
-            id: 'task-a',
-            title: 'Task A',
-            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
-          ),
-          _projectionTask(
-            id: 'task-b',
-            title: 'Task B',
-            scores: const TaskProjectionScores(metadataCompleteness: 0.90),
-          ),
-        ],
-        edges: const <TaskProjectionEdge>[
-          TaskProjectionEdge(
-            fromTaskId: 'task-a',
-            toTaskId: 'task-b',
-            relationType: 'depends_on',
-            source: 'explicit',
-            confidence: 1,
-          ),
-          TaskProjectionEdge(
-            fromTaskId: 'task-b',
-            toTaskId: 'task-a',
-            relationType: 'depends_on',
-            source: 'explicit',
-            confidence: 1,
-          ),
-        ],
-      ),
-      now: now,
-    );
-
-    expect(
-      index.metadataGapsFor('task-a').map((gap) => gap.field),
-      contains('dependency_cycle'),
-    );
-    expect(
-      index.metadataGapsFor('task-b').map((gap) => gap.field),
-      contains('dependency_cycle'),
-    );
-  });
 }
 
 /// Builds a workspace task with practical defaults for insight tests.
@@ -426,8 +350,6 @@ WorkspaceTask _workspaceTask({
   DateTime? dueAt,
   DateTime? followUpAt,
   int estimateMinutes = 30,
-  String context = '',
-  String domain = '',
   String owner = '',
 }) {
   return WorkspaceTask(
@@ -441,10 +363,7 @@ WorkspaceTask _workspaceTask({
     dueAt: dueAt,
     followUpAt: followUpAt,
     estimateMinutes: estimateMinutes,
-    context: context,
-    domain: domain,
     owner: owner,
-    confidence: 0.80,
     active: status != 'done' && status != 'canceled',
   );
 }
@@ -455,7 +374,6 @@ TaskProjectionTask _projectionTask({
   required String title,
   String status = 'open',
   DateTime? dueAt,
-  String valueType = '',
   TaskProjectionScores scores = const TaskProjectionScores(),
 }) {
   return TaskProjectionTask(
@@ -464,7 +382,6 @@ TaskProjectionTask _projectionTask({
     status: status,
     priority: 'normal',
     dueAt: dueAt,
-    valueType: valueType,
     scores: scores,
     confidence: 0.80,
   );

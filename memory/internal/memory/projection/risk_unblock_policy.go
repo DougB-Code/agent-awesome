@@ -47,7 +47,7 @@ func riskChainForRelation(index taskIndex, relation domain.TaskRelation) (domain
 	default:
 		return domain.RiskUnblockChain{}, false
 	}
-	if blocked.Status != domain.TaskStatusBlocked && blocked.Status != domain.TaskStatusWaiting && blocked.Risk < 0.4 && blocked.Value < 0.4 {
+	if blocked.Status != domain.TaskStatusBlocked && blocked.Status != domain.TaskStatusWaiting && blocked.Risk < 0.4 && priorityImportanceScore(blocked) < 0.4 {
 		return domain.RiskUnblockChain{}, false
 	}
 	action := &domain.ExecutiveSummaryAction{
@@ -67,7 +67,7 @@ func riskChainForRelation(index taskIndex, relation domain.TaskRelation) (domain
 	}, true
 }
 
-// chainScore scores chains by blocked task risk and value.
+// chainScore scores chains by blocked task risk and explicit priority.
 func chainScore(index taskIndex, chain domain.RiskUnblockChain) float64 {
 	if len(chain.Nodes) == 0 {
 		return 0
@@ -77,7 +77,7 @@ func chainScore(index taskIndex, chain domain.RiskUnblockChain) float64 {
 	if !ok {
 		return 0
 	}
-	return task.Risk + task.Value + pressureScore(task)
+	return task.Risk + priorityImportanceScore(task) + pressureScore(task)
 }
 
 // statusSubtitle returns a compact state line for risk chain nodes.

@@ -76,39 +76,14 @@ String _ownerForIndexedTask(TaskInsightIndex index, String taskId) {
 String _projectForIndexedTask(TaskInsightIndex index, String taskId) {
   final workspaceTask = index.workspaceTasksById[taskId];
   final projectionTask = index.projectionTasksById[taskId];
-  final contextLabel = _firstNonEmpty(<String>[
-    index.facetLabelForTask(taskId, 'context'),
-    workspaceTask?.context ?? '',
-    projectionTask?.context ?? '',
-    index.facetLabelForTask(taskId, 'attention'),
-  ]);
   return _firstNonEmpty(<String>[
-    _projectLabelUnlessContext(workspaceTask?.project ?? '', contextLabel),
-    _projectLabelUnlessContext(projectionTask?.project ?? '', contextLabel),
+    workspaceTask?.project ?? '',
+    projectionTask?.project ?? '',
     projectionTask?.projectId ?? '',
     workspaceTask?.sourceLabel ?? '',
-    workspaceTask?.source ?? '',
-    projectionTask?.source ?? '',
-    index.facetLabelForTask(taskId, 'view'),
-    _projectLabelUnlessContext(
-      index.facetLabelForTask(taskId, 'project'),
-      contextLabel,
-    ),
+    index.facetLabelForTask(taskId, 'project'),
     'No project',
   ]);
-}
-
-/// Returns a project label only when it adds information beyond context.
-String _projectLabelUnlessContext(String value, String contextLabel) {
-  final label = value.trim();
-  if (label.isEmpty) {
-    return '';
-  }
-  if (contextLabel.trim().isNotEmpty &&
-      label.toLowerCase() == contextLabel.trim().toLowerCase()) {
-    return '';
-  }
-  return label;
 }
 
 /// Returns the best insight-aware next action for one task.
@@ -127,9 +102,9 @@ String _indexNextBestAction(TaskInsightIndex index, String taskId) {
   }
   final workspaceTask = index.workspaceTasksById[taskId];
   if (workspaceTask != null && workspaceTask.description.isNotEmpty) {
-    return 'Open the context notes and continue.';
+    return 'Open the task notes and continue.';
   }
-  return 'Start with the context title as the next action.';
+  return 'Start with the task title as the next action.';
 }
 
 /// Returns the most specific insight id for explaining one task.
@@ -139,7 +114,6 @@ String _primaryInsightId(TaskInsightIndex index, String taskId) {
     TaskInsightIds.agentHandoff,
     TaskInsightIds.nextWeekHighValue,
     TaskInsightIds.highRiskLowConfidence,
-    TaskInsightIds.metadataGaps,
   ]) {
     if (index.candidateForTask(taskId, insightId) != null) {
       return insightId;

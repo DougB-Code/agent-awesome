@@ -28,7 +28,6 @@ type ExecutiveSummaryProjection struct {
 	Metrics          []SummaryMetric          `json:"metrics"`
 	Attention        AttentionProjection      `json:"attention"`
 	OpenLoops        OpenLoopProjection       `json:"open_loops"`
-	Commitments      CommitmentProjection     `json:"commitments"`
 	TimeHorizon      TimeHorizonProjection    `json:"time_horizon"`
 	Delegation       DelegationProjection     `json:"delegation"`
 	RiskUnblocks     RiskUnblockProjection    `json:"risk_unblocks"`
@@ -122,12 +121,6 @@ type OpenLoopCategory struct {
 	Severity string                 `json:"severity,omitempty"`
 	TopItems []ExecutiveSummaryItem `json:"top_items,omitempty"`
 	Link     ProjectionLink         `json:"link,omitempty"`
-}
-
-// CommitmentProjection stores relationship and promise-related loops.
-type CommitmentProjection struct {
-	Items []ExecutiveSummaryItem `json:"items"`
-	Link  ProjectionLink         `json:"link,omitempty"`
 }
 
 // TimeHorizonProjection stores count buckets for near-future work.

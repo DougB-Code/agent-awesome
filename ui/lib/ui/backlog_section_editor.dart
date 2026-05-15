@@ -372,8 +372,6 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
           const SizedBox(height: 14),
           _TaskWbsBlock(controller: widget.controller, task: task),
           const SizedBox(height: 14),
-          _TaskInsightDetailsBlock(controller: widget.controller, task: task),
-          const SizedBox(height: 14),
           _TaskGraphDetailsBlock(controller: widget.controller, task: task),
         ],
       ),

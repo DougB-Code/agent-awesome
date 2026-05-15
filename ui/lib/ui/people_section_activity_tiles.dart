@@ -1,4 +1,4 @@
-/// Contact activity tiles for tasks, commitments, memories, and pages.
+/// Contact activity tiles for tasks, memories, and pages.
 part of 'people_section.dart';
 
 class _ContactMutedText extends StatelessWidget {
@@ -62,82 +62,6 @@ class _ContactTaskTile extends StatelessWidget {
                     PanelBadge(label: _taskContextLabel(task)),
                     if (task.priority.isNotEmpty)
                       PanelBadge(label: _contactLabel(task.priority)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// _ContactCommitmentTile renders one commitment that names a contact.
-class _ContactCommitmentTile extends StatelessWidget {
-  /// Creates a commitment tile.
-  const _ContactCommitmentTile({required this.commitment});
-
-  /// Commitment linked to the contact.
-  final TaskCommitment commitment;
-
-  /// Builds one compact commitment row.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    final title = _firstNonEmpty(<String>[
-      commitment.project,
-      commitment.domain,
-      commitment.responsibility,
-      commitment.timeWindow,
-      'Commitment',
-    ]);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(Icons.handshake_outlined, size: 18, color: colors.green),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.ink,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _joinNonEmpty(<String>[
-                    commitment.timeWindow,
-                    commitment.responsibility,
-                    commitment.consequence,
-                  ]),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.muted),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    for (final person in commitment.people.take(3))
-                      PanelBadge(label: person),
-                    PanelBadge(
-                      label: _contactLabel(
-                        _commitmentContextFirewall(commitment),
-                      ),
-                    ),
-                    PanelBadge(label: _commitmentContextLabel(commitment)),
-                    if (commitment.hardness.isNotEmpty)
-                      PanelBadge(label: _contactLabel(commitment.hardness)),
                   ],
                 ),
               ],

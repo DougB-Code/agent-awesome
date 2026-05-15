@@ -23,14 +23,6 @@ class _TaskMemoryLinkPanel extends StatelessWidget {
       onLink: controller.tasksBusy || selectedMemory == null
           ? null
           : () => unawaited(controller.linkSelectedMemoryToTaskFromUi(task.id)),
-      onUnlink: controller.primaryMemoryToolAvailable('unlink_task_memory')
-          ? (link) => unawaited(
-              controller.unlinkTaskMemoryFromUi(
-                taskId: task.id,
-                linkId: link.id,
-              ),
-            )
-          : null,
     );
   }
 }
@@ -86,10 +78,9 @@ class _TaskSelectedMemoryBlock extends StatelessWidget {
 }
 
 class _TaskMemoryLinksBlock extends StatelessWidget {
-  const _TaskMemoryLinksBlock({required this.links, required this.onUnlink});
+  const _TaskMemoryLinksBlock({required this.links});
 
   final List<TaskMemoryLink> links;
-  final ValueChanged<TaskMemoryLink>? onUnlink;
 
   /// Builds memory link rows for context objects.
   @override
@@ -128,15 +119,6 @@ class _TaskMemoryLinksBlock extends StatelessWidget {
                       ),
                     ),
                     _TaskBadge(label: link.relationship),
-                    const SizedBox(width: 6),
-                    if (onUnlink != null)
-                      Tooltip(
-                        message: 'Unlink memory',
-                        child: IconButton.outlined(
-                          onPressed: () => onUnlink!(link),
-                          icon: const Icon(Icons.link_off, size: 18),
-                        ),
-                      ),
                   ],
                 ),
               ),
