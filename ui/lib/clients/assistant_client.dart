@@ -32,6 +32,7 @@ class AssistantEvent {
     required this.partial,
     this.toolActivity,
     this.confirmation,
+    this.modelRef = '',
     this.errorMessage = '',
   });
 
@@ -52,6 +53,9 @@ class AssistantEvent {
 
   /// Confirmation request, if present.
   final ConfirmationRequest? confirmation;
+
+  /// Selected provider:model ref reported by the runtime, if present.
+  final String modelRef;
 
   /// Error message, if present.
   final String errorMessage;
@@ -161,14 +165,17 @@ class AssistantClient {
     required String sessionId,
     String text = '',
     ConfirmationReply? confirmation,
+    String modelRef = '',
   }) async* {
     final uri = _uri('/run_sse');
     await _log(
-      'POST $uri run_sse session=$sessionId textLength=${text.length} confirmation=${confirmation != null}',
+      'POST $uri run_sse session=$sessionId textLength=${text.length} confirmation=${confirmation != null} modelRef=$modelRef',
     );
     final request = http.Request('POST', uri);
     request.headers.addAll(_headers(contentTypeJson: true));
-    request.body = jsonEncode(_runBody(sessionId, text, confirmation));
+    request.body = jsonEncode(
+      _runBody(sessionId, text, confirmation, modelRef),
+    );
     final response = await _http.send(request);
     await _log('POST $uri -> ${response.statusCode}');
     if (response.statusCode != 200) {
@@ -247,7 +254,9 @@ class AssistantClient {
     String sessionId,
     String text,
     ConfirmationReply? confirmation,
+    String modelRef,
   ) {
+    final normalizedModelRef = modelRef.trim();
     final part = confirmation == null
         ? <String, dynamic>{
             'text': messageTextForAgent(text, sessionId: sessionId),
@@ -268,6 +277,10 @@ class AssistantClient {
       'userId': userId,
       'sessionId': sessionId,
       'streaming': false,
+      if (normalizedModelRef.isNotEmpty)
+        'stateDelta': <String, dynamic>{
+          runtimeModelRefStateKey: normalizedModelRef,
+        },
       'newMessage': <String, dynamic>{
         'role': 'user',
         'parts': <Map<String, dynamic>>[part],
@@ -379,8 +392,26 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
     partial: event['partial'] == true,
     toolActivity: toolActivity,
     confirmation: confirmation,
+    modelRef: modelRefFromAssistantEvent(event),
     errorMessage: errorMessage,
   );
+}
+
+/// Returns the route metadata attached to an assistant event.
+String modelRefFromAssistantEvent(Map<String, dynamic> event) {
+  final modelVersion = stringFrom(event['modelVersion']);
+  if (modelVersion.trim().isNotEmpty) {
+    return modelVersion.trim();
+  }
+  final actions = event['actions'];
+  final actionsMap = actions is Map<String, dynamic>
+      ? actions
+      : <String, dynamic>{};
+  final stateDelta = actionsMap['stateDelta'];
+  final stateMap = stateDelta is Map<String, dynamic>
+      ? stateDelta
+      : <String, dynamic>{};
+  return stringFrom(stateMap[runtimeModelRefStateKey]).trim();
 }
 
 /// Parses an assistant confirmation function call.
@@ -423,6 +454,9 @@ ConfirmationRequest parseConfirmation(Map<String, dynamic> functionCall) {
 
 /// Internal confirmation function name used by the assistant runtime protocol.
 const String _runtimeConfirmationFunctionName = 'adk_request_confirmation';
+
+/// Session state key used to route one chat turn to a configured model.
+const String runtimeModelRefStateKey = 'agentawesome.model_ref';
 
 /// Returns a user-facing tool name for activity summaries.
 String _displayToolName(String name) {

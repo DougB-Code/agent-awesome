@@ -350,6 +350,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Currently selected chat session id.
   String? selectedSessionId;
 
+  /// Provider:model ref selected for the next chat turn.
+  String chatModelRef = '';
+
   /// Current chat messages.
   List<ChatMessage> messages = const <ChatMessage>[];
 
@@ -1953,6 +1956,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       author: role == ChatRole.user ? 'You' : 'Agent Awesome',
       text: text,
       createdAt: DateTime.now(),
+      modelRef: role == ChatRole.assistant ? event.modelRef : '',
       isPartial: event.partial,
     );
   }

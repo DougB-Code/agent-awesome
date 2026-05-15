@@ -286,13 +286,21 @@ class StatusRow extends StatelessWidget {
 /// ChatPanel renders chat timeline content in a section panel.
 class ChatPanel extends StatelessWidget {
   /// Creates a chat panel body.
-  const ChatPanel({super.key, required this.children, required this.empty});
+  const ChatPanel({
+    super.key,
+    required this.children,
+    required this.empty,
+    this.controller,
+  });
 
   /// Timeline children.
   final List<Widget> children;
 
   /// Empty state widget.
   final Widget empty;
+
+  /// Optional scroll controller for callers that manage timeline position.
+  final ScrollController? controller;
 
   /// Builds the chat panel.
   @override
@@ -301,6 +309,7 @@ class ChatPanel extends StatelessWidget {
       return empty;
     }
     return ListView(
+      controller: controller,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
       children: children,
     );

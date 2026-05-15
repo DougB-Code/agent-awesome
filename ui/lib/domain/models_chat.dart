@@ -145,6 +145,7 @@ class ChatMessage {
     required this.text,
     required this.createdAt,
     this.toolActivity,
+    this.modelRef = '',
     this.isPartial = false,
   });
 
@@ -166,6 +167,9 @@ class ChatMessage {
   /// Optional tool activity metadata.
   final ToolActivity? toolActivity;
 
+  /// Runtime-selected provider:model ref for assistant responses.
+  final String modelRef;
+
   /// Whether the message is a streaming partial.
   final bool isPartial;
 
@@ -178,6 +182,7 @@ class ChatMessage {
       text: text ?? this.text,
       createdAt: createdAt,
       toolActivity: toolActivity,
+      modelRef: modelRef,
       isPartial: isPartial ?? this.isPartial,
     );
   }

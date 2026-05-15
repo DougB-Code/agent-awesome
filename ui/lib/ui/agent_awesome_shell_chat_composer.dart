@@ -5,11 +5,17 @@ class _ChatComposer extends StatelessWidget {
   const _ChatComposer({
     required this.controller,
     required this.sending,
+    required this.modelChoices,
+    required this.selectedModelRef,
+    required this.onModelSelected,
     required this.onSubmit,
   });
 
   final TextEditingController controller;
   final bool sending;
+  final List<ModelConfigChoice> modelChoices;
+  final String selectedModelRef;
+  final ValueChanged<String> onModelSelected;
   final VoidCallback onSubmit;
 
   /// Builds the sticky same-thread composer for the chat timeline.
@@ -65,6 +71,18 @@ class _ChatComposer extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              if (modelChoices.length > 1) ...<Widget>[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 9),
+                  child: _ChatModelMenuButton(
+                    choices: modelChoices,
+                    selectedRef: selectedModelRef,
+                    sending: sending,
+                    onSelected: onModelSelected,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: IconButton.filled(
@@ -89,5 +107,140 @@ class _ChatComposer extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// _ChatModelMenuButton lets a chat turn choose one configured runtime model.
+class _ChatModelMenuButton extends StatelessWidget {
+  /// Creates the per-message chat model selector.
+  const _ChatModelMenuButton({
+    required this.choices,
+    required this.selectedRef,
+    required this.sending,
+    required this.onSelected,
+  });
+
+  /// Model choices available through the active runtime profile.
+  final List<ModelConfigChoice> choices;
+
+  /// Provider:model ref selected for the next message.
+  final String selectedRef;
+
+  /// Whether chat input is currently locked by an active run.
+  final bool sending;
+
+  /// Called when the user chooses a different model for future messages.
+  final ValueChanged<String> onSelected;
+
+  /// Builds the compact model picker beside the send button.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final selected = _selectedChoice();
+    return PopupMenuButton<String>(
+      key: const ValueKey<String>('chat-thread-model-picker'),
+      enabled: !sending,
+      tooltip: 'Chat model',
+      color: colors.surface,
+      onSelected: onSelected,
+      itemBuilder: (context) {
+        return <PopupMenuEntry<String>>[
+          for (final choice in choices)
+            PopupMenuItem<String>(
+              value: choice.ref,
+              child: SizedBox(
+                width: 260,
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      choice.ref == selectedRef
+                          ? Icons.check
+                          : Icons.psychology_alt_outlined,
+                      size: 18,
+                      color: choice.ref == selectedRef
+                          ? colors.green
+                          : colors.muted,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            choice.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: colors.ink,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          if (_choiceModelName(choice).isNotEmpty)
+                            Text(
+                              _choiceModelName(choice),
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.muted,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ];
+      },
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 164),
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(Icons.psychology_alt_outlined, size: 18, color: colors.muted),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                selected?.modelId ?? 'Model',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.expand_more, size: 18, color: colors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Returns the currently selected model choice.
+  ModelConfigChoice? _selectedChoice() {
+    for (final choice in choices) {
+      if (choice.ref == selectedRef) {
+        return choice;
+      }
+    }
+    return choices.isEmpty ? null : choices.first;
+  }
+
+  /// Returns a secondary provider-native model label when useful.
+  String _choiceModelName(ModelConfigChoice choice) {
+    final modelName = choice.modelName.trim();
+    if (modelName.isEmpty || modelName == choice.modelId) {
+      return '';
+    }
+    return modelName;
   }
 }

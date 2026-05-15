@@ -2,19 +2,6 @@
 
 ## Priority 1
 
-### Panels - General
-
-- Remove the border card from all right side sections. See backlog, queue, memory.
-
-### Chat Panel - Runtime
-
-- Move Profile to top
-- Make chat model second
-- Move memory to end, allow multiple memory entries. 
-- 'Memory memory' is not an informative name for the memory server. 
-- 'Today loaded' is not a clear message. 
-- Profiles should provide a default model, but chats should be able to switch models mid chat, as other providers allow. UX for this doesn't exist.  
-
 ### Panels - Backlog
 
 - Why does the queue have a topics and the stream has a different kind of filter? Should both filters be on each panel?

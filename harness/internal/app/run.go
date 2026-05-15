@@ -90,7 +90,7 @@ func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCf
 		return nil, err
 	}
 
-	llm, err := modelFactory.Create(ctx, selection)
+	llm, err := modelFactory.CreateRouter(ctx, modelCfg, selection)
 	if err != nil {
 		return nil, err
 	}

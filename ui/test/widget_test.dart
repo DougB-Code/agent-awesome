@@ -534,8 +534,32 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final controller = _readyController();
-    controller.runtimeProfile = _settingsProfile();
+    controller.runtimeProfile = _chatRuntimeProfile();
     controller.runtimeProfilePath = '/tmp/personal.json';
+    controller.availableModelConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/model.yaml',
+        kind: ConfigFileKind.model,
+        assigned: true,
+        displayName: 'Configured Model',
+        modelChoices: <ModelConfigChoice>[
+          ModelConfigChoice(
+            providerId: 'openai',
+            providerName: 'OpenAI',
+            modelId: 'gpt-5-mini',
+            modelName: 'GPT-5 Mini',
+            isDefault: true,
+          ),
+          ModelConfigChoice(
+            providerId: 'openai',
+            providerName: 'OpenAI',
+            modelId: 'gpt-5-pro',
+            modelName: 'GPT-5 Pro',
+            isDefault: false,
+          ),
+        ],
+      ),
+    ];
     controller.availableProfiles = const <RuntimeProfileFileEntry>[
       RuntimeProfileFileEntry(
         path: '/tmp/personal.json',
@@ -568,6 +592,12 @@ void main() {
         name: 'Memory',
         url: 'http://127.0.0.1:8070/mcp',
         state: ConnectionStateKind.connected,
+        message: 'Today loaded',
+      ),
+      EndpointStatus(
+        name: 'Project Memory',
+        url: 'http://127.0.0.1:8071/mcp',
+        state: ConnectionStateKind.connected,
         message: 'Connected',
       ),
     ];
@@ -575,6 +605,12 @@ void main() {
       ServiceProcessStatus(
         name: 'Memory',
         url: 'http://127.0.0.1:8090/healthz',
+        state: ConnectionStateKind.connected,
+        message: 'Started locally',
+      ),
+      ServiceProcessStatus(
+        name: 'Project Memory',
+        url: 'http://127.0.0.1:8091/healthz',
         state: ConnectionStateKind.connected,
         message: 'Started locally',
       ),
@@ -722,11 +758,25 @@ void main() {
     await tester.tap(find.byTooltip('Runtime'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Chat model'), findsOneWidget);
+    expect(find.text('Selected model'), findsOneWidget);
     expect(find.text('OpenAI / gpt-5-mini - GPT-5 Mini'), findsOneWidget);
+    expect(find.text('Selected for this chat'), findsNothing);
+    expect(find.text('Available model'), findsOneWidget);
+    expect(find.text('Can select before sending'), findsNothing);
+    expect(find.text('OpenAI / gpt-5-pro - GPT-5 Pro'), findsOneWidget);
     expect(find.text('Memory'), findsWidgets);
+    expect(find.text('Project Memory'), findsOneWidget);
+    expect(find.textContaining('Today loaded'), findsNothing);
     expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Personal'), findsWidgets);
+    expect(
+      tester.getTopLeft(find.text('Profile')).dy,
+      lessThan(tester.getTopLeft(find.text('Selected model')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Selected model')).dy,
+      lessThan(tester.getTopLeft(find.text('Project Memory')).dy),
+    );
     expect(find.text('Local Harness'), findsNothing);
     expect(find.text('Agent API'), findsNothing);
     expect(find.text('Local processes'), findsNothing);
@@ -734,6 +784,14 @@ void main() {
 
     expect(find.byTooltip('Copy message'), findsOneWidget);
     expect(find.text('Message Agent Awesome in this chat...'), findsOneWidget);
+    expect(find.byTooltip('Chat model'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('chat-thread-model-picker')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI / gpt-5-pro'));
+    await tester.pumpAndSettle();
+    expect(controller.activeChatModelRef, 'openai:gpt-5-pro');
     expect(
       find.text('Command current screen, Ctrl/Shift+Enter for chat...'),
       findsOneWidget,
@@ -798,6 +856,49 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('opens chat timeline at the latest message', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+    controller.selectedSessionId = 'session-live';
+    controller.sessions = <ChatSession>[
+      ChatSession(
+        id: 'session-live',
+        title: 'Live chat',
+        updatedAt: DateTime(2026, 5, 14, 20),
+      ),
+    ];
+    controller.messages = <ChatMessage>[
+      for (var index = 0; index < 30; index++)
+        ChatMessage(
+          id: 'message-$index',
+          role: ChatRole.assistant,
+          author: 'Agent Awesome',
+          text: 'Timeline message $index',
+          createdAt: DateTime(2026, 5, 14, 20, index % 60),
+        ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+
+    final timeline = tester.widget<ListView>(
+      find.descendant(
+        of: find.byType(ChatPanel),
+        matching: find.byType(ListView),
+      ),
+    );
+    final scrollController = timeline.controller!;
+
+    expect(scrollController.offset, scrollController.position.maxScrollExtent);
+    expect(find.text('Timeline message 29'), findsOneWidget);
   });
 
   testWidgets('keeps chat navigation unlocked without a configured model', (
@@ -1894,6 +1995,48 @@ RuntimeProfile _settingsProfile() {
       actor: 'agent:test',
       readDomains: <String>['memory'],
       writeDomains: <String>['memory'],
+      defaultWriteDomain: 'memory',
+      allowedSensitivities: <String>['public', 'internal', 'private'],
+    ),
+  );
+}
+
+RuntimeProfile _chatRuntimeProfile() {
+  return _settingsProfile().copyWith(
+    memoryDomains: const <McpServerRuntime>[
+      McpServerRuntime(
+        id: 'memory',
+        label: 'Memory',
+        kind: 'memory',
+        endpoint: 'http://127.0.0.1:1/mcp',
+        healthUrl: 'http://127.0.0.1:1/healthz',
+        workingDirectory: '/tmp/memory',
+        packagePath: './cmd/memoryd',
+        dbPath: '/tmp/memory.db',
+        dataDir: '/tmp/memory-files',
+        arguments: <String>[],
+        autoStart: false,
+        enabled: true,
+      ),
+      McpServerRuntime(
+        id: 'project',
+        label: 'Project Memory',
+        kind: 'memory',
+        endpoint: 'http://127.0.0.1:3/mcp',
+        healthUrl: 'http://127.0.0.1:3/healthz',
+        workingDirectory: '/tmp/project-memory',
+        packagePath: './cmd/memoryd',
+        dbPath: '/tmp/project-memory.db',
+        dataDir: '/tmp/project-memory-files',
+        arguments: <String>[],
+        autoStart: false,
+        enabled: true,
+      ),
+    ],
+    agentMemory: const AgentMemoryRuntime(
+      actor: 'agent:test',
+      readDomains: <String>['memory', 'project'],
+      writeDomains: <String>['memory', 'project'],
       defaultWriteDomain: 'memory',
       allowedSensitivities: <String>['public', 'internal', 'private'],
     ),

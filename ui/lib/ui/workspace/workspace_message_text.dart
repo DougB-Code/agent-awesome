@@ -38,6 +38,11 @@ class _MessageText extends StatelessWidget {
                             text: '  $time',
                             style: TextStyle(color: colors.muted),
                           ),
+                          if (message.modelRef.trim().isNotEmpty)
+                            TextSpan(
+                              text: '  ${message.modelRef}',
+                              style: TextStyle(color: colors.muted),
+                            ),
                         ],
                       ),
                     ),

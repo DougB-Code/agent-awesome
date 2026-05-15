@@ -47,11 +47,16 @@ class _ChatConversationContent extends StatefulWidget {
 
 class _ChatConversationContentState extends State<_ChatConversationContent> {
   final TextEditingController _replyController = TextEditingController();
+  final ScrollController _timelineController = ScrollController();
+  String _lastScrolledSessionId = '';
+  int _lastScrolledMessageCount = -1;
+  bool _scrollScheduled = false;
 
   /// Cleans up the persistent chat composer.
   @override
   void dispose() {
     _replyController.dispose();
+    _timelineController.dispose();
     super.dispose();
   }
 
@@ -68,10 +73,12 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
           label: 'Agent Awesome is responding',
         ),
     ];
+    _scheduleScrollToBottom(messages.length);
     return Column(
       children: <Widget>[
         Expanded(
           child: ChatPanel(
+            controller: _timelineController,
             empty: PanelEmptyState(query: query),
             children: timelineChildren,
           ),
@@ -80,6 +87,9 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
         _ChatComposer(
           controller: _replyController,
           sending: widget.controller.sending,
+          modelChoices: widget.controller.chatModelChoices,
+          selectedModelRef: widget.controller.activeChatModelRef,
+          onModelSelected: widget.controller.selectChatModelRef,
           onSubmit: _submitReply,
         ),
       ],
@@ -90,6 +100,30 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
   @override
   Widget build(BuildContext context) {
     return _buildConversationContent(widget.query);
+  }
+
+  /// Schedules a bottom jump when a chat is opened or receives new messages.
+  void _scheduleScrollToBottom(int messageCount) {
+    if (messageCount == 0) {
+      return;
+    }
+    final sessionId = widget.controller.selectedSessionId ?? '';
+    final shouldScroll =
+        sessionId != _lastScrolledSessionId ||
+        messageCount != _lastScrolledMessageCount;
+    if (!shouldScroll || _scrollScheduled) {
+      return;
+    }
+    _lastScrolledSessionId = sessionId;
+    _lastScrolledMessageCount = messageCount;
+    _scrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollScheduled = false;
+      if (!mounted || !_timelineController.hasClients) {
+        return;
+      }
+      _timelineController.jumpTo(_timelineController.position.maxScrollExtent);
+    });
   }
 
   /// Sends the composer text into the selected chat thread.

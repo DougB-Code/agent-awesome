@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +18,13 @@ import (
 )
 
 func TestOpenAICompatibleGenerateBuildsChatRequest(t *testing.T) {
-	var decoded openAIChatRequest
+	var decoded struct {
+		Model    string `json:"model"`
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got, want := r.Header.Get("authorization"), "Bearer test-key"; got != want {
 			t.Fatalf("authorization header = %q, want %q", got, want)
@@ -59,17 +64,28 @@ func TestOpenAICompatibleGenerateBuildsChatRequest(t *testing.T) {
 	if len(decoded.Messages) != 2 {
 		t.Fatalf("request messages len = %d, want 2", len(decoded.Messages))
 	}
-	if got, want := decoded.Messages[0], (openAIMessage{Role: "system", Content: "be terse"}); !reflect.DeepEqual(got, want) {
-		t.Fatalf("system message = %#v, want %#v", got, want)
+	if got, want := decoded.Messages[0].Role, "system"; got != want {
+		t.Fatalf("system role = %q, want %q", got, want)
 	}
-	if got, want := decoded.Messages[1], (openAIMessage{Role: "user", Content: "ping"}); !reflect.DeepEqual(got, want) {
-		t.Fatalf("user message = %#v, want %#v", got, want)
+	if got, want := decoded.Messages[0].Content, "be terse"; got != want {
+		t.Fatalf("system content = %q, want %q", got, want)
+	}
+	if got, want := decoded.Messages[1].Role, "user"; got != want {
+		t.Fatalf("user role = %q, want %q", got, want)
+	}
+	if got, want := decoded.Messages[1].Content, "ping"; got != want {
+		t.Fatalf("user content = %q, want %q", got, want)
 	}
 }
 
 func TestOpenAICompatibleNon2xxErrorIsSanitized(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, `{"error":"secret account detail"}`, http.StatusTooManyRequests)
+		if got := r.Header.Get("authorization"); got != "" {
+			t.Fatalf("authorization header = %q, want empty for anonymous loopback", got)
+		}
+		w.Header().Set("content-type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"secret account detail","type":"rate_limit_error","code":"rate_limit","param":""}}`))
 	}))
 	defer server.Close()
 
@@ -201,7 +217,16 @@ func (f *recordingHTTPClientFactory) NewHTTPClient() *http.Client {
 }
 
 func TestOpenAICompatibleSendsToolsAndParsesToolCalls(t *testing.T) {
-	var decoded openAIChatRequest
+	var decoded struct {
+		Tools []struct {
+			Type     string `json:"type"`
+			Function struct {
+				Name        string         `json:"name"`
+				Description string         `json:"description"`
+				Parameters  map[string]any `json:"parameters"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
 			t.Fatalf("Decode() error = %v", err)
@@ -238,8 +263,11 @@ func TestOpenAICompatibleSendsToolsAndParsesToolCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate() error = %v", err)
 	}
-	if len(decoded.Tools) != 1 || decoded.Tools[0].Function.Name != "local_exec" {
+	if len(decoded.Tools) != 1 || decoded.Tools[0].Type != "function" || decoded.Tools[0].Function.Name != "local_exec" {
 		t.Fatalf("request tools = %#v, want local_exec", decoded.Tools)
+	}
+	if got, want := decoded.Tools[0].Function.Parameters["type"], "object"; got != want {
+		t.Fatalf("tool parameter type = %#v, want %q", got, want)
 	}
 	if got.Content == nil || len(got.Content.Parts) != 1 || got.Content.Parts[0].FunctionCall == nil {
 		t.Fatalf("generate() content = %#v, want function call", got.Content)
@@ -247,6 +275,73 @@ func TestOpenAICompatibleSendsToolsAndParsesToolCalls(t *testing.T) {
 	call := got.Content.Parts[0].FunctionCall
 	if call.ID != "call-1" || call.Name != "local_exec" || call.Args["command"] != "git_status" {
 		t.Fatalf("function call = %#v, want local_exec git_status", call)
+	}
+}
+
+func TestOpenAICompatibleNormalizesGenAISchemaTools(t *testing.T) {
+	var parameters map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var decoded struct {
+			Tools []struct {
+				Function struct {
+					Parameters map[string]any `json:"parameters"`
+				} `json:"function"`
+			} `json:"tools"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+			t.Fatalf("Decode() error = %v", err)
+		}
+		if len(decoded.Tools) == 1 {
+			parameters = decoded.Tools[0].Function.Parameters
+		}
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"pong"}}]}`))
+	}))
+	defer server.Close()
+
+	model := &openAICompatibleModel{
+		url:      server.URL,
+		client:   server.Client(),
+		name:     "test-model",
+		provider: "test-openai",
+	}
+	_, err := model.generate(context.Background(), &llmapi.LLMRequest{
+		Config: &genai.GenerateContentConfig{
+			Tools: []*genai.Tool{
+				{
+					FunctionDeclarations: []*genai.FunctionDeclaration{
+						{
+							Name: "load_memory",
+							Parameters: &genai.Schema{
+								Type: genai.TypeObject,
+								Properties: map[string]*genai.Schema{
+									"query": &genai.Schema{Type: genai.TypeString},
+								},
+								Required: []string{"query"},
+							},
+						},
+					},
+				},
+			},
+		},
+		Contents: []*genai.Content{genai.NewContentFromText("How are you?", genai.RoleUser)},
+	})
+	if err != nil {
+		t.Fatalf("generate() error = %v", err)
+	}
+	if got, want := parameters["type"], "object"; got != want {
+		t.Fatalf("parameters type = %#v, want %q", got, want)
+	}
+	properties, ok := parameters["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %#v, want object", parameters["properties"])
+	}
+	query, ok := properties["query"].(map[string]any)
+	if !ok {
+		t.Fatalf("query property = %#v, want object", properties["query"])
+	}
+	if got, want := query["type"], "string"; got != want {
+		t.Fatalf("query type = %#v, want %q", got, want)
 	}
 }
 
@@ -270,9 +365,29 @@ func TestOpenAIMessagesSerializesToolResponses(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openAIMessages() error = %v", err)
 	}
-	want := []openAIMessage{{Role: "tool", ToolCallID: "call-1", Content: `{"stdout":"ok"}`}}
-	if !reflect.DeepEqual(messages, want) {
-		t.Fatalf("openAIMessages() = %#v, want %#v", messages, want)
+	data, err := json.Marshal(messages)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	var decoded []struct {
+		Role       string `json:"role"`
+		ToolCallID string `json:"tool_call_id"`
+		Content    string `json:"content"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if len(decoded) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(decoded))
+	}
+	if got, want := decoded[0].Role, "tool"; got != want {
+		t.Fatalf("role = %q, want %q", got, want)
+	}
+	if got, want := decoded[0].ToolCallID, "call-1"; got != want {
+		t.Fatalf("tool_call_id = %q, want %q", got, want)
+	}
+	if got, want := decoded[0].Content, `{"stdout":"ok"}`; got != want {
+		t.Fatalf("content = %q, want %q", got, want)
 	}
 }
 
@@ -287,7 +402,7 @@ func TestOpenAICompatibleRejectsStreaming(t *testing.T) {
 	t.Fatalf("GenerateContent() yielded nothing")
 }
 
-func TestOpenAICompatibleRejectsUnsupportedContentParts(t *testing.T) {
+func TestOpenAIMessagesSerializesToolCalls(t *testing.T) {
 	messages, err := openAIMessages(&llmapi.LLMRequest{
 		Contents: []*genai.Content{
 			{
@@ -301,8 +416,36 @@ func TestOpenAICompatibleRejectsUnsupportedContentParts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("openAIMessages() error = %v", err)
 	}
-	if len(messages) != 1 || len(messages[0].ToolCalls) != 1 {
+	if len(messages) != 1 {
 		t.Fatalf("openAIMessages() = %#v, want assistant tool call", messages)
+	}
+	data, err := json.Marshal(messages)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	var decoded []struct {
+		Role      string `json:"role"`
+		ToolCalls []struct {
+			ID       string `json:"id"`
+			Type     string `json:"type"`
+			Function struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			} `json:"function"`
+		} `json:"tool_calls"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal() error = %v", err)
+	}
+	if len(decoded) != 1 || decoded[0].Role != "assistant" || len(decoded[0].ToolCalls) != 1 {
+		t.Fatalf("messages = %#v, want assistant tool call", decoded)
+	}
+	toolCall := decoded[0].ToolCalls[0]
+	if toolCall.ID != "call-1" || toolCall.Type != "function" || toolCall.Function.Name != "tool" {
+		t.Fatalf("tool call = %#v, want assistant tool call", toolCall)
+	}
+	if got, want := toolCall.Function.Arguments, `{"city":"Toronto"}`; got != want {
+		t.Fatalf("tool call arguments = %q, want %q", got, want)
 	}
 }
 

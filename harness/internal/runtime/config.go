@@ -28,10 +28,13 @@ import (
 // installs any configured tools and toolsets on that agent.
 func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools toolbundle.Bundle) (*launcher.Config, error) {
 	runtimeAgent, err := llmagent.New(llmagent.Config{
-		Name:                def.Name,
-		Model:               llm,
-		Description:         def.Description,
-		Instruction:         def.Instruction,
+		Name:        def.Name,
+		Model:       llm,
+		Description: def.Description,
+		Instruction: def.Instruction,
+		BeforeModelCallbacks: []llmagent.BeforeModelCallback{
+			modelSelectionCallback(),
+		},
 		BeforeToolCallbacks: callbacks.TaskInvariantCallbacks(),
 		Tools:               tools.Tools,
 		Toolsets:            tools.Toolsets,

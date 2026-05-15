@@ -2,11 +2,10 @@
 package openai
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"iter"
 	"net"
 	"net/http"
@@ -17,6 +16,9 @@ import (
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/model/adapter"
 	"agentawesome/internal/model/protocol"
+	openaisdk "github.com/openai/openai-go"
+	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/shared"
 	llmapi "google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
@@ -157,59 +159,19 @@ func (m *openAICompatibleModel) GenerateContent(ctx context.Context, req *llmapi
 // generate sends one chat-completions request and converts the first choice
 // back into runtime content.
 func (m *openAICompatibleModel) generate(ctx context.Context, req *llmapi.LLMRequest) (*llmapi.LLMResponse, error) {
-	messages, err := openAIMessages(req)
+	params, err := m.chatCompletionParams(req)
 	if err != nil {
 		return nil, err
 	}
-	body := openAIChatRequest{
-		Model:    m.modelName(req),
-		Messages: messages,
-		Stream:   false,
-		Tools:    openAITools(req),
-	}
-	data, err := json.Marshal(body)
+	client := m.openAIClient()
+	completion, err := client.Chat.Completions.New(ctx, params)
 	if err != nil {
-		return nil, err
+		return nil, m.providerError(string(params.Model), err)
 	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, m.url, bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("content-type", "application/json")
-	if m.apiKey != "" {
-		httpReq.Header.Set("authorization", "Bearer "+m.apiKey)
-	}
-
-	resp, err := m.client.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, adapter.NewProviderErrorWithDetail(
-			m.provider,
-			body.Model,
-			resp.StatusCode,
-			resp.Status,
-			adapter.ProviderErrorDetail(respBody),
-		)
-	}
-
-	var decoded openAIChatResponse
-	if err := json.Unmarshal(respBody, &decoded); err != nil {
-		return nil, err
-	}
-	if len(decoded.Choices) == 0 {
+	if len(completion.Choices) == 0 {
 		return nil, fmt.Errorf("empty response")
 	}
-	message := decoded.Choices[0].Message
-	content, err := openAIResponseContent(message)
+	content, err := openAIResponseContent(completion.Choices[0].Message)
 	if err != nil {
 		return nil, err
 	}
@@ -217,6 +179,73 @@ func (m *openAICompatibleModel) generate(ctx context.Context, req *llmapi.LLMReq
 		Content:      content,
 		TurnComplete: true,
 	}, nil
+}
+
+// chatCompletionParams converts an ADK request into official OpenAI SDK params.
+func (m *openAICompatibleModel) chatCompletionParams(req *llmapi.LLMRequest) (openaisdk.ChatCompletionNewParams, error) {
+	messages, err := openAIMessages(req)
+	if err != nil {
+		return openaisdk.ChatCompletionNewParams{}, err
+	}
+	tools, err := openAITools(req)
+	if err != nil {
+		return openaisdk.ChatCompletionNewParams{}, err
+	}
+	return openaisdk.ChatCompletionNewParams{
+		Model:    openaisdk.ChatModel(m.modelName(req)),
+		Messages: messages,
+		Tools:    tools,
+	}, nil
+}
+
+// openAIClient builds an official SDK client with configured adapter options.
+func (m *openAICompatibleModel) openAIClient() openaisdk.Client {
+	options := []option.RequestOption{
+		option.WithBaseURL(openAIBaseURL(m.url)),
+		option.WithHTTPClient(m.client),
+	}
+	if m.apiKey == "" {
+		options = append(options, option.WithHeaderDel("authorization"))
+	} else {
+		options = append(options, option.WithAPIKey(m.apiKey))
+	}
+	return openaisdk.NewClient(options...)
+}
+
+// providerError converts SDK API errors into sanitized provider errors.
+func (m *openAICompatibleModel) providerError(modelName string, err error) error {
+	var apiErr *openaisdk.Error
+	if !errors.As(err, &apiErr) {
+		return err
+	}
+	status := http.StatusText(apiErr.StatusCode)
+	if apiErr.Response != nil && apiErr.Response.Status != "" {
+		status = apiErr.Response.Status
+	}
+	detailBody, _ := json.Marshal(map[string]any{
+		"error": map[string]any{
+			"message": apiErr.Message,
+			"type":    apiErr.Type,
+			"code":    apiErr.Code,
+			"param":   apiErr.Param,
+		},
+	})
+	return adapter.NewProviderErrorWithDetail(
+		m.provider,
+		modelName,
+		apiErr.StatusCode,
+		status,
+		adapter.ProviderErrorDetail(detailBody),
+	)
+}
+
+// openAIBaseURL converts configured chat-completions URLs to SDK base URLs.
+func openAIBaseURL(rawURL string) string {
+	trimmed := strings.TrimRight(strings.TrimSpace(rawURL), "/")
+	if strings.HasSuffix(trimmed, "/chat/completions") {
+		return strings.TrimSuffix(trimmed, "/chat/completions")
+	}
+	return trimmed
 }
 
 // modelName lets a request override the configured model name when supplied.
@@ -229,19 +258,19 @@ func (m *openAICompatibleModel) modelName(req *llmapi.LLMRequest) string {
 
 // openAIMessages converts runtime system/user/model/tool content into
 // OpenAI-compatible chat messages.
-func openAIMessages(req *llmapi.LLMRequest) ([]openAIMessage, error) {
+func openAIMessages(req *llmapi.LLMRequest) ([]openaisdk.ChatCompletionMessageParamUnion, error) {
 	if req == nil {
 		return nil, fmt.Errorf("request is nil")
 	}
 
-	messages := make([]openAIMessage, 0, len(req.Contents)+1)
+	messages := make([]openaisdk.ChatCompletionMessageParamUnion, 0, len(req.Contents)+1)
 	if req.Config != nil && req.Config.SystemInstruction != nil {
 		text, err := protocol.ContentText(req.Config.SystemInstruction)
 		if err != nil {
 			return nil, fmt.Errorf("system instruction: %w", err)
 		}
 		if text := strings.TrimSpace(text); text != "" {
-			messages = append(messages, openAIMessage{Role: "system", Content: text})
+			messages = append(messages, openaisdk.SystemMessage(text))
 		}
 	}
 	for _, content := range req.Contents {
@@ -262,10 +291,10 @@ func openAIMessages(req *llmapi.LLMRequest) ([]openAIMessage, error) {
 
 // openAIContentMessages converts a single runtime content item into one or more
 // OpenAI-compatible messages.
-func openAIContentMessages(content *genai.Content) ([]openAIMessage, error) {
+func openAIContentMessages(content *genai.Content) ([]openaisdk.ChatCompletionMessageParamUnion, error) {
 	textParts := make([]string, 0, len(content.Parts))
-	toolCalls := make([]openAIToolCall, 0)
-	toolResponses := make([]openAIMessage, 0)
+	toolCalls := make([]openaisdk.ChatCompletionMessageToolCallParam, 0)
+	toolResponses := make([]openaisdk.ChatCompletionMessageParamUnion, 0)
 	for i, part := range content.Parts {
 		if part == nil {
 			continue
@@ -281,10 +310,9 @@ func openAIContentMessages(content *genai.Content) ([]openAIMessage, error) {
 			if err != nil {
 				return nil, fmt.Errorf("marshal function call %q arguments: %w", part.FunctionCall.Name, err)
 			}
-			toolCalls = append(toolCalls, openAIToolCall{
-				ID:   part.FunctionCall.ID,
-				Type: "function",
-				Function: openAIFunctionCall{
+			toolCalls = append(toolCalls, openaisdk.ChatCompletionMessageToolCallParam{
+				ID: part.FunctionCall.ID,
+				Function: openaisdk.ChatCompletionMessageToolCallFunctionParam{
 					Name:      part.FunctionCall.Name,
 					Arguments: string(arguments),
 				},
@@ -295,76 +323,85 @@ func openAIContentMessages(content *genai.Content) ([]openAIMessage, error) {
 			if err != nil {
 				return nil, fmt.Errorf("marshal function response %q: %w", part.FunctionResponse.Name, err)
 			}
-			toolResponses = append(toolResponses, openAIMessage{
-				Role:       "tool",
-				ToolCallID: part.FunctionResponse.ID,
-				Content:    string(content),
-			})
+			toolResponses = append(
+				toolResponses,
+				openaisdk.ToolMessage(string(content), part.FunctionResponse.ID),
+			)
 		}
 	}
 
 	text := strings.Join(textParts, "\n")
-	messages := make([]openAIMessage, 0, 1+len(toolResponses))
+	messages := make([]openaisdk.ChatCompletionMessageParamUnion, 0, 1+len(toolResponses))
 	// OpenAI represents model tool calls on an assistant message, followed by
 	// separate tool-role messages for the tool results.
 	if len(toolCalls) > 0 {
-		messages = append(messages, openAIMessage{
-			Role:      "assistant",
-			Content:   text,
+		assistant := openaisdk.ChatCompletionAssistantMessageParam{
 			ToolCalls: toolCalls,
+		}
+		if strings.TrimSpace(text) != "" {
+			assistant.Content.OfString = openaisdk.String(text)
+		}
+		messages = append(messages, openaisdk.ChatCompletionMessageParamUnion{
+			OfAssistant: &assistant,
 		})
 	} else if strings.TrimSpace(text) != "" {
-		role, err := openAIRole(content.Role)
+		message, err := openAITextMessage(content.Role, text)
 		if err != nil {
 			return nil, err
 		}
-		messages = append(messages, openAIMessage{Role: role, Content: text})
+		messages = append(messages, message)
 	}
 	messages = append(messages, toolResponses...)
 	return messages, nil
 }
 
-// openAIRole maps runtime roles into OpenAI-compatible chat roles.
-func openAIRole(role string) (string, error) {
+// openAITextMessage maps runtime roles into OpenAI SDK text message params.
+func openAITextMessage(role string, text string) (openaisdk.ChatCompletionMessageParamUnion, error) {
 	switch role {
 	case "", "user":
-		return "user", nil
+		return openaisdk.UserMessage(text), nil
 	case "model", "assistant":
-		return "assistant", nil
+		return openaisdk.AssistantMessage(text), nil
 	case "system":
-		return "system", nil
+		return openaisdk.SystemMessage(text), nil
 	default:
-		return "", fmt.Errorf("unsupported OpenAI-compatible role %q", role)
+		return openaisdk.ChatCompletionMessageParamUnion{}, fmt.Errorf("unsupported OpenAI-compatible role %q", role)
 	}
 }
 
 // openAITools converts runtime function declarations into OpenAI tool
 // declarations.
-func openAITools(req *llmapi.LLMRequest) []openAITool {
+func openAITools(req *llmapi.LLMRequest) ([]openaisdk.ChatCompletionToolParam, error) {
 	declarations := protocol.FunctionDeclarations(req)
 	if len(declarations) == 0 {
-		return nil
+		return nil, nil
 	}
-	tools := make([]openAITool, 0, len(declarations))
+	tools := make([]openaisdk.ChatCompletionToolParam, 0, len(declarations))
 	for _, decl := range declarations {
 		if decl == nil {
 			continue
 		}
-		tools = append(tools, openAITool{
-			Type: "function",
-			Function: openAIFunctionDeclaration{
-				Name:        decl.Name,
-				Description: decl.Description,
-				Parameters:  protocol.DeclarationParameters(decl),
-			},
+		parameters, err := openAIParametersSchema(protocol.DeclarationParameters(decl))
+		if err != nil {
+			return nil, fmt.Errorf("tool %q parameters: %w", decl.Name, err)
+		}
+		function := shared.FunctionDefinitionParam{
+			Name:       decl.Name,
+			Parameters: parameters,
+		}
+		if strings.TrimSpace(decl.Description) != "" {
+			function.Description = openaisdk.String(decl.Description)
+		}
+		tools = append(tools, openaisdk.ChatCompletionToolParam{
+			Function: function,
 		})
 	}
-	return tools
+	return tools, nil
 }
 
 // openAIResponseContent converts assistant text and tool calls from an
 // OpenAI-compatible response into runtime content parts.
-func openAIResponseContent(message openAIMessage) (*genai.Content, error) {
+func openAIResponseContent(message openaisdk.ChatCompletionMessage) (*genai.Content, error) {
 	parts := make([]*genai.Part, 0, 1+len(message.ToolCalls))
 	if strings.TrimSpace(message.Content) != "" {
 		parts = append(parts, genai.NewPartFromText(message.Content))
@@ -384,46 +421,4 @@ func openAIResponseContent(message openAIMessage) (*genai.Content, error) {
 		return nil, fmt.Errorf("empty response content")
 	}
 	return &genai.Content{Role: "model", Parts: parts}, nil
-}
-
-type openAIChatRequest struct {
-	Model    string          `json:"model"`
-	Messages []openAIMessage `json:"messages"`
-	Stream   bool            `json:"stream"`
-	Tools    []openAITool    `json:"tools,omitempty"`
-}
-
-type openAIMessage struct {
-	Role       string           `json:"role"`
-	Content    string           `json:"content,omitempty"`
-	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
-	ToolCallID string           `json:"tool_call_id,omitempty"`
-}
-
-type openAIChatResponse struct {
-	Choices []struct {
-		Message openAIMessage `json:"message"`
-	} `json:"choices"`
-}
-
-type openAITool struct {
-	Type     string                    `json:"type"`
-	Function openAIFunctionDeclaration `json:"function"`
-}
-
-type openAIFunctionDeclaration struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Parameters  any    `json:"parameters,omitempty"`
-}
-
-type openAIToolCall struct {
-	ID       string             `json:"id,omitempty"`
-	Type     string             `json:"type"`
-	Function openAIFunctionCall `json:"function"`
-}
-
-type openAIFunctionCall struct {
-	Name      string `json:"name"`
-	Arguments string `json:"arguments"`
 }

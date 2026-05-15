@@ -139,6 +139,7 @@ void main() {
         'id': 'event-1',
         'author': 'assistant',
         'partial': true,
+        'modelVersion': 'openai:gpt-mini',
         'content': <String, dynamic>{
           'parts': <Map<String, dynamic>>[
             <String, dynamic>{'text': 'Hello'},
@@ -149,6 +150,26 @@ void main() {
       expect(event.id, 'event-1');
       expect(event.text, 'Hello');
       expect(event.partial, isTrue);
+      expect(event.modelRef, 'openai:gpt-mini');
+    });
+
+    test('parses routed model refs from state delta', () {
+      final event = parseAssistantEvent(<String, dynamic>{
+        'id': 'event-user-route',
+        'author': 'user',
+        'actions': <String, dynamic>{
+          'stateDelta': <String, dynamic>{
+            runtimeModelRefStateKey: 'openai:gpt-5-pro',
+          },
+        },
+        'content': <String, dynamic>{
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{'text': 'Use the stronger model.'},
+          ],
+        },
+      });
+
+      expect(event.modelRef, 'openai:gpt-5-pro');
     });
 
     test('deletes sessions through the assistant endpoint', () async {
@@ -191,6 +212,8 @@ void main() {
           expect(request.url.path, '/run_sse');
           final body = jsonDecode(request.body) as Map<String, dynamic>;
           expect(body['streaming'], isFalse);
+          final stateDelta = body['stateDelta'] as Map<String, dynamic>;
+          expect(stateDelta[runtimeModelRefStateKey], 'openai:gpt-5-pro');
           return http.Response(
             'data: {"id":"event-1","author":"assistant","content":{"parts":[{"text":"ok"}]}}\n\n',
             200,
@@ -202,7 +225,11 @@ void main() {
       );
 
       final events = await client
-          .sendMessage(sessionId: 'session-1', text: 'hello')
+          .sendMessage(
+            sessionId: 'session-1',
+            text: 'hello',
+            modelRef: 'openai:gpt-5-pro',
+          )
           .toList();
 
       expect(events.single.text, 'ok');

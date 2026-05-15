@@ -4,10 +4,12 @@ library;
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
 import 'package:agentawesome_ui/app/chat_history.dart';
+import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
 import 'package:agentawesome_ui/app/process_supervisor.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/clients/assistant_client.dart';
+import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -120,6 +122,69 @@ void main() {
       expect(historyStore.saved.single.sessionId, 'stale-session');
     },
   );
+
+  test('selectSession restores the last routed chat model', () async {
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      assistantClient: _SessionEventsAssistantClient(
+        events: <AssistantEvent>[
+          const AssistantEvent(
+            id: 'user-1',
+            author: 'user',
+            text: 'Use the mini model.',
+            partial: false,
+            modelRef: 'openai:gpt-5-mini',
+          ),
+          const AssistantEvent(
+            id: 'assistant-1',
+            author: 'agent_awesome',
+            text: 'Done.',
+            partial: false,
+            modelRef: 'openai:gpt-5-pro',
+          ),
+        ],
+      ),
+    );
+    controller.runtimeProfile = _testProfile();
+    controller.runtimeProfilePath = '/tmp/personal.json';
+    controller.availableModelConfigs = _testModelConfigs();
+
+    await controller.selectSession('session-live');
+
+    expect(controller.activeChatModelRef, 'openai:gpt-5-pro');
+    expect(controller.messages.last.modelRef, 'openai:gpt-5-pro');
+  });
+
+  test('selectSession restores missing assistant route labels', () async {
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      assistantClient: _SessionEventsAssistantClient(
+        events: <AssistantEvent>[
+          const AssistantEvent(
+            id: 'user-1',
+            author: 'user',
+            text: 'Use the pro model.',
+            partial: false,
+            modelRef: 'openai:gpt-5-pro',
+          ),
+          const AssistantEvent(
+            id: 'assistant-1',
+            author: 'agent_awesome',
+            text: 'Done.',
+            partial: false,
+          ),
+        ],
+      ),
+    );
+    controller.runtimeProfile = _testProfile();
+    controller.runtimeProfilePath = '/tmp/personal.json';
+    controller.availableModelConfigs = _testModelConfigs();
+
+    await controller.selectSession('session-live');
+
+    expect(controller.activeChatModelRef, 'openai:gpt-5-pro');
+    expect(controller.messages.last.modelRef, 'openai:gpt-5-pro');
+  });
 }
 
 /// Tracking supervisor records whether service shutdown was requested.
@@ -159,6 +224,22 @@ class _RejectingAssistantClient extends AssistantClient {
   }
 }
 
+/// Session events client returns seeded events for controller tests.
+class _SessionEventsAssistantClient extends AssistantClient {
+  /// Creates a client backed by in-memory session events.
+  _SessionEventsAssistantClient({required this.events})
+    : super(baseUrl: 'http://127.0.0.1:1/api', appName: 'test', userId: 'user');
+
+  /// Events returned for every loaded session.
+  final List<AssistantEvent> events;
+
+  /// Loads seeded session events.
+  @override
+  Future<List<AssistantEvent>> loadSessionEvents(String sessionId) async {
+    return events;
+  }
+}
+
 /// Memory-backed chat history store keeps controller tests away from disk.
 class _MemoryChatHistoryStore extends ChatHistoryStore {
   /// Creates an in-memory store seeded with known entries.
@@ -179,6 +260,34 @@ class _MemoryChatHistoryStore extends ChatHistoryStore {
   Future<void> save(List<ChatHistoryEntry> entries) async {
     saved = entries;
   }
+}
+
+/// Returns the model choices used by chat restoration tests.
+List<ConfigFileEntry> _testModelConfigs() {
+  return const <ConfigFileEntry>[
+    ConfigFileEntry(
+      path: '/tmp/model.yaml',
+      kind: ConfigFileKind.model,
+      assigned: true,
+      displayName: 'Model',
+      modelChoices: <ModelConfigChoice>[
+        ModelConfigChoice(
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          modelId: 'gpt-5-mini',
+          modelName: 'GPT-5 Mini',
+          isDefault: true,
+        ),
+        ModelConfigChoice(
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          modelId: 'gpt-5-pro',
+          modelName: 'GPT-5 Pro',
+          isDefault: false,
+        ),
+      ],
+    ),
+  ];
 }
 
 /// Builds a minimal app config for controller shutdown tests.

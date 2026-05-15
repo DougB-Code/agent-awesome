@@ -7,10 +7,12 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     await _log('select session requested $sessionId');
     try {
       final events = await assistantClient.loadSessionEvents(sessionId);
+      final routedEvents = _chatEventsWithInheritedModelRefs(events);
       _rememberLiveSession(sessionId);
       selectedSessionId = sessionId;
       await _touchHistoryChat(sessionId);
-      messages = events
+      _restoreChatModelRefFromEvents(routedEvents);
+      messages = routedEvents
           .map(_messageFromEvent)
           .whereType<ChatMessage>()
           .toList();
@@ -241,7 +243,11 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
   }
 
   /// Sends a user-authored chat message with optional hidden routing context.
-  Future<void> sendUserMessage(String text, {String displayText = ''}) async {
+  Future<void> sendUserMessage(
+    String text, {
+    String displayText = '',
+    String modelRef = '',
+  }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || sending) {
       await _log(
@@ -252,7 +258,10 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     final visibleText = displayText.trim().isEmpty
         ? displayTextFromUserPrompt(trimmed)
         : displayText.trim();
-    await _log('send user message requested length=${trimmed.length}');
+    final runModelRef = _chatModelRefForSend(modelRef);
+    await _log(
+      'send user message requested length=${trimmed.length} modelRef=$runModelRef',
+    );
     statusMessage = 'Preparing managed chat runtime';
     _notifyControllerListeners();
     final runtimeReady = await _ensureChatRuntimeReady();
@@ -287,7 +296,11 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     sending = true;
     _notifyControllerListeners();
     await _log('streaming run for session $sessionId');
-    await _streamRun(sessionId: sessionId, text: trimmed);
+    await _streamRun(
+      sessionId: sessionId,
+      text: trimmed,
+      modelRef: runModelRef,
+    );
   }
 
   /// Responds to a pending runtime confirmation request.
@@ -692,10 +705,11 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     required String sessionId,
     String text = '',
     ConfirmationReply? reply,
+    String modelRef = '',
   }) async {
     try {
       await _log(
-        'stream run start session=$sessionId textLength=${text.length} confirmation=${reply != null}',
+        'stream run start session=$sessionId textLength=${text.length} confirmation=${reply != null} modelRef=$modelRef',
       );
       var count = 0;
       ConfirmationRequest? autoConfirmation;
@@ -703,11 +717,13 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
         sessionId: sessionId,
         text: text,
         confirmation: reply,
+        modelRef: modelRef,
       )) {
         count++;
         await _log(
           'stream event #$count author=${event.author} textLength=${event.text.length} partial=${event.partial} tool=${event.toolActivity?.name ?? ''} error=${event.errorMessage.isNotEmpty}',
         );
+        _restoreChatModelRefFromEvent(event);
         autoConfirmation ??= _applyEvent(event, sessionId: sessionId);
       }
       await _log('stream run complete session=$sessionId events=$count');
@@ -753,5 +769,141 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       sending = false;
       _notifyControllerListeners();
     }
+  }
+
+  /// Selects the model ref used for future chat turns.
+  void selectChatModelRef(String modelRef) {
+    final normalized = _normalizeChatModelRef(modelRef);
+    if (chatModelRef == normalized) {
+      return;
+    }
+    chatModelRef = normalized;
+    _notifyControllerListeners();
+  }
+
+  /// Model choices available to the active chat profile.
+  List<ModelConfigChoice> get chatModelChoices {
+    return _activeModelConfigEntry()?.modelChoices ??
+        const <ModelConfigChoice>[];
+  }
+
+  /// Effective model ref used when sending without an explicit override.
+  String get activeChatModelRef {
+    return _chatModelRefForSend('');
+  }
+
+  /// Effective model choice used when sending without an explicit override.
+  ModelConfigChoice? get activeChatModelChoice {
+    final activeRef = activeChatModelRef;
+    for (final choice in chatModelChoices) {
+      if (choice.ref == activeRef) {
+        return choice;
+      }
+    }
+    return null;
+  }
+
+  /// Returns the configured model file currently assigned to the profile.
+  ConfigFileEntry? _activeModelConfigEntry() {
+    final path = runtimeProfile?.harness.modelConfigPath.trim() ?? '';
+    for (final entry in availableModelConfigs) {
+      if (entry.path == path || entry.assigned) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  /// Resolves an explicit or selected model ref to a configured choice.
+  String _chatModelRefForSend(String explicitRef) {
+    final choices = chatModelChoices;
+    if (choices.isEmpty) {
+      return '';
+    }
+    final requested = _normalizeChatModelRef(
+      explicitRef.trim().isEmpty ? chatModelRef : explicitRef,
+    );
+    for (final choice in choices) {
+      if (choice.ref == requested) {
+        return choice.ref;
+      }
+    }
+    for (final choice in choices) {
+      if (choice.isDefault) {
+        return choice.ref;
+      }
+    }
+    return choices.first.ref;
+  }
+
+  /// Restores the composer model from the latest routed event in a chat.
+  void _restoreChatModelRefFromEvents(List<AssistantEvent> events) {
+    for (final event in events.reversed) {
+      if (_restoreChatModelRefFromEvent(event)) {
+        return;
+      }
+    }
+  }
+
+  /// Restores the composer model from one event when it names a known model.
+  bool _restoreChatModelRefFromEvent(AssistantEvent event) {
+    final modelRef = _normalizeChatModelRef(event.modelRef);
+    if (modelRef.isEmpty || !_chatModelChoiceExists(modelRef)) {
+      return false;
+    }
+    chatModelRef = modelRef;
+    return true;
+  }
+
+  /// Reports whether a provider:model ref belongs to the active model config.
+  bool _chatModelChoiceExists(String modelRef) {
+    for (final choice in chatModelChoices) {
+      if (choice.ref == modelRef) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Adds missing assistant route labels from the most recent routed turn.
+  List<AssistantEvent> _chatEventsWithInheritedModelRefs(
+    List<AssistantEvent> events,
+  ) {
+    var latestModelRef = '';
+    final restored = <AssistantEvent>[];
+    for (final event in events) {
+      if (event.modelRef.trim().isNotEmpty) {
+        latestModelRef = event.modelRef.trim();
+      }
+      restored.add(_chatEventWithInheritedModelRef(event, latestModelRef));
+    }
+    return restored;
+  }
+
+  /// Returns an event with a restored model ref when storage omitted it.
+  AssistantEvent _chatEventWithInheritedModelRef(
+    AssistantEvent event,
+    String latestModelRef,
+  ) {
+    if (event.modelRef.trim().isNotEmpty ||
+        latestModelRef.trim().isEmpty ||
+        event.author == 'user') {
+      return event;
+    }
+    return AssistantEvent(
+      id: event.id,
+      author: event.author,
+      text: event.text,
+      partial: event.partial,
+      toolActivity: event.toolActivity,
+      confirmation: event.confirmation,
+      modelRef: latestModelRef.trim(),
+      errorMessage: event.errorMessage,
+    );
+  }
+
+  /// Normalizes user-facing model refs before storing or sending them.
+  String _normalizeChatModelRef(String modelRef) {
+    return modelRef.trim();
   }
 }
