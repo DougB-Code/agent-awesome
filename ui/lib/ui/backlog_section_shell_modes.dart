@@ -1,15 +1,6 @@
 /// Backlog command-area and detail-mode configuration helpers.
 part of 'backlog_section.dart';
 
-/// _TaskFilterView identifies bundled queue filter modes.
-enum _TaskFilterView {
-  /// Open, waiting, and blocked backlog items.
-  active,
-
-  /// Every backlog item status.
-  all,
-}
-
 /// _BacklogDetailMode identifies the right-side backlog details view.
 enum _BacklogDetailMode {
   /// Task and relation inspector.

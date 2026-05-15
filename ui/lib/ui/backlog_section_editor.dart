@@ -162,13 +162,6 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
                           ),
                         ),
                         onComplete: null,
-                        onDelete: () => unawaited(
-                          widget.controller.deleteTaskFromUi(task.id),
-                        ),
-                        insightBadges: _insightBadgesForTask(
-                          widget.controller,
-                          task,
-                        ),
                       ),
                     ),
               ],

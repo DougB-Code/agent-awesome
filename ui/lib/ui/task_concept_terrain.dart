@@ -38,12 +38,16 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
         ),
       );
     }
+    final presetProjection = _terrainProjectionForInsightPreset(
+      projection,
+      controller,
+    );
     final filterModel = TaskTerrainFilterProjector.build(
       streamProjection: controller.taskStreamProjection,
-      terrainProjection: projection,
+      terrainProjection: presetProjection,
     );
     final selection = _effectiveTerrainFilterSelection(filterModel);
-    final filteredProjection = filterModel.apply(projection, selection);
+    final filteredProjection = filterModel.apply(presetProjection, selection);
     final filterControls = _buildTerrainFilterControls(filterModel, selection);
     final activeFilterCount = _activeTerrainFilterCount(selection);
     return Column(
@@ -61,6 +65,7 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
                 });
               },
             ),
+            _TerrainInsightPresetMenu(controller: controller),
             _TerrainFiltersButton(
               activeCount: activeFilterCount,
               open: _filtersOpen,
@@ -84,81 +89,111 @@ class _PriorityTerrainViewState extends State<_PriorityTerrainView> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: PanelSectionBlock(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final layout = TaskTerrainLayout.build(
-                  filteredProjection,
-                  constraints.biggest,
-                  mode: TaskTerrainViewMode.all,
-                );
-                final selectedTaskId = controller.selectedGraphTaskId;
-                return Stack(
-                  children: <Widget>[
-                    Positioned.fill(
-                      child: CustomPaint(
-                        painter: _TerrainPainter(
-                          layout,
-                          context.agentAwesomeColors,
-                        ),
-                      ),
-                    ),
-                    for (final card in layout.cards)
-                      if (_revealedTerrainTaskIds.contains(card.point.taskId))
-                        _PositionedTerrainCard(
-                          placement: card,
-                          selected: selectedTaskId == card.point.taskId,
-                          onTap: () => controller.selectTask(card.point.taskId),
-                        ),
-                    for (final cluster in layout.clusters)
-                      _PositionedTerrainCluster(
-                        cluster: cluster,
-                        expanded: _isTerrainClusterRevealed(cluster),
-                        onTap: () {
-                          _toggleTerrainReveal(
-                            cluster.points.map((point) => point.taskId),
-                            selectTaskId: cluster.points.first.taskId,
-                          );
-                        },
-                      ),
-                    for (final pin in layout.pins)
-                      _PositionedTerrainPin(
-                        pin: pin,
-                        selected: selectedTaskId == pin.point.taskId,
-                        expanded: _revealedTerrainTaskIds.contains(
-                          pin.point.taskId,
-                        ),
-                        onTap: () {
-                          _toggleTerrainReveal(<String>[
-                            pin.point.taskId,
-                          ], selectTaskId: pin.point.taskId);
-                        },
-                      ),
-                    if (_filtersOpen)
-                      _TerrainFilterDrawer(
-                        controls: filterControls,
-                        activeCount: activeFilterCount,
-                        onClear: activeFilterCount == 0
-                            ? null
-                            : () {
+          child: filteredProjection.points.isEmpty
+              ? const PanelEmptyBlock(
+                  label: 'No terrain items match this insight',
+                )
+              : PanelSectionBlock(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final layout = TaskTerrainLayout.build(
+                        filteredProjection,
+                        constraints.biggest,
+                        mode: TaskTerrainViewMode.all,
+                      );
+                      final selectedTaskId = controller.selectedGraphTaskId;
+                      return Stack(
+                        children: <Widget>[
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _TerrainPainter(
+                                layout,
+                                context.agentAwesomeColors,
+                              ),
+                            ),
+                          ),
+                          for (final card in layout.cards)
+                            if (_revealedTerrainTaskIds.contains(
+                              card.point.taskId,
+                            ))
+                              _PositionedTerrainCard(
+                                placement: card,
+                                selected: selectedTaskId == card.point.taskId,
+                                onTap: () =>
+                                    controller.selectTask(card.point.taskId),
+                              ),
+                          for (final cluster in layout.clusters)
+                            _PositionedTerrainCluster(
+                              cluster: cluster,
+                              expanded: _isTerrainClusterRevealed(cluster),
+                              onTap: () {
+                                _toggleTerrainReveal(
+                                  cluster.points.map((point) => point.taskId),
+                                  selectTaskId: cluster.points.first.taskId,
+                                );
+                              },
+                            ),
+                          for (final pin in layout.pins)
+                            _PositionedTerrainPin(
+                              pin: pin,
+                              selected: selectedTaskId == pin.point.taskId,
+                              expanded: _revealedTerrainTaskIds.contains(
+                                pin.point.taskId,
+                              ),
+                              onTap: () {
+                                _toggleTerrainReveal(<String>[
+                                  pin.point.taskId,
+                                ], selectTaskId: pin.point.taskId);
+                              },
+                            ),
+                          if (_filtersOpen)
+                            _TerrainFilterDrawer(
+                              controls: filterControls,
+                              activeCount: activeFilterCount,
+                              onClear: activeFilterCount == 0
+                                  ? null
+                                  : () {
+                                      setState(() {
+                                        _filterSelection =
+                                            const TaskTerrainFilterSelection();
+                                        _revealedTerrainTaskIds =
+                                            const <String>{};
+                                      });
+                                    },
+                              onClose: () {
                                 setState(() {
-                                  _filterSelection =
-                                      const TaskTerrainFilterSelection();
-                                  _revealedTerrainTaskIds = const <String>{};
+                                  _filtersOpen = false;
                                 });
                               },
-                        onClose: () {
-                          setState(() {
-                            _filtersOpen = false;
-                          });
-                        },
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
         ),
+      ],
+    );
+  }
+
+  /// Applies the active semantic insight preset to a terrain projection.
+  PriorityTerrainProjection _terrainProjectionForInsightPreset(
+    PriorityTerrainProjection projection,
+    AgentAwesomeAppController controller,
+  ) {
+    if (controller.taskInsightPresetId == TaskInsightIds.all) {
+      return projection;
+    }
+    final taskIds = controller.taskInsightIndex
+        .tasksForInsight(controller.taskInsightPresetId)
+        .map((candidate) => candidate.taskId)
+        .toSet();
+    return PriorityTerrainProjection(
+      generatedAt: projection.generatedAt,
+      bands: projection.bands,
+      points: <PriorityTerrainPoint>[
+        for (final point in projection.points)
+          if (taskIds.contains(point.taskId)) point,
       ],
     );
   }
@@ -330,6 +365,81 @@ class _TerrainInsightModeSelector extends StatelessWidget {
               }
             },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Renders the terrain semantic insight preset selector.
+class _TerrainInsightPresetMenu extends StatelessWidget {
+  const _TerrainInsightPresetMenu({required this.controller});
+
+  final AgentAwesomeAppController controller;
+
+  /// Builds a compact selector for semantic terrain slices.
+  @override
+  Widget build(BuildContext context) {
+    final selected = TaskInsightPresetRegistry.selectedTerrainPreset(
+      controller.taskInsightPresetId,
+    );
+    final colors = context.agentAwesomeColors;
+    return PopupMenuButton<String>(
+      tooltip: selected.question,
+      onSelected: (presetId) {
+        unawaited(controller.applyTaskInsightPreset(presetId));
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final preset in TaskInsightPresetRegistry.terrainPresets)
+          CheckedPopupMenuItem<String>(
+            value: preset.id,
+            checked: preset.id == controller.taskInsightPresetId,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(
+                  TaskInsightPresetRegistry.iconFor(preset.iconName),
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Flexible(child: Text(preset.label)),
+              ],
+            ),
+          ),
+      ],
+      child: Container(
+        height: 34,
+        constraints: const BoxConstraints(maxWidth: 210),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: colors.surface,
+          gradient: context.agentAwesomeControlGradient,
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              TaskInsightPresetRegistry.iconFor(selected.iconName),
+              size: 16,
+              color: colors.muted,
+            ),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                selected.label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.ink,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.keyboard_arrow_down, size: 16, color: colors.muted),
+          ],
         ),
       ),
     );

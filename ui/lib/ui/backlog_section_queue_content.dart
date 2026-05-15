@@ -10,12 +10,8 @@ class _BacklogQueueContent extends StatelessWidget {
   /// Builds the filtered operational backlog queue.
   @override
   Widget build(BuildContext context) {
-    final presetTaskIds = _queuePresetTaskIds(controller);
     final tasks = controller.filteredTasks.where((task) {
-      final presetMatches =
-          controller.taskInsightPresetId == TaskInsightIds.all ||
-          presetTaskIds.contains(task.id);
-      return presetMatches && _matchesTask(task, query);
+      return _matchesTask(task, query);
     }).toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
@@ -51,9 +47,6 @@ class _BacklogQueueContent extends StatelessWidget {
                   onComplete: task.done || task.status == 'canceled'
                       ? null
                       : () => unawaited(controller.completeTaskFromUi(task.id)),
-                  onDelete: () =>
-                      unawaited(controller.deleteTaskFromUi(task.id)),
-                  insightBadges: _insightBadgesForTask(controller, task),
                 ),
               ),
         ],

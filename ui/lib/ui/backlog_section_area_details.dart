@@ -50,6 +50,10 @@ class _BacklogTerrainDetailPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final projection = controller.priorityTerrainProjection;
     final selectedPoint = _terrainPointForSelectedTask(controller, projection);
+    final preset = TaskInsightPresetRegistry.selectedTerrainPreset(
+      controller.taskInsightPresetId,
+    );
+    final insightTasks = _backlogTerrainInsightTasks(controller, preset.id);
     return _BacklogDetailScroll(
       children: <Widget>[
         PanelSectionBlock.gradient(
@@ -77,6 +81,20 @@ class _BacklogTerrainDetailPanel extends StatelessWidget {
             ],
           ),
         ),
+        PanelSectionBlock.gradient(
+          title: 'Selected Insight',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                preset.label,
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 8),
+              Text(preset.question),
+            ],
+          ),
+        ),
         if (selectedPoint != null)
           PanelSectionBlock.gradient(
             title: 'Selected Terrain Point',
@@ -99,6 +117,12 @@ class _BacklogTerrainDetailPanel extends StatelessWidget {
             ),
           ),
         _BacklogSelectedTaskSection(controller: controller),
+        if (preset.id != TaskInsightIds.all && insightTasks.isNotEmpty)
+          _BacklogTaskListSection(
+            title: 'Insight Tasks',
+            tasks: insightTasks.take(6).toList(),
+            controller: controller,
+          ),
       ],
     );
   }
@@ -492,6 +516,25 @@ PriorityTerrainPoint? _terrainPointForSelectedTask(
     }
   }
   return null;
+}
+
+/// Returns concrete workspace tasks matching the selected terrain insight.
+List<WorkspaceTask> _backlogTerrainInsightTasks(
+  AgentAwesomeAppController controller,
+  String insightId,
+) {
+  if (insightId == TaskInsightIds.all) {
+    return const <WorkspaceTask>[];
+  }
+  final tasksById = <String, WorkspaceTask>{
+    for (final task in controller.workspace.tasks) task.id: task,
+  };
+  return <WorkspaceTask>[
+    for (final candidate in controller.taskInsightIndex.tasksForInsight(
+      insightId,
+    ))
+      if (tasksById[candidate.taskId] != null) tasksById[candidate.taskId]!,
+  ];
 }
 
 /// Returns an average score from normalized terrain values.

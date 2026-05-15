@@ -11,8 +11,6 @@ class _TaskQueueTile extends StatelessWidget {
     required this.onScheduleToday,
     required this.onSnooze,
     required this.onComplete,
-    required this.onDelete,
-    required this.insightBadges,
   });
 
   final WorkspaceTask task;
@@ -23,8 +21,6 @@ class _TaskQueueTile extends StatelessWidget {
   final VoidCallback onScheduleToday;
   final VoidCallback onSnooze;
   final VoidCallback? onComplete;
-  final VoidCallback onDelete;
-  final List<String> insightBadges;
 
   /// Builds one selectable context row.
   @override
@@ -32,7 +28,6 @@ class _TaskQueueTile extends StatelessWidget {
     final colors = context.agentAwesomeColors;
     final accentColor = _taskQueueAccentColor(context, task);
     final description = _taskQueueDescription(task);
-    final suggestedAction = _taskSuggestedAction(task);
     final borderColor = selected
         ? colors.borderStrong
         : focused
@@ -66,8 +61,6 @@ class _TaskQueueTile extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          _TaskActionTypeBadge(task: task),
-                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,16 +83,15 @@ class _TaskQueueTile extends StatelessWidget {
                                     style: TextStyle(color: colors.muted),
                                   ),
                                 ],
-                                const SizedBox(height: 8),
-                                _TaskSuggestedActionLine(
-                                  label: suggestedAction,
-                                ),
                                 const SizedBox(height: 10),
                                 Wrap(
                                   spacing: 6,
                                   runSpacing: 6,
                                   children: <Widget>[
                                     _TaskBadge(label: _taskLabel(task.status)),
+                                    _TaskBadge(
+                                      label: _taskLabel(task.priority),
+                                    ),
                                     if (task.overdue)
                                       const _TaskBadge(label: 'Overdue'),
                                     if (task.dueAt == null)
@@ -127,8 +119,6 @@ class _TaskQueueTile extends StatelessWidget {
                                       ),
                                     if (task.sourceLabel.isNotEmpty)
                                       _TaskBadge(label: task.sourceLabel),
-                                    for (final badge in insightBadges)
-                                      _TaskBadge(label: badge),
                                     for (final topic in task.topics.take(3))
                                       _TaskBadge(label: topic),
                                   ],
@@ -136,8 +126,6 @@ class _TaskQueueTile extends StatelessWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          _TaskQueueScoreBlock(task: task),
                         ],
                       ),
                     ),
@@ -164,15 +152,6 @@ class _TaskQueueTile extends StatelessWidget {
                             icon: Icons.schedule_outlined,
                             onPressed: onSnooze,
                           ),
-                          const Spacer(),
-                          Tooltip(
-                            message: 'Delete backlog item',
-                            child: TextButton.icon(
-                              onPressed: onDelete,
-                              icon: const Icon(Icons.delete_outline, size: 17),
-                              label: const Text('Dismiss'),
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -189,123 +168,6 @@ class _TaskQueueTile extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// _TaskActionTypeBadge renders the queue action category for one task.
-class _TaskActionTypeBadge extends StatelessWidget {
-  const _TaskActionTypeBadge({required this.task});
-
-  final WorkspaceTask task;
-
-  /// Builds the compact action-type badge.
-  @override
-  Widget build(BuildContext context) {
-    final label = _taskActionTypeLabel(task);
-    final icon = _taskActionTypeIcon(task);
-    final accent = _taskQueueAccentColor(context, task);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
-        border: Border.all(color: accent.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 16, color: accent),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              color: accent,
-              fontWeight: FontWeight.w900,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// _TaskSuggestedActionLine renders the recommended next action text.
-class _TaskSuggestedActionLine extends StatelessWidget {
-  const _TaskSuggestedActionLine({required this.label});
-
-  final String label;
-
-  /// Builds the suggested-action copy.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return RichText(
-      maxLines: 2,
-      overflow: TextOverflow.ellipsis,
-      text: TextSpan(
-        style: DefaultTextStyle.of(
-          context,
-        ).style.copyWith(color: colors.ink, fontWeight: FontWeight.w800),
-        children: <InlineSpan>[
-          const TextSpan(text: 'Suggested next action: '),
-          TextSpan(
-            text: label,
-            style: TextStyle(color: colors.green, fontWeight: FontWeight.w900),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// _TaskQueueScoreBlock renders a compact attention-style queue score.
-class _TaskQueueScoreBlock extends StatelessWidget {
-  const _TaskQueueScoreBlock({required this.task});
-
-  final WorkspaceTask task;
-
-  /// Builds a score and urgency label for the queue tile.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    final score = _taskQueueScore(task);
-    final label = _taskQueueScoreLabel(score);
-    final labelColor = _taskQueueScoreColor(context, score);
-    return SizedBox(
-      width: 86,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: <Widget>[
-          Text(
-            'Queue score',
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              color: colors.ink,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            score.toString(),
-            style: TextStyle(
-              color: colors.ink,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              color: labelColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
       ),
     );
   }

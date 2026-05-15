@@ -374,7 +374,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Active task queue filters.
   TaskFilterState taskFilters = const TaskFilterState();
 
-  /// Active semantic task insight preset for Queue.
+  /// Active semantic task insight preset for Terrain.
   String taskInsightPresetId = TaskInsightIds.all;
 
   /// Latest canonical projection graph shared by task views.

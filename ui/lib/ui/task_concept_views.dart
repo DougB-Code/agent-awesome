@@ -1,6 +1,7 @@
 /// Renders task graph projections inside the shared task command panel.
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import '../app/theme.dart';
 import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import '../domain/task_graph_query.dart';
+import '../domain/task_insight_query.dart';
 import '../domain/task_projection_adapters.dart';
 import '../domain/task_wbs_tree.dart';
 import 'panels/panels.dart';
@@ -21,6 +23,7 @@ import 'task_stream_filters.dart';
 import 'task_terrain_filters.dart';
 import 'task_terrain_layout.dart';
 import 'task_terrain_modes.dart';
+import 'task_insight_presets.dart';
 import 'task_wbs_formatting.dart';
 
 part 'task_concept_wbs.dart';

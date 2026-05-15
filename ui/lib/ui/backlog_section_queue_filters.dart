@@ -44,100 +44,10 @@ class _TaskQueueFilterStrip extends StatelessWidget {
         runSpacing: 10,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: <Widget>[
-          _TaskInsightPresetMenu(controller: controller),
-          _TaskViewMenu(controller: controller),
           _TaskStatusFilterMenu(controller: controller),
           _TaskPriorityFilterMenu(controller: controller),
           _TaskTopicFilterMenu(controller: controller),
         ],
-      ),
-    );
-  }
-}
-
-/// _TaskInsightPresetMenu renders semantic Queue presets as one dropdown.
-class _TaskInsightPresetMenu extends StatelessWidget {
-  const _TaskInsightPresetMenu({required this.controller});
-
-  final AgentAwesomeAppController controller;
-
-  /// Builds the preset dropdown.
-  @override
-  Widget build(BuildContext context) {
-    final selected = _selectedTaskInsightPreset(controller);
-    return PopupMenuButton<String>(
-      tooltip: 'Insight preset',
-      onSelected: (presetId) {
-        unawaited(controller.applyTaskInsightPreset(presetId));
-      },
-      itemBuilder: (context) => <PopupMenuEntry<String>>[
-        for (final preset in TaskInsightPresetRegistry.queuePresets)
-          CheckedPopupMenuItem<String>(
-            value: preset.id,
-            checked: controller.taskInsightPresetId == preset.id,
-            child: _TaskFilterMenuItem(
-              icon: TaskInsightPresetRegistry.iconFor(preset.iconName),
-              label: _presetLabel(controller, preset),
-            ),
-          ),
-      ],
-      child: _TaskFilterMenuButton(
-        icon: TaskInsightPresetRegistry.iconFor(selected.iconName),
-        label: _presetButtonLabel(controller, selected),
-        selected: true,
-      ),
-    );
-  }
-}
-
-/// _TaskViewMenu renders bundled active/all queue filter choices.
-class _TaskViewMenu extends StatelessWidget {
-  const _TaskViewMenu({required this.controller});
-
-  final AgentAwesomeAppController controller;
-
-  /// Builds the view dropdown.
-  @override
-  Widget build(BuildContext context) {
-    final filters = controller.taskFilters;
-    return PopupMenuButton<_TaskFilterView>(
-      tooltip: 'Task view',
-      onSelected: (view) {
-        unawaited(
-          controller.applyTaskFilters(switch (view) {
-            _TaskFilterView.active => filters.copyWith(
-              statuses: _activeTaskStatuses,
-              includeDone: true,
-            ),
-            _TaskFilterView.all => filters.copyWith(
-              statuses: const <String>[],
-              includeDone: true,
-            ),
-          }),
-        );
-      },
-      itemBuilder: (context) => <PopupMenuEntry<_TaskFilterView>>[
-        CheckedPopupMenuItem<_TaskFilterView>(
-          value: _TaskFilterView.active,
-          checked: _isActiveTaskView(filters),
-          child: const _TaskFilterMenuItem(
-            icon: Icons.playlist_play,
-            label: 'Active',
-          ),
-        ),
-        CheckedPopupMenuItem<_TaskFilterView>(
-          value: _TaskFilterView.all,
-          checked: filters.statuses.isEmpty,
-          child: const _TaskFilterMenuItem(
-            icon: Icons.all_inbox_outlined,
-            label: 'All tasks',
-          ),
-        ),
-      ],
-      child: _TaskFilterMenuButton(
-        icon: _taskViewIcon(filters),
-        label: _taskViewLabel(filters),
-        selected: true,
       ),
     );
   }
@@ -161,6 +71,11 @@ class _TaskStatusFilterMenu extends StatelessWidget {
             statuses: const <String>[],
             overdueOnly: false,
           ),
+          '__active_statuses' => filters.copyWith(
+            statuses: _activeTaskStatuses,
+            includeDone: true,
+            overdueOnly: false,
+          ),
           '__overdue' => filters.copyWith(overdueOnly: !filters.overdueOnly),
           _ => filters.copyWith(
             statuses: toggleStringValue(filters.statuses, value),
@@ -174,7 +89,15 @@ class _TaskStatusFilterMenu extends StatelessWidget {
           checked: filters.statuses.isEmpty && !filters.overdueOnly,
           child: const _TaskFilterMenuItem(
             icon: Icons.clear_all,
-            label: 'Any status',
+            label: 'Any statuses',
+          ),
+        ),
+        CheckedPopupMenuItem<String>(
+          value: '__active_statuses',
+          checked: _isActiveTaskView(filters) && !filters.overdueOnly,
+          child: const _TaskFilterMenuItem(
+            icon: Icons.playlist_play,
+            label: 'Active statuses',
           ),
         ),
         const PopupMenuDivider(),
@@ -200,9 +123,7 @@ class _TaskStatusFilterMenu extends StatelessWidget {
       child: _TaskFilterMenuButton(
         icon: Icons.task_alt_outlined,
         label: _statusFilterLabel(filters),
-        selected:
-            (!_isActiveTaskView(filters) && filters.statuses.isNotEmpty) ||
-            filters.overdueOnly,
+        selected: filters.statuses.isNotEmpty || filters.overdueOnly,
       ),
     );
   }

@@ -242,7 +242,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
-  /// Applies one semantic task insight preset to Queue.
+  /// Applies one semantic task insight preset to Terrain.
   Future<void> applyTaskInsightPreset(String presetId) async {
     taskInsightPresetId = presetId;
     _notifyControllerListeners();

@@ -1,16 +1,16 @@
-/// Defines task insight presets shared by queue and projection controls.
+/// Defines task insight presets shared by projection controls.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../domain/task_insight_query.dart';
 
-/// TaskInsightPresetRegistry exposes stable one-click task insight presets.
+/// TaskInsightPresetRegistry exposes stable one-click terrain insight presets.
 class TaskInsightPresetRegistry {
   const TaskInsightPresetRegistry._();
 
-  /// Queue presets shown above operational filters.
-  static const List<TaskInsightPreset> queuePresets = <TaskInsightPreset>[
+  /// Terrain presets shown above projection overlays.
+  static const List<TaskInsightPreset> terrainPresets = <TaskInsightPreset>[
     TaskInsightPreset(
       id: TaskInsightIds.all,
       label: 'All insights',
@@ -48,6 +48,16 @@ class TaskInsightPresetRegistry {
       iconName: 'quality',
     ),
   ];
+
+  /// Returns the selected terrain preset, falling back to the all preset.
+  static TaskInsightPreset selectedTerrainPreset(String presetId) {
+    for (final preset in terrainPresets) {
+      if (preset.id == presetId) {
+        return preset;
+      }
+    }
+    return terrainPresets.first;
+  }
 
   /// Returns a Material icon for a preset icon name.
   static IconData iconFor(String iconName) {

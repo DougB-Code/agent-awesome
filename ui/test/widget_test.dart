@@ -223,6 +223,20 @@ void main() {
       sources: <SourceItem>[],
       memoryRecords: <MemoryRecord>[],
     );
+    controller.priorityTerrainProjection = const PriorityTerrainProjection(
+      points: <PriorityTerrainPoint>[
+        PriorityTerrainPoint(
+          taskId: 'task-brief',
+          title: 'Draft task brief',
+          status: 'open',
+          priority: 'normal',
+          valueScore: 0.5,
+          riskScore: 0.2,
+          x: 0.5,
+          y: 0.5,
+        ),
+      ],
+    );
     controller.selectedTaskId = 'task-brief';
 
     await tester.pumpWidget(
@@ -240,10 +254,10 @@ void main() {
     expect(find.text('Agent handoff 0'), findsNothing);
     expect(find.byTooltip('Refresh context'), findsNothing);
     expect(find.byTooltip('New backlog item'), findsOneWidget);
-    expect(find.text('All insights'), findsOneWidget);
-    expect(find.text('Active tasks'), findsOneWidget);
-    expect(find.text('Status'), findsOneWidget);
-    expect(find.text('Queue score'), findsWidgets);
+    expect(find.text('All insights'), findsNothing);
+    expect(find.text('Open, Waiting, Blocked'), findsOneWidget);
+    expect(find.text('Active tasks'), findsNothing);
+    expect(find.text('Queue score'), findsNothing);
     expect(find.text('Schedule'), findsWidgets);
     expect(find.text('Mark done'), findsWidgets);
     expect(find.textContaining('Data quality'), findsNothing);
@@ -262,10 +276,17 @@ void main() {
     expect(find.text('STREAM'), findsWidgets);
     expect(find.text('STREAM PROJECTION'), findsOneWidget);
 
+    await tester.tap(find.byTooltip('Terrain'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('TERRAIN'), findsWidgets);
+    expect(find.text('All insights'), findsWidgets);
+    expect(find.text('TERRAIN PROJECTION'), findsOneWidget);
+
     await tester.tap(find.byTooltip('Collapse details column'));
     await tester.pumpAndSettle();
 
-    expect(find.text('STREAM'), findsWidgets);
+    expect(find.text('TERRAIN'), findsWidgets);
     expect(find.text('Inspector'), findsNothing);
   });
 
@@ -1343,7 +1364,8 @@ void main() {
     expect(find.text('QUEUE'), findsOneWidget);
     expect(find.text('INSPECTOR'), findsOneWidget);
     expect(find.text('Draft task brief'), findsWidgets);
-    expect(find.byTooltip('Delete backlog item'), findsWidgets);
+    expect(find.byTooltip('Delete backlog item'), findsNothing);
+    expect(find.text('Delete'), findsWidgets);
     expect(find.text('Backlog Stream'), findsNothing);
     expect(find.byTooltip('Stream'), findsOneWidget);
     expect(find.byTooltip('Terrain'), findsOneWidget);

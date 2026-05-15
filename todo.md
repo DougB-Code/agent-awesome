@@ -2,14 +2,8 @@
 
 ## Priority 1
 
-### Panels - Backlog
-
-- Why does the queue have a topics and the stream has a different kind of filter? Should both filters be on each panel?
-- The right side needs to change for each left side content type. That means the inspector needs to work with each panel type. It just shows the same task for each view. 
-
 ### Panels - Backlog - Queue
 
-- An 'Active' task is not intuitive. 
 - We can dismiss a card, but where does it go? Is there a way to recover it? Do we need a Trash (right) panel?
 - The 'queue score' is not clear. What does this number actually represent?
 - The Clarify pill is not clear. What's the algorithm to place them on a card?
@@ -28,11 +22,6 @@
 ### Panels - Backlog - Terrain
 
 - Why does the pill have a number in it? What's it represent?
-
-### Panels - Backlog - Inspector
-
-- Open and normal dropdown styling should match other form controls. 
-- The same inspector panel is used for each backlog view (Queue, Stream, etc)
 
 ### Panels - Memory - Search
 
