@@ -22,19 +22,25 @@ class BacklogCommandPanel extends StatefulWidget {
 
 /// _BacklogCommandPanelState stores the selected backlog detail mode.
 class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
-  _BacklogDetailMode _detailMode = _BacklogDetailMode.inspector;
+  final Map<String, _BacklogDetailMode> _detailModesByArea =
+      <String, _BacklogDetailMode>{};
 
   /// Builds backlog areas and details inside the reusable command subshell.
   @override
   Widget build(BuildContext context) {
-    final selectedMode = _effectiveDetailMode();
     return CommandPanelSubShell(
       areas: _backlogCommandAreas(widget.controller),
       detailTitle: 'Backlog Inspector',
-      detailModes: _visibleBacklogDetailModes(widget.controller),
-      selectedDetailModeId: _backlogDetailModeId(selectedMode),
+      detailModes: const <CommandPanelDetailMode>[],
+      selectedDetailModeId: _backlogDetailModeId(_BacklogDetailMode.inspector),
       onDetailModeSelected: _selectDetailMode,
       detailBuilder: _buildDetailBody,
+      detailModesBuilder: (area) =>
+          _visibleBacklogDetailModes(widget.controller, area),
+      selectedDetailModeIdBuilder: (area) =>
+          _backlogDetailModeId(_effectiveDetailMode(area)),
+      onAreaDetailModeSelected: _selectAreaDetailMode,
+      areaDetailBuilder: _buildAreaDetailBody,
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: _buildAreaActions,
       filterHint: 'Filter...',
@@ -51,6 +57,19 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
 
   /// Selects the right-side details mode and mirrors review state to controller.
   void _selectDetailMode(String modeId) {
+    _selectAreaDetailMode(
+      const SwitcherPanelArea(
+        id: _BacklogAreaIds.queue,
+        title: 'Queue',
+        icon: Icons.task_alt_outlined,
+        builder: _emptyBacklogAreaBuilder,
+      ),
+      modeId,
+    );
+  }
+
+  /// Selects an area-scoped details mode and mirrors review state to controller.
+  void _selectAreaDetailMode(SwitcherPanelArea area, String modeId) {
     final mode = _backlogDetailModeForId(modeId);
     if (mode == _BacklogDetailMode.aiReview) {
       widget.controller.openBacklogReviewPanel();
@@ -58,23 +77,46 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
       widget.controller.openBacklogInspectorPanel();
     }
     setState(() {
-      _detailMode = mode;
+      _detailModesByArea[_backlogAreaId(area)] = mode;
     });
   }
 
   /// Returns the visible details mode, honoring controller-owned AI review state.
-  _BacklogDetailMode _effectiveDetailMode() {
+  _BacklogDetailMode _effectiveDetailMode(SwitcherPanelArea area) {
     final hasReview = _backlogReviewAvailable(widget.controller);
-    if (widget.controller.backlogReviewPanelOpen && hasReview) {
+    if (_backlogAreaId(area) == _BacklogAreaIds.queue &&
+        widget.controller.backlogReviewPanelOpen &&
+        hasReview) {
       return _BacklogDetailMode.aiReview;
     }
-    return _detailMode == _BacklogDetailMode.aiReview
-        ? _BacklogDetailMode.inspector
-        : _detailMode;
+    final visibleModes = _visibleBacklogDetailModes(
+      widget.controller,
+      area,
+    ).map((mode) => mode.id).toSet();
+    final selected =
+        _detailModesByArea[_backlogAreaId(area)] ??
+        _defaultBacklogDetailModeForArea(area);
+    if (visibleModes.contains(_backlogDetailModeId(selected))) {
+      return selected;
+    }
+    return _defaultBacklogDetailModeForArea(area);
   }
 
   /// Builds the content for the current detail mode id.
   Widget _buildDetailBody(String modeId) {
+    return _buildAreaDetailBody(
+      const SwitcherPanelArea(
+        id: _BacklogAreaIds.queue,
+        title: 'Queue',
+        icon: Icons.task_alt_outlined,
+        builder: _emptyBacklogAreaBuilder,
+      ),
+      modeId,
+    );
+  }
+
+  /// Builds the content for the active area and detail mode id.
+  Widget _buildAreaDetailBody(SwitcherPanelArea area, String modeId) {
     final mode = _backlogDetailModeForId(modeId);
     final edge = widget.controller.selectedConstellationEdge;
     final task = widget.controller.selectedTask;
@@ -90,6 +132,25 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
       _BacklogDetailMode.aiReview => _BacklogReviewContent(
         controller: widget.controller,
       ),
+      _BacklogDetailMode.streamOverview => _BacklogStreamDetailPanel(
+        controller: widget.controller,
+      ),
+      _BacklogDetailMode.terrainOverview => _BacklogTerrainDetailPanel(
+        controller: widget.controller,
+      ),
+      _BacklogDetailMode.wbsOverview => _BacklogWbsDetailPanel(
+        controller: widget.controller,
+      ),
+      _BacklogDetailMode.constellationOverview =>
+        edge != null
+            ? _TaskConstellationEdgeInspector(
+                controller: widget.controller,
+                edge: edge,
+              )
+            : _BacklogConstellationDetailPanel(controller: widget.controller),
+      _BacklogDetailMode.captureContext => _BacklogCaptureDetailPanel(
+        controller: widget.controller,
+      ),
       _BacklogDetailMode.inspector =>
         edge != null
             ? _TaskConstellationEdgeInspector(
@@ -101,4 +162,9 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
             : _TaskDetailEditor(controller: widget.controller, task: task),
     };
   }
+}
+
+/// Builds an empty area for non-area detail-mode fallback calls.
+Widget _emptyBacklogAreaBuilder(String query) {
+  return const SizedBox.shrink();
 }

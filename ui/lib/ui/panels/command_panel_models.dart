@@ -45,3 +45,19 @@ class CommandPanelDetailMode {
 /// CommandPanelAreaActionsBuilder builds trailing controls for a command area.
 typedef CommandPanelAreaActionsBuilder =
     Widget? Function(BuildContext context, SwitcherPanelArea area);
+
+/// CommandPanelDetailModesBuilder builds detail modes for the active area.
+typedef CommandPanelDetailModesBuilder =
+    List<CommandPanelDetailMode> Function(SwitcherPanelArea area);
+
+/// CommandPanelSelectedDetailModeBuilder returns the selected mode per area.
+typedef CommandPanelSelectedDetailModeBuilder =
+    String Function(SwitcherPanelArea area);
+
+/// CommandPanelAreaDetailBuilder builds detail content for an active area.
+typedef CommandPanelAreaDetailBuilder =
+    Widget Function(SwitcherPanelArea area, String modeId);
+
+/// CommandPanelAreaDetailModeChanged reports area-scoped detail selection.
+typedef CommandPanelAreaDetailModeChanged =
+    void Function(SwitcherPanelArea area, String modeId);

@@ -260,11 +260,12 @@ void main() {
 
     expect(find.text('Stream command panel'), findsNothing);
     expect(find.text('STREAM'), findsWidgets);
+    expect(find.text('STREAM PROJECTION'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Collapse details column'));
     await tester.pumpAndSettle();
 
-    expect(find.text('INSPECTOR'), findsOneWidget);
+    expect(find.text('STREAM'), findsWidgets);
     expect(find.text('Inspector'), findsNothing);
   });
 
@@ -1349,7 +1350,8 @@ void main() {
     expect(find.byTooltip('Constellation'), findsOneWidget);
     await tester.tap(find.byTooltip('Stream'));
     await tester.pumpAndSettle();
-    expect(find.text('STREAM'), findsOneWidget);
+    expect(find.text('STREAM'), findsWidgets);
+    expect(find.text('STREAM PROJECTION'), findsOneWidget);
     expect(find.text('Focus'), findsOneWidget);
     expect(find.text('Analyze stream layout'), findsOneWidget);
     expect(find.text('Backlog Stream'), findsNothing);
@@ -1369,7 +1371,7 @@ void main() {
     expect(find.byTooltip('Pick Scheduled date'), findsOneWidget);
     await tester.tap(find.byTooltip('Stream'));
     await tester.pumpAndSettle();
-    expect(find.text('STREAM'), findsOneWidget);
+    expect(find.text('STREAM'), findsWidgets);
     expect(find.byTooltip('Collapse command column'), findsOneWidget);
     expect(find.byTooltip('Collapse details column'), findsOneWidget);
     await tester.tap(find.byTooltip('Collapse command column'));
@@ -1379,7 +1381,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Terrain'));
     await tester.pumpAndSettle();
-    expect(find.text('TERRAIN'), findsOneWidget);
+    expect(find.text('TERRAIN'), findsWidgets);
+    expect(find.text('TERRAIN PROJECTION'), findsOneWidget);
   });
 
   testWidgets(

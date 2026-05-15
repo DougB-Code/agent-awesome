@@ -14,6 +14,10 @@ class CommandPanelSubShell extends StatefulWidget {
     required this.detailBuilder,
     this.onAreaChanged,
     this.areaActionsBuilder,
+    this.detailModesBuilder,
+    this.selectedDetailModeIdBuilder,
+    this.onAreaDetailModeSelected,
+    this.areaDetailBuilder,
     this.split = const PanelSplit(left: 0.72, min: 0.46, max: 0.86),
     this.gutterWidth = 12,
     this.padding = const EdgeInsets.fromLTRB(28, 18, 28, 24),
@@ -45,6 +49,18 @@ class CommandPanelSubShell extends StatefulWidget {
 
   /// Builds trailing command controls for the selected area.
   final CommandPanelAreaActionsBuilder? areaActionsBuilder;
+
+  /// Optional area-aware detail mode builder.
+  final CommandPanelDetailModesBuilder? detailModesBuilder;
+
+  /// Optional area-aware selected detail mode resolver.
+  final CommandPanelSelectedDetailModeBuilder? selectedDetailModeIdBuilder;
+
+  /// Optional area-aware detail mode selection callback.
+  final CommandPanelAreaDetailModeChanged? onAreaDetailModeSelected;
+
+  /// Optional area-aware detail body builder.
+  final CommandPanelAreaDetailBuilder? areaDetailBuilder;
 
   /// Split ratio configuration.
   final PanelSplit split;
@@ -115,7 +131,8 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     }
     final boundedIndex = _selectedAreaIndex.clamp(0, widget.areas.length - 1);
     final area = widget.areas[boundedIndex];
-    final detailMode = _selectedDetailMode();
+    final detailModes = _detailModesForArea(area);
+    final detailMode = _selectedDetailMode(area, detailModes);
     return Padding(
       padding: widget.padding,
       child: SplitPanelShell(
@@ -135,14 +152,14 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
         ),
         right: _CommandSubShellDetailPane(
           title: detailMode.id.isEmpty ? widget.detailTitle : detailMode.label,
-          modes: widget.detailModes,
+          modes: detailModes,
           selectedMode: detailMode,
-          onModeSelected: (mode) => widget.onDetailModeSelected(mode.id),
+          onModeSelected: (mode) => _selectDetailMode(area, mode.id),
           showHeader: widget.showDetailHeader,
-          onTitleTap: widget.detailModes.length > 1
-              ? () => _selectNextDetailMode(detailMode)
+          onTitleTap: detailModes.length > 1
+              ? () => _selectNextDetailMode(area, detailModes, detailMode)
               : null,
-          child: widget.detailBuilder(detailMode.id),
+          child: _buildDetail(area, detailMode.id),
         ),
       ),
     );
@@ -170,14 +187,36 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
   }
 
   /// Selects the next detail mode from the title interaction.
-  void _selectNextDetailMode(CommandPanelDetailMode selectedMode) {
-    final modes = widget.detailModes;
+  void _selectNextDetailMode(
+    SwitcherPanelArea area,
+    List<CommandPanelDetailMode> modes,
+    CommandPanelDetailMode selectedMode,
+  ) {
     if (modes.isEmpty) {
       return;
     }
     final currentIndex = modes.indexWhere((mode) => mode.id == selectedMode.id);
     final nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % modes.length;
-    widget.onDetailModeSelected(modes[nextIndex].id);
+    _selectDetailMode(area, modes[nextIndex].id);
+  }
+
+  /// Selects a detail mode for either the whole shell or active area.
+  void _selectDetailMode(SwitcherPanelArea area, String modeId) {
+    final areaHandler = widget.onAreaDetailModeSelected;
+    if (areaHandler != null) {
+      areaHandler(area, modeId);
+      return;
+    }
+    widget.onDetailModeSelected(modeId);
+  }
+
+  /// Builds detail content for either the whole shell or active area.
+  Widget _buildDetail(SwitcherPanelArea area, String modeId) {
+    final areaBuilder = widget.areaDetailBuilder;
+    if (areaBuilder != null) {
+      return areaBuilder(area, modeId);
+    }
+    return widget.detailBuilder(modeId);
   }
 
   /// Reports the active command area to the owning shell.
@@ -195,21 +234,32 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     widget.onAreaChanged?.call(area);
   }
 
-  /// Returns the currently selected detail mode, falling back to the first mode.
-  CommandPanelDetailMode _selectedDetailMode() {
-    if (widget.detailModes.isEmpty) {
+  /// Returns detail modes for the active command area.
+  List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
+    return widget.detailModesBuilder?.call(area) ?? widget.detailModes;
+  }
+
+  /// Returns the selected detail mode, falling back to the first mode.
+  CommandPanelDetailMode _selectedDetailMode(
+    SwitcherPanelArea area,
+    List<CommandPanelDetailMode> modes,
+  ) {
+    if (modes.isEmpty) {
       return const CommandPanelDetailMode(
         id: '',
         label: 'Details',
         icon: Icons.info_outline,
       );
     }
-    for (final mode in widget.detailModes) {
-      if (mode.id == widget.selectedDetailModeId) {
+    final selectedModeId =
+        widget.selectedDetailModeIdBuilder?.call(area) ??
+        widget.selectedDetailModeId;
+    for (final mode in modes) {
+      if (mode.id == selectedModeId) {
         return mode;
       }
     }
-    return widget.detailModes.first;
+    return modes.first;
   }
 
   /// Returns a stable key for the selected area in one area collection.

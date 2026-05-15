@@ -498,11 +498,19 @@ ThemeData buildAgentAwesomeTheme({Brightness brightness = Brightness.light}) {
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: colors.page,
-    canvasColor: colors.page,
+    canvasColor: colors.surface,
     fontFamily: 'Inter',
     extensions: <ThemeExtension<dynamic>>[colors],
     dividerTheme: DividerThemeData(color: colors.border, thickness: 1),
     iconTheme: IconThemeData(color: colors.ink),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colors.surface,
+      border: _agentAwesomeInputBorder(colors.border),
+      enabledBorder: _agentAwesomeInputBorder(colors.border),
+      disabledBorder: _agentAwesomeInputBorder(colors.border),
+      focusedBorder: _agentAwesomeInputBorder(colors.searchBorder),
+    ),
     textSelectionTheme: TextSelectionThemeData(
       cursorColor: colors.green,
       selectionColor: colors.greenSoft,
@@ -526,5 +534,13 @@ ThemeData buildAgentAwesomeTheme({Brightness brightness = Brightness.light}) {
       titleLarge: TextStyle(fontWeight: FontWeight.w700, color: colors.ink),
       bodyMedium: TextStyle(height: 1.5, color: colors.ink),
     ),
+  );
+}
+
+/// Builds the shared outline used by form fields and dropdown fields.
+OutlineInputBorder _agentAwesomeInputBorder(Color color) {
+  return OutlineInputBorder(
+    borderRadius: BorderRadius.circular(8),
+    borderSide: BorderSide(color: color),
   );
 }

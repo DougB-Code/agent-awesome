@@ -14,7 +14,6 @@ class _TaskStreamView extends StatefulWidget {
 class _TaskStreamViewState extends State<_TaskStreamView> {
   TaskStreamAxisDimension _columnAxis = TaskStreamAxisDimension.due;
   TaskStreamAxisDimension _rowAxis = TaskStreamAxisDimension.project;
-  _TaskStreamPreset _streamPreset = _TaskStreamPreset.custom;
   TaskStreamFilterSelection _streamFilters = const TaskStreamFilterSelection();
 
   /// Builds the task-fact stream projection.
@@ -62,7 +61,6 @@ class _TaskStreamViewState extends State<_TaskStreamView> {
           setState(() {
             _columnAxis = effectiveColumnAxis;
             _rowAxis = effectiveRowAxis;
-            _streamPreset = _presetForAxes(_columnAxis, _rowAxis);
           });
         }
       });
@@ -84,23 +82,15 @@ class _TaskStreamViewState extends State<_TaskStreamView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _TaskStreamControls(
-          preset: _streamPreset,
           rowAxis: effectiveRowAxis,
           columnAxis: effectiveColumnAxis,
           filters: effectiveFilters,
           filterModel: effectiveFilterModel,
-          onPresetSelected: _applyPreset,
           onRowAxisChanged: (dimension) {
-            setState(() {
-              _rowAxis = dimension;
-              _streamPreset = _presetForAxes(effectiveColumnAxis, _rowAxis);
-            });
+            setState(() => _rowAxis = dimension);
           },
           onColumnAxisChanged: (dimension) {
-            setState(() {
-              _columnAxis = dimension;
-              _streamPreset = _presetForAxes(_columnAxis, effectiveRowAxis);
-            });
+            setState(() => _columnAxis = dimension);
           },
           onFiltersChanged: (filters) {
             setState(() => _streamFilters = filters);
@@ -121,20 +111,6 @@ class _TaskStreamViewState extends State<_TaskStreamView> {
       ],
     );
   }
-
-  /// Applies a named stream question preset to the axis selectors.
-  void _applyPreset(_TaskStreamPreset preset) {
-    final axes = _streamPresetAxes[preset];
-    if (axes == null) {
-      setState(() => _streamPreset = preset);
-      return;
-    }
-    setState(() {
-      _streamPreset = preset;
-      _columnAxis = axes.columnAxis;
-      _rowAxis = axes.rowAxis;
-    });
-  }
 }
 
 /// Returns a valid Stream axis after a hot reload or preset change.
@@ -148,35 +124,29 @@ TaskStreamAxisDimension _effectiveStreamAxis(
 
 class _TaskStreamControls extends StatelessWidget {
   const _TaskStreamControls({
-    required this.preset,
     required this.rowAxis,
     required this.columnAxis,
     required this.filters,
     required this.filterModel,
-    required this.onPresetSelected,
     required this.onRowAxisChanged,
     required this.onColumnAxisChanged,
     required this.onFiltersChanged,
   });
 
-  final _TaskStreamPreset preset;
   final TaskStreamAxisDimension rowAxis;
   final TaskStreamAxisDimension columnAxis;
   final TaskStreamFilterSelection filters;
   final TaskStreamFilterModel filterModel;
-  final ValueChanged<_TaskStreamPreset> onPresetSelected;
   final ValueChanged<TaskStreamAxisDimension> onRowAxisChanged;
   final ValueChanged<TaskStreamAxisDimension> onColumnAxisChanged;
   final ValueChanged<TaskStreamFilterSelection> onFiltersChanged;
 
-  /// Builds stream question shortcuts above axis and fact filters.
+  /// Builds axis and fact filters for the Stream projection.
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        _TaskStreamPresetSelector(value: preset, onSelected: onPresetSelected),
-        const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -229,162 +199,6 @@ class _TaskStreamControls extends StatelessWidget {
       ],
     );
   }
-}
-
-/// _TaskStreamPreset identifies one Stream question preset.
-enum _TaskStreamPreset {
-  /// Manual axis pairing outside the named question presets.
-  custom,
-
-  /// Due date by effort for workload scanning.
-  dueEffort,
-
-  /// Due date by spend for money scanning.
-  dueSpend,
-
-  /// Due date by context for context load scanning.
-  contextLoad,
-
-  /// Due date by person for responsibility load scanning.
-  personLoad,
-
-  /// Due date by project for project load scanning.
-  projectLoad,
-}
-
-/// _TaskStreamPresetAxes stores the axes selected by one stream preset.
-class _TaskStreamPresetAxes {
-  const _TaskStreamPresetAxes({
-    required this.columnAxis,
-    required this.rowAxis,
-  });
-
-  /// Horizontal stream axis.
-  final TaskStreamAxisDimension columnAxis;
-
-  /// Vertical stream axis.
-  final TaskStreamAxisDimension rowAxis;
-}
-
-const Map<_TaskStreamPreset, _TaskStreamPresetAxes> _streamPresetAxes =
-    <_TaskStreamPreset, _TaskStreamPresetAxes>{
-      _TaskStreamPreset.dueEffort: _TaskStreamPresetAxes(
-        columnAxis: TaskStreamAxisDimension.due,
-        rowAxis: TaskStreamAxisDimension.effort,
-      ),
-      _TaskStreamPreset.dueSpend: _TaskStreamPresetAxes(
-        columnAxis: TaskStreamAxisDimension.due,
-        rowAxis: TaskStreamAxisDimension.spend,
-      ),
-      _TaskStreamPreset.contextLoad: _TaskStreamPresetAxes(
-        columnAxis: TaskStreamAxisDimension.due,
-        rowAxis: TaskStreamAxisDimension.context,
-      ),
-      _TaskStreamPreset.personLoad: _TaskStreamPresetAxes(
-        columnAxis: TaskStreamAxisDimension.due,
-        rowAxis: TaskStreamAxisDimension.person,
-      ),
-      _TaskStreamPreset.projectLoad: _TaskStreamPresetAxes(
-        columnAxis: TaskStreamAxisDimension.due,
-        rowAxis: TaskStreamAxisDimension.project,
-      ),
-    };
-
-/// Returns the preset represented by an axis pair, or custom when unmatched.
-_TaskStreamPreset _presetForAxes(
-  TaskStreamAxisDimension columnAxis,
-  TaskStreamAxisDimension rowAxis,
-) {
-  for (final entry in _streamPresetAxes.entries) {
-    if (entry.value.columnAxis == columnAxis &&
-        entry.value.rowAxis == rowAxis) {
-      return entry.key;
-    }
-  }
-  return _TaskStreamPreset.custom;
-}
-
-class _TaskStreamPresetSelector extends StatelessWidget {
-  const _TaskStreamPresetSelector({
-    required this.value,
-    required this.onSelected,
-  });
-
-  final _TaskStreamPreset value;
-  final ValueChanged<_TaskStreamPreset> onSelected;
-
-  /// Builds one-click question presets for the Stream view.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return SegmentedButton<_TaskStreamPreset>(
-      showSelectedIcon: false,
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        side: WidgetStatePropertyAll(
-          BorderSide(color: colors.border.withValues(alpha: 0.85)),
-        ),
-        backgroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return colors.greenSoft;
-          }
-          return colors.surface;
-        }),
-        foregroundColor: WidgetStatePropertyAll(colors.ink),
-      ),
-      segments: <ButtonSegment<_TaskStreamPreset>>[
-        for (final preset in _TaskStreamPreset.values)
-          ButtonSegment<_TaskStreamPreset>(
-            value: preset,
-            icon: Icon(_streamPresetIcon(preset), size: 15),
-            tooltip: _streamPresetQuestion(preset),
-            label: Text(_streamPresetLabel(preset)),
-          ),
-      ],
-      selected: <_TaskStreamPreset>{value},
-      onSelectionChanged: (selection) {
-        if (selection.isNotEmpty) {
-          onSelected(selection.first);
-        }
-      },
-    );
-  }
-}
-
-/// Returns the short label for one stream question preset.
-String _streamPresetLabel(_TaskStreamPreset preset) {
-  return switch (preset) {
-    _TaskStreamPreset.custom => 'Custom',
-    _TaskStreamPreset.dueEffort => 'Effort',
-    _TaskStreamPreset.dueSpend => 'Spend',
-    _TaskStreamPreset.contextLoad => 'Context',
-    _TaskStreamPreset.personLoad => 'People',
-    _TaskStreamPreset.projectLoad => 'Projects',
-  };
-}
-
-/// Returns the tooltip question for one stream preset.
-String _streamPresetQuestion(_TaskStreamPreset preset) {
-  return switch (preset) {
-    _TaskStreamPreset.custom => 'Use the selected axes.',
-    _TaskStreamPreset.dueEffort => 'How much effort sits near each due date?',
-    _TaskStreamPreset.dueSpend => 'Where does spend land against due dates?',
-    _TaskStreamPreset.contextLoad => 'Which contexts carry dated work?',
-    _TaskStreamPreset.personLoad => 'Who has dated work?',
-    _TaskStreamPreset.projectLoad => 'Which projects carry dated work?',
-  };
-}
-
-/// Returns the icon for one stream preset.
-IconData _streamPresetIcon(_TaskStreamPreset preset) {
-  return switch (preset) {
-    _TaskStreamPreset.custom => Icons.tune,
-    _TaskStreamPreset.dueEffort => Icons.speed,
-    _TaskStreamPreset.dueSpend => Icons.price_change_outlined,
-    _TaskStreamPreset.contextLoad => Icons.category_outlined,
-    _TaskStreamPreset.personLoad => Icons.person_outline,
-    _TaskStreamPreset.projectLoad => Icons.folder_copy_outlined,
-  };
 }
 
 /// Formats stream effort minutes for compact filter summaries.

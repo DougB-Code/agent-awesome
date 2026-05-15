@@ -123,7 +123,6 @@ class _TaskDropdown extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: colors.surface,
-          gradient: context.agentAwesomeControlGradient,
           border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
