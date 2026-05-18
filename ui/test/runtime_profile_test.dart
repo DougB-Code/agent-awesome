@@ -34,6 +34,9 @@ void main() {
     );
     expect(profile.gateway.enabled, isTrue);
     expect(profile.gateway.apiBaseUrl, 'http://127.0.0.1:8070/api');
+    expect(profile.workflow.enabled, isTrue);
+    expect(profile.workflow.apiBaseUrl, 'http://127.0.0.1:8092/api/workflows');
+    expect(profile.workflow.mcpUrl, 'http://127.0.0.1:8092/mcp');
     expect(
       profile.gateway.effectiveStatusUrl,
       'http://127.0.0.1:8070/api/gateway/beta-status',
@@ -54,6 +57,8 @@ void main() {
       ]),
     );
     final gatewayArguments = gatewayArgumentsForProfile(profile);
+    expect(gatewayArguments, contains('--workflow-base-url'));
+    expect(gatewayArguments, contains('http://127.0.0.1:8092/api/workflows'));
     expect(gatewayArguments, contains('--memory-domains-json'));
     expect(gatewayArguments, contains('--memory-policy-json'));
     expect(gatewayArguments, contains('--agent-profiles-json'));
@@ -119,10 +124,47 @@ void main() {
       final profile = await loader.loadFile(file);
 
       expect(profile.id, 'agent-awesome');
+      expect(profile.workflow.id, 'agent-awesome-workflow');
       expect(profile.memoryDomains.single.id, 'memory');
       expect(profile.agentMemory.defaultWriteDomain, 'memory');
     },
   );
+
+  test('loads app-managed profiles that predate workflow runtime', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-old-profile-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final file = File('${root.path}/profile.json');
+    await file.writeAsString(
+      jsonEncode(<String, dynamic>{
+        'id': 'agent-awesome',
+        'label': 'Agent Awesome',
+        'harness': <String, dynamic>{..._harnessJson(), 'auto_start': true},
+        'gateway': <String, dynamic>{..._gatewayJson(), 'auto_start': true},
+        'memory_domains': <Map<String, dynamic>>[_memoryDomainJson('memory')],
+        'agent_memory': <String, dynamic>{
+          'actor': 'agent:test',
+          'read_domains': <String>['memory'],
+          'write_domains': <String>['memory'],
+          'default_write_domain': 'memory',
+          'allowed_sensitivities': <String>['public', 'internal', 'private'],
+        },
+      }),
+    );
+
+    final profile = await RuntimeProfileLoader(
+      _testConfig(workspaceRoot: root.path, runtimeProfilePath: file.path),
+    ).load();
+
+    expect(profile.workflow.enabled, isTrue);
+    expect(profile.workflow.autoStart, isTrue);
+    expect(profile.workflow.workingDirectory, '${root.path}/workflow');
+    expect(
+      profile.workflow.definitionsDir,
+      defaultWorkflowDefinitionsDirectoryPath(),
+    );
+  });
 
   test('loads cloud profile as an external gateway topology', () async {
     final profile = await RuntimeProfileLoader(
@@ -167,6 +209,7 @@ void main() {
           'label': 'Bad Harness',
         },
         'gateway': _gatewayJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[
           <String, dynamic>{
             'id': 'memory',
@@ -202,6 +245,7 @@ void main() {
         'label': 'Bad',
         'harness': _harnessJson(),
         'gateway': _gatewayJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[_memoryDomainJson('memory')],
         'agent_memory': <String, dynamic>{
           'actor': 'agent:test',
@@ -222,6 +266,7 @@ void main() {
         'label': 'Disabled Grant',
         'harness': _harnessJson(),
         'gateway': _gatewayJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[
           _memoryDomainJson('memory', enabled: false),
           _memoryDomainJson('shared_project', port: 8091),
@@ -245,6 +290,7 @@ void main() {
         'label': 'Duplicate Storage',
         'harness': _harnessJson(),
         'gateway': _gatewayJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[
           _memoryDomainJson(
             'memory',
@@ -279,6 +325,7 @@ void main() {
         'label': 'Missing Package',
         'harness': _harnessJson(),
         'gateway': _gatewayJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[
           _memoryDomainJson('memory', autoStart: true, packagePath: ''),
         ],
@@ -300,6 +347,7 @@ void main() {
       'label': 'Multi Domain',
       'harness': _harnessJson(),
       'gateway': _gatewayJson(),
+      'workflow': _workflowJson(),
       'memory_domains': <Map<String, dynamic>>[
         _memoryDomainJson('memory'),
         _memoryDomainJson('shared_project'),
@@ -335,6 +383,7 @@ void main() {
         'label': 'Bad Flow',
         'harness': _harnessJson(),
         'gateway': _gatewayJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[
           _memoryDomainJson('memory'),
           _memoryDomainJson('shared_project'),
@@ -361,6 +410,7 @@ void main() {
         'label': 'Bad',
         'harness': _harnessJson(),
         'gateway': _gatewayJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[
           _memoryDomainJson('memory'),
           _memoryDomainJson('memory'),
@@ -383,6 +433,7 @@ void main() {
         'id': 'bad',
         'label': 'Bad',
         'harness': _harnessJson(),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[_memoryDomainJson('memory')],
         'agent_memory': <String, dynamic>{
           'actor': 'agent:test',
@@ -403,6 +454,7 @@ void main() {
         'label': 'Bad',
         'harness': _harnessJson(),
         'gateway': _gatewayJson(enabled: false),
+        'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[_memoryDomainJson('memory')],
         'agent_memory': <String, dynamic>{
           'actor': 'agent:test',
@@ -476,6 +528,23 @@ Map<String, dynamic> _gatewayJson({bool enabled = true}) {
     'app_name': 'agent_awesome',
     'user_id': 'doug',
     'port': 8070,
+    'auto_start': false,
+    'enabled': enabled,
+  };
+}
+
+/// Builds one workflow runtime profile JSON fixture.
+Map<String, dynamic> _workflowJson({bool enabled = true}) {
+  return <String, dynamic>{
+    'id': 'workflow',
+    'label': 'Workflow',
+    'api_base_url': 'http://127.0.0.1:8092/api/workflows',
+    'health_url': 'http://127.0.0.1:8092/healthz',
+    'working_directory': '/tmp/workflow',
+    'package_path': './cmd/workflowd',
+    'definitions_dir': '/tmp/workflows',
+    'db_path': '/tmp/workflow.db',
+    'port': 8092,
     'auto_start': false,
     'enabled': enabled,
   };

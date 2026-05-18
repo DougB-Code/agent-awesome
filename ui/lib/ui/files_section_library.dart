@@ -9,7 +9,6 @@ class _FilesLibraryContent extends StatelessWidget {
     required this.query,
     required this.selectedFileId,
     required this.kindFilter,
-    required this.onKindFilterChanged,
     required this.onSelected,
     required this.onAddFile,
   });
@@ -26,9 +25,6 @@ class _FilesLibraryContent extends StatelessWidget {
   /// Active type filter.
   final _FileKindFilter kindFilter;
 
-  /// Changes the active type filter.
-  final ValueChanged<_FileKindFilter> onKindFilterChanged;
-
   /// Selects a file card.
   final ValueChanged<String> onSelected;
 
@@ -44,14 +40,6 @@ class _FilesLibraryContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          _FilesSummaryStrip(files: files),
-          const SizedBox(height: 14),
-          _FileKindFilterBar(
-            selected: kindFilter,
-            files: files,
-            onSelected: onKindFilterChanged,
-          ),
-          const SizedBox(height: 14),
           Expanded(
             child: visibleFiles.isEmpty
                 ? _FilesEmptyState(
@@ -73,230 +61,6 @@ class _FilesLibraryContent extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// _FilesSummaryStrip renders high-level file inventory counts.
-class _FilesSummaryStrip extends StatelessWidget {
-  /// Creates the file summary strip.
-  const _FilesSummaryStrip({required this.files});
-
-  /// File inventory to summarize.
-  final List<_AgentFileItem> files;
-
-  /// Builds responsive inventory cards.
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 760;
-        final cards = <Widget>[
-          _FileMetricCard(
-            label: 'Files',
-            value: files.length.toString(),
-            icon: Icons.folder_open_outlined,
-            accent: context.agentAwesomeColors.green,
-          ),
-          _FileMetricCard(
-            label: 'Documents',
-            value: _countKind(files, _AgentFileKind.document).toString(),
-            icon: Icons.description_outlined,
-            accent: context.agentAwesomeLowAccent,
-          ),
-          _FileMetricCard(
-            label: 'Sheets',
-            value: _countKind(files, _AgentFileKind.spreadsheet).toString(),
-            icon: Icons.table_chart_outlined,
-            accent: context.agentAwesomeWarningAccent,
-          ),
-          _FileMetricCard(
-            label: 'Images',
-            value: _countKind(files, _AgentFileKind.image).toString(),
-            icon: Icons.image_outlined,
-            accent: context.agentAwesomeColors.coral,
-          ),
-        ];
-        if (compact) {
-          return Column(
-            children: <Widget>[
-              for (final card in cards) ...<Widget>[
-                card,
-                if (card != cards.last) const SizedBox(height: 8),
-              ],
-            ],
-          );
-        }
-        return Row(
-          children: <Widget>[
-            for (final card in cards) ...<Widget>[
-              Expanded(child: card),
-              if (card != cards.last) const SizedBox(width: 10),
-            ],
-          ],
-        );
-      },
-    );
-  }
-}
-
-/// _FileMetricCard renders one compact file count.
-class _FileMetricCard extends StatelessWidget {
-  /// Creates one summary card.
-  const _FileMetricCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.accent,
-  });
-
-  /// Metric label.
-  final String label;
-
-  /// Metric value.
-  final String value;
-
-  /// Metric icon.
-  final IconData icon;
-
-  /// Accent color for the left edge.
-  final Color accent;
-
-  /// Builds the summary card.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 74),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        gradient: context.agentAwesomeCardGradient,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Row(
-        children: <Widget>[
-          Container(width: 4, color: accent),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Row(
-                children: <Widget>[
-                  _FileIconBox(icon: icon, color: accent),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          label,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: colors.ink,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        Text(
-                          value,
-                          style: TextStyle(
-                            color: colors.ink,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// _FileKindFilterBar renders file type filter chips.
-class _FileKindFilterBar extends StatelessWidget {
-  /// Creates the file type filter bar.
-  const _FileKindFilterBar({
-    required this.selected,
-    required this.files,
-    required this.onSelected,
-  });
-
-  /// Active filter.
-  final _FileKindFilter selected;
-
-  /// File inventory used to show counts.
-  final List<_AgentFileItem> files;
-
-  /// Selects a filter.
-  final ValueChanged<_FileKindFilter> onSelected;
-
-  /// Builds filter controls with subtle dark styling.
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: <Widget>[
-          for (final filter in _FileKindFilter.values) ...<Widget>[
-            _FileFilterChip(
-              filter: filter,
-              selected: selected == filter,
-              count: _countFilter(files, filter),
-              onSelected: () => onSelected(filter),
-            ),
-            if (filter != _FileKindFilter.values.last) const SizedBox(width: 8),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// _FileFilterChip renders one file type filter trigger.
-class _FileFilterChip extends StatelessWidget {
-  /// Creates a filter chip.
-  const _FileFilterChip({
-    required this.filter,
-    required this.selected,
-    required this.count,
-    required this.onSelected,
-  });
-
-  /// File type filter represented by this chip.
-  final _FileKindFilter filter;
-
-  /// Whether this chip is active.
-  final bool selected;
-
-  /// Count shown beside the filter label.
-  final int count;
-
-  /// Selects this filter.
-  final VoidCallback onSelected;
-
-  /// Builds the filter chip.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return OutlinedButton.icon(
-      onPressed: onSelected,
-      style: OutlinedButton.styleFrom(
-        visualDensity: VisualDensity.compact,
-        backgroundColor: selected ? colors.greenSoft : colors.surface,
-        foregroundColor: selected ? colors.green : colors.ink,
-        side: BorderSide(color: selected ? colors.borderStrong : colors.border),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      icon: Icon(filter.icon, size: 16),
-      label: Text('${filter.label} $count'),
     );
   }
 }

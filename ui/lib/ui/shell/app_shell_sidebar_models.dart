@@ -20,7 +20,6 @@ class _SidebarItem {
     required this.label,
     required this.section,
     required this.iconGlyph,
-    this.showsChevron = false,
   });
 
   /// Display text.
@@ -31,7 +30,4 @@ class _SidebarItem {
 
   /// Leading glyph copied from the documentation nav.
   final String iconGlyph;
-
-  /// Whether the row shows a nested-section chevron.
-  final bool showsChevron;
 }

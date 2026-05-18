@@ -420,6 +420,25 @@ class MemoryExportDraft {
   final String sensitivity;
 }
 
+/// MemoryExportResult stores a backend-enforced memory export decision.
+class MemoryExportResult {
+  /// Creates a memory export decision result.
+  const MemoryExportResult({
+    required this.exported,
+    this.capture = const <String, dynamic>{},
+    this.safetyEvent,
+  });
+
+  /// Whether the reviewed copy was written to the destination domain.
+  final bool exported;
+
+  /// Destination capture response when an export was written.
+  final Map<String, dynamic> capture;
+
+  /// Harness-generated safety decision event.
+  final MemorySafetyEvent? safetyEvent;
+}
+
 /// MemorySafetyEvent records a domain-policy decision for review.
 class MemorySafetyEvent {
   /// Creates an immutable memory safety event.

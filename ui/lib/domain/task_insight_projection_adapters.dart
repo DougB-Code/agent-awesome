@@ -95,22 +95,6 @@ class TaskInsightProjectionAdapters {
     );
   }
 
-  /// Builds a mode-specific terrain projection from the shared insight index.
-  static PriorityTerrainProjection terrain(
-    TaskInsightIndex index, {
-    TaskTerrainInsightMode mode = TaskTerrainInsightMode.priorityFocus,
-  }) {
-    final taskIds = _terrainTaskIds(index, mode);
-    final points = <PriorityTerrainPoint>[
-      for (final taskId in taskIds) _terrainPoint(index, taskId, mode),
-    ]..sort(_compareTerrainPoints);
-    return PriorityTerrainProjection(
-      generatedAt: index.generatedAt,
-      points: points,
-      bands: _terrainBandsForMode(mode),
-    );
-  }
-
   /// Builds a mode-specific constellation projection from the insight index.
   static TaskConstellationProjection constellation(
     TaskInsightIndex index, {

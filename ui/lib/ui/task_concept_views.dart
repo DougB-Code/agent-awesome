@@ -1,18 +1,14 @@
 /// Renders task graph projections inside the shared task command panel.
 library;
 
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
 import '../app/theme.dart';
-import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import '../domain/task_graph_query.dart';
-import '../domain/task_insight_query.dart';
-import '../domain/task_projection_adapters.dart';
 import '../domain/task_wbs_tree.dart';
 import 'panels/panels.dart';
 import 'task_constellation_layout.dart';
@@ -20,16 +16,11 @@ import 'task_filter_menu.dart';
 import 'task_stream_axes.dart';
 import 'task_stream_canvas.dart';
 import 'task_stream_filters.dart';
-import 'task_terrain_filters.dart';
-import 'task_terrain_layout.dart';
-import 'task_terrain_modes.dart';
-import 'task_insight_presets.dart';
 import 'task_wbs_formatting.dart';
 
 part 'task_concept_wbs.dart';
 part 'task_concept_stream.dart';
 part 'task_concept_constellation.dart';
-part 'task_concept_terrain.dart';
 part 'task_concept_shared.dart';
 
 /// TaskConceptKind identifies one task projection workspace.
@@ -39,9 +30,6 @@ enum TaskConceptKind {
 
   /// Encoded task-fact stream.
   stream,
-
-  /// Priority landscape for planning.
-  terrain,
 
   /// Work-breakdown structure table.
   wbs,
@@ -85,8 +73,6 @@ class TaskConceptProjectionPanel extends StatelessWidget {
         return _TaskConstellationView(controller: controller);
       case TaskConceptKind.stream:
         return _TaskStreamView(controller: controller);
-      case TaskConceptKind.terrain:
-        return _PriorityTerrainView(controller: controller);
       case TaskConceptKind.wbs:
         return _TaskWbsView(controller: controller);
     }

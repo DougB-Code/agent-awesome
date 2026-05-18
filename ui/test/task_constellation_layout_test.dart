@@ -170,35 +170,6 @@ void main() {
       expect(selected.relationType, 'anchor_membership');
     });
 
-    test('uses terrain insights for AI delegation anchors', () {
-      final layout = TaskConstellationLayout.build(
-        _projection(nodeCount: 3, edgeCount: 0),
-        const Size(900, 560),
-        anchorDimension: TaskConstellationAnchorDimension.aiDelegation,
-        terrainPointsByTaskId: const <String, PriorityTerrainPoint>{
-          'task-0': PriorityTerrainPoint(
-            taskId: 'task-0',
-            title: 'AI task',
-            status: 'open',
-            priority: 'normal',
-            agentFitScore: 0.82,
-          ),
-          'task-1': PriorityTerrainPoint(
-            taskId: 'task-1',
-            title: 'Human task',
-            status: 'open',
-            priority: 'normal',
-            agentFitScore: 0.12,
-          ),
-        },
-      );
-
-      expect(
-        layout.anchors.map((anchor) => anchor.label),
-        containsAll(<String>['Strong AI fit', 'Human led']),
-      );
-    });
-
     test('uses owner and project metadata as graph anchors', () {
       const projection = TaskConstellationProjection(
         nodes: <TaskConstellationNode>[

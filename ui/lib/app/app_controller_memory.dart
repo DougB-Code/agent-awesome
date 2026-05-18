@@ -157,26 +157,10 @@ extension AgentAwesomeAppControllerMemory on AgentAwesomeAppController {
     final target = _defaultWriteMemoryServer();
     if (sourceDomain.isEmpty || sourceDomain == target.id) {
       memoryMessage = 'Memory is already in the default write domain';
-      _recordMemorySafetyEvent(
+      _appendMemorySafetyEvent(
         kind: 'skipped_export',
         severity: 'info',
         title: 'Export not needed',
-        detail: memoryMessage,
-        sourceDomain: sourceDomain,
-        targetDomain: target.id,
-        sourceMemoryId: source.id,
-        approved: false,
-      );
-      _notifyControllerListeners();
-      return false;
-    }
-    if (!_memoryDomainFlowAllowed(sourceDomain, target.id)) {
-      memoryMessage =
-          'Export blocked: ${memoryDomainLabel(sourceDomain)} cannot write to ${target.label}';
-      _recordMemorySafetyEvent(
-        kind: 'blocked_export',
-        severity: 'warning',
-        title: 'Export blocked',
         detail: memoryMessage,
         sourceDomain: sourceDomain,
         targetDomain: target.id,
@@ -194,51 +178,33 @@ extension AgentAwesomeAppControllerMemory on AgentAwesomeAppController {
     memoryMessage = 'Exporting reviewed memory copy';
     _notifyControllerListeners();
     try {
-      await _withMemoryClientForServer(
-        target,
-        (client) => client.saveMemoryCandidate(
-          draft: MemoryCaptureDraft(
-            content: content,
-            title: draft.title.trim().isEmpty
-                ? source.title
-                : draft.title.trim(),
-            kind: source.kind,
-            firewall: draft.firewall.trim().isEmpty
-                ? source.firewall
-                : draft.firewall.trim(),
-            trustLevel: 'user_asserted',
-            sensitivity: draft.sensitivity.trim().isEmpty
-                ? source.sensitivity
-                : draft.sensitivity.trim(),
-            sourceSystem: 'agent_awesome_declassification',
-            sourceId: _memoryExportSourceId(source),
-            subjects: source.subjects,
-            topics: source.topics,
-            entityNames: source.entityNames,
-          ),
+      final result = await _withMemoryControlClient(
+        (client) => client.exportMemoryCopy(
+          source: source,
+          draft: draft,
+          sourceDomain: sourceDomain,
+          targetDomain: target.id,
           actor: _memoryActor(),
           idempotencyKey:
-              'agent_awesome_declassification:$sourceDomain:${source.id}:${DateTime.now().microsecondsSinceEpoch}',
+              'agent_awesome_declassification:$sourceDomain:${target.id}:${source.id}:${DateTime.now().microsecondsSinceEpoch}',
         ),
       );
-      memoryMessage = 'Reviewed memory copy exported';
-      _recordMemorySafetyEvent(
-        kind: 'approved_export',
-        severity: 'review',
-        title: 'Reviewed memory copy exported',
-        detail:
-            '${memoryDomainLabel(sourceDomain)} -> ${target.label}: ${source.title}',
-        sourceDomain: sourceDomain,
-        targetDomain: target.id,
-        sourceMemoryId: source.id,
-        approved: true,
-      );
+      if (result.safetyEvent != null) {
+        _recordMemorySafetyEvent(result.safetyEvent!);
+      }
+      if (!result.exported) {
+        memoryMessage = result.safetyEvent?.detail ?? 'Export blocked';
+        _notifyControllerListeners();
+        return false;
+      }
+      memoryMessage =
+          result.safetyEvent?.title ?? 'Reviewed memory copy exported';
       _setEndpoint(target.label, ConnectionStateKind.connected, memoryMessage);
       await _loadMemory();
-      return true;
+      return result.exported;
     } catch (error) {
       memoryMessage = error.toString();
-      _recordMemorySafetyEvent(
+      _appendMemorySafetyEvent(
         kind: 'failed_export',
         severity: 'error',
         title: 'Export failed',
@@ -269,7 +235,7 @@ extension AgentAwesomeAppControllerMemory on AgentAwesomeAppController {
     }
     final targetDomain = profile.agentMemory.defaultWriteDomain;
     return sourceDomain != targetDomain &&
-        _memoryDomainFlowAllowed(sourceDomain, targetDomain);
+        profile.agentMemory.writeDomains.contains(targetDomain);
   }
 
   /// Returns a human-readable memory domain label.
@@ -740,32 +706,8 @@ $content
     return <String>[...memoryFilters.allowedSensitivities, sensitivity];
   }
 
-  /// Checks configured same-domain or explicit memory information flow.
-  bool _memoryDomainFlowAllowed(String sourceDomain, String targetDomain) {
-    if (sourceDomain == targetDomain) {
-      return true;
-    }
-    final profile = runtimeProfile;
-    if (profile == null) {
-      return false;
-    }
-    return profile.agentMemory.allowedFlows.any((flow) {
-      return flow.fromDomain == sourceDomain && flow.toDomain == targetDomain;
-    });
-  }
-
-  /// Builds an auditable source id for an exported memory copy.
-  String _memoryExportSourceId(MemoryRecord source) {
-    final evidence = source.evidenceId.trim();
-    return <String>[
-      source.domainId.trim(),
-      source.id.trim(),
-      if (evidence.isNotEmpty) evidence,
-    ].join(':');
-  }
-
-  /// Records a bounded in-session memory safety event.
-  void _recordMemorySafetyEvent({
+  /// Creates and records a local safety event for non-backend export outcomes.
+  void _appendMemorySafetyEvent({
     required String kind,
     required String severity,
     required String title,
@@ -788,6 +730,11 @@ $content
       approved: approved,
       createdAt: now,
     );
+    _recordMemorySafetyEvent(event);
+  }
+
+  /// Records a bounded in-session memory safety event.
+  void _recordMemorySafetyEvent(MemorySafetyEvent event) {
     memorySafetyEvents = <MemorySafetyEvent>[
       event,
       ...memorySafetyEvents,

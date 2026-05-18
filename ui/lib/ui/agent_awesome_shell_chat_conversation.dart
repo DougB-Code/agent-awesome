@@ -14,9 +14,7 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
   /// Builds the dedicated chat command panel with conversation and chat areas.
   @override
   Widget build(BuildContext context) {
-    return SwitcherPanel(
-      titleControl: _ChatSessionPicker(controller: widget.controller),
-      showAreaQuickSelect: false,
+    return CommandPanelSubShell(
       areas: <SwitcherPanelArea>[
         SwitcherPanelArea(
           title: 'Conversation',
@@ -27,6 +25,17 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
           ),
         ),
       ],
+      detailTitle: '',
+      detailModes: const <CommandPanelDetailMode>[],
+      selectedDetailModeId: '',
+      onDetailModeSelected: (_) {},
+      detailBuilder: (_) => const SizedBox.shrink(),
+      areaActionsBuilder: (context, area) =>
+          _ChatSessionPicker(controller: widget.controller),
+      filterHint: 'Filter...',
+      showAreaTabs: false,
+      showDetailPane: false,
+      showPaneCollapseButtons: false,
     );
   }
 }
@@ -142,7 +151,6 @@ class _ChatSessionPicker extends StatelessWidget {
   /// Builds the active chat selector for the conversation panel.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
     final selectedChat = controller.selectedChatEntry;
     final selectedSession = _selectedSession();
     final selectedChatKey = controller.selectedChatKey;
@@ -159,31 +167,12 @@ class _ChatSessionPicker extends StatelessWidget {
           onSelected: (chatKey) {
             unawaited(controller.selectHistoryChat(chatKey));
           },
-          onDelete: controller.deleteHistoryChat,
-          deleteTooltip: 'Delete chat',
         ),
         const SizedBox(width: 8),
-        Tooltip(
-          message: 'Delete selected chat',
-          child: SizedBox.square(
-            dimension: 38,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                padding: EdgeInsets.zero,
-                foregroundColor: colors.muted,
-                side: BorderSide(color: colors.border),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              onPressed: selectedChatKey.isEmpty
-                  ? null
-                  : () {
-                      unawaited(controller.deleteHistoryChat(selectedChatKey));
-                    },
-              child: const Icon(Icons.delete_outline, size: 18),
-            ),
-          ),
+        PanelIconButton(
+          icon: Icons.add_comment_outlined,
+          tooltip: 'Start new chat',
+          onPressed: () => unawaited(controller.createChat()),
         ),
       ],
     );

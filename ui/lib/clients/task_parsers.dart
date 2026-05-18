@@ -287,7 +287,6 @@ TaskProjectionScores parseTaskProjectionScores(dynamic content) {
     unblockLeverage: doubleValue(scores['unblock_leverage']),
     staleness: doubleValue(scores['staleness']),
     elevation: doubleValue(scores['elevation']),
-    terrainZone: stringValue(scores['terrain_zone']),
   );
 }
 

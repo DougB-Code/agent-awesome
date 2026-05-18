@@ -2,36 +2,21 @@
 part of 'settings_panel.dart';
 
 class _SettingsMissingProfilePanel extends StatelessWidget {
-  const _SettingsMissingProfilePanel({required this.section});
+  const _SettingsMissingProfilePanel({
+    required this.section,
+    required this.query,
+  });
 
   final String section;
+  final String query;
 
   /// Builds a high-density settings panel for missing profile state.
   @override
   Widget build(BuildContext context) {
-    return CollectionSwitcherPanel<String>(
-      title: section,
-      selectedId: 'missing-profile',
-      emptyLabel: 'Runtime profile unavailable',
-      items: const <CollectionPanelItem<String>>[
-        CollectionPanelItem<String>(
-          id: 'missing-profile',
-          label: 'Profile Required',
-          icon: Icons.warning_amber_outlined,
-          value: 'missing-profile',
-        ),
-      ],
-      onSelect: (_) {},
-      builder: (_, query) {
-        if (!SettingsQuery.matches(query, <String>[
-          section,
-          'Profile Required',
-        ])) {
-          return PanelEmptyState(query: query);
-        }
-        return const _RuntimeProfileMissing();
-      },
-    );
+    if (!SettingsQuery.matches(query, <String>[section, 'Profile Required'])) {
+      return PanelEmptyState(query: query);
+    }
+    return const _RuntimeProfileMissing();
   }
 }
 
@@ -47,96 +32,28 @@ class _RuntimeProfileMissing extends StatelessWidget {
   }
 }
 
-class _SettingsProfilesCollection extends StatefulWidget {
+class _SettingsProfilesCollection extends StatelessWidget {
   const _SettingsProfilesCollection({
     required this.controller,
     required this.profile,
     required this.profilePath,
+    required this.query,
   });
 
   final AgentAwesomeAppController controller;
   final RuntimeProfile profile;
   final String profilePath;
+  final String query;
 
-  @override
-  State<_SettingsProfilesCollection> createState() =>
-      _SettingsProfilesCollectionState();
-}
-
-class _SettingsProfilesCollectionState
-    extends State<_SettingsProfilesCollection> {
-  /// Builds a file-backed runtime profile collection panel.
+  /// Builds active runtime profile content without section-owned shell chrome.
   @override
   Widget build(BuildContext context) {
-    final profiles = widget.controller.availableProfiles.isEmpty
-        ? <RuntimeProfileFileEntry>[
-            RuntimeProfileFileEntry(
-              path: widget.profilePath,
-              id: widget.profile.id,
-              label: widget.profile.label,
-              active: true,
-            ),
-          ]
-        : widget.controller.availableProfiles;
-    return CollectionSwitcherPanel<RuntimeProfileFileEntry>(
-      title: 'Profiles',
-      selectedId: widget.profilePath,
-      emptyLabel: 'No profiles configured',
-      items: <CollectionPanelItem<RuntimeProfileFileEntry>>[
-        for (final entry in profiles)
-          CollectionPanelItem<RuntimeProfileFileEntry>(
-            id: entry.path,
-            label: entry.label,
-            detail: entry.path,
-            icon: Icons.person_outline,
-            badge: entry.path == widget.profilePath ? 'Active' : '',
-            value: entry,
-          ),
-      ],
-      onSelect: (path) => unawaited(_load(path)),
-      onCreate: () => unawaited(_create()),
-      onDuplicate: (_) => unawaited(_duplicate()),
-      onDelete: (_) => unawaited(_delete()),
-      builder: (entry, query) {
-        return _SettingsProfileEditor(
-          controller: widget.controller,
-          profile: widget.profile,
-          profilePath: entry.path,
-          query: query,
-        );
-      },
+    return _SettingsProfileEditor(
+      controller: controller,
+      profile: profile,
+      profilePath: profilePath,
+      query: query,
     );
-  }
-
-  Future<void> _load(String path) async {
-    try {
-      await widget.controller.loadRuntimeProfileFromPath(path);
-    } catch (_) {}
-  }
-
-  Future<void> _create() async {
-    try {
-      await widget.controller.createRuntimeProfileFile();
-    } catch (_) {}
-  }
-
-  Future<void> _duplicate() async {
-    try {
-      await widget.controller.duplicateRuntimeProfileFile();
-    } catch (_) {}
-  }
-
-  Future<void> _delete() async {
-    final confirmed = await _confirmSettingsDelete(
-      context,
-      label: SettingsConfigLabels.fileLabel(widget.profilePath),
-    );
-    if (!confirmed) {
-      return;
-    }
-    try {
-      await widget.controller.deleteActiveRuntimeProfileFile();
-    } catch (_) {}
   }
 }
 

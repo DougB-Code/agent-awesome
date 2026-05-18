@@ -30,7 +30,6 @@ part 'settings_panel_mcp_servers.dart';
 part 'settings_panel_tool_collection.dart';
 part 'settings_panel_tool_editor.dart';
 part 'settings_panel_tool_fields.dart';
-part 'settings_panel_tool_files.dart';
 part 'settings_panel_config_files.dart';
 part 'settings_panel_server.dart';
 part 'settings_panel_actions.dart';

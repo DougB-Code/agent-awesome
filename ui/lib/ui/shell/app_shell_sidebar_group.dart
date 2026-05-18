@@ -50,12 +50,12 @@ class _SidebarGroupView extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: _NavButton(
+                key: ValueKey<String>('sidebar-${item.section}'),
                 label: item.label,
                 iconGlyph: item.iconGlyph,
                 selected: selected == item.section,
                 onTap: () => onSelected(item.section),
                 compact: compact,
-                showsChevron: item.showsChevron,
               ),
             ),
         ],

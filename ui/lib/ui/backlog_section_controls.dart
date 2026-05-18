@@ -98,105 +98,22 @@ class _TaskBadge extends StatelessWidget {
   }
 }
 
-class _TaskDropdown extends StatelessWidget {
+class _TaskDropdown extends PanelDropdownFormField<String> {
   const _TaskDropdown({
-    required this.value,
-    required this.values,
-    required this.tooltip,
-    required this.onChanged,
-  });
-
-  final String value;
-  final List<String> values;
-  final String tooltip;
-  final ValueChanged<String> onChanged;
-
-  /// Builds a compact dropdown for context controlled vocabulary.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    final dropdownValue = values.contains(value) ? value : values.first;
-    return Tooltip(
-      message: tooltip,
-      child: Container(
-        height: 44,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          border: Border.all(color: colors.border),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: dropdownValue,
-            isDense: true,
-            isExpanded: true,
-            dropdownColor: colors.surface,
-            icon: Icon(Icons.expand_more, size: 18, color: colors.muted),
-            style: TextStyle(color: colors.ink),
-            items: <DropdownMenuItem<String>>[
-              for (final item in values)
-                DropdownMenuItem<String>(
-                  value: item,
-                  child: Text(
-                    _taskLabel(item),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-            ],
-            onChanged: (value) {
-              if (value != null) {
-                onChanged(value);
-              }
-            },
-          ),
-        ),
-      ),
-    );
-  }
+    required super.value,
+    required super.values,
+    required super.tooltip,
+    required super.onChanged,
+  }) : super(label: tooltip ?? '', showLabel: false, labelFor: _taskLabel);
 }
 
-class _TaskTextField extends StatelessWidget {
+class _TaskTextField extends PanelTextFormField {
   const _TaskTextField({
-    required this.controller,
-    required this.label,
-    this.maxLines = 1,
-    this.keyboardType,
+    required super.controller,
+    required super.label,
+    super.maxLines = 1,
+    super.keyboardType,
   });
-
-  final TextEditingController controller;
-  final String label;
-  final int maxLines;
-  final TextInputType? keyboardType;
-
-  /// Builds a compact context form field.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      minLines: maxLines == 1 ? 1 : 3,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: colors.surface,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: colors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: colors.searchBorder),
-        ),
-      ),
-    );
-  }
 }
 
 /// _TaskDatePickerField renders a task date value with a popup date picker.
@@ -232,11 +149,10 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
             onTap: _pickDate,
             child: InputDecorator(
               isEmpty: !hasValue,
-              decoration: InputDecoration(
-                labelText: widget.label,
+              decoration: PanelFormDecoration.field(
+                context,
+                label: widget.label,
                 floatingLabelBehavior: FloatingLabelBehavior.always,
-                filled: true,
-                fillColor: colors.surface,
                 suffixIcon: IconButton(
                   tooltip: hasValue
                       ? 'Clear ${widget.label}'
@@ -246,18 +162,6 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
                     hasValue ? Icons.close : Icons.calendar_today_outlined,
                     size: 18,
                   ),
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: colors.searchBorder),
                 ),
               ),
               child: Text(

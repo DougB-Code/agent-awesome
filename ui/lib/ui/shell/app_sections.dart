@@ -12,6 +12,24 @@ abstract final class AppSections {
   /// Backlog workspace section backed by graph task data.
   static const String backlog = 'Backlog';
 
+  /// Workflow run and approval operations section.
+  static const String automationOperations = 'Operations';
+
+  /// State-machine workflow authoring section.
+  static const String automationWorkflows = 'Workflows';
+
+  /// DAG task authoring section.
+  static const String automationTasks = 'Tasks';
+
+  /// Agent step authoring section.
+  static const String automationAgents = 'Agents';
+
+  /// MCP server toolset configuration section.
+  static const String automationMcpServers = 'MCP Servers';
+
+  /// Harness OS/local tool configuration section.
+  static const String automationTools = 'Tools';
+
   /// Memory workspace section.
   static const String memory = 'Memory';
 

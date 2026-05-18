@@ -80,9 +80,9 @@ class _MemoryMetadataContentState extends State<_MemoryMetadataContent> {
             title: 'Metadata Repair',
             child: Column(
               children: <Widget>[
-                _MemoryTextField(controller: _title, label: 'Title'),
+                PanelTextFormField(controller: _title, label: 'Title'),
                 const SizedBox(height: 10),
-                _MemoryTextField(
+                PanelTextFormField(
                   controller: _summary,
                   label: 'Summary',
                   maxLines: 4,
@@ -91,19 +91,23 @@ class _MemoryMetadataContentState extends State<_MemoryMetadataContent> {
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: _MemoryDropdown(
+                      child: PanelDropdownFormField<String>(
+                        label: 'Kind',
                         value: _kind,
                         values: _memoryKinds,
                         tooltip: 'Kind',
+                        labelFor: _memoryLabel,
                         onChanged: (value) => setState(() => _kind = value),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _MemoryDropdown(
+                      child: PanelDropdownFormField<String>(
+                        label: 'Sensitivity',
                         value: _sensitivity,
                         values: _memorySensitivities,
                         tooltip: 'Sensitivity',
+                        labelFor: _memoryLabel,
                         onChanged: (value) =>
                             setState(() => _sensitivity = value),
                       ),
@@ -111,18 +115,20 @@ class _MemoryMetadataContentState extends State<_MemoryMetadataContent> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _MemoryDropdown(
+                PanelDropdownFormField<String>(
+                  label: 'Status',
                   value: _status,
                   values: _memoryStatuses,
                   tooltip: 'Status',
+                  labelFor: _memoryLabel,
                   onChanged: (value) => setState(() => _status = value),
                 ),
                 const SizedBox(height: 10),
-                _MemoryTextField(controller: _subjects, label: 'Subjects'),
+                PanelTextFormField(controller: _subjects, label: 'Subjects'),
                 const SizedBox(height: 10),
-                _MemoryTextField(controller: _topics, label: 'Topics'),
+                PanelTextFormField(controller: _topics, label: 'Topics'),
                 const SizedBox(height: 10),
-                _MemoryTextField(controller: _entities, label: 'Entities'),
+                PanelTextFormField(controller: _entities, label: 'Entities'),
               ],
             ),
           ),

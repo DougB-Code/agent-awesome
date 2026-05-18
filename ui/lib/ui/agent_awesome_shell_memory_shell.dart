@@ -24,6 +24,8 @@ class _MemoryCommandSubShellState extends State<_MemoryCommandSubShell> {
       selectedDetailModeId: _detailModeId,
       onDetailModeSelected: _selectDetailMode,
       detailBuilder: _buildDetailContent,
+      searchableDetailBuilder: (_, modeId, query) =>
+          _buildDetailContent(modeId, query),
       onAreaChanged: widget.onAreaChanged,
       filterHint: 'Filter...',
       split: const PanelSplit(left: 0.58, min: 0.44, max: 0.82),
@@ -36,29 +38,29 @@ class _MemoryCommandSubShellState extends State<_MemoryCommandSubShell> {
   }
 
   /// Builds one selected-memory detail mode.
-  Widget _buildDetailContent(String modeId) {
+  Widget _buildDetailContent(String modeId, [String query = '']) {
     return switch (modeId) {
       _memorySourceDetailId => _MemorySourceContent(
         controller: widget.controller,
-        query: '',
+        query: query,
       ),
       _memoryRelationsDetailId => _MemoryRelationsContent(
         controller: widget.controller,
-        query: '',
+        query: query,
       ),
       _memoryMetadataDetailId => _MemoryMetadataContent(
         controller: widget.controller,
-        query: '',
+        query: query,
       ),
       _memoryCorrectionsDetailId => _MemoryCorrectionsContent(
         controller: widget.controller,
-        query: '',
+        query: query,
       ),
       _memoryPagesDetailId => _MemoryPagesContent(
         controller: widget.controller,
-        query: '',
+        query: query,
       ),
-      _ => _MemoryOverviewContent(controller: widget.controller, query: ''),
+      _ => _MemoryOverviewContent(controller: widget.controller, query: query),
     };
   }
 }

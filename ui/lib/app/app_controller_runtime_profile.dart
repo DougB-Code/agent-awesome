@@ -319,9 +319,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
         toolConfigPath: graphToolPath,
       ),
     );
-    if (next.harness.modelConfigPath != harness.modelConfigPath ||
-        next.harness.agentConfigPath != harness.agentConfigPath ||
-        next.harness.toolConfigPath != harness.toolConfigPath) {
+    if (encodeRuntimeProfileJson(next) != encodeRuntimeProfileJson(profile)) {
       final file = File(runtimeProfilePath);
       await file.parent.create(recursive: true);
       await file.writeAsString(encodeRuntimeProfileJson(next));
@@ -502,6 +500,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     final target = graphBackedMemoryToolConfigForDomains(
       memoryDomains: graphServers,
       agentMemory: profile.agentMemory,
+      workflow: profile.workflow,
       localExec: document.localExec,
       extra: document.extra,
     );
@@ -753,6 +752,14 @@ extension AgentAwesomeAppControllerRuntimeProfiles
           headers: headers,
           logger: logger,
         ),
+      );
+    }
+    if (!_automationsClientInjected) {
+      automationsClient.close();
+      automationsClient = AutomationsClient(
+        baseUrl: _workflowBaseUrl(profile.gateway.apiBaseUrl),
+        headers: headers,
+        logger: logger,
       );
     }
   }

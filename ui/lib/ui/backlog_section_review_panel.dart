@@ -87,7 +87,7 @@ class _ScreenRunSummaryBlock extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
           ),
           const SizedBox(height: 6),
-          Text(
+          SelectableText(
             controller.screenCommandMessage,
             style: TextStyle(color: context.agentAwesomeColors.muted),
           ),
@@ -162,7 +162,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
             ],
             if (change.error.isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-              Text(
+              SelectableText(
                 change.error,
                 style: const TextStyle(
                   color: AgentAwesomeColors.coral,

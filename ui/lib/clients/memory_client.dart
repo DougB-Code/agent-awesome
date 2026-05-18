@@ -101,6 +101,39 @@ class MemoryClient {
     });
   }
 
+  /// Requests a harness-enforced reviewed copy between memory domains.
+  Future<MemoryExportResult> exportMemoryCopy({
+    required MemoryRecord source,
+    required MemoryExportDraft draft,
+    required String sourceDomain,
+    required String targetDomain,
+    String actor = 'agent_awesome_ui',
+    String idempotencyKey = '',
+  }) async {
+    final content = await _rpc.callTool('export_memory_copy', <String, dynamic>{
+      'actor': actor,
+      'source_domain': sourceDomain,
+      'target_domain': targetDomain,
+      'source_memory_id': source.id,
+      'source_evidence_id': source.evidenceId,
+      'title': draft.title.trim().isEmpty ? source.title : draft.title,
+      'content': draft.content,
+      'kind': source.kind,
+      'firewall': draft.firewall.trim().isEmpty
+          ? source.firewall
+          : draft.firewall,
+      'sensitivity': draft.sensitivity.trim().isEmpty
+          ? source.sensitivity
+          : draft.sensitivity,
+      'subjects': source.subjects,
+      'topics': source.topics,
+      'entity_names': source.entityNames,
+      if (idempotencyKey.trim().isNotEmpty)
+        'idempotency_key': idempotencyKey.trim(),
+    });
+    return parseMemoryExportResult(content);
+  }
+
   /// Loads or builds a compiled entity page.
   Future<CompiledMemoryPage> loadEntityPage({
     required String firewall,

@@ -53,12 +53,6 @@ List<SwitcherPanelArea> _memoryCommandAreas(
           _MemorySearchContent(controller: controller, query: query),
     ),
     SwitcherPanelArea(
-      title: 'Browse',
-      icon: Icons.filter_alt_outlined,
-      builder: (query) =>
-          _MemoryBrowseContent(controller: controller, query: query),
-    ),
-    SwitcherPanelArea(
       title: 'Review',
       icon: Icons.rule_folder_outlined,
       builder: (query) =>

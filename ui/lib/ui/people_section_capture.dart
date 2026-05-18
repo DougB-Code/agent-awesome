@@ -126,29 +126,30 @@ class _ContactCaptureDialogState extends State<_ContactCaptureDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              _ContactTextField(controller: _name, label: 'Name'),
+              PanelTextFormField(controller: _name, label: 'Name'),
               const SizedBox(height: 10),
-              _ContactTextField(controller: _context, label: 'Context'),
+              PanelTextFormField(controller: _context, label: 'Context'),
               const SizedBox(height: 10),
-              _ContactTextField(controller: _note, label: 'Note', maxLines: 5),
+              PanelTextFormField(controller: _note, label: 'Note', maxLines: 5),
               const SizedBox(height: 10),
-              _ContactTextField(controller: _topics, label: 'Topics'),
+              PanelTextFormField(controller: _topics, label: 'Topics'),
               const SizedBox(height: 10),
               Row(
                 children: <Widget>[
                   Expanded(
-                    child: _ContactDropdown(
+                    child: PanelDropdownFormField<String>(
+                      label: 'Firewall',
                       value: _firewall,
                       values: widget.controller.memoryFirewallIds,
                       tooltip: 'Firewall',
-                      labelForValue:
-                          widget.controller.memoryFirewallPickerLabel,
+                      labelFor: widget.controller.memoryFirewallPickerLabel,
                       onChanged: (value) => setState(() => _firewall = value),
                     ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _ContactDropdown(
+                    child: PanelDropdownFormField<String>(
+                      label: 'Sensitivity',
                       value: _sensitivity,
                       values: const <String>[
                         'public',
@@ -157,6 +158,7 @@ class _ContactCaptureDialogState extends State<_ContactCaptureDialog> {
                         'restricted',
                       ],
                       tooltip: 'Sensitivity',
+                      labelFor: _contactLabel,
                       onChanged: (value) =>
                           setState(() => _sensitivity = value),
                     ),
@@ -224,122 +226,6 @@ class _ContactCaptureDialogState extends State<_ContactCaptureDialog> {
     if (mounted) {
       Navigator.of(context).pop();
     }
-  }
-}
-
-/// _ContactTextField renders one dialog text input.
-class _ContactTextField extends StatelessWidget {
-  /// Creates a dialog text field.
-  const _ContactTextField({
-    required this.controller,
-    required this.label,
-    this.maxLines = 1,
-  });
-
-  /// Text controller for the field.
-  final TextEditingController controller;
-
-  /// Field label.
-  final String label;
-
-  /// Maximum visible lines.
-  final int maxLines;
-
-  /// Builds a compact dialog text field.
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-    );
-  }
-}
-
-/// _ContactDropdown renders one controlled vocabulary dropdown.
-class _ContactDropdown extends StatelessWidget {
-  /// Creates a dropdown field.
-  const _ContactDropdown({
-    required this.value,
-    required this.values,
-    required this.tooltip,
-    required this.onChanged,
-    this.labelForValue,
-  });
-
-  /// Selected value.
-  final String value;
-
-  /// Allowed values.
-  final List<String> values;
-
-  /// Tooltip text for the control.
-  final String tooltip;
-
-  /// Selection callback.
-  final ValueChanged<String> onChanged;
-
-  /// Optional visible label resolver.
-  final String Function(String value)? labelForValue;
-
-  /// Builds a compact dropdown control.
-  @override
-  Widget build(BuildContext context) {
-    if (values.isEmpty) {
-      return Tooltip(
-        message: tooltip,
-        child: TextField(
-          enabled: false,
-          decoration: InputDecoration(
-            labelText: tooltip,
-            border: const OutlineInputBorder(),
-          ),
-        ),
-      );
-    }
-    final dropdownValue = _coerceContactDropdownValue(
-      values,
-      value,
-      values.first,
-    );
-    return Tooltip(
-      message: tooltip,
-      child: DropdownButtonFormField<String>(
-        initialValue: dropdownValue,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: tooltip,
-          border: const OutlineInputBorder(),
-        ),
-        selectedItemBuilder: (context) => <Widget>[
-          for (final item in values)
-            Text(
-              labelForValue?.call(item) ?? _contactLabel(item),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-        ],
-        items: <DropdownMenuItem<String>>[
-          for (final item in values)
-            DropdownMenuItem<String>(
-              value: item,
-              child: Text(
-                labelForValue?.call(item) ?? _contactLabel(item),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
-        onChanged: (value) {
-          if (value != null) {
-            onChanged(value);
-          }
-        },
-      ),
-    );
   }
 }
 

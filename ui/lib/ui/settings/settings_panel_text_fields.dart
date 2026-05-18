@@ -16,19 +16,22 @@ class _SettingsInlineField extends StatefulWidget {
   final int minLines;
   final int maxLines;
 
-  /// Creates state for blur-based inline settings edits.
+  /// Creates state for inline settings edits.
   @override
   State<_SettingsInlineField> createState() => _SettingsInlineFieldState();
 }
 
 class _SettingsInlineFieldState extends State<_SettingsInlineField> {
+  static const Duration _saveDelay = Duration(milliseconds: 500);
+
   late final TextEditingController _controller = TextEditingController(
     text: widget.value,
   );
   late final FocusNode _focusNode = FocusNode();
   late String _savedValue = widget.value;
+  Timer? _saveTimer;
 
-  /// Initializes focus tracking for blur saves.
+  /// Initializes focus tracking for autosave flushes.
   @override
   void initState() {
     super.initState();
@@ -48,6 +51,7 @@ class _SettingsInlineFieldState extends State<_SettingsInlineField> {
   /// Cleans up field controllers.
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     _controller.dispose();
@@ -65,12 +69,13 @@ class _SettingsInlineFieldState extends State<_SettingsInlineField> {
         minLines: widget.minLines,
         maxLines: widget.maxLines,
         onFieldSubmitted: (_) => _save(),
+        onChanged: (_) => _scheduleSave(),
         decoration: SettingsInputDecoration.field(context, label: widget.label),
       ),
     );
   }
 
-  /// Saves changed field content after focus leaves the field.
+  /// Flushes changed field content after focus leaves the field.
   void _handleFocusChange() {
     if (!_focusNode.hasFocus) {
       _save();
@@ -79,12 +84,19 @@ class _SettingsInlineFieldState extends State<_SettingsInlineField> {
 
   /// Emits the new value when it differs from the saved value.
   void _save() {
+    _saveTimer?.cancel();
     final next = _controller.text.trim();
     if (next == _savedValue.trim()) {
       return;
     }
     _savedValue = next;
     widget.onChanged(next);
+  }
+
+  /// Schedules one save after a short edit pause.
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, _save);
   }
 }
 
@@ -132,10 +144,13 @@ class _SettingsAutoSaveTextField extends StatefulWidget {
 
 class _SettingsAutoSaveTextFieldState
     extends State<_SettingsAutoSaveTextField> {
+  static const Duration _saveDelay = Duration(milliseconds: 500);
+
   late final FocusNode _focusNode = FocusNode();
   late String _savedValue = widget.initialSavedValue;
+  Timer? _saveTimer;
 
-  /// Initializes focus tracking for blur autosave.
+  /// Initializes focus tracking for autosave flushes.
   @override
   void initState() {
     super.initState();
@@ -154,12 +169,13 @@ class _SettingsAutoSaveTextFieldState
   /// Cleans up field focus state.
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     super.dispose();
   }
 
-  /// Builds an editable field that saves when focus leaves it.
+  /// Builds an editable field that saves after each edit pause.
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -169,21 +185,35 @@ class _SettingsAutoSaveTextFieldState
         controller: widget.controller,
         minLines: widget.minLines,
         maxLines: widget.maxLines,
+        onChanged: (_) => _scheduleSave(),
+        onFieldSubmitted: (_) => _save(),
         decoration: SettingsInputDecoration.field(context, label: widget.label),
       ),
     );
   }
 
-  /// Saves changed field content after focus leaves the field.
+  /// Flushes changed field content after focus leaves the field.
   void _handleFocusChange() {
     if (_focusNode.hasFocus) {
       return;
     }
+    _save();
+  }
+
+  /// Saves changed field content immediately.
+  void _save() {
+    _saveTimer?.cancel();
     final next = widget.controller.text.trim();
     if (next == _savedValue.trim()) {
       return;
     }
     _savedValue = next;
     unawaited(widget.onSave(next));
+  }
+
+  /// Schedules one save after a short edit pause.
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, _save);
   }
 }

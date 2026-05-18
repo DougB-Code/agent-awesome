@@ -109,18 +109,6 @@ class TaskStreamAxisProjector {
         TaskStreamAxisDimension.spend,
       ];
 
-  /// Encoded area dimensions used to overlay task facts on terrain projections.
-  static const List<TaskStreamAxisDimension> terrainOverlayDimensions =
-      <TaskStreamAxisDimension>[
-        TaskStreamAxisDimension.project,
-        TaskStreamAxisDimension.person,
-        TaskStreamAxisDimension.priority,
-        TaskStreamAxisDimension.due,
-        TaskStreamAxisDimension.scheduled,
-        TaskStreamAxisDimension.estimate,
-        TaskStreamAxisDimension.spend,
-      ];
-
   /// Dimensions that are useful as top-level columns.
   static const List<TaskStreamAxisDimension> columnDimensions = factDimensions;
 
@@ -133,11 +121,6 @@ class TaskStreamAxisProjector {
   /// Returns whether a dimension is encoded task data in the Stream UI.
   static bool isFactDimension(TaskStreamAxisDimension dimension) {
     return factDimensions.contains(dimension);
-  }
-
-  /// Returns whether a dimension is intended as a Terrain area overlay.
-  static bool isTerrainOverlayDimension(TaskStreamAxisDimension dimension) {
-    return terrainOverlayDimensions.contains(dimension);
   }
 
   /// Returns a display label for an axis dimension.

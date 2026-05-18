@@ -2,12 +2,10 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../../domain/executive_summary.dart';
-import 'widgets/confidence_coverage_card.dart';
 import 'widgets/delegation_agent_card.dart';
 import 'widgets/executive_summary_explanation_drawer.dart';
 import 'widgets/open_loop_radar_card.dart';
@@ -39,24 +37,6 @@ class TodayScreen extends StatelessWidget {
             _TodayErrorBanner(message: state.error),
             const SizedBox(height: 14),
           ],
-          LayoutBuilder(
-            builder: (context, constraints) {
-              return SizedBox(
-                height: RisksCoverageCard.preferredHeight(
-                  width: constraints.maxWidth,
-                  coverage: projection.coverage,
-                  riskUnblocks: projection.riskUnblocks,
-                ),
-                child: RisksCoverageCard(
-                  coverage: projection.coverage,
-                  quality: projection.quality,
-                  riskUnblocks: projection.riskUnblocks,
-                  onOpenLink: _openRoute,
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 14),
           _PrimarySections(
             projection: projection,
             onExplain: (item) => _showExplanation(context, item),
@@ -203,14 +183,6 @@ class _TodayErrorBanner extends StatelessWidget {
               message,
               style: TextStyle(color: colors.warningText, fontSize: 13),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: 'Copy error',
-            icon: Icon(Icons.copy, size: 18, color: colors.warningText),
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: message));
-            },
           ),
         ],
       ),

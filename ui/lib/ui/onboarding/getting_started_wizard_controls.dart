@@ -192,7 +192,7 @@ class _StatusBanner extends StatelessWidget {
           const Icon(Icons.warning_amber_outlined, color: Color(0xffc85f0a)),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
+            child: SelectableText(
               message,
               style: const TextStyle(color: Color(0xff9a4700)),
             ),
@@ -223,7 +223,7 @@ class _WarningBanner extends StatelessWidget {
           const Icon(Icons.warning_amber_outlined, color: Color(0xffdb6b00)),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
+            child: SelectableText(
               message,
               style: const TextStyle(color: Color(0xffbf5c00)),
             ),

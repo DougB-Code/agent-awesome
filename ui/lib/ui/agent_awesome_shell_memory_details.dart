@@ -287,9 +287,9 @@ Future<MemoryExportDraft?> _showMemoryExportDialog(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      _MemoryTextField(controller: title, label: 'Title'),
+                      PanelTextFormField(controller: title, label: 'Title'),
                       const SizedBox(height: 10),
-                      _MemoryTextField(
+                      PanelTextFormField(
                         controller: content,
                         label: 'Approved content',
                         maxLines: 10,
@@ -298,12 +298,12 @@ Future<MemoryExportDraft?> _showMemoryExportDialog(
                       Row(
                         children: <Widget>[
                           Expanded(
-                            child: _MemoryDropdown(
+                            child: PanelDropdownFormField<String>(
+                              label: 'Firewall',
                               value: firewall,
                               values: controller.memoryFirewallIds,
                               tooltip: 'Firewall',
-                              labelForValue:
-                                  controller.memoryFirewallPickerLabel,
+                              labelFor: controller.memoryFirewallPickerLabel,
                               onChanged: (value) {
                                 setState(() => firewall = value);
                               },
@@ -311,10 +311,12 @@ Future<MemoryExportDraft?> _showMemoryExportDialog(
                           ),
                           const SizedBox(width: 10),
                           Expanded(
-                            child: _MemoryDropdown(
+                            child: PanelDropdownFormField<String>(
+                              label: 'Sensitivity',
                               value: sensitivity,
                               values: _memorySensitivities,
                               tooltip: 'Sensitivity',
+                              labelFor: _memoryLabel,
                               onChanged: (value) {
                                 setState(() => sensitivity = value);
                               },

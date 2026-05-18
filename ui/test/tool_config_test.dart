@@ -172,6 +172,54 @@ mcp:
     );
   });
 
+  test('adds workflow MCP server when workflow runtime is enabled', () {
+    final document = graphBackedMemoryToolConfigForDomains(
+      memoryDomains: const <McpServerRuntime>[
+        McpServerRuntime(
+          id: 'memory',
+          label: 'Memory',
+          kind: 'memory',
+          endpoint: 'http://127.0.0.1:8090/mcp',
+          healthUrl: 'http://127.0.0.1:8090/healthz',
+          workingDirectory: '/tmp/memory',
+          packagePath: './cmd/memoryd',
+          dbPath: '/tmp/memory.db',
+          dataDir: '/tmp/memory-files',
+          arguments: <String>[],
+          autoStart: false,
+          enabled: true,
+        ),
+      ],
+      agentMemory: const AgentMemoryRuntime(
+        actor: 'agent:test',
+        readDomains: <String>['memory'],
+        writeDomains: <String>['memory'],
+        defaultWriteDomain: 'memory',
+        allowedSensitivities: <String>['public'],
+      ),
+      workflow: const WorkflowRuntime(
+        id: 'workflow',
+        label: 'Workflow',
+        apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
+        healthUrl: 'http://127.0.0.1:8092/healthz',
+        workingDirectory: '/tmp/workflow',
+        packagePath: './cmd/workflowd',
+        definitionsDir: '/tmp/workflows',
+        dbPath: '/tmp/workflow.db',
+        port: 8092,
+        autoStart: false,
+        enabled: true,
+      ),
+      localExec: emptyToolConfigDocument().localExec,
+    );
+
+    final workflowServer = document.mcp.servers.firstWhere(
+      (server) => server.name == 'workflow',
+    );
+    expect(workflowServer.endpoint, 'http://127.0.0.1:8092/mcp');
+    expect(workflowServer.tools.allow, workflowMcpToolNames);
+  });
+
   test('limits model-exposed tools when profile reads multiple domains', () {
     final document = graphBackedMemoryToolConfigForDomains(
       memoryDomains: const <McpServerRuntime>[

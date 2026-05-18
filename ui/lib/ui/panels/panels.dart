@@ -24,3 +24,4 @@ part 'search_picker.dart';
 part 'collection_switcher.dart';
 part 'panel_empty_state.dart';
 part 'panel_status_widgets.dart';
+part 'panel_form_fields.dart';

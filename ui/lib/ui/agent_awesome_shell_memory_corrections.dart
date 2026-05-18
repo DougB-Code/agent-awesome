@@ -56,7 +56,7 @@ class _MemoryCorrectionsContentState extends State<_MemoryCorrectionsContent> {
               children: <Widget>[
                 _MemoryPanelLabel('New Correction'),
                 const SizedBox(height: 10),
-                _MemoryTextField(
+                PanelTextFormField(
                   controller: _correction,
                   label: 'Correction text',
                   maxLines: 6,

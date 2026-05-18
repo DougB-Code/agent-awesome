@@ -48,6 +48,7 @@ class CollectionSwitcherPanel<T> extends StatefulWidget {
     this.onDelete,
     this.emptyLabel = 'No items configured',
     this.showQuickSelect = true,
+    this.showCollapseButton = true,
     this.selectionWidth = 210,
     this.filterHint = 'Filter selected...',
     this.filterKeyBuilder,
@@ -88,6 +89,9 @@ class CollectionSwitcherPanel<T> extends StatefulWidget {
 
   /// Whether to show quick icon selectors for items.
   final bool showQuickSelect;
+
+  /// Whether to show the split-pane collapse button when available.
+  final bool showCollapseButton;
 
   /// Width for the compact dropdown selector.
   final double selectionWidth;
@@ -203,7 +207,8 @@ class _CollectionSwitcherPanelState<T>
                           width: widget.selectionWidth,
                           onChanged: _selectItem,
                         ),
-                      if (collapseScope != null) ...<Widget>[
+                      if (collapseScope != null &&
+                          widget.showCollapseButton) ...<Widget>[
                         const SizedBox(width: 8),
                         PanelCollapseButton(
                           expanded: true,

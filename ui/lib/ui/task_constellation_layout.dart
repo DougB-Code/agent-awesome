@@ -26,12 +26,6 @@ enum TaskConstellationAnchorDimension {
   /// Group tasks by pressure inferred from urgency.
   pressure,
 
-  /// Group tasks by derived risk from terrain projection data.
-  risk,
-
-  /// Group tasks by derived AI delegation fit from terrain projection data.
-  aiDelegation,
-
   /// Group tasks by task size or graph importance.
   scale,
 }
@@ -101,8 +95,6 @@ class TaskConstellationLayout {
         TaskConstellationAnchorDimension.category,
     Set<String> expandedAnchorIds = const <String>{},
     Set<String> expandedTaskIds = const <String>{},
-    Map<String, PriorityTerrainPoint> terrainPointsByTaskId =
-        const <String, PriorityTerrainPoint>{},
     TaskConstellationLayoutStrategyKind layoutStrategy =
         TaskConstellationLayoutStrategyKind.anchoredForce,
   }) {
@@ -113,7 +105,6 @@ class TaskConstellationLayout {
       layoutStrategy: layoutStrategy,
       expandedAnchorIds: expandedAnchorIds,
       expandedTaskIds: expandedTaskIds,
-      terrainPointsByTaskId: terrainPointsByTaskId,
     );
     return _strategyFor(layoutStrategy).build(input);
   }
@@ -126,8 +117,6 @@ class TaskConstellationLayout {
         TaskConstellationAnchorDimension.category,
     Set<String> expandedAnchorIds = const <String>{},
     Set<String> expandedTaskIds = const <String>{},
-    Map<String, PriorityTerrainPoint> terrainPointsByTaskId =
-        const <String, PriorityTerrainPoint>{},
     TaskConstellationLayoutStrategyKind layoutStrategy =
         TaskConstellationLayoutStrategyKind.anchoredForce,
   }) {
@@ -142,7 +131,6 @@ class TaskConstellationLayout {
       layoutStrategy: layoutStrategy,
       expandedAnchorIds: expandedAnchorIds,
       expandedTaskIds: expandedTaskIds,
-      terrainPointsByTaskId: terrainPointsByTaskId,
     );
     return _strategyFor(layoutStrategy).canvasSizeFor(input);
   }
@@ -183,7 +171,6 @@ class TaskConstellationLayout {
       input.projection.nodes,
       degrees,
       input.anchorDimension,
-      input.terrainPointsByTaskId,
     );
     final anchorIds = anchorModels.map((anchor) => anchor.id).toSet();
     final activeAnchorIds = input.expandedAnchorIds.intersection(anchorIds);
@@ -252,12 +239,7 @@ class TaskConstellationLayout {
     final validEdges = _validEdges(input.projection.edges, nodeIds);
     final degrees = _degrees(validEdges, nodeIds);
     final anchors = _anchorPlacements(
-      _anchorModels(
-        input.projection.nodes,
-        degrees,
-        input.anchorDimension,
-        input.terrainPointsByTaskId,
-      ),
+      _anchorModels(input.projection.nodes, degrees, input.anchorDimension),
       input.size,
     );
     var visibleNodeBudget = 0;
@@ -442,8 +424,6 @@ class TaskConstellationLayout {
       TaskConstellationAnchorDimension.owner => 'Owner',
       TaskConstellationAnchorDimension.project => 'Project',
       TaskConstellationAnchorDimension.pressure => 'Pressure',
-      TaskConstellationAnchorDimension.risk => 'Risk',
-      TaskConstellationAnchorDimension.aiDelegation => 'AI Fit',
       TaskConstellationAnchorDimension.scale => 'Scale',
     };
   }
@@ -479,31 +459,18 @@ class TaskConstellationLayout {
     List<TaskConstellationNode> nodes,
     Map<String, int> degrees,
     TaskConstellationAnchorDimension dimension,
-    Map<String, PriorityTerrainPoint> terrainPointsByTaskId,
   ) {
     final buckets = <String, List<TaskConstellationNode>>{};
     for (final node in nodes) {
-      final bucket = _bucketFor(
-        node,
-        dimension,
-        terrainPointsByTaskId[node.taskId],
-      );
+      final bucket = _bucketFor(node, dimension);
       buckets.putIfAbsent(bucket.id, () => <TaskConstellationNode>[]).add(node);
     }
     final models = <_ConstellationAnchorModel>[
       for (final entry in buckets.entries)
         _ConstellationAnchorModel(
           id: entry.key,
-          label: _bucketFor(
-            entry.value.first,
-            dimension,
-            terrainPointsByTaskId[entry.value.first.taskId],
-          ).label,
-          subtitle: _bucketFor(
-            entry.value.first,
-            dimension,
-            terrainPointsByTaskId[entry.value.first.taskId],
-          ).subtitle,
+          label: _bucketFor(entry.value.first, dimension).label,
+          subtitle: _bucketFor(entry.value.first, dimension).subtitle,
           nodes: entry.value,
           weight: entry.value.fold<double>(
             0,
@@ -537,7 +504,6 @@ class TaskConstellationLayout {
   static _ConstellationBucket _bucketFor(
     TaskConstellationNode node,
     TaskConstellationAnchorDimension dimension,
-    PriorityTerrainPoint? terrainPoint,
   ) {
     switch (dimension) {
       case TaskConstellationAnchorDimension.category:
@@ -569,48 +535,6 @@ class TaskConstellationLayout {
           id: 'low-pressure',
           label: 'Low pressure',
           subtitle: 'Room to sequence',
-        );
-      case TaskConstellationAnchorDimension.risk:
-        final risk = terrainPoint?.riskScore ?? node.urgency;
-        if (risk >= 0.64) {
-          return const _ConstellationBucket(
-            id: 'high-risk',
-            label: 'High risk',
-            subtitle: 'Likely to slip',
-          );
-        }
-        if (risk >= 0.36) {
-          return const _ConstellationBucket(
-            id: 'medium-risk',
-            label: 'Medium risk',
-            subtitle: 'Needs tracking',
-          );
-        }
-        return const _ConstellationBucket(
-          id: 'low-risk',
-          label: 'Low risk',
-          subtitle: 'Stable work',
-        );
-      case TaskConstellationAnchorDimension.aiDelegation:
-        final agentFit = terrainPoint?.agentFitScore ?? 0;
-        if (agentFit >= 0.66) {
-          return const _ConstellationBucket(
-            id: 'strong-ai-fit',
-            label: 'Strong AI fit',
-            subtitle: 'Good delegation',
-          );
-        }
-        if (agentFit >= 0.34) {
-          return const _ConstellationBucket(
-            id: 'partial-ai-fit',
-            label: 'Partial AI fit',
-            subtitle: 'Assistable',
-          );
-        }
-        return const _ConstellationBucket(
-          id: 'human-led',
-          label: 'Human led',
-          subtitle: 'Low AI fit',
         );
       case TaskConstellationAnchorDimension.scale:
         if (node.size >= 0.68) {
@@ -1449,7 +1373,6 @@ class _ConstellationLayoutInput {
     required this.layoutStrategy,
     required this.expandedAnchorIds,
     required this.expandedTaskIds,
-    required this.terrainPointsByTaskId,
   });
 
   /// Source projection read model.
@@ -1469,9 +1392,6 @@ class _ConstellationLayoutInput {
 
   /// Requested expanded task ids.
   final Set<String> expandedTaskIds;
-
-  /// Terrain insights keyed by task id.
-  final Map<String, PriorityTerrainPoint> terrainPointsByTaskId;
 }
 
 /// _ConstellationLayoutContext stores prepared graph facts for strategies.

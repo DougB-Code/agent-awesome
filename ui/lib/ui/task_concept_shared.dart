@@ -2,10 +2,9 @@
 part of 'task_concept_views.dart';
 
 class _ProjectionToolbar extends StatelessWidget {
-  const _ProjectionToolbar({required this.left, this.right = const <Widget>[]});
+  const _ProjectionToolbar({required this.left});
 
   final List<Widget> left;
-  final List<Widget> right;
 
   /// Builds compact projection controls above canvases.
   @override
@@ -14,10 +13,6 @@ class _ProjectionToolbar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Expanded(child: Wrap(spacing: 8, runSpacing: 8, children: left)),
-        if (right.isNotEmpty) ...<Widget>[
-          const SizedBox(width: 12),
-          Wrap(spacing: 8, runSpacing: 8, children: right),
-        ],
       ],
     );
   }
@@ -117,134 +112,6 @@ class _ConstellationPainter extends CustomPainter {
   }
 }
 
-/// Paints the terrain atlas behind terrain markers.
-class _TerrainPainter extends CustomPainter {
-  const _TerrainPainter(this.layout, this.colors);
-
-  final TaskTerrainLayout layout;
-  final AgentAwesomePalette colors;
-
-  /// Paints the visible terrain atlas and score guides.
-  @override
-  void paint(Canvas canvas, Size size) {
-    _paintZones(canvas);
-    _paintAxes(canvas);
-  }
-
-  /// Paints touching named terrain zones so placement boundaries are visible.
-  void _paintZones(Canvas canvas) {
-    for (final zone in layout.zones) {
-      final rect = zone.rect;
-      final color = zone.definition.color;
-      final fill = Paint()
-        ..style = PaintingStyle.fill
-        ..color = color.withValues(alpha: 0.045);
-      final border = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = color.withValues(alpha: 0.14);
-      canvas.drawRect(rect, fill);
-      canvas.drawRect(rect, border);
-      _paintZoneLabel(canvas, zone);
-    }
-  }
-
-  /// Paints one terrain zone label and visible task count.
-  void _paintZoneLabel(Canvas canvas, TaskTerrainZoneRegion zone) {
-    final color = zone.definition.color;
-    final count = zone.taskCount == 0 ? '' : '  ${zone.taskCount}';
-    final text = TextSpan(
-      children: <InlineSpan>[
-        TextSpan(
-          text: '${zone.definition.label.toUpperCase()}$count\n',
-          style: TextStyle(
-            color: color.withValues(alpha: 0.72),
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 0,
-          ),
-        ),
-        TextSpan(
-          text: zone.definition.description,
-          style: TextStyle(
-            color: colors.muted.withValues(alpha: 0.72),
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-    final painter = TextPainter(
-      text: text,
-      textDirection: TextDirection.ltr,
-      maxLines: 2,
-      ellipsis: '...',
-    )..layout(maxWidth: math.max(64, zone.rect.width - 18));
-    painter.paint(canvas, zone.rect.topLeft + const Offset(10, 9));
-  }
-
-  /// Paints quiet reward and pressure score axes.
-  void _paintAxes(Canvas canvas) {
-    final paint = Paint()
-      ..color = colors.border.withValues(alpha: 0.42)
-      ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(
-        layout.mapArea.left + layout.mapArea.width / 2,
-        layout.mapArea.top,
-      ),
-      Offset(
-        layout.mapArea.left + layout.mapArea.width / 2,
-        layout.mapArea.bottom,
-      ),
-      paint,
-    );
-    canvas.drawLine(
-      Offset(
-        layout.mapArea.left,
-        layout.mapArea.top + layout.mapArea.height / 2,
-      ),
-      Offset(
-        layout.mapArea.right,
-        layout.mapArea.top + layout.mapArea.height / 2,
-      ),
-      paint,
-    );
-    _paintAxisLabel(
-      canvas,
-      layout.xAxisLabel,
-      Offset(layout.mapArea.right - 116, layout.mapArea.bottom - 18),
-    );
-    _paintAxisLabel(
-      canvas,
-      layout.yAxisLabel,
-      Offset(layout.mapArea.left + 12, layout.mapArea.bottom - 18),
-    );
-  }
-
-  /// Paints a small axis label.
-  void _paintAxisLabel(Canvas canvas, String label, Offset offset) {
-    final painter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: colors.muted.withValues(alpha: 0.72),
-          fontSize: 10,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: 130);
-    painter.paint(canvas, offset);
-  }
-
-  /// Reports whether this painter needs repainting.
-  @override
-  bool shouldRepaint(covariant _TerrainPainter oldDelegate) {
-    return oldDelegate.layout != layout || oldDelegate.colors != colors;
-  }
-}
-
 /// Returns an empty-state label with projection loading detail when available.
 String _emptyProjectionLabel(
   AgentAwesomeAppController controller,
@@ -288,22 +155,6 @@ String _resourceSummary(TaskResourceRequirement resource) {
     return resource.name;
   }
   return '${resource.name} · ${details.join(' · ')}';
-}
-
-/// Returns a terrain empty state tailored to the selected insight mode.
-String _emptyTerrainLabel(TaskTerrainInsightMode mode) {
-  return switch (mode) {
-    TaskTerrainInsightMode.agentHandoff =>
-      'No agent handoff candidates found. Add risk, estimate, task notes, or linked memory to enable handoff analysis.',
-    TaskTerrainInsightMode.nextWeekHighValue =>
-      'No high-value next-week backlog items found. Add due dates, priority, or risk to improve this view.',
-    TaskTerrainInsightMode.unblockLeverage =>
-      'No quick unblocks found. Add dependency relations or mark waiting/blocking backlog items to enable unblock analysis.',
-    TaskTerrainInsightMode.riskFocus =>
-      'No risk confidence gaps found. Low-confidence or high-risk backlog items will appear here.',
-    TaskTerrainInsightMode.priorityFocus =>
-      'No terrain projection available. The graph service did not return a canonical insight graph, or there are no active backlog items.',
-  };
 }
 
 /// Returns the layout grouping that best matches a graph query result.

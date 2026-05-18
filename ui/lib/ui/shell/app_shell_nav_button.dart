@@ -5,12 +5,12 @@ part of 'app_shell_frame.dart';
 class _NavButton extends StatelessWidget {
   /// Creates a navigation button for one app route.
   const _NavButton({
+    super.key,
     required this.label,
     required this.iconGlyph,
     required this.selected,
     required this.onTap,
     required this.compact,
-    required this.showsChevron,
   });
 
   final String label;
@@ -18,7 +18,6 @@ class _NavButton extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
   final bool compact;
-  final bool showsChevron;
 
   /// Builds one navigation item.
   @override
@@ -83,17 +82,6 @@ class _NavButton extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (showsChevron) const SizedBox(width: 8),
-                if (showsChevron) ...<Widget>[
-                  Text(
-                    '›',
-                    style: TextStyle(
-                      color: colors.subtle,
-                      fontSize: 19,
-                      height: 1,
-                    ),
-                  ),
-                ],
               ],
             ],
           ),

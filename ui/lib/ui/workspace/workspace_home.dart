@@ -48,7 +48,7 @@ class HomeWorkspace extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
+          SelectableText(
             controller.statusMessage,
             style: TextStyle(color: colors.muted, fontSize: 17),
           ),

@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Runs controller tests for explicit memory-domain exports.
 void main() {
   test('exports reviewed copy only through an allowed domain flow', () async {
-    final rpc = _RecordingRpcClient();
+    final rpc = _RecordingRpcClient(exported: true);
     final controller = AgentAwesomeAppController(
       config: _testConfig(),
       memoryClient: MemoryClient(rpc: rpc),
@@ -29,20 +29,17 @@ void main() {
     );
 
     expect(exported, isTrue);
-    final save = rpc.calls.where(
-      (call) => call.name == 'save_memory_candidate',
-    );
-    expect(save, hasLength(1));
-    final args = save.single.arguments;
+    final export = rpc.calls.where((call) => call.name == 'export_memory_copy');
+    expect(export, hasLength(1));
+    final args = export.single.arguments;
     expect(args['content'], 'Approved project funding range is available.');
     expect(args['title'], 'Sanitized capital note');
-    expect(args['trust_level'], 'user_asserted');
+    expect(args['source_domain'], 'marriage');
+    expect(args['target_domain'], 'side_project');
+    expect(args['source_memory_id'], 'liquid-capital');
+    expect(args['source_evidence_id'], 'ev-capital');
     expect(args['firewall'], 'project');
     expect(args['sensitivity'], 'internal');
-    expect(args['source'], <String, dynamic>{
-      'system': 'agent_awesome_declassification',
-      'id': 'marriage:liquid-capital:ev-capital',
-    });
     expect(controller.memorySafetyEvents, hasLength(1));
     expect(controller.memorySafetyEvents.single.kind, 'approved_export');
     expect(controller.memorySafetyEvents.single.approved, isTrue);
@@ -51,7 +48,7 @@ void main() {
   });
 
   test('blocks reviewed export when no domain flow is configured', () async {
-    final rpc = _RecordingRpcClient();
+    final rpc = _RecordingRpcClient(exported: false);
     final controller = AgentAwesomeAppController(
       config: _testConfig(),
       memoryClient: MemoryClient(rpc: rpc),
@@ -72,7 +69,11 @@ void main() {
       rpc.calls.where((call) => call.name == 'save_memory_candidate'),
       isEmpty,
     );
-    expect(controller.memoryMessage, contains('Export blocked'));
+    expect(
+      rpc.calls.where((call) => call.name == 'export_memory_copy'),
+      hasLength(1),
+    );
+    expect(controller.memoryMessage, contains('memory domain flow'));
     expect(controller.memorySafetyEvents, hasLength(1));
     expect(controller.memorySafetyEvents.single.kind, 'blocked_export');
     expect(controller.memorySafetyEvents.single.approved, isFalse);
@@ -93,6 +94,12 @@ class _ToolCall {
 
 /// _RecordingRpcClient captures memory MCP calls without network access.
 class _RecordingRpcClient implements ToolRpcClient {
+  /// Creates a fake export backend.
+  _RecordingRpcClient({required this.exported});
+
+  /// Whether export_memory_copy should return an approved export.
+  final bool exported;
+
   /// Recorded tool calls.
   final List<_ToolCall> calls = <_ToolCall>[];
 
@@ -112,13 +119,39 @@ class _RecordingRpcClient implements ToolRpcClient {
     if (name == 'search_memory' || name == 'search_sources') {
       return <String, dynamic>{'primary_memory': <Map<String, dynamic>>[]};
     }
+    if (name == 'export_memory_copy') {
+      return <String, dynamic>{
+        'exported': exported,
+        if (exported) 'capture': <String, dynamic>{'memory_id': 'mem-exported'},
+        'safety_event': <String, dynamic>{
+          'id': exported ? 'event-approved' : 'event-blocked',
+          'kind': exported ? 'approved_export' : 'blocked_export',
+          'severity': exported ? 'review' : 'warning',
+          'title': exported
+              ? 'Reviewed memory copy exported'
+              : 'Export blocked',
+          'detail': exported
+              ? 'marriage -> side_project'
+              : 'memory domain flow is not allowed',
+          'source_domain': 'marriage',
+          'target_domain': 'side_project',
+          'source_memory_id': 'liquid-capital',
+          'approved': exported,
+          'created_at': '2026-05-15T10:00:00Z',
+        },
+      };
+    }
     return <String, dynamic>{'memory_id': 'mem-exported'};
   }
 
   /// Lists the memory tools exposed by this fake transport.
   @override
   Future<List<String>> listToolNames() async {
-    return const <String>['save_memory_candidate', 'search_memory'];
+    return const <String>[
+      'export_memory_copy',
+      'save_memory_candidate',
+      'search_memory',
+    ];
   }
 
   /// Closes no resources because this fake owns no sockets.

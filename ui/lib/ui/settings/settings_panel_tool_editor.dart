@@ -5,24 +5,14 @@ class _SettingsToolConfigEditor extends StatefulWidget {
   const _SettingsToolConfigEditor({
     required this.controller,
     required this.entry,
-    required this.entries,
     required this.surface,
     required this.query,
-    required this.onConfigSelected,
-    required this.onCreateConfig,
-    required this.onDuplicateConfig,
-    required this.onDeleteConfig,
   });
 
   final AgentAwesomeAppController controller;
   final ConfigFileEntry entry;
-  final List<ConfigFileEntry> entries;
   final _ToolSettingsSurface surface;
   final String query;
-  final ValueChanged<ConfigFileEntry> onConfigSelected;
-  final VoidCallback onCreateConfig;
-  final VoidCallback onDuplicateConfig;
-  final VoidCallback onDeleteConfig;
 
   /// Creates state for editing structured tool config content.
   @override
@@ -80,15 +70,6 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
     }
     return FormPanel(
       children: <Widget>[
-        _SettingsToolFileCard(
-          entry: widget.entry,
-          entries: widget.entries,
-          onSelected: widget.onConfigSelected,
-          onAssign: widget.entry.assigned ? null : _assign,
-          onCreate: widget.onCreateConfig,
-          onDuplicate: widget.onDuplicateConfig,
-          onDelete: widget.onDeleteConfig,
-        ),
         if (widget.surface == _ToolSettingsSurface.osTools)
           _SettingsLocalExecCard(
             config: document.localExec,
@@ -199,17 +180,6 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
         _loading = false;
       });
     }
-  }
-
-  /// Assigns the selected tool config file to the active profile.
-  Future<void> _assign() async {
-    try {
-      await widget.controller.assignConfigFile(widget.entry);
-      if (!mounted) {
-        return;
-      }
-      setState(() {});
-    } catch (_) {}
   }
 
   /// Saves a typed tool config document after local validation.

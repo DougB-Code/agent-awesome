@@ -12,6 +12,7 @@ class CommandBar extends StatefulWidget {
     required this.onSubmitScreenCommand,
     required this.onSubmit,
     required this.onNewChat,
+    required this.onToggleAssistantChat,
     required this.onStartChatWithProfile,
     required this.onSelectHistoryChat,
     required this.onOpenSection,
@@ -38,6 +39,9 @@ class CommandBar extends StatefulWidget {
 
   /// Starts a blank default-profile chat.
   final VoidCallback onNewChat;
+
+  /// Toggles the auxiliary AI chat panel.
+  final VoidCallback onToggleAssistantChat;
 
   /// Starts a blank chat with a chosen runtime profile.
   final ValueChanged<String> onStartChatWithProfile;
@@ -157,9 +161,17 @@ class _CommandBarState extends State<CommandBar> {
                   onOpen: _handleExternalControlOpened,
                 ),
                 SizedBox(width: compact ? 8 : 10),
-                if (!compact && !widget.appController.hasConfiguredModel)
+                if (!compact && !widget.appController.gettingStartedCompleted)
                   _SetupStatusButton(onTap: _handleOpenSetup),
                 if (roomy) ...const <Widget>[SizedBox(width: 8), _ThemeBadge()],
+                SizedBox(width: compact ? 8 : 10),
+                _CommandChromeButton(
+                  icon: Icons.chat_bubble_outline,
+                  label: '',
+                  tooltip: 'AI chat',
+                  size: _buttonSize,
+                  onTap: _handleAssistantChatToggle,
+                ),
               ],
             ),
           );
@@ -199,6 +211,12 @@ class _CommandBarState extends State<CommandBar> {
       return;
     }
     widget.onStartChatWithProfile(profilePath);
+  }
+
+  /// Toggles the global auxiliary AI chat pane.
+  void _handleAssistantChatToggle() {
+    _removeQuickAccess();
+    widget.onToggleAssistantChat();
   }
 
   /// Opens the setup wizard from the app shell.

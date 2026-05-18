@@ -11,6 +11,19 @@ class RuntimeProfile {
     required this.label,
     required this.harness,
     required this.gateway,
+    this.workflow = const WorkflowRuntime(
+      id: 'workflow',
+      label: 'Workflow',
+      apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
+      healthUrl: 'http://127.0.0.1:8092/healthz',
+      workingDirectory: '',
+      packagePath: '',
+      definitionsDir: '',
+      dbPath: '',
+      port: 8092,
+      autoStart: false,
+      enabled: false,
+    ),
     required this.memoryDomains,
     required this.agentMemory,
   });
@@ -26,6 +39,9 @@ class RuntimeProfile {
 
   /// Gateway process and API configuration used by every channel client.
   final GatewayRuntime gateway;
+
+  /// Workflow process and API configuration used for durable orchestration.
+  final WorkflowRuntime workflow;
 
   /// Configured memory domains available to this runtime profile.
   final List<McpServerRuntime> memoryDomains;
@@ -51,6 +67,7 @@ class RuntimeProfile {
     String? label,
     HarnessRuntime? harness,
     GatewayRuntime? gateway,
+    WorkflowRuntime? workflow,
     List<McpServerRuntime>? memoryDomains,
     AgentMemoryRuntime? agentMemory,
   }) {
@@ -59,6 +76,7 @@ class RuntimeProfile {
       label: label ?? this.label,
       harness: harness ?? this.harness,
       gateway: gateway ?? this.gateway,
+      workflow: workflow ?? this.workflow,
       memoryDomains: memoryDomains ?? this.memoryDomains,
       agentMemory: agentMemory ?? this.agentMemory,
     );
@@ -71,6 +89,7 @@ class RuntimeProfile {
       'label': label,
       'harness': harness.toJson(),
       'gateway': gateway.toJson(),
+      'workflow': workflow.toJson(),
       'memory_domains': memoryDomains.map((domain) => domain.toJson()).toList(),
       'agent_memory': agentMemory.toJson(),
     };
@@ -86,11 +105,14 @@ class RuntimeProfile {
       _requiredMap(json, 'agent_memory'),
     );
     _validateAgentMemory(agentMemory, domains);
+    final workflow = WorkflowRuntime.fromJson(_requiredMap(json, 'workflow'));
+    _validateWorkflowRuntime(workflow);
     return RuntimeProfile(
       id: _requiredString(json, 'id'),
       label: _requiredString(json, 'label'),
       harness: HarnessRuntime.fromJson(_requiredMap(json, 'harness')),
       gateway: _requiredGateway(_requiredMap(json, 'gateway')),
+      workflow: workflow,
       memoryDomains: domains,
       agentMemory: agentMemory,
     );
@@ -313,6 +335,91 @@ class GatewayRuntime {
       authCredential: _optionalString(json['auth_credential']),
       modelProviderId: _optionalString(json['model_provider_id']),
       modelId: _optionalString(json['model_id']),
+      port: _requiredInt(json, 'port'),
+      autoStart: _requiredBool(json, 'auto_start'),
+      enabled: _requiredBool(json, 'enabled'),
+    );
+  }
+}
+
+/// WorkflowRuntime describes the workflow orchestration service process.
+class WorkflowRuntime {
+  /// Creates an immutable workflow runtime definition.
+  const WorkflowRuntime({
+    required this.id,
+    required this.label,
+    required this.apiBaseUrl,
+    required this.healthUrl,
+    required this.workingDirectory,
+    required this.packagePath,
+    required this.definitionsDir,
+    required this.dbPath,
+    required this.port,
+    required this.autoStart,
+    required this.enabled,
+  });
+
+  /// Stable workflow service id.
+  final String id;
+
+  /// Human-readable workflow service label.
+  final String label;
+
+  /// Workflow REST API base URL.
+  final String apiBaseUrl;
+
+  /// Workflow health URL used before and after launching.
+  final String healthUrl;
+
+  /// Directory where the Go workflow package is built and run.
+  final String workingDirectory;
+
+  /// Go package path for workflowd.
+  final String packagePath;
+
+  /// Directory containing user-authored workflow YAML files.
+  final String definitionsDir;
+
+  /// SQLite database path for durable workflow state.
+  final String dbPath;
+
+  /// Workflow service listen port.
+  final int port;
+
+  /// Whether the UI should start workflowd.
+  final bool autoStart;
+
+  /// Whether this profile exposes workflow orchestration.
+  final bool enabled;
+
+  /// Encodes this workflow runtime to explicit JSON values.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'label': label,
+      'api_base_url': apiBaseUrl,
+      'health_url': healthUrl,
+      'working_directory': workingDirectory,
+      'package_path': packagePath,
+      'definitions_dir': definitionsDir,
+      'db_path': dbPath,
+      'port': port,
+      'auto_start': autoStart,
+      'enabled': enabled,
+    };
+  }
+
+  /// Parses workflow runtime JSON from explicit profile values.
+  factory WorkflowRuntime.fromJson(Map<String, dynamic> json) {
+    return WorkflowRuntime(
+      id: _requiredString(json, 'id'),
+      label: _requiredString(json, 'label'),
+      apiBaseUrl: _requiredString(json, 'api_base_url'),
+      healthUrl: _requiredString(json, 'health_url'),
+      workingDirectory: _optionalString(json['working_directory']),
+      packagePath: _optionalString(json['package_path']),
+      definitionsDir: _optionalString(json['definitions_dir']),
+      dbPath: _optionalString(json['db_path']),
       port: _requiredInt(json, 'port'),
       autoStart: _requiredBool(json, 'auto_start'),
       enabled: _requiredBool(json, 'enabled'),
@@ -662,6 +769,28 @@ void _validateMemoryDomains(List<McpServerRuntime> domains) {
         'Managed memory domain data directories',
       );
     }
+  }
+}
+
+/// Validates workflow service settings as profile-owned orchestration data.
+void _validateWorkflowRuntime(WorkflowRuntime workflow) {
+  _validateSafeId(workflow.id, 'workflow id');
+  if (!workflow.enabled) {
+    return;
+  }
+  if (workflow.apiBaseUrl.trim().isEmpty || workflow.healthUrl.trim().isEmpty) {
+    throw const FormatException(
+      'Enabled workflow runtime requires api_base_url and health_url',
+    );
+  }
+  if (workflow.autoStart &&
+      (workflow.workingDirectory.trim().isEmpty ||
+          workflow.packagePath.trim().isEmpty ||
+          workflow.definitionsDir.trim().isEmpty ||
+          workflow.dbPath.trim().isEmpty)) {
+    throw const FormatException(
+      'Managed workflow runtime requires working_directory, package_path, definitions_dir, and db_path',
+    );
   }
 }
 

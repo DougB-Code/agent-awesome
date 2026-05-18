@@ -132,12 +132,6 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
       _BacklogDetailMode.aiReview => _BacklogReviewContent(
         controller: widget.controller,
       ),
-      _BacklogDetailMode.streamOverview => _BacklogStreamDetailPanel(
-        controller: widget.controller,
-      ),
-      _BacklogDetailMode.terrainOverview => _BacklogTerrainDetailPanel(
-        controller: widget.controller,
-      ),
       _BacklogDetailMode.wbsOverview => _BacklogWbsDetailPanel(
         controller: widget.controller,
       ),

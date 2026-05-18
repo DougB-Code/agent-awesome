@@ -1,96 +1,187 @@
 /// Settings tool configuration collection and missing-state widgets.
 part of 'settings_panel.dart';
 
-class _SettingsToolConfigCollection extends StatefulWidget {
-  const _SettingsToolConfigCollection({
+/// ToolsCommandPanel renders the dedicated OS tool configuration workspace.
+class ToolsCommandPanel extends StatelessWidget {
+  /// Creates the OS tools app section.
+  const ToolsCommandPanel({
+    super.key,
     required this.controller,
-    required this.emptyLabel,
-    required this.entries,
-    required this.assignedPath,
+    this.onAreaChanged,
   });
 
   final AgentAwesomeAppController controller;
-  final String emptyLabel;
-  final List<ConfigFileEntry> entries;
-  final String assignedPath;
+  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
-  /// Creates state for structured harness tool config editing.
+  /// Builds the dedicated local tool configuration command panel.
   @override
-  State<_SettingsToolConfigCollection> createState() =>
-      _SettingsToolConfigCollectionState();
+  Widget build(BuildContext context) {
+    return _SettingsToolSurfaceCommandPanel(
+      controller: controller,
+      title: 'Tools',
+      icon: Icons.terminal,
+      emptyLabel: 'No tool configs configured',
+      surface: _ToolSettingsSurface.osTools,
+      onAreaChanged: onAreaChanged,
+    );
+  }
 }
 
-class _SettingsToolConfigCollectionState
-    extends State<_SettingsToolConfigCollection> {
-  String? _selectedPath;
-  _ToolSettingsSurface _selectedSurface = _ToolSettingsSurface.osTools;
+/// McpServersCommandPanel renders the dedicated MCP server toolset workspace.
+class McpServersCommandPanel extends StatelessWidget {
+  /// Creates the MCP servers app section.
+  const McpServersCommandPanel({
+    super.key,
+    required this.controller,
+    this.onAreaChanged,
+  });
 
-  /// Initializes selected tool config state.
+  final AgentAwesomeAppController controller;
+  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
+
+  /// Builds the dedicated MCP server configuration command panel.
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsToolSurfaceCommandPanel(
+      controller: controller,
+      title: 'MCP Servers',
+      icon: Icons.hub_outlined,
+      emptyLabel: 'No MCP server tool configs configured',
+      surface: _ToolSettingsSurface.mcpServer,
+      onAreaChanged: onAreaChanged,
+    );
+  }
+}
+
+class _SettingsToolSurfaceCommandPanel extends StatefulWidget {
+  const _SettingsToolSurfaceCommandPanel({
+    required this.controller,
+    required this.title,
+    required this.icon,
+    required this.emptyLabel,
+    required this.surface,
+    this.onAreaChanged,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String title;
+  final IconData icon;
+  final String emptyLabel;
+  final _ToolSettingsSurface surface;
+  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
+
+  /// Creates state for a fixed tool-surface command panel.
+  @override
+  State<_SettingsToolSurfaceCommandPanel> createState() =>
+      _SettingsToolSurfaceCommandPanelState();
+}
+
+class _SettingsToolSurfaceCommandPanelState
+    extends State<_SettingsToolSurfaceCommandPanel> {
+  String? _selectedPath;
+
+  /// Initializes the selected tool config path.
   @override
   void initState() {
     super.initState();
     _selectedPath = _initialSelectedPath();
   }
 
-  /// Keeps selected tool config state valid after collection updates.
+  /// Keeps the selected file valid when tool config entries refresh.
   @override
-  void didUpdateWidget(covariant _SettingsToolConfigCollection oldWidget) {
+  void didUpdateWidget(covariant _SettingsToolSurfaceCommandPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_selectedPath == null ||
-        !widget.entries.any((entry) => entry.path == _selectedPath)) {
+        !widget.controller.availableToolConfigs.any(
+          (entry) => entry.path == _selectedPath,
+        )) {
       _selectedPath = _initialSelectedPath();
     }
   }
 
-  /// Builds the tool-family switcher for the selected harness tool config.
+  /// Builds the fixed OS-tool or MCP-server command section.
   @override
   Widget build(BuildContext context) {
-    final selectedEntry = _selectedEntry();
-    return CollectionSwitcherPanel<_ToolSettingsSurface>(
-      title: 'Tools',
-      selectedId: _selectedSurface.id,
-      emptyLabel: widget.emptyLabel,
-      items: <CollectionPanelItem<_ToolSettingsSurface>>[
-        CollectionPanelItem<_ToolSettingsSurface>(
-          id: _ToolSettingsSurface.osTools.id,
-          label: 'OS Tools',
-          detail: 'Local command aliases and approval rules.',
-          icon: Icons.terminal,
-          value: _ToolSettingsSurface.osTools,
-        ),
-        CollectionPanelItem<_ToolSettingsSurface>(
-          id: _ToolSettingsSurface.mcpServer.id,
-          label: 'MCP Server',
-          detail: 'MCP server toolsets and tool policy.',
-          icon: Icons.hub_outlined,
-          value: _ToolSettingsSurface.mcpServer,
+    final profile = widget.controller.runtimeProfile;
+    if (profile == null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
+        child: _SettingsMissingProfilePanel(section: widget.title, query: ''),
+      );
+    }
+    return CommandPanelSubShell(
+      areas: <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          id: widget.surface.id,
+          title: widget.title,
+          icon: widget.icon,
+          builder: (query) => _SettingsToolConfigFileList(
+            query: query,
+            entries: widget.controller.availableToolConfigs,
+            selectedPath: _selectedPath,
+            emptyLabel: widget.emptyLabel,
+            icon: widget.icon,
+            onSelected: (path) => setState(() => _selectedPath = path),
+          ),
         ),
       ],
-      onSelect: (id) => setState(() {
-        _selectedSurface = _ToolSettingsSurface.fromId(id);
-      }),
-      builder: (surface, query) {
-        final entry = selectedEntry;
-        if (entry == null) {
-          return _SettingsMissingToolConfig(
-            label: widget.emptyLabel,
-            onCreate: () => unawaited(_create()),
-          );
-        }
-        return _SettingsToolConfigEditor(
-          controller: widget.controller,
-          entry: entry,
-          entries: widget.entries,
-          surface: surface,
-          query: query,
-          onConfigSelected: (entry) {
-            setState(() => _selectedPath = entry.path);
-          },
-          onCreateConfig: () => unawaited(_create()),
-          onDuplicateConfig: () => unawaited(_duplicate(entry)),
-          onDeleteConfig: () => unawaited(_delete(entry)),
-        );
-      },
+      detailTitle: widget.title,
+      detailModes: const <CommandPanelDetailMode>[],
+      selectedDetailModeId: '',
+      onDetailModeSelected: (_) {},
+      detailBuilder: (_) => _buildDetail(),
+      onAreaChanged: widget.onAreaChanged,
+      areaActionsBuilder: (context, area) => _buildActions(),
+      filterHint: widget.surface == _ToolSettingsSurface.osTools
+          ? 'Filter tool configs...'
+          : 'Filter MCP configs...',
+      split: const PanelSplit(left: 0.25, min: 0.16, max: 0.5),
+    );
+  }
+
+  /// Builds CRUD controls for the selected tool config file.
+  Widget _buildActions() {
+    final selectedEntry = _selectedEntry();
+    return Wrap(
+      spacing: 8,
+      children: <Widget>[
+        PanelIconButton(
+          icon: Icons.add,
+          tooltip: 'Add tool config',
+          onPressed: () => unawaited(_create()),
+        ),
+        PanelIconButton(
+          icon: Icons.content_copy,
+          tooltip: 'Duplicate tool config',
+          onPressed: selectedEntry == null
+              ? null
+              : () => unawaited(_duplicate(selectedEntry)),
+        ),
+        PanelIconButton(
+          icon: Icons.delete_outline,
+          tooltip: 'Delete tool config',
+          onPressed: selectedEntry == null
+              ? null
+              : () => unawaited(_delete(selectedEntry)),
+        ),
+      ],
+    );
+  }
+
+  /// Builds the selected tool config editor.
+  Widget _buildDetail() {
+    final entry = _selectedEntry();
+    if (entry == null) {
+      return _SettingsMissingToolConfig(
+        label: widget.emptyLabel,
+        onCreate: () => unawaited(_create()),
+      );
+    }
+    return _SettingsToolConfigEditor(
+      controller: widget.controller,
+      entry: entry,
+      surface: widget.surface,
+      query: '',
     );
   }
 
@@ -98,28 +189,31 @@ class _SettingsToolConfigCollectionState
   ConfigFileEntry? _selectedEntry() {
     final selectedPath = _selectedPath;
     if (selectedPath != null) {
-      for (final entry in widget.entries) {
+      for (final entry in widget.controller.availableToolConfigs) {
         if (entry.path == selectedPath) {
           return entry;
         }
       }
     }
-    if (widget.entries.isEmpty) {
+    if (widget.controller.availableToolConfigs.isEmpty) {
       return null;
     }
-    return widget.entries.first;
+    return widget.controller.availableToolConfigs.first;
   }
 
-  /// Returns the initially selected config path.
+  /// Returns the active profile assignment or first available tool config.
   String? _initialSelectedPath() {
-    if (widget.assignedPath.isNotEmpty &&
-        widget.entries.any((entry) => entry.path == widget.assignedPath)) {
-      return widget.assignedPath;
+    final entries = widget.controller.availableToolConfigs;
+    final assignedPath =
+        widget.controller.runtimeProfile?.harness.toolConfigPath ?? '';
+    if (assignedPath.isNotEmpty &&
+        entries.any((entry) => entry.path == assignedPath)) {
+      return assignedPath;
     }
-    if (widget.entries.isEmpty) {
+    if (entries.isEmpty) {
       return null;
     }
-    return widget.entries.first.path;
+    return entries.first.path;
   }
 
   /// Creates a new tool config file.
@@ -131,26 +225,22 @@ class _SettingsToolConfigCollectionState
       if (!mounted) {
         return;
       }
-      setState(() {
-        _selectedPath = path;
-      });
+      setState(() => _selectedPath = path);
     } catch (_) {}
   }
 
-  /// Duplicates an existing tool config file.
+  /// Duplicates a tool config file.
   Future<void> _duplicate(ConfigFileEntry entry) async {
     try {
       final path = await widget.controller.duplicateConfigFile(entry);
       if (!mounted) {
         return;
       }
-      setState(() {
-        _selectedPath = path;
-      });
+      setState(() => _selectedPath = path);
     } catch (_) {}
   }
 
-  /// Deletes an unassigned tool config file.
+  /// Deletes an unassigned tool config file after confirmation.
   Future<void> _delete(ConfigFileEntry entry) async {
     final confirmed = await _confirmSettingsDelete(context, label: entry.label);
     if (!confirmed) {
@@ -161,10 +251,121 @@ class _SettingsToolConfigCollectionState
       if (!mounted) {
         return;
       }
-      setState(() {
-        _selectedPath = _initialSelectedPath();
-      });
+      setState(() => _selectedPath = _initialSelectedPath());
     } catch (_) {}
+  }
+}
+
+class _SettingsToolConfigFileList extends StatelessWidget {
+  const _SettingsToolConfigFileList({
+    required this.query,
+    required this.entries,
+    required this.selectedPath,
+    required this.emptyLabel,
+    required this.icon,
+    required this.onSelected,
+  });
+
+  final String query;
+  final List<ConfigFileEntry> entries;
+  final String? selectedPath;
+  final String emptyLabel;
+  final IconData icon;
+  final ValueChanged<String> onSelected;
+
+  /// Builds the left file-browser list for tool config files.
+  @override
+  Widget build(BuildContext context) {
+    final matches = entries.where((entry) {
+      return SettingsQuery.matches(query, <String>[
+        entry.label,
+        entry.fileLabel,
+        entry.path,
+        if (entry.assigned) 'assigned',
+      ]);
+    }).toList();
+    if (entries.isEmpty) {
+      return PanelEmptyBlock(label: emptyLabel);
+    }
+    if (matches.isEmpty) {
+      return PanelEmptyState(query: query);
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        for (final entry in matches)
+          _SettingsToolConfigFileTile(
+            entry: entry,
+            icon: icon,
+            selected: entry.path == selectedPath,
+            onTap: () => onSelected(entry.path),
+          ),
+      ],
+    );
+  }
+}
+
+class _SettingsToolConfigFileTile extends StatelessWidget {
+  const _SettingsToolConfigFileTile({
+    required this.entry,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ConfigFileEntry entry;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// Builds one selectable tool config file row.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: PanelSurface(
+          fillWidth: true,
+          padding: const EdgeInsets.all(12),
+          style: PanelSurfaceStyle.card,
+          selected: selected,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(icon, color: selected ? colors.green : colors.muted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      entry.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      entry.path,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.muted),
+                    ),
+                    if (entry.assigned) ...<Widget>[
+                      const SizedBox(height: 8),
+                      const PanelBadge(label: 'Assigned'),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -177,14 +378,6 @@ enum _ToolSettingsSurface {
     return switch (this) {
       _ToolSettingsSurface.osTools => 'os-tools',
       _ToolSettingsSurface.mcpServer => 'mcp-server',
-    };
-  }
-
-  /// Returns a surface from a stable switcher id.
-  static _ToolSettingsSurface fromId(String id) {
-    return switch (id) {
-      'mcp-server' => _ToolSettingsSurface.mcpServer,
-      _ => _ToolSettingsSurface.osTools,
     };
   }
 }

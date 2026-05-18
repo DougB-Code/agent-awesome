@@ -8,6 +8,7 @@ class _SettingsModelProviderCollection extends StatefulWidget {
     required this.icon,
     required this.entries,
     required this.assignedPath,
+    required this.query,
   });
 
   final AgentAwesomeAppController controller;
@@ -15,6 +16,7 @@ class _SettingsModelProviderCollection extends StatefulWidget {
   final IconData icon;
   final List<ConfigFileEntry> entries;
   final String assignedPath;
+  final String query;
 
   @override
   State<_SettingsModelProviderCollection> createState() =>
@@ -59,85 +61,123 @@ class _SettingsModelProviderCollectionState
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    return CollectionSwitcherPanel<ModelProviderConfig>(
-      title: 'Models',
-      selectedId: _selectedProviderIdFor(providers),
-      emptyLabel: entry == null ? widget.emptyLabel : 'No providers configured',
-      items: <CollectionPanelItem<ModelProviderConfig>>[
-        for (final provider in providers)
-          CollectionPanelItem<ModelProviderConfig>(
-            id: provider.id,
-            label: provider.displayName,
-            detail: provider.id,
-            icon: widget.icon,
-            badge: _isDefaultProvider(document, provider.id) ? 'Active' : '',
-            value: provider,
+    if (entry == null || document == null) {
+      if (!SettingsQuery.matches(widget.query, <String>[
+        'Models',
+        widget.emptyLabel,
+      ])) {
+        return PanelEmptyState(query: widget.query);
+      }
+      return FormPanel(
+        children: <Widget>[
+          FormSectionCard(
+            title: 'Model config',
+            children: <Widget>[
+              _SettingsActionRow(
+                children: <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: () => unawaited(_addProvider()),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add provider'),
+                  ),
+                ],
+              ),
+            ],
           ),
+        ],
+      );
+    }
+    final visibleProviders = providers.where((provider) {
+      return SettingsQuery.matches(
+        widget.query,
+        _providerSearchValues(provider),
+      );
+    }).toList();
+    return FormPanel(
+      children: <Widget>[
+        FormSectionCard(
+          title: 'Model config',
+          children: <Widget>[
+            _SettingsReadOnlyField(label: 'Path', value: entry.path),
+            _SettingsActionRow(
+              children: <Widget>[
+                FilledButton.icon(
+                  onPressed: entry.assigned
+                      ? null
+                      : () => unawaited(_assign(entry)),
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: Text(entry.assigned ? 'Assigned' : 'Use for profile'),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: () => unawaited(_addProvider()),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add provider'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        if (visibleProviders.isEmpty)
+          PanelEmptyBlock(label: 'No matching providers')
+        else
+          for (final provider in visibleProviders) ...<Widget>[
+            FormSectionCard(
+              title: 'Provider actions',
+              children: <Widget>[
+                _SettingsActionRow(
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: _isDefaultProvider(document, provider.id)
+                          ? null
+                          : () => unawaited(
+                              _setDefaultProvider(entry, document, provider),
+                            ),
+                      icon: const Icon(Icons.radio_button_checked),
+                      label: Text(
+                        _isDefaultProvider(document, provider.id)
+                            ? 'Default provider'
+                            : 'Set default provider',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () => unawaited(_duplicateProvider(provider)),
+                      tooltip: 'Duplicate provider',
+                      icon: const Icon(Icons.content_copy),
+                    ),
+                    IconButton(
+                      onPressed: providers.length <= 1
+                          ? null
+                          : () => unawaited(_deleteProvider(provider)),
+                      tooltip: 'Delete provider',
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            _SettingsModelProviderCard(
+              controller: widget.controller,
+              provider: provider,
+              onChanged: (next) =>
+                  _replaceProvider(document, provider.id, next),
+            ),
+            _SettingsModelProviderYamlPreview(provider: provider),
+          ],
       ],
-      onSelect: (id) => setState(() => _selectedProviderId = id),
-      onCreate: () => unawaited(_addProvider()),
-      onDuplicate: (provider) => unawaited(_duplicateProvider(provider)),
-      onDelete: (provider) => unawaited(_deleteProvider(provider)),
-      builder: (provider, query) {
-        if (entry == null || document == null) {
-          return PanelEmptyState(query: query);
-        }
-        return _buildProviderEditor(entry, document, provider, query);
-      },
     );
   }
 
-  Widget _buildProviderEditor(
-    ConfigFileEntry entry,
-    ModelConfigDocument document,
-    ModelProviderConfig provider,
-    String query,
-  ) {
-    if (!SettingsQuery.matches(query, <String>[
+  List<String> _providerSearchValues(ModelProviderConfig provider) {
+    return <String>[
       provider.id,
       provider.name,
       provider.adapter,
       provider.apiKey,
       provider.url,
       for (final model in provider.models) ...<String>[model.id, model.model],
-    ])) {
-      return PanelEmptyState(query: query);
-    }
-    return FormPanel(
-      children: <Widget>[
-        _SettingsActionRow(
-          children: <Widget>[
-            FilledButton.icon(
-              onPressed: entry.assigned
-                  ? null
-                  : () => unawaited(_assign(entry)),
-              icon: const Icon(Icons.check_circle_outline),
-              label: Text(entry.assigned ? 'Assigned' : 'Use for profile'),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: _isDefaultProvider(document, provider.id)
-                  ? null
-                  : () => unawaited(
-                      _setDefaultProvider(entry, document, provider),
-                    ),
-              icon: const Icon(Icons.radio_button_checked),
-              label: Text(
-                _isDefaultProvider(document, provider.id)
-                    ? 'Default provider'
-                    : 'Set default provider',
-              ),
-            ),
-          ],
-        ),
-        _SettingsModelProviderCard(
-          controller: widget.controller,
-          provider: provider,
-          onChanged: (next) => _replaceProvider(document, provider.id, next),
-        ),
-        _SettingsModelProviderYamlPreview(provider: provider),
-      ],
-    );
+    ];
   }
 
   String? _initialSelectedPath() {

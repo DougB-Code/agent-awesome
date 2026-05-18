@@ -190,18 +190,6 @@ int _compareStreamCards(TaskStreamCard left, TaskStreamCard right) {
   return left.title.compareTo(right.title);
 }
 
-/// Orders terrain points by elevation and title.
-int _compareTerrainPoints(
-  PriorityTerrainPoint left,
-  PriorityTerrainPoint right,
-) {
-  final elevationCompare = right.elevation.compareTo(left.elevation);
-  if (elevationCompare != 0) {
-    return elevationCompare;
-  }
-  return left.title.compareTo(right.title);
-}
-
 /// Maps priority labels to a compact sort rank.
 int _priorityRank(String priority) {
   return switch (priority) {

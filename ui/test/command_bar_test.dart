@@ -3,6 +3,7 @@ library;
 
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
+import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/theme.dart';
 import 'package:agentawesome_ui/domain/models.dart';
@@ -127,6 +128,9 @@ void main() {
     tester,
   ) async {
     final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.appSettings = const AgentAwesomeAppSettings(
+      gettingStartedCompleted: true,
+    );
     controller.runtimeProfilePath = '/tmp/cloudflare_context.json';
     controller.runtimeProfile = _externalGatewayProfile();
     controller.availableModelConfigs = const <ConfigFileEntry>[];
@@ -153,6 +157,32 @@ void main() {
     expect(controller.hasConfiguredModel, isTrue);
     expect(find.text('Setup incomplete'), findsNothing);
   });
+
+  testWidgets(
+    'hides setup badge after completed setup even when model list is stale',
+    (tester) async {
+      final controller = AgentAwesomeAppController(config: _testConfig());
+      controller.appSettings = const AgentAwesomeAppSettings(
+        gettingStartedCompleted: true,
+      );
+      controller.runtimeProfilePath = '/tmp/personal.json';
+      controller.runtimeProfile = _personalProfile();
+      controller.availableModelConfigs = const <ConfigFileEntry>[];
+
+      await tester.pumpWidget(
+        _CommandBarHarness(
+          commandController: TextEditingController(),
+          appController: controller,
+          onScreenCommand: (_) {},
+          onNewChatSubmit: () {},
+        ),
+      );
+
+      expect(controller.gettingStartedCompleted, isTrue);
+      expect(controller.hasConfiguredModel, isFalse);
+      expect(find.text('Setup incomplete'), findsNothing);
+    },
+  );
 
   testWidgets('shows active runtime profile picker in the top bar', (
     tester,
@@ -427,6 +457,7 @@ class _CommandBarHarness extends StatelessWidget {
           onSubmitScreenCommand: (context) async => onScreenCommand(context),
           onSubmit: ({String profilePath = ''}) async => onNewChatSubmit(),
           onNewChat: () {},
+          onToggleAssistantChat: () {},
           onStartChatWithProfile: (_) {},
           onSelectHistoryChat: (_) {},
           onOpenSection: onOpenSection ?? (_) {},
@@ -479,6 +510,7 @@ class _ThemeCommandBarHarnessState extends State<_ThemeCommandBarHarness> {
           onSubmitScreenCommand: (_) async {},
           onSubmit: ({String profilePath = ''}) async {},
           onNewChat: () {},
+          onToggleAssistantChat: () {},
           onStartChatWithProfile: (_) {},
           onSelectHistoryChat: (_) {},
           onOpenSection: (_) {},
@@ -575,6 +607,68 @@ RuntimeProfile _externalGatewayProfile() {
       readDomains: <String>['doug'],
       writeDomains: <String>['doug'],
       defaultWriteDomain: 'doug',
+      allowedSensitivities: <String>['public', 'internal', 'private'],
+    ),
+  );
+}
+
+/// Returns a local profile that relies on harness model configuration.
+RuntimeProfile _personalProfile() {
+  return const RuntimeProfile(
+    id: 'personal',
+    label: 'Personal',
+    harness: HarnessRuntime(
+      id: 'personal-harness',
+      label: 'Personal Harness',
+      apiBaseUrl: 'http://127.0.0.1:8080/api',
+      contextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
+      appName: 'agent_awesome',
+      userId: 'doug',
+      workingDirectory: '/tmp/harness',
+      packagePath: './cmd/agent-awesome',
+      modelConfigPath: '/tmp/model.yaml',
+      agentConfigPath: '/tmp/agent.yaml',
+      toolConfigPath: '/tmp/tool.yaml',
+      port: 8080,
+      autoStart: true,
+    ),
+    gateway: GatewayRuntime(
+      id: 'personal-gateway',
+      label: 'Personal Gateway',
+      apiBaseUrl: 'http://127.0.0.1:8070/api',
+      healthUrl: 'http://127.0.0.1:8070/healthz',
+      workingDirectory: '/tmp/gateway',
+      packagePath: './cmd/agent-gateway',
+      harnessBaseUrl: 'http://127.0.0.1:8080/api',
+      contextBaseUrl: 'http://127.0.0.1:8081/api/context',
+      memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
+      appName: 'agent_awesome',
+      userId: 'doug',
+      port: 8070,
+      autoStart: true,
+      enabled: true,
+    ),
+    memoryDomains: <McpServerRuntime>[
+      McpServerRuntime(
+        id: 'memory',
+        label: 'Memory',
+        kind: 'memory',
+        endpoint: 'http://127.0.0.1:8090/mcp',
+        healthUrl: 'http://127.0.0.1:8090/healthz',
+        workingDirectory: '',
+        packagePath: '',
+        dbPath: '',
+        dataDir: '',
+        arguments: <String>[],
+        autoStart: false,
+        enabled: true,
+      ),
+    ],
+    agentMemory: AgentMemoryRuntime(
+      actor: 'agent:personal',
+      readDomains: <String>['memory'],
+      writeDomains: <String>['memory'],
+      defaultWriteDomain: 'memory',
       allowedSensitivities: <String>['public', 'internal', 'private'],
     ),
   );

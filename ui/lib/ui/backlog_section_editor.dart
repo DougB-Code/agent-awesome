@@ -225,19 +225,28 @@ class _TaskDetailEditor extends StatefulWidget {
 }
 
 class _TaskDetailEditorState extends State<_TaskDetailEditor> {
+  static const Duration _saveDelay = Duration(milliseconds: 500);
+
   final TextEditingController _title = TextEditingController();
   final TextEditingController _description = TextEditingController();
   final TextEditingController _topics = TextEditingController();
   final TextEditingController _dueAt = TextEditingController();
   final TextEditingController _scheduledAt = TextEditingController();
+  Timer? _saveTimer;
   String _status = 'open';
   String _priority = 'normal';
   String _message = '';
+  String _lastSavedFingerprint = '';
 
   /// Initializes editor fields from the selected backlog item.
   @override
   void initState() {
     super.initState();
+    _title.addListener(_scheduleSave);
+    _description.addListener(_scheduleSave);
+    _topics.addListener(_scheduleSave);
+    _dueAt.addListener(_scheduleSave);
+    _scheduledAt.addListener(_scheduleSave);
     _syncFromTask();
   }
 
@@ -253,6 +262,12 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
   /// Cleans up editor controllers.
   @override
   void dispose() {
+    _saveTimer?.cancel();
+    _title.removeListener(_scheduleSave);
+    _description.removeListener(_scheduleSave);
+    _topics.removeListener(_scheduleSave);
+    _dueAt.removeListener(_scheduleSave);
+    _scheduledAt.removeListener(_scheduleSave);
     _title.dispose();
     _description.dispose();
     _topics.dispose();
@@ -290,7 +305,10 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
                         value: _status,
                         values: _taskStatuses,
                         tooltip: 'Status',
-                        onChanged: (value) => setState(() => _status = value),
+                        onChanged: (value) => setState(() {
+                          _status = value;
+                          _scheduleSave();
+                        }),
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -299,7 +317,10 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
                         value: _priority,
                         values: _taskPriorities,
                         tooltip: 'Priority',
-                        onChanged: (value) => setState(() => _priority = value),
+                        onChanged: (value) => setState(() {
+                          _priority = value;
+                          _scheduleSave();
+                        }),
                       ),
                     ),
                   ],
@@ -339,11 +360,6 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
             spacing: 10,
             runSpacing: 10,
             children: <Widget>[
-              FilledButton.icon(
-                onPressed: widget.controller.tasksBusy ? null : _save,
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Save'),
-              ),
               OutlinedButton.icon(
                 onPressed: widget.controller.tasksBusy || terminal
                     ? null
@@ -388,10 +404,20 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
     _status = widget.task.status;
     _priority = widget.task.priority;
     _message = '';
+    _lastSavedFingerprint = _taskFingerprint();
   }
 
   /// Saves editor changes through graph-backed context tools.
   Future<void> _save() async {
+    _saveTimer?.cancel();
+    if (widget.controller.tasksBusy) {
+      _scheduleSave();
+      return;
+    }
+    final fingerprint = _taskFingerprint();
+    if (fingerprint == _lastSavedFingerprint) {
+      return;
+    }
     final dueAt = _parseTaskDateInput(_dueAt.text);
     final scheduledAt = _parseTaskDateInput(_scheduledAt.text);
     if (_dueAt.text.trim().isNotEmpty && dueAt == null) {
@@ -406,6 +432,7 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
       setState(() => _message = 'Title is required');
       return;
     }
+    _lastSavedFingerprint = fingerprint;
     await widget.controller.updateTaskFromUi(
       taskId: widget.task.id,
       title: _title.text.trim(),
@@ -422,6 +449,25 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
     if (mounted) {
       setState(() => _message = '');
     }
+  }
+
+  /// Schedules one task save after a short edit pause.
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, () => unawaited(_save()));
+  }
+
+  /// Returns a stable comparison key for persisted task editor fields.
+  String _taskFingerprint() {
+    return jsonEncode(<String, Object?>{
+      'title': _title.text.trim(),
+      'description': _description.text.trim(),
+      'status': _status,
+      'priority': _priority,
+      'dueAt': _dueAt.text.trim(),
+      'scheduledAt': _scheduledAt.text.trim(),
+      'topics': splitCommaSeparatedValues(_topics.text),
+    });
   }
 
   /// Completes the selected backlog item after confirmation.

@@ -35,6 +35,19 @@
     "auto_start": ${AUTO_START_LOCAL_SERVICES},
     "enabled": true
   },
+  "workflow": {
+    "id": "local-dev-workflow",
+    "label": "Local Dev Workflow",
+    "api_base_url": "${WORKFLOW_API_BASE_URL}",
+    "health_url": "${WORKFLOW_HEALTH_URL}",
+    "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/workflow",
+    "package_path": "./cmd/workflowd",
+    "definitions_dir": "${WORKFLOW_DEFINITIONS_DIR}",
+    "db_path": "${WORKFLOW_DB_PATH}",
+    "port": ${WORKFLOW_API_PORT},
+    "auto_start": ${AUTO_START_LOCAL_SERVICES},
+    "enabled": true
+  },
   "memory_domains": [
     {
       "id": "memory",

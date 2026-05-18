@@ -129,31 +129,16 @@ class _TaskConstellationViewState extends State<_TaskConstellationView>
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final viewportSize = constraints.biggest;
-                      final terrainProjection =
-                          TaskInsightProjectionAdapters.terrain(
-                            controller.taskInsightIndex,
-                          );
-                      final terrainPointsByTaskId =
-                          <String, PriorityTerrainPoint>{
-                            for (final point
-                                in (terrainProjection.points.isEmpty
-                                        ? controller.priorityTerrainProjection
-                                        : terrainProjection)
-                                    .points)
-                              point.taskId: point,
-                          };
                       final canvasSize = TaskConstellationLayout.canvasSizeFor(
                         projection,
                         viewportSize,
                         anchorDimension: anchorDimension,
-                        terrainPointsByTaskId: terrainPointsByTaskId,
                         layoutStrategy: layoutStrategy,
                       );
                       final baseLayout = TaskConstellationLayout.build(
                         projection,
                         canvasSize,
                         anchorDimension: anchorDimension,
-                        terrainPointsByTaskId: terrainPointsByTaskId,
                         layoutStrategy: layoutStrategy,
                       );
                       final effectiveExpandedAnchorIds =
@@ -172,7 +157,6 @@ class _TaskConstellationViewState extends State<_TaskConstellationView>
                             anchorDimension: anchorDimension,
                             expandedAnchorIds: effectiveExpandedAnchorIds,
                             expandedTaskIds: _expandedTaskIds,
-                            terrainPointsByTaskId: terrainPointsByTaskId,
                             layoutStrategy: layoutStrategy,
                           );
                       final layout = TaskConstellationLayout.build(
@@ -181,7 +165,6 @@ class _TaskConstellationViewState extends State<_TaskConstellationView>
                         anchorDimension: anchorDimension,
                         expandedAnchorIds: effectiveExpandedAnchorIds,
                         expandedTaskIds: _expandedTaskIds,
-                        terrainPointsByTaskId: terrainPointsByTaskId,
                         layoutStrategy: layoutStrategy,
                       );
                       _rememberConstellationFrame(viewportSize, layout);
@@ -1299,5 +1282,3 @@ class _ConstellationIndicatorBucket {
     };
   }
 }
-
-/// Shows the qualitative terrain insight projection.

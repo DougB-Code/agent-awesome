@@ -13,6 +13,11 @@ class _CommandSubShellCommandPane extends StatelessWidget {
     required this.onTitleTap,
     required this.onFilterChanged,
     required this.actions,
+    required this.areaFilters,
+    required this.selectedAreaFilterId,
+    required this.onAreaFilterSelected,
+    required this.showAreaTabs,
+    required this.showCollapseButton,
     required this.child,
   });
 
@@ -25,6 +30,11 @@ class _CommandSubShellCommandPane extends StatelessWidget {
   final VoidCallback? onTitleTap;
   final ValueChanged<String> onFilterChanged;
   final Widget? actions;
+  final List<CommandPanelFilterOption> areaFilters;
+  final String selectedAreaFilterId;
+  final ValueChanged<CommandPanelFilterOption> onAreaFilterSelected;
+  final bool showAreaTabs;
+  final bool showCollapseButton;
   final Widget child;
 
   /// Builds the command area column.
@@ -39,8 +49,13 @@ class _CommandSubShellCommandPane extends StatelessWidget {
         collapseScope: collapseScope!,
       );
     }
-    return PanelSurface(
-      clipBehavior: Clip.antiAlias,
+    return DecoratedBox(
+      key: const ValueKey<String>('main-content-left-pane'),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        gradient: context.agentAwesomeSurfaceGradient,
+        border: Border(right: BorderSide(color: colors.border)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -54,7 +69,7 @@ class _CommandSubShellCommandPane extends StatelessWidget {
                     Expanded(
                       child: PanelSectionLabel(area.title, onTap: onTitleTap),
                     ),
-                    if (collapseScope != null)
+                    if (collapseScope != null && showCollapseButton)
                       PanelCollapseButton(
                         expanded: true,
                         direction: collapseScope.side.direction,
@@ -65,28 +80,41 @@ class _CommandSubShellCommandPane extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      child: _CommandSubShellAreaTabs(
-                        areas: areas,
-                        selectedIndex: selectedIndex,
-                        onSelected: onAreaSelected,
-                      ),
-                    ),
-                    if (actions != null) ...<Widget>[
-                      const SizedBox(width: 12),
-                      actions!,
+                if (showAreaTabs || actions != null) ...<Widget>[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      if (showAreaTabs)
+                        Expanded(
+                          child: _CommandSubShellAreaTabs(
+                            areas: areas,
+                            selectedIndex: selectedIndex,
+                            onSelected: onAreaSelected,
+                          ),
+                        )
+                      else
+                        const Spacer(),
+                      if (actions != null) ...<Widget>[
+                        const SizedBox(width: 12),
+                        actions!,
+                      ],
                     ],
-                  ],
-                ),
-                const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _CommandSubShellFilterField(
                   controller: filterController,
                   hintText: filterHint,
                   onChanged: onFilterChanged,
                 ),
+                if (areaFilters.isNotEmpty) ...<Widget>[
+                  const SizedBox(height: 12),
+                  _CommandSubShellAreaFilters(
+                    filters: areaFilters,
+                    selectedId: selectedAreaFilterId,
+                    onSelected: onAreaFilterSelected,
+                  ),
+                ],
               ],
             ),
           ),

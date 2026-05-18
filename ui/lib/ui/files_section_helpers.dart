@@ -337,10 +337,6 @@ bool _matchesFileQuery(_AgentFileItem file, String query) {
 }
 
 /// Counts files matching one concrete file kind.
-int _countKind(List<_AgentFileItem> files, _AgentFileKind kind) {
-  return files.where((file) => file.kind == kind).length;
-}
-
 /// Counts files matching a library filter.
 int _countFilter(List<_AgentFileItem> files, _FileKindFilter filter) {
   return files.where((file) => _matchesFileKindFilter(file, filter)).length;

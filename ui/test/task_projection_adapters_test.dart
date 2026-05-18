@@ -49,7 +49,6 @@ void main() {
               'human_effort': 0.5,
               'agent_fit': 0.75,
               'elevation': 0.72,
-              'terrain_zone': 'agent-opportunity',
             },
             'facet_ids': <String>['time:now', 'attention:deep-work'],
             'confidence': 0.9,
@@ -87,7 +86,6 @@ void main() {
       });
 
       expect(graph.generatedAt, DateTime.parse('2026-05-03T10:00:00Z'));
-      expect(graph.tasks.single.scores.terrainZone, 'agent-opportunity');
       expect(graph.tasks.single.workBreakdown.deliverable, 'Proposal draft');
       expect(
         graph.tasks.single.workBreakdown.resources.single.name,
@@ -135,20 +133,6 @@ void main() {
       expect(stream.links.single.fromTaskId, 'task-b');
       expect(stream.links.single.toTaskId, 'task-a');
       expect(stream.links.single.transitionType, 'enables');
-    });
-
-    test('uses canonical terrain scores without recomputing them', () {
-      final terrain = TaskProjectionAdapters.terrain(_projectionGraph());
-      final point = terrain.points.firstWhere(
-        (item) => item.taskId == 'task-a',
-      );
-
-      expect(point.rewardScore, 0.84);
-      expect(point.urgencyScore, 0.68);
-      expect(point.riskScore, 0.42);
-      expect(point.agentFitScore, 0.78);
-      expect(point.terrainZone, 'agent-opportunity');
-      expect(terrain.bands.map((band) => band.id), contains('quick-win'));
     });
 
     test('constellation draws only sparse canonical task edges', () {
@@ -237,7 +221,6 @@ TaskProjectionGraph _projectionGraph() {
           humanEffort: 0.58,
           agentFit: 0.78,
           elevation: 0.74,
-          terrainZone: 'agent-opportunity',
         ),
         facetIds: <String>['time:now', 'attention:deep-work', 'topic:proposal'],
         confidence: 0.9,
@@ -256,7 +239,6 @@ TaskProjectionGraph _projectionGraph() {
           humanEffort: 0.22,
           agentFit: 0.64,
           elevation: 0.42,
-          terrainZone: 'quick-win',
         ),
         facetIds: <String>['time:next', 'attention:admin', 'view:work'],
         confidence: 0.8,

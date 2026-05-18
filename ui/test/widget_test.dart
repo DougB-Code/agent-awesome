@@ -14,6 +14,7 @@ import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/domain/executive_summary.dart';
 import 'package:agentawesome_ui/domain/models.dart';
+import 'package:agentawesome_ui/domain/models_automation.dart';
 import 'package:agentawesome_ui/domain/screen_command.dart';
 import 'package:agentawesome_ui/domain/today_state.dart';
 import 'package:agentawesome_ui/features/today/widgets/today_schedule_card.dart';
@@ -21,7 +22,6 @@ import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs widget tests for the shell.
@@ -38,26 +38,12 @@ void main() {
     expect(find.text('Decide'), findsOneWidget);
     expect(find.text('OPEN LOOP RADAR'), findsOneWidget);
     expect(find.text("TODAY'S ATTENTION"), findsOneWidget);
-    expect(find.text('RISKS & COVERAGE'), findsOneWidget);
     expect(find.text('Prepare investor meeting brief'), findsNothing);
   });
 
-  testWidgets('makes Today errors selectable and copyable', (tester) async {
+  testWidgets('makes Today errors selectable', (tester) async {
     const error =
         'ClientException with SocketException: Connection refused, uri=http://127.0.0.1:8070/api/context/tools/call';
-    var copied = '';
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-          if (call.method == 'Clipboard.setData') {
-            final data = call.arguments as Map<dynamic, dynamic>;
-            copied = data['text'] as String? ?? '';
-          }
-          return null;
-        });
-    addTearDown(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null);
-    });
     final controller = _readyController()
       ..todayState = const TodayState(error: error);
 
@@ -65,10 +51,9 @@ void main() {
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Copy error'));
 
     expect(find.widgetWithText(SelectableText, error), findsOneWidget);
-    expect(copied, error);
+    expect(find.byTooltip('Copy error'), findsNothing);
   });
 
   testWidgets('renders populated Today lower sections without overflow', (
@@ -103,16 +88,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('RISKS & COVERAGE'), findsOneWidget);
     expect(find.text('SCHEDULE'), findsOneWidget);
     expect(find.text('Review weekly plan'), findsWidgets);
     expect(find.text('Overview'), findsOneWidget);
-    expect(find.textContaining('Banking / Bills'), findsOneWidget);
+    expect(find.textContaining('Banking / Bills'), findsNothing);
     expect(find.text('Manage connections'), findsNothing);
-    expect(
-      tester.getTopLeft(find.text('RISKS & COVERAGE')).dy,
-      lessThan(tester.getTopLeft(find.text("TODAY'S ATTENTION")).dy),
-    );
     expect(
       tester.getTopLeft(find.text('SCHEDULE')).dy,
       greaterThan(tester.getTopLeft(find.text("TODAY'S ATTENTION")).dy),
@@ -222,20 +202,6 @@ void main() {
       sources: <SourceItem>[],
       memoryRecords: <MemoryRecord>[],
     );
-    controller.priorityTerrainProjection = const PriorityTerrainProjection(
-      points: <PriorityTerrainPoint>[
-        PriorityTerrainPoint(
-          taskId: 'task-brief',
-          title: 'Draft task brief',
-          status: 'open',
-          priority: 'normal',
-          valueScore: 0.5,
-          riskScore: 0.2,
-          x: 0.5,
-          y: 0.5,
-        ),
-      ],
-    );
     controller.selectedTaskId = 'task-brief';
 
     await tester.pumpWidget(
@@ -253,6 +219,7 @@ void main() {
     expect(find.text('Agent handoff 0'), findsNothing);
     expect(find.byTooltip('Refresh context'), findsNothing);
     expect(find.byTooltip('New backlog item'), findsOneWidget);
+    expect(find.byIcon(Icons.save_outlined), findsNothing);
     expect(find.text('All insights'), findsNothing);
     expect(find.text('Open, Waiting, Blocked'), findsOneWidget);
     expect(find.text('Active tasks'), findsNothing);
@@ -273,21 +240,564 @@ void main() {
 
     expect(find.text('Stream command panel'), findsNothing);
     expect(find.text('STREAM'), findsWidgets);
-    expect(find.text('STREAM PROJECTION'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Terrain'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('TERRAIN'), findsWidgets);
-    expect(find.text('All insights'), findsWidgets);
-    expect(find.text('TERRAIN PROJECTION'), findsOneWidget);
+    expect(find.text('TASK'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Collapse details column'));
     await tester.pumpAndSettle();
 
-    expect(find.text('TERRAIN'), findsWidgets);
+    expect(find.text('STREAM'), findsWidgets);
     expect(find.text('Inspector'), findsNothing);
   });
+
+  testWidgets('opens focused Automations menu sections', (tester) async {
+    tester.view.physicalSize = const Size(1800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationActionTypes = const <AutomationActionType>[
+        AutomationActionType(
+          name: 'agent.run',
+          label: 'Agent Task',
+          description: 'Run a harness-owned reasoning step.',
+          risk: 'reasoning',
+          available: true,
+        ),
+        AutomationActionType(
+          name: 'tool.call',
+          label: 'Run Tool',
+          description: 'Call a harness-exposed tool.',
+          risk: 'tool',
+          available: true,
+        ),
+        AutomationActionType(
+          name: 'dag.run',
+          label: 'Run Task DAG',
+          description: 'Start a nested task graph.',
+          risk: 'workflow',
+          available: true,
+        ),
+        AutomationActionType(
+          name: 'cli.command',
+          label: 'Run Command',
+          description: 'Draft-only command action.',
+          risk: 'system',
+          available: false,
+        ),
+      ]
+      ..automationToolNames = const <String>{'email.search', 'browser.read'}
+      ..automationDefinitions = const <AutomationDefinition>[
+        AutomationDefinition(
+          id: 'daily_email',
+          kind: 'dag',
+          name: 'Daily Email',
+          hash: 'abc',
+        ),
+      ]
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_review',
+          kind: 'state_machine',
+          name: 'Review Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'review_flow',
+            'states': <Object>[
+              <String, Object>{
+                'id': 'review',
+                'on_entry': <Object>[
+                  <String, Object>{
+                    'id': 'triage_agent',
+                    'uses': 'agent.run',
+                    'with': <String, Object>{'agent': 'email_triage_agent'},
+                  },
+                ],
+              },
+            ],
+          },
+        ),
+        AutomationDraft(
+          id: 'draft_task',
+          kind: 'dag',
+          name: 'Task Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'dag',
+            'id': 'task_flow',
+            'nodes': <Object>[
+              <String, Object>{
+                'id': 'fetch_email',
+                'uses': 'mcp.call',
+                'with': <String, Object>{'tool': 'email.search'},
+              },
+              <String, Object>{
+                'id': 'classify_email',
+                'uses': 'agent.run',
+                'depends_on': <Object>['fetch_email'],
+                'with': <String, Object>{'agent': 'email_triage_agent'},
+              },
+              <String, Object>{
+                'id': 'summarize_email',
+                'uses': 'agent.run',
+                'depends_on': <Object>['fetch_email'],
+                'with': <String, Object>{'agent': 'email_triage_agent'},
+              },
+              <String, Object>{
+                'id': 'prepare_review',
+                'uses': 'human.request',
+                'depends_on': <Object>['classify_email', 'summarize_email'],
+                'with': <String, Object>{'prompt': 'Review triage'},
+              },
+            ],
+          },
+        ),
+      ]
+      ..automationRuns = const <AutomationRun>[
+        AutomationRun(
+          id: 'run_1',
+          definitionId: 'daily_email',
+          kind: 'dag',
+          status: 'waiting',
+          state: 'running',
+        ),
+      ]
+      ..automationInbox = const <AutomationPendingItem>[
+        AutomationPendingItem(
+          id: 'pending_1',
+          runId: 'run_1',
+          stepId: 'approve',
+          status: 'open',
+          prompt: 'Approve archive?',
+        ),
+      ]
+      ..automationTemplates = const <AutomationTemplate>[
+        AutomationTemplate(
+          id: 'approval_state_machine',
+          name: 'Approval Workflow',
+          description: 'Human approval flow.',
+          category: 'approval',
+          body: <String, dynamic>{'kind': 'state_machine'},
+        ),
+      ]
+      ..automationAgentSpecs = const <AutomationAgentSpec>[
+        AutomationAgentSpec(
+          id: 'email_triage_agent',
+          name: 'Email Triage Agent',
+          instructions: 'Classify email into action buckets.',
+          permissions: AutomationAgentPermissions(
+            filesystemRead: true,
+            networkRead: true,
+          ),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    expect(find.text('AUTOMATIONS'), findsOneWidget);
+    expect(find.text('Operations'), findsWidgets);
+    expect(find.text('Workflows'), findsOneWidget);
+    expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Agents'), findsOneWidget);
+    expect(find.text('MCP Servers'), findsOneWidget);
+    expect(find.text('Tools'), findsOneWidget);
+    expect(find.text('›'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey<String>('main-content-sub-shell')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('main-content-left-pane')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('main-content-right-pane')),
+      findsOneWidget,
+    );
+    expect(find.text('OPERATIONS'), findsWidgets);
+    expect(find.text('Approve archive?'), findsOneWidget);
+    expect(find.text('Daily Email'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('WORKFLOWS'), findsWidgets);
+    expect(find.text('Review Flow'), findsWidgets);
+    expect(find.text('ADD ACTION'), findsOneWidget);
+    expect(find.text('Agent Task'), findsWidgets);
+    expect(find.text('Run Command'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tasks')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('TASKS'), findsWidgets);
+    expect(find.text('TASK DAGS'), findsNothing);
+    expect(find.text('Task Flow'), findsWidgets);
+    expect(find.text('INPUTS'), findsNothing);
+    expect(find.text('OUTPUTS'), findsNothing);
+    expect(find.text('CONFIGURATION'), findsNothing);
+    expect(find.text('100%'), findsOneWidget);
+    expect(find.text('fetch_email'), findsWidgets);
+    expect(find.text('classify_email'), findsWidgets);
+    expect(find.text('summarize_email'), findsWidgets);
+    expect(find.text('prepare_review'), findsWidgets);
+    expect(find.text('2 in'), findsOneWidget);
+    final fetchFinder = find.byKey(
+      const ValueKey<String>('dag-node-fetch_email'),
+    );
+    final classifyFinder = find.byKey(
+      const ValueKey<String>('dag-node-classify_email'),
+    );
+    expect(fetchFinder, findsOneWidget);
+    expect(classifyFinder, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dag-stage-drop-1')),
+      findsOneWidget,
+    );
+    final fetchConnect = find.descendant(
+      of: fetchFinder,
+      matching: find.byTooltip('Connect from node'),
+    );
+    await tester.tap(fetchConnect);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: fetchFinder,
+        matching: find.byTooltip('Cancel connection'),
+      ),
+      findsWidgets,
+    );
+    await tester.tap(classifyFinder);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: classifyFinder, matching: find.text('entry')),
+      findsOneWidget,
+    );
+    await tester.tap(classifyFinder);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: classifyFinder, matching: find.text('1 in')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find
+          .descendant(
+            of: fetchFinder,
+            matching: find.byTooltip('Cancel connection'),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+
+    final fetchRect = tester.getRect(fetchFinder);
+    final classifyRect = tester.getRect(classifyFinder);
+    await tester.tapAt(
+      Offset(
+        (fetchRect.right + classifyRect.left) / 2,
+        (fetchRect.top + classifyRect.top) / 2 + 56,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Delete connection'), findsOneWidget);
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('dag-edge-delete-fetch_email-classify_email'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: classifyFinder, matching: find.text('entry')),
+      findsOneWidget,
+    );
+
+    expect(find.byType(Draggable<String>), findsWidgets);
+    expect(find.byType(DragTarget<Object>), findsWidgets);
+    expect(find.text('SELECTED STEP'), findsNothing);
+    expect(find.byTooltip('Steps'), findsNothing);
+    expect(find.byTooltip('Map'), findsNothing);
+    expect(find.textContaining('"nodes"'), findsNothing);
+    await tester.tap(find.byTooltip('Zoom in'));
+    await tester.pump();
+
+    expect(find.text('110%'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Nodes'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('NODES'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('dag-action-agent.run')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dag-action-tool.call')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dag-action-dag.run')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dag-action-cli.command')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dag-action-human.request')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dag-action-delay.until')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('dag-action-workflow.signal')),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('dag-action-agent.run')),
+    );
+    await tester.pump();
+
+    expect(find.text('agent_run_5'), findsWidgets);
+
+    final newNodeFinder = find.byKey(
+      const ValueKey<String>('dag-node-agent_run_5'),
+    );
+    await tester.ensureVisible(newNodeFinder);
+    await tester.pumpAndSettle();
+    final newNodeMoveUp = find.descendant(
+      of: newNodeFinder,
+      matching: find.byTooltip('Move up'),
+    );
+    final newNodeDelete = find.descendant(
+      of: newNodeFinder,
+      matching: find.byTooltip('Delete node'),
+    );
+
+    expect(newNodeMoveUp, findsOneWidget);
+    expect(
+      find.descendant(of: newNodeFinder, matching: find.byTooltip('Move down')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: newNodeFinder, matching: find.byTooltip('Move left')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: newNodeFinder,
+        matching: find.byTooltip('Move right'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: newNodeFinder,
+        matching: find.byTooltip('Connect from node'),
+      ),
+      findsOneWidget,
+    );
+    expect(newNodeDelete, findsOneWidget);
+
+    final newNodeTopBeforeMove = tester.getTopLeft(newNodeFinder).dy;
+    expect(
+      newNodeTopBeforeMove,
+      greaterThan(tester.getTopLeft(fetchFinder).dy),
+    );
+
+    await tester.tap(newNodeMoveUp);
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(newNodeFinder).dy, lessThan(newNodeTopBeforeMove));
+
+    await tester.tap(newNodeDelete);
+    await tester.pumpAndSettle();
+
+    expect(find.text('agent_run_5'), findsNothing);
+
+    await tester.tap(find.byTooltip('Tasks'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Overview').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('SELECTED STEP'), findsOneWidget);
+    expect(find.text('Action'), findsOneWidget);
+    expect(find.text('Retry delay'), findsOneWidget);
+    expect(find.byTooltip('New task DAG'), findsOneWidget);
+    expect(find.byTooltip('Add DAG node'), findsOneWidget);
+    expect(find.byTooltip('Delete DAG node'), findsOneWidget);
+    expect(find.byTooltip('Validate draft'), findsOneWidget);
+    expect(find.byTooltip('Publish draft'), findsOneWidget);
+    expect(find.text('Templates'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Agents')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('AGENT PROFILES'), findsWidgets);
+    expect(find.text('AGENT BUILDER'), findsOneWidget);
+    expect(find.text('Email Triage Agent'), findsWidgets);
+    expect(find.text('Instructions'), findsWidgets);
+    expect(find.text('Permissions'), findsWidgets);
+    expect(find.text('Used In'), findsWidgets);
+    expect(find.text('Capabilities'), findsNothing);
+    expect(find.text('Model Policy'), findsNothing);
+    expect(find.text('What this agent should do'), findsNothing);
+    expect(find.text('Output schema JSON'), findsNothing);
+    expect(find.text('Input schema JSON'), findsNothing);
+    expect(find.text('Test examples JSON'), findsNothing);
+    expect(find.text('Risk notes'), findsNothing);
+    await tester.tap(find.text('Instructions').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('What this agent should do'), findsOneWidget);
+    await tester.tap(find.text('Permissions').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Resource permissions'), findsOneWidget);
+    expect(find.byTooltip('Profile'), findsNothing);
+    expect(find.byTooltip('Builder'), findsNothing);
+    expect(find.byTooltip('Test'), findsNothing);
+    expect(find.byTooltip('Audit'), findsNothing);
+
+    await tester.tap(find.text('Used In').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Used In'), findsWidgets);
+    expect(find.text('classify_email'), findsWidgets);
+    expect(find.text('summarize_email'), findsWidgets);
+    expect(find.text('BUILDER PALETTE'), findsNothing);
+    expect(find.text('Canvas'), findsNothing);
+    expect(find.text('Tool Grant'), findsNothing);
+
+    await tester.tap(find.text('Overview').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('AGENT PROFILES'), findsWidgets);
+    expect(find.text('Overview'), findsOneWidget);
+    expect(find.byTooltip('Add to selected draft'), findsNothing);
+    expect(find.byTooltip('Open automation chat'), findsNothing);
+    expect(find.byTooltip('Save agent spec'), findsNothing);
+    expect(find.byTooltip('Delete agent profile'), findsOneWidget);
+    expect(find.byTooltip('AI chat'), findsOneWidget);
+    expect(find.byTooltip('Refresh automations'), findsNothing);
+    expect(find.text('triage_agent'), findsNothing);
+    expect(find.text('prepare_review'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MCP SERVERS'), findsWidgets);
+    expect(find.text('No MCP server tool configs configured'), findsWidgets);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tools')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('TOOLS'), findsWidgets);
+    expect(find.text('No tool configs configured'), findsWidgets);
+  });
+
+  testWidgets('does not render passive Automations status blocks', (
+    tester,
+  ) async {
+    final controller = _readyController()
+      ..automationsMessage = 'Automations refreshed'
+      ..automationDefinitions = const <AutomationDefinition>[
+        AutomationDefinition(
+          id: 'ready',
+          kind: 'dag',
+          name: 'Ready',
+          hash: 'sha256:ready',
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Agents').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Status'), findsNothing);
+    expect(find.text('Automations refreshed'), findsNothing);
+  });
+
+  testWidgets('opens global AI chat as a third pane from any workspace', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDefinitions = const <AutomationDefinition>[
+        AutomationDefinition(
+          id: 'daily_email',
+          kind: 'dag',
+          name: 'Daily Email',
+          hash: 'abc',
+        ),
+      ]
+      ..messages = <ChatMessage>[
+        ChatMessage(
+          id: 'm1',
+          role: ChatRole.assistant,
+          author: 'Agent Awesome',
+          text: 'Draft ready.',
+          createdAt: DateTime(2026, 5, 16, 10),
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Workflows').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('AI chat'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(controller.assistantChatPanelOpen, isTrue);
+    expect(find.text('WORKFLOWS'), findsWidgets);
+    expect(find.text('CONVERSATION'), findsOneWidget);
+    expect(find.text('Draft ready.'), findsOneWidget);
+    expect(find.byTooltip('Start new chat'), findsOneWidget);
+    expect(find.byTooltip('Delete selected chat'), findsNothing);
+    expect(find.byTooltip('Delete chat'), findsNothing);
+  });
+
+  testWidgets(
+    'global AI chat header starts chats without local delete/collapse',
+    (tester) async {
+      tester.view.physicalSize = const Size(1800, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = _readyController();
+
+      await tester.pumpWidget(
+        MaterialApp(home: AgentAwesomeShell(controller: controller)),
+      );
+      await tester.tap(find.byTooltip('AI chat'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('CONVERSATION'), findsOneWidget);
+      expect(find.byTooltip('Start new chat'), findsOneWidget);
+      expect(find.byTooltip('Delete selected chat'), findsNothing);
+      expect(find.byTooltip('Delete chat'), findsNothing);
+      expect(find.byTooltip('Collapse panel'), findsNothing);
+    },
+  );
 
   testWidgets('walks through first-launch model setup', (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
@@ -438,15 +948,22 @@ void main() {
     expect(find.text('Tools'), findsWidgets);
     expect(find.text('Memory'), findsWidgets);
 
-    await tester.tap(find.text('Tools').first);
+    expect(find.text('OS Tools'), findsNothing);
+    expect(find.text('MCP Server'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('OS Tools'), findsOneWidget);
-    await tester.tap(find.text('TOOLS'));
+    expect(find.text('MCP SERVERS'), findsWidgets);
+    expect(find.text('Personal Tools'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tools')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
-    expect(find.text('MCP Server'), findsOneWidget);
+
+    expect(find.text('TOOLS'), findsWidgets);
+    expect(find.text('Personal Tools'), findsOneWidget);
   });
 
   testWidgets('keeps selectors for editable single-item collection panels', (
@@ -743,7 +1260,8 @@ void main() {
     expect(find.text('Preference'), findsOneWidget);
     expect(find.text('Chat message from user in session-live'), findsNothing);
     expect(find.byTooltip('Select chat'), findsOneWidget);
-    expect(find.byTooltip('Delete selected chat'), findsOneWidget);
+    expect(find.byTooltip('Start new chat'), findsOneWidget);
+    expect(find.byTooltip('Delete selected chat'), findsNothing);
     expect(find.byTooltip('New chat with profile'), findsNothing);
     expect(find.byTooltip('Chats'), findsNothing);
     expect(find.byTooltip('Sessions'), findsNothing);
@@ -862,7 +1380,7 @@ void main() {
       find.byKey(const ValueKey<String>('search-picker-filter')),
       findsOneWidget,
     );
-    expect(find.byTooltip('Delete chat'), findsWidgets);
+    expect(find.byTooltip('Delete chat'), findsNothing);
     expect(find.text('Alternate planning chat'), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey<String>('search-picker-filter')),
@@ -938,7 +1456,7 @@ void main() {
     expect(controller.hasConfiguredModel, isFalse);
     expect(controller.canStartChat, isTrue);
     expect(find.byTooltip('New chat'), findsOneWidget);
-    expect(find.text('Setup incomplete'), findsOneWidget);
+    expect(find.text('Setup incomplete'), findsNothing);
 
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
@@ -987,12 +1505,6 @@ void main() {
 
     expect(find.text('PAGE TOOLS'), findsOneWidget);
     expect(find.text('No compiled page loaded'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Browse'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Adk Chat'), findsNothing);
-    expect(find.text('Chat'), findsWidgets);
   });
 
   testWidgets('shows memory safety event history', (tester) async {
@@ -1348,12 +1860,11 @@ void main() {
     expect(find.text('Delete'), findsWidgets);
     expect(find.text('Backlog Stream'), findsNothing);
     expect(find.byTooltip('Stream'), findsOneWidget);
-    expect(find.byTooltip('Terrain'), findsOneWidget);
     expect(find.byTooltip('Constellation'), findsOneWidget);
     await tester.tap(find.byTooltip('Stream'));
     await tester.pumpAndSettle();
     expect(find.text('STREAM'), findsWidgets);
-    expect(find.text('STREAM PROJECTION'), findsOneWidget);
+    expect(find.text('TASK'), findsOneWidget);
     expect(find.text('Analyze stream layout'), findsOneWidget);
     expect(find.text('Backlog Stream'), findsNothing);
     expect(find.text('Workload'), findsNothing);
@@ -1380,10 +1891,6 @@ void main() {
     expect(find.byTooltip('Expand column'), findsOneWidget);
     await tester.tap(find.byTooltip('Expand column'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Terrain'));
-    await tester.pumpAndSettle();
-    expect(find.text('TERRAIN'), findsWidgets);
-    expect(find.text('TERRAIN PROJECTION'), findsOneWidget);
   });
 
   testWidgets(
@@ -1553,7 +2060,7 @@ void main() {
     );
   });
 
-  testWidgets('hides workflow and timeline routes for v1', (tester) async {
+  testWidgets('hides old work-management timeline routes', (tester) async {
     final controller = _readyController();
 
     await tester.pumpWidget(
@@ -1562,7 +2069,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('WORK MANAGEMENT'), findsNothing);
-    expect(find.text('Workflows'), findsNothing);
     expect(find.text('Timeline'), findsNothing);
     expect(find.text('View timeline'), findsNothing);
   });

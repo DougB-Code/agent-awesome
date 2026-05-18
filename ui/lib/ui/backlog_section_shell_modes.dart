@@ -12,12 +12,6 @@ enum _BacklogDetailMode {
   /// Screen-command review queue.
   aiReview,
 
-  /// Stream projection overview.
-  streamOverview,
-
-  /// Terrain projection overview.
-  terrainOverview,
-
   /// Work-breakdown structure overview.
   wbsOverview,
 
@@ -35,9 +29,6 @@ abstract final class _BacklogAreaIds {
 
   /// Stream projection area.
   static const String stream = 'stream';
-
-  /// Terrain projection area.
-  static const String terrain = 'terrain';
 
   /// Work-breakdown structure area.
   static const String wbs = 'wbs';
@@ -68,15 +59,6 @@ List<SwitcherPanelArea> _backlogCommandAreas(
       builder: (query) => TaskConceptProjectionPanel(
         controller: controller,
         kind: TaskConceptKind.stream,
-      ),
-    ),
-    SwitcherPanelArea(
-      id: _BacklogAreaIds.terrain,
-      title: 'Terrain',
-      icon: Icons.terrain_outlined,
-      builder: (query) => TaskConceptProjectionPanel(
-        controller: controller,
-        kind: TaskConceptKind.terrain,
       ),
     ),
     SwitcherPanelArea(
@@ -122,13 +104,8 @@ List<CommandPanelDetailMode> _visibleBacklogDetailModes(
       ];
     case _BacklogAreaIds.stream:
       return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.streamOverview),
         _backlogDetailMode(_BacklogDetailMode.inspector),
-      ];
-    case _BacklogAreaIds.terrain:
-      return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.terrainOverview),
-        _backlogDetailMode(_BacklogDetailMode.inspector),
+        _backlogDetailMode(_BacklogDetailMode.memoryLinks),
       ];
     case _BacklogAreaIds.wbs:
       return <CommandPanelDetailMode>[
@@ -163,8 +140,6 @@ String _backlogDetailModeId(_BacklogDetailMode mode) {
     _BacklogDetailMode.inspector => 'inspector',
     _BacklogDetailMode.memoryLinks => 'memory_links',
     _BacklogDetailMode.aiReview => 'ai_review',
-    _BacklogDetailMode.streamOverview => 'stream_overview',
-    _BacklogDetailMode.terrainOverview => 'terrain_overview',
     _BacklogDetailMode.wbsOverview => 'wbs_overview',
     _BacklogDetailMode.constellationOverview => 'constellation_overview',
     _BacklogDetailMode.captureContext => 'capture_context',
@@ -178,12 +153,6 @@ _BacklogDetailMode _backlogDetailModeForId(String id) {
   }
   if (id == _backlogDetailModeId(_BacklogDetailMode.aiReview)) {
     return _BacklogDetailMode.aiReview;
-  }
-  if (id == _backlogDetailModeId(_BacklogDetailMode.streamOverview)) {
-    return _BacklogDetailMode.streamOverview;
-  }
-  if (id == _backlogDetailModeId(_BacklogDetailMode.terrainOverview)) {
-    return _BacklogDetailMode.terrainOverview;
   }
   if (id == _backlogDetailModeId(_BacklogDetailMode.wbsOverview)) {
     return _BacklogDetailMode.wbsOverview;
@@ -212,8 +181,6 @@ String _backlogDetailLabel(_BacklogDetailMode mode) {
     _BacklogDetailMode.inspector => 'Inspector',
     _BacklogDetailMode.memoryLinks => 'Memory',
     _BacklogDetailMode.aiReview => 'AI review',
-    _BacklogDetailMode.streamOverview => 'Stream',
-    _BacklogDetailMode.terrainOverview => 'Terrain',
     _BacklogDetailMode.wbsOverview => 'WBS',
     _BacklogDetailMode.constellationOverview => 'Graph',
     _BacklogDetailMode.captureContext => 'Capture',
@@ -226,8 +193,6 @@ IconData _backlogDetailIcon(_BacklogDetailMode mode) {
     _BacklogDetailMode.inspector => Icons.edit_note_outlined,
     _BacklogDetailMode.memoryLinks => Icons.link_outlined,
     _BacklogDetailMode.aiReview => Icons.auto_awesome_outlined,
-    _BacklogDetailMode.streamOverview => Icons.waves_outlined,
-    _BacklogDetailMode.terrainOverview => Icons.terrain_outlined,
     _BacklogDetailMode.wbsOverview => Icons.account_tree_outlined,
     _BacklogDetailMode.constellationOverview => Icons.hub_outlined,
     _BacklogDetailMode.captureContext => Icons.add_task_outlined,
@@ -242,8 +207,6 @@ String _backlogAreaId(SwitcherPanelArea area) {
 /// Returns the default right-side detail mode for a backlog area.
 _BacklogDetailMode _defaultBacklogDetailModeForArea(SwitcherPanelArea area) {
   return switch (_backlogAreaId(area)) {
-    _BacklogAreaIds.stream => _BacklogDetailMode.streamOverview,
-    _BacklogAreaIds.terrain => _BacklogDetailMode.terrainOverview,
     _BacklogAreaIds.wbs => _BacklogDetailMode.wbsOverview,
     _BacklogAreaIds.constellation => _BacklogDetailMode.constellationOverview,
     _BacklogAreaIds.capture => _BacklogDetailMode.captureContext,

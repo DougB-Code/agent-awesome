@@ -18,12 +18,15 @@ class _SettingsTextFileEditor extends StatefulWidget {
 }
 
 class _SettingsTextFileEditorState extends State<_SettingsTextFileEditor> {
+  static const Duration _saveDelay = Duration(milliseconds: 700);
+
   final TextEditingController _content = TextEditingController();
   final FocusNode _contentFocus = FocusNode();
+  Timer? _saveTimer;
   String _savedContent = '';
   bool _loading = true;
 
-  /// Loads the file editor content.
+  /// Loads the file editor content and prepares autosave flushes.
   @override
   void initState() {
     super.initState();
@@ -43,6 +46,7 @@ class _SettingsTextFileEditorState extends State<_SettingsTextFileEditor> {
   /// Cleans up the text editor controller.
   @override
   void dispose() {
+    _saveTimer?.cancel();
     _contentFocus.removeListener(_handleContentFocusChange);
     _contentFocus.dispose();
     _content.dispose();
@@ -64,6 +68,7 @@ class _SettingsTextFileEditorState extends State<_SettingsTextFileEditor> {
             controller: _content,
             minLines: 14,
             maxLines: 28,
+            onChanged: (_) => _scheduleSave(),
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
             decoration: SettingsInputDecoration.field(
               context,
@@ -110,6 +115,7 @@ class _SettingsTextFileEditorState extends State<_SettingsTextFileEditor> {
   }
 
   Future<void> _save() async {
+    _saveTimer?.cancel();
     if (_content.text == _savedContent) {
       return;
     }
@@ -129,5 +135,14 @@ class _SettingsTextFileEditorState extends State<_SettingsTextFileEditor> {
       return;
     }
     unawaited(_save());
+  }
+
+  /// Schedules one file save after a short edit pause.
+  void _scheduleSave() {
+    if (_loading) {
+      return;
+    }
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, () => unawaited(_save()));
   }
 }

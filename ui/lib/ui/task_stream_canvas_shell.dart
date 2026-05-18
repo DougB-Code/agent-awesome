@@ -215,11 +215,11 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
                             ),
                           for (final row in layout.rows)
                             Positioned(
-                              left: layout.endX - 17,
-                              top: row.centerY - 17,
-                              width: 34,
-                              height: 34,
-                              child: _StreamContinuationButton(row: row),
+                              left: layout.endX - 7,
+                              top: row.centerY - 7,
+                              width: 14,
+                              height: 14,
+                              child: _StreamContinuationMarker(row: row),
                             ),
                         ],
                       ),

@@ -124,6 +124,38 @@ List<MemoryRelationship> parseMemoryRelationships(dynamic content) {
   }).toList();
 }
 
+/// Parses a backend-enforced memory export result.
+MemoryExportResult parseMemoryExportResult(dynamic content) {
+  final result = content is Map<String, dynamic>
+      ? content
+      : <String, dynamic>{};
+  final capture = result['capture'];
+  return MemoryExportResult(
+    exported: boolValue(result['exported']),
+    capture: capture is Map<String, dynamic> ? capture : <String, dynamic>{},
+    safetyEvent: parseMemorySafetyEvent(result['safety_event']),
+  );
+}
+
+/// Parses one memory safety decision event.
+MemorySafetyEvent? parseMemorySafetyEvent(dynamic content) {
+  if (content is! Map<String, dynamic>) {
+    return null;
+  }
+  return MemorySafetyEvent(
+    id: stringValue(content['id']),
+    kind: stringValue(content['kind']),
+    severity: stringValue(content['severity']),
+    title: stringValue(content['title']),
+    detail: stringValue(content['detail']),
+    sourceDomain: stringValue(content['source_domain']),
+    targetDomain: stringValue(content['target_domain']),
+    sourceMemoryId: stringValue(content['source_memory_id']),
+    approved: boolValue(content['approved']),
+    createdAt: parseOptionalDateTime(content['created_at']),
+  );
+}
+
 /// Parses a compiled page returned by the memory service.
 CompiledMemoryPage parseCompiledMemoryPage(dynamic content) {
   final page = content is Map<String, dynamic> ? content : <String, dynamic>{};

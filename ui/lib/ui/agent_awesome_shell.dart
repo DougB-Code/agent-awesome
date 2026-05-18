@@ -15,6 +15,7 @@ import '../features/today/attention_screen.dart';
 import '../features/today/today_screen.dart';
 import 'command_bar/command_context.dart';
 import 'command_bar/command_router.dart';
+import 'automations_section.dart';
 import 'backlog_section.dart';
 import 'files_section.dart';
 import 'panels/panels.dart';
@@ -31,13 +32,13 @@ part 'agent_awesome_shell_chat_context_widgets.dart';
 part 'agent_awesome_shell_chat_conversation.dart';
 part 'agent_awesome_shell_chat_runtime.dart';
 part 'agent_awesome_shell_chat_shell.dart';
-part 'agent_awesome_shell_memory_browse.dart';
 part 'agent_awesome_shell_memory_capture.dart';
 part 'agent_awesome_shell_memory_controls.dart';
 part 'agent_awesome_shell_memory_corrections.dart';
 part 'agent_awesome_shell_memory_details.dart';
 part 'agent_awesome_shell_memory_metadata.dart';
 part 'agent_awesome_shell_memory_pages.dart';
+part 'agent_awesome_shell_memory_review_map.dart';
 part 'agent_awesome_shell_memory_safety.dart';
 part 'agent_awesome_shell_memory_search.dart';
 part 'agent_awesome_shell_memory_shell.dart';
@@ -94,6 +95,7 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
               onToggleSidebar: _toggleSidebar,
               onSubmit: _submitCommand,
               onNewChat: _startNewChat,
+              onToggleAssistantChat: widget.controller.toggleAssistantChatPanel,
               onStartChatWithProfile: _startNewChatWithProfile,
               onSelectHistoryChat: _selectHistoryChat,
               onOpenSection: _selectSection,
@@ -122,16 +124,20 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     switch (_section) {
       case AppSections.today:
         if (_todayRoute.startsWith('/attention')) {
-          return TodayAttentionScreen(
-            controller: widget.controller,
-            route: _todayRoute,
-            onOpenToday: () => _selectSection(AppSections.today),
-            onOpenBacklogTask: _openBacklogTask,
+          return _withAssistantChat(
+            TodayAttentionScreen(
+              controller: widget.controller,
+              route: _todayRoute,
+              onOpenToday: () => _selectSection(AppSections.today),
+              onOpenBacklogTask: _openBacklogTask,
+            ),
           );
         }
-        return TodayScreen(
-          controller: widget.controller,
-          onOpenRoute: _openProjectionRoute,
+        return _withAssistantChat(
+          TodayScreen(
+            controller: widget.controller,
+            onOpenRoute: _openProjectionRoute,
+          ),
         );
       case AppSections.chat:
         return _ChatCommandSubShell(
@@ -139,46 +145,112 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           onAreaChanged: _rememberArea(AppSections.chat),
         );
       case AppSections.memory:
-        return _MemoryCommandSubShell(
-          controller: widget.controller,
-          onAreaChanged: _rememberArea(AppSections.memory),
+        return _withAssistantChat(
+          _MemoryCommandSubShell(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.memory),
+          ),
         );
       case AppSections.backlog:
         final backlogPanel = BacklogCommandPanel(
           controller: widget.controller,
           onAreaChanged: _rememberArea(AppSections.backlog),
         );
-        if (widget.controller.backlogChatPanelOpen) {
-          return SplitPanelShell(
-            split: const PanelSplit(left: 0.74, min: 0.52, max: 0.86),
-            left: backlogPanel,
-            right: _ChatCommandPanel(controller: widget.controller),
-          );
-        }
-        return backlogPanel;
+        return _withAssistantChat(
+          backlogPanel,
+          legacyOpen: widget.controller.backlogChatPanelOpen,
+        );
+      case AppSections.automationOperations:
+        return _withAssistantChat(
+          AutomationOperationsCommandPanel(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.automationOperations),
+          ),
+          legacyOpen: widget.controller.automationsChatPanelOpen,
+        );
+      case AppSections.automationWorkflows:
+        return _withAssistantChat(
+          AutomationWorkflowsCommandPanel(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.automationWorkflows),
+          ),
+          legacyOpen: widget.controller.automationsChatPanelOpen,
+        );
+      case AppSections.automationTasks:
+        return _withAssistantChat(
+          AutomationTasksCommandPanel(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.automationTasks),
+          ),
+          legacyOpen: widget.controller.automationsChatPanelOpen,
+        );
+      case AppSections.automationAgents:
+        return _withAssistantChat(
+          AutomationAgentsCommandPanel(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.automationAgents),
+          ),
+          legacyOpen: widget.controller.automationsChatPanelOpen,
+        );
+      case AppSections.automationMcpServers:
+        return _withAssistantChat(
+          McpServersCommandPanel(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.automationMcpServers),
+          ),
+          legacyOpen: widget.controller.automationsChatPanelOpen,
+        );
+      case AppSections.automationTools:
+        return _withAssistantChat(
+          ToolsCommandPanel(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.automationTools),
+          ),
+          legacyOpen: widget.controller.automationsChatPanelOpen,
+        );
       case AppSections.files:
-        return FilesCommandSubShell(
-          controller: widget.controller,
-          onAreaChanged: _rememberArea(AppSections.files),
+        return _withAssistantChat(
+          FilesCommandSubShell(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.files),
+          ),
         );
       case AppSections.people:
-        return PeopleCommandSubShell(
-          controller: widget.controller,
-          onAreaChanged: _rememberArea(AppSections.people),
+        return _withAssistantChat(
+          PeopleCommandSubShell(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.people),
+          ),
         );
       case AppSections.settings:
-        return SettingsCommandSubShell(
-          controller: widget.controller,
-          selectedSection: _settingsSection,
-          onSectionSelected: _selectSettingsSection,
-          onAreaChanged: _rememberArea(AppSections.settings),
+        return _withAssistantChat(
+          SettingsCommandSubShell(
+            controller: widget.controller,
+            selectedSection: _settingsSection,
+            onSectionSelected: _selectSettingsSection,
+            onAreaChanged: _rememberArea(AppSections.settings),
+          ),
         );
       default:
-        return HomeWorkspace(
-          controller: widget.controller,
-          onOpenSection: _selectSection,
+        return _withAssistantChat(
+          HomeWorkspace(
+            controller: widget.controller,
+            onOpenSection: _selectSection,
+          ),
         );
     }
+  }
+
+  /// Wraps workspace panels with the optional auxiliary AI chat pane.
+  Widget _withAssistantChat(Widget panel, {bool legacyOpen = false}) {
+    if (!widget.controller.assistantChatPanelOpen && !legacyOpen) {
+      return panel;
+    }
+    return SplitPanelShell(
+      split: const PanelSplit(left: 0.68, min: 0.5, max: 0.84),
+      left: panel,
+      right: _ChatCommandPanel(controller: widget.controller),
+    );
   }
 
   /// Selects a top-level app section from sidebar or command navigation.
@@ -206,10 +278,6 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     }
     final uri = Uri.tryParse(route);
     if (uri != null && uri.path == '/backlog') {
-      final insightId = uri.queryParameters['insight'] ?? '';
-      if (insightId.isNotEmpty) {
-        unawaited(widget.controller.applyTaskInsightPreset(insightId));
-      }
       _selectSection(AppSections.backlog);
       return;
     }

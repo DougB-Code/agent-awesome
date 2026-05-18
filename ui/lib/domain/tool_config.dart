@@ -72,6 +72,28 @@ const List<String> graphBackedMcpReadOnlyToolNames = <String>[
   'traverse_task_relations',
 ];
 
+/// Workflow MCP tools exposed by workflowd.
+const List<String> workflowMcpToolNames = <String>[
+  'workflow_list',
+  'workflow_describe',
+  'workflow_start',
+  'workflow_status',
+  'workflow_signal',
+  'workflow_cancel',
+  'workflow_history',
+  'workflow_action_types',
+  'workflow_draft_create',
+  'workflow_draft_update',
+  'workflow_draft_validate',
+  'workflow_draft_publish',
+  'workflow_template_list',
+  'workflow_template_instantiate',
+  'workflow_agent_spec_list',
+  'workflow_agent_spec_create',
+  'workflow_agent_spec_update',
+  'workflow_agent_spec_delete',
+];
+
 /// ToolConfigDocument represents one harness tool config YAML file.
 class ToolConfigDocument {
   /// Creates a tool config document.
@@ -746,6 +768,7 @@ McpServerToolConfig newHttpMcpServerToolConfig({
 ToolConfigDocument graphBackedMemoryToolConfigForDomains({
   required List<McpServerRuntime> memoryDomains,
   required AgentMemoryRuntime agentMemory,
+  WorkflowRuntime? workflow,
   required LocalExecToolConfig localExec,
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
@@ -775,6 +798,13 @@ ToolConfigDocument graphBackedMemoryToolConfigForDomains({
                 : graphBackedMcpReadOnlyToolNames,
           ),
         ),
+        if (workflow != null && workflow.enabled)
+          newHttpMcpServerToolConfig(
+            name: 'workflow',
+            endpoint: _workflowMcpUrl(workflow),
+          ).copyWith(
+            tools: const McpToolFilterConfig(allow: workflowMcpToolNames),
+          ),
       ],
     ),
     extra: <String, dynamic>{
@@ -796,6 +826,12 @@ ToolConfigDocument graphBackedMemoryToolConfigForDomains({
       },
     },
   );
+}
+
+/// Returns the workflow MCP endpoint beside the workflow REST API.
+String _workflowMcpUrl(WorkflowRuntime workflow) {
+  final uri = Uri.parse(workflow.apiBaseUrl);
+  return uri.replace(path: '/mcp', query: null).toString();
 }
 
 /// Encodes one memory domain for harness-owned memory access.

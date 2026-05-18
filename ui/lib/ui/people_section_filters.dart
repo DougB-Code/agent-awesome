@@ -57,27 +57,6 @@ int _countContactFilter(List<_ContactItem> contacts, _ContactFilter filter) {
       .length;
 }
 
-/// Counts contacts with active task ownership.
-int _activeContactCount(List<_ContactItem> contacts) {
-  return contacts.where((contact) => contact.openTaskCount > 0).length;
-}
-
-/// Counts context slices across all contacts.
-int _contactContextCount(List<_ContactItem> contacts) {
-  return contacts.fold<int>(
-    0,
-    (count, contact) => count + contact.contexts.length,
-  );
-}
-
-/// Counts source records across all contacts.
-int _contactSourceCount(List<_ContactItem> contacts) {
-  return contacts.fold<int>(
-    0,
-    (count, contact) => count + contact.memoryRecords.length,
-  );
-}
-
 /// Returns whether a task is currently open for contact activity.
 bool _contactTaskIsOpen(WorkspaceTask task) {
   final status = task.status.toLowerCase();

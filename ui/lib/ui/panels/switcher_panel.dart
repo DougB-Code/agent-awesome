@@ -8,6 +8,7 @@ class SwitcherPanel extends StatefulWidget {
     required this.areas,
     this.titleControl,
     this.showAreaQuickSelect = true,
+    this.showCollapseButton = true,
     this.onAreaChanged,
   });
 
@@ -19,6 +20,9 @@ class SwitcherPanel extends StatefulWidget {
 
   /// Whether to show compact icon buttons for the selectable areas.
   final bool showAreaQuickSelect;
+
+  /// Whether to show the split-pane collapse button when available.
+  final bool showCollapseButton;
 
   /// Reports the active area to the owning shell.
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
@@ -78,6 +82,7 @@ class _SwitcherPanelState extends State<SwitcherPanel> {
         titleControl: widget.titleControl,
         onTitleTap: areas.length > 1 ? _selectNextArea : null,
         showQuickSelect: widget.showAreaQuickSelect,
+        showCollapseButton: widget.showCollapseButton,
         selectionWidth: 150,
         filterHint: 'Filter...',
         filterKeyBuilder: (item) => 'command-panel-filter-${item?.label}',

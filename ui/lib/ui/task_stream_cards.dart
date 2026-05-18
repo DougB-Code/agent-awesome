@@ -94,9 +94,9 @@ class _StreamTaskCard extends StatelessWidget {
   }
 }
 
-/// _StreamContinuationButton renders a future-work endpoint.
-class _StreamContinuationButton extends StatelessWidget {
-  const _StreamContinuationButton({required this.row});
+/// _StreamContinuationMarker renders a non-interactive future-work endpoint.
+class _StreamContinuationMarker extends StatelessWidget {
+  const _StreamContinuationMarker({required this.row});
 
   final TaskStreamRowLayout row;
 
@@ -105,10 +105,10 @@ class _StreamContinuationButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: row.color.withValues(alpha: 0.88),
+        color: row.color.withValues(alpha: 0.78),
         shape: BoxShape.circle,
       ),
-      child: const Icon(Icons.add, color: Colors.white, size: 18),
+      child: const SizedBox.square(dimension: 14),
     );
   }
 }

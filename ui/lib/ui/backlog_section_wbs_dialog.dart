@@ -26,6 +26,8 @@ class _TaskWbsDialog extends StatefulWidget {
 }
 
 class _TaskWbsDialogState extends State<_TaskWbsDialog> {
+  static const Duration _saveDelay = Duration(milliseconds: 500);
+
   final TextEditingController _code = TextEditingController();
   final TextEditingController _deliverable = TextEditingController();
   final TextEditingController _startCriteria = TextEditingController();
@@ -35,12 +37,23 @@ class _TaskWbsDialogState extends State<_TaskWbsDialog> {
   final TextEditingController _resources = TextEditingController();
   final TextEditingController _estimatedCost = TextEditingController();
   final TextEditingController _costCurrency = TextEditingController();
+  Timer? _saveTimer;
   String _message = '';
+  String _lastSavedFingerprint = '';
 
   /// Initializes WBS fields from the selected task.
   @override
   void initState() {
     super.initState();
+    _code.addListener(_scheduleSave);
+    _deliverable.addListener(_scheduleSave);
+    _startCriteria.addListener(_scheduleSave);
+    _acceptanceCriteria.addListener(_scheduleSave);
+    _requirementRefs.addListener(_scheduleSave);
+    _rubricRefs.addListener(_scheduleSave);
+    _resources.addListener(_scheduleSave);
+    _estimatedCost.addListener(_scheduleSave);
+    _costCurrency.addListener(_scheduleSave);
     final workBreakdown = widget.task.workBreakdown;
     _code.text = workBreakdown.code;
     _deliverable.text = workBreakdown.deliverable;
@@ -55,11 +68,22 @@ class _TaskWbsDialogState extends State<_TaskWbsDialog> {
         ? ''
         : workBreakdown.estimatedCostCents.toString();
     _costCurrency.text = workBreakdown.costCurrency;
+    _lastSavedFingerprint = _fingerprint();
   }
 
   /// Cleans up WBS field controllers.
   @override
   void dispose() {
+    _saveTimer?.cancel();
+    _code.removeListener(_scheduleSave);
+    _deliverable.removeListener(_scheduleSave);
+    _startCriteria.removeListener(_scheduleSave);
+    _acceptanceCriteria.removeListener(_scheduleSave);
+    _requirementRefs.removeListener(_scheduleSave);
+    _rubricRefs.removeListener(_scheduleSave);
+    _resources.removeListener(_scheduleSave);
+    _estimatedCost.removeListener(_scheduleSave);
+    _costCurrency.removeListener(_scheduleSave);
     _code.dispose();
     _deliverable.dispose();
     _startCriteria.dispose();
@@ -153,15 +177,23 @@ class _TaskWbsDialogState extends State<_TaskWbsDialog> {
       actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: const Text('Close'),
         ),
-        FilledButton(onPressed: _save, child: const Text('Save')),
       ],
     );
   }
 
   /// Saves the edited WBS metadata through graph-backed task tools.
   Future<void> _save() async {
+    _saveTimer?.cancel();
+    if (widget.controller.tasksBusy) {
+      _scheduleSave();
+      return;
+    }
+    final fingerprint = _fingerprint();
+    if (fingerprint == _lastSavedFingerprint) {
+      return;
+    }
     final costText = _estimatedCost.text.trim();
     final cost = costText.isEmpty ? 0 : int.tryParse(costText);
     if (cost == null || cost < 0) {
@@ -173,6 +205,7 @@ class _TaskWbsDialogState extends State<_TaskWbsDialog> {
       setState(() => _message = 'Resource quantities and spend must be valid');
       return;
     }
+    _lastSavedFingerprint = fingerprint;
     await widget.controller.updateTaskFromUi(
       taskId: widget.task.id,
       workBreakdown: TaskWorkBreakdown(
@@ -188,7 +221,28 @@ class _TaskWbsDialogState extends State<_TaskWbsDialog> {
       ),
     );
     if (mounted) {
-      Navigator.of(context).pop();
+      setState(() => _message = '');
     }
+  }
+
+  /// Schedules one WBS save after a short edit pause.
+  void _scheduleSave() {
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, () => unawaited(_save()));
+  }
+
+  /// Returns a stable comparison key for persisted WBS fields.
+  String _fingerprint() {
+    return jsonEncode(<String, Object?>{
+      'code': _code.text.trim(),
+      'deliverable': _deliverable.text.trim(),
+      'startCriteria': _startCriteria.text.trim(),
+      'acceptanceCriteria': _acceptanceCriteria.text.trim(),
+      'requirementRefs': _requirementRefs.text.trim(),
+      'rubricRefs': _rubricRefs.text.trim(),
+      'resources': _resources.text.trim(),
+      'estimatedCost': _estimatedCost.text.trim(),
+      'costCurrency': _costCurrency.text.trim(),
+    });
   }
 }

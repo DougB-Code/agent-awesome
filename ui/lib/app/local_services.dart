@@ -123,6 +123,14 @@ class LocalServiceSupervisor {
       await _writeStatusLog(status);
       statuses.add(status);
     }
+    if (profile.workflow.enabled) {
+      final workflowStatus = await _ensureWorkflowStatus(
+        profile,
+        restartAutoStarted: restartAutoStarted,
+      );
+      await _writeStatusLog(workflowStatus);
+      statuses.add(workflowStatus);
+    }
     final harnessStatus = await _ensureHarnessStatus(
       profile,
       restartAutoStarted: restartAutoStarted,
@@ -422,6 +430,27 @@ class LocalServiceSupervisor {
     }
   }
 
+  /// Ensures workflowd and converts launch failures into a status.
+  Future<ServiceProcessStatus> _ensureWorkflowStatus(
+    RuntimeProfile profile, {
+    required bool restartAutoStarted,
+  }) async {
+    try {
+      return await _ensureWorkflow(
+        profile,
+        restartAutoStarted: restartAutoStarted,
+      );
+    } catch (error) {
+      final workflow = profile.workflow;
+      return _status(
+        workflow.label,
+        workflow.healthUrl,
+        ConnectionStateKind.disconnected,
+        await _startupFailureMessage(workflow.label, error),
+      );
+    }
+  }
+
   /// Ensures one MCP server is reachable, starting it when the profile manages it.
   Future<ServiceProcessStatus> _ensureMcpServer(
     RuntimeProfile profile,
@@ -499,6 +528,73 @@ class LocalServiceSupervisor {
     );
     if (status.state != ConnectionStateKind.connected) {
       _started.remove(server.id);
+    }
+    return status;
+  }
+
+  /// Ensures workflowd is reachable, starting it when the profile manages it.
+  Future<ServiceProcessStatus> _ensureWorkflow(
+    RuntimeProfile profile, {
+    required bool restartAutoStarted,
+  }) async {
+    final workflow = profile.workflow;
+    final health = Uri.parse(workflow.healthUrl);
+    final arguments = workflowArgumentsForProfile(profile);
+    _rememberServiceEndpoint(
+      id: workflow.id,
+      name: workflow.label,
+      health: health,
+      arguments: arguments,
+    );
+    if (restartAutoStarted && workflow.autoStart) {
+      await _restartAutoStartedEndpoint(
+        id: workflow.id,
+        name: workflow.label,
+        health: health,
+      );
+    }
+    if (await _isHealthy(health)) {
+      await _emitObservedServiceLog(
+        id: workflow.id,
+        name: workflow.label,
+        health: health,
+        arguments: arguments,
+      );
+      return _status(
+        workflow.label,
+        workflow.healthUrl,
+        ConnectionStateKind.connected,
+        'Already running',
+      );
+    }
+    if (!workflow.autoStart) {
+      return _status(
+        workflow.label,
+        workflow.healthUrl,
+        ConnectionStateKind.disconnected,
+        'External workflow service is not reachable',
+      );
+    }
+    await _createArgumentDirectories(arguments);
+    final process = await _startProcess(
+      id: workflow.id,
+      profile: profile,
+      name: workflow.label,
+      health: health,
+      workingDirectory: workflow.workingDirectory,
+      packagePath: workflow.packagePath,
+      arguments: arguments,
+      outputLogPath: '${config.serviceLogDirectory}/workflow.log',
+    );
+    _started[workflow.id] = process;
+    final status = await _waitForProcessHealth(
+      workflow.label,
+      health,
+      process,
+      logPath: '${config.serviceLogDirectory}/workflow.log',
+    );
+    if (status.state != ConnectionStateKind.connected) {
+      _started.remove(workflow.id);
     }
     return status;
   }
@@ -939,6 +1035,9 @@ class LocalServiceSupervisor {
         await parent.create(recursive: true);
       }
       if (flag == '--data') {
+        await Directory(value).create(recursive: true);
+      }
+      if (flag == '--definitions') {
         await Directory(value).create(recursive: true);
       }
     }

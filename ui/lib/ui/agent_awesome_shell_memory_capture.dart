@@ -76,9 +76,9 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
           PanelSectionBlock(
             child: Column(
               children: <Widget>[
-                _MemoryTextField(controller: _title, label: 'Title'),
+                PanelTextFormField(controller: _title, label: 'Title'),
                 const SizedBox(height: 10),
-                _MemoryTextField(
+                PanelTextFormField(
                   controller: _content,
                   label: 'Source content',
                   maxLines: 8,
@@ -87,14 +87,14 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: _MemoryTextField(
+                      child: PanelTextFormField(
                         controller: _sourceSystem,
                         label: 'Source system',
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _MemoryTextField(
+                      child: PanelTextFormField(
                         controller: _sourceId,
                         label: 'Source id',
                       ),
@@ -105,21 +105,23 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: _MemoryDropdown(
+                      child: PanelDropdownFormField<String>(
+                        label: 'Kind',
                         value: _kind,
                         values: _memoryKinds,
                         tooltip: 'Kind',
+                        labelFor: _memoryLabel,
                         onChanged: (value) => setState(() => _kind = value),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _MemoryDropdown(
+                      child: PanelDropdownFormField<String>(
+                        label: 'Firewall',
                         value: _firewall,
                         values: widget.controller.memoryFirewallIds,
                         tooltip: 'Firewall',
-                        labelForValue:
-                            widget.controller.memoryFirewallPickerLabel,
+                        labelFor: widget.controller.memoryFirewallPickerLabel,
                         onChanged: (value) => setState(() => _firewall = value),
                       ),
                     ),
@@ -129,19 +131,23 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                 Row(
                   children: <Widget>[
                     Expanded(
-                      child: _MemoryDropdown(
+                      child: PanelDropdownFormField<String>(
+                        label: 'Trust',
                         value: _trust,
                         values: _memoryTrustLevels,
                         tooltip: 'Trust',
+                        labelFor: _memoryLabel,
                         onChanged: (value) => setState(() => _trust = value),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _MemoryDropdown(
+                      child: PanelDropdownFormField<String>(
+                        label: 'Sensitivity',
                         value: _sensitivity,
                         values: _memorySensitivities,
                         tooltip: 'Sensitivity',
+                        labelFor: _memoryLabel,
                         onChanged: (value) =>
                             setState(() => _sensitivity = value),
                       ),
@@ -149,11 +155,11 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                   ],
                 ),
                 const SizedBox(height: 10),
-                _MemoryTextField(controller: _subjects, label: 'Subjects'),
+                PanelTextFormField(controller: _subjects, label: 'Subjects'),
                 const SizedBox(height: 10),
-                _MemoryTextField(controller: _topics, label: 'Topics'),
+                PanelTextFormField(controller: _topics, label: 'Topics'),
                 const SizedBox(height: 10),
-                _MemoryTextField(controller: _entities, label: 'Entities'),
+                PanelTextFormField(controller: _entities, label: 'Entities'),
               ],
             ),
           ),

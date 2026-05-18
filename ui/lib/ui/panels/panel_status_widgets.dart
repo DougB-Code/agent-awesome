@@ -257,8 +257,12 @@ class StatusRow extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Icon(Icons.circle, size: 12, color: color),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Icon(Icons.circle, size: 12, color: color),
+          ),
           const SizedBox(width: 14),
           SizedBox(
             width: 160,
@@ -270,10 +274,10 @@ class StatusRow extends StatelessWidget {
           ),
           Expanded(child: Text(url, overflow: TextOverflow.ellipsis)),
           const SizedBox(width: 16),
-          Flexible(
-            child: Text(
+          Expanded(
+            flex: 2,
+            child: SelectableText(
               message,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(color: colors.muted),
             ),
           ),

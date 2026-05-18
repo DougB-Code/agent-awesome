@@ -211,7 +211,7 @@ void main() {
   );
 
   test(
-    'startup reopens setup when restored local model cannot start',
+    'startup keeps setup complete when restored local model cannot start',
     () async {
       final root = await Directory.systemTemp.createTemp(
         'agentawesome-controller-local-model-bad-runtime-',
@@ -266,13 +266,14 @@ providers:
       await controller.initialize();
 
       expect(controller.shellDecisionReady, isTrue);
-      expect(controller.gettingStartedCompleted, isFalse);
-      expect(settingsStore.saved.gettingStartedCompleted, isFalse);
+      expect(controller.gettingStartedCompleted, isTrue);
+      expect(settingsStore.saved.gettingStartedCompleted, isTrue);
       expect(
         controller.localProcessStatuses.any(
           (status) =>
               status.name == 'Local model' &&
-              status.state == ConnectionStateKind.disconnected,
+              status.state == ConnectionStateKind.disconnected &&
+              status.message.contains('Executable unavailable'),
         ),
         isTrue,
       );

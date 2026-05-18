@@ -194,12 +194,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
-  /// Applies one semantic task insight preset to Terrain.
-  Future<void> applyTaskInsightPreset(String presetId) async {
-    taskInsightPresetId = presetId;
-    _notifyControllerListeners();
-  }
-
   /// Refreshes graph-backed task state from memory graph servers.
   Future<void> refreshTasksFromUi() async {
     await _loadTasks();
@@ -664,9 +658,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     taskStreamProjection = TaskInsightProjectionAdapters.stream(
       taskInsightIndex,
     );
-    priorityTerrainProjection = TaskInsightProjectionAdapters.terrain(
-      taskInsightIndex,
-    );
     taskConstellationProjection = TaskInsightProjectionAdapters.constellation(
       taskInsightIndex,
     );
@@ -714,7 +705,6 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
     taskInsightIndex = TaskInsightIndex.empty;
     taskInsightSummaries = const <TaskInsightQuerySummary>[];
     taskStreamProjection = const TaskStreamProjection();
-    priorityTerrainProjection = const PriorityTerrainProjection();
     taskConstellationProjection = const TaskConstellationProjection();
     taskProjectionMessage = '';
     taskInsightMessage = '';

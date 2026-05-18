@@ -37,6 +37,19 @@
     "auto_start": false,
     "enabled": true
   },
+  "workflow": {
+    "id": "cloudflare-family-workflow",
+    "label": "Cloudflare Workflow",
+    "api_base_url": "${WORKFLOW_API_BASE_URL}",
+    "health_url": "${WORKFLOW_HEALTH_URL}",
+    "working_directory": "",
+    "package_path": "",
+    "definitions_dir": "",
+    "db_path": "",
+    "port": ${WORKFLOW_API_PORT},
+    "auto_start": false,
+    "enabled": false
+  },
   "memory_domains": [
     {
       "id": "family",

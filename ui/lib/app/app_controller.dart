@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../clients/assistant_client.dart';
+import '../clients/automations_client.dart';
 import '../clients/chat_title_client.dart';
 import '../clients/executive_summary_client.dart';
 import '../clients/mcp_client.dart';
@@ -18,6 +19,7 @@ import '../domain/json_value.dart';
 import '../domain/local_models.dart';
 import '../domain/model_config.dart';
 import '../domain/models.dart';
+import '../domain/models_automation.dart';
 import '../domain/onboarding_model_setup.dart';
 import '../domain/screen_command.dart';
 import '../domain/system_capabilities.dart';
@@ -47,6 +49,7 @@ part 'app_controller_runtime_profile.dart';
 part 'app_controller_chat.dart';
 part 'app_controller_memory.dart';
 part 'app_controller_tasks.dart';
+part 'app_controller_automations.dart';
 
 const List<String> _requiredTaskProjectionTools = <String>[
   'task_graph_projection',
@@ -93,6 +96,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     MemoryClient? memoryClient,
     TasksClient? tasksClient,
     ExecutiveSummaryClient? executiveSummaryClient,
+    AutomationsClient? automationsClient,
     LocalServiceSupervisor? localServices,
     LocalModelRuntime? localModels,
     ConfigFileStore? configFiles,
@@ -155,6 +159,13 @@ class AgentAwesomeAppController extends ChangeNotifier {
               logger: effectiveLogger,
             ),
           ),
+      automationsClient:
+          automationsClient ??
+          AutomationsClient(
+            baseUrl: _workflowBaseUrl(config.agentGatewayBaseUrl),
+            headers: config.gatewayAuthHeaders,
+            logger: effectiveLogger,
+          ),
       localServices:
           localServices ??
           LocalServiceSupervisor(
@@ -191,6 +202,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       memoryClientInjected: memoryClient != null,
       tasksClientInjected: tasksClient != null,
       executiveSummaryClientInjected: executiveSummaryClient != null,
+      automationsClientInjected: automationsClient != null,
       screenCommandPlannerInjected: screenCommandPlanner != null,
     );
   }
@@ -204,6 +216,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     required this.memoryClient,
     required this.tasksClient,
     required this.executiveSummaryClient,
+    required this.automationsClient,
     required this.localServices,
     required this.localModels,
     required this.configFiles,
@@ -217,11 +230,13 @@ class AgentAwesomeAppController extends ChangeNotifier {
     required bool memoryClientInjected,
     required bool tasksClientInjected,
     required bool executiveSummaryClientInjected,
+    required bool automationsClientInjected,
     required bool screenCommandPlannerInjected,
   }) : _assistantClientInjected = assistantClientInjected,
        _memoryClientInjected = memoryClientInjected,
        _tasksClientInjected = tasksClientInjected,
        _executiveSummaryClientInjected = executiveSummaryClientInjected,
+       _automationsClientInjected = automationsClientInjected,
        _screenCommandPlannerInjected = screenCommandPlannerInjected;
 
   /// Runtime service configuration.
@@ -244,6 +259,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Client for the canonical Today projection tools.
   ExecutiveSummaryClient executiveSummaryClient;
+
+  /// Gateway-routed client for workflow automation APIs.
+  AutomationsClient automationsClient;
 
   /// Local process supervisor for the managed service stack.
   final LocalServiceSupervisor localServices;
@@ -276,6 +294,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   final bool _memoryClientInjected;
   final bool _tasksClientInjected;
   final bool _executiveSummaryClientInjected;
+  final bool _automationsClientInjected;
   final bool _screenCommandPlannerInjected;
 
   /// Active runtime profile for harness configs and MCP topology.
@@ -347,9 +366,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Active task queue filters.
   TaskFilterState taskFilters = const TaskFilterState();
 
-  /// Active semantic task insight preset for Terrain.
-  String taskInsightPresetId = TaskInsightIds.all;
-
   /// Latest canonical projection graph shared by task views.
   TaskProjectionGraph taskProjectionGraph = const TaskProjectionGraph();
 
@@ -362,10 +378,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Latest task stream projection.
   TaskStreamProjection taskStreamProjection = const TaskStreamProjection();
-
-  /// Latest priority terrain projection.
-  PriorityTerrainProjection priorityTerrainProjection =
-      const PriorityTerrainProjection();
 
   /// Latest task constellation projection.
   TaskConstellationProjection taskConstellationProjection =
@@ -413,6 +425,57 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Whether Backlog is showing the auxiliary chat pane.
   bool backlogChatPanelOpen = false;
 
+  /// Whether Automations is showing the auxiliary chat pane.
+  bool automationsChatPanelOpen = false;
+
+  /// Whether the current workspace is showing the auxiliary AI chat pane.
+  bool assistantChatPanelOpen = false;
+
+  /// Whether an Automations operation is currently running.
+  bool automationsBusy = false;
+
+  /// Last actionable Automations error or runtime message.
+  String automationsMessage = '';
+
+  /// Workflow action types loaded for authoring.
+  List<AutomationActionType> automationActionTypes =
+      const <AutomationActionType>[];
+
+  /// Installed workflow definitions.
+  List<AutomationDefinition> automationDefinitions =
+      const <AutomationDefinition>[];
+
+  /// Editable workflow drafts.
+  List<AutomationDraft> automationDrafts = const <AutomationDraft>[];
+
+  /// Recent workflow runs.
+  List<AutomationRun> automationRuns = const <AutomationRun>[];
+
+  /// Pending workflow inbox items.
+  List<AutomationPendingItem> automationInbox = const <AutomationPendingItem>[];
+
+  /// Workflow templates available for draft creation.
+  List<AutomationTemplate> automationTemplates = const <AutomationTemplate>[];
+
+  /// Installed automation packages.
+  List<AutomationPackage> automationPackages = const <AutomationPackage>[];
+
+  /// Reusable workflow agent specs.
+  List<AutomationAgentSpec> automationAgentSpecs =
+      const <AutomationAgentSpec>[];
+
+  /// Events for the selected automation run.
+  List<AutomationEvent> selectedAutomationEvents = const <AutomationEvent>[];
+
+  /// Selected automation draft id.
+  String selectedAutomationDraftId = '';
+
+  /// Selected automation run id.
+  String selectedAutomationRunId = '';
+
+  /// Selected reusable automation agent spec id.
+  String selectedAutomationAgentSpecId = '';
+
   /// Task id requested by the review panel for queue focus.
   String focusedBacklogTaskId = '';
 
@@ -446,6 +509,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Tool names advertised by the active primary memory MCP endpoint.
   Set<String> primaryMemoryToolNames = const <String>{};
+
+  /// Tool names advertised by the harness context API for automation steps.
+  Set<String> automationToolNames = const <String>{};
 
   /// Pending runtime confirmation request.
   ConfirmationRequest? pendingConfirmation;
@@ -622,7 +688,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     try {
       await _startConfiguredLocalModelRuntime();
-      await _markSetupIncompleteForUnavailableLocalModel();
+      await _recordUnavailableLocalModelStatus();
     } catch (error) {
       if (_isClosing) {
         statusMessage = 'Agent Awesome runtime is shutting down';
@@ -630,7 +696,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
         return;
       }
       await _log('local model startup failed: $error');
-      await _markSetupIncompleteForUnavailableLocalModel();
+      await _recordUnavailableLocalModelStatus();
     }
     notifyListeners();
     if (_requiredLocalServiceStartupFailed()) {
@@ -647,6 +713,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       _loadSessions(),
       _loadMemory(),
       _loadTasks(),
+      _loadAutomations(),
     ]);
   }
 
@@ -843,11 +910,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
   }
 
-  /// Reopens setup when the configured local runtime cannot start.
-  Future<void> _markSetupIncompleteForUnavailableLocalModel() async {
-    if (!appSettings.gettingStartedCompleted) {
-      return;
-    }
+  /// Records local runtime startup problems without reopening first-run setup.
+  Future<void> _recordUnavailableLocalModelStatus() async {
     final provider = await _activeLocalProviderConfig();
     if (provider == null) {
       return;
@@ -855,9 +919,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
     for (final status in localProcessStatuses) {
       if (status.name == 'Local model' &&
           status.state == ConnectionStateKind.disconnected) {
-        appSettings = appSettings.copyWith(gettingStartedCompleted: false);
-        await appSettingsStore.save(appSettings);
-        await _log('setup marked incomplete: ${status.message}');
+        final detail = status.message.trim();
+        statusMessage = detail.isEmpty
+            ? 'Local model unavailable'
+            : 'Local model unavailable: $detail';
+        await _log('local model unavailable: ${status.message}');
         return;
       }
     }
@@ -1436,6 +1502,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     memoryClient.close();
     tasksClient.close();
     executiveSummaryClient.close();
+    automationsClient.close();
     titleClient.close();
     if (!_screenCommandPlannerInjected &&
         screenCommandPlanner is ScreenCommandClient) {
@@ -1485,6 +1552,26 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Selects the home workspace without fabricating local data.
   void openHome() {
     unawaited(_loadToday(quiet: true));
+    notifyListeners();
+  }
+
+  /// Toggles the global auxiliary AI chat pane.
+  void toggleAssistantChatPanel() {
+    assistantChatPanelOpen = !assistantChatPanelOpen;
+    notifyListeners();
+  }
+
+  /// Opens the global auxiliary AI chat pane.
+  void openAssistantChatPanel() {
+    assistantChatPanelOpen = true;
+    notifyListeners();
+  }
+
+  /// Closes the global auxiliary AI chat pane.
+  void closeAssistantChatPanel() {
+    assistantChatPanelOpen = false;
+    backlogChatPanelOpen = false;
+    automationsChatPanelOpen = false;
     notifyListeners();
   }
 
@@ -1649,6 +1736,35 @@ class AgentAwesomeAppController extends ChangeNotifier {
         client.close();
       }
     }
+  }
+
+  /// Runs one harness-enforced memory policy operation.
+  Future<T> _withMemoryControlClient<T>(
+    Future<T> Function(MemoryClient client) action,
+  ) async {
+    final client = _memoryControlClient();
+    try {
+      return await action(client);
+    } finally {
+      if (!identical(client, memoryClient)) {
+        client.close();
+      }
+    }
+  }
+
+  /// Creates a memory client without a preselected domain.
+  MemoryClient _memoryControlClient() {
+    if (_memoryClientInjected) {
+      return memoryClient;
+    }
+    final profile = _activeRuntimeProfile();
+    return MemoryClient(
+      rpc: GatewayContextClient(
+        baseUrl: _contextBaseUrl(profile),
+        headers: _runtimeGatewayHeaders,
+        logger: logger,
+      ),
+    );
   }
 
   /// Finds the memory server that owns a returned memory record.

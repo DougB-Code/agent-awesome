@@ -29,6 +29,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       );
       if (planned.intent != ScreenCommandIntent.change) {
         activeScreenCommandRun = planned;
+        assistantChatPanelOpen = true;
         backlogChatPanelOpen = true;
         backlogReviewPanelOpen = false;
         screenCommandMessage = planned.message.trim().isEmpty
@@ -83,6 +84,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
 
   /// Closes the auxiliary Backlog chat panel.
   void closeBacklogChatPanel() {
+    assistantChatPanelOpen = false;
     backlogChatPanelOpen = false;
     _notifyControllerListeners();
   }

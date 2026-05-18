@@ -40,7 +40,6 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
             query: query,
             selectedContactId: selected?.id,
             filter: _filter,
-            onFilterChanged: _selectFilter,
             onSelected: _selectContact,
             onAddContact: () =>
                 _showContactCaptureDialog(context, widget.controller),
@@ -99,6 +98,9 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
       ),
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: _buildAreaActions,
+      areaFiltersBuilder: (_, _) => _contactFilterOptions(contacts),
+      selectedAreaFilterIdBuilder: (_) => _filter.name,
+      onAreaFilterSelected: (_, filterId) => _selectFilterId(filterId),
       filterHint: 'Filter contacts...',
       emptyLabel: 'No contact areas configured',
       split: const PanelSplit(left: 0.66, min: 0.5, max: 0.84),
@@ -126,6 +128,16 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
     setState(() => _filter = filter);
   }
 
+  /// Selects the active contact library filter from a shell option id.
+  void _selectFilterId(String filterId) {
+    for (final filter in _ContactFilter.values) {
+      if (filter.name == filterId) {
+        _selectFilter(filter);
+        return;
+      }
+    }
+  }
+
   /// Selects one contact for the right-side inspector.
   void _selectContact(String contactId) {
     setState(() => _selectedContactId = contactId);
@@ -145,5 +157,20 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
       }
     }
     return contacts.first;
+  }
+
+  /// Builds shell-owned contact filter options with current counts.
+  List<CommandPanelFilterOption> _contactFilterOptions(
+    List<_ContactItem> contacts,
+  ) {
+    return <CommandPanelFilterOption>[
+      for (final filter in _ContactFilter.values)
+        CommandPanelFilterOption(
+          id: filter.name,
+          label: filter.label,
+          icon: filter.icon,
+          badge: _countContactFilter(contacts, filter).toString(),
+        ),
+    ];
   }
 }

@@ -16,6 +16,7 @@ class AppShellFrame extends StatelessWidget {
     required this.onToggleSidebar,
     required this.onSubmit,
     required this.onNewChat,
+    required this.onToggleAssistantChat,
     required this.onStartChatWithProfile,
     required this.onSelectHistoryChat,
     required this.onOpenSection,
@@ -55,6 +56,9 @@ class AppShellFrame extends StatelessWidget {
 
   /// Starts a blank default-profile chat.
   final VoidCallback onNewChat;
+
+  /// Toggles the auxiliary AI chat panel.
+  final VoidCallback onToggleAssistantChat;
 
   /// Starts a blank chat with a selected runtime profile.
   final ValueChanged<String> onStartChatWithProfile;
@@ -103,6 +107,7 @@ class AppShellFrame extends StatelessWidget {
                 onSubmitScreenCommand: onSubmitScreenCommand,
                 onSubmit: onSubmit,
                 onNewChat: onNewChat,
+                onToggleAssistantChat: onToggleAssistantChat,
                 onStartChatWithProfile: onStartChatWithProfile,
                 onSelectHistoryChat: onSelectHistoryChat,
                 onOpenSection: onOpenSection,

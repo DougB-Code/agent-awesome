@@ -2,10 +2,15 @@
 part of 'settings_panel.dart';
 
 class _SettingsAppContent extends StatefulWidget {
-  const _SettingsAppContent({required this.controller, required this.profile});
+  const _SettingsAppContent({
+    required this.controller,
+    required this.profile,
+    required this.query,
+  });
 
   final AgentAwesomeAppController controller;
   final RuntimeProfile? profile;
+  final String query;
 
   /// Creates state for app-specific settings edits.
   @override
@@ -36,22 +41,7 @@ class _SettingsAppContentState extends State<_SettingsAppContent> {
   @override
   Widget build(BuildContext context) {
     final profiles = _profileEntries();
-    return CollectionSwitcherPanel<String>(
-      title: 'App',
-      selectedId: 'app-settings',
-      emptyLabel: 'No app settings configured',
-      items: const <CollectionPanelItem<String>>[
-        CollectionPanelItem<String>(
-          id: 'app-settings',
-          label: 'App Settings',
-          detail: 'Chat defaults and app-owned model choices.',
-          icon: Icons.dashboard_customize_outlined,
-          value: 'app-settings',
-        ),
-      ],
-      onSelect: (_) {},
-      builder: (_, query) => _buildAppSettings(query, profiles),
-    );
+    return _buildAppSettings(widget.query, profiles);
   }
 
   /// Builds the combined app settings surface.

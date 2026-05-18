@@ -40,7 +40,6 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
             query: query,
             selectedFileId: selected?.id,
             kindFilter: _kindFilter,
-            onKindFilterChanged: _selectKindFilter,
             onSelected: _selectFile,
             onAddFile: widget.controller.importFileFromUi,
           ),
@@ -76,6 +75,9 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
       ),
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: _buildAreaActions,
+      areaFiltersBuilder: (_, _) => _fileFilterOptions(files),
+      selectedAreaFilterIdBuilder: (_) => _kindFilter.name,
+      onAreaFilterSelected: (_, filterId) => _selectKindFilterId(filterId),
       filterHint: 'Filter files...',
       emptyLabel: 'No file areas configured',
       split: const PanelSplit(left: 0.68, min: 0.5, max: 0.84),
@@ -103,6 +105,16 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
     setState(() => _kindFilter = filter);
   }
 
+  /// Selects the file kind filter from the shared shell option id.
+  void _selectKindFilterId(String filterId) {
+    for (final filter in _FileKindFilter.values) {
+      if (filter.name == filterId) {
+        _selectKindFilter(filter);
+        return;
+      }
+    }
+  }
+
   /// Selects one file for the right-side inspector.
   void _selectFile(String fileId) {
     setState(() => _selectedFileId = fileId);
@@ -122,5 +134,20 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
       }
     }
     return files.first;
+  }
+
+  /// Builds shell-owned file filter options with current counts.
+  List<CommandPanelFilterOption> _fileFilterOptions(
+    List<_AgentFileItem> files,
+  ) {
+    return <CommandPanelFilterOption>[
+      for (final filter in _FileKindFilter.values)
+        CommandPanelFilterOption(
+          id: filter.name,
+          label: filter.label,
+          icon: filter.icon,
+          badge: _countFilter(files, filter).toString(),
+        ),
+    ];
   }
 }

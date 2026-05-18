@@ -1,23 +1,6 @@
 /// Insight projection mode enumerations.
 part of 'task_projection_adapters.dart';
 
-enum TaskTerrainInsightMode {
-  /// Default reward and pressure planning mode.
-  priorityFocus,
-
-  /// Must-do work that is safe and useful for agent handoff.
-  agentHandoff,
-
-  /// High-value tasks due next week.
-  nextWeekHighValue,
-
-  /// Low-effort blockers with high downstream value.
-  unblockLeverage,
-
-  /// Risky tasks that need timing or blocker review.
-  riskFocus,
-}
-
 /// TaskConstellationInsightMode identifies relationship diagnosis modes.
 enum TaskConstellationInsightMode {
   /// General task relationship map.

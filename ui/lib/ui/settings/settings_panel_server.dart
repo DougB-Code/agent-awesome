@@ -7,12 +7,16 @@ class _SettingsServerContent extends StatefulWidget {
     required this.controller,
     required this.title,
     required this.servers,
+    this.selectedServerId,
+    this.query = '',
   });
 
   final RuntimeProfile profile;
   final AgentAwesomeAppController controller;
   final String title;
   final List<McpServerRuntime> servers;
+  final String? selectedServerId;
+  final String query;
 
   /// Creates state for MCP server settings selection.
   @override
@@ -20,123 +24,68 @@ class _SettingsServerContent extends StatefulWidget {
 }
 
 class _SettingsServerContentState extends State<_SettingsServerContent> {
-  String? _selectedServerId;
-
-  /// Initializes the selected server.
-  @override
-  void initState() {
-    super.initState();
-    _selectedServerId = _initialSelectedServerId();
-  }
-
-  /// Keeps the selected server valid when profile bindings change.
-  @override
-  void didUpdateWidget(covariant _SettingsServerContent oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (_selectedServerId == null ||
-        !widget.servers.any((server) => server.id == _selectedServerId)) {
-      _selectedServerId = _initialSelectedServerId();
-    }
-  }
-
   /// Builds MCP server binding details for one server kind.
   @override
   Widget build(BuildContext context) {
-    return CollectionSwitcherPanel<McpServerRuntime>(
-      title: widget.title,
-      selectedId: _selectedServerId,
-      emptyLabel: 'No servers configured',
-      items: <CollectionPanelItem<McpServerRuntime>>[
-        for (final server in widget.servers)
-          CollectionPanelItem<McpServerRuntime>(
-            id: server.id,
-            label: server.label.isEmpty ? server.id : server.label,
-            detail: server.endpoint,
-            icon: Icons.hub_outlined,
-            badge: server.enabled ? 'Enabled' : 'Disabled',
-            value: server,
-          ),
+    final server = _selectedServer();
+    if (server == null) {
+      return const Center(
+        child: PanelEmptyBlock(label: 'No servers configured'),
+      );
+    }
+    final query = widget.query;
+    if (!SettingsQuery.matches(query, <String>[
+      server.id,
+      server.label,
+      server.kind,
+      server.endpoint,
+      server.healthUrl,
+      server.dbPath,
+      server.dataDir,
+      server.workingDirectory,
+      server.packagePath,
+      server.arguments.join(' '),
+      widget.profile.agentMemory.actor,
+      widget.profile.agentMemory.readDomains.join(' '),
+      widget.profile.agentMemory.writeDomains.join(' '),
+    ])) {
+      return PanelEmptyState(query: query);
+    }
+    return FormPanel(
+      children: <Widget>[
+        _SettingsMemoryAccessReviewTile(profile: widget.profile),
+        _SettingsServerTile(
+          profile: widget.profile,
+          controller: widget.controller,
+          server: server,
+        ),
+        _SettingsAgentMemoryTile(
+          profile: widget.profile,
+          controller: widget.controller,
+        ),
       ],
-      onSelect: (id) => setState(() => _selectedServerId = id),
-      onCreate: () => unawaited(_createDomain()),
-      onDelete: (server) => unawaited(_deleteDomain(server)),
-      builder: (server, query) {
-        if (!SettingsQuery.matches(query, <String>[
-          server.id,
-          server.label,
-          server.kind,
-          server.endpoint,
-          server.healthUrl,
-          server.dbPath,
-          server.dataDir,
-          server.workingDirectory,
-          server.packagePath,
-          server.arguments.join(' '),
-          widget.profile.agentMemory.actor,
-          widget.profile.agentMemory.readDomains.join(' '),
-          widget.profile.agentMemory.writeDomains.join(' '),
-        ])) {
-          return PanelEmptyState(query: query);
-        }
-        return FormPanel(
-          children: <Widget>[
-            _SettingsMemoryAccessReviewTile(profile: widget.profile),
-            _SettingsServerTile(
-              profile: widget.profile,
-              controller: widget.controller,
-              server: server,
-            ),
-            _SettingsAgentMemoryTile(
-              profile: widget.profile,
-              controller: widget.controller,
-            ),
-          ],
-        );
-      },
     );
   }
 
-  /// Returns the initially selected MCP server id.
-  String? _initialSelectedServerId() {
+  /// Returns the selected MCP server for content rendering.
+  McpServerRuntime? _selectedServer() {
     if (widget.servers.isEmpty) {
       return null;
     }
+    final selectedServerId = widget.selectedServerId;
+    if (selectedServerId != null) {
+      for (final server in widget.servers) {
+        if (server.id == selectedServerId) {
+          return server;
+        }
+      }
+    }
     for (final server in widget.servers) {
       if (server.id == widget.profile.agentMemory.defaultWriteDomain) {
-        return server.id;
+        return server;
       }
     }
-    return widget.servers.first.id;
-  }
-
-  Future<void> _createDomain() async {
-    try {
-      final domain = await widget.controller.createMemoryDomainRuntime();
-      if (!mounted) {
-        return;
-      }
-      setState(() => _selectedServerId = domain.id);
-    } catch (_) {}
-  }
-
-  Future<void> _deleteDomain(McpServerRuntime server) async {
-    final label = server.label.trim().isEmpty ? server.id : server.label;
-    final confirmed = await _confirmSettingsDelete(
-      context,
-      label: label,
-      message:
-          'Delete "$label" from this profile? Existing files at ${server.dbPath} and ${server.dataDir} are not removed automatically.',
-    );
-    if (!confirmed) {
-      return;
-    }
-    try {
-      await widget.controller.deleteMemoryDomainRuntime(server.id);
-      if (!mounted) {
-        return;
-      }
-      setState(() => _selectedServerId = _initialSelectedServerId());
-    } catch (_) {}
+    return widget.servers.first;
   }
 }
 

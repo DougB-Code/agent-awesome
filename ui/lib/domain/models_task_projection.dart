@@ -1,4 +1,4 @@
-/// Task projection, stream, terrain, and constellation data models.
+/// Task projection, stream, and constellation data models.
 part of 'models.dart';
 
 /// TaskProjectionGraph stores canonical task facts for client-owned projections.
@@ -220,7 +220,6 @@ class TaskProjectionScores {
     this.unblockLeverage = 0,
     this.staleness = 0,
     this.elevation = 0,
-    this.terrainZone = '',
   });
 
   /// Reward or upside score.
@@ -273,9 +272,6 @@ class TaskProjectionScores {
 
   /// Overall importance score.
   final double elevation;
-
-  /// Derived terrain zone id.
-  final String terrainZone;
 }
 
 /// TaskScoreComponent explains one component of a derived score.
@@ -732,131 +728,6 @@ class TaskStreamLink {
 
   /// Human-readable relation explanation.
   final String explanation;
-}
-
-/// PriorityTerrainProjection stores priority terrain points.
-class PriorityTerrainProjection {
-  /// Creates a priority terrain projection.
-  const PriorityTerrainProjection({
-    this.generatedAt,
-    this.points = const <PriorityTerrainPoint>[],
-    this.bands = const <PriorityTerrainBand>[],
-  });
-
-  /// Projection generation timestamp.
-  final DateTime? generatedAt;
-
-  /// Projected task points.
-  final List<PriorityTerrainPoint> points;
-
-  /// Named terrain bands.
-  final List<PriorityTerrainBand> bands;
-}
-
-/// PriorityTerrainPoint stores one task's terrain placement.
-class PriorityTerrainPoint {
-  /// Creates a priority terrain point.
-  const PriorityTerrainPoint({
-    required this.taskId,
-    required this.title,
-    required this.status,
-    required this.priority,
-    this.dueAt,
-    this.urgencyScore = 0,
-    this.valueScore = 0,
-    this.effortScore = 0,
-    this.riskScore = 0,
-    this.rewardScore = 0,
-    this.timePressureScore = 0,
-    this.agentFitScore = 0,
-    this.humanEffortScore = 0,
-    this.terrainZone = '',
-    this.x = 0,
-    this.y = 0,
-    this.elevation = 0,
-    this.recommendedNextStep = '',
-    this.confidence = 0,
-    this.explanation = '',
-  });
-
-  /// Referenced task id.
-  final String taskId;
-
-  /// Display title.
-  final String title;
-
-  /// Backend task status.
-  final String status;
-
-  /// Backend task priority.
-  final String priority;
-
-  /// Optional due timestamp.
-  final DateTime? dueAt;
-
-  /// Normalized urgency score.
-  final double urgencyScore;
-
-  /// Normalized value score.
-  final double valueScore;
-
-  /// Normalized effort score.
-  final double effortScore;
-
-  /// Normalized risk score.
-  final double riskScore;
-
-  /// Derived reward or upside score.
-  final double rewardScore;
-
-  /// Derived time-pressure score.
-  final double timePressureScore;
-
-  /// Derived agent delegation fit score.
-  final double agentFitScore;
-
-  /// Derived human attention cost score.
-  final double humanEffortScore;
-
-  /// Derived terrain zone identifier.
-  final String terrainZone;
-
-  /// Normalized x coordinate.
-  final double x;
-
-  /// Normalized y coordinate.
-  final double y;
-
-  /// Combined priority score.
-  final double elevation;
-
-  /// Suggested next step.
-  final String recommendedNextStep;
-
-  /// Projection confidence from 0 to 1.
-  final double confidence;
-
-  /// Placement explanation.
-  final String explanation;
-}
-
-/// PriorityTerrainBand describes one terrain region.
-class PriorityTerrainBand {
-  /// Creates a priority terrain band.
-  const PriorityTerrainBand({
-    required this.id,
-    required this.title,
-    this.description = '',
-  });
-
-  /// Stable band id.
-  final String id;
-
-  /// Display title.
-  final String title;
-
-  /// Region explanation.
-  final String description;
 }
 
 /// TaskConstellationProjection stores spatial task graph nodes and edges.

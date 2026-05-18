@@ -27,9 +27,15 @@ class _PathGrid extends StatelessWidget {
       ),
       _PathCardData(
         title: 'Task Stream',
-        detail: 'Shape backlog work into queue, stream, and terrain views.',
+        detail: 'Shape backlog work into queue, stream, and graph views.',
         icon: Icons.task_alt_outlined,
         section: AppSections.backlog,
+      ),
+      _PathCardData(
+        title: 'Automation Studio',
+        detail: 'Run, observe, and build durable AI workflows.',
+        icon: Icons.route_outlined,
+        section: AppSections.automationOperations,
       ),
       _PathCardData(
         title: 'Memory Map',
@@ -41,7 +47,7 @@ class _PathGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 1080
-            ? 4
+            ? 5
             : constraints.maxWidth >= 700
             ? 2
             : 1;

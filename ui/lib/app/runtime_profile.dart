@@ -83,10 +83,44 @@ extension GatewayRuntimeLaunch on GatewayRuntime {
   }
 }
 
+/// WorkflowRuntimeLaunch derives workflowd launch and MCP endpoint details.
+extension WorkflowRuntimeLaunch on WorkflowRuntime {
+  /// Workflow MCP endpoint exposed directly to the harness.
+  String get mcpUrl {
+    final uri = Uri.parse(apiBaseUrl);
+    return uri.replace(path: '/mcp', query: null).toString();
+  }
+}
+
+/// Builds workflowd launch arguments for the active runtime profile.
+List<String> workflowArgumentsForProfile(RuntimeProfile profile) {
+  final workflow = profile.workflow;
+  return <String>[
+    '--addr',
+    _listenAddress(workflow.apiBaseUrl, workflow.port),
+    '--definitions',
+    workflow.definitionsDir,
+    '--db',
+    workflow.dbPath,
+    '--harness-base-url',
+    profile.harness.apiBaseUrl,
+    '--harness-context-base-url',
+    profile.gateway.contextBaseUrl,
+    '--app-name',
+    profile.harness.appName,
+    '--user-id',
+    profile.harness.userId,
+  ];
+}
+
 /// Builds gateway launch arguments for the complete active runtime profile.
 List<String> gatewayArgumentsForProfile(RuntimeProfile profile) {
   return <String>[
     ..._gatewayBaseArguments(profile.gateway),
+    if (profile.workflow.enabled) ...<String>[
+      '--workflow-base-url',
+      profile.workflow.apiBaseUrl,
+    ],
     '--memory-domains-json',
     jsonEncode(_gatewayMemoryDomainJson(profile.memoryServers)),
     '--memory-policy-json',
@@ -205,7 +239,7 @@ class RuntimeProfileLoader {
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('Runtime profile must be a JSON object');
     }
-    return RuntimeProfile.fromJson(decoded);
+    return RuntimeProfile.fromJson(_withRequiredRuntimeSections(decoded));
   }
 
   /// Resolves and creates the selected profile file when using defaults.
@@ -271,6 +305,11 @@ class RuntimeProfileLoader {
       'AGENT_API_PORT': _portString(agentApi, 8080),
       'AGENT_CONTEXT_API_BASE_URL': config.agentContextApiBaseUrl,
       'AGENT_CONTEXT_API_PORT': _portString(contextApi, 8081),
+      'WORKFLOW_API_BASE_URL': _workflowApiBaseUrl(),
+      'WORKFLOW_API_PORT': '8092',
+      'WORKFLOW_HEALTH_URL': _healthUrl(_workflowApiBaseUrl()),
+      'WORKFLOW_DEFINITIONS_DIR': defaultWorkflowDefinitionsDirectoryPath(),
+      'WORKFLOW_DB_PATH': defaultWorkflowDatabasePath(),
       'AGENT_GATEWAY_BASE_URL': config.agentGatewayBaseUrl,
       'AGENT_GATEWAY_CONTEXT_BASE_URL': config.agentGatewayContextBaseUrl,
       'AGENT_GATEWAY_MCP_URL': config.agentGatewayMcpUrl,
@@ -287,6 +326,68 @@ class RuntimeProfileLoader {
       'MEMORY_HEALTH_URL': _healthUrl(config.memoryMcpUrl),
       'AUTO_START_LOCAL_SERVICES': config.autoStartLocalServices.toString(),
     };
+  }
+
+  /// Adds runtime sections that were introduced after a profile was created.
+  Map<String, dynamic> _withRequiredRuntimeSections(
+    Map<String, dynamic> profile,
+  ) {
+    if (profile['workflow'] is Map<String, dynamic>) {
+      return profile;
+    }
+    if (profile.containsKey('workflow') && profile['workflow'] != null) {
+      return profile;
+    }
+    return <String, dynamic>{
+      ...profile,
+      'workflow': _defaultWorkflowRuntimeJson(profile),
+    };
+  }
+
+  /// Builds the workflow runtime expected by current app-managed profiles.
+  Map<String, dynamic> _defaultWorkflowRuntimeJson(
+    Map<String, dynamic> profile,
+  ) {
+    final managed =
+        _profileServiceAutoStart(profile, 'harness') ||
+        _profileServiceAutoStart(profile, 'gateway');
+    final profileId = _profileString(profile, 'id', fallback: 'agent-awesome');
+    return <String, dynamic>{
+      'id': '$profileId-workflow',
+      'label': 'Agent Awesome Workflow',
+      'api_base_url': _workflowApiBaseUrl(),
+      'health_url': _healthUrl(_workflowApiBaseUrl()),
+      'working_directory': '${config.workspaceRoot}/workflow',
+      'package_path': './cmd/workflowd',
+      'definitions_dir': defaultWorkflowDefinitionsDirectoryPath(),
+      'db_path': defaultWorkflowDatabasePath(),
+      'port': 8092,
+      'auto_start': managed,
+      'enabled': managed,
+    };
+  }
+
+  /// Reports whether a nested profile service is app-managed.
+  bool _profileServiceAutoStart(Map<String, dynamic> profile, String key) {
+    final service = profile[key];
+    if (service is! Map<String, dynamic>) {
+      return false;
+    }
+    return service['auto_start'] == true;
+  }
+
+  /// Reads one string field from a decoded profile map.
+  String _profileString(
+    Map<String, dynamic> profile,
+    String key, {
+    required String fallback,
+  }) {
+    final value = profile[key];
+    if (value == null) {
+      return fallback;
+    }
+    final text = value.toString().trim();
+    return text.isEmpty ? fallback : text;
   }
 }
 
@@ -366,6 +467,16 @@ String defaultMemoryDataDirectoryPath() {
   return '${agentAwesomeDataDirectoryPath()}/memory/files';
 }
 
+/// Returns the directory where user-authored workflow YAML files live.
+String defaultWorkflowDefinitionsDirectoryPath() {
+  return '${agentAwesomeConfigDirectoryPath()}/workflows';
+}
+
+/// Returns the default SQLite database path for workflowd.
+String defaultWorkflowDatabasePath() {
+  return '${agentAwesomeDataDirectoryPath()}/workflow/workflow.db';
+}
+
 /// Returns the SQLite database path for one local memory domain.
 String memoryDomainDatabasePath(String domainId) {
   return '${agentAwesomeDataDirectoryPath()}/memory/$domainId/memory.db';
@@ -385,6 +496,11 @@ String memoryFirewallPolicyPath() {
 String _healthUrl(String endpoint) {
   final uri = Uri.parse(endpoint);
   return uri.replace(path: '/healthz', query: '').toString();
+}
+
+/// Returns the default local workflow API base URL.
+String _workflowApiBaseUrl() {
+  return 'http://127.0.0.1:8092/api/workflows';
 }
 
 /// Returns the beta status URL for a gateway base endpoint.

@@ -6,12 +6,10 @@ import 'dart:math' as math;
 import 'models.dart';
 import 'task_insight_index.dart';
 import 'task_insight_query.dart';
-import 'task_insight_scores.dart';
 
 part 'task_projection_canonical.dart';
 part 'task_projection_modes.dart';
 part 'task_insight_projection_adapters.dart';
 part 'task_insight_projection_common.dart';
-part 'task_insight_projection_terrain.dart';
 part 'task_insight_projection_constellation.dart';
 part 'task_projection_shared.dart';
