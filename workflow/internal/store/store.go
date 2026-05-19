@@ -13,6 +13,9 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// sqliteBusyTimeoutPragma is the SQLite wait policy for locked workflow databases.
+const sqliteBusyTimeoutPragma = "busy_timeout=5000"
+
 // Store provides durable workflow persistence.
 type Store struct {
 	db *sql.DB
@@ -185,7 +188,7 @@ func databaseDSN(path string) string {
 		return path
 	}
 	values := url.Values{}
-	values.Add("_pragma", "busy_timeout=5000")
+	values.Add("_pragma", sqliteBusyTimeoutPragma)
 	values.Add("_pragma", "journal_mode=WAL")
 	values.Add("_pragma", "foreign_keys=ON")
 	values.Add("_pragma", "synchronous=NORMAL")
