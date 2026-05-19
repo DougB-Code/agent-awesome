@@ -27,7 +27,6 @@ type Context struct {
 // Host exposes workflow services needed by selected actions.
 type Host interface {
 	RequestHuman(context.Context, HumanRequest) (string, error)
-	RunAgent(context.Context, AgentRequest) (map[string]any, error)
 	CallTool(context.Context, ToolRequest) (map[string]any, error)
 	CallMCP(context.Context, MCPRequest) (map[string]any, error)
 	SignalWorkflow(context.Context, WorkflowSignal) error
@@ -40,15 +39,6 @@ type HumanRequest struct {
 	StepID  string
 	Prompt  string
 	Payload map[string]any
-}
-
-// AgentRequest describes one scoped harness agent invocation.
-type AgentRequest struct {
-	RunID        string
-	StepID       string
-	Agent        string
-	Instructions string
-	Input        map[string]any
 }
 
 // MCPRequest describes one MCP tool call action.
@@ -86,11 +76,9 @@ type Registry struct {
 // NewRegistry returns the default built-in workflow action registry.
 func NewRegistry() *Registry {
 	r := &Registry{actions: map[string]Executor{}}
-	r.Register("agent.run", agentRun)
 	r.Register("tool.call", toolCall)
 	r.Register("mcp.call", mcpCall)
-	r.Register("cli.command", cliCommand)
-	r.Register("dag.run", dagRun)
+	r.Register("workflow.run", workflowRun)
 	r.Register("workflow.signal", workflowSignal)
 	r.Register("human.request", humanRequest)
 	r.Register("delay.until", delayUntil)
@@ -136,20 +124,6 @@ func (r *Registry) Execute(ctx context.Context, action string, execCtx Context, 
 	return executor(ctx, execCtx, args)
 }
 
-// agentRun delegates a reasoning step to the harness through the workflow host.
-func agentRun(ctx context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
-	if execCtx.Host == nil {
-		return nil, fmt.Errorf("agent.run host is not configured")
-	}
-	return execCtx.Host.RunAgent(ctx, AgentRequest{
-		RunID:        execCtx.RunID,
-		StepID:       execCtx.StepID,
-		Agent:        stringArg(args, "agent"),
-		Instructions: stringArg(args, "instructions"),
-		Input:        mapArgWithInputFallback(args, "input", execCtx.Input),
-	})
-}
-
 // toolCall delegates a generic tool call to the harness context API.
 func toolCall(ctx context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
 	if execCtx.Host == nil {
@@ -174,19 +148,14 @@ func mcpCall(ctx context.Context, execCtx Context, args map[string]any) (map[str
 	})
 }
 
-// cliCommand rejects direct command execution until an allowlist host is added.
-func cliCommand(context.Context, Context, map[string]any) (map[string]any, error) {
-	return nil, fmt.Errorf("cli.command is registered but no command allowlist executor is configured")
-}
-
-// dagRun starts a nested workflow through the durable workflow host.
-func dagRun(ctx context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
+// workflowRun starts a nested workflow through the durable workflow host.
+func workflowRun(ctx context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
 	if execCtx.Host == nil {
-		return nil, fmt.Errorf("dag.run host is not configured")
+		return nil, fmt.Errorf("workflow.run host is not configured")
 	}
 	workflow := stringArg(args, "workflow")
 	if workflow == "" {
-		return nil, fmt.Errorf("dag.run workflow is required")
+		return nil, fmt.Errorf("workflow.run workflow is required")
 	}
 	return execCtx.Host.StartNestedWorkflow(ctx, NestedWorkflowRequest{
 		DefinitionID: workflow,

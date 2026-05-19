@@ -17,10 +17,7 @@ type config struct {
 	ListenAddress  string
 	DefinitionsDir string
 	DatabasePath   string
-	HarnessBaseURL string
 	ContextBaseURL string
-	AppName        string
-	UserID         string
 	CheckConfig    bool
 	RequestTimeout time.Duration
 }
@@ -33,20 +30,14 @@ func parseConfig(args []string) (config, error) {
 		ListenAddress:  envString("AGENTAWESOME_WORKFLOW_ADDR", "127.0.0.1:8092"),
 		DefinitionsDir: envString("AGENTAWESOME_WORKFLOW_DEFINITIONS_DIR", filepath.Join(defaultConfig, "workflows")),
 		DatabasePath:   envString("AGENTAWESOME_WORKFLOW_DB", filepath.Join(defaultData, "workflow", "workflow.db")),
-		HarnessBaseURL: envString("AGENTAWESOME_HARNESS_API_BASE_URL", "http://127.0.0.1:8080/api"),
 		ContextBaseURL: envString("AGENTAWESOME_HARNESS_CONTEXT_BASE_URL", "http://127.0.0.1:8081/api/context"),
-		AppName:        envString("AGENTAWESOME_APP_NAME", "agent_awesome"),
-		UserID:         envString("AGENTAWESOME_USER_ID", "doug"),
 		RequestTimeout: envDuration("AGENTAWESOME_WORKFLOW_REQUEST_TIMEOUT", 10*time.Minute),
 	}
 	fs := flag.NewFlagSet("workflowd", flag.ContinueOnError)
 	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, "workflowd listen address")
 	fs.StringVar(&cfg.DefinitionsDir, "definitions", cfg.DefinitionsDir, "workflow definition directory")
 	fs.StringVar(&cfg.DatabasePath, "db", cfg.DatabasePath, "workflow SQLite database path")
-	fs.StringVar(&cfg.HarnessBaseURL, "harness-base-url", cfg.HarnessBaseURL, "internal harness API base URL")
 	fs.StringVar(&cfg.ContextBaseURL, "harness-context-base-url", cfg.ContextBaseURL, "internal harness context API base URL")
-	fs.StringVar(&cfg.AppName, "app-name", cfg.AppName, "assistant app name for workflow agent steps")
-	fs.StringVar(&cfg.UserID, "user-id", cfg.UserID, "assistant user id for workflow agent steps")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "upstream request timeout")
 	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit")
 	if err := fs.Parse(args); err != nil {
@@ -66,12 +57,6 @@ func (c config) Validate() error {
 	if strings.TrimSpace(c.DatabasePath) == "" {
 		return fmt.Errorf("database path is required")
 	}
-	if strings.TrimSpace(c.AppName) == "" {
-		return fmt.Errorf("app name is required")
-	}
-	if strings.TrimSpace(c.UserID) == "" {
-		return fmt.Errorf("user id is required")
-	}
 	return nil
 }
 
@@ -80,10 +65,7 @@ func (c config) RuntimeConfig() runtime.Config {
 	return runtime.Config{
 		DefinitionsDir:        c.DefinitionsDir,
 		DatabasePath:          c.DatabasePath,
-		HarnessBaseURL:        c.HarnessBaseURL,
 		HarnessContextBaseURL: c.ContextBaseURL,
-		AppName:               c.AppName,
-		UserID:                c.UserID,
 		RequestTimeout:        c.RequestTimeout,
 	}
 }

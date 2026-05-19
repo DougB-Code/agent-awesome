@@ -463,10 +463,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Installed automation packages.
   List<AutomationPackage> automationPackages = const <AutomationPackage>[];
 
-  /// Reusable workflow agent specs.
-  List<AutomationAgentSpec> automationAgentSpecs =
-      const <AutomationAgentSpec>[];
-
   /// Events for the selected automation run.
   List<AutomationEvent> selectedAutomationEvents = const <AutomationEvent>[];
 
@@ -484,9 +480,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Selected automation template id.
   String selectedAutomationTemplateId = '';
-
-  /// Selected reusable automation agent spec id.
-  String selectedAutomationAgentSpecId = '';
 
   /// Task id requested by the review panel for queue focus.
   String focusedBacklogTaskId = '';

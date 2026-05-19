@@ -185,29 +185,6 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 			Name:       req.Name,
 		})
 		return map[string]any{"draft": draft}, err
-	case "workflow_agent_spec_list":
-		specs, err := s.service.ListAgentSpecs(ctx)
-		return map[string]any{"agent_specs": specs}, err
-	case "workflow_agent_spec_create":
-		var req runtime.AgentSpecRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		spec, err := s.service.CreateAgentSpec(ctx, req)
-		return map[string]any{"agent_spec": spec}, err
-	case "workflow_agent_spec_update":
-		var req workflowAgentSpecUpdateRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		spec, err := s.service.UpdateAgentSpec(ctx, req.AgentSpecID, req.AgentSpecRequest)
-		return map[string]any{"agent_spec": spec}, err
-	case "workflow_agent_spec_delete":
-		var req workflowAgentSpecRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return map[string]any{"deleted": req.AgentSpecID}, s.service.DeleteAgentSpec(ctx, req.AgentSpecID)
 	default:
 		return nil, errors.New("workflow tool is not supported")
 	}
@@ -230,10 +207,6 @@ func workflowToolDefinitions() []map[string]any {
 		"workflow_draft_publish",
 		"workflow_template_list",
 		"workflow_template_instantiate",
-		"workflow_agent_spec_list",
-		"workflow_agent_spec_create",
-		"workflow_agent_spec_update",
-		"workflow_agent_spec_delete",
 	}
 	tools := make([]map[string]any, 0, len(names))
 	for _, name := range names {
@@ -277,14 +250,6 @@ func workflowToolDescription(name string) string {
 		return "List available workflow templates."
 	case "workflow_template_instantiate":
 		return "Create an editable draft from a workflow template."
-	case "workflow_agent_spec_list":
-		return "List reusable workflow agent specs."
-	case "workflow_agent_spec_create":
-		return "Create a reusable workflow agent spec."
-	case "workflow_agent_spec_update":
-		return "Update a reusable workflow agent spec."
-	case "workflow_agent_spec_delete":
-		return "Delete a reusable workflow agent spec."
 	default:
 		return "Workflow control tool."
 	}
@@ -385,15 +350,4 @@ type workflowTemplateInstantiateRequest struct {
 	TemplateID string         `json:"template_id"`
 	Name       string         `json:"name"`
 	Parameters map[string]any `json:"parameters"`
-}
-
-// workflowAgentSpecRequest stores one reusable agent spec id argument.
-type workflowAgentSpecRequest struct {
-	AgentSpecID string `json:"agent_spec_id"`
-}
-
-// workflowAgentSpecUpdateRequest stores reusable agent spec update arguments.
-type workflowAgentSpecUpdateRequest struct {
-	AgentSpecID string `json:"agent_spec_id"`
-	runtime.AgentSpecRequest
 }

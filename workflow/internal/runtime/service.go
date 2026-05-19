@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	flow "github.com/Azure/go-workflow"
-	"github.com/cenkalti/backoff/v4"
 	"github.com/qmuntal/stateless"
 
 	"workflow/internal/actions"
@@ -27,6 +25,13 @@ const (
 	statusSucceeded = "succeeded"
 	statusFailed    = "failed"
 	statusCanceled  = "canceled"
+	statusPending   = "pending"
+)
+
+const (
+	taskTriggerStart   = "start"
+	taskTriggerSucceed = "succeed"
+	taskTriggerFail    = "fail"
 )
 
 // Service owns workflow definitions, persistence, and execution.
@@ -34,12 +39,12 @@ type Service struct {
 	cfg     Config
 	store   *store.Store
 	actions *actions.Registry
-	agent   *AgentClient
 	tools   *ToolClient
 	mcp     *MCPClient
 	mu      sync.RWMutex
 	defs    map[string]definition.Definition
 	defHash map[string]string
+	runMu   map[string]*sync.Mutex
 }
 
 // Open creates a workflow service and loads declarative definitions.
@@ -53,11 +58,11 @@ func Open(ctx context.Context, cfg Config) (*Service, error) {
 		cfg:     cfg,
 		store:   workflowStore,
 		actions: registry,
-		agent:   NewAgentClient(cfg.HarnessBaseURL, cfg.AppName, cfg.UserID, cfg.RequestTimeout),
 		tools:   NewToolClient(cfg.HarnessContextBaseURL, cfg.RequestTimeout),
 		mcp:     NewMCPClient(cfg.RequestTimeout),
 		defs:    map[string]definition.Definition{},
 		defHash: map[string]string{},
+		runMu:   map[string]*sync.Mutex{},
 	}
 	if err := service.ReloadDefinitions(ctx); err != nil {
 		_ = workflowStore.Close()
@@ -143,7 +148,7 @@ func (s *Service) StartWorkflow(ctx context.Context, definitionID string, input 
 		return store.RunRecord{}, err
 	}
 	state := "running"
-	if def.Kind == definition.KindStateMachine {
+	if !definition.HasTaskStates(def) {
 		state = def.Initial
 	}
 	run := store.RunRecord{
@@ -220,7 +225,7 @@ func (s *Service) Signal(ctx context.Context, runID string, signal string, paylo
 	if err := s.store.AppendEvent(ctx, run.ID, "signal_received", "workflow signal received", map[string]any{"signal": signal, "payload": payload}); err != nil {
 		return store.RunRecord{}, err
 	}
-	if def.Kind != definition.KindStateMachine {
+	if def.Kind != definition.KindStateMachine || definition.HasTaskStates(def) {
 		return run, nil
 	}
 	if err := s.fireStateTrigger(ctx, def, run, signal); err != nil {
@@ -254,11 +259,6 @@ func (s *Service) RequestHuman(ctx context.Context, req actions.HumanRequest) (s
 	return id, nil
 }
 
-// RunAgent executes a scoped harness agent step.
-func (s *Service) RunAgent(ctx context.Context, req actions.AgentRequest) (map[string]any, error) {
-	return s.agent.Run(ctx, req)
-}
-
 // CallTool invokes one harness context tool.
 func (s *Service) CallTool(ctx context.Context, req actions.ToolRequest) (map[string]any, error) {
 	return s.tools.Call(ctx, req)
@@ -290,6 +290,8 @@ func (s *Service) StartNestedWorkflow(ctx context.Context, req actions.NestedWor
 
 // executeRun resumes a run according to its definition kind.
 func (s *Service) executeRun(ctx context.Context, runID string) {
+	unlock := s.lockRun(runID)
+	defer unlock()
 	run, err := s.store.GetRun(ctx, runID)
 	if err != nil || run.Status == statusCanceled || run.Status == statusSucceeded {
 		return
@@ -299,23 +301,25 @@ func (s *Service) executeRun(ctx context.Context, runID string) {
 		s.failRun(ctx, run, fmt.Errorf("workflow definition %q not loaded", run.DefinitionID))
 		return
 	}
-	switch def.Kind {
-	case definition.KindStateMachine:
-		err = s.executeStateEntry(ctx, def, run)
-	case definition.KindDAG:
-		err = s.executeDAG(ctx, def, run)
-	default:
+	if def.Kind != definition.KindStateMachine {
 		err = fmt.Errorf("unsupported workflow kind %q", def.Kind)
+	} else if definition.HasTaskStates(def) {
+		err = s.executeTaskStates(ctx, def, run)
+	} else {
+		err = s.executeStateEntry(ctx, def, run)
 	}
 	if err == nil {
 		run, _ = s.store.GetRun(ctx, run.ID)
+		if definition.HasTaskStates(def) {
+			if run.Status == statusRunning {
+				_ = s.store.UpdateRunState(ctx, run.ID, statusSucceeded, run.State, map[string]any{"status": statusSucceeded})
+				_ = s.store.AppendEvent(ctx, run.ID, "run_succeeded", "workflow run succeeded", nil)
+			}
+			return
+		}
 		if def.Kind == definition.KindStateMachine {
 			s.completeStateMachineRun(ctx, def, run)
 			return
-		}
-		if run.Status == statusRunning {
-			_ = s.store.UpdateRunState(ctx, run.ID, statusSucceeded, run.State, map[string]any{"status": statusSucceeded})
-			_ = s.store.AppendEvent(ctx, run.ID, "run_succeeded", "workflow run succeeded", nil)
 		}
 		return
 	}
@@ -363,59 +367,132 @@ func (s *Service) executeStateEntry(ctx context.Context, def definition.Definiti
 	return nil
 }
 
-// executeDAG builds and runs a go-workflow DAG from declarative nodes.
-func (s *Service) executeDAG(ctx context.Context, def definition.Definition, run store.RunRecord) error {
-	steps := map[string]*actionStep{}
-	for _, node := range def.Nodes {
-		steps[node.ID] = &actionStep{
-			service: s,
-			run:     run,
-			node:    node,
+// executeTaskStates schedules ready task states until the graph completes.
+func (s *Service) executeTaskStates(ctx context.Context, def definition.Definition, run store.RunRecord) error {
+	taskStates := taskStatesByID(def)
+	execCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	inFlight := map[string]struct{}{}
+	results := make(chan taskStateResult, len(taskStates))
+	for {
+		records, err := s.store.ListTaskStates(ctx, run.ID)
+		if err != nil {
+			return err
 		}
-	}
-	var workflow flow.Workflow
-	for _, node := range def.Nodes {
-		builder := flow.Step(steps[node.ID])
-		for _, dep := range node.DependsOn {
-			builder = builder.DependsOn(steps[dep])
+		statuses := taskStatusByID(records)
+		if taskStatesSucceeded(taskStates, statuses) {
+			return nil
 		}
-		if node.Timeout != "" {
-			timeout, err := time.ParseDuration(node.Timeout)
-			if err != nil {
-				return fmt.Errorf("node %q timeout: %w", node.ID, err)
+		if failedID, failed := firstFailedTaskState(taskStates, statuses); failed {
+			return fmt.Errorf("task state %q failed: %s", failedID, statuses[failedID].Error)
+		}
+		for _, state := range def.States {
+			if _, ok := taskStates[state.ID]; !ok {
+				continue
 			}
-			builder = builder.Timeout(timeout)
-		}
-		if node.Retry > 0 {
-			attempts := node.Retry + 1
-			retryDelay, err := nodeRetryDelay(node)
-			if err != nil {
-				return err
+			if _, ok := inFlight[state.ID]; ok {
+				continue
 			}
-			builder = builder.Retry(func(option *flow.RetryOption) {
-				option.Attempts = uint64(attempts)
-				if retryDelay > 0 {
-					option.Backoff = backoff.NewConstantBackOff(retryDelay)
-				}
-			})
+			if record, ok := statuses[state.ID]; ok && record.Status == statusSucceeded {
+				continue
+			}
+			if !taskDependenciesSucceeded(state, statuses) {
+				continue
+			}
+			inFlight[state.ID] = struct{}{}
+			go func(task definition.StateDefinition) {
+				results <- taskStateResult{stateID: task.ID, err: s.executeTaskState(execCtx, run, task)}
+			}(state)
 		}
-		workflow.Add(builder)
+		if len(inFlight) == 0 {
+			return fmt.Errorf("task states are blocked by incomplete dependencies")
+		}
+		result := <-results
+		delete(inFlight, result.stateID)
+		if result.err != nil {
+			cancel()
+			for len(inFlight) > 0 {
+				next := <-results
+				delete(inFlight, next.stateID)
+			}
+			if errors.Is(result.err, actions.ErrPending) || containsPending(result.err) {
+				return actions.ErrPending
+			}
+			return result.err
+		}
 	}
-	err := workflow.Do(ctx)
-	if err != nil && containsPending(err) {
-		return actions.ErrPending
-	}
-	return err
 }
 
-// nodeRetryDelay parses fixed retry delay settings for one DAG node.
-func nodeRetryDelay(node definition.NodeDefinition) (time.Duration, error) {
-	if strings.TrimSpace(node.RetryDelay) == "" {
+// executeTaskState runs one durable task state with retry and timeout policy.
+func (s *Service) executeTaskState(ctx context.Context, run store.RunRecord, state definition.StateDefinition) error {
+	if record, ok, err := s.store.GetTaskState(ctx, run.ID, state.ID); err != nil {
+		return err
+	} else if ok && record.Status == statusSucceeded {
+		return nil
+	}
+	attempts := taskStateAttempts(ctx, s.store, run.ID, state.ID)
+	maxAttempts := state.Retry + 1
+	retryDelay, err := stateRetryDelay(state)
+	if err != nil {
+		return err
+	}
+	var lastErr error
+	for attempts < maxAttempts {
+		attempts++
+		if err := s.fireTaskStateTrigger(ctx, run.ID, state.ID, taskTriggerStart, attempts, nil, ""); err != nil {
+			return err
+		}
+		input, err := s.taskStateInput(ctx, run, state)
+		if err != nil {
+			lastErr = err
+		} else {
+			actionCtx := ctx
+			var cancel context.CancelFunc
+			if strings.TrimSpace(state.Timeout) != "" {
+				timeout, err := time.ParseDuration(state.Timeout)
+				if err != nil {
+					return fmt.Errorf("task state %q timeout: %w", state.ID, err)
+				}
+				actionCtx, cancel = context.WithTimeout(ctx, timeout)
+			}
+			output, err := s.executeActionWithInput(actionCtx, run, state.ID, state.Uses, state.With, input)
+			if cancel != nil {
+				cancel()
+			}
+			if err == nil {
+				if output == nil {
+					output = map[string]any{}
+					if err := s.store.SaveStepOutput(ctx, run.ID, state.ID, output); err != nil {
+						return err
+					}
+				}
+				return s.fireTaskStateTrigger(ctx, run.ID, state.ID, taskTriggerSucceed, attempts, output, "")
+			}
+			lastErr = err
+		}
+		if attempts < maxAttempts && retryDelay > 0 {
+			if err := sleepContext(ctx, retryDelay); err != nil {
+				return err
+			}
+		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("task state %q failed", state.ID)
+	}
+	if err := s.fireTaskStateTrigger(ctx, run.ID, state.ID, taskTriggerFail, attempts, nil, lastErr.Error()); err != nil {
+		return err
+	}
+	return lastErr
+}
+
+// stateRetryDelay parses fixed retry delay settings for one task state.
+func stateRetryDelay(state definition.StateDefinition) (time.Duration, error) {
+	if strings.TrimSpace(state.RetryDelay) == "" {
 		return 0, nil
 	}
-	delay, err := time.ParseDuration(node.RetryDelay)
+	delay, err := time.ParseDuration(state.RetryDelay)
 	if err != nil {
-		return 0, fmt.Errorf("node %q retry_delay: %w", node.ID, err)
+		return 0, fmt.Errorf("task state %q retry_delay: %w", state.ID, err)
 	}
 	return delay, nil
 }
@@ -449,13 +526,13 @@ func (s *Service) executeActionWithInput(ctx context.Context, run store.RunRecor
 	return output, nil
 }
 
-// nodeInput builds the JSON input visible to a DAG node from parent outputs.
-func (s *Service) nodeInput(ctx context.Context, run store.RunRecord, node definition.NodeDefinition) (map[string]any, error) {
-	if len(node.DependsOn) == 0 {
+// taskStateInput builds the JSON input visible to a task state from parent outputs.
+func (s *Service) taskStateInput(ctx context.Context, run store.RunRecord, state definition.StateDefinition) (map[string]any, error) {
+	if len(state.DependsOn) == 0 {
 		return run.Input, nil
 	}
 	input := map[string]any{"workflow_input": run.Input}
-	for _, dependencyID := range node.DependsOn {
+	for _, dependencyID := range state.DependsOn {
 		output, ok, err := s.store.StepOutput(ctx, run.ID, dependencyID)
 		if err != nil {
 			return nil, err
@@ -494,6 +571,45 @@ func (s *Service) fireStateTrigger(ctx context.Context, def definition.Definitio
 	return s.store.AppendEvent(ctx, run.ID, "state_transitioned", "workflow state transitioned", map[string]any{"from": run.State, "to": current, "trigger": trigger})
 }
 
+// fireTaskStateTrigger uses stateless to persist one task-state lifecycle transition.
+func (s *Service) fireTaskStateTrigger(ctx context.Context, runID string, stateID string, trigger string, attempts int, output map[string]any, message string) error {
+	current := statusPending
+	if record, ok, err := s.store.GetTaskState(ctx, runID, stateID); err != nil {
+		return err
+	} else if ok {
+		current = record.Status
+	}
+	machine := stateless.NewStateMachineWithExternalStorage(
+		func(context.Context) (stateless.State, error) {
+			return current, nil
+		},
+		func(ctx context.Context, state stateless.State) error {
+			next, _ := state.(string)
+			current = next
+			switch next {
+			case statusRunning:
+				return s.store.MarkTaskStateRunning(ctx, runID, stateID, attempts)
+			case statusSucceeded:
+				return s.store.MarkTaskStateSucceeded(ctx, runID, stateID, attempts, output)
+			case statusFailed:
+				return s.store.MarkTaskStateFailed(ctx, runID, stateID, attempts, message)
+			default:
+				return fmt.Errorf("unsupported task state status %q", next)
+			}
+		},
+		stateless.FiringQueued,
+	)
+	machine.Configure(statusPending).Permit(taskTriggerStart, statusRunning)
+	machine.Configure(statusRunning).
+		PermitReentry(taskTriggerStart).
+		Permit(taskTriggerSucceed, statusSucceeded).
+		Permit(taskTriggerFail, statusFailed)
+	if err := machine.FireCtx(ctx, trigger); err != nil {
+		return fmt.Errorf("task state %q transition %q from %q: %w", stateID, trigger, current, err)
+	}
+	return nil
+}
+
 // failRun marks a run failed and records the error.
 func (s *Service) failRun(ctx context.Context, run store.RunRecord, err error) {
 	_ = s.store.UpdateRunState(ctx, run.ID, statusFailed, run.State, map[string]any{"error": err.Error()})
@@ -508,6 +624,99 @@ func stateByID(def definition.Definition, id string) (definition.StateDefinition
 		}
 	}
 	return definition.StateDefinition{}, false
+}
+
+// lockRun serializes in-process execution for one run id.
+func (s *Service) lockRun(runID string) func() {
+	s.mu.Lock()
+	mutex := s.runMu[runID]
+	if mutex == nil {
+		mutex = &sync.Mutex{}
+		s.runMu[runID] = mutex
+	}
+	s.mu.Unlock()
+	mutex.Lock()
+	return mutex.Unlock
+}
+
+// taskStateResult reports one concurrent task-state completion.
+type taskStateResult struct {
+	stateID string
+	err     error
+}
+
+// taskStatesByID returns every executable task state by id.
+func taskStatesByID(def definition.Definition) map[string]definition.StateDefinition {
+	states := map[string]definition.StateDefinition{}
+	for _, state := range def.States {
+		if definition.IsTaskState(state) {
+			states[state.ID] = state
+		}
+	}
+	return states
+}
+
+// taskStatusByID indexes durable task-state records by state id.
+func taskStatusByID(records []store.TaskStateRecord) map[string]store.TaskStateRecord {
+	statuses := map[string]store.TaskStateRecord{}
+	for _, record := range records {
+		statuses[record.StateID] = record
+	}
+	return statuses
+}
+
+// taskStatesSucceeded reports whether every task state has durable success.
+func taskStatesSucceeded(states map[string]definition.StateDefinition, statuses map[string]store.TaskStateRecord) bool {
+	for id := range states {
+		if statuses[id].Status != statusSucceeded {
+			return false
+		}
+	}
+	return true
+}
+
+// firstFailedTaskState returns the first durable failed task state.
+func firstFailedTaskState(states map[string]definition.StateDefinition, statuses map[string]store.TaskStateRecord) (string, bool) {
+	for id := range states {
+		if statuses[id].Status == statusFailed {
+			return id, true
+		}
+	}
+	return "", false
+}
+
+// taskDependenciesSucceeded reports whether all parent task states completed.
+func taskDependenciesSucceeded(state definition.StateDefinition, statuses map[string]store.TaskStateRecord) bool {
+	for _, dependencyID := range state.DependsOn {
+		if statuses[dependencyID].Status != statusSucceeded {
+			return false
+		}
+	}
+	return true
+}
+
+// taskStateAttempts returns persisted attempts for one task state.
+func taskStateAttempts(ctx context.Context, workflowStore *store.Store, runID string, stateID string) int {
+	record, ok, err := workflowStore.GetTaskState(ctx, runID, stateID)
+	if err != nil || !ok {
+		return 0
+	}
+	if record.Status == statusRunning && record.Attempts > 0 {
+		return record.Attempts - 1
+	}
+	return record.Attempts
+}
+
+// sleepContext waits for retry delay or context cancellation.
+func sleepContext(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // containsPending reports whether a workflow error includes a pending action.
@@ -562,21 +771,4 @@ func containsSensitiveKey(value any) bool {
 		}
 	}
 	return false
-}
-
-// actionStep adapts one declarative node to go-workflow.
-type actionStep struct {
-	service *Service
-	run     store.RunRecord
-	node    definition.NodeDefinition
-}
-
-// Do executes the DAG node action.
-func (s *actionStep) Do(ctx context.Context) error {
-	input, err := s.service.nodeInput(ctx, s.run, s.node)
-	if err != nil {
-		return err
-	}
-	_, err = s.service.executeActionWithInput(ctx, s.run, s.node.ID, s.node.Uses, s.node.With, input)
-	return err
 }

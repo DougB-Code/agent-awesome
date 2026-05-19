@@ -107,8 +107,8 @@ func TestContainsSensitiveKeyDetectsCredentials(t *testing.T) {
 	}
 }
 
-// TestDAGToolCallUsesHarnessContextAPI verifies tool.call stays harness-owned.
-func TestDAGToolCallUsesHarnessContextAPI(t *testing.T) {
+// TestTaskStateToolCallUsesHarnessContextAPI verifies tool.call stays harness-owned.
+func TestTaskStateToolCallUsesHarnessContextAPI(t *testing.T) {
 	ctx := context.Background()
 	var received atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -129,11 +129,12 @@ func TestDAGToolCallUsesHarnessContextAPI(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "tool.yaml", `
-kind: dag
-id: tool_dag
-name: Tool DAG
-nodes:
+kind: state_machine
+id: tool_task_graph
+name: Tool Task Graph
+states:
   - id: call
+    type: task
     uses: tool.call
     with:
       name: mock_tool
@@ -151,7 +152,7 @@ nodes:
 	}
 	defer service.Close()
 
-	started, err := service.StartWorkflow(ctx, "tool_dag", map[string]any{})
+	started, err := service.StartWorkflow(ctx, "tool_task_graph", map[string]any{})
 	if err != nil {
 		t.Fatalf("StartWorkflow() error = %v", err)
 	}
@@ -164,8 +165,8 @@ nodes:
 	}
 }
 
-// TestDAGToolCallReceivesParentOutputs verifies fan-in data reaches child nodes.
-func TestDAGToolCallReceivesParentOutputs(t *testing.T) {
+// TestTaskStateToolCallReceivesParentOutputs verifies fan-in data reaches child states.
+func TestTaskStateToolCallReceivesParentOutputs(t *testing.T) {
 	ctx := context.Background()
 	var secondSawParent atomic.Bool
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -192,16 +193,18 @@ func TestDAGToolCallReceivesParentOutputs(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "fanin.yaml", `
-kind: dag
-id: fanin_dag
-name: Fan-in DAG
-nodes:
+kind: state_machine
+id: fanin_task_graph
+name: Fan-in Task Graph
+states:
   - id: first
+    type: task
     uses: tool.call
     with:
       name: first_tool
       arguments: {}
   - id: second
+    type: task
     uses: tool.call
     depends_on:
       - first
@@ -220,7 +223,7 @@ nodes:
 	}
 	defer service.Close()
 
-	started, err := service.StartWorkflow(ctx, "fanin_dag", map[string]any{})
+	started, err := service.StartWorkflow(ctx, "fanin_task_graph", map[string]any{})
 	if err != nil {
 		t.Fatalf("StartWorkflow() error = %v", err)
 	}
@@ -233,8 +236,8 @@ nodes:
 	}
 }
 
-// TestDAGRetryDelayWaitsBetweenAttempts verifies fixed retry_delay policy.
-func TestDAGRetryDelayWaitsBetweenAttempts(t *testing.T) {
+// TestTaskStateRetryDelayWaitsBetweenAttempts verifies fixed retry_delay policy.
+func TestTaskStateRetryDelayWaitsBetweenAttempts(t *testing.T) {
 	ctx := context.Background()
 	var attempts atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -248,11 +251,12 @@ func TestDAGRetryDelayWaitsBetweenAttempts(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "retry.yaml", `
-kind: dag
-id: retry_dag
-name: Retry DAG
-nodes:
+kind: state_machine
+id: retry_task_graph
+name: Retry Task Graph
+states:
   - id: call
+    type: task
     uses: tool.call
     retry: 1
     retry_delay: 50ms
@@ -272,7 +276,7 @@ nodes:
 	defer service.Close()
 
 	start := time.Now()
-	started, err := service.StartWorkflow(ctx, "retry_dag", map[string]any{})
+	started, err := service.StartWorkflow(ctx, "retry_task_graph", map[string]any{})
 	if err != nil {
 		t.Fatalf("StartWorkflow() error = %v", err)
 	}
@@ -285,6 +289,145 @@ nodes:
 	}
 	if elapsed := time.Since(start); elapsed < 45*time.Millisecond {
 		t.Fatalf("elapsed = %s, want retry delay honored", elapsed)
+	}
+}
+
+// TestTaskStatesRunIndependentBranchesConcurrently verifies ready branches fan out.
+func TestTaskStatesRunIndependentBranchesConcurrently(t *testing.T) {
+	ctx := context.Background()
+	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
+	}))
+	defer toolServer.Close()
+
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "parallel.yaml", `
+kind: state_machine
+id: parallel_task_graph
+name: Parallel Task Graph
+states:
+  - id: first
+    type: task
+    uses: tool.call
+    with:
+      name: first_tool
+      arguments: {}
+  - id: second
+    type: task
+    uses: tool.call
+    with:
+      name: second_tool
+      arguments: {}
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir:        definitionsDir,
+		DatabasePath:          filepath.Join(t.TempDir(), "workflow.db"),
+		HarnessContextBaseURL: toolServer.URL + "/api/context",
+		RequestTimeout:        time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	start := time.Now()
+	started, err := service.StartWorkflow(ctx, "parallel_task_graph", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded
+	})
+	if elapsed := time.Since(start); elapsed > 280*time.Millisecond {
+		t.Fatalf("elapsed = %s, want independent states to run concurrently", elapsed)
+	}
+}
+
+// TestTaskStateResumeSkipsCompletedSteps verifies completed task states are not rerun.
+func TestTaskStateResumeSkipsCompletedSteps(t *testing.T) {
+	ctx := context.Background()
+	var firstCalls atomic.Int64
+	var secondCalls atomic.Int64
+	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		switch body["name"] {
+		case "first_tool":
+			firstCalls.Add(1)
+			writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
+		case "second_tool":
+			if secondCalls.Add(1) == 1 {
+				http.Error(w, "interrupted", http.StatusBadGateway)
+				return
+			}
+			writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
+		default:
+			http.Error(w, "unexpected tool", http.StatusBadRequest)
+		}
+	}))
+	defer toolServer.Close()
+
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "resume.yaml", `
+kind: state_machine
+id: resume_task_graph
+name: Resume Task Graph
+states:
+  - id: first
+    type: task
+    uses: tool.call
+    with:
+      name: first_tool
+      arguments: {}
+  - id: second
+    type: task
+    uses: tool.call
+    depends_on:
+      - first
+    with:
+      name: second_tool
+      arguments: {}
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir:        definitionsDir,
+		DatabasePath:          filepath.Join(t.TempDir(), "workflow.db"),
+		HarnessContextBaseURL: toolServer.URL + "/api/context",
+		RequestTimeout:        time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "resume_task_graph", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusFailed
+	})
+	if _, err := service.store.DB().ExecContext(ctx, `DELETE FROM workflow_task_states WHERE run_id = ? AND state_id = 'second'`, started.ID); err != nil {
+		t.Fatalf("delete interrupted task state = %v", err)
+	}
+	if err := service.store.UpdateRunState(ctx, started.ID, statusRunning, "running", map[string]any{}); err != nil {
+		t.Fatalf("UpdateRunState() error = %v", err)
+	}
+	service.executeRun(ctx, started.ID)
+	run, err := service.Status(ctx, started.ID)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if run.Status != statusSucceeded {
+		t.Fatalf("run status = %q, want succeeded", run.Status)
+	}
+	if firstCalls.Load() != 1 || secondCalls.Load() != 2 {
+		t.Fatalf("calls first=%d second=%d, want first skipped and second retried", firstCalls.Load(), secondCalls.Load())
 	}
 }
 

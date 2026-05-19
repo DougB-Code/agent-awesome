@@ -262,97 +262,6 @@ class AutomationTemplate {
   final Map<String, dynamic> body;
 }
 
-/// AutomationAgentPermissions stores explicit resource permissions.
-class AutomationAgentPermissions {
-  /// Creates an immutable resource permission set for one agent.
-  const AutomationAgentPermissions({
-    this.filesystemRead = false,
-    this.filesystemWrite = false,
-    this.filesystemExecute = false,
-    this.networkRead = false,
-    this.networkWrite = false,
-  });
-
-  /// Whether the agent may read files.
-  final bool filesystemRead;
-
-  /// Whether the agent may write files.
-  final bool filesystemWrite;
-
-  /// Whether the agent may execute filesystem-backed commands.
-  final bool filesystemExecute;
-
-  /// Whether the agent may read network resources.
-  final bool networkRead;
-
-  /// Whether the agent may write or mutate network resources.
-  final bool networkWrite;
-
-  /// Returns a copy with selected permission values replaced.
-  AutomationAgentPermissions copyWith({
-    bool? filesystemRead,
-    bool? filesystemWrite,
-    bool? filesystemExecute,
-    bool? networkRead,
-    bool? networkWrite,
-  }) {
-    return AutomationAgentPermissions(
-      filesystemRead: filesystemRead ?? this.filesystemRead,
-      filesystemWrite: filesystemWrite ?? this.filesystemWrite,
-      filesystemExecute: filesystemExecute ?? this.filesystemExecute,
-      networkRead: networkRead ?? this.networkRead,
-      networkWrite: networkWrite ?? this.networkWrite,
-    );
-  }
-
-  /// Encodes permissions using the workflowd authoring API shape.
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'filesystem': <String, bool>{
-        'read': filesystemRead,
-        'write': filesystemWrite,
-        'execute': filesystemExecute,
-      },
-      'network': <String, bool>{'read': networkRead, 'write': networkWrite},
-    };
-  }
-}
-
-/// AutomationAgentSpec stores one reusable authoring-time agent behavior.
-class AutomationAgentSpec {
-  /// Creates an immutable reusable agent specification.
-  const AutomationAgentSpec({
-    required this.id,
-    required this.name,
-    this.description = '',
-    this.instructions = '',
-    this.permissions = const AutomationAgentPermissions(),
-    this.createdAt = '',
-    this.updatedAt = '',
-  });
-
-  /// Agent spec id.
-  final String id;
-
-  /// User-facing agent name.
-  final String name;
-
-  /// User-facing description.
-  final String description;
-
-  /// Agent task instructions.
-  final String instructions;
-
-  /// Resource permissions granted to this reusable agent.
-  final AutomationAgentPermissions permissions;
-
-  /// Creation timestamp.
-  final String createdAt;
-
-  /// Last update timestamp.
-  final String updatedAt;
-}
-
 /// AutomationPackage stores one importable automation package.
 class AutomationPackage {
   /// Creates an immutable automation package.
@@ -524,34 +433,6 @@ AutomationTemplate parseAutomationTemplate(dynamic value) {
   );
 }
 
-/// Parses one reusable automation agent spec from JSON.
-AutomationAgentSpec parseAutomationAgentSpec(dynamic value) {
-  final map = _map(value);
-  return AutomationAgentSpec(
-    id: _string(map['id']),
-    name: _string(map['name']),
-    description: _string(map['description']),
-    instructions: _string(map['instructions']),
-    permissions: parseAutomationAgentPermissions(map['permissions']),
-    createdAt: _string(map['created_at']),
-    updatedAt: _string(map['updated_at']),
-  );
-}
-
-/// Parses one reusable automation agent permission set from JSON.
-AutomationAgentPermissions parseAutomationAgentPermissions(dynamic value) {
-  final map = _map(value);
-  final filesystem = _map(map['filesystem']);
-  final network = _map(map['network']);
-  return AutomationAgentPermissions(
-    filesystemRead: _bool(filesystem['read']),
-    filesystemWrite: _bool(filesystem['write']),
-    filesystemExecute: _bool(filesystem['execute']),
-    networkRead: _bool(network['read']),
-    networkWrite: _bool(network['write']),
-  );
-}
-
 /// Parses one automation package from JSON.
 AutomationPackage parseAutomationPackage(dynamic value) {
   final map = _map(value);
@@ -626,11 +507,4 @@ int _int(dynamic value) {
     return value.toInt();
   }
   return int.tryParse(_string(value)) ?? 0;
-}
-
-bool _bool(dynamic value) {
-  if (value is bool) {
-    return value;
-  }
-  return _string(value).toLowerCase() == 'true';
 }

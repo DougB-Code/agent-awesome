@@ -7,9 +7,6 @@ import "time"
 type Config struct {
 	DefinitionsDir        string
 	DatabasePath          string
-	HarnessBaseURL        string
 	HarnessContextBaseURL string
-	AppName               string
-	UserID                string
 	RequestTimeout        time.Duration
 }

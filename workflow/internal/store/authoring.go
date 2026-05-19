@@ -186,63 +186,6 @@ func (s *Store) GetPackage(ctx context.Context, id string) (PackageRecord, error
 	return scanPackage(row)
 }
 
-// UpsertAgentSpec stores or replaces one reusable authoring-time agent spec.
-func (s *Store) UpsertAgentSpec(ctx context.Context, record AgentSpecRecord) error {
-	now := nowString()
-	permissions, err := marshalMap(record.Permissions)
-	if err != nil {
-		return fmt.Errorf("encode workflow agent permissions: %w", err)
-	}
-	createdAt := record.CreatedAt
-	if createdAt == "" {
-		createdAt = now
-	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO workflow_agent_specs
-		(id, name, description, instructions, permissions_json, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description,
-			instructions=excluded.instructions, permissions_json=excluded.permissions_json,
-			updated_at=excluded.updated_at`,
-		record.ID, record.Name, record.Description, record.Instructions, string(permissions), createdAt, now)
-	if err != nil {
-		return fmt.Errorf("upsert workflow agent spec %q: %w", record.ID, err)
-	}
-	return nil
-}
-
-// ListAgentSpecs returns reusable authoring-time agent specs.
-func (s *Store) ListAgentSpecs(ctx context.Context) ([]AgentSpecRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, instructions, permissions_json, created_at, updated_at FROM workflow_agent_specs ORDER BY updated_at DESC`)
-	if err != nil {
-		return nil, fmt.Errorf("list workflow agent specs: %w", err)
-	}
-	defer rows.Close()
-	var records []AgentSpecRecord
-	for rows.Next() {
-		record, err := scanAgentSpec(rows)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, record)
-	}
-	return records, rows.Err()
-}
-
-// GetAgentSpec returns one reusable authoring-time agent spec.
-func (s *Store) GetAgentSpec(ctx context.Context, id string) (AgentSpecRecord, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, name, description, instructions, permissions_json, created_at, updated_at FROM workflow_agent_specs WHERE id = ?`, id)
-	return scanAgentSpec(row)
-}
-
-// DeleteAgentSpec removes one reusable authoring-time agent spec.
-func (s *Store) DeleteAgentSpec(ctx context.Context, id string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM workflow_agent_specs WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("delete workflow agent spec %q: %w", id, err)
-	}
-	return nil
-}
-
 // UpsertPublishedDefinition stores publication metadata for one definition.
 func (s *Store) UpsertPublishedDefinition(ctx context.Context, record PublishedDefinitionRecord) error {
 	publishedAt := record.PublishedAt
@@ -356,25 +299,6 @@ func scanPackage(row interface{ Scan(...any) error }) (PackageRecord, error) {
 	}
 	if err := json.Unmarshal([]byte(body), &record.Body); err != nil {
 		return PackageRecord{}, fmt.Errorf("decode workflow package body: %w", err)
-	}
-	return record, nil
-}
-
-// scanAgentSpec decodes one workflow agent spec row.
-func scanAgentSpec(row interface{ Scan(...any) error }) (AgentSpecRecord, error) {
-	var record AgentSpecRecord
-	var permissions string
-	if err := row.Scan(&record.ID, &record.Name, &record.Description, &record.Instructions, &permissions, &record.CreatedAt, &record.UpdatedAt); err != nil {
-		if err == sql.ErrNoRows {
-			return AgentSpecRecord{}, fmt.Errorf("workflow agent spec not found")
-		}
-		return AgentSpecRecord{}, err
-	}
-	if strings.TrimSpace(permissions) == "" {
-		permissions = "{}"
-	}
-	if err := json.Unmarshal([]byte(permissions), &record.Permissions); err != nil {
-		return AgentSpecRecord{}, fmt.Errorf("decode workflow agent permissions: %w", err)
 	}
 	return record, nil
 }

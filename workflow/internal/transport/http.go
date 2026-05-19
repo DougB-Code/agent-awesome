@@ -37,8 +37,6 @@ func (s *HTTPServer) Routes() http.Handler {
 	mux.HandleFunc("/api/workflows/templates/", s.templateHandler)
 	mux.HandleFunc("/api/workflows/packages", s.packagesHandler)
 	mux.HandleFunc("/api/workflows/packages/", s.packageHandler)
-	mux.HandleFunc("/api/workflows/agent-specs", s.agentSpecsHandler)
-	mux.HandleFunc("/api/workflows/agent-specs/", s.agentSpecHandler)
 	mux.HandleFunc("/api/workflows/runs", s.runsHandler)
 	mux.HandleFunc("/api/workflows/runs/", s.runHandler)
 	mux.HandleFunc("/api/workflows/inbox", s.inboxHandler)
@@ -207,59 +205,6 @@ func (s *HTTPServer) packageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow package route not found"})
-}
-
-// agentSpecsHandler lists or creates reusable agent specs.
-func (s *HTTPServer) agentSpecsHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		specs, err := s.service.ListAgentSpecs(r.Context())
-		writeResult(w, map[string]any{"agent_specs": specs}, err)
-	case http.MethodPost:
-		var req runtime.AgentSpecRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		spec, err := s.service.CreateAgentSpec(r.Context(), req)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{"agent_spec": spec})
-	default:
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-	}
-}
-
-// agentSpecHandler routes reusable agent spec read, update, and delete.
-func (s *HTTPServer) agentSpecHandler(w http.ResponseWriter, r *http.Request) {
-	specID, action := splitTail(r.URL.Path, "/api/workflows/agent-specs/")
-	if specID == "" {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "agent spec id is required"})
-		return
-	}
-	if action != "" {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow agent spec route not found"})
-		return
-	}
-	switch r.Method {
-	case http.MethodGet:
-		spec, err := s.service.GetAgentSpec(r.Context(), specID)
-		writeResult(w, map[string]any{"agent_spec": spec}, err)
-	case http.MethodPut:
-		var req runtime.AgentSpecRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		spec, err := s.service.UpdateAgentSpec(r.Context(), specID, req)
-		writeResult(w, map[string]any{"agent_spec": spec}, err)
-	case http.MethodDelete:
-		writeResult(w, map[string]any{"deleted": specID}, s.service.DeleteAgentSpec(r.Context(), specID))
-	default:
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-	}
 }
 
 // runsHandler lists or starts workflow runs.

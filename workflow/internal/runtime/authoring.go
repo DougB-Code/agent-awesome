@@ -2,6 +2,7 @@
 package runtime
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -21,16 +22,10 @@ import (
 const (
 	draftStatusDraft     = "draft"
 	draftStatusPublished = "published"
+	draftKindTaskGraph   = "task_graph"
 )
 
 var authoringIDPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
-
-var agentPermissionResources = []string{"filesystem", "network"}
-
-var agentPermissionActionsByResource = map[string][]string{
-	"filesystem": {"read", "write", "execute"},
-	"network":    {"read", "write"},
-}
 
 // ActionType describes one action node the authoring UI can place in a draft.
 type ActionType struct {
@@ -84,13 +79,25 @@ type PackageImportRequest struct {
 	Package store.PackageRecord `json:"package"`
 }
 
-// AgentSpecRequest carries a reusable agent spec create or update payload.
-type AgentSpecRequest struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	Instructions string         `json:"instructions"`
-	Permissions  map[string]any `json:"permissions"`
+// taskGraphDraftDefinition stores the authoring-only task graph shape.
+type taskGraphDraftDefinition struct {
+	Kind        string                    `json:"kind"`
+	ID          string                    `json:"id"`
+	Name        string                    `json:"name,omitempty"`
+	Description string                    `json:"description,omitempty"`
+	Schedule    string                    `json:"schedule,omitempty"`
+	Nodes       []taskGraphNodeDefinition `json:"nodes,omitempty"`
+}
+
+// taskGraphNodeDefinition stores one authoring-only task graph node.
+type taskGraphNodeDefinition struct {
+	ID         string         `json:"id"`
+	Uses       string         `json:"uses"`
+	DependsOn  []string       `json:"depends_on,omitempty"`
+	With       map[string]any `json:"with,omitempty"`
+	Timeout    string         `json:"timeout,omitempty"`
+	Retry      int            `json:"retry,omitempty"`
+	RetryDelay string         `json:"retry_delay,omitempty"`
 }
 
 // RunQuery selects workflow runs for the operations screen.
@@ -272,7 +279,7 @@ func (s *Service) InstantiateTemplate(ctx context.Context, id string, req Templa
 		name = template.Name
 	}
 	return s.CreateDraft(ctx, DraftRequest{
-		Kind:        stringFromMap(body, "kind", definition.KindDAG),
+		Kind:        stringFromMap(body, "kind", draftKindTaskGraph),
 		Name:        name,
 		Description: template.Description,
 		Body:        body,
@@ -307,51 +314,6 @@ func (s *Service) ExportPackage(ctx context.Context, id string) (store.PackageRe
 	return s.store.GetPackage(ctx, strings.TrimSpace(id))
 }
 
-// ListAgentSpecs returns reusable agent specs for the Agent Builder.
-func (s *Service) ListAgentSpecs(ctx context.Context) ([]store.AgentSpecRecord, error) {
-	return s.store.ListAgentSpecs(ctx)
-}
-
-// GetAgentSpec returns one reusable agent spec.
-func (s *Service) GetAgentSpec(ctx context.Context, id string) (store.AgentSpecRecord, error) {
-	return s.store.GetAgentSpec(ctx, strings.TrimSpace(id))
-}
-
-// CreateAgentSpec stores a new reusable agent spec.
-func (s *Service) CreateAgentSpec(ctx context.Context, req AgentSpecRequest) (store.AgentSpecRecord, error) {
-	record, err := s.agentSpecRecordFromRequest(req, true)
-	if err != nil {
-		return store.AgentSpecRecord{}, err
-	}
-	if err := s.store.UpsertAgentSpec(ctx, record); err != nil {
-		return store.AgentSpecRecord{}, err
-	}
-	return s.store.GetAgentSpec(ctx, record.ID)
-}
-
-// UpdateAgentSpec replaces editable fields for one reusable agent spec.
-func (s *Service) UpdateAgentSpec(ctx context.Context, id string, req AgentSpecRequest) (store.AgentSpecRecord, error) {
-	req.ID = strings.TrimSpace(id)
-	record, err := s.agentSpecRecordFromRequest(req, false)
-	if err != nil {
-		return store.AgentSpecRecord{}, err
-	}
-	existing, err := s.store.GetAgentSpec(ctx, record.ID)
-	if err != nil {
-		return store.AgentSpecRecord{}, err
-	}
-	record.CreatedAt = existing.CreatedAt
-	if err := s.store.UpsertAgentSpec(ctx, record); err != nil {
-		return store.AgentSpecRecord{}, err
-	}
-	return s.store.GetAgentSpec(ctx, record.ID)
-}
-
-// DeleteAgentSpec removes one reusable agent spec.
-func (s *Service) DeleteAgentSpec(ctx context.Context, id string) error {
-	return s.store.DeleteAgentSpec(ctx, strings.TrimSpace(id))
-}
-
 // SeedAuthoringCatalog installs built-in templates and package metadata.
 func (s *Service) SeedAuthoringCatalog(ctx context.Context) error {
 	for _, template := range builtInTemplates() {
@@ -377,10 +339,10 @@ func (s *Service) draftRecordFromRequest(req DraftRequest, create bool) (store.D
 	}
 	kind := strings.TrimSpace(req.Kind)
 	if kind == "" {
-		kind = stringFromMap(req.Body, "kind", definition.KindDAG)
+		kind = stringFromMap(req.Body, "kind", draftKindTaskGraph)
 	}
-	if kind != definition.KindDAG && kind != definition.KindStateMachine {
-		return store.DraftRecord{}, fmt.Errorf("draft kind must be %q or %q", definition.KindDAG, definition.KindStateMachine)
+	if kind != draftKindTaskGraph && kind != definition.KindStateMachine {
+		return store.DraftRecord{}, fmt.Errorf("draft kind must be %q or %q", draftKindTaskGraph, definition.KindStateMachine)
 	}
 	body := cloneMap(req.Body)
 	if len(body) == 0 {
@@ -405,36 +367,6 @@ func (s *Service) draftRecordFromRequest(req DraftRequest, create bool) (store.D
 		Status:      draftStatusDraft,
 		Body:        body,
 		Validation:  map[string]any{},
-	}, nil
-}
-
-// agentSpecRecordFromRequest normalizes one reusable agent spec request.
-func (s *Service) agentSpecRecordFromRequest(req AgentSpecRequest, create bool) (store.AgentSpecRecord, error) {
-	id := strings.TrimSpace(req.ID)
-	if id == "" && create {
-		generated, err := randomID("agent")
-		if err != nil {
-			return store.AgentSpecRecord{}, err
-		}
-		id = generated
-	}
-	if err := validateAuthoringID(id, "agent spec id"); err != nil {
-		return store.AgentSpecRecord{}, err
-	}
-	permissions, err := normalizeAgentPermissions(req.Permissions)
-	if err != nil {
-		return store.AgentSpecRecord{}, err
-	}
-	name := strings.TrimSpace(req.Name)
-	if name == "" {
-		name = id
-	}
-	return store.AgentSpecRecord{
-		ID:           id,
-		Name:         name,
-		Description:  strings.TrimSpace(req.Description),
-		Instructions: strings.TrimSpace(req.Instructions),
-		Permissions:  permissions,
 	}, nil
 }
 
@@ -479,15 +411,19 @@ func definitionFromDraft(draft store.DraftRecord) (definition.Definition, error)
 	if nested, ok := body["definition"].(map[string]any); ok {
 		body = nested
 	}
+	if isTaskGraphDraft(draft, body) {
+		return taskGraphDefinitionFromDraft(draft, body)
+	}
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return definition.Definition{}, fmt.Errorf("encode draft body: %w", err)
 	}
 	var def definition.Definition
-	if err := json.Unmarshal(encoded, &def); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&def); err != nil {
 		return definition.Definition{}, fmt.Errorf("decode draft definition: %w", err)
 	}
-	normalizeDraftDAGRetries(body, &def)
 	if strings.TrimSpace(def.ID) == "" {
 		def.ID = definitionIDFromDraftID(draft.ID)
 	}
@@ -500,9 +436,61 @@ func definitionFromDraft(draft store.DraftRecord) (definition.Definition, error)
 	return def, nil
 }
 
-// normalizeDraftDAGRetries folds editable retry policy maps into definitions.
-func normalizeDraftDAGRetries(body map[string]any, def *definition.Definition) {
-	if def == nil || def.Kind != definition.KindDAG {
+// isTaskGraphDraft reports whether a draft body uses visual task-graph authoring.
+func isTaskGraphDraft(draft store.DraftRecord, body map[string]any) bool {
+	return strings.TrimSpace(draft.Kind) == draftKindTaskGraph ||
+		strings.TrimSpace(stringFromMap(body, "kind", "")) == draftKindTaskGraph
+}
+
+// taskGraphDefinitionFromDraft compiles authoring graph nodes into task states.
+func taskGraphDefinitionFromDraft(draft store.DraftRecord, body map[string]any) (definition.Definition, error) {
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return definition.Definition{}, fmt.Errorf("encode task graph draft: %w", err)
+	}
+	var graph taskGraphDraftDefinition
+	if err := json.Unmarshal(encoded, &graph); err != nil {
+		return definition.Definition{}, fmt.Errorf("decode task graph draft: %w", err)
+	}
+	normalizeTaskGraphRetries(body, &graph)
+	id := strings.TrimSpace(graph.ID)
+	if id == "" {
+		id = definitionIDFromDraftID(draft.ID)
+	}
+	name := strings.TrimSpace(graph.Name)
+	if name == "" {
+		name = draft.Name
+	}
+	states := make([]definition.StateDefinition, 0, len(graph.Nodes))
+	for _, node := range graph.Nodes {
+		states = append(states, definition.StateDefinition{
+			ID:         node.ID,
+			Type:       definition.StateTypeTask,
+			Uses:       node.Uses,
+			DependsOn:  append([]string(nil), node.DependsOn...),
+			With:       cloneMap(node.With),
+			Timeout:    node.Timeout,
+			Retry:      node.Retry,
+			RetryDelay: node.RetryDelay,
+		})
+	}
+	return definition.Definition{
+		Kind:        definition.KindStateMachine,
+		ID:          id,
+		Name:        name,
+		Description: strings.TrimSpace(graph.Description),
+		Schedule:    strings.TrimSpace(graph.Schedule),
+		States:      states,
+		Authoring: map[string]any{
+			"mode":       draftKindTaskGraph,
+			"task_graph": cloneMap(body),
+		},
+	}, nil
+}
+
+// normalizeTaskGraphRetries folds editable retry policy maps into task nodes.
+func normalizeTaskGraphRetries(body map[string]any, def *taskGraphDraftDefinition) {
+	if def == nil {
 		return
 	}
 	nodes := anySlice(body["nodes"])
@@ -548,11 +536,11 @@ func blankDefinitionBody(id string, kind string, name string, description string
 	} else {
 		body["nodes"] = []any{
 			map[string]any{
-				"id":   "agent_task",
-				"uses": "agent.run",
+				"id":   "tool_task",
+				"uses": "tool.call",
 				"with": map[string]any{
-					"instructions": "Return the result requested by this automation step.",
-					"input":        map[string]any{},
+					"name":      "",
+					"arguments": map[string]any{},
 				},
 			},
 		}
@@ -564,11 +552,6 @@ func blankDefinitionBody(id string, kind string, name string, description string
 func actionTypeForName(name string) ActionType {
 	action := ActionType{Name: name, Label: name, Description: "Workflow action.", Risk: "read", Available: true, InputSchema: map[string]any{"type": "object"}}
 	switch name {
-	case "agent.run":
-		action.Label = "Agent Task"
-		action.Description = "Run a harness-owned reasoning step."
-		action.Risk = "reasoning"
-		action.InputSchema = map[string]any{"type": "object", "required": []any{"instructions"}, "properties": map[string]any{"agent": map[string]any{"type": "string"}, "instructions": map[string]any{"type": "string"}, "input": map[string]any{"type": "object"}}}
 	case "tool.call":
 		action.Label = "Run Tool"
 		action.Description = "Call a harness-exposed context or MCP-backed tool."
@@ -579,14 +562,9 @@ func actionTypeForName(name string) ActionType {
 		action.Description = "Call an installed MCP tool endpoint."
 		action.Risk = "tool"
 		action.InputSchema = map[string]any{"type": "object", "required": []any{"endpoint", "tool"}, "properties": map[string]any{"endpoint": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}}}
-	case "cli.command":
-		action.Label = "Run Command"
-		action.Description = "Draft a CLI command action. Publishing is blocked until an allowlisted executor is configured."
-		action.Risk = "system"
-		action.Available = false
-	case "dag.run":
-		action.Label = "Run Task DAG"
-		action.Description = "Start a nested task DAG definition."
+	case "workflow.run":
+		action.Label = "Run Workflow"
+		action.Description = "Start a nested workflow definition."
 		action.Risk = "workflow"
 	case "workflow.signal":
 		action.Label = "Signal Workflow"
@@ -605,25 +583,8 @@ func actionTypeForName(name string) ActionType {
 }
 
 // unavailableActions returns registered actions that cannot be published yet.
-func unavailableActions(def definition.Definition) []string {
-	seen := map[string]struct{}{}
-	for _, state := range def.States {
-		for _, action := range state.OnEntry {
-			if action.Uses == "cli.command" {
-				seen[action.Uses] = struct{}{}
-			}
-		}
-	}
-	for _, node := range def.Nodes {
-		if node.Uses == "cli.command" {
-			seen[node.Uses] = struct{}{}
-		}
-	}
-	names := make([]string, 0, len(seen))
-	for name := range seen {
-		names = append(names, name)
-	}
-	return names
+func unavailableActions(_ definition.Definition) []string {
+	return nil
 }
 
 // builtInTemplates returns starter templates backed by package-shaped bodies.
@@ -661,26 +622,26 @@ func builtInTemplates() []store.TemplateRecord {
 			},
 		},
 		{
-			ID:          "agent_dag",
-			Name:        "Agent DAG",
-			Description: "Start from a bounded DAG with one harness agent task.",
-			Category:    "agent",
-			Tags:        []string{"agent", "dag"},
-			Parameters:  []map[string]any{{"id": "instructions", "label": "Agent instructions", "type": "string", "default": "Summarize the input."}},
+			ID:          "tool_task_graph",
+			Name:        "Tool Task Graph",
+			Description: "Start from a bounded task graph with one generic tool call.",
+			Category:    "task_graph",
+			Tags:        []string{"tool", "task-graph"},
+			Parameters:  []map[string]any{{"id": "tool_name", "label": "Tool name", "type": "string", "default": "example_tool"}},
 			Requirements: map[string]any{
-				"actions": []any{"agent.run"},
+				"actions": []any{"tool.call"},
 			},
 			Body: map[string]any{
-				"kind":        definition.KindDAG,
-				"id":          "agent_dag",
-				"name":        "Agent DAG",
-				"description": "A bounded DAG with one agent task.",
+				"kind":        draftKindTaskGraph,
+				"id":          "tool_task_graph",
+				"name":        "Tool Task Graph",
+				"description": "A bounded task graph with one generic tool call.",
 				"nodes": []any{map[string]any{
-					"id":   "agent_task",
-					"uses": "agent.run",
+					"id":   "tool_task",
+					"uses": "tool.call",
 					"with": map[string]any{
-						"instructions": "{{instructions}}",
-						"input":        map[string]any{},
+						"name":      "{{tool_name}}",
+						"arguments": map[string]any{},
 					},
 				}},
 			},
@@ -733,48 +694,6 @@ func validateAuthoringID(value string, label string) error {
 		return fmt.Errorf("%s %q is invalid", label, trimmed)
 	}
 	return nil
-}
-
-// normalizeAgentPermissions validates and defaults an agent resource grant map.
-func normalizeAgentPermissions(value map[string]any) (map[string]any, error) {
-	normalized := map[string]any{}
-	for _, resource := range agentPermissionResources {
-		normalized[resource] = map[string]any{}
-		for _, action := range agentPermissionActionsByResource[resource] {
-			normalized[resource].(map[string]any)[action] = false
-		}
-	}
-	for resource, rawGrants := range value {
-		if !containsString(agentPermissionResources, resource) {
-			return nil, fmt.Errorf("agent permission resource %q is not supported", resource)
-		}
-		grants, ok := rawGrants.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("agent permission resource %q must be an object", resource)
-		}
-		allowedActions := agentPermissionActionsByResource[resource]
-		for action, rawAllowed := range grants {
-			if !containsString(allowedActions, action) {
-				return nil, fmt.Errorf("agent permission action %s.%s is not supported", resource, action)
-			}
-			allowed, ok := rawAllowed.(bool)
-			if !ok {
-				return nil, fmt.Errorf("agent permission %s.%s must be a boolean", resource, action)
-			}
-			normalized[resource].(map[string]any)[action] = allowed
-		}
-	}
-	return normalized, nil
-}
-
-// containsString reports whether a list contains a string exactly.
-func containsString(values []string, needle string) bool {
-	for _, value := range values {
-		if value == needle {
-			return true
-		}
-	}
-	return false
 }
 
 // definitionIDFromDraftID returns a safe default definition id for a draft.

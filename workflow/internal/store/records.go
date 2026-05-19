@@ -34,6 +34,19 @@ type EventRecord struct {
 	CreatedAt string         `json:"created_at"`
 }
 
+// TaskStateRecord stores durable execution status for one task state.
+type TaskStateRecord struct {
+	RunID       string         `json:"run_id"`
+	StateID     string         `json:"state_id"`
+	Status      string         `json:"status"`
+	Attempts    int            `json:"attempts"`
+	Output      map[string]any `json:"output"`
+	Error       string         `json:"error"`
+	StartedAt   string         `json:"started_at"`
+	CompletedAt string         `json:"completed_at"`
+	UpdatedAt   string         `json:"updated_at"`
+}
+
 // PendingItem stores one user-visible workflow inbox item.
 type PendingItem struct {
 	ID        string         `json:"id"`
@@ -83,17 +96,6 @@ type PackageRecord struct {
 	Body        map[string]any `json:"body"`
 	CreatedAt   string         `json:"created_at"`
 	UpdatedAt   string         `json:"updated_at"`
-}
-
-// AgentSpecRecord stores one reusable authoring-time agent specification.
-type AgentSpecRecord struct {
-	ID           string         `json:"id"`
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	Instructions string         `json:"instructions"`
-	Permissions  map[string]any `json:"permissions"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
 }
 
 // PublishedDefinitionRecord links published definitions back to authoring drafts.

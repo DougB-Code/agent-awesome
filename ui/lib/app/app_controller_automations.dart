@@ -52,16 +52,6 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationTemplates.isEmpty ? null : automationTemplates.first;
   }
 
-  /// Returns the currently selected reusable automation agent spec.
-  AutomationAgentSpec? get selectedAutomationAgentSpec {
-    for (final spec in automationAgentSpecs) {
-      if (spec.id == selectedAutomationAgentSpecId) {
-        return spec;
-      }
-    }
-    return automationAgentSpecs.isEmpty ? null : automationAgentSpecs.first;
-  }
-
   /// Refreshes all Automations data from workflowd through the gateway.
   Future<void> refreshAutomationsFromUi() async {
     if (automationsBusy) {
@@ -88,12 +78,6 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
   /// Selects one automation draft for builder screens.
   void selectAutomationDraft(String draftId) {
     selectedAutomationDraftId = draftId;
-    _notifyControllerListeners();
-  }
-
-  /// Selects one reusable automation agent spec for editing.
-  void selectAutomationAgentSpec(String specId) {
-    selectedAutomationAgentSpecId = specId;
     _notifyControllerListeners();
   }
 
@@ -296,7 +280,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       if (draft.kind == 'state_machine') {
         _appendStateMachineAction(body, actionName);
       } else {
-        _appendDagNode(body, actionName);
+        _appendTaskGraphNode(body, actionName);
       }
       final updated = AutomationDraft(
         id: draft.id,
@@ -315,76 +299,6 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     } catch (error) {
       automationsMessage = error.toString();
       await _log('automation action add failed: $error');
-    } finally {
-      automationsBusy = false;
-      _notifyControllerListeners();
-    }
-  }
-
-  /// Creates a new reusable automation agent spec.
-  Future<void> createAutomationAgentSpecFromUi() async {
-    automationsBusy = true;
-    automationsMessage = 'Creating agent spec';
-    _notifyControllerListeners();
-    try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
-      final spec = await automationsClient.createAgentSpec(name: 'New Agent');
-      selectedAutomationAgentSpecId = spec.id;
-      await _loadAutomationAgentSpecs();
-      automationsMessage = '';
-    } catch (error) {
-      automationsMessage = error.toString();
-      await _log('agent spec create failed: $error');
-    } finally {
-      automationsBusy = false;
-      _notifyControllerListeners();
-    }
-  }
-
-  /// Saves one reusable automation agent spec.
-  Future<void> saveAutomationAgentSpecFromUi(AutomationAgentSpec spec) async {
-    automationsBusy = true;
-    automationsMessage = 'Saving ${spec.name}';
-    _notifyControllerListeners();
-    try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
-      final updated = await automationsClient.updateAgentSpec(spec);
-      selectedAutomationAgentSpecId = updated.id;
-      await _loadAutomationAgentSpecs();
-      automationsMessage = '';
-    } catch (error) {
-      automationsMessage = error.toString();
-      await _log('agent spec save failed: $error');
-    } finally {
-      automationsBusy = false;
-      _notifyControllerListeners();
-    }
-  }
-
-  /// Deletes the selected reusable automation agent spec.
-  Future<void> deleteSelectedAutomationAgentSpecFromUi() async {
-    final spec = selectedAutomationAgentSpec;
-    if (spec == null) {
-      return;
-    }
-    automationsBusy = true;
-    automationsMessage = 'Deleting ${spec.name}';
-    _notifyControllerListeners();
-    try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
-      await automationsClient.deleteAgentSpec(spec.id);
-      selectedAutomationAgentSpecId = '';
-      await _loadAutomationAgentSpecs();
-      automationsMessage = '';
-    } catch (error) {
-      automationsMessage = error.toString();
-      await _log('agent spec delete failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
@@ -478,18 +392,12 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         automationsClient.listDefinitions(),
         automationsClient.listTemplates(),
         automationsClient.listPackages(),
-        automationsClient.listAgentSpecs(),
       ]);
       automationActionTypes = results[0] as List<AutomationActionType>;
       automationDefinitions = results[1] as List<AutomationDefinition>;
       automationTemplates = results[2] as List<AutomationTemplate>;
       automationPackages = results[3] as List<AutomationPackage>;
-      automationAgentSpecs = results[4] as List<AutomationAgentSpec>;
       await _loadAutomationToolNames();
-      if (selectedAutomationAgentSpecId.isEmpty &&
-          automationAgentSpecs.isNotEmpty) {
-        selectedAutomationAgentSpecId = automationAgentSpecs.first.id;
-      }
       if (selectedAutomationDefinitionId.isEmpty &&
           automationDefinitions.isNotEmpty) {
         selectedAutomationDefinitionId = automationDefinitions.first.id;
@@ -511,28 +419,6 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     } catch (error) {
       automationToolNames = const <String>{};
       await _log('automation tool names load failed: $error');
-    }
-  }
-
-  /// Loads reusable automation agent specs.
-  Future<void> _loadAutomationAgentSpecs() async {
-    try {
-      automationAgentSpecs = await automationsClient.listAgentSpecs();
-      if (selectedAutomationAgentSpecId.isEmpty &&
-          automationAgentSpecs.isNotEmpty) {
-        selectedAutomationAgentSpecId = automationAgentSpecs.first.id;
-      }
-      if (selectedAutomationAgentSpecId.isNotEmpty &&
-          !automationAgentSpecs.any(
-            (spec) => spec.id == selectedAutomationAgentSpecId,
-          )) {
-        selectedAutomationAgentSpecId = automationAgentSpecs.isEmpty
-            ? ''
-            : automationAgentSpecs.first.id;
-      }
-    } catch (error) {
-      automationsMessage = error.toString();
-      await _log('automation agent spec load failed: $error');
     }
   }
 
@@ -607,13 +493,11 @@ $userText
 
 Current automation context:
 - selected draft: ${draft == null ? 'none' : '${draft.id} (${draft.kind})'}
-- selected agent spec: ${selectedAutomationAgentSpec == null ? 'none' : selectedAutomationAgentSpec!.id}
 - available actions: $actionNames
-- reusable agent specs: ${automationAgentSpecs.length}
 - open approvals: ${automationInbox.length}
 - recent runs: ${automationRuns.length}
 
-Use workflow authoring MCP tools to create or update drafts and reusable agent specs. Do not publish until the user explicitly approves the draft.
+Use workflow authoring MCP tools to create or update drafts. Do not publish until the user explicitly approves the draft.
 ''';
   }
 
@@ -671,8 +555,8 @@ Map<String, dynamic> _jsonMapCopy(Map<String, dynamic> value) {
   return jsonDecode(jsonEncode(value)) as Map<String, dynamic>;
 }
 
-/// Appends one executable action node to a DAG draft body.
-void _appendDagNode(
+/// Appends one executable action node to a task-graph draft body.
+void _appendTaskGraphNode(
   Map<String, dynamic> body,
   String actionName, [
   Map<String, dynamic>? args,
@@ -738,10 +622,6 @@ String _nextAutomationStepId(List<dynamic> items, String actionName) {
 /// Provides valid starting arguments for one built-in action type.
 Map<String, dynamic> _defaultAutomationActionArgs(String actionName) {
   return switch (actionName) {
-    'agent.run' => <String, dynamic>{
-      'instructions': 'Return the result requested by this automation step.',
-      'input': <String, dynamic>{},
-    },
     'tool.call' => <String, dynamic>{
       'name': '',
       'domain_id': '',
@@ -752,8 +632,7 @@ Map<String, dynamic> _defaultAutomationActionArgs(String actionName) {
       'tool': '',
       'arguments': <String, dynamic>{},
     },
-    'cli.command' => <String, dynamic>{'command': '', 'arguments': <String>[]},
-    'dag.run' => <String, dynamic>{
+    'workflow.run' => <String, dynamic>{
       'workflow': '',
       'input': <String, dynamic>{},
     },

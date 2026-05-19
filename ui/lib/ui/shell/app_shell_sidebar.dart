@@ -117,11 +117,6 @@ class _AppSidebar extends StatelessWidget {
           iconGlyph: '⎇',
         ),
         _SidebarItem(
-          label: AppSections.automationAgents,
-          section: AppSections.automationAgents,
-          iconGlyph: '✦',
-        ),
-        _SidebarItem(
           label: AppSections.automationMcpServers,
           section: AppSections.automationMcpServers,
           iconGlyph: '⌬',

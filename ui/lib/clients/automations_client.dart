@@ -113,46 +113,6 @@ class AutomationsClient {
     return _list(decoded['templates']).map(parseAutomationTemplate).toList();
   }
 
-  /// Lists reusable workflow agent specs.
-  Future<List<AutomationAgentSpec>> listAgentSpecs() async {
-    final decoded = await _get('/agent-specs');
-    return _list(decoded['agent_specs']).map(parseAutomationAgentSpec).toList();
-  }
-
-  /// Creates one reusable workflow agent spec.
-  Future<AutomationAgentSpec> createAgentSpec({
-    String id = '',
-    required String name,
-    String description = '',
-    String instructions = '',
-    AutomationAgentPermissions permissions = const AutomationAgentPermissions(),
-  }) async {
-    final decoded = await _post('/agent-specs', <String, dynamic>{
-      if (id.trim().isNotEmpty) 'id': id.trim(),
-      'name': name,
-      'description': description,
-      'instructions': instructions,
-      'permissions': permissions.toJson(),
-    });
-    return parseAutomationAgentSpec(decoded['agent_spec']);
-  }
-
-  /// Updates one reusable workflow agent spec.
-  Future<AutomationAgentSpec> updateAgentSpec(AutomationAgentSpec spec) async {
-    final decoded = await _put('/agent-specs/${spec.id}', <String, dynamic>{
-      'name': spec.name,
-      'description': spec.description,
-      'instructions': spec.instructions,
-      'permissions': spec.permissions.toJson(),
-    });
-    return parseAutomationAgentSpec(decoded['agent_spec']);
-  }
-
-  /// Deletes one reusable workflow agent spec.
-  Future<void> deleteAgentSpec(String specId) async {
-    await _delete('/agent-specs/$specId');
-  }
-
   /// Instantiates one template as an editable draft.
   Future<AutomationDraft> instantiateTemplate(
     String templateId, {
@@ -274,15 +234,6 @@ class AutomationsClient {
     );
     await _log('PUT $uri -> ${response.statusCode}');
     return _decode(response, 'PUT $path');
-  }
-
-  /// Sends a DELETE request to the workflow API.
-  Future<Map<String, dynamic>> _delete(String path) async {
-    final uri = _uri(path);
-    await _log('DELETE $uri');
-    final response = await _http.delete(uri, headers: _headers());
-    await _log('DELETE $uri -> ${response.statusCode}');
-    return _decode(response, 'DELETE $path');
   }
 
   Map<String, dynamic> _decode(http.Response response, String operation) {

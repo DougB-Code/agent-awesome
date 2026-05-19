@@ -561,16 +561,15 @@ func TestWorkflowToolConfigExposesWorkflowMCP(t *testing.T) {
 		"workflow_draft_publish",
 		"workflow_template_list",
 		"workflow_template_instantiate",
-		"workflow_agent_spec_list",
-		"workflow_agent_spec_create",
-		"workflow_agent_spec_update",
-		"workflow_agent_spec_delete",
 	}
 	if !reflect.DeepEqual(server.Tools.Allow, expectedTools) {
 		t.Fatalf("workflow Tools.Allow = %#v, want %#v", server.Tools.Allow, expectedTools)
 	}
 	if cfg.LocalExec.Enabled {
 		t.Fatalf("LocalExec.Enabled = true, want workflow control through MCP only")
+	}
+	if len(cfg.LocalExec.Commands) != 0 {
+		t.Fatalf("LocalExec.Commands = %#v, want workflow profile to expose no direct commands", cfg.LocalExec.Commands)
 	}
 }
 

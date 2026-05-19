@@ -12,16 +12,16 @@ import (
 const (
 	// KindStateMachine identifies a long-lived state-machine workflow.
 	KindStateMachine = "state_machine"
-	// KindDAG identifies a bounded dependency graph workflow.
-	KindDAG = "dag"
+	// StateTypeTask identifies a durable task state inside a state machine.
+	StateTypeTask = "task"
 )
 
 var safeIDPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
-var dagActionTypes = map[string]struct{}{
-	"agent.run": {},
-	"tool.call": {},
-	"dag.run":   {},
+var taskActionTypes = map[string]struct{}{
+	"mcp.call":     {},
+	"tool.call":    {},
+	"workflow.run": {},
 }
 
 // ActionCatalog reports whether a declarative action type is installed.
@@ -40,20 +40,21 @@ func Validate(def Definition, actions ActionCatalog) error {
 	switch strings.TrimSpace(def.Kind) {
 	case KindStateMachine:
 		return validateStateMachine(def, actions)
-	case KindDAG:
-		return validateDAG(def, actions)
 	default:
-		return fmt.Errorf("workflow %q kind must be %q or %q", def.ID, KindStateMachine, KindDAG)
+		return fmt.Errorf("workflow %q kind must be %q", def.ID, KindStateMachine)
 	}
 }
 
 // validateStateMachine checks state and transition references.
 func validateStateMachine(def Definition, actions ActionCatalog) error {
-	if err := validateSafeID(def.Initial, "initial state"); err != nil {
-		return err
-	}
 	if len(def.States) == 0 {
 		return fmt.Errorf("state machine %q must define states", def.ID)
+	}
+	if hasTaskStates(def) {
+		return validateTaskStateGraph(def, actions)
+	}
+	if err := validateSafeID(def.Initial, "initial state"); err != nil {
+		return err
 	}
 	states := map[string]StateDefinition{}
 	for _, state := range def.States {
@@ -97,73 +98,91 @@ func validateStateMachine(def Definition, actions ActionCatalog) error {
 	return nil
 }
 
-// validateDAG checks DAG node references and cycles.
-func validateDAG(def Definition, actions ActionCatalog) error {
-	if len(def.Nodes) == 0 {
-		return fmt.Errorf("dag %q must define nodes", def.ID)
-	}
-	nodes := map[string]NodeDefinition{}
-	for _, node := range def.Nodes {
-		if err := validateSafeID(node.ID, "node id"); err != nil {
+// validateTaskStateGraph checks task-state references and cycles.
+func validateTaskStateGraph(def Definition, actions ActionCatalog) error {
+	states := map[string]StateDefinition{}
+	for _, state := range def.States {
+		if err := validateSafeID(state.ID, "state id"); err != nil {
 			return err
 		}
-		if _, ok := nodes[node.ID]; ok {
-			return fmt.Errorf("dag %q has duplicate node %q", def.ID, node.ID)
+		if _, ok := states[state.ID]; ok {
+			return fmt.Errorf("state machine %q has duplicate state %q", def.ID, state.ID)
 		}
-		if err := validateAction(node.Uses, actions); err != nil {
-			return fmt.Errorf("node %s: %w", node.ID, err)
+		if !IsTaskState(state) {
+			return fmt.Errorf("state %q cannot mix process states with task states", state.ID)
 		}
-		if err := validateDAGAction(node.Uses); err != nil {
-			return fmt.Errorf("node %s: %w", node.ID, err)
+		if len(state.OnEntry) > 0 || len(state.Transitions) > 0 {
+			return fmt.Errorf("task state %q must not define on_entry or transitions", state.ID)
 		}
-		if node.Retry < 0 {
-			return fmt.Errorf("node %q retry must not be negative", node.ID)
+		if err := validateAction(state.Uses, actions); err != nil {
+			return fmt.Errorf("task state %s: %w", state.ID, err)
 		}
-		if node.Timeout != "" {
-			if _, err := time.ParseDuration(node.Timeout); err != nil {
-				return fmt.Errorf("node %q timeout: %w", node.ID, err)
-			}
+		if err := validateTaskAction(state.Uses); err != nil {
+			return fmt.Errorf("task state %s: %w", state.ID, err)
 		}
-		if node.RetryDelay != "" {
-			if _, err := time.ParseDuration(node.RetryDelay); err != nil {
-				return fmt.Errorf("node %q retry_delay: %w", node.ID, err)
-			}
+		if state.Retry < 0 {
+			return fmt.Errorf("task state %q retry must not be negative", state.ID)
 		}
-		nodes[node.ID] = node
+		if err := validateDuration(state.Timeout, "timeout", state.ID); err != nil {
+			return err
+		}
+		if err := validateDuration(state.RetryDelay, "retry_delay", state.ID); err != nil {
+			return err
+		}
+		states[state.ID] = state
 	}
-	for _, node := range def.Nodes {
+	if strings.TrimSpace(def.Initial) != "" {
+		if err := validateSafeID(def.Initial, "initial state"); err != nil {
+			return err
+		}
+		if _, ok := states[def.Initial]; !ok {
+			return fmt.Errorf("state machine %q initial state %q is not defined", def.ID, def.Initial)
+		}
+	}
+	for _, state := range def.States {
 		seenDeps := map[string]struct{}{}
-		for _, dep := range node.DependsOn {
-			if err := validateSafeID(dep, "node dependency"); err != nil {
+		for _, dep := range state.DependsOn {
+			if err := validateSafeID(dep, "state dependency"); err != nil {
 				return err
 			}
-			if _, ok := nodes[dep]; !ok {
-				return fmt.Errorf("node %q depends on missing node %q", node.ID, dep)
+			if _, ok := states[dep]; !ok {
+				return fmt.Errorf("task state %q depends on missing state %q", state.ID, dep)
 			}
-			if dep == node.ID {
-				return fmt.Errorf("node %q cannot depend on itself", node.ID)
+			if dep == state.ID {
+				return fmt.Errorf("task state %q cannot depend on itself", state.ID)
 			}
 			if _, ok := seenDeps[dep]; ok {
-				return fmt.Errorf("node %q repeats dependency %q", node.ID, dep)
+				return fmt.Errorf("task state %q repeats dependency %q", state.ID, dep)
 			}
 			seenDeps[dep] = struct{}{}
 		}
 	}
-	return validateAcyclic(def.Nodes)
+	return validateTaskAcyclic(def.States)
 }
 
-// validateAcyclic rejects DAG cycles before go-workflow construction.
-func validateAcyclic(nodes []NodeDefinition) error {
+// validateDuration checks one optional task-state duration field.
+func validateDuration(value string, field string, stateID string) error {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	if _, err := time.ParseDuration(value); err != nil {
+		return fmt.Errorf("task state %q %s: %w", stateID, field, err)
+	}
+	return nil
+}
+
+// validateTaskAcyclic rejects task-state cycles before runtime scheduling.
+func validateTaskAcyclic(states []StateDefinition) error {
 	graph := map[string][]string{}
-	for _, node := range nodes {
-		graph[node.ID] = append([]string(nil), node.DependsOn...)
+	for _, state := range states {
+		graph[state.ID] = append([]string(nil), state.DependsOn...)
 	}
 	visiting := map[string]bool{}
 	visited := map[string]bool{}
 	var visit func(string) error
 	visit = func(id string) error {
 		if visiting[id] {
-			return fmt.Errorf("dag has dependency cycle involving %q", id)
+			return fmt.Errorf("task states have dependency cycle involving %q", id)
 		}
 		if visited[id] {
 			return nil
@@ -186,13 +205,13 @@ func validateAcyclic(nodes []NodeDefinition) error {
 	return nil
 }
 
-// validateDAGAction limits bounded DAGs to straight-shot orchestration actions.
-func validateDAGAction(name string) error {
+// validateTaskAction limits task states to deterministic tool orchestration actions.
+func validateTaskAction(name string) error {
 	trimmed := strings.TrimSpace(name)
-	if _, ok := dagActionTypes[trimmed]; ok {
+	if _, ok := taskActionTypes[trimmed]; ok {
 		return nil
 	}
-	return fmt.Errorf("action %q is not supported in task DAGs", trimmed)
+	return fmt.Errorf("action %q is not supported in task states", trimmed)
 }
 
 // validateAction ensures the action is supplied by the installed registry.
@@ -241,4 +260,29 @@ func validateSafeID(value string, label string) error {
 		return fmt.Errorf("%s %q is invalid", label, trimmed)
 	}
 	return nil
+}
+
+// HasTaskStates reports whether a definition uses the task-state workflow model.
+func HasTaskStates(def Definition) bool {
+	return hasTaskStates(def)
+}
+
+// IsTaskState reports whether a state is a durable executable task state.
+func IsTaskState(state StateDefinition) bool {
+	return strings.TrimSpace(state.Type) == StateTypeTask ||
+		strings.TrimSpace(state.Uses) != "" ||
+		len(state.DependsOn) > 0 ||
+		strings.TrimSpace(state.Timeout) != "" ||
+		state.Retry != 0 ||
+		strings.TrimSpace(state.RetryDelay) != ""
+}
+
+// hasTaskStates reports whether any state declares task-state metadata.
+func hasTaskStates(def Definition) bool {
+	for _, state := range def.States {
+		if IsTaskState(state) {
+			return true
+		}
+	}
+	return false
 }

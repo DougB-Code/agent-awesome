@@ -27,6 +27,9 @@ func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
 	if cfg.WorkflowService.HealthURL != "http://127.0.0.1:8092/healthz" {
 		t.Fatalf("workflow health = %q", cfg.WorkflowService.HealthURL)
 	}
+	if cfg.CommandService.HealthURL != "http://127.0.0.1:8093/healthz" {
+		t.Fatalf("command health = %q", cfg.CommandService.HealthURL)
+	}
 	if len(cfg.MemoryDomains) != 1 || cfg.MemoryDomains[0].ID != "memory" || cfg.MemoryDomains[0].Endpoint != "http://127.0.0.1:8090/mcp" {
 		t.Fatalf("memory domains = %#v, want default memory endpoint", cfg.MemoryDomains)
 	}

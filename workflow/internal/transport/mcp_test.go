@@ -20,15 +20,16 @@ func TestMCPWorkflowStartReturnsRun(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	writeTransportDefinition(t, definitionsDir, "daily.yaml", `
-kind: dag
+kind: state_machine
 id: daily_email_triage
 name: Daily Email Triage
-nodes:
+states:
   - id: triage
-    uses: agent.run
+    type: task
+    uses: tool.call
     with:
-      instructions: Triage input.
-      input: {}
+      name: mock_tool
+      arguments: {}
 `)
 	service, err := runtime.Open(ctx, runtime.Config{
 		DefinitionsDir: definitionsDir,
@@ -102,10 +103,10 @@ func TestMCPWorkflowAuthoringToolsCreateDraft(t *testing.T) {
 			"name": "workflow_draft_create",
 			"arguments": map[string]any{
 				"id":   "draft_mcp",
-				"kind": "dag",
+				"kind": "task_graph",
 				"name": "MCP Draft",
 				"body": map[string]any{
-					"kind": "dag",
+					"kind": "task_graph",
 					"id":   "mcp_draft",
 					"name": "MCP Draft",
 					"nodes": []any{
@@ -120,40 +121,6 @@ func TestMCPWorkflowAuthoringToolsCreateDraft(t *testing.T) {
 		t.Fatalf("workflow_draft_create result = %#v, want success", createdResult)
 	}
 
-	agentSpec := postJSONRPC(t, server.URL+"/mcp", map[string]any{
-		"jsonrpc": "2.0",
-		"id":      3,
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": "workflow_agent_spec_create",
-			"arguments": map[string]any{
-				"id":           "triage_agent",
-				"name":         "Triage Agent",
-				"instructions": "Classify workflow input.",
-				"permissions": map[string]any{
-					"filesystem": map[string]any{"read": true},
-				},
-			},
-		},
-	})
-	agentSpecResult := agentSpec["result"].(map[string]any)
-	if agentSpecResult["isError"] == true {
-		t.Fatalf("workflow_agent_spec_create result = %#v, want success", agentSpecResult)
-	}
-
-	listedAgentSpecs := postJSONRPC(t, server.URL+"/mcp", map[string]any{
-		"jsonrpc": "2.0",
-		"id":      4,
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name":      "workflow_agent_spec_list",
-			"arguments": map[string]any{},
-		},
-	})
-	listedStructured := listedAgentSpecs["result"].(map[string]any)["structuredContent"].(map[string]any)
-	if listedStructured["agent_specs"] == nil {
-		t.Fatalf("workflow_agent_spec_list structuredContent = %#v, want agent_specs", listedStructured)
-	}
 }
 
 // postJSONRPC posts one JSON-RPC body and returns the decoded response.

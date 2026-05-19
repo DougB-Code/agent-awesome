@@ -22,6 +22,8 @@ const (
 	DefaultMemoryServiceName = "memory"
 	// DefaultWorkflowServiceName is the supervisor name for workflowd.
 	DefaultWorkflowServiceName = "workflow"
+	// DefaultCommandServiceName is the supervisor name for commandmcpd.
+	DefaultCommandServiceName = "command"
 )
 
 // Config stores all runtime settings for one personal gateway process.
@@ -54,6 +56,7 @@ type Config struct {
 	HarnessService                   ServiceConfig
 	MemoryService                    ServiceConfig
 	WorkflowService                  ServiceConfig
+	CommandService                   ServiceConfig
 	Slack                            SlackConfig
 }
 
@@ -200,10 +203,19 @@ func FromFlags(args []string) (Config, error) {
 		"AGENTAWESOME_WORKFLOW_WORKDIR",
 		"AGENTAWESOME_WORKFLOW_AUTO_START",
 	)
+	cfg.CommandService = envServiceConfig(
+		DefaultCommandServiceName,
+		"AGENTAWESOME_COMMAND_HEALTH_URL",
+		"AGENTAWESOME_COMMAND_COMMAND",
+		"AGENTAWESOME_COMMAND_ARGS",
+		"AGENTAWESOME_COMMAND_WORKDIR",
+		"AGENTAWESOME_COMMAND_AUTO_START",
+	)
 
 	harnessArgs := repeatedStrings(cfg.HarnessService.Arguments)
 	memoryArgs := repeatedStrings(cfg.MemoryService.Arguments)
 	workflowArgs := repeatedStrings(cfg.WorkflowService.Arguments)
+	commandArgs := repeatedStrings(cfg.CommandService.Arguments)
 	fs := flag.NewFlagSet("agent-gateway", flag.ContinueOnError)
 	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, "gateway listen address")
 	fs.StringVar(&cfg.GatewayBaseURL, "gateway-base-url", cfg.GatewayBaseURL, "gateway API base URL used by channel adapters")
@@ -241,6 +253,7 @@ func FromFlags(args []string) (Config, error) {
 	bindServiceFlags(fs, &cfg.HarnessService, &harnessArgs, DefaultHarnessServiceName)
 	bindServiceFlags(fs, &cfg.MemoryService, &memoryArgs, DefaultMemoryServiceName)
 	bindServiceFlags(fs, &cfg.WorkflowService, &workflowArgs, DefaultWorkflowServiceName)
+	bindServiceFlags(fs, &cfg.CommandService, &commandArgs, DefaultCommandServiceName)
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -248,6 +261,7 @@ func FromFlags(args []string) (Config, error) {
 	cfg.HarnessService.Arguments = harnessArgs
 	cfg.MemoryService.Arguments = memoryArgs
 	cfg.WorkflowService.Arguments = workflowArgs
+	cfg.CommandService.Arguments = commandArgs
 	if err := cfg.applyMemoryTopology(memoryDomainsJSON, memoryPolicyJSON); err != nil {
 		return Config{}, err
 	}
@@ -265,6 +279,9 @@ func FromFlags(args []string) (Config, error) {
 	}
 	if cfg.WorkflowService.HealthURL == "" {
 		cfg.WorkflowService.HealthURL = workflowHealthURL(cfg.WorkflowBaseURL)
+	}
+	if cfg.CommandService.HealthURL == "" {
+		cfg.CommandService.HealthURL = "http://127.0.0.1:8093/healthz"
 	}
 	if err := cfg.applyMemoryServices(memoryServicesJSON); err != nil {
 		return Config{}, err
@@ -332,6 +349,9 @@ func (c Config) Validate() error {
 	}
 	if err := c.WorkflowService.Validate(); err != nil {
 		return fmt.Errorf("workflow service: %w", err)
+	}
+	if err := c.CommandService.Validate(); err != nil {
+		return fmt.Errorf("command service: %w", err)
 	}
 	if err := c.validateMemoryServices(); err != nil {
 		return err
@@ -420,6 +440,7 @@ func (c Config) StatusView() map[string]any {
 		"harness_service":  c.HarnessService.StatusView(),
 		"memory_service":   c.MemoryService.StatusView(),
 		"workflow_service": c.WorkflowService.StatusView(),
+		"command_service":  c.CommandService.StatusView(),
 		"slack":            c.Slack.StatusView(),
 	}
 }

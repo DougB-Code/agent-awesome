@@ -2,6 +2,7 @@
 package definition
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -70,7 +71,9 @@ func LoadFile(path string, actions ActionCatalog) (LoadedDefinition, error) {
 		return LoadedDefinition{}, fmt.Errorf("read workflow definition %q: %w", path, err)
 	}
 	var def Definition
-	if err := yaml.Unmarshal(body, &def); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(body))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&def); err != nil {
 		return LoadedDefinition{}, fmt.Errorf("decode workflow definition %q: %w", path, err)
 	}
 	if err := Validate(def, actions); err != nil {

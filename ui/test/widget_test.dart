@@ -262,13 +262,6 @@ void main() {
     final controller = _readyController()
       ..automationActionTypes = const <AutomationActionType>[
         AutomationActionType(
-          name: 'agent.run',
-          label: 'Agent Task',
-          description: 'Run a harness-owned reasoning step.',
-          risk: 'reasoning',
-          available: true,
-        ),
-        AutomationActionType(
           name: 'tool.call',
           label: 'Run Tool',
           description: 'Call a harness-exposed tool.',
@@ -276,25 +269,25 @@ void main() {
           available: true,
         ),
         AutomationActionType(
-          name: 'dag.run',
-          label: 'Run Task DAG',
-          description: 'Start a nested task graph.',
-          risk: 'workflow',
+          name: 'mcp.call',
+          label: 'Call MCP Tool',
+          description: 'Call an installed MCP tool endpoint.',
+          risk: 'tool',
           available: true,
         ),
         AutomationActionType(
-          name: 'cli.command',
-          label: 'Run Command',
-          description: 'Draft-only command action.',
-          risk: 'system',
-          available: false,
+          name: 'workflow.run',
+          label: 'Run Workflow',
+          description: 'Start a nested workflow.',
+          risk: 'workflow',
+          available: true,
         ),
       ]
       ..automationToolNames = const <String>{'email.search', 'browser.read'}
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'daily_email',
-          kind: 'dag',
+          kind: 'state_machine',
           name: 'Daily Email',
           hash: 'abc',
         ),
@@ -314,8 +307,8 @@ void main() {
                 'on_entry': <Object>[
                   <String, Object>{
                     'id': 'triage_agent',
-                    'uses': 'agent.run',
-                    'with': <String, Object>{'agent': 'email_triage_agent'},
+                    'uses': 'human.request',
+                    'with': <String, Object>{'prompt': 'Review'},
                   },
                 ],
               },
@@ -324,35 +317,39 @@ void main() {
         ),
         AutomationDraft(
           id: 'draft_task',
-          kind: 'dag',
+          kind: 'task_graph',
           name: 'Task Flow',
           status: 'draft',
           body: <String, dynamic>{
-            'kind': 'dag',
+            'kind': 'task_graph',
             'id': 'task_flow',
             'nodes': <Object>[
               <String, Object>{
                 'id': 'fetch_email',
                 'uses': 'mcp.call',
-                'with': <String, Object>{'tool': 'email.search'},
+                'with': <String, Object>{
+                  'endpoint': 'http://127.0.0.1:8090/mcp',
+                  'tool': 'email.search',
+                  'arguments': <String, Object>{},
+                },
               },
               <String, Object>{
                 'id': 'classify_email',
-                'uses': 'agent.run',
+                'uses': 'tool.call',
                 'depends_on': <Object>['fetch_email'],
-                'with': <String, Object>{'agent': 'email_triage_agent'},
+                'with': <String, Object>{'name': 'email.classify'},
               },
               <String, Object>{
                 'id': 'summarize_email',
-                'uses': 'agent.run',
+                'uses': 'tool.call',
                 'depends_on': <Object>['fetch_email'],
-                'with': <String, Object>{'agent': 'email_triage_agent'},
+                'with': <String, Object>{'name': 'email.summarize'},
               },
               <String, Object>{
                 'id': 'prepare_review',
-                'uses': 'human.request',
+                'uses': 'workflow.run',
                 'depends_on': <Object>['classify_email', 'summarize_email'],
-                'with': <String, Object>{'prompt': 'Review triage'},
+                'with': <String, Object>{'workflow': 'review_flow'},
               },
             ],
           },
@@ -362,7 +359,7 @@ void main() {
         AutomationRun(
           id: 'run_1',
           definitionId: 'daily_email',
-          kind: 'dag',
+          kind: 'state_machine',
           status: 'waiting',
           state: 'running',
         ),
@@ -384,17 +381,6 @@ void main() {
           category: 'approval',
           body: <String, dynamic>{'kind': 'state_machine'},
         ),
-      ]
-      ..automationAgentSpecs = const <AutomationAgentSpec>[
-        AutomationAgentSpec(
-          id: 'email_triage_agent',
-          name: 'Email Triage Agent',
-          instructions: 'Classify email into action buckets.',
-          permissions: AutomationAgentPermissions(
-            filesystemRead: true,
-            networkRead: true,
-          ),
-        ),
       ];
 
     await tester.pumpWidget(
@@ -404,7 +390,7 @@ void main() {
     expect(find.text('Operations'), findsWidgets);
     expect(find.text('Workflows'), findsOneWidget);
     expect(find.text('Tasks'), findsOneWidget);
-    expect(find.text('Agents'), findsOneWidget);
+    expect(find.text('Agents'), findsNothing);
     expect(find.text('MCP Servers'), findsOneWidget);
     expect(find.text('Tools'), findsOneWidget);
     expect(find.text('›'), findsNothing);
@@ -452,14 +438,13 @@ void main() {
     await tester.tap(find.byTooltip('Actions'));
     await tester.pumpAndSettle();
     expect(find.text('ACTIONS'), findsWidgets);
-    expect(find.text('Agent Task'), findsWidgets);
-    expect(find.text('Run Command'), findsWidgets);
+    expect(find.text('Call MCP Tool'), findsWidgets);
+    expect(find.text('Run Command'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tasks')));
     await tester.pumpAndSettle();
 
     expect(find.text('TASKS'), findsWidgets);
-    expect(find.text('TASK DAGS'), findsNothing);
     expect(find.text('Task Flow'), findsWidgets);
     expect(find.text('INPUTS'), findsNothing);
     expect(find.text('OUTPUTS'), findsNothing);
@@ -471,15 +456,15 @@ void main() {
     expect(find.text('prepare_review'), findsWidgets);
     expect(find.text('2 in'), findsOneWidget);
     final fetchFinder = find.byKey(
-      const ValueKey<String>('dag-node-fetch_email'),
+      const ValueKey<String>('task-graph-node-fetch_email'),
     );
     final classifyFinder = find.byKey(
-      const ValueKey<String>('dag-node-classify_email'),
+      const ValueKey<String>('task-graph-node-classify_email'),
     );
     expect(fetchFinder, findsOneWidget);
     expect(classifyFinder, findsOneWidget);
     expect(
-      find.byKey(const ValueKey<String>('dag-stage-drop-1')),
+      find.byKey(const ValueKey<String>('task-graph-stage-drop-1')),
       findsOneWidget,
     );
     final fetchConnect = find.descendant(
@@ -533,7 +518,9 @@ void main() {
     expect(find.byTooltip('Delete connection'), findsOneWidget);
     await tester.tap(
       find.byKey(
-        const ValueKey<String>('dag-edge-delete-fetch_email-classify_email'),
+        const ValueKey<String>(
+          'task-graph-edge-delete-fetch_email-classify_email',
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -559,42 +546,38 @@ void main() {
 
     expect(find.text('NODES'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey<String>('dag-action-agent.run')),
+      find.byKey(const ValueKey<String>('task-graph-action-mcp.call')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('dag-action-tool.call')),
+      find.byKey(const ValueKey<String>('task-graph-action-tool.call')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('dag-action-dag.run')),
+      find.byKey(const ValueKey<String>('task-graph-action-workflow.run')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('dag-action-cli.command')),
+      find.byKey(const ValueKey<String>('task-graph-action-human.request')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey<String>('dag-action-human.request')),
+      find.byKey(const ValueKey<String>('task-graph-action-delay.until')),
       findsNothing,
     );
     expect(
-      find.byKey(const ValueKey<String>('dag-action-delay.until')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('dag-action-workflow.signal')),
+      find.byKey(const ValueKey<String>('task-graph-action-workflow.signal')),
       findsNothing,
     );
     await tester.tap(
-      find.byKey(const ValueKey<String>('dag-action-agent.run')),
+      find.byKey(const ValueKey<String>('task-graph-action-mcp.call')),
     );
     await tester.pump();
 
-    expect(find.text('agent_run_5'), findsWidgets);
+    expect(find.text('mcp_call_5'), findsWidgets);
 
     final newNodeFinder = find.byKey(
-      const ValueKey<String>('dag-node-agent_run_5'),
+      const ValueKey<String>('task-graph-node-mcp_call_5'),
     );
     await tester.ensureVisible(newNodeFinder);
     await tester.pumpAndSettle();
@@ -646,7 +629,7 @@ void main() {
     await tester.tap(newNodeDelete);
     await tester.pumpAndSettle();
 
-    expect(find.text('agent_run_5'), findsNothing);
+    expect(find.text('mcp_call_5'), findsNothing);
 
     await tester.tap(find.byTooltip('Tasks'));
     await tester.pumpAndSettle();
@@ -657,65 +640,14 @@ void main() {
     expect(find.text('SELECTED STEP'), findsOneWidget);
     expect(find.text('Action'), findsOneWidget);
     expect(find.text('Retry delay'), findsOneWidget);
-    expect(find.byTooltip('New task DAG'), findsOneWidget);
-    expect(find.byTooltip('Add DAG node'), findsOneWidget);
-    expect(find.byTooltip('Delete DAG node'), findsOneWidget);
+    expect(find.byTooltip('New task graph'), findsOneWidget);
+    expect(find.byTooltip('Add task node'), findsOneWidget);
+    expect(find.byTooltip('Delete task node'), findsOneWidget);
     expect(find.byTooltip('Validate draft'), findsOneWidget);
     expect(find.byTooltip('Publish draft'), findsOneWidget);
     expect(find.byTooltip('Templates'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Agents')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('AGENT PROFILES'), findsWidgets);
-    expect(find.text('AGENT PROFILE'), findsWidgets);
-    expect(find.text('Email Triage Agent'), findsWidgets);
-    expect(find.text('Instructions'), findsWidgets);
-    expect(find.text('Permissions'), findsWidgets);
-    expect(find.text('Used In'), findsWidgets);
-    expect(find.text('Capabilities'), findsNothing);
-    expect(find.text('Model Policy'), findsNothing);
-    expect(find.text('What this agent should do'), findsNothing);
-    expect(find.text('Output schema JSON'), findsNothing);
-    expect(find.text('Input schema JSON'), findsNothing);
-    expect(find.text('Test examples JSON'), findsNothing);
-    expect(find.text('Risk notes'), findsNothing);
-    await tester.tap(find.text('Instructions').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('What this agent should do'), findsOneWidget);
-    await tester.tap(find.text('Permissions').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Resource permissions'), findsOneWidget);
-    expect(find.byTooltip('Profile'), findsNothing);
-    expect(find.byTooltip('Builder'), findsNothing);
-    expect(find.byTooltip('Test'), findsNothing);
-    expect(find.byTooltip('Audit'), findsNothing);
-
-    await tester.tap(find.text('Used In').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Used In'), findsWidgets);
-    expect(find.text('classify_email'), findsWidgets);
-    expect(find.text('summarize_email'), findsWidgets);
-    expect(find.text('BUILDER PALETTE'), findsNothing);
-    expect(find.text('Canvas'), findsNothing);
-    expect(find.text('Tool Grant'), findsNothing);
-
-    await tester.tap(find.text('Overview').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('AGENT PROFILES'), findsWidgets);
-    expect(find.text('Overview'), findsOneWidget);
-    expect(find.byTooltip('Add to selected draft'), findsNothing);
-    expect(find.byTooltip('Open automation chat'), findsNothing);
-    expect(find.byTooltip('Save agent spec'), findsNothing);
-    expect(find.byTooltip('Delete agent profile'), findsOneWidget);
-    expect(find.byTooltip('AI chat'), findsOneWidget);
-    expect(find.byTooltip('Refresh automations'), findsNothing);
-    expect(find.text('triage_agent'), findsNothing);
-    expect(find.text('prepare_review'), findsNothing);
+    expect(find.byKey(const ValueKey<String>('sidebar-Agents')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
@@ -740,7 +672,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'ready',
-          kind: 'dag',
+          kind: 'state_machine',
           name: 'Ready',
           hash: 'sha256:ready',
         ),
@@ -749,7 +681,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.text('Agents').first);
+    await tester.tap(find.text('Workflows').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Status'), findsNothing);
@@ -767,7 +699,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'daily_email',
-          kind: 'dag',
+          kind: 'state_machine',
           name: 'Daily Email',
           hash: 'abc',
         ),

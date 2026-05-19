@@ -14,7 +14,6 @@ import 'panels/panels.dart';
 const String _automationPanelOperations = 'operations';
 const String _automationPanelWorkflows = 'workflows';
 const String _automationPanelTasks = 'tasks';
-const String _automationPanelAgents = 'agents';
 const String _automationOperationsAreaInbox = 'operations_inbox';
 const String _automationOperationsAreaPublished = 'operations_published';
 const String _automationOperationsAreaRuns = 'operations_runs';
@@ -24,7 +23,6 @@ const String _automationWorkflowAreaActions = 'workflow_actions';
 const String _automationTaskAreaDrafts = 'task_drafts';
 const String _automationTaskAreaTemplates = 'task_templates';
 const String _automationTaskAreaNodes = 'task_nodes';
-const String _automationAgentAreaProfiles = 'agent_profiles';
 
 const String _automationDetailOverview = 'overview';
 const String _automationDetailBuilder = 'builder';
@@ -32,14 +30,11 @@ const String _automationDetailSteps = 'steps';
 const String _automationDetailMap = 'map';
 const String _automationDetailHistory = 'history';
 const String _automationDetailSafety = 'safety';
-const String _automationDetailInstructions = 'instructions';
-const String _automationDetailPermissions = 'permissions';
-const String _automationAgentModeProfile = 'agent_profile';
 
-const Set<String> _taskDagActionNames = <String>{
-  'agent.run',
+const Set<String> _taskGraphActionNames = <String>{
+  'mcp.call',
   'tool.call',
-  'dag.run',
+  'workflow.run',
 };
 
 /// AutomationOperationsCommandPanel runs and observes published workflows.
@@ -104,9 +99,9 @@ class AutomationWorkflowsCommandPanel extends StatelessWidget {
   }
 }
 
-/// AutomationTasksCommandPanel authors bounded DAG task automations.
+/// AutomationTasksCommandPanel authors bounded task-graph automations.
 class AutomationTasksCommandPanel extends StatelessWidget {
-  /// Creates a DAG task authoring panel bound to app state.
+  /// Creates a task-graph authoring panel bound to app state.
   const AutomationTasksCommandPanel({
     super.key,
     required this.controller,
@@ -119,51 +114,17 @@ class AutomationTasksCommandPanel extends StatelessWidget {
   /// Reports active area changes to the root shell command context.
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
-  /// Builds the task DAG command panel.
+  /// Builds the task-graph command panel.
   @override
   Widget build(BuildContext context) {
     return _AutomationFocusedCommandPanel(
       controller: controller,
       panelId: _automationPanelTasks,
       title: 'Tasks',
-      detailTitle: 'Task DAG',
+      detailTitle: 'Task Graph',
       icon: Icons.account_tree_outlined,
       filterHint: 'Filter tasks or nodes...',
       detailModes: _detailModesForPanel(_automationPanelTasks),
-      split: const PanelSplit(left: 0.25, min: 0.12, max: 0.9),
-      onAreaChanged: onAreaChanged,
-    );
-  }
-}
-
-/// AutomationAgentsCommandPanel authors reusable agent step behavior.
-class AutomationAgentsCommandPanel extends StatelessWidget {
-  /// Creates an agent authoring panel bound to app state.
-  const AutomationAgentsCommandPanel({
-    super.key,
-    required this.controller,
-    this.onAreaChanged,
-  });
-
-  /// Shared app controller.
-  final AgentAwesomeAppController controller;
-
-  /// Reports active area changes to the root shell command context.
-  final ValueChanged<SwitcherPanelArea>? onAreaChanged;
-
-  /// Builds the agent builder command panel.
-  @override
-  Widget build(BuildContext context) {
-    return _AutomationFocusedCommandPanel(
-      controller: controller,
-      panelId: _automationPanelAgents,
-      title: 'Agent Profiles',
-      detailTitle: 'Agent Profile',
-      icon: Icons.psychology_outlined,
-      filterHint: 'Filter agents...',
-      detailModes: _detailModesForPanel(_automationPanelAgents),
-      contentBuilder: (query) =>
-          _AutomationAgentContent(controller: controller, query: query),
       split: const PanelSplit(left: 0.25, min: 0.12, max: 0.9),
       onAreaChanged: onAreaChanged,
     );
@@ -179,7 +140,6 @@ class _AutomationFocusedCommandPanel extends StatefulWidget {
     required this.icon,
     required this.filterHint,
     required this.detailModes,
-    this.contentBuilder,
     this.split = const PanelSplit(left: 0.64, min: 0.12, max: 0.9),
     this.onAreaChanged,
   });
@@ -191,7 +151,6 @@ class _AutomationFocusedCommandPanel extends StatefulWidget {
   final IconData icon;
   final String filterHint;
   final List<CommandPanelDetailMode> detailModes;
-  final Widget Function(String query)? contentBuilder;
   final PanelSplit split;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
@@ -202,14 +161,14 @@ class _AutomationFocusedCommandPanel extends StatefulWidget {
 
 class _AutomationFocusedCommandPanelState
     extends State<_AutomationFocusedCommandPanel> {
-  late final _DagActionIntentController _dagActionIntents;
+  late final _TaskGraphActionIntentController _taskGraphActionIntents;
   String _detailModeId = _automationDetailOverview;
 
   /// Triggers the first data load after the focused panel is attached.
   @override
   void initState() {
     super.initState();
-    _dagActionIntents = _DagActionIntentController();
+    _taskGraphActionIntents = _TaskGraphActionIntentController();
     if (widget.panelId == _automationPanelTasks) {
       _detailModeId = _automationDetailBuilder;
     }
@@ -226,7 +185,7 @@ class _AutomationFocusedCommandPanelState
   /// Releases command-panel intent controllers.
   @override
   void dispose() {
-    _dagActionIntents.dispose();
+    _taskGraphActionIntents.dispose();
     super.dispose();
   }
 
@@ -288,7 +247,10 @@ class _AutomationFocusedCommandPanelState
     if (widget.panelId != _automationPanelTasks) {
       return shell;
     }
-    return _DagActionIntentScope(notifier: _dagActionIntents, child: shell);
+    return _TaskGraphActionIntentScope(
+      notifier: _taskGraphActionIntents,
+      child: shell,
+    );
   }
 
   /// Builds quick-access command areas for the current Automations screen.
@@ -368,8 +330,8 @@ class _AutomationFocusedCommandPanelState
           builder: (query) => _AutomationDraftsContent(
             controller: widget.controller,
             query: query,
-            kind: 'dag',
-            emptyLabel: 'No task DAG drafts',
+            kind: 'task_graph',
+            emptyLabel: 'No task graph drafts',
           ),
         ),
         SwitcherPanelArea(
@@ -379,7 +341,7 @@ class _AutomationFocusedCommandPanelState
           builder: (query) => _AutomationTemplatesContent(
             controller: widget.controller,
             query: query,
-            kind: 'dag',
+            kind: 'task_graph',
           ),
         ),
         SwitcherPanelArea(
@@ -393,23 +355,13 @@ class _AutomationFocusedCommandPanelState
         ),
       ];
     }
-    if (widget.panelId == _automationPanelAgents) {
-      return <SwitcherPanelArea>[
-        SwitcherPanelArea(
-          id: _automationAgentAreaProfiles,
-          title: widget.title,
-          icon: widget.icon,
-          builder: widget.contentBuilder ?? (_) => const SizedBox.shrink(),
-        ),
-      ];
-    }
     if (widget.panelId != _automationPanelTasks) {
       return <SwitcherPanelArea>[
         SwitcherPanelArea(
           id: widget.panelId,
           title: widget.title,
           icon: widget.icon,
-          builder: widget.contentBuilder ?? (_) => const SizedBox.shrink(),
+          builder: (_) => const SizedBox.shrink(),
         ),
       ];
     }
@@ -433,14 +385,14 @@ class _AutomationFocusedCommandPanelState
   }
 }
 
-class _DagActionIntentController extends ChangeNotifier {
+class _TaskGraphActionIntentController extends ChangeNotifier {
   String _actionName = '';
   int _revision = 0;
 
   String get actionName => _actionName;
   int get revision => _revision;
 
-  /// Publishes one left-panel DAG action request to the active graph editor.
+  /// Publishes one left-panel task action request to the active graph editor.
   void addAction(String actionName) {
     final trimmed = actionName.trim();
     if (trimmed.isEmpty) {
@@ -452,14 +404,17 @@ class _DagActionIntentController extends ChangeNotifier {
   }
 }
 
-class _DagActionIntentScope
-    extends InheritedNotifier<_DagActionIntentController> {
-  const _DagActionIntentScope({required super.notifier, required super.child});
+class _TaskGraphActionIntentScope
+    extends InheritedNotifier<_TaskGraphActionIntentController> {
+  const _TaskGraphActionIntentScope({
+    required super.notifier,
+    required super.child,
+  });
 
-  /// Finds the current DAG action intent publisher for the Tasks screen.
-  static _DagActionIntentController? maybeOf(BuildContext context) {
+  /// Finds the current task action intent publisher for the Tasks screen.
+  static _TaskGraphActionIntentController? maybeOf(BuildContext context) {
     return context
-        .dependOnInheritedWidgetOfExactType<_DagActionIntentScope>()
+        .dependOnInheritedWidgetOfExactType<_TaskGraphActionIntentScope>()
         ?.notifier;
   }
 }
@@ -481,8 +436,7 @@ class _AutomationPanelActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        if (panelId != _automationPanelAgents &&
-            panelId != _automationPanelTasks) ...<Widget>[
+        if (panelId != _automationPanelTasks) ...<Widget>[
           PanelIconButton(
             icon: Icons.refresh,
             tooltip: 'Refresh automations',
@@ -510,23 +464,15 @@ class _AutomationPanelActions extends StatelessWidget {
             areaId == _automationTaskAreaDrafts)
           PanelIconButton(
             icon: Icons.add,
-            tooltip: 'New task DAG',
+            tooltip: 'New task graph',
             onPressed: controller.automationsBusy
                 ? null
                 : () => unawaited(
                     controller.createAutomationDraftFromUi(
-                      kind: 'dag',
-                      name: 'New Task DAG',
+                      kind: 'task_graph',
+                      name: 'New Task Graph',
                     ),
                   ),
-          ),
-        if (panelId == _automationPanelAgents)
-          PanelIconButton(
-            icon: Icons.add,
-            tooltip: 'New agent profile',
-            onPressed: controller.automationsBusy
-                ? null
-                : () => unawaited(controller.createAutomationAgentSpecFromUi()),
           ),
       ],
     );
@@ -568,7 +514,8 @@ class _AutomationDetailActions extends StatelessWidget {
         panelId == _automationPanelWorkflows ||
         panelId == _automationPanelTasks) {
       final effectiveKind =
-          kind ?? (panelId == _automationPanelTasks ? 'dag' : 'state_machine');
+          kind ??
+          (panelId == _automationPanelTasks ? 'task_graph' : 'state_machine');
       final draft = _selectedAutomationDraftForKind(controller, effectiveKind);
       if (draft == null) {
         return const SizedBox.shrink();
@@ -597,19 +544,7 @@ class _AutomationDetailActions extends StatelessWidget {
         ],
       );
     }
-    if (panelId != _automationPanelAgents) {
-      return const SizedBox.shrink();
-    }
-    return PanelIconButton(
-      icon: Icons.delete_outline,
-      tooltip: 'Delete agent profile',
-      onPressed:
-          controller.automationsBusy ||
-              controller.selectedAutomationAgentSpec == null
-          ? null
-          : () =>
-                unawaited(controller.deleteSelectedAutomationAgentSpecFromUi()),
-    );
+    return const SizedBox.shrink();
   }
 }
 
@@ -729,14 +664,6 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
           icon: Icons.verified_user_outlined,
         ),
       ];
-    case _automationPanelAgents:
-      return const <CommandPanelDetailMode>[
-        CommandPanelDetailMode(
-          id: _automationAgentModeProfile,
-          label: 'Profile',
-          icon: Icons.info_outline,
-        ),
-      ];
     default:
       return const <CommandPanelDetailMode>[];
   }
@@ -744,32 +671,7 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
 
 /// Returns second-level tabs available inside the selected right workspace.
 List<ShellTab> _detailTabsForMode(String panelId, String modeId) {
-  if (panelId != _automationPanelAgents ||
-      modeId != _automationAgentModeProfile) {
-    return const <ShellTab>[];
-  }
-  return const <ShellTab>[
-    ShellTab(
-      id: _automationDetailOverview,
-      label: 'Overview',
-      icon: Icons.info_outline,
-    ),
-    ShellTab(
-      id: _automationDetailInstructions,
-      label: 'Instructions',
-      icon: Icons.chat_bubble_outline,
-    ),
-    ShellTab(
-      id: _automationDetailPermissions,
-      label: 'Permissions',
-      icon: Icons.lock_outline,
-    ),
-    ShellTab(
-      id: _automationDetailSteps,
-      label: 'Used In',
-      icon: Icons.call_split_outlined,
-    ),
-  ];
+  return const <ShellTab>[];
 }
 
 class _AutomationInboxContent extends StatelessWidget {
@@ -931,7 +833,7 @@ class _AutomationActionPaletteContent extends StatelessWidget {
       controller,
       'state_machine',
     );
-    return _DagActionPalette(
+    return _TaskGraphActionPalette(
       actionTypes: actionTypes,
       query: query,
       onAddAction: (actionName) {
@@ -956,21 +858,24 @@ class _AutomationTaskNodePaletteContent extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
-  /// Builds the node-type quick access panel for task DAG authoring.
+  /// Builds the node-type quick access panel for task-graph authoring.
   @override
   Widget build(BuildContext context) {
-    final selectedDraft = _selectedAutomationDraftForKind(controller, 'dag');
+    final selectedDraft = _selectedAutomationDraftForKind(
+      controller,
+      'task_graph',
+    );
     if (selectedDraft == null) {
       return Center(
         child: SelectableText(
-          'Select a task DAG',
+          'Select a task graph',
           style: TextStyle(color: context.agentAwesomeColors.muted),
         ),
       );
     }
-    final actionIntents = _DagActionIntentScope.maybeOf(context);
-    return _DagActionPalette(
-      actionTypes: _resolvedTaskDagActionTypes(controller),
+    final actionIntents = _TaskGraphActionIntentScope.maybeOf(context);
+    return _TaskGraphActionPalette(
+      actionTypes: _resolvedTaskGraphActionTypes(controller),
       query: query,
       onAddAction: (actionName) {
         if (actionIntents != null) {
@@ -986,32 +891,6 @@ class _AutomationTaskNodePaletteContent extends StatelessWidget {
           controller.addAutomationActionToSelectedDraftFromUi(actionName),
         );
       },
-    );
-  }
-}
-
-class _AutomationAgentContent extends StatelessWidget {
-  const _AutomationAgentContent({
-    required this.controller,
-    required this.query,
-  });
-
-  final AgentAwesomeAppController controller;
-  final String query;
-
-  /// Builds the reusable agent profile list.
-  @override
-  Widget build(BuildContext context) {
-    final specs = _filterAgentSpecs(controller.automationAgentSpecs, query);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        if (specs.isEmpty)
-          const PanelEmptyBlock(label: 'No agent profiles')
-        else
-          for (final spec in specs)
-            _AgentSpecTile(controller: controller, spec: spec),
-      ],
     );
   }
 }
@@ -1057,16 +936,14 @@ class _AutomationDetailContent extends StatelessWidget {
     }
     if (areaId == _automationPanelWorkflows ||
         areaId == _automationPanelTasks) {
-      final kind = areaId == _automationPanelTasks ? 'dag' : 'state_machine';
+      final kind = areaId == _automationPanelTasks
+          ? 'task_graph'
+          : 'state_machine';
       return _DraftDetail(
         controller: controller,
         modeId: modeId,
         draft: _selectedAutomationDraftForKind(controller, kind),
       );
-    }
-    if (areaId == _automationPanelAgents ||
-        areaId == _automationAgentAreaProfiles) {
-      return _AgentDetail(controller: controller, tabId: tabId);
     }
     return _OperationsDetail(controller: controller, modeId: modeId);
   }
@@ -1162,8 +1039,8 @@ class _DraftDetail extends StatelessWidget {
     if (selectedDraft == null) {
       return const PanelEmptyBlock(label: 'No draft selected');
     }
-    if (selectedDraft.kind == 'dag') {
-      return _DagDraftDetail(
+    if (selectedDraft.kind == 'task_graph') {
+      return _TaskGraphDraftDetail(
         controller: controller,
         modeId: modeId,
         draft: selectedDraft,
@@ -1210,8 +1087,8 @@ class _DraftOverview extends StatelessWidget {
   }
 }
 
-class _DagDraftDetail extends StatelessWidget {
-  const _DagDraftDetail({
+class _TaskGraphDraftDetail extends StatelessWidget {
+  const _TaskGraphDraftDetail({
     required this.controller,
     required this.modeId,
     required this.draft,
@@ -1221,24 +1098,24 @@ class _DagDraftDetail extends StatelessWidget {
   final String modeId;
   final AutomationDraft draft;
 
-  /// Builds task DAG-specific detail views.
+  /// Builds task-graph-specific detail views.
   @override
   Widget build(BuildContext context) {
     if (modeId == _automationDetailSafety) {
       return _ValidationDetail(draft: draft);
     }
-    return _DagDraftEditor(
+    return _TaskGraphDraftEditor(
       key: ValueKey<String>('${draft.id}:$modeId'),
       controller: controller,
       draft: draft,
       view: modeId == _automationDetailOverview
-          ? _DagDraftEditorView.overview
-          : _DagDraftEditorView.builder,
+          ? _TaskGraphDraftEditorView.overview
+          : _TaskGraphDraftEditorView.builder,
     );
   }
 }
 
-enum _DagDraftEditorView {
+enum _TaskGraphDraftEditorView {
   /// Dedicated visual graph authoring surface.
   builder,
 
@@ -1246,8 +1123,8 @@ enum _DagDraftEditorView {
   overview,
 }
 
-class _DagDraftEditor extends StatefulWidget {
-  const _DagDraftEditor({
+class _TaskGraphDraftEditor extends StatefulWidget {
+  const _TaskGraphDraftEditor({
     super.key,
     required this.controller,
     required this.draft,
@@ -1256,18 +1133,18 @@ class _DagDraftEditor extends StatefulWidget {
 
   final AgentAwesomeAppController controller;
   final AutomationDraft draft;
-  final _DagDraftEditorView view;
+  final _TaskGraphDraftEditorView view;
 
   @override
-  State<_DagDraftEditor> createState() => _DagDraftEditorState();
+  State<_TaskGraphDraftEditor> createState() => _TaskGraphDraftEditorState();
 }
 
-class _DagDraftEditorState extends State<_DagDraftEditor> {
+class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   static const Duration _saveDelay = Duration(milliseconds: 500);
 
   late final TextEditingController _nameController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _dagIdController;
+  late final TextEditingController _taskGraphIdController;
   late final TextEditingController _nodeIdController;
   late final TextEditingController _timeoutController;
   late final TextEditingController _retryController;
@@ -1289,20 +1166,19 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   List<Map<String, dynamic>> _nodes = <Map<String, dynamic>>[];
   Set<String> _dependsOn = <String>{};
   String _selectedNodeId = '';
-  String _selectedAction = 'agent.run';
-  String _selectedAgentId = '';
+  String _selectedAction = 'tool.call';
   String _message = '';
   String _lastSavedFingerprint = '';
-  _DagActionIntentController? _dagActionIntents;
-  int _lastDagActionIntentRevision = 0;
+  _TaskGraphActionIntentController? _taskGraphActionIntents;
+  int _lastTaskGraphActionIntentRevision = 0;
 
-  /// Initializes DAG editor controllers from the selected draft.
+  /// Initializes task-graph editor controllers from the selected draft.
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController();
     _descriptionController = TextEditingController();
-    _dagIdController = TextEditingController();
+    _taskGraphIdController = TextEditingController();
     _nodeIdController = TextEditingController();
     _timeoutController = TextEditingController();
     _retryController = TextEditingController();
@@ -1326,34 +1202,34 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
     _loadDraft(widget.draft);
   }
 
-  /// Reloads local fields when a different DAG draft is selected.
+  /// Reloads local fields when a different task-graph draft is selected.
   @override
-  void didUpdateWidget(covariant _DagDraftEditor oldWidget) {
+  void didUpdateWidget(covariant _TaskGraphDraftEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.draft.id != widget.draft.id) {
       _loadDraft(widget.draft);
     }
   }
 
-  /// Subscribes to left-panel node creation requests for this DAG editor.
+  /// Subscribes to left-panel node creation requests for this task-graph editor.
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final nextIntents = _DagActionIntentScope.maybeOf(context);
-    if (nextIntents == _dagActionIntents) {
+    final nextIntents = _TaskGraphActionIntentScope.maybeOf(context);
+    if (nextIntents == _taskGraphActionIntents) {
       return;
     }
-    _dagActionIntents?.removeListener(_handleDagActionIntent);
-    _dagActionIntents = nextIntents;
-    _lastDagActionIntentRevision = nextIntents?.revision ?? 0;
-    _dagActionIntents?.addListener(_handleDagActionIntent);
+    _taskGraphActionIntents?.removeListener(_handleTaskGraphActionIntent);
+    _taskGraphActionIntents = nextIntents;
+    _lastTaskGraphActionIntentRevision = nextIntents?.revision ?? 0;
+    _taskGraphActionIntents?.addListener(_handleTaskGraphActionIntent);
   }
 
-  /// Releases DAG editor controllers and pending saves.
+  /// Releases task-graph editor controllers and pending saves.
   @override
   void dispose() {
     _saveTimer?.cancel();
-    _dagActionIntents?.removeListener(_handleDagActionIntent);
+    _taskGraphActionIntents?.removeListener(_handleTaskGraphActionIntent);
     for (final controller in _controllers) {
       controller.removeListener(_scheduleSave);
       controller.dispose();
@@ -1361,20 +1237,21 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
     super.dispose();
   }
 
-  /// Adds the latest left-panel action request to the local DAG graph.
-  void _handleDagActionIntent() {
-    final intents = _dagActionIntents;
-    if (intents == null || intents.revision == _lastDagActionIntentRevision) {
+  /// Adds the latest left-panel action request to the local task graph.
+  void _handleTaskGraphActionIntent() {
+    final intents = _taskGraphActionIntents;
+    if (intents == null ||
+        intents.revision == _lastTaskGraphActionIntentRevision) {
       return;
     }
-    _lastDagActionIntentRevision = intents.revision;
+    _lastTaskGraphActionIntentRevision = intents.revision;
     _addNode(intents.actionName, null);
   }
 
   List<TextEditingController> get _controllers => <TextEditingController>[
     _nameController,
     _descriptionController,
-    _dagIdController,
+    _taskGraphIdController,
     _nodeIdController,
     _timeoutController,
     _retryController,
@@ -1394,16 +1271,16 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
     _payloadController,
   ];
 
-  /// Builds the DAG editor surface.
+  /// Builds the task-graph editor surface.
   @override
   Widget build(BuildContext context) {
-    if (widget.view == _DagDraftEditorView.builder) {
+    if (widget.view == _TaskGraphDraftEditorView.builder) {
       return _buildGraphBuilder();
     }
     return _buildOverviewEditor(context);
   }
 
-  /// Builds the dedicated visual DAG graph builder.
+  /// Builds the dedicated visual task-graph builder.
   Widget _buildGraphBuilder() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1415,7 +1292,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
           child: SizedBox(
             height: designerHeight,
-            child: _DagDesignerSurface(
+            child: _TaskGraphDesignerSurface(
               nodes: _nodes,
               actionTypes: _resolvedActionTypes(),
               selectedNodeId: _selectedNodeId,
@@ -1450,7 +1327,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
         PanelSectionBlock.plain(
-          title: 'Task DAG',
+          title: 'Task Graph',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -1463,8 +1340,8 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
               ),
               const SizedBox(height: 10),
               _AutomationTextField(
-                controller: _dagIdController,
-                label: 'DAG id',
+                controller: _taskGraphIdController,
+                label: 'Graph id',
               ),
             ],
           ),
@@ -1486,7 +1363,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
       title: 'Steps',
       trailing: PanelIconButton(
         icon: Icons.add,
-        tooltip: 'Add DAG node',
+        tooltip: 'Add task node',
         onPressed: widget.controller.automationsBusy ? null : _addNode,
       ),
       child: _nodes.isEmpty
@@ -1505,7 +1382,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
       title: 'Selected Step',
       trailing: PanelIconButton(
         icon: Icons.delete_outline,
-        tooltip: 'Delete DAG node',
+        tooltip: 'Delete task node',
         onPressed: widget.controller.automationsBusy ? null : _deleteNode,
       ),
       child: Column(
@@ -1520,13 +1397,13 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
             onChanged: (value) {
               setState(() {
                 _selectedAction = value;
-                _loadArgs(_defaultDagActionArgs(value));
+                _loadArgs(_defaultTaskGraphActionArgs(value));
                 _scheduleSave();
               });
             },
           ),
           const SizedBox(height: 10),
-          _DagDependencySelector(
+          _TaskGraphDependencySelector(
             nodeIds: _nodes.map(_nodeId).where((id) => id.isNotEmpty).toList(),
             selectedNodeId: _selectedNodeId,
             dependsOn: _dependsOn,
@@ -1577,44 +1454,6 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
 
   Widget _buildActionFields() {
     switch (_selectedAction) {
-      case 'agent.run':
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            _AutomationDropdown(
-              label: 'Agent',
-              value: _selectedAgentId,
-              values: <String>[
-                '',
-                ...widget.controller.automationAgentSpecs.map(
-                  (spec) => spec.id,
-                ),
-              ],
-              labels: <String, String>{
-                '': 'Inline instructions',
-                for (final spec in widget.controller.automationAgentSpecs)
-                  spec.id: spec.name,
-              },
-              onChanged: (value) => setState(() {
-                _selectedAgentId = value;
-                _scheduleSave();
-              }),
-            ),
-            const SizedBox(height: 10),
-            _AutomationTextField(
-              controller: _instructionsController,
-              label: 'Instructions',
-              maxLines: 5,
-            ),
-            const SizedBox(height: 10),
-            _AutomationTextField(
-              controller: _agentInputController,
-              label: 'Input JSON',
-              maxLines: 4,
-              monospace: true,
-            ),
-          ],
-        );
       case 'tool.call':
         final toolNames = widget.controller.automationToolNames.toList()
           ..sort();
@@ -1654,7 +1493,26 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
             ),
           ],
         );
-      case 'dag.run':
+      case 'mcp.call':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _AutomationTextField(
+              controller: _endpointController,
+              label: 'MCP endpoint',
+            ),
+            const SizedBox(height: 10),
+            _AutomationTextField(controller: _toolController, label: 'Tool'),
+            const SizedBox(height: 10),
+            _AutomationTextField(
+              controller: _argumentsController,
+              label: 'Arguments JSON',
+              maxLines: 5,
+              monospace: true,
+            ),
+          ],
+        );
+      case 'workflow.run':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -1674,7 +1532,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
       default:
         return PanelEmptyBlock(
           label:
-              '${_fallbackActionLabel(_selectedAction)} is unsupported in Task DAGs',
+              '${_fallbackActionLabel(_selectedAction)} is unsupported in task graphs',
         );
     }
   }
@@ -1682,9 +1540,9 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   void _loadDraft(AutomationDraft draft) {
     _nameController.text = draft.name;
     _descriptionController.text = draft.description;
-    final body = _normalizedDagBody(draft);
-    _dagIdController.text = '${body['id'] ?? draft.id}';
-    _nodes = _dagNodes(body);
+    final body = _normalizedTaskGraphBody(draft);
+    _taskGraphIdController.text = '${body['id'] ?? draft.id}';
+    _nodes = _taskGraphNodes(body);
     _selectedNodeId = _nodes.isEmpty ? '' : _nodeId(_nodes.first);
     _loadSelectedNode();
     _lastSavedFingerprint = _draftFingerprint(
@@ -1729,7 +1587,6 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   }
 
   void _loadArgs(Map<String, dynamic> args) {
-    _selectedAgentId = '${args['agent'] ?? ''}';
     _instructionsController.text = '${args['instructions'] ?? ''}';
     _agentInputController.text = _jsonText(_map(args['input']));
     _endpointController.text = '${args['endpoint'] ?? ''}';
@@ -1749,19 +1606,19 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
     );
   }
 
-  void _addNode([String actionName = 'agent.run', int? stageIndex]) {
+  void _addNode([String actionName = 'tool.call', int? stageIndex]) {
     final dependencies = stageIndex == null
         ? const <String>[]
         : _dependenciesForStage(stageIndex);
     setState(() {
-      final id = _nextDagNodeId(_nodes, actionName);
+      final id = _nextTaskGraphNodeId(_nodes, actionName);
       _nodes.add(<String, dynamic>{
         'id': id,
         'uses': actionName,
         if (dependencies.isNotEmpty) 'depends_on': dependencies,
-        'with': _defaultDagActionArgs(actionName),
+        'with': _defaultTaskGraphActionArgs(actionName),
       });
-      _nodes = _flattenDagLevels(_dagLevels(_nodes));
+      _nodes = _flattenTaskGraphLevels(_taskGraphLevels(_nodes));
       _selectedNodeId = id;
       _loadSelectedNode();
       _scheduleSave();
@@ -1770,14 +1627,14 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
 
   void _addNodeAfter(String actionName, String dependencyId) {
     setState(() {
-      final id = _nextDagNodeId(_nodes, actionName);
+      final id = _nextTaskGraphNodeId(_nodes, actionName);
       _nodes.add(<String, dynamic>{
         'id': id,
         'uses': actionName,
         'depends_on': <String>[dependencyId],
-        'with': _defaultDagActionArgs(actionName),
+        'with': _defaultTaskGraphActionArgs(actionName),
       });
-      _nodes = _flattenDagLevels(_dagLevels(_nodes));
+      _nodes = _flattenTaskGraphLevels(_taskGraphLevels(_nodes));
       _selectedNodeId = id;
       _loadSelectedNode();
       _scheduleSave();
@@ -1792,7 +1649,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
     setState(() {
       final node = Map<String, dynamic>.from(_nodes[index]);
       node['uses'] = actionName;
-      node['with'] = _defaultDagActionArgs(actionName);
+      node['with'] = _defaultTaskGraphActionArgs(actionName);
       _nodes[index] = node;
       _selectedNodeId = nodeId;
       _loadSelectedNode();
@@ -1805,7 +1662,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
       return;
     }
     if (delta.dx.abs() > delta.dy.abs() && delta.dx.abs() > 92) {
-      final levels = _dagLevels(_nodes);
+      final levels = _taskGraphLevels(_nodes);
       final stage = _stageIndexForNode(levels, nodeId);
       if (stage < 0) {
         return;
@@ -1843,7 +1700,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   }
 
   void _moveNodeStageBy(String nodeId, int delta) {
-    final levels = _dagLevels(_nodes);
+    final levels = _taskGraphLevels(_nodes);
     final stageIndex = _stageIndexForNode(levels, nodeId);
     if (stageIndex < 0) {
       return;
@@ -1874,7 +1731,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
         _nodeId(node) == nodeId ? moved : Map<String, dynamic>.from(node),
     ];
     setState(() {
-      _nodes = _flattenDagLevels(_dagLevels(nextNodes));
+      _nodes = _flattenTaskGraphLevels(_taskGraphLevels(nextNodes));
       _selectedNodeId = nodeId;
       _loadSelectedNode();
       _message = '';
@@ -1886,7 +1743,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
     int stageIndex, {
     String excludeNodeId = '',
   }) {
-    final levels = _dagLevels(_nodes);
+    final levels = _taskGraphLevels(_nodes);
     final targetStage = stageIndex.clamp(0, levels.length);
     final previousStage = targetStage <= 0
         ? const <Map<String, dynamic>>[]
@@ -1905,7 +1762,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
     if (draggedNodeId == targetNodeId) {
       return;
     }
-    final levels = _dagLevels(_nodes);
+    final levels = _taskGraphLevels(_nodes);
     final draggedStage = _stageIndexForNode(levels, draggedNodeId);
     final targetStage = _stageIndexForNode(levels, targetNodeId);
     if (draggedStage == targetStage) {
@@ -1939,7 +1796,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   }
 
   void _reorderNodeWithinStage(String nodeId, int direction) {
-    final levels = _dagLevels(_nodes);
+    final levels = _taskGraphLevels(_nodes);
     final stageIndex = _stageIndexForNode(levels, nodeId);
     if (stageIndex < 0) {
       return;
@@ -2056,7 +1913,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
             : Map<String, dynamic>.from(_nodes[index]),
     ];
     setState(() {
-      _nodes = _flattenDagLevels(_dagLevels(nextNodes));
+      _nodes = _flattenTaskGraphLevels(_taskGraphLevels(nextNodes));
       _selectedNodeId = selectedNodeId ?? targetNodeId;
       _loadSelectedNode();
       _message = '';
@@ -2087,9 +1944,9 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   }
 
   AutomationDraft? _currentDraft() {
-    final dagId = _dagIdController.text.trim().isEmpty
+    final taskGraphId = _taskGraphIdController.text.trim().isEmpty
         ? widget.draft.id
-        : _dagIdController.text.trim();
+        : _taskGraphIdController.text.trim();
     final node = _selectedNode();
     final nodeIndex = node == null
         ? -1
@@ -2110,7 +1967,11 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
           : _nameController.text.trim(),
       description: _descriptionController.text.trim(),
       status: widget.draft.status,
-      body: <String, dynamic>{'kind': 'dag', 'id': dagId, 'nodes': _nodes},
+      body: <String, dynamic>{
+        'kind': 'task_graph',
+        'id': taskGraphId,
+        'nodes': _nodes,
+      },
       validation: widget.draft.validation,
       createdAt: widget.draft.createdAt,
       updatedAt: widget.draft.updatedAt,
@@ -2153,19 +2014,6 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
 
   Map<String, dynamic>? _currentArgs() {
     switch (_selectedAction) {
-      case 'agent.run':
-        final input = _parseJsonObject(
-          _agentInputController.text,
-          'Input JSON',
-        );
-        if (input == null) {
-          return null;
-        }
-        return <String, dynamic>{
-          if (_selectedAgentId.isNotEmpty) 'agent': _selectedAgentId,
-          'instructions': _instructionsController.text.trim(),
-          'input': input,
-        };
       case 'tool.call':
         final args = _parseJsonObject(
           _argumentsController.text,
@@ -2180,7 +2028,20 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
             'domain_id': _domainIdController.text.trim(),
           'arguments': args,
         };
-      case 'dag.run':
+      case 'mcp.call':
+        final args = _parseJsonObject(
+          _argumentsController.text,
+          'Arguments JSON',
+        );
+        if (args == null) {
+          return null;
+        }
+        return <String, dynamic>{
+          'endpoint': _endpointController.text.trim(),
+          'tool': _toolController.text.trim(),
+          'arguments': args,
+        };
+      case 'workflow.run':
         final input = _parseJsonObject(_payloadController.text, 'Input JSON');
         if (input == null) {
           return null;
@@ -2242,7 +2103,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   }
 
   List<String> _actionNames() {
-    final names = _resolvedTaskDagActionTypes(
+    final names = _resolvedTaskGraphActionTypes(
       widget.controller,
     ).map((action) => action.name).toList();
     final selected = _selectedAction.trim();
@@ -2253,7 +2114,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
   }
 
   List<AutomationActionType> _resolvedActionTypes() {
-    final actions = _resolvedTaskDagActionTypes(widget.controller).toList();
+    final actions = _resolvedTaskGraphActionTypes(widget.controller).toList();
     final actionNames = actions.map((action) => action.name).toSet();
     for (final node in _nodes) {
       final uses = _nodeUses(node);
@@ -2262,7 +2123,7 @@ class _DagDraftEditorState extends State<_DagDraftEditor> {
           AutomationActionType(
             name: uses,
             label: _fallbackActionLabel(uses),
-            description: 'Unsupported in Task DAGs',
+            description: 'Unsupported in task graphs',
             risk: 'unsupported',
             available: false,
           ),
@@ -2284,13 +2145,11 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
   };
   final names = known.keys.isEmpty
       ? const <String>[
-          'agent.run',
           'tool.call',
           'mcp.call',
-          'cli.command',
           'human.request',
           'delay.until',
-          'dag.run',
+          'workflow.run',
           'workflow.signal',
         ]
       : known.keys.toList();
@@ -2307,8 +2166,8 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
   ];
 }
 
-/// Returns action types that may be newly created in Task DAGs.
-List<AutomationActionType> _resolvedTaskDagActionTypes(
+/// Returns action types that may be newly created in task graphs.
+List<AutomationActionType> _resolvedTaskGraphActionTypes(
   AgentAwesomeAppController controller,
 ) {
   final known = <String, AutomationActionType>{
@@ -2316,7 +2175,7 @@ List<AutomationActionType> _resolvedTaskDagActionTypes(
       action.name: action,
   };
   return <AutomationActionType>[
-    for (final name in _taskDagActionNames)
+    for (final name in _taskGraphActionNames)
       known[name] ??
           AutomationActionType(
             name: name,
@@ -2369,8 +2228,8 @@ class _AutomationDropdown extends StatelessWidget {
   }
 }
 
-class _DagDependencySelector extends StatelessWidget {
-  const _DagDependencySelector({
+class _TaskGraphDependencySelector extends StatelessWidget {
+  const _TaskGraphDependencySelector({
     required this.nodeIds,
     required this.selectedNodeId,
     required this.dependsOn,
@@ -2382,7 +2241,7 @@ class _DagDependencySelector extends StatelessWidget {
   final Set<String> dependsOn;
   final ValueChanged<Set<String>> onChanged;
 
-  /// Builds dependency checkboxes for DAG nodes.
+  /// Builds dependency checkboxes for task nodes.
   @override
   Widget build(BuildContext context) {
     final choices = nodeIds.where((id) => id != selectedNodeId).toList();
@@ -2412,8 +2271,8 @@ class _DagDependencySelector extends StatelessWidget {
   }
 }
 
-class _DagDesignerSurface extends StatefulWidget {
-  const _DagDesignerSurface({
+class _TaskGraphDesignerSurface extends StatefulWidget {
+  const _TaskGraphDesignerSurface({
     required this.nodes,
     required this.actionTypes,
     required this.selectedNodeId,
@@ -2451,27 +2310,28 @@ class _DagDesignerSurface extends StatefulWidget {
   final void Function(String nodeId, int delta) onMoveNodeStageBy;
 
   @override
-  State<_DagDesignerSurface> createState() => _DagDesignerSurfaceState();
+  State<_TaskGraphDesignerSurface> createState() =>
+      _TaskGraphDesignerSurfaceState();
 }
 
-class _DagDesignerSurfaceState extends State<_DagDesignerSurface> {
+class _TaskGraphDesignerSurfaceState extends State<_TaskGraphDesignerSurface> {
   static const double _nodeWidth = 230;
   static const double _nodeCardHeight = 136;
   static const double _nodeHeight = 178;
 
   double _zoom = 1;
   String _connectionSourceId = '';
-  _DagEdgeId? _selectedEdge;
+  _TaskGraphEdgeId? _selectedEdge;
 
-  /// Builds the professional DAG designer surface.
+  /// Builds the professional task-graph designer surface.
   @override
   Widget build(BuildContext context) {
     return PanelSurface(
       fillWidth: true,
       clipBehavior: Clip.hardEdge,
       style: PanelSurfaceStyle.card,
-      child: _DagCanvasViewport(
-        key: const ValueKey<String>('dag-canvas'),
+      child: _TaskGraphCanvasViewport(
+        key: const ValueKey<String>('task-graph-canvas'),
         nodes: widget.nodes,
         actionTypes: widget.actionTypes,
         selectedNodeId: widget.selectedNodeId,
@@ -2527,14 +2387,14 @@ class _DagDesignerSurfaceState extends State<_DagDesignerSurface> {
   }
 
   /// Selects a canvas edge and exits node connect mode.
-  void _selectEdge(_DagEdgeId edge) {
+  void _selectEdge(_TaskGraphEdgeId edge) {
     setState(() {
       _connectionSourceId = '';
       _selectedEdge = edge;
     });
   }
 
-  /// Deletes the selected canvas edge from the DAG dependencies.
+  /// Deletes the selected canvas edge from task dependencies.
   void _deleteSelectedEdge() {
     final edge = _selectedEdge;
     if (edge == null) {
@@ -2545,8 +2405,8 @@ class _DagDesignerSurfaceState extends State<_DagDesignerSurface> {
   }
 }
 
-class _DagActionPalette extends StatelessWidget {
-  const _DagActionPalette({
+class _TaskGraphActionPalette extends StatelessWidget {
+  const _TaskGraphActionPalette({
     required this.actionTypes,
     required this.query,
     required this.onAddAction,
@@ -2556,7 +2416,7 @@ class _DagActionPalette extends StatelessWidget {
   final String query;
   final ValueChanged<String> onAddAction;
 
-  /// Builds the draggable action palette for DAG node creation.
+  /// Builds the draggable action palette for task node creation.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
@@ -2585,7 +2445,7 @@ class _DagActionPalette extends StatelessWidget {
                           const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final action = filtered[index];
-                        return _DagActionPaletteTile(
+                        return _TaskGraphActionPaletteTile(
                           action: action,
                           onAdd: () => onAddAction(action.name),
                         );
@@ -2599,8 +2459,11 @@ class _DagActionPalette extends StatelessWidget {
   }
 }
 
-class _DagActionPaletteTile extends StatelessWidget {
-  const _DagActionPaletteTile({required this.action, required this.onAdd});
+class _TaskGraphActionPaletteTile extends StatelessWidget {
+  const _TaskGraphActionPaletteTile({
+    required this.action,
+    required this.onAdd,
+  });
 
   final AutomationActionType action;
   final VoidCallback onAdd;
@@ -2615,7 +2478,7 @@ class _DagActionPaletteTile extends StatelessWidget {
       style: PanelSurfaceStyle.card,
       child: Row(
         children: <Widget>[
-          _DagNodeIcon(actionName: action.name, size: 32),
+          _TaskGraphNodeIcon(actionName: action.name, size: 32),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -2643,15 +2506,15 @@ class _DagActionPaletteTile extends StatelessWidget {
         ],
       ),
     );
-    return Draggable<_DagActionDragData>(
-      data: _DagActionDragData(action.name),
+    return Draggable<_TaskGraphActionDragData>(
+      data: _TaskGraphActionDragData(action.name),
       feedback: SizedBox(
         width: 210,
         child: Material(color: Colors.transparent, child: tile),
       ),
       childWhenDragging: Opacity(opacity: 0.5, child: tile),
       child: InkWell(
-        key: ValueKey<String>('dag-action-${action.name}'),
+        key: ValueKey<String>('task-graph-action-${action.name}'),
         borderRadius: BorderRadius.circular(8),
         onTap: onAdd,
         child: tile,
@@ -2660,8 +2523,8 @@ class _DagActionPaletteTile extends StatelessWidget {
   }
 }
 
-class _DagCanvasViewport extends StatelessWidget {
-  const _DagCanvasViewport({
+class _TaskGraphCanvasViewport extends StatelessWidget {
+  const _TaskGraphCanvasViewport({
     super.key,
     required this.nodes,
     required this.actionTypes,
@@ -2707,8 +2570,8 @@ class _DagCanvasViewport extends StatelessWidget {
   final void Function(String nodeId, Offset delta) onNudgeNode;
   final ValueChanged<String> onStartConnection;
   final ValueChanged<String> onToggleConnection;
-  final _DagEdgeId? selectedEdge;
-  final ValueChanged<_DagEdgeId> onSelectEdge;
+  final _TaskGraphEdgeId? selectedEdge;
+  final ValueChanged<_TaskGraphEdgeId> onSelectEdge;
   final VoidCallback onDeleteSelectedEdge;
   final ValueChanged<String> onDeleteNode;
   final void Function(String nodeId, int direction) onMoveNodeInStage;
@@ -2719,8 +2582,8 @@ class _DagCanvasViewport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    final levels = _dagLevels(nodes);
-    final layout = _DagCanvasLayout.fromLevels(
+    final levels = _taskGraphLevels(nodes);
+    final layout = _TaskGraphCanvasLayout.fromLevels(
       levels,
       nodeWidth: nodeWidth,
       nodeHeight: nodeHeight,
@@ -2747,10 +2610,10 @@ class _DagCanvasViewport extends StatelessWidget {
             Positioned.fill(
               child: DragTarget<Object>(
                 onWillAcceptWithDetails: (details) =>
-                    details.data is _DagActionDragData,
+                    details.data is _TaskGraphActionDragData,
                 onAcceptWithDetails: (details) {
                   final data = details.data;
-                  if (data is _DagActionDragData) {
+                  if (data is _TaskGraphActionDragData) {
                     onAddActionToStage(data.actionName, null);
                   }
                 },
@@ -2779,7 +2642,7 @@ class _DagCanvasViewport extends StatelessWidget {
                                 children: <Widget>[
                                   Positioned.fill(
                                     child: CustomPaint(
-                                      painter: _DagCanvasPainter(
+                                      painter: _TaskGraphCanvasPainter(
                                         layout: layout,
                                         colors: colors,
                                         selectedEdge: selectedEdge,
@@ -2793,9 +2656,9 @@ class _DagCanvasViewport extends StatelessWidget {
                                   )
                                     Positioned.fromRect(
                                       rect: layout.stageRects[index],
-                                      child: _DagStageDropColumn(
+                                      child: _TaskGraphStageDropColumn(
                                         key: ValueKey<String>(
-                                          'dag-stage-drop-$index',
+                                          'task-graph-stage-drop-$index',
                                         ),
                                         stageIndex: index,
                                         onMoveToStage: onMoveToStage,
@@ -2804,9 +2667,9 @@ class _DagCanvasViewport extends StatelessWidget {
                                     ),
                                   Positioned.fromRect(
                                     rect: layout.appendStageRect,
-                                    child: _DagStageDropColumn(
+                                    child: _TaskGraphStageDropColumn(
                                       key: ValueKey<String>(
-                                        'dag-stage-drop-${layout.stageRects.length}',
+                                        'task-graph-stage-drop-${layout.stageRects.length}',
                                       ),
                                       stageIndex: layout.stageRects.length,
                                       onMoveToStage: onMoveToStage,
@@ -2814,7 +2677,7 @@ class _DagCanvasViewport extends StatelessWidget {
                                     ),
                                   ),
                                   Positioned.fill(
-                                    child: _DagEdgeInteractionLayer(
+                                    child: _TaskGraphEdgeInteractionLayer(
                                       layout: layout,
                                       selectedEdge: selectedEdge,
                                       onSelect: onSelectEdge,
@@ -2824,9 +2687,9 @@ class _DagCanvasViewport extends StatelessWidget {
                                   for (final placement in layout.placements)
                                     Positioned.fromRect(
                                       rect: placement.rect,
-                                      child: _DagGraphNodeCard(
+                                      child: _TaskGraphGraphNodeCard(
                                         key: ValueKey<String>(
-                                          'dag-node-${_nodeId(placement.node)}',
+                                          'task-graph-node-${_nodeId(placement.node)}',
                                         ),
                                         node: placement.node,
                                         actionTypes: actionTypes,
@@ -2871,12 +2734,15 @@ class _DagCanvasViewport extends StatelessWidget {
             Positioned(
               left: 16,
               top: 14,
-              child: _DagGraphMenu(zoom: zoom, onZoomChanged: onZoomChanged),
+              child: _TaskGraphGraphMenu(
+                zoom: zoom,
+                onZoomChanged: onZoomChanged,
+              ),
             ),
             Positioned(
               right: 16,
               bottom: 14,
-              child: _DagMiniMap(layout: layout),
+              child: _TaskGraphMiniMap(layout: layout),
             ),
           ],
         );
@@ -2885,17 +2751,17 @@ class _DagCanvasViewport extends StatelessWidget {
   }
 }
 
-class _DagEdgeInteractionLayer extends StatelessWidget {
-  const _DagEdgeInteractionLayer({
+class _TaskGraphEdgeInteractionLayer extends StatelessWidget {
+  const _TaskGraphEdgeInteractionLayer({
     required this.layout,
     required this.selectedEdge,
     required this.onSelect,
     required this.onDelete,
   });
 
-  final _DagCanvasLayout layout;
-  final _DagEdgeId? selectedEdge;
-  final ValueChanged<_DagEdgeId> onSelect;
+  final _TaskGraphCanvasLayout layout;
+  final _TaskGraphEdgeId? selectedEdge;
+  final ValueChanged<_TaskGraphEdgeId> onSelect;
   final VoidCallback onDelete;
 
   /// Builds path-distance hit testing and controls for canvas edges.
@@ -2933,7 +2799,7 @@ class _DagEdgeInteractionLayer extends StatelessWidget {
                 ),
                 child: InkWell(
                   key: ValueKey<String>(
-                    'dag-edge-delete-${selectedPlacement.id.dependencyId}-${selectedPlacement.id.targetNodeId}',
+                    'task-graph-edge-delete-${selectedPlacement.id.dependencyId}-${selectedPlacement.id.targetNodeId}',
                   ),
                   borderRadius: BorderRadius.circular(8),
                   onTap: onDelete,
@@ -2955,8 +2821,8 @@ class _DagEdgeInteractionLayer extends StatelessWidget {
   }
 }
 
-class _DagStageDropColumn extends StatelessWidget {
-  const _DagStageDropColumn({
+class _TaskGraphStageDropColumn extends StatelessWidget {
+  const _TaskGraphStageDropColumn({
     super.key,
     required this.stageIndex,
     required this.onMoveToStage,
@@ -2973,13 +2839,13 @@ class _DagStageDropColumn extends StatelessWidget {
     final colors = context.agentAwesomeColors;
     return DragTarget<Object>(
       onWillAcceptWithDetails: (details) =>
-          details.data is String || details.data is _DagActionDragData,
+          details.data is String || details.data is _TaskGraphActionDragData,
       onAcceptWithDetails: (details) {
         final data = details.data;
         if (data is String) {
           onMoveToStage(data, stageIndex);
         }
-        if (data is _DagActionDragData) {
+        if (data is _TaskGraphActionDragData) {
           onAddActionToStage(data.actionName, stageIndex);
         }
       },
@@ -3000,8 +2866,8 @@ class _DagStageDropColumn extends StatelessWidget {
   }
 }
 
-class _DagGraphMenu extends StatelessWidget {
-  const _DagGraphMenu({required this.zoom, required this.onZoomChanged});
+class _TaskGraphGraphMenu extends StatelessWidget {
+  const _TaskGraphGraphMenu({required this.zoom, required this.onZoomChanged});
 
   final double zoom;
   final ValueChanged<double> onZoomChanged;
@@ -3043,10 +2909,10 @@ class _DagGraphMenu extends StatelessWidget {
   }
 }
 
-class _DagMiniMap extends StatelessWidget {
-  const _DagMiniMap({required this.layout});
+class _TaskGraphMiniMap extends StatelessWidget {
+  const _TaskGraphMiniMap({required this.layout});
 
-  final _DagCanvasLayout layout;
+  final _TaskGraphCanvasLayout layout;
 
   /// Builds a compact map of the current graph topology.
   @override
@@ -3061,7 +2927,7 @@ class _DagMiniMap extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: CustomPaint(
-          painter: _DagMiniMapPainter(
+          painter: _TaskGraphMiniMapPainter(
             layout: layout,
             colors: context.agentAwesomeColors,
           ),
@@ -3071,8 +2937,8 @@ class _DagMiniMap extends StatelessWidget {
   }
 }
 
-class _DagGraphNodeCard extends StatelessWidget {
-  const _DagGraphNodeCard({
+class _TaskGraphGraphNodeCard extends StatelessWidget {
+  const _TaskGraphGraphNodeCard({
     super.key,
     required this.node,
     required this.actionTypes,
@@ -3112,27 +2978,28 @@ class _DagGraphNodeCard extends StatelessWidget {
   final void Function(String nodeId, int delta) onMoveNodeStageBy;
   final VoidCallback onTap;
 
-  /// Builds one draggable DAG graph node.
+  /// Builds one draggable task graph node.
   @override
   Widget build(BuildContext context) {
     final nodeId = _nodeId(node);
     return DragTarget<Object>(
       onWillAcceptWithDetails: (details) {
         final data = details.data;
-        return (data is String && data != nodeId) || data is _DagActionDragData;
+        return (data is String && data != nodeId) ||
+            data is _TaskGraphActionDragData;
       },
       onAcceptWithDetails: (details) {
         final data = details.data;
         if (data is String) {
           onDropOnNode(data, nodeId);
         }
-        if (data is _DagActionDragData) {
+        if (data is _TaskGraphActionDragData) {
           onAddActionAfterNode(data.actionName, nodeId);
         }
       },
       builder: (context, candidateData, rejectedData) {
         final active = candidateData.isNotEmpty;
-        final draggableChild = _DagGraphNodeSurface(
+        final draggableChild = _TaskGraphGraphNodeSurface(
           node: node,
           selected: selected || active,
           connectedToConnectionSource: connectedToConnectionSource,
@@ -3151,7 +3018,7 @@ class _DagGraphNodeCard extends StatelessWidget {
           onMoveRight: () => onMoveNodeStageBy(nodeId, 1),
           onTap: onTap,
         );
-        return _DagNodeDragTracker(
+        return _TaskGraphNodeDragTracker(
           nodeId: nodeId,
           onNudgeNode: onNudgeNode,
           child: draggableChild,
@@ -3161,8 +3028,8 @@ class _DagGraphNodeCard extends StatelessWidget {
   }
 }
 
-class _DagNodeDragTracker extends StatefulWidget {
-  const _DagNodeDragTracker({
+class _TaskGraphNodeDragTracker extends StatefulWidget {
+  const _TaskGraphNodeDragTracker({
     required this.nodeId,
     required this.onNudgeNode,
     required this.child,
@@ -3173,10 +3040,11 @@ class _DagNodeDragTracker extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_DagNodeDragTracker> createState() => _DagNodeDragTrackerState();
+  State<_TaskGraphNodeDragTracker> createState() =>
+      _TaskGraphNodeDragTrackerState();
 }
 
-class _DagNodeDragTrackerState extends State<_DagNodeDragTracker> {
+class _TaskGraphNodeDragTrackerState extends State<_TaskGraphNodeDragTracker> {
   Offset _delta = Offset.zero;
   bool _emitted = false;
 
@@ -3196,8 +3064,8 @@ class _DagNodeDragTrackerState extends State<_DagNodeDragTracker> {
         onDragUpdate: (details) => _delta += details.delta,
         onDragEnd: (_) => _emit(),
         feedback: SizedBox(
-          width: _DagDesignerSurfaceState._nodeWidth,
-          height: _DagDesignerSurfaceState._nodeHeight,
+          width: _TaskGraphDesignerSurfaceState._nodeWidth,
+          height: _TaskGraphDesignerSurfaceState._nodeHeight,
           child: Material(color: Colors.transparent, child: widget.child),
         ),
         childWhenDragging: Opacity(opacity: 0.35, child: widget.child),
@@ -3220,8 +3088,8 @@ class _DagNodeDragTrackerState extends State<_DagNodeDragTracker> {
   }
 }
 
-class _DagGraphNodeSurface extends StatelessWidget {
-  const _DagGraphNodeSurface({
+class _TaskGraphGraphNodeSurface extends StatelessWidget {
+  const _TaskGraphGraphNodeSurface({
     required this.node,
     required this.selected,
     required this.connectedToConnectionSource,
@@ -3257,7 +3125,7 @@ class _DagGraphNodeSurface extends StatelessWidget {
   final VoidCallback onMoveRight;
   final VoidCallback onTap;
 
-  /// Builds the visual card used by draggable DAG nodes.
+  /// Builds the visual card used by draggable task nodes.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
@@ -3288,7 +3156,7 @@ class _DagGraphNodeSurface extends StatelessWidget {
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                      _DagNodeIcon(actionName: _nodeUses(node), size: 28),
+                      _TaskGraphNodeIcon(actionName: _nodeUses(node), size: 28),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -3336,7 +3204,7 @@ class _DagGraphNodeSurface extends StatelessWidget {
           Positioned(
             left: 8,
             top: cardHeight + 6,
-            child: _DagNodeInlineToolbar(
+            child: _TaskGraphNodeInlineToolbar(
               actionTypes: actionTypes,
               currentAction: _nodeUses(node),
               connectingFromThis: connectingFromThis,
@@ -3352,7 +3220,7 @@ class _DagGraphNodeSurface extends StatelessWidget {
           Positioned(
             left: -5,
             top: 50,
-            child: _DagPort(
+            child: _TaskGraphPort(
               color: connectedToConnectionSource
                   ? colors.green
                   : dependencies.isEmpty
@@ -3367,7 +3235,7 @@ class _DagGraphNodeSurface extends StatelessWidget {
               onTap: onStartConnection,
               child: Tooltip(
                 message: connectingFromThis ? 'Cancel connection' : 'Connect',
-                child: _DagPort(
+                child: _TaskGraphPort(
                   color: connectingFromThis ? colors.coral : colors.green,
                 ),
               ),
@@ -3379,8 +3247,8 @@ class _DagGraphNodeSurface extends StatelessWidget {
   }
 }
 
-class _DagNodeInlineToolbar extends StatelessWidget {
-  const _DagNodeInlineToolbar({
+class _TaskGraphNodeInlineToolbar extends StatelessWidget {
+  const _TaskGraphNodeInlineToolbar({
     required this.actionTypes,
     required this.currentAction,
     required this.connectingFromThis,
@@ -3404,7 +3272,7 @@ class _DagNodeInlineToolbar extends StatelessWidget {
   final VoidCallback onMoveLeft;
   final VoidCallback onMoveRight;
 
-  /// Builds point-of-use controls for the selected DAG node.
+  /// Builds point-of-use controls for the selected task node.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
@@ -3442,7 +3310,7 @@ class _DagNodeInlineToolbar extends StatelessWidget {
                 ],
               ),
             ),
-            _DagNodeToolbarButton(
+            _TaskGraphNodeToolbarButton(
               icon: Icons.link,
               tooltip: connectingFromThis
                   ? 'Cancel connection'
@@ -3450,27 +3318,27 @@ class _DagNodeInlineToolbar extends StatelessWidget {
               selected: connectingFromThis,
               onPressed: onStartConnection,
             ),
-            _DagNodeToolbarButton(
+            _TaskGraphNodeToolbarButton(
               icon: Icons.arrow_upward,
               tooltip: 'Move up',
               onPressed: onMoveUp,
             ),
-            _DagNodeToolbarButton(
+            _TaskGraphNodeToolbarButton(
               icon: Icons.arrow_downward,
               tooltip: 'Move down',
               onPressed: onMoveDown,
             ),
-            _DagNodeToolbarButton(
+            _TaskGraphNodeToolbarButton(
               icon: Icons.arrow_back,
               tooltip: 'Move left',
               onPressed: onMoveLeft,
             ),
-            _DagNodeToolbarButton(
+            _TaskGraphNodeToolbarButton(
               icon: Icons.arrow_forward,
               tooltip: 'Move right',
               onPressed: onMoveRight,
             ),
-            _DagNodeToolbarButton(
+            _TaskGraphNodeToolbarButton(
               icon: Icons.delete_outline,
               tooltip: 'Delete node',
               onPressed: onDeleteNode,
@@ -3482,8 +3350,8 @@ class _DagNodeInlineToolbar extends StatelessWidget {
   }
 }
 
-class _DagNodeToolbarButton extends StatelessWidget {
-  const _DagNodeToolbarButton({
+class _TaskGraphNodeToolbarButton extends StatelessWidget {
+  const _TaskGraphNodeToolbarButton({
     required this.icon,
     required this.tooltip,
     required this.onPressed,
@@ -3522,8 +3390,8 @@ class _DagNodeToolbarButton extends StatelessWidget {
   }
 }
 
-class _DagNodeIcon extends StatelessWidget {
-  const _DagNodeIcon({required this.actionName, required this.size});
+class _TaskGraphNodeIcon extends StatelessWidget {
+  const _TaskGraphNodeIcon({required this.actionName, required this.size});
 
   final String actionName;
   final double size;
@@ -3531,7 +3399,6 @@ class _DagNodeIcon extends StatelessWidget {
   /// Builds the colored node-type icon used by palette and graph cards.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
     return Container(
       width: size,
       height: size,
@@ -3545,16 +3412,14 @@ class _DagNodeIcon extends StatelessWidget {
       child: Icon(
         _actionIcon(actionName),
         size: size * 0.55,
-        color: actionName == 'agent.run'
-            ? colors.coral
-            : _actionColor(context, actionName),
+        color: _actionColor(context, actionName),
       ),
     );
   }
 }
 
-class _DagPort extends StatelessWidget {
-  const _DagPort({required this.color});
+class _TaskGraphPort extends StatelessWidget {
+  const _TaskGraphPort({required this.color});
 
   final Color color;
 
@@ -3572,14 +3437,14 @@ class _DagPort extends StatelessWidget {
   }
 }
 
-class _DagActionDragData {
-  const _DagActionDragData(this.actionName);
+class _TaskGraphActionDragData {
+  const _TaskGraphActionDragData(this.actionName);
 
   final String actionName;
 }
 
-class _DagNodePlacement {
-  const _DagNodePlacement({
+class _TaskGraphNodePlacement {
+  const _TaskGraphNodePlacement({
     required this.node,
     required this.rect,
     required this.stageIndex,
@@ -3590,16 +3455,19 @@ class _DagNodePlacement {
   final int stageIndex;
 }
 
-/// Identifies one directed dependency edge between two DAG nodes.
-class _DagEdgeId {
-  const _DagEdgeId({required this.dependencyId, required this.targetNodeId});
+/// Identifies one directed dependency edge between two task nodes.
+class _TaskGraphEdgeId {
+  const _TaskGraphEdgeId({
+    required this.dependencyId,
+    required this.targetNodeId,
+  });
 
   final String dependencyId;
   final String targetNodeId;
 
   @override
   bool operator ==(Object other) {
-    return other is _DagEdgeId &&
+    return other is _TaskGraphEdgeId &&
         other.dependencyId == dependencyId &&
         other.targetNodeId == targetNodeId;
   }
@@ -3608,21 +3476,21 @@ class _DagEdgeId {
   int get hashCode => Object.hash(dependencyId, targetNodeId);
 }
 
-/// Stores the geometry needed to paint and hit-test a DAG dependency edge.
-class _DagEdgePlacement {
-  const _DagEdgePlacement({
+/// Stores the geometry needed to paint and hit-test a task dependency edge.
+class _TaskGraphEdgePlacement {
+  const _TaskGraphEdgePlacement({
     required this.id,
     required this.from,
     required this.to,
   });
 
-  final _DagEdgeId id;
+  final _TaskGraphEdgeId id;
   final Offset from;
   final Offset to;
 
   /// Returns the visual center point used for selected-edge controls.
   Offset get midpoint {
-    final metrics = _dagEdgePath(from, to).computeMetrics().toList();
+    final metrics = _taskGraphEdgePath(from, to).computeMetrics().toList();
     final metric = metrics.isEmpty ? null : metrics.first;
     return metric?.getTangentForOffset(metric.length / 2)?.position ??
         Offset((from.dx + to.dx) / 2, (from.dy + to.dy) / 2);
@@ -3630,7 +3498,7 @@ class _DagEdgePlacement {
 
   /// Measures the shortest sampled distance from a canvas point to the edge.
   double distanceTo(Offset point) {
-    final metrics = _dagEdgePath(from, to).computeMetrics().toList();
+    final metrics = _taskGraphEdgePath(from, to).computeMetrics().toList();
     if (metrics.isEmpty) {
       return (point - midpoint).distance;
     }
@@ -3639,7 +3507,7 @@ class _DagEdgePlacement {
       for (
         var distance = 0.0;
         distance <= metric.length;
-        distance += _dagEdgeHitSampleStep
+        distance += _taskGraphEdgeHitSampleStep
       ) {
         final tangent = metric.getTangentForOffset(distance);
         if (tangent == null) {
@@ -3662,8 +3530,8 @@ class _DagEdgePlacement {
   }
 }
 
-class _DagCanvasLayout {
-  const _DagCanvasLayout({
+class _TaskGraphCanvasLayout {
+  const _TaskGraphCanvasLayout({
     required this.size,
     required this.placements,
     required this.stageRects,
@@ -3671,33 +3539,36 @@ class _DagCanvasLayout {
   });
 
   final Size size;
-  final List<_DagNodePlacement> placements;
+  final List<_TaskGraphNodePlacement> placements;
   final List<Rect> stageRects;
   final Rect appendStageRect;
 
-  Map<String, _DagNodePlacement> get byId => <String, _DagNodePlacement>{
-    for (final placement in placements) _nodeId(placement.node): placement,
-  };
+  Map<String, _TaskGraphNodePlacement> get byId =>
+      <String, _TaskGraphNodePlacement>{
+        for (final placement in placements) _nodeId(placement.node): placement,
+      };
 
-  List<_DagEdgePlacement> get edges {
+  List<_TaskGraphEdgePlacement> get edges {
     final placementsById = byId;
-    return <_DagEdgePlacement>[
+    return <_TaskGraphEdgePlacement>[
       for (final placement in placements)
         for (final dependencyId in _nodeDependsOn(placement.node))
           if (placementsById[dependencyId] != null)
-            _DagEdgePlacement(
-              id: _DagEdgeId(
+            _TaskGraphEdgePlacement(
+              id: _TaskGraphEdgeId(
                 dependencyId: dependencyId,
                 targetNodeId: _nodeId(placement.node),
               ),
-              from: _dagOutputPortCenter(placementsById[dependencyId]!.rect),
-              to: _dagInputPortCenter(placement.rect),
+              from: _taskGraphOutputPortCenter(
+                placementsById[dependencyId]!.rect,
+              ),
+              to: _taskGraphInputPortCenter(placement.rect),
             ),
     ];
   }
 
   /// Returns the visible edge placement for an edge id.
-  _DagEdgePlacement? edgeById(_DagEdgeId? edgeId) {
+  _TaskGraphEdgePlacement? edgeById(_TaskGraphEdgeId? edgeId) {
     if (edgeId == null) {
       return null;
     }
@@ -3710,9 +3581,9 @@ class _DagCanvasLayout {
   }
 
   /// Returns the nearest edge when the point is close to an actual edge path.
-  _DagEdgePlacement? edgeAt(Offset point) {
-    _DagEdgePlacement? nearestEdge;
-    var nearestDistance = _dagEdgeHitRadius;
+  _TaskGraphEdgePlacement? edgeAt(Offset point) {
+    _TaskGraphEdgePlacement? nearestEdge;
+    var nearestDistance = _taskGraphEdgeHitRadius;
     for (final edge in edges) {
       final distance = edge.distanceTo(point);
       if (distance <= nearestDistance) {
@@ -3723,8 +3594,8 @@ class _DagCanvasLayout {
     return nearestEdge;
   }
 
-  /// Creates deterministic graph layout coordinates from DAG levels.
-  static _DagCanvasLayout fromLevels(
+  /// Creates deterministic graph layout coordinates from task levels.
+  static _TaskGraphCanvasLayout fromLevels(
     List<List<Map<String, dynamic>>> levels, {
     required double nodeWidth,
     required double nodeHeight,
@@ -3744,7 +3615,7 @@ class _DagCanvasLayout {
         (stageCount - 1) * columnGap +
         180;
     final height = padding * 2 + graphHeight;
-    final placements = <_DagNodePlacement>[];
+    final placements = <_TaskGraphNodePlacement>[];
     final stageRects = <Rect>[];
     for (var stageIndex = 0; stageIndex < levels.length; stageIndex++) {
       final level = levels[stageIndex];
@@ -3755,7 +3626,7 @@ class _DagCanvasLayout {
       stageRects.add(Rect.fromLTWH(x - 28, 28, nodeWidth + 56, height - 56));
       for (var index = 0; index < level.length; index++) {
         placements.add(
-          _DagNodePlacement(
+          _TaskGraphNodePlacement(
             node: level[index],
             rect: Rect.fromLTWH(
               x,
@@ -3769,7 +3640,7 @@ class _DagCanvasLayout {
       }
     }
     final appendLeft = padding + stageCount * (nodeWidth + columnGap) - 28;
-    return _DagCanvasLayout(
+    return _TaskGraphCanvasLayout(
       size: Size(width, height),
       placements: placements,
       stageRects: stageRects,
@@ -3783,16 +3654,16 @@ class _DagCanvasLayout {
   }
 }
 
-class _DagCanvasPainter extends CustomPainter {
-  const _DagCanvasPainter({
+class _TaskGraphCanvasPainter extends CustomPainter {
+  const _TaskGraphCanvasPainter({
     required this.layout,
     required this.colors,
     required this.selectedEdge,
   });
 
-  final _DagCanvasLayout layout;
+  final _TaskGraphCanvasLayout layout;
   final AgentAwesomePalette colors;
-  final _DagEdgeId? selectedEdge;
+  final _TaskGraphEdgeId? selectedEdge;
 
   /// Paints the dotted grid and curved dependency connectors.
   @override
@@ -3828,7 +3699,7 @@ class _DagCanvasPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
     for (final edge in layout.edges) {
       canvas.drawPath(
-        _dagEdgePath(edge.from, edge.to),
+        _taskGraphEdgePath(edge.from, edge.to),
         edge.id == selectedEdge ? selectedEdgePaint : edgePaint,
       );
       canvas.drawCircle(edge.to, 4, activePaint);
@@ -3837,38 +3708,38 @@ class _DagCanvasPainter extends CustomPainter {
 
   /// Repaints when graph topology or colors change.
   @override
-  bool shouldRepaint(covariant _DagCanvasPainter oldDelegate) {
+  bool shouldRepaint(covariant _TaskGraphCanvasPainter oldDelegate) {
     return oldDelegate.layout != layout ||
         oldDelegate.colors != colors ||
         oldDelegate.selectedEdge != selectedEdge;
   }
 }
 
-/// Builds the curved path for one DAG dependency edge.
-Path _dagEdgePath(Offset from, Offset to) {
+/// Builds the curved path for one task dependency edge.
+Path _taskGraphEdgePath(Offset from, Offset to) {
   final bend = (to.dx - from.dx).abs() / 2;
   return Path()
     ..moveTo(from.dx, from.dy)
     ..cubicTo(from.dx + bend, from.dy, to.dx - bend, to.dy, to.dx, to.dy);
 }
 
-const double _dagEdgeHitRadius = 6;
-const double _dagEdgeHitSampleStep = 4;
+const double _taskGraphEdgeHitRadius = 6;
+const double _taskGraphEdgeHitSampleStep = 4;
 
 /// Returns the visible input port center for a node placement.
-Offset _dagInputPortCenter(Rect rect) {
+Offset _taskGraphInputPortCenter(Rect rect) {
   return Offset(rect.left, rect.top + 56);
 }
 
 /// Returns the visible output port center for a node placement.
-Offset _dagOutputPortCenter(Rect rect) {
+Offset _taskGraphOutputPortCenter(Rect rect) {
   return Offset(rect.right, rect.top + 56);
 }
 
-class _DagMiniMapPainter extends CustomPainter {
-  const _DagMiniMapPainter({required this.layout, required this.colors});
+class _TaskGraphMiniMapPainter extends CustomPainter {
+  const _TaskGraphMiniMapPainter({required this.layout, required this.colors});
 
-  final _DagCanvasLayout layout;
+  final _TaskGraphCanvasLayout layout;
   final AgentAwesomePalette colors;
 
   /// Paints a compact overview of graph node positions.
@@ -3897,7 +3768,7 @@ class _DagMiniMapPainter extends CustomPainter {
 
   /// Repaints when layout or colors change.
   @override
-  bool shouldRepaint(covariant _DagMiniMapPainter oldDelegate) {
+  bool shouldRepaint(covariant _TaskGraphMiniMapPainter oldDelegate) {
     return oldDelegate.layout != layout || oldDelegate.colors != colors;
   }
 }
@@ -3996,7 +3867,7 @@ class _DraftSteps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = draft.kind == 'dag'
+    final items = draft.kind == 'task_graph'
         ? _list(draft.body['nodes'])
         : _stateActions(draft.body);
     return ListView(
@@ -4055,40 +3926,6 @@ class _ValidationDetail extends StatelessWidget {
               badges: <String>[diagnostic.severity],
             ),
       ],
-    );
-  }
-}
-
-class _AgentDetail extends StatelessWidget {
-  const _AgentDetail({required this.controller, required this.tabId});
-
-  final AgentAwesomeAppController controller;
-  final String tabId;
-
-  /// Builds detail views for agent-oriented automation authoring.
-  @override
-  Widget build(BuildContext context) {
-    final spec = controller.selectedAutomationAgentSpec;
-    if (spec == null) {
-      return const Padding(
-        padding: EdgeInsets.all(18),
-        child: PanelEmptyBlock(label: 'No agent profile selected'),
-      );
-    }
-    final selectedTab = tabId.isEmpty ? _automationDetailOverview : tabId;
-    if (selectedTab == _automationDetailSteps) {
-      return _AgentStepList(
-        steps: _agentStepsFromDrafts(
-          controller.automationDrafts,
-          agentId: spec.id,
-        ),
-      );
-    }
-    return _AgentSpecEditor(
-      key: ValueKey<String>(spec.id),
-      controller: controller,
-      spec: spec,
-      tabId: selectedTab,
     );
   }
 }
@@ -4347,420 +4184,6 @@ class _DraftTile extends StatelessWidget {
   }
 }
 
-class _AgentSpecTile extends StatelessWidget {
-  const _AgentSpecTile({required this.controller, required this.spec});
-
-  final AgentAwesomeAppController controller;
-  final AutomationAgentSpec spec;
-
-  /// Builds one reusable agent spec row.
-  @override
-  Widget build(BuildContext context) {
-    final hasInstructions = spec.instructions.trim().isNotEmpty;
-    return _AutomationTile(
-      title: spec.name,
-      subtitle: spec.description.isEmpty ? spec.id : spec.description,
-      selected: controller.selectedAutomationAgentSpec?.id == spec.id,
-      badges: <String>[
-        hasInstructions ? 'ready' : 'needs instructions',
-        ..._permissionBadges(spec.permissions),
-      ],
-      onTap: () => controller.selectAutomationAgentSpec(spec.id),
-    );
-  }
-}
-
-class _AgentSpecEditor extends StatefulWidget {
-  const _AgentSpecEditor({
-    super.key,
-    required this.controller,
-    required this.spec,
-    required this.tabId,
-  });
-
-  final AgentAwesomeAppController controller;
-  final AutomationAgentSpec spec;
-  final String tabId;
-
-  @override
-  State<_AgentSpecEditor> createState() => _AgentSpecEditorState();
-}
-
-class _AgentSpecEditorState extends State<_AgentSpecEditor> {
-  static const Duration _saveDelay = Duration(milliseconds: 500);
-
-  late final TextEditingController _nameController;
-  late final TextEditingController _descriptionController;
-  late final TextEditingController _instructionsController;
-  Timer? _saveTimer;
-  AutomationAgentPermissions _permissions = const AutomationAgentPermissions();
-  String _lastSavedFingerprint = '';
-
-  /// Initializes editable field controllers from the selected spec.
-  @override
-  void initState() {
-    super.initState();
-    _nameController = TextEditingController();
-    _descriptionController = TextEditingController();
-    _instructionsController = TextEditingController();
-    _nameController.addListener(_scheduleSave);
-    _descriptionController.addListener(_scheduleSave);
-    _instructionsController.addListener(_scheduleSave);
-    _loadSpec(widget.spec);
-  }
-
-  /// Reloads fields when a different spec is selected.
-  @override
-  void didUpdateWidget(covariant _AgentSpecEditor oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.spec.id != widget.spec.id) {
-      _loadSpec(widget.spec);
-    }
-  }
-
-  /// Releases editor field controllers.
-  @override
-  void dispose() {
-    _saveTimer?.cancel();
-    _nameController.removeListener(_scheduleSave);
-    _descriptionController.removeListener(_scheduleSave);
-    _instructionsController.removeListener(_scheduleSave);
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _instructionsController.dispose();
-    super.dispose();
-  }
-
-  /// Builds the editable reusable agent spec form.
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: _sectionsForMode(),
-    );
-  }
-
-  /// Returns mode-scoped agent profile sections.
-  List<Widget> _sectionsForMode() {
-    final sections = switch (widget.tabId) {
-      _automationDetailInstructions => <Widget>[_instructionsSection()],
-      _automationDetailPermissions => <Widget>[_permissionsSection()],
-      _ => <Widget>[_overviewSection()],
-    };
-    return <Widget>[
-      for (var index = 0; index < sections.length; index++) ...<Widget>[
-        if (index > 0) const SizedBox(height: 12),
-        sections[index],
-      ],
-    ];
-  }
-
-  /// Builds the profile identity editor section.
-  Widget _overviewSection() {
-    return PanelSectionBlock(
-      title: 'Agent Profile',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          _AgentSpecTextField(controller: _nameController, label: 'Name'),
-          const SizedBox(height: 10),
-          _AgentSpecTextField(
-            controller: _descriptionController,
-            label: 'Description',
-            maxLines: 3,
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Builds the profile instruction editor section.
-  Widget _instructionsSection() {
-    return PanelSectionBlock(
-      title: 'Instructions',
-      child: _AgentSpecTextField(
-        controller: _instructionsController,
-        label: 'What this agent should do',
-        minLines: 9,
-        maxLines: 16,
-      ),
-    );
-  }
-
-  /// Builds the profile permission editor section.
-  Widget _permissionsSection() {
-    return PanelSectionBlock(
-      title: 'Permissions',
-      child: _AgentPermissionMatrix(
-        permissions: _permissions,
-        onChanged: widget.controller.automationsBusy
-            ? null
-            : (permissions) => setState(() {
-                _permissions = permissions;
-                _scheduleSave();
-              }),
-      ),
-    );
-  }
-
-  /// Copies the selected spec into editable field controllers.
-  void _loadSpec(AutomationAgentSpec spec) {
-    _nameController.text = spec.name;
-    _descriptionController.text = spec.description;
-    _instructionsController.text = spec.instructions;
-    _permissions = spec.permissions;
-    _lastSavedFingerprint = _fingerprint(_currentSpec());
-  }
-
-  /// Persists the edited spec using harness-owned agent contracts.
-  Future<void> _save() async {
-    _saveTimer?.cancel();
-    if (widget.controller.automationsBusy) {
-      _scheduleSave();
-      return;
-    }
-    final spec = _currentSpec();
-    final fingerprint = _fingerprint(spec);
-    if (fingerprint == _lastSavedFingerprint) {
-      return;
-    }
-    _lastSavedFingerprint = fingerprint;
-    await widget.controller.saveAutomationAgentSpecFromUi(spec);
-  }
-
-  /// Schedules one autosave after a short edit pause.
-  void _scheduleSave() {
-    _saveTimer?.cancel();
-    _saveTimer = Timer(_saveDelay, () => unawaited(_save()));
-  }
-
-  /// Builds the current edited spec without exposing schema knobs to users.
-  AutomationAgentSpec _currentSpec() {
-    return AutomationAgentSpec(
-      id: widget.spec.id,
-      name: _nameController.text.trim().isEmpty
-          ? widget.spec.id
-          : _nameController.text.trim(),
-      description: _descriptionController.text.trim(),
-      instructions: _instructionsController.text.trim(),
-      permissions: _permissions,
-      createdAt: widget.spec.createdAt,
-      updatedAt: widget.spec.updatedAt,
-    );
-  }
-
-  /// Returns a stable comparison key for persisted agent spec fields.
-  String _fingerprint(AutomationAgentSpec spec) {
-    return jsonEncode(<String, Object?>{
-      'name': spec.name,
-      'description': spec.description,
-      'instructions': spec.instructions,
-      'permissions': spec.permissions.toJson(),
-    });
-  }
-}
-
-class _AgentSpecTextField extends PanelTextFormField {
-  const _AgentSpecTextField({
-    required super.controller,
-    required super.label,
-    super.minLines,
-    super.maxLines = 1,
-  });
-}
-
-class _AgentPermissionMatrix extends StatelessWidget {
-  const _AgentPermissionMatrix({
-    required this.permissions,
-    required this.onChanged,
-  });
-
-  final AutomationAgentPermissions permissions;
-  final ValueChanged<AutomationAgentPermissions>? onChanged;
-
-  /// Builds resource permission controls for the selected agent spec.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          'Resource permissions',
-          style: TextStyle(color: colors.muted, fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        _AgentPermissionRow(
-          label: 'Filesystem',
-          read: permissions.filesystemRead,
-          write: permissions.filesystemWrite,
-          execute: permissions.filesystemExecute,
-          onReadChanged: _change(
-            (value) => permissions.copyWith(filesystemRead: value),
-          ),
-          onWriteChanged: _change(
-            (value) => permissions.copyWith(filesystemWrite: value),
-          ),
-          onExecuteChanged: _change(
-            (value) => permissions.copyWith(filesystemExecute: value),
-          ),
-        ),
-        const SizedBox(height: 8),
-        _AgentPermissionRow(
-          label: 'Network',
-          read: permissions.networkRead,
-          write: permissions.networkWrite,
-          onReadChanged: _change(
-            (value) => permissions.copyWith(networkRead: value),
-          ),
-          onWriteChanged: _change(
-            (value) => permissions.copyWith(networkWrite: value),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// Converts a permission copy operation into a nullable checkbox callback.
-  ValueChanged<bool?>? _change(
-    AutomationAgentPermissions Function(bool value) update,
-  ) {
-    if (onChanged == null) {
-      return null;
-    }
-    return (value) => onChanged!(update(value ?? false));
-  }
-}
-
-class _AgentPermissionRow extends StatelessWidget {
-  const _AgentPermissionRow({
-    required this.label,
-    required this.read,
-    required this.write,
-    required this.onReadChanged,
-    required this.onWriteChanged,
-    this.execute,
-    this.onExecuteChanged,
-  });
-
-  final String label;
-  final bool read;
-  final bool write;
-  final bool? execute;
-  final ValueChanged<bool?>? onReadChanged;
-  final ValueChanged<bool?>? onWriteChanged;
-  final ValueChanged<bool?>? onExecuteChanged;
-
-  /// Builds one resource row with supported permission controls.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 6,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: <Widget>[
-        SizedBox(
-          width: 96,
-          child: Text(
-            label,
-            style: TextStyle(color: colors.ink, fontWeight: FontWeight.w700),
-          ),
-        ),
-        _PermissionCheckbox(
-          label: 'Read',
-          value: read,
-          onChanged: onReadChanged,
-        ),
-        _PermissionCheckbox(
-          label: 'Write',
-          value: write,
-          onChanged: onWriteChanged,
-        ),
-        if (execute != null)
-          _PermissionCheckbox(
-            label: 'Execute',
-            value: execute!,
-            onChanged: onExecuteChanged,
-          ),
-      ],
-    );
-  }
-}
-
-class _PermissionCheckbox extends StatelessWidget {
-  const _PermissionCheckbox({
-    required this.label,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String label;
-  final bool value;
-  final ValueChanged<bool?>? onChanged;
-
-  /// Builds one compact permission checkbox.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return InkWell(
-      borderRadius: BorderRadius.circular(6),
-      onTap: onChanged == null ? null : () => onChanged!(!value),
-      child: Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Checkbox(value: value, onChanged: onChanged),
-            Text(label, style: TextStyle(color: colors.ink)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AgentStepList extends StatelessWidget {
-  const _AgentStepList({required this.steps});
-
-  final List<_AgentStep> steps;
-
-  /// Builds a detail list of drafts that reference agents.
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        const PanelSectionLabel('Used In'),
-        const SizedBox(height: 12),
-        if (steps.isEmpty)
-          const PanelEmptyBlock(label: 'Unused')
-        else
-          for (final step in steps) _AgentStepTile(step: step),
-      ],
-    );
-  }
-}
-
-class _AgentStepTile extends StatelessWidget {
-  const _AgentStepTile({required this.step});
-
-  final _AgentStep step;
-
-  /// Builds one agent step row with its owning draft.
-  @override
-  Widget build(BuildContext context) {
-    return _AutomationTile(
-      title: step.stepId,
-      subtitle: '${step.draftName} / ${step.location}',
-      badges: <String>[
-        step.draftKind,
-        if (step.agentId.isNotEmpty) step.agentId,
-      ],
-    );
-  }
-}
-
 class _TemplateTile extends StatelessWidget {
   const _TemplateTile({required this.controller, required this.template});
 
@@ -4855,34 +4278,6 @@ class _AutomationTile extends StatelessWidget {
   }
 }
 
-class _AgentStep {
-  const _AgentStep({
-    required this.draftName,
-    required this.draftKind,
-    required this.agentId,
-    required this.stepId,
-    required this.location,
-  });
-
-  final String draftName;
-  final String draftKind;
-  final String agentId;
-  final String stepId;
-  final String location;
-}
-
-/// Summarizes agent resource permissions as compact badges.
-List<String> _permissionBadges(AutomationAgentPermissions permissions) {
-  final badges = <String>[
-    if (permissions.filesystemRead) 'files read',
-    if (permissions.filesystemWrite) 'files write',
-    if (permissions.filesystemExecute) 'files execute',
-    if (permissions.networkRead) 'network read',
-    if (permissions.networkWrite) 'network write',
-  ];
-  return badges.isEmpty ? <String>['no resources'] : badges;
-}
-
 List<AutomationDefinition> _filterDefinitions(
   List<AutomationDefinition> definitions,
   String query,
@@ -4939,20 +4334,6 @@ List<AutomationTemplate> _filterTemplates(
   }).toList();
 }
 
-/// Filters reusable agent specs by author-visible fields.
-List<AutomationAgentSpec> _filterAgentSpecs(
-  List<AutomationAgentSpec> specs,
-  String query,
-) {
-  final needle = query.toLowerCase();
-  return specs.where((spec) {
-    return spec.name.toLowerCase().contains(needle) ||
-        spec.id.toLowerCase().contains(needle) ||
-        spec.description.toLowerCase().contains(needle) ||
-        spec.instructions.toLowerCase().contains(needle);
-  }).toList();
-}
-
 /// Reports whether a template belongs in a workflow or task authoring panel.
 bool _templateMatchesKind(AutomationTemplate template, String kind) {
   final bodyKind = '${template.body['kind'] ?? ''}'.trim();
@@ -4965,7 +4346,9 @@ bool _templateMatchesKind(AutomationTemplate template, String kind) {
         category.contains('approval') ||
         category.contains('state');
   }
-  return category.contains('dag') ||
+  return category.contains('task_graph') ||
+      category.contains('task-graph') ||
+      category.contains('task graph') ||
       category.contains('task') ||
       category.contains('agent');
 }
@@ -4978,7 +4361,7 @@ String? _automationDraftKindForArea(String areaId) {
   }
   if (areaId == _automationTaskAreaDrafts ||
       areaId == _automationTaskAreaNodes) {
-    return 'dag';
+    return 'task_graph';
   }
   return null;
 }
@@ -4989,7 +4372,7 @@ String? _automationTemplateKindForArea(String areaId) {
     return 'state_machine';
   }
   if (areaId == _automationTaskAreaTemplates) {
-    return 'dag';
+    return 'task_graph';
   }
   return null;
 }
@@ -5036,25 +4419,27 @@ AutomationDraft? _selectedAutomationDraftForKind(
   return drafts.first;
 }
 
-/// Returns a canonical DAG body for an editable draft.
-Map<String, dynamic> _normalizedDagBody(AutomationDraft draft) {
+/// Returns a canonical task-graph body for an editable draft.
+Map<String, dynamic> _normalizedTaskGraphBody(AutomationDraft draft) {
   final body = _map(draft.body);
   return <String, dynamic>{
-    'kind': 'dag',
+    'kind': 'task_graph',
     'id': '${body['id'] ?? draft.id}',
-    'nodes': _dagNodes(body),
+    'nodes': _taskGraphNodes(body),
   };
 }
 
-/// Returns detached DAG nodes from a draft body.
-List<Map<String, dynamic>> _dagNodes(Map<String, dynamic> body) {
+/// Returns detached task nodes from a draft body.
+List<Map<String, dynamic>> _taskGraphNodes(Map<String, dynamic> body) {
   return _list(
     body['nodes'],
   ).map((node) => Map<String, dynamic>.from(_map(node))).toList();
 }
 
-/// Groups DAG nodes into dependency stages for visual graph rendering.
-List<List<Map<String, dynamic>>> _dagLevels(List<Map<String, dynamic>> nodes) {
+/// Groups task nodes into dependency stages for visual graph rendering.
+List<List<Map<String, dynamic>>> _taskGraphLevels(
+  List<Map<String, dynamic>> nodes,
+) {
   final byId = <String, Map<String, dynamic>>{
     for (final node in nodes)
       if (_nodeId(node).isNotEmpty) _nodeId(node): node,
@@ -5086,8 +4471,8 @@ List<List<Map<String, dynamic>>> _dagLevels(List<Map<String, dynamic>> nodes) {
   return levels;
 }
 
-/// Flattens DAG levels back into ordered node data.
-List<Map<String, dynamic>> _flattenDagLevels(
+/// Flattens task levels back into ordered node data.
+List<Map<String, dynamic>> _flattenTaskGraphLevels(
   List<List<Map<String, dynamic>>> levels,
 ) {
   return <Map<String, dynamic>>[
@@ -5139,13 +4524,11 @@ bool _nodeDependsOnPath(
 /// Returns the icon for one automation action type.
 IconData _actionIcon(String actionName) {
   return switch (actionName) {
-    'agent.run' => Icons.psychology_outlined,
     'tool.call' => Icons.extension_outlined,
     'mcp.call' => Icons.extension_outlined,
-    'cli.command' => Icons.terminal_outlined,
     'human.request' => Icons.how_to_reg_outlined,
     'delay.until' => Icons.schedule_outlined,
-    'dag.run' => Icons.account_tree_outlined,
+    'workflow.run' => Icons.account_tree_outlined,
     'workflow.signal' => Icons.flag_outlined,
     _ => Icons.bolt_outlined,
   };
@@ -5154,13 +4537,11 @@ IconData _actionIcon(String actionName) {
 /// Returns the friendly label for a built-in action.
 String _fallbackActionLabel(String actionName) {
   return switch (actionName) {
-    'agent.run' => 'Agent Task',
     'tool.call' => 'Run Tool',
-    'mcp.call' => 'Tool',
-    'cli.command' => 'Command',
+    'mcp.call' => 'Call MCP Tool',
     'human.request' => 'Prompt',
     'delay.until' => 'Delay',
-    'dag.run' => 'Run Task DAG',
+    'workflow.run' => 'Run Workflow',
     'workflow.signal' => 'Signal',
     _ => actionName,
   };
@@ -5169,52 +4550,48 @@ String _fallbackActionLabel(String actionName) {
 /// Returns a short built-in action description for palette display.
 String _fallbackActionDescription(String actionName) {
   return switch (actionName) {
-    'agent.run' => 'Harness reasoning step',
     'tool.call' => 'Harness-exposed tool call',
-    'mcp.call' => 'External tool call',
-    'cli.command' => 'Allowlisted command',
+    'mcp.call' => 'External MCP tool call',
     'human.request' => 'Human approval or input',
     'delay.until' => 'Timed wait',
-    'dag.run' => 'Nested task graph',
+    'workflow.run' => 'Nested workflow run',
     'workflow.signal' => 'Workflow signal',
     _ => 'Workflow action',
   };
 }
 
-/// Returns the visual accent color for a DAG action type.
+/// Returns the visual accent color for a task action type.
 Color _actionColor(BuildContext context, String actionName) {
   final colors = context.agentAwesomeColors;
   return switch (actionName) {
-    'agent.run' => colors.coral,
     'tool.call' => colors.cardIcon,
     'mcp.call' => colors.cardIcon,
-    'cli.command' => colors.warningText,
     'human.request' => colors.green,
     'delay.until' => colors.muted,
-    'dag.run' => colors.orbit,
+    'workflow.run' => colors.orbit,
     'workflow.signal' => colors.warningText,
     _ => colors.green,
   };
 }
 
-/// Returns a DAG node id.
+/// Returns a task node id.
 String _nodeId(Map<String, dynamic> node) {
   return '${node['id'] ?? ''}'.trim();
 }
 
-/// Returns a DAG node action type.
+/// Returns a task node action type.
 String _nodeUses(Map<String, dynamic> node) {
   return '${node['uses'] ?? ''}'.trim();
 }
 
-/// Returns dependency ids for one DAG node.
+/// Returns dependency ids for one task node.
 List<String> _nodeDependsOn(Map<String, dynamic> node) {
   return _list(
     node['depends_on'],
   ).map((item) => '$item'.trim()).where((item) => item.isNotEmpty).toList();
 }
 
-/// Reports whether two DAG nodes share an immediate dependency edge.
+/// Reports whether two task nodes share an immediate dependency edge.
 bool _nodesImmediatelyConnected(
   List<Map<String, dynamic>> nodes,
   String firstNodeId,
@@ -5231,7 +4608,7 @@ bool _nodesImmediatelyConnected(
       _nodeDependsOn(second).contains(firstNodeId);
 }
 
-/// Returns one DAG node by id, or an empty map when absent.
+/// Returns one task node by id, or an empty map when absent.
 Map<String, dynamic> _nodeById(
   List<Map<String, dynamic>> nodes,
   String nodeId,
@@ -5299,8 +4676,11 @@ String _linesText(List<dynamic> value) {
   return value.map((item) => '$item').join('\n');
 }
 
-/// Builds a unique node id for a DAG action name.
-String _nextDagNodeId(List<Map<String, dynamic>> nodes, String actionName) {
+/// Builds a unique node id for a task action name.
+String _nextTaskGraphNodeId(
+  List<Map<String, dynamic>> nodes,
+  String actionName,
+) {
   final base = actionName.replaceAll('.', '_').replaceAll('-', '_');
   final existing = nodes.map(_nodeId).toSet();
   var index = nodes.length + 1;
@@ -5312,58 +4692,25 @@ String _nextDagNodeId(List<Map<String, dynamic>> nodes, String actionName) {
   return id;
 }
 
-/// Provides valid starting arguments for one DAG action type.
-Map<String, dynamic> _defaultDagActionArgs(String actionName) {
+/// Provides valid starting arguments for one task action type.
+Map<String, dynamic> _defaultTaskGraphActionArgs(String actionName) {
   return switch (actionName) {
-    'agent.run' => <String, dynamic>{
-      'instructions': 'Return the result requested by this automation step.',
-      'input': <String, dynamic>{},
-    },
     'tool.call' => <String, dynamic>{
       'name': '',
       'domain_id': '',
       'arguments': <String, dynamic>{},
     },
-    'dag.run' => <String, dynamic>{
+    'mcp.call' => <String, dynamic>{
+      'endpoint': '',
+      'tool': '',
+      'arguments': <String, dynamic>{},
+    },
+    'workflow.run' => <String, dynamic>{
       'workflow': '',
       'input': <String, dynamic>{},
     },
     _ => <String, dynamic>{},
   };
-}
-
-/// Extracts all agent.run steps from automation drafts.
-List<_AgentStep> _agentStepsFromDrafts(
-  List<AutomationDraft> drafts, {
-  String agentId = '',
-}) {
-  final steps = <_AgentStep>[];
-  for (final draft in drafts) {
-    final items = draft.kind == 'dag'
-        ? _list(draft.body['nodes'])
-        : _stateActions(draft.body);
-    for (final item in items) {
-      final map = _map(item);
-      if ('${map['uses'] ?? ''}' != 'agent.run') {
-        continue;
-      }
-      final args = _map(map['with']);
-      final referencedAgent = '${args['agent'] ?? ''}';
-      if (agentId.isNotEmpty && referencedAgent != agentId) {
-        continue;
-      }
-      steps.add(
-        _AgentStep(
-          draftName: draft.name,
-          draftKind: draft.kind,
-          agentId: referencedAgent,
-          stepId: '${map['id'] ?? 'agent.run'}',
-          location: draft.kind == 'dag' ? 'DAG node' : 'state entry',
-        ),
-      );
-    }
-  }
-  return steps;
 }
 
 List<dynamic> _stateActions(Map<String, dynamic> body) {

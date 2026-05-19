@@ -13,16 +13,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const agentSpecTableStatement = `CREATE TABLE IF NOT EXISTS workflow_agent_specs (
-	id TEXT PRIMARY KEY,
-	name TEXT NOT NULL,
-	description TEXT NOT NULL,
-	instructions TEXT NOT NULL,
-	permissions_json TEXT NOT NULL,
-	created_at TEXT NOT NULL,
-	updated_at TEXT NOT NULL
-)`
-
 // Store provides durable workflow persistence.
 type Store struct {
 	db *sql.DB
@@ -102,6 +92,18 @@ func (s *Store) migrate(ctx context.Context) error {
 			created_at TEXT NOT NULL,
 			PRIMARY KEY (run_id, step_id)
 		)`,
+		`CREATE TABLE IF NOT EXISTS workflow_task_states (
+			run_id TEXT NOT NULL,
+			state_id TEXT NOT NULL,
+			status TEXT NOT NULL,
+			attempts INTEGER NOT NULL,
+			output_json TEXT NOT NULL,
+			error TEXT NOT NULL,
+			started_at TEXT NOT NULL,
+			completed_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			PRIMARY KEY (run_id, state_id)
+		)`,
 		`CREATE TABLE IF NOT EXISTS workflow_pending_items (
 			id TEXT PRIMARY KEY,
 			run_id TEXT NOT NULL,
@@ -145,7 +147,6 @@ func (s *Store) migrate(ctx context.Context) error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
-		agentSpecTableStatement,
 		`CREATE TABLE IF NOT EXISTS workflow_published_definitions (
 			definition_id TEXT PRIMARY KEY,
 			draft_id TEXT NOT NULL,
@@ -159,91 +160,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			return fmt.Errorf("migrate workflow database: %w", err)
 		}
 	}
-	if err := s.migrateAgentSpecTable(ctx); err != nil {
-		return err
-	}
 	return nil
-}
-
-// migrateAgentSpecTable rebuilds agent specs into the current permission model.
-func (s *Store) migrateAgentSpecTable(ctx context.Context) error {
-	columns, err := s.tableColumns(ctx, "workflow_agent_specs")
-	if err != nil {
-		return err
-	}
-	expected := []string{"id", "name", "description", "instructions", "permissions_json", "created_at", "updated_at"}
-	if hasOnlyColumns(columns, expected) {
-		return nil
-	}
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin agent spec migration: %w", err)
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DROP TABLE IF EXISTS workflow_agent_specs_rebuild`); err != nil {
-		return fmt.Errorf("prepare agent spec migration: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `ALTER TABLE workflow_agent_specs RENAME TO workflow_agent_specs_rebuild`); err != nil {
-		return fmt.Errorf("rename agent spec table: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, agentSpecTableStatement); err != nil {
-		return fmt.Errorf("create migrated agent spec table: %w", err)
-	}
-	permissionsColumn := `'{}'`
-	if columns["permissions_json"] {
-		permissionsColumn = "permissions_json"
-	}
-	copyStatement := `INSERT INTO workflow_agent_specs
-		(id, name, description, instructions, permissions_json, created_at, updated_at)
-		SELECT id, name, description, instructions, ` + permissionsColumn + `, created_at, updated_at
-		FROM workflow_agent_specs_rebuild`
-	if _, err := tx.ExecContext(ctx, copyStatement); err != nil {
-		return fmt.Errorf("copy migrated agent specs: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `DROP TABLE workflow_agent_specs_rebuild`); err != nil {
-		return fmt.Errorf("drop rebuilt agent spec table: %w", err)
-	}
-	return tx.Commit()
-}
-
-// tableColumns returns the column names currently present on a SQLite table.
-func (s *Store) tableColumns(ctx context.Context, table string) (map[string]bool, error) {
-	if strings.TrimSpace(table) != "workflow_agent_specs" {
-		return nil, fmt.Errorf("unsupported table inspection %q", table)
-	}
-	rows, err := s.db.QueryContext(ctx, "PRAGMA table_info("+table+")")
-	if err != nil {
-		return nil, fmt.Errorf("inspect table %q: %w", table, err)
-	}
-	defer rows.Close()
-	columns := map[string]bool{}
-	for rows.Next() {
-		var cid int
-		var name, columnType string
-		var notNull, primaryKey int
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
-			return nil, fmt.Errorf("inspect table %q column: %w", table, err)
-		}
-		columns[name] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("inspect table %q columns: %w", table, err)
-	}
-	return columns, nil
-}
-
-// hasOnlyColumns reports whether the table column set matches the expected set.
-func hasOnlyColumns(columns map[string]bool, expected []string) bool {
-	if len(columns) != len(expected) {
-		return false
-	}
-	for _, column := range expected {
-		if !columns[column] {
-			return false
-		}
-	}
-	return true
 }
 
 // ensurePath creates the database parent directory and private file.

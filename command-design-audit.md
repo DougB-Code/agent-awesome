@@ -35,7 +35,7 @@ Not every section uses the command shell. Today and Today Attention are route-le
 | Menu group | Menu sections |
 |---|---|
 | Home & Chat | Today, Chat, Backlog |
-| Automations | Operations, Workflows, Tasks, Agents, MCP Servers, Tools |
+| Automations | Operations, Workflows, Tasks, MCP Servers, Tools |
 | Knowledge | Memory, Files, People |
 | System | Settings |
 
@@ -50,7 +50,6 @@ Not every section uses the command shell. Today and Today Attention are route-le
 | Operations | Operations | Overview, History, Safety | None |
 | Workflows | Workflows | Overview, Steps, Map, Safety | None |
 | Tasks | Tasks, Nodes | Builder, Overview, Safety | None |
-| Agents | Agent Profiles | Profile | Overview, Instructions, Permissions, Used In |
 | MCP Servers | MCP Servers | Selected MCP server config editor | None |
 | Tools | Tools | Selected local tool config editor | None |
 | Memory | Search, Review, Safety, Map, Capture | Overview, Source, Relations, Metadata, Corrections, Pages | None |
@@ -365,12 +364,12 @@ Styling of right modes:
 
 ### Left Panel: Tasks
 
-Purpose: select and manage task DAG drafts.
+Purpose: select and manage task graph drafts.
 
 Content:
 
-- DAG draft list.
-- Header action for creating a task DAG.
+- Task graph draft list.
+- Header action for creating a task graph.
 - Shell search.
 
 Styling:
@@ -380,11 +379,11 @@ Styling:
 
 ### Left Panel: Nodes
 
-Purpose: provide a palette of DAG node/action types.
+Purpose: provide a palette of task graph node/action types.
 
 Content:
 
-- Action/node palette for `agent.run`, `tool.call`, and `dag.run`-style nodes.
+- Action/node palette for `mcp.call`, `tool.call`, and `workflow.run` task nodes.
 - Searchable through the shell query.
 
 Styling:
@@ -395,8 +394,8 @@ Styling:
 
 Right modes:
 
-- Builder: visual DAG editor with node graph and selected node controls.
-- Overview: DAG metadata and selected-step form surface.
+- Builder: visual task graph editor with node graph and selected node controls.
+- Overview: task graph metadata and selected-step form surface.
 - Safety: validation diagnostics.
 
 Styling of right modes:
@@ -408,39 +407,7 @@ Styling of right modes:
 
 ## Agents
 
-### Left Panel: Agent Profiles
-
-Purpose: select and manage reusable automation agent profiles.
-
-Content:
-
-- Agent profile list.
-- Header action for creating an agent profile.
-- Shell search.
-
-Styling:
-
-- Command shell with one left area.
-- Profile rows are automation tiles/cards.
-
-Right mode:
-
-- Profile.
-
-Tab menu inside Profile:
-
-- Overview.
-- Instructions.
-- Permissions.
-- Used In.
-
-Styling:
-
-- This is the only active right-pane labeled tab menu found in the command shell.
-- Overview uses an `Agent Profile` section.
-- Instructions uses an `Instructions` section.
-- Permissions uses a `Permissions` section.
-- Used In uses a `Used In` section listing workflow/task usage or an `Unused` empty block.
+The previous Automations Agents section has been retired. Agent behavior is owned by the conversational harness and gateway profile policy, while workflow authoring stays limited to workflow definitions, task graphs, MCP calls, tool calls, and nested workflow runs.
 
 ## MCP Servers
 
@@ -773,7 +740,7 @@ Styling:
 
 3. Backlog has the widest variation. Queue is list/card based, Stream is canvas based, WBS is tree/section based, Constellation has an in-content graph toolbar and query field, and Capture is form based. This is domain-appropriate, but it is the least visually uniform section.
 
-4. Automations is mostly consistent. Operations, Workflows, Tasks, and Agents share the focused command panel. Agents is the only place with a right-side labeled tab menu, which makes it stand out but matches the configured shell hierarchy.
+4. Automations is mostly consistent. Operations, Workflows, and Tasks share the focused command panel, while MCP Servers and Tools use the shared configuration shell.
 
 5. Files and People are strongly paired. Both use a single left collection area, shell-owned quick filters, selected cards with accent stripes, and right inspector modes.
 
@@ -905,12 +872,12 @@ Style:
 Inconsistencies:
 
 - Steps editing has a different density and section treatment than Settings forms, despite both being editable configuration surfaces.
-- Template and draft cards are visually close to task/agent cards but not formally shared.
+- Template and draft cards are visually close to task cards but not formally shared.
 - Map state cards resemble graph/node cards but use separate styling.
 
 ### Tasks
 
-Purpose: build task DAGs and manage DAG drafts/nodes.
+Purpose: build task graphs and manage task graph drafts/nodes.
 
 Style:
 
@@ -920,24 +887,9 @@ Style:
 
 Inconsistencies:
 
-- DAG node cards have a distinct visual language from Backlog graph cards and Workflows map cards.
+- Task graph node cards have a distinct visual language from Backlog graph cards and Workflows map cards.
 - Node toolbars use compact local icon rows; these should share the same canvas-toolbar rule as Backlog visualizations.
 - Palette cards and draft cards should use a named selectable-card variant.
-
-### Agents
-
-Purpose: select agent profiles and edit profile subviews.
-
-Style:
-
-- Left side uses profile cards/automation tiles.
-- Right side has one Profile mode with labeled tabs: Overview, Instructions, Permissions, Used In.
-- Tab panels use section blocks and badges.
-
-Inconsistencies:
-
-- Agents is currently the clearest labeled-tab example; Backlog also uses mode-owned tabs in some visual/capture modes. The style guide should define tab styling as a shared right-mode subview control, not an Agents-only pattern.
-- Instructions and Permissions editing should align with Settings form density when they are true configuration forms.
 
 ### MCP Servers
 
@@ -1043,13 +995,13 @@ Inconsistencies:
 
 3. **Empty states vary in weight.** `PanelEmptyState` is plain centered text, `PanelEmptyBlock` is a bordered block, form editors sometimes put empty states inside `FormSectionCard`, and Files/People have actionable empty states.
 
-4. **Editable forms split into Settings forms and local forms.** Settings uses shared field primitives and autosave feedback. Backlog, Memory Capture, Workflow Steps, Task Overview, and some Agent panels still feel more custom.
+4. **Editable forms split into Settings forms and local forms.** Settings uses shared field primitives and autosave feedback. Backlog, Memory Capture, Workflow Steps, and Task Overview still feel more custom.
 
 5. **Section block choices are ambiguous.** `PanelSectionBlock`, `PanelSectionBlock.gradient`, `PanelSectionBlock.plain`, and `FormSectionCard` are all used, but there is no documented rule for when each is correct.
 
 6. **Badges and chips are visually fragmented.** `PanelBadge` is common, but Today chips, Memory filter chips, Backlog action chips, and graph labels use local variants.
 
-7. **Canvas controls are local.** Stream, Constellation, DAG Builder, and Workflow Map each have graph/canvas affordances that should share a toolbar/control visual language.
+7. **Canvas controls are local.** Stream, Constellation, Task Graph Builder, and Workflow Map each have graph/canvas affordances that should share a toolbar/control visual language.
 
 8. **Typography is mostly consistent but not codified.** Pane labels are uppercase/letter-spaced, card titles are bold, secondary text is muted 12-14px, and dashboard numbers are larger. These are stable patterns but need names and limits.
 

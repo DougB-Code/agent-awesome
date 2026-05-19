@@ -6,19 +6,6 @@ local-exec:
   default-max-output-bytes: 65536
   allowed-workdirs:
     - .
-  commands:
-    - name: git_status
-      executable: git
-      description: Show repository status.
-      args:
-        - status
-        - --short
-      timeout: 5s
-      max-output-bytes: 16384
-      approval:
-        always-allow-within-workspace: false
-        always-allow-command-starts-with: []
-        always-allow: false
 mcp:
   enabled: true
   servers:
@@ -88,10 +75,16 @@ mcp:
           - workflow_draft_publish
           - workflow_template_list
           - workflow_template_instantiate
-          - workflow_agent_spec_list
-          - workflow_agent_spec_create
-          - workflow_agent_spec_update
-          - workflow_agent_spec_delete
+    - name: command
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8093/mcp
+      tools:
+        allow:
+          - command_template_list
+          - command_request
+          - command_run
+          - command_status
+          - command_cancel
 memory:
   actor: agent:agent-awesome
   read-domains:
