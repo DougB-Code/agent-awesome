@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	commandparser "command/internal/parser"
 )
 
 const (
@@ -42,30 +44,46 @@ type Config struct {
 	ApprovalTTL      time.Duration
 	RequireApproval  bool
 	AllowArbitrary   bool
+	ParserDir        string
 }
 
 // Template stores one configured named command shape.
 type Template struct {
-	ID              string            `json:"id"`
-	Description     string            `json:"description"`
-	Executable      string            `json:"executable"`
-	Args            []string          `json:"args"`
-	Stdin           string            `json:"stdin,omitempty"`
-	WorkingDir      string            `json:"working_dir,omitempty"`
-	Env             map[string]string `json:"env,omitempty"`
-	Timeout         time.Duration     `json:"timeout,omitempty"`
-	MaxOutputBytes  int64             `json:"max_output_bytes,omitempty"`
-	RequireApproval bool              `json:"require_approval,omitempty"`
+	ID                     string            `json:"id"`
+	Description            string            `json:"description"`
+	Executable             string            `json:"executable"`
+	Args                   []string          `json:"args"`
+	Stdin                  string            `json:"stdin,omitempty"`
+	WorkingDir             string            `json:"working_dir,omitempty"`
+	Env                    map[string]string `json:"env,omitempty"`
+	Timeout                time.Duration     `json:"timeout,omitempty"`
+	MaxOutputBytes         int64             `json:"max_output_bytes,omitempty"`
+	RequireApproval        bool              `json:"require_approval,omitempty"`
+	ParameterSchema        map[string]any    `json:"parameter_schema,omitempty"`
+	OutputContract         OutputContract    `json:"output_contract,omitempty"`
+	ParserID               string            `json:"parser_id,omitempty"`
+	OutputSource           string            `json:"output_source,omitempty"`
+	ArtifactGlobs          []string          `json:"artifact_globs,omitempty"`
+	EnvironmentPolicy      map[string]any    `json:"environment_policy,omitempty"`
+	WorkingDirectoryPolicy string            `json:"working_directory_policy,omitempty"`
+	ValidationSchema       map[string]any    `json:"validation_schema,omitempty"`
 }
 
 // TemplateSummary describes a configured command template without secret-bearing fields.
 type TemplateSummary struct {
-	ID               string   `json:"id"`
-	Description      string   `json:"description"`
-	Parameters       []string `json:"parameters,omitempty"`
-	ApprovalRequired bool     `json:"approval_required"`
-	Timeout          string   `json:"timeout,omitempty"`
-	MaxOutputBytes   int64    `json:"max_output_bytes,omitempty"`
+	ID                     string         `json:"id"`
+	Description            string         `json:"description"`
+	Parameters             []string       `json:"parameters,omitempty"`
+	ApprovalRequired       bool           `json:"approval_required"`
+	Timeout                string         `json:"timeout,omitempty"`
+	MaxOutputBytes         int64          `json:"max_output_bytes,omitempty"`
+	ParameterSchema        map[string]any `json:"parameter_schema,omitempty"`
+	OutputContract         OutputContract `json:"output_contract,omitempty"`
+	ParserID               string         `json:"parser_id,omitempty"`
+	OutputSource           string         `json:"output_source,omitempty"`
+	ArtifactGlobs          []string       `json:"artifact_globs,omitempty"`
+	EnvironmentPolicy      map[string]any `json:"environment_policy,omitempty"`
+	WorkingDirectoryPolicy string         `json:"working_directory_policy,omitempty"`
 }
 
 // Request stores one command proposal request.
@@ -110,16 +128,30 @@ type RunResult struct {
 
 // StatusResult stores observable command job state.
 type StatusResult struct {
-	JobID      string `json:"job_id"`
-	Status     string `json:"status"`
-	ExitCode   int    `json:"exit_code"`
-	StdoutTail string `json:"stdout_tail"`
-	StderrTail string `json:"stderr_tail"`
-	Truncated  bool   `json:"truncated"`
-	TimedOut   bool   `json:"timed_out"`
-	Error      string `json:"error,omitempty"`
-	StartedAt  string `json:"started_at"`
-	EndedAt    string `json:"ended_at,omitempty"`
+	JobID       string           `json:"job_id"`
+	Status      string           `json:"status"`
+	ExitCode    int              `json:"exit_code"`
+	StdoutTail  string           `json:"stdout_tail"`
+	StderrTail  string           `json:"stderr_tail"`
+	Truncated   bool             `json:"truncated"`
+	TimedOut    bool             `json:"timed_out"`
+	Error       string           `json:"error,omitempty"`
+	StartedAt   string           `json:"started_at"`
+	EndedAt     string           `json:"ended_at,omitempty"`
+	Output      any              `json:"output,omitempty"`
+	Diagnostics []Diagnostic     `json:"diagnostics,omitempty"`
+	Artifacts   []Artifact       `json:"artifacts,omitempty"`
+	Validation  ValidationResult `json:"validation,omitempty"`
+}
+
+// ExecuteRequest stores one workflow-friendly command execution request.
+type ExecuteRequest struct {
+	TemplateID string         `json:"template_id"`
+	Parameters map[string]any `json:"parameters,omitempty"`
+	WorkingDir string         `json:"cwd,omitempty"`
+	Reason     string         `json:"reason,omitempty"`
+	Actor      string         `json:"actor,omitempty"`
+	SessionID  string         `json:"session_id,omitempty"`
 }
 
 // Service validates command requests, records approvals, and tracks jobs.
@@ -127,6 +159,7 @@ type Service struct {
 	cfg       Config
 	roots     []string
 	templates map[string]Template
+	parsers   *commandparser.Catalog
 	mu        sync.Mutex
 	jobs      map[string]context.CancelFunc
 }
@@ -158,7 +191,11 @@ func Open(cfg Config) (*Service, error) {
 	if err := os.MkdirAll(filepath.Join(normalized.DataDir, "jobs"), 0o700); err != nil {
 		return nil, fmt.Errorf("create jobs directory: %w", err)
 	}
-	return &Service{cfg: normalized, roots: roots, templates: templates, jobs: map[string]context.CancelFunc{}}, nil
+	parserCatalog, err := commandparser.NewCatalog(normalized.ParserDir)
+	if err != nil {
+		return nil, err
+	}
+	return &Service{cfg: normalized, roots: roots, templates: templates, parsers: parserCatalog, jobs: map[string]context.CancelFunc{}}, nil
 }
 
 // Templates returns sanitized configured command templates in stable order.
@@ -184,12 +221,19 @@ func (s *Service) templateSummary(template Template) TemplateSummary {
 		maxOutput = s.cfg.DefaultMaxOutput
 	}
 	return TemplateSummary{
-		ID:               template.ID,
-		Description:      template.Description,
-		Parameters:       templateParameters(template),
-		ApprovalRequired: s.cfg.RequireApproval || template.RequireApproval,
-		Timeout:          timeout.String(),
-		MaxOutputBytes:   maxOutput,
+		ID:                     template.ID,
+		Description:            template.Description,
+		Parameters:             templateParameters(template),
+		ApprovalRequired:       s.cfg.RequireApproval || template.RequireApproval,
+		Timeout:                timeout.String(),
+		MaxOutputBytes:         maxOutput,
+		ParameterSchema:        cloneMap(template.ParameterSchema),
+		OutputContract:         template.OutputContract,
+		ParserID:               template.ParserID,
+		OutputSource:           template.OutputSource,
+		ArtifactGlobs:          append([]string(nil), template.ArtifactGlobs...),
+		EnvironmentPolicy:      cloneMap(template.EnvironmentPolicy),
+		WorkingDirectoryPolicy: template.WorkingDirectoryPolicy,
 	}
 }
 
@@ -250,6 +294,73 @@ func (s *Service) Run(ctx context.Context, req RunRequest) (RunResult, error) {
 	s.mu.Unlock()
 	go s.execute(runCtx, jobID, proposal)
 	return RunResult{JobID: jobID, Status: statusRunning}, nil
+}
+
+// Execute requests, runs, polls, and returns one completed command result.
+func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (StatusResult, error) {
+	proposal, err := s.Request(ctx, Request{
+		TemplateID: req.TemplateID,
+		Parameters: req.Parameters,
+		WorkingDir: req.WorkingDir,
+		Reason:     req.Reason,
+		Actor:      req.Actor,
+		SessionID:  req.SessionID,
+	})
+	if err != nil {
+		return StatusResult{}, err
+	}
+	if proposal.ApprovalRequired {
+		return StatusResult{}, fmt.Errorf("command.execute cannot run approval-required command %q", req.TemplateID)
+	}
+	run, err := s.Run(ctx, RunRequest{ApprovalID: proposal.ApprovalID})
+	if err != nil {
+		return StatusResult{}, err
+	}
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		status, err := s.Status(ctx, run.JobID)
+		if err != nil {
+			return StatusResult{}, err
+		}
+		if status.Status != statusPending && status.Status != statusRunning {
+			return status, commandExecuteResultError(status)
+		}
+		select {
+		case <-ctx.Done():
+			_, _ = s.Cancel(context.Background(), run.JobID)
+			return StatusResult{}, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// commandExecuteResultError converts unsuccessful workflow command results into errors.
+func commandExecuteResultError(status StatusResult) error {
+	if status.Status != statusSucceeded {
+		return commandExecuteTerminalError(status)
+	}
+	if status.Validation.Checked && !status.Validation.Valid {
+		return fmt.Errorf("command.execute job %s output validation failed: %s", status.JobID, strings.Join(status.Validation.Errors, "; "))
+	}
+	for _, diagnostic := range status.Diagnostics {
+		if strings.EqualFold(diagnostic.Severity, "error") {
+			return fmt.Errorf("command.execute job %s output contract failed: %s", status.JobID, diagnostic.Message)
+		}
+	}
+	return nil
+}
+
+// commandExecuteTerminalError converts unsuccessful terminal jobs into workflow errors.
+func commandExecuteTerminalError(status StatusResult) error {
+	detail := strings.TrimSpace(status.Error)
+	if detail == "" && status.ExitCode >= 0 {
+		detail = fmt.Sprintf("exit code %d", status.ExitCode)
+	}
+	if detail == "" {
+		detail = fmt.Sprintf("terminal status %s", status.Status)
+	}
+	return fmt.Errorf("command.execute job %s %s: %s", status.JobID, status.Status, detail)
 }
 
 // Approve marks one exact command proposal as externally approved.
@@ -339,9 +450,108 @@ func (s *Service) execute(ctx context.Context, jobID string, proposal approvalRe
 		record.Status = statusSucceeded
 		record.ExitCode = 0
 	}
+	output, diagnostics, artifacts, validation := s.completedOutput(context.Background(), proposal, record)
+	record.Output = output
+	record.Diagnostics = diagnostics
+	record.Artifacts = artifacts
+	record.Validation = validation
 	_ = s.saveJob(context.Background(), record)
 	proposal.Status = record.Status
 	_ = s.saveApproval(context.Background(), proposal)
+}
+
+// completedOutput derives structured output, diagnostics, artifacts, and validation.
+func (s *Service) completedOutput(ctx context.Context, proposal approvalRecord, record jobRecord) (any, []Diagnostic, []Artifact, ValidationResult) {
+	var output any
+	var diagnostics []Diagnostic
+	if strings.TrimSpace(proposal.ParserID) != "" {
+		parsed, err := s.parsers.Parse(ctx, proposal.ParserID, commandparser.Input{
+			Stdout:   record.StdoutTail,
+			Stderr:   record.StderrTail,
+			ExitCode: record.ExitCode,
+			Status:   record.Status,
+		})
+		if err != nil {
+			diagnostics = append(diagnostics, Diagnostic{Severity: "error", Message: err.Error()})
+		} else {
+			output = parsed["output"]
+			if output == nil {
+				output = parsed
+			}
+			diagnostics = append(diagnostics, diagnosticsFromAny(parsed["diagnostics"])...)
+		}
+	} else {
+		parsed, err := parseContractOutput(proposal, record)
+		if err != nil {
+			diagnostics = append(diagnostics, Diagnostic{Severity: "error", Message: err.Error()})
+		} else {
+			output = parsed
+		}
+	}
+	artifacts, artifactDiagnostics := discoverArtifacts(proposal.WorkingDir, proposal.ArtifactGlobs)
+	diagnostics = append(diagnostics, artifactDiagnostics...)
+	validation := validateOutput(output, proposal.ValidationSchema)
+	for _, message := range validation.Errors {
+		diagnostics = append(diagnostics, Diagnostic{Severity: "error", Message: message})
+	}
+	return output, diagnostics, artifacts, validation
+}
+
+// parseContractOutput parses raw output directly when no parser is configured.
+func parseContractOutput(proposal approvalRecord, record jobRecord) (any, error) {
+	format := normalizeOutputFormat(proposal.OutputContract.Format)
+	source := outputText(record, normalizeOutputSource(proposal.OutputSource, proposal.OutputContract))
+	switch format {
+	case "":
+		return nil, nil
+	case outputFormatJSON:
+		var output any
+		if err := json.Unmarshal([]byte(source), &output); err != nil {
+			return nil, fmt.Errorf("parse JSON output: %w", err)
+		}
+		return output, nil
+	case outputFormatText, outputFormatPlain:
+		return map[string]any{"text": source}, nil
+	default:
+		return nil, fmt.Errorf("output format %q requires a configured parser", format)
+	}
+}
+
+// outputText selects a raw output stream for parsing.
+func outputText(record jobRecord, source string) string {
+	switch source {
+	case outputSourceStderr:
+		return record.StderrTail
+	case outputSourceCombined:
+		return strings.TrimSpace(record.StdoutTail + "\n" + record.StderrTail)
+	default:
+		return record.StdoutTail
+	}
+}
+
+// diagnosticsFromAny decodes generic parser diagnostics into public diagnostics.
+func diagnosticsFromAny(value any) []Diagnostic {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	diagnostics := make([]Diagnostic, 0, len(items))
+	for _, item := range items {
+		switch typed := item.(type) {
+		case string:
+			if strings.TrimSpace(typed) != "" {
+				diagnostics = append(diagnostics, Diagnostic{Severity: "info", Message: typed})
+			}
+		case map[string]any:
+			message, _ := typed["message"].(string)
+			if strings.TrimSpace(message) == "" {
+				continue
+			}
+			severity, _ := typed["severity"].(string)
+			diagnostics = append(diagnostics, Diagnostic{Severity: severity, Message: message})
+		}
+	}
+	return diagnostics
 }
 
 // resolveRequest normalizes a raw request into one exact command proposal.
@@ -361,6 +571,9 @@ func (s *Service) resolveTemplateRequest(req Request) (approvalRecord, error) {
 	if !ok {
 		return approvalRecord{}, fmt.Errorf("command template %q not found", req.TemplateID)
 	}
+	if err := validateTemplateParameters(req.Parameters, template.ParameterSchema); err != nil {
+		return approvalRecord{}, err
+	}
 	args := renderStrings(template.Args, req.Parameters)
 	stdin := renderString(template.Stdin, req.Parameters)
 	cwd, err := s.safeWorkdir(firstNonEmpty(req.WorkingDir, template.WorkingDir))
@@ -376,20 +589,43 @@ func (s *Service) resolveTemplateRequest(req Request) (approvalRecord, error) {
 		maxOutput = s.cfg.DefaultMaxOutput
 	}
 	return approvalRecord{
-		TemplateID:       template.ID,
-		ApprovalRequired: s.cfg.RequireApproval || template.RequireApproval,
-		Executable:       template.Executable,
-		Args:             args,
-		Stdin:            stdin,
-		WorkingDir:       cwd,
-		Env:              template.Env,
-		Timeout:          timeout,
-		MaxOutputBytes:   maxOutput,
-		Reason:           req.Reason,
-		Risk:             req.Risk,
-		Actor:            req.Actor,
-		SessionID:        req.SessionID,
+		TemplateID:             template.ID,
+		ApprovalRequired:       s.cfg.RequireApproval || template.RequireApproval,
+		Executable:             template.Executable,
+		Args:                   args,
+		Stdin:                  stdin,
+		WorkingDir:             cwd,
+		Env:                    template.Env,
+		Timeout:                timeout,
+		MaxOutputBytes:         maxOutput,
+		ParameterSchema:        cloneMap(template.ParameterSchema),
+		OutputContract:         template.OutputContract,
+		ParserID:               template.ParserID,
+		OutputSource:           template.OutputSource,
+		ArtifactGlobs:          append([]string(nil), template.ArtifactGlobs...),
+		EnvironmentPolicy:      cloneMap(template.EnvironmentPolicy),
+		WorkingDirectoryPolicy: template.WorkingDirectoryPolicy,
+		ValidationSchema:       cloneMap(template.ValidationSchema),
+		Reason:                 req.Reason,
+		Risk:                   req.Risk,
+		Actor:                  req.Actor,
+		SessionID:              req.SessionID,
 	}, nil
+}
+
+// validateTemplateParameters enforces a template's input schema before rendering.
+func validateTemplateParameters(parameters map[string]any, schema map[string]any) error {
+	if len(schema) == 0 {
+		return nil
+	}
+	if parameters == nil {
+		parameters = map[string]any{}
+	}
+	result := validateOutput(parameters, schema)
+	if result.Valid {
+		return nil
+	}
+	return fmt.Errorf("template parameters invalid: %s", strings.Join(result.Errors, "; "))
 }
 
 // resolveArbitraryRequest normalizes one arbitrary command request.
@@ -526,23 +762,31 @@ func (s *Service) jobPath(jobID string) (string, error) {
 
 // approvalRecord stores one frozen command approval proposal.
 type approvalRecord struct {
-	ApprovalID       string            `json:"approval_id"`
-	TemplateID       string            `json:"template_id,omitempty"`
-	Status           string            `json:"status"`
-	ApprovalRequired bool              `json:"approval_required"`
-	Executable       string            `json:"executable"`
-	Args             []string          `json:"args"`
-	Stdin            string            `json:"stdin,omitempty"`
-	WorkingDir       string            `json:"cwd"`
-	Env              map[string]string `json:"env,omitempty"`
-	Timeout          time.Duration     `json:"timeout"`
-	MaxOutputBytes   int64             `json:"max_output_bytes"`
-	Reason           string            `json:"reason,omitempty"`
-	Risk             string            `json:"risk,omitempty"`
-	Actor            string            `json:"actor,omitempty"`
-	SessionID        string            `json:"session_id,omitempty"`
-	CreatedAt        string            `json:"created_at"`
-	ExpiresAt        string            `json:"expires_at"`
+	ApprovalID             string            `json:"approval_id"`
+	TemplateID             string            `json:"template_id,omitempty"`
+	Status                 string            `json:"status"`
+	ApprovalRequired       bool              `json:"approval_required"`
+	Executable             string            `json:"executable"`
+	Args                   []string          `json:"args"`
+	Stdin                  string            `json:"stdin,omitempty"`
+	WorkingDir             string            `json:"cwd"`
+	Env                    map[string]string `json:"env,omitempty"`
+	Timeout                time.Duration     `json:"timeout"`
+	MaxOutputBytes         int64             `json:"max_output_bytes"`
+	ParameterSchema        map[string]any    `json:"parameter_schema,omitempty"`
+	Reason                 string            `json:"reason,omitempty"`
+	Risk                   string            `json:"risk,omitempty"`
+	Actor                  string            `json:"actor,omitempty"`
+	SessionID              string            `json:"session_id,omitempty"`
+	CreatedAt              string            `json:"created_at"`
+	ExpiresAt              string            `json:"expires_at"`
+	OutputContract         OutputContract    `json:"output_contract,omitempty"`
+	ParserID               string            `json:"parser_id,omitempty"`
+	OutputSource           string            `json:"output_source,omitempty"`
+	ArtifactGlobs          []string          `json:"artifact_globs,omitempty"`
+	EnvironmentPolicy      map[string]any    `json:"environment_policy,omitempty"`
+	WorkingDirectoryPolicy string            `json:"working_directory_policy,omitempty"`
+	ValidationSchema       map[string]any    `json:"validation_schema,omitempty"`
 }
 
 // requestResult returns the public approval proposal shape.
@@ -599,32 +843,40 @@ func (r approvalRecord) canRun() error {
 
 // jobRecord stores durable process execution status.
 type jobRecord struct {
-	JobID      string `json:"job_id"`
-	ApprovalID string `json:"approval_id"`
-	Status     string `json:"status"`
-	ExitCode   int    `json:"exit_code"`
-	StdoutTail string `json:"stdout_tail"`
-	StderrTail string `json:"stderr_tail"`
-	Truncated  bool   `json:"truncated"`
-	TimedOut   bool   `json:"timed_out"`
-	Error      string `json:"error,omitempty"`
-	StartedAt  string `json:"started_at"`
-	EndedAt    string `json:"ended_at,omitempty"`
+	JobID       string           `json:"job_id"`
+	ApprovalID  string           `json:"approval_id"`
+	Status      string           `json:"status"`
+	ExitCode    int              `json:"exit_code"`
+	StdoutTail  string           `json:"stdout_tail"`
+	StderrTail  string           `json:"stderr_tail"`
+	Truncated   bool             `json:"truncated"`
+	TimedOut    bool             `json:"timed_out"`
+	Error       string           `json:"error,omitempty"`
+	StartedAt   string           `json:"started_at"`
+	EndedAt     string           `json:"ended_at,omitempty"`
+	Output      any              `json:"output,omitempty"`
+	Diagnostics []Diagnostic     `json:"diagnostics,omitempty"`
+	Artifacts   []Artifact       `json:"artifacts,omitempty"`
+	Validation  ValidationResult `json:"validation,omitempty"`
 }
 
 // statusResult returns the public job status shape.
 func (r jobRecord) statusResult() StatusResult {
 	return StatusResult{
-		JobID:      r.JobID,
-		Status:     r.Status,
-		ExitCode:   r.ExitCode,
-		StdoutTail: r.StdoutTail,
-		StderrTail: r.StderrTail,
-		Truncated:  r.Truncated,
-		TimedOut:   r.TimedOut,
-		Error:      r.Error,
-		StartedAt:  r.StartedAt,
-		EndedAt:    r.EndedAt,
+		JobID:       r.JobID,
+		Status:      r.Status,
+		ExitCode:    r.ExitCode,
+		StdoutTail:  r.StdoutTail,
+		StderrTail:  r.StderrTail,
+		Truncated:   r.Truncated,
+		TimedOut:    r.TimedOut,
+		Error:       r.Error,
+		StartedAt:   r.StartedAt,
+		EndedAt:     r.EndedAt,
+		Output:      r.Output,
+		Diagnostics: append([]Diagnostic(nil), r.Diagnostics...),
+		Artifacts:   append([]Artifact(nil), r.Artifacts...),
+		Validation:  r.Validation,
 	}
 }
 
@@ -683,7 +935,19 @@ func normalizeConfig(cfg Config) (Config, error) {
 	if len(cfg.AllowedEnv) == 0 {
 		cfg.AllowedEnv = []string{"PATH", "HOME", "USER", "TMPDIR"}
 	}
+	if strings.TrimSpace(cfg.ParserDir) == "" {
+		cfg.ParserDir = defaultParserDir()
+	}
 	return cfg, nil
+}
+
+// defaultParserDir returns the OS-local command parser catalog path.
+func defaultParserDir() string {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return filepath.Join(".", "agent-awesome", "command", "parsers")
+	}
+	return filepath.Join(configDir, "agent-awesome", "command", "parsers")
 }
 
 // cleanRoots resolves configured allowed working directory roots.
@@ -833,6 +1097,55 @@ func containsString(values []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// discoverArtifacts expands configured globs inside the command working directory.
+func discoverArtifacts(workdir string, globs []string) ([]Artifact, []Diagnostic) {
+	var artifacts []Artifact
+	var diagnostics []Diagnostic
+	for _, pattern := range globs {
+		trimmed := strings.TrimSpace(pattern)
+		if trimmed == "" {
+			continue
+		}
+		if !filepath.IsAbs(trimmed) {
+			trimmed = filepath.Join(workdir, trimmed)
+		}
+		matches, err := filepath.Glob(trimmed)
+		if err != nil {
+			diagnostics = append(diagnostics, Diagnostic{Severity: "error", Message: fmt.Sprintf("artifact glob %q: %v", pattern, err)})
+			continue
+		}
+		for _, match := range matches {
+			clean := filepath.Clean(match)
+			rel, err := filepath.Rel(workdir, clean)
+			if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+				diagnostics = append(diagnostics, Diagnostic{Severity: "error", Message: fmt.Sprintf("artifact %q is outside working directory", clean)})
+				continue
+			}
+			info, err := os.Stat(clean)
+			if err != nil || info.IsDir() {
+				continue
+			}
+			artifacts = append(artifacts, Artifact{Path: filepath.ToSlash(rel), Size: info.Size()})
+		}
+	}
+	sort.Slice(artifacts, func(i, j int) bool {
+		return artifacts[i].Path < artifacts[j].Path
+	})
+	return artifacts, diagnostics
+}
+
+// cloneMap copies JSON-like template metadata.
+func cloneMap(value map[string]any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	next := make(map[string]any, len(value))
+	for key, item := range value {
+		next[key] = item
+	}
+	return next
 }
 
 // exitCode extracts a process exit code when available.

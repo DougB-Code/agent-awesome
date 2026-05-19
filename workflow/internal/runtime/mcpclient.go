@@ -75,8 +75,42 @@ func (c *MCPClient) Call(ctx context.Context, req actions.MCPRequest) (map[strin
 		return nil, fmt.Errorf("MCP error: %v", rpcErr["message"])
 	}
 	result, _ := decoded["result"].(map[string]any)
+	if err := mcpToolResultError(req.Tool, result); err != nil {
+		return nil, err
+	}
 	if structured, ok := result["structuredContent"].(map[string]any); ok {
 		return structured, nil
 	}
 	return result, nil
+}
+
+// mcpToolResultError converts MCP isError tool results into action failures.
+func mcpToolResultError(toolName string, result map[string]any) error {
+	isError, _ := result["isError"].(bool)
+	if !isError {
+		return nil
+	}
+	return fmt.Errorf("MCP tool %s failed: %s", strings.TrimSpace(toolName), mcpToolErrorText(result))
+}
+
+// mcpToolErrorText extracts the most useful message from an MCP error result.
+func mcpToolErrorText(result map[string]any) string {
+	if structured, ok := result["structuredContent"].(map[string]any); ok {
+		if message, ok := structured["error"].(string); ok && strings.TrimSpace(message) != "" {
+			return strings.TrimSpace(message)
+		}
+		if data, err := json.Marshal(structured); err == nil && len(data) > 0 {
+			return string(data)
+		}
+	}
+	if content, ok := result["content"].([]any); ok {
+		for _, item := range content {
+			itemMap, _ := item.(map[string]any)
+			text, _ := itemMap["text"].(string)
+			if strings.TrimSpace(text) != "" {
+				return strings.TrimSpace(text)
+			}
+		}
+	}
+	return "tool returned isError=true"
 }

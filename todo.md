@@ -2,58 +2,16 @@
 
 ## Priority 1
 
-### Panels - Backlog - Queue
-
-- We can dismiss a card, but where does it go? Is there a way to recover it? Do we need a Trash (right) panel?
-- The 'queue score' is not clear. What does this number actually represent?
-- The Clarify pill is not clear. What's the algorithm to place them on a card?
-- Change 'Missing Person' to 'No Person'.
-- Remove the 'Open' text. Redundant with Open pill.
-- The 'Schedule' button is really an 'Auto Schedule' button. Everything should always be automatically scheduled by the system.
-
-### Panels - Backlog - Queue - Memory
-
-- There's a chat message. What is 'No Linked Memory'?
-
-### Panels - Backlog - Stream
-
-- Remove the preset buttons (Custom, Effort, etc). 
-
-### Panels - Backlog - Terrain
-
-- Why does the pill have a number in it? What's it represent?
-
-### Panels - Memory - Search
-
-- Remove the refresh button.
-- The use of the drop down vs buttons is not clear. 
-- Clicking on a memory entry can cause glitching. 
-- Memory cards are showing internal identifiers.
-- The overview card is not showing anything which can't be shown on the card itself. 
-
-### Panels - Memory - Browse, Review
-
-- Remove these
-
-
-### Panels - Memory - Safety
-
-- What are these? How are they flagged?
-
-### Panels - Files & People
-
-- Remove the cards or buttons. Only one is needed. 
-- Remove the person icon from the new person button.
-
-### Shell
-
-- The spacing between the top right buttons is not consistent. 
-
+- Prove app can run Codex CLI remotely. 
 
 ## Priority 2
 
 - Prove multi-user, multi-memory model. 
 - Run cleanup passes to eliminate excess logic and duplicate implementations.
+
+## Priority 3
+
+Would making MCP and CLI re-usable packages, instead of daemons, help improve security as everything would be in process. That would allow for one implementation and consistency across services. 
 
 
 ## Priority 3

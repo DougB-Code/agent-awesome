@@ -1,5 +1,5 @@
-// This file parses commandmcpd command-line configuration.
-package main
+// This file parses command daemon command-line configuration.
+package app
 
 import (
 	"encoding/json"
@@ -13,24 +13,29 @@ import (
 	"command/internal/command"
 )
 
-// config stores commandmcpd process settings.
-type config struct {
+// Config stores command daemon process settings.
+type Config struct {
 	ListenAddress  string
 	DataDir        string
 	AllowedWorkdir repeatedStrings
 	AllowedEnv     repeatedStrings
 	TemplatesJSON  string
+	ParserDir      string
 	CheckConfig    bool
 	Command        command.Config
 }
 
-// parseConfig parses commandmcpd flags and environment defaults.
-func parseConfig(args []string) (config, error) {
+// ParseConfig parses command daemon flags and environment defaults.
+func ParseConfig(args []string, processName string) (Config, error) {
+	if strings.TrimSpace(processName) == "" {
+		processName = "commandd"
+	}
 	defaultData := filepath.Join(defaultDataDir(), "command")
-	cfg := config{
+	cfg := Config{
 		ListenAddress:  envString("AGENTAWESOME_COMMAND_ADDR", "127.0.0.1:8093"),
 		DataDir:        envString("AGENTAWESOME_COMMAND_DATA_DIR", defaultData),
 		TemplatesJSON:  envString("AGENTAWESOME_COMMAND_TEMPLATES_JSON", ""),
+		ParserDir:      envString("AGENTAWESOME_COMMAND_PARSER_DIR", defaultParserDir()),
 		AllowedWorkdir: repeatedStrings(envList("AGENTAWESOME_COMMAND_ALLOWED_WORKDIRS", []string{"."})),
 		AllowedEnv:     repeatedStrings(envList("AGENTAWESOME_COMMAND_ALLOWED_ENV", []string{"PATH", "HOME", "USER", "TMPDIR"})),
 	}
@@ -41,12 +46,13 @@ func parseConfig(args []string) (config, error) {
 		RequireApproval:  envBool("AGENTAWESOME_COMMAND_REQUIRE_APPROVAL", true),
 		AllowArbitrary:   envBool("AGENTAWESOME_COMMAND_ALLOW_ARBITRARY", true),
 	}
-	fs := flag.NewFlagSet("commandmcpd", flag.ContinueOnError)
-	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, "commandmcpd listen address")
+	fs := flag.NewFlagSet(processName, flag.ContinueOnError)
+	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, processName+" listen address")
 	fs.StringVar(&cfg.DataDir, "data", cfg.DataDir, "command service data directory")
 	fs.Var(&cfg.AllowedWorkdir, "allow-workdir", "allowed command working directory root")
 	fs.Var(&cfg.AllowedEnv, "allow-env", "allowed process environment variable")
 	fs.StringVar(&cfg.TemplatesJSON, "templates-json", cfg.TemplatesJSON, "JSON command template list")
+	fs.StringVar(&cfg.ParserDir, "parser-dir", cfg.ParserDir, "Starlark command parser directory")
 	fs.DurationVar(&commandCfg.DefaultTimeout, "timeout", commandCfg.DefaultTimeout, "default command timeout")
 	fs.Int64Var(&commandCfg.DefaultMaxOutput, "max-output-bytes", commandCfg.DefaultMaxOutput, "default output tail byte limit")
 	fs.DurationVar(&commandCfg.ApprovalTTL, "approval-ttl", commandCfg.ApprovalTTL, "command approval expiry")
@@ -54,27 +60,31 @@ func parseConfig(args []string) (config, error) {
 	fs.BoolVar(&commandCfg.AllowArbitrary, "allow-arbitrary", commandCfg.AllowArbitrary, "allow arbitrary reviewed command proposals")
 	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit")
 	if err := fs.Parse(args); err != nil {
-		return config{}, err
+		return Config{}, err
 	}
 	templates, err := parseTemplates(cfg.TemplatesJSON)
 	if err != nil {
-		return config{}, err
+		return Config{}, err
 	}
 	commandCfg.DataDir = cfg.DataDir
 	commandCfg.AllowedWorkdirs = []string(cfg.AllowedWorkdir)
 	commandCfg.AllowedEnv = []string(cfg.AllowedEnv)
 	commandCfg.Templates = templates
+	commandCfg.ParserDir = cfg.ParserDir
 	cfg.Command = commandCfg
 	return cfg, cfg.Validate()
 }
 
-// Validate reports unsafe or incomplete commandmcpd settings.
-func (c config) Validate() error {
+// Validate reports unsafe or incomplete command daemon settings.
+func (c Config) Validate() error {
 	if strings.TrimSpace(c.ListenAddress) == "" {
 		return fmt.Errorf("listen address is required")
 	}
 	if strings.TrimSpace(c.DataDir) == "" {
 		return fmt.Errorf("data directory is required")
+	}
+	if strings.TrimSpace(c.ParserDir) == "" {
+		return fmt.Errorf("parser directory is required")
 	}
 	return nil
 }
@@ -95,16 +105,24 @@ func parseTemplates(value string) ([]command.Template, error) {
 			return nil, fmt.Errorf("template %q timeout: %w", item.ID, err)
 		}
 		templates = append(templates, command.Template{
-			ID:              item.ID,
-			Description:     item.Description,
-			Executable:      item.Executable,
-			Args:            item.Args,
-			Stdin:           item.Stdin,
-			WorkingDir:      item.WorkingDir,
-			Env:             item.Env,
-			Timeout:         timeout,
-			MaxOutputBytes:  item.MaxOutputBytes,
-			RequireApproval: item.RequireApproval,
+			ID:                     item.ID,
+			Description:            item.Description,
+			Executable:             item.Executable,
+			Args:                   item.Args,
+			Stdin:                  item.Stdin,
+			WorkingDir:             item.WorkingDir,
+			Env:                    item.Env,
+			Timeout:                timeout,
+			MaxOutputBytes:         item.MaxOutputBytes,
+			RequireApproval:        item.RequireApproval,
+			ParameterSchema:        item.ParameterSchema,
+			OutputContract:         item.OutputContract,
+			ParserID:               item.ParserID,
+			OutputSource:           item.OutputSource,
+			ArtifactGlobs:          item.ArtifactGlobs,
+			EnvironmentPolicy:      item.EnvironmentPolicy,
+			WorkingDirectoryPolicy: item.WorkingDirectoryPolicy,
+			ValidationSchema:       item.ValidationSchema,
 		})
 	}
 	return templates, nil
@@ -120,16 +138,24 @@ func parseOptionalDuration(value string) (time.Duration, error) {
 
 // rawTemplate stores JSON-friendly command template fields.
 type rawTemplate struct {
-	ID              string            `json:"id"`
-	Description     string            `json:"description"`
-	Executable      string            `json:"executable"`
-	Args            []string          `json:"args"`
-	Stdin           string            `json:"stdin"`
-	WorkingDir      string            `json:"working_dir"`
-	Env             map[string]string `json:"env"`
-	Timeout         string            `json:"timeout"`
-	MaxOutputBytes  int64             `json:"max_output_bytes"`
-	RequireApproval bool              `json:"require_approval"`
+	ID                     string                 `json:"id"`
+	Description            string                 `json:"description"`
+	Executable             string                 `json:"executable"`
+	Args                   []string               `json:"args"`
+	Stdin                  string                 `json:"stdin"`
+	WorkingDir             string                 `json:"working_dir"`
+	Env                    map[string]string      `json:"env"`
+	Timeout                string                 `json:"timeout"`
+	MaxOutputBytes         int64                  `json:"max_output_bytes"`
+	RequireApproval        bool                   `json:"require_approval"`
+	ParameterSchema        map[string]any         `json:"parameter_schema"`
+	OutputContract         command.OutputContract `json:"output_contract"`
+	ParserID               string                 `json:"parser_id"`
+	OutputSource           string                 `json:"output_source"`
+	ArtifactGlobs          []string               `json:"artifact_globs"`
+	EnvironmentPolicy      map[string]any         `json:"environment_policy"`
+	WorkingDirectoryPolicy string                 `json:"working_directory_policy"`
+	ValidationSchema       map[string]any         `json:"validation_schema"`
 }
 
 // repeatedStrings stores repeatable CLI string flags.
@@ -215,4 +241,16 @@ func defaultDataDir() string {
 		return filepath.Join(".", "agent-awesome", "data")
 	}
 	return filepath.Join(configDir, "agent-awesome", "data")
+}
+
+// defaultParserDir returns the default file-backed parser catalog path.
+func defaultParserDir() string {
+	if dir := strings.TrimSpace(os.Getenv("AGENTAWESOME_COMMAND_PARSER_DIR")); dir != "" {
+		return dir
+	}
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return filepath.Join(".", "agent-awesome", "command", "parsers")
+	}
+	return filepath.Join(configDir, "agent-awesome", "command", "parsers")
 }

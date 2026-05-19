@@ -200,6 +200,82 @@ func TestTemplateInstantiateCreatesDraft(t *testing.T) {
 	}
 }
 
+// TestCodexCLIPilotTemplateAssertsPlanPolicy verifies the pilot plan gate matches policy.
+func TestCodexCLIPilotTemplateAssertsPlanPolicy(t *testing.T) {
+	template := codexCLIPilotTemplate()
+	states, _ := template.Body["states"].([]any)
+	have := map[string]bool{}
+	for _, state := range states {
+		stateMap, _ := state.(map[string]any)
+		if stateMap["id"] != "assert_plan" {
+			continue
+		}
+		with, _ := stateMap["with"].(map[string]any)
+		checks, _ := with["checks"].([]any)
+		for _, check := range checks {
+			checkMap, _ := check.(map[string]any)
+			path, _ := checkMap["path"].(string)
+			have[path] = true
+		}
+	}
+	want := []string{
+		"plan.output.plan.compliant",
+		"plan.output.plan.project_conventions",
+		"plan.output.plan.solid",
+		"plan.output.plan.agents",
+		"plan.output.plan.relevant_skills",
+		"plan.output.plan.no_unnecessary_backwards_compatibility",
+		"plan.output.plan.no_duplicate_implementations",
+		"plan.output.plan.no_hardcoded_values",
+	}
+	for _, path := range want {
+		if !have[path] {
+			t.Fatalf("assert_plan missing policy check %q", path)
+		}
+	}
+}
+
+// TestCodexCLIPilotTemplateGatesFinalReviewAfterCleanup verifies cleanup can respond to review.
+func TestCodexCLIPilotTemplateGatesFinalReviewAfterCleanup(t *testing.T) {
+	template := codexCLIPilotTemplate()
+	states, _ := template.Body["states"].([]any)
+	byID := map[string]map[string]any{}
+	for _, state := range states {
+		stateMap, _ := state.(map[string]any)
+		id, _ := stateMap["id"].(string)
+		byID[id] = stateMap
+	}
+
+	cleanupDeps, _ := byID["cleanup"]["depends_on"].([]string)
+	if !hasString(cleanupDeps, "post_review") {
+		t.Fatalf("cleanup depends_on = %#v, want post_review", cleanupDeps)
+	}
+	finalReviewDeps, _ := byID["final_review"]["depends_on"].([]string)
+	if !hasString(finalReviewDeps, "assert_retest") {
+		t.Fatalf("final_review depends_on = %#v, want assert_retest", finalReviewDeps)
+	}
+	assertReviewWith, _ := byID["assert_review"]["with"].(map[string]any)
+	assertReviewChecks, _ := assertReviewWith["checks"].([]any)
+	check, _ := assertReviewChecks[0].(map[string]any)
+	if check["path"] != "final_review.output.deviations" {
+		t.Fatalf("assert_review path = %#v, want final review deviations", check["path"])
+	}
+	commitDeps, _ := byID["commit"]["depends_on"].([]string)
+	if !hasString(commitDeps, "assert_review") {
+		t.Fatalf("commit depends_on = %#v, want assert_review", commitDeps)
+	}
+}
+
+// hasString reports whether values contains expected.
+func hasString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
+}
+
 // TestPackageImportExportRoundTrip verifies package records can be installed and exported.
 func TestPackageImportExportRoundTrip(t *testing.T) {
 	ctx := context.Background()

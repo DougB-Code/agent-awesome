@@ -78,6 +78,7 @@ func NewRegistry() *Registry {
 	r := &Registry{actions: map[string]Executor{}}
 	r.Register("tool.call", toolCall)
 	r.Register("mcp.call", mcpCall)
+	r.Register("data.assert", dataAssert)
 	r.Register("workflow.run", workflowRun)
 	r.Register("workflow.signal", workflowSignal)
 	r.Register("human.request", humanRequest)
@@ -130,9 +131,9 @@ func toolCall(ctx context.Context, execCtx Context, args map[string]any) (map[st
 		return nil, fmt.Errorf("tool.call host is not configured")
 	}
 	return execCtx.Host.CallTool(ctx, ToolRequest{
-		Name:      stringArg(args, "name"),
-		DomainID:  stringArg(args, "domain_id"),
-		Arguments: mapArgWithInputFallback(args, "arguments", execCtx.Input),
+		Name:      resolvedStringArg(args, "name", execCtx.Input),
+		DomainID:  resolvedStringArg(args, "domain_id", execCtx.Input),
+		Arguments: resolvedMapArg(args, "arguments", execCtx.Input, execCtx.Input),
 	})
 }
 
@@ -142,9 +143,9 @@ func mcpCall(ctx context.Context, execCtx Context, args map[string]any) (map[str
 		return nil, fmt.Errorf("mcp.call host is not configured")
 	}
 	return execCtx.Host.CallMCP(ctx, MCPRequest{
-		Endpoint:  stringArg(args, "endpoint"),
-		Tool:      stringArg(args, "tool"),
-		Arguments: mapArg(args, "arguments", nil),
+		Endpoint:  resolvedStringArg(args, "endpoint", execCtx.Input),
+		Tool:      resolvedStringArg(args, "tool", execCtx.Input),
+		Arguments: resolvedMapArg(args, "arguments", nil, execCtx.Input),
 	})
 }
 
@@ -159,7 +160,7 @@ func workflowRun(ctx context.Context, execCtx Context, args map[string]any) (map
 	}
 	return execCtx.Host.StartNestedWorkflow(ctx, NestedWorkflowRequest{
 		DefinitionID: workflow,
-		Input:        mapArgWithInputFallback(args, "input", execCtx.Input),
+		Input:        resolvedMapArg(args, "input", execCtx.Input, execCtx.Input),
 	})
 }
 

@@ -22,7 +22,7 @@ const (
 	DefaultMemoryServiceName = "memory"
 	// DefaultWorkflowServiceName is the supervisor name for workflowd.
 	DefaultWorkflowServiceName = "workflow"
-	// DefaultCommandServiceName is the supervisor name for commandmcpd.
+	// DefaultCommandServiceName is the supervisor name for commandd.
 	DefaultCommandServiceName = "command"
 )
 

@@ -54,7 +54,11 @@ states:
 
 	eventually(t, func() bool {
 		items, err := service.Inbox(ctx)
-		return err == nil && len(items) == 1 && items[0].RunID == started.ID
+		if err != nil || len(items) != 1 || items[0].RunID != started.ID {
+			return false
+		}
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusWaiting && run.State == "review"
 	})
 	waiting, err := service.Status(ctx, started.ID)
 	if err != nil {
@@ -429,6 +433,106 @@ states:
 	if firstCalls.Load() != 1 || secondCalls.Load() != 2 {
 		t.Fatalf("calls first=%d second=%d, want first skipped and second retried", firstCalls.Load(), secondCalls.Load())
 	}
+}
+
+// TestTaskStateDataAssertGatesOnParentOutput verifies generic data gates use task input.
+func TestTaskStateDataAssertGatesOnParentOutput(t *testing.T) {
+	ctx := context.Background()
+	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"structuredContent": map[string]any{
+			"plan": map[string]any{"status": "approved"},
+		}})
+	}))
+	defer toolServer.Close()
+
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "gate.yaml", `
+kind: state_machine
+id: gated_task_graph
+name: Gated Task Graph
+states:
+  - id: plan
+    type: task
+    uses: tool.call
+    with:
+      name: plan_tool
+      arguments: {}
+  - id: assert_plan
+    type: task
+    uses: data.assert
+    depends_on:
+      - plan
+    with:
+      checks:
+        - path: plan.plan.status
+          mode: equals
+          value: approved
+        - path: plan.plan
+          mode: schema
+          schema:
+            type: object
+            required:
+              - status
+            properties:
+              status:
+                type: string
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir:        definitionsDir,
+		DatabasePath:          filepath.Join(t.TempDir(), "workflow.db"),
+		HarnessContextBaseURL: toolServer.URL + "/api/context",
+		RequestTimeout:        time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "gated_task_graph", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded
+	})
+}
+
+// TestTaskStateDataAssertFailureFailsRun verifies failed data gates stop progression.
+func TestTaskStateDataAssertFailureFailsRun(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "gate_fail.yaml", `
+kind: state_machine
+id: failed_gate_task_graph
+name: Failed Gate Task Graph
+states:
+  - id: assert_plan
+    type: task
+    uses: data.assert
+    with:
+      path: workflow_input.status
+      mode: equals
+      value: approved
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "failed_gate_task_graph", map[string]any{"status": "rejected"})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusFailed
+	})
 }
 
 // writeTestDefinition writes one YAML workflow definition for a runtime test.

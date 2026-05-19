@@ -1,8 +1,8 @@
 # This Dockerfile builds the Agent Awesome Cloudflare Container image.
 #
-# It compiles the gateway, harness, and memory services from their existing Go
-# modules, then runs a single gateway process that supervises the two local
-# dependencies inside the container.
+# It compiles the gateway, harness, memory, workflow, and command services from
+# their existing Go modules, then runs a single gateway process that supervises
+# local dependencies inside the container.
 FROM golang:1.26-bookworm AS build
 
 WORKDIR /src
@@ -16,13 +16,23 @@ RUN cd harness && go mod download
 COPY memory/go.mod memory/go.sum ./memory/
 RUN cd memory && go mod download
 
+COPY workflow/go.mod workflow/go.sum ./workflow/
+RUN cd workflow && go mod download
+
+COPY command/go.mod command/go.sum ./command/
+RUN cd command && go mod download
+
 COPY gateway ./gateway
 COPY harness ./harness
 COPY memory ./memory
+COPY workflow ./workflow
+COPY command ./command
 
 RUN cd gateway && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/agent-gateway ./cmd/agent-gateway
 RUN cd harness && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/agent-awesome ./cmd/agent-awesome
 RUN cd memory && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/memoryd ./cmd/memoryd
+RUN cd workflow && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/workflowd ./cmd/workflowd
+RUN cd command && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /out/commandd ./cmd/commandd
 
 FROM debian:bookworm-slim
 
@@ -34,6 +44,8 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build /out/agent-gateway /usr/local/bin/agent-gateway
 COPY --from=build /out/agent-awesome /usr/local/bin/agent-awesome
 COPY --from=build /out/memoryd /usr/local/bin/memoryd
+COPY --from=build /out/workflowd /usr/local/bin/workflowd
+COPY --from=build /out/commandd /usr/local/bin/commandd
 COPY deploy/cloudflare/config /app/config
 COPY deploy/cloudflare/scripts/entrypoint.sh /usr/local/bin/agentawesome-cloudflare
 

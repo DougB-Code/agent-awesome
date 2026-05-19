@@ -118,10 +118,11 @@ func TestValidateAcceptsTaskStateSafeActions(t *testing.T) {
 		ID:   "safe",
 		States: []StateDefinition{
 			{ID: "mcp", Type: StateTypeTask, Uses: "mcp.call", Retry: 1, RetryDelay: "10ms"},
-			{ID: "tool", Type: StateTypeTask, Uses: "tool.call", DependsOn: []string{"mcp"}},
+			{ID: "assert", Type: StateTypeTask, Uses: "data.assert", DependsOn: []string{"mcp"}},
+			{ID: "tool", Type: StateTypeTask, Uses: "tool.call", DependsOn: []string{"assert"}},
 			{ID: "child", Type: StateTypeTask, Uses: "workflow.run", DependsOn: []string{"tool"}},
 		},
-	}, testCatalog{"mcp.call": true, "tool.call": true, "workflow.run": true})
+	}, testCatalog{"mcp.call": true, "data.assert": true, "tool.call": true, "workflow.run": true})
 
 	if err != nil {
 		t.Fatalf("Validate() error = %v", err)

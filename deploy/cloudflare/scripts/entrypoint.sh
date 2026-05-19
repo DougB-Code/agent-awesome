@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts the Cloudflare pilot container with profile-specific harnesses and
-# gateway-supervised memory services.
+# gateway-supervised memory, workflow, and command services.
 set -euo pipefail
 
 # wait_for_tcp blocks until a colocated service accepts TCP connections.
@@ -70,7 +70,7 @@ EOF
   echo "Cloudflare model config provider=openai model_id=${model_id} model=${wire_model} url=${provider_url}" >&2
 }
 
-mkdir -p /app/data /app/data/sessions /app/logs /app/runtime
+mkdir -p /app/data /app/data/sessions /app/data/workflow/definitions /app/logs /app/runtime /app/config/command/parsers
 export LOG_FORMAT="${LOG_FORMAT:-json}"
 write_model_config
 # Reset ephemeral log files so Cloudflare captures only this container lifecycle.
@@ -132,6 +132,25 @@ exec agent-gateway \
   --memory-policy-json "$MEMORY_POLICY_JSON" \
   --agent-profiles-json "$AGENT_PROFILES_JSON" \
   --memory-services-json "$MEMORY_SERVICES_JSON" \
+  --workflow-command /usr/local/bin/workflowd \
+  --workflow-arg --addr \
+  --workflow-arg 127.0.0.1:8092 \
+  --workflow-arg --definitions \
+  --workflow-arg /app/data/workflow/definitions \
+  --workflow-arg --db \
+  --workflow-arg /app/data/workflow/workflow.db \
+  --workflow-auto-start=true \
+  --command-command /usr/local/bin/commandd \
+  --command-arg --addr \
+  --command-arg 127.0.0.1:8093 \
+  --command-arg --data \
+  --command-arg /app/data/command \
+  --command-arg --allow-workdir \
+  --command-arg /app \
+  --command-arg --parser-dir \
+  --command-arg /app/config/command/parsers \
+  --command-arg --allow-arbitrary=false \
+  --command-auto-start=true \
   --app-name "${AGENTAWESOME_APP_NAME:-agent_awesome}" \
   --user-id "${AGENTAWESOME_USER_ID:-doug}" \
   --model-provider-id "${AGENTAWESOME_MODEL_PROVIDER_ID:-openai}" \

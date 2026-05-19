@@ -562,6 +562,11 @@ func actionTypeForName(name string) ActionType {
 		action.Description = "Call an installed MCP tool endpoint."
 		action.Risk = "tool"
 		action.InputSchema = map[string]any{"type": "object", "required": []any{"endpoint", "tool"}, "properties": map[string]any{"endpoint": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}}}
+	case "data.assert":
+		action.Label = "Assert Data"
+		action.Description = "Gate workflow progression on deterministic input data checks."
+		action.Risk = "validation"
+		action.InputSchema = map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"}, "value": map[string]any{}, "checks": map[string]any{"type": "array"}}}
 	case "workflow.run":
 		action.Label = "Run Workflow"
 		action.Description = "Start a nested workflow definition."
@@ -590,6 +595,7 @@ func unavailableActions(_ definition.Definition) []string {
 // builtInTemplates returns starter templates backed by package-shaped bodies.
 func builtInTemplates() []store.TemplateRecord {
 	return []store.TemplateRecord{
+		codexCLIPilotTemplate(),
 		{
 			ID:          "approval_state_machine",
 			Name:        "Approval Workflow",

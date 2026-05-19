@@ -72,7 +72,7 @@ void main() {
       timeout: const Duration(seconds: 90),
       description: 'created task to render in Backlog',
     );
-    expect(find.text('Active tasks'), findsWidgets);
+    expect(find.text('QUEUE'), findsWidgets);
     expect(find.text(_taskTitle), findsWidgets);
 
     final requests = await _loadMockRequests();
@@ -263,7 +263,7 @@ void _expectOpenAiRequest(Map<String, dynamic> request) {
   expect(body, isA<Map<String, dynamic>>());
   final typedBody = body as Map<String, dynamic>;
   expect(typedBody['model'], _wireModel);
-  expect(typedBody['stream'], isFalse);
+  expect(typedBody['stream'] ?? false, isFalse);
   expect(typedBody['messages'], isA<List<dynamic>>());
   _expectToolDeclaration(typedBody, 'create_task');
   _expectToolDeclaration(typedBody, 'load_memory');

@@ -21,6 +21,7 @@ var safeIDPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 var taskActionTypes = map[string]struct{}{
 	"mcp.call":     {},
 	"tool.call":    {},
+	"data.assert":  {},
 	"workflow.run": {},
 }
 
