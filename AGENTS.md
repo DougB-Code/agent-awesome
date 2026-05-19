@@ -2,6 +2,48 @@
 
 ## Architecture
 
+### Project Terminology
+
+`AA` is the accepted shortform for Agent Awesome in code comments, docs, branch names, and internal discussion.
+
+### Workspace Components
+
+`harness` is the main agent runtime. It loads agent, model, and tool configuration; builds the ADK runtime; and manages MCP/local toolsets, context APIs, credentials, console mode, and web runtime behavior.
+
+`gateway` is the HTTP control plane and adapter layer. It proxies UI and Slack traffic to harness services, exposes gateway status and channels, bridges selected APIs, and can supervise local sibling services.
+
+`memory` is the memory daemon and service boundary. It owns memory storage, retrieval, graph and task projections, validation, persistence, snapshots, and MCP transport for memory capabilities.
+
+`workflow` is the durable orchestration daemon. It owns workflow definitions, run state, events, outputs, inbox handling, runtime execution, and workflow/MCP/HTTP transport. Its execution model is `state_machine`; definitions may use explicit transition states or task-style states, but they remain state-machine definitions.
+
+`command` is the generic command execution boundary. It runs approved CLI commands through a daemon/MCP service with templates, requests, jobs, approvals, cancellation, timeout handling, and bounded output capture.
+
+`provision` contains provisioning tooling. It manages deployment bundle generation, Cloudflare and platform configuration, local state, credentials/keyring access, and worker secrets.
+
+`ui` is the Flutter desktop app. It owns application controllers, local service supervision UI, HTTP/MCP clients, domain models, shared shell components, command-panel screens, runtime profiles, and integration tests.
+
+`deploy` contains deployment assets and scripts, including Cloudflare Worker/Container beta assets and Linux install tooling.
+
+`docs` contains the Antora documentation component and UI assets for generated project docs.
+
+`e2e` contains the release end-to-end test harness, including mock provider support and diagnostics under `build/e2e`.
+
+`.github` contains GitHub workflow automation and release/CI definitions.
+
+`.agents` and `.codex` contain local agent and Codex metadata. They are workspace support folders, not product runtime architecture.
+
+`build`, module-local `build` folders, `.dart_tool`, `node_modules`, and `logs` contain generated dependencies, caches, diagnostics, local runtime state, or build outputs. Do not treat them as architecture precedents.
+
+### Integration Boundaries
+
+Workflow orchestration MUST remain generic. Do not add first-class workflow runtime support for individual external tools, coding agents, CLIs, hosted services, or vendor-specific assistants. AA invokes external capabilities through generic CLI, MCP, HTTP, or configured tool boundaries.
+
+When an external tool has structured input or output, model that contract at the boundary with explicit schemas, arguments, environment policy, output capture, validation, and typed workflow data. Align to the tool's native interface rather than forcing the tool into an AA-specific abstraction.
+
+Quality gates, planning reviews, post-implementation reviews, coding-standard checks, retries, approvals, and cleanup loops SHOULD be modeled as state-machine workflow steps using generic primitives. Do not hard-code those product workflows into the workflow engine.
+
+Productized Git worktree, branch, commit, and pull-request operations MUST live behind a dedicated source-control boundary instead of ad hoc shell snippets. Use generic source-control primitives so workflows can compose Git operations without coupling orchestration to a specific agent or review process.
+
 ### Code Documentation
 
 ALWAYS add concise code documentation for each file and function.
