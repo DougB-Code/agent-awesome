@@ -224,8 +224,13 @@ void main() {
     expect(find.text('Open, Waiting, Blocked'), findsOneWidget);
     expect(find.text('Active tasks'), findsNothing);
     expect(find.text('Queue score'), findsNothing);
-    expect(find.text('Schedule'), findsWidgets);
-    expect(find.text('Mark done'), findsWidgets);
+    expect(find.text('Schedule'), findsNothing);
+    expect(find.text('Mark done'), findsNothing);
+    expect(
+      find.byTooltip('Schedule selected backlog item today'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Complete backlog item'), findsOneWidget);
     expect(find.textContaining('Data quality'), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('command-split-handle')),
@@ -240,7 +245,7 @@ void main() {
 
     expect(find.text('Stream command panel'), findsNothing);
     expect(find.text('STREAM'), findsWidgets);
-    expect(find.text('TASK'), findsOneWidget);
+    expect(find.text('TASK'), findsNothing);
 
     await tester.tap(find.byTooltip('Collapse details column'));
     await tester.pumpAndSettle();
@@ -420,16 +425,33 @@ void main() {
       find.byKey(const ValueKey<String>('main-content-right-pane')),
       findsOneWidget,
     );
-    expect(find.text('OPERATIONS'), findsWidgets);
+    expect(find.text('INBOX'), findsWidgets);
+    expect(find.byTooltip('Inbox'), findsOneWidget);
+    expect(find.byTooltip('Published'), findsOneWidget);
+    expect(find.byTooltip('Runs'), findsOneWidget);
     expect(find.text('Approve archive?'), findsOneWidget);
+    expect(find.text('Daily Email'), findsNothing);
+    await tester.tap(find.byTooltip('Published'));
+    await tester.pumpAndSettle();
     expect(find.text('Daily Email'), findsWidgets);
+    await tester.tap(find.byTooltip('Runs'));
+    await tester.pumpAndSettle();
+    expect(find.text('run_1 / running'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
     await tester.pumpAndSettle();
 
-    expect(find.text('WORKFLOWS'), findsWidgets);
+    expect(find.text('DRAFTS'), findsWidgets);
     expect(find.text('Review Flow'), findsWidgets);
-    expect(find.text('ADD ACTION'), findsOneWidget);
+    expect(find.text('ADD ACTION'), findsNothing);
+    await tester.tap(find.byTooltip('Templates'));
+    await tester.pumpAndSettle();
+    expect(find.text('TEMPLATES'), findsWidgets);
+    expect(find.text('Approval Workflow'), findsWidgets);
+    expect(find.byTooltip('Use selected template'), findsOneWidget);
+    await tester.tap(find.byTooltip('Actions'));
+    await tester.pumpAndSettle();
+    expect(find.text('ACTIONS'), findsWidgets);
     expect(find.text('Agent Task'), findsWidgets);
     expect(find.text('Run Command'), findsWidgets);
 
@@ -640,13 +662,13 @@ void main() {
     expect(find.byTooltip('Delete DAG node'), findsOneWidget);
     expect(find.byTooltip('Validate draft'), findsOneWidget);
     expect(find.byTooltip('Publish draft'), findsOneWidget);
-    expect(find.text('Templates'), findsNothing);
+    expect(find.byTooltip('Templates'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Agents')));
     await tester.pumpAndSettle();
 
     expect(find.text('AGENT PROFILES'), findsWidgets);
-    expect(find.text('AGENT BUILDER'), findsOneWidget);
+    expect(find.text('AGENT PROFILE'), findsWidgets);
     expect(find.text('Email Triage Agent'), findsWidgets);
     expect(find.text('Instructions'), findsWidgets);
     expect(find.text('Permissions'), findsWidgets);
@@ -698,13 +720,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
 
-    expect(find.text('MCP SERVERS'), findsWidgets);
+    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.text('SERVERS'), findsWidgets);
     expect(find.text('No MCP server tool configs configured'), findsWidgets);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tools')));
     await tester.pumpAndSettle();
 
-    expect(find.text('TOOLS'), findsWidgets);
+    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.text('COMMANDS'), findsWidgets);
     expect(find.text('No tool configs configured'), findsWidgets);
   });
 
@@ -768,7 +792,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(controller.assistantChatPanelOpen, isTrue);
-    expect(find.text('WORKFLOWS'), findsWidgets);
+    expect(find.text('DRAFTS'), findsWidgets);
     expect(find.text('CONVERSATION'), findsOneWidget);
     expect(find.text('Draft ready.'), findsOneWidget);
     expect(find.byTooltip('Start new chat'), findsOneWidget);
@@ -927,8 +951,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('Settings'), findsWidgets);
-    expect(find.text('Profiles'), findsWidgets);
-    expect(find.text('App'), findsWidgets);
+    expect(find.byTooltip('Profiles'), findsOneWidget);
+    expect(find.byTooltip('App'), findsOneWidget);
+    expect(find.byTooltip('Models'), findsOneWidget);
+    expect(find.byTooltip('Memory'), findsOneWidget);
     expect(find.text('APP SETTINGS'), findsNothing);
     expect(find.text('CHAT DEFAULTS'), findsOneWidget);
     expect(find.text('Default profile'), findsOneWidget);
@@ -938,7 +964,7 @@ void main() {
     expect(find.text('Summary model'), findsOneWidget);
     expect(find.text('openai / gpt-mini'), findsOneWidget);
 
-    await tester.tap(find.text('Profiles').first);
+    await tester.tap(find.byTooltip('Profiles'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
@@ -951,19 +977,44 @@ void main() {
     expect(find.text('OS Tools'), findsNothing);
     expect(find.text('MCP Server'), findsNothing);
 
+    await tester.tap(find.byTooltip('Models'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('Summary Mini'), findsWidgets);
+    expect(find.byTooltip('Add model config'), findsOneWidget);
+    expect(find.byTooltip('Duplicate model config'), findsOneWidget);
+    expect(find.byTooltip('Delete model config'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Memory'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.byTooltip('Add memory domain'), findsOneWidget);
+    expect(find.byTooltip('Remove memory domain'), findsOneWidget);
+
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('MCP SERVERS'), findsWidgets);
+    expect(find.text('SERVERS'), findsWidgets);
     expect(find.text('Personal Tools'), findsOneWidget);
+    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.byTooltip('Servers'), findsOneWidget);
+    expect(find.byTooltip('Source'), findsOneWidget);
+    expect(find.byTooltip('Add tool config'), findsOneWidget);
+    expect(find.byTooltip('Duplicate tool config'), findsOneWidget);
+    expect(find.byTooltip('Delete tool config'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tools')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('TOOLS'), findsWidgets);
+    expect(find.text('COMMANDS'), findsWidgets);
     expect(find.text('Personal Tools'), findsOneWidget);
+    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.byTooltip('Commands'), findsOneWidget);
+    expect(find.byTooltip('Source'), findsOneWidget);
   });
 
   testWidgets('keeps selectors for editable single-item collection panels', (
@@ -1250,20 +1301,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+    expect(find.text('CHATS'), findsOneWidget);
     expect(find.text('CONVERSATION'), findsOneWidget);
-    expect(find.text('MEMORY'), findsWidgets);
     expect(find.byTooltip('Memory'), findsOneWidget);
     expect(find.byTooltip('Tasks'), findsOneWidget);
     expect(find.byTooltip('Files'), findsOneWidget);
     expect(find.byTooltip('People'), findsOneWidget);
     expect(find.byTooltip('Runtime'), findsOneWidget);
-    expect(find.text('Preference'), findsOneWidget);
     expect(find.text('Chat message from user in session-live'), findsNothing);
-    expect(find.byTooltip('Select chat'), findsOneWidget);
+    expect(find.byTooltip('Select chat'), findsNothing);
     expect(find.byTooltip('Start new chat'), findsOneWidget);
     expect(find.byTooltip('Delete selected chat'), findsNothing);
     expect(find.byTooltip('New chat with profile'), findsNothing);
-    expect(find.byTooltip('Chats'), findsNothing);
+    expect(find.byTooltip('Chats'), findsOneWidget);
     expect(find.byTooltip('Sessions'), findsNothing);
     expect(find.text('Live chat'), findsOneWidget);
     expect(find.byType(SelectableText), findsWidgets);
@@ -1273,12 +1323,27 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.tap(find.text('MEMORY').first);
+    expect(
+      find.byTooltip('AI chat is unavailable in this view'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('AI chat is unavailable in this view'));
+    await tester.pumpAndSettle();
+    expect(controller.assistantChatPanelOpen, isFalse);
+
+    await tester.tap(find.byTooltip('Memory'));
     await tester.pumpAndSettle();
 
-    expect(find.text('TASKS'), findsWidgets);
-    expect(find.text('Associated chat task'), findsOneWidget);
-    expect(find.text('Follow up report'), findsWidgets);
+    expect(find.text('MEMORY'), findsWidgets);
+    expect(find.text('Preference'), findsWidgets);
+    expect(find.byTooltip('AI chat'), findsOneWidget);
+    await tester.tap(find.byTooltip('AI chat'));
+    await tester.pumpAndSettle();
+    expect(controller.assistantChatPanelOpen, isTrue);
+    expect(find.text('CONVERSATION'), findsOneWidget);
+    await tester.tap(find.byTooltip('AI chat'));
+    await tester.pumpAndSettle();
+    expect(controller.assistantChatPanelOpen, isFalse);
 
     await tester.tap(find.byTooltip('Files'));
     await tester.pumpAndSettle();
@@ -1321,6 +1386,8 @@ void main() {
     expect(find.text('Local processes'), findsNothing);
     expect(find.text('Service endpoints'), findsNothing);
 
+    await tester.tap(find.byTooltip('Conversation'));
+    await tester.pumpAndSettle();
     expect(find.byTooltip('Copy message'), findsOneWidget);
     expect(find.text('Message Agent Awesome in this chat...'), findsOneWidget);
     expect(find.byTooltip('Chat model'), findsOneWidget);
@@ -1374,27 +1441,8 @@ void main() {
     expect(find.text('Associated chat task'), findsOneWidget);
     expect(find.text('Follow up report'), findsOneWidget);
     expect(find.text('Unrelated chat task'), findsNothing);
-    await tester.tap(find.byTooltip('Select chat'));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey<String>('search-picker-filter')),
-      findsOneWidget,
-    );
     expect(find.byTooltip('Delete chat'), findsNothing);
     expect(find.text('Alternate planning chat'), findsOneWidget);
-    await tester.enterText(
-      find.byKey(const ValueKey<String>('search-picker-filter')),
-      'alt',
-    );
-    await tester.pump();
-    expect(find.text('Alternate planning chat'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(Dialog),
-        matching: find.text('Live chat'),
-      ),
-      findsNothing,
-    );
   });
 
   testWidgets('opens chat timeline at the latest message', (tester) async {
@@ -1464,7 +1512,7 @@ void main() {
 
     await tester.tap(find.text('Memory'));
     await tester.pumpAndSettle();
-    expect(find.text('SEARCH'), findsOneWidget);
+    expect(find.text('RECORDS'), findsOneWidget);
     expect(find.text('No memory records'), findsOneWidget);
 
     await tester.tap(
@@ -1490,10 +1538,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('SEARCH'), findsOneWidget);
+    expect(find.text('RECORDS'), findsOneWidget);
     expect(find.text('OVERVIEW'), findsOneWidget);
     expect(find.text('Preference'), findsWidgets);
-    expect(find.text('MEMORY'), findsOneWidget);
+    expect(find.text('MEMORY'), findsWidgets);
     expect(find.byTooltip('Refresh'), findsNothing);
     await tester.tap(find.byTooltip('Metadata'));
     await tester.pumpAndSettle();
@@ -1563,7 +1611,7 @@ void main() {
     expect(find.text('Connection failed'), findsOneWidget);
     expect(find.textContaining('HTTP 401'), findsOneWidget);
     expect(find.text('Try again'), findsNothing);
-    expect(find.text('SEARCH'), findsNothing);
+    expect(find.text('RECORDS'), findsNothing);
     expect(find.text('OVERVIEW'), findsNothing);
     expect(find.text('No memory records'), findsNothing);
 
@@ -1593,12 +1641,13 @@ void main() {
     expect(find.text('DETAILS'), findsOneWidget);
     expect(find.text('No files indexed yet'), findsWidgets);
     expect(find.textContaining('PDFs, spreadsheets, images'), findsWidgets);
-    expect(find.text('Add file'), findsOneWidget);
+    expect(find.text('Add file'), findsNothing);
+    expect(find.byTooltip('Add file'), findsOneWidget);
     expect(find.byTooltip('Refresh files'), findsNothing);
     expect(find.text('Immutable source material from memory.'), findsNothing);
     expect(find.text('No source content loaded'), findsNothing);
 
-    await tester.tap(find.text('Add file'));
+    await tester.tap(find.byTooltip('Add file'));
     await tester.pump(const Duration(milliseconds: 1));
     await tester.pumpAndSettle();
     expect(find.text('File import is not connected yet'), findsNothing);
@@ -1777,7 +1826,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No contacts yet'), findsOneWidget);
 
-    await tester.tap(find.text('Add contact'));
+    expect(find.text('Add contact'), findsNothing);
+    expect(find.byTooltip('Add contact'), findsOneWidget);
+    await tester.tap(find.byTooltip('Add contact'));
     await tester.pumpAndSettle();
 
     expect(find.text('Add Contact'), findsOneWidget);
@@ -1856,20 +1907,18 @@ void main() {
     expect(find.text('QUEUE'), findsOneWidget);
     expect(find.text('INSPECTOR'), findsOneWidget);
     expect(find.text('Draft task brief'), findsWidgets);
-    expect(find.byTooltip('Delete backlog item'), findsNothing);
-    expect(find.text('Delete'), findsWidgets);
+    expect(find.byTooltip('Delete backlog item'), findsOneWidget);
+    expect(find.text('Delete'), findsNothing);
     expect(find.text('Backlog Stream'), findsNothing);
     expect(find.byTooltip('Stream'), findsOneWidget);
-    expect(find.byTooltip('Constellation'), findsOneWidget);
+    expect(find.byTooltip('Map'), findsOneWidget);
     await tester.tap(find.byTooltip('Stream'));
     await tester.pumpAndSettle();
     expect(find.text('STREAM'), findsWidgets);
-    expect(find.text('TASK'), findsOneWidget);
+    expect(find.text('TASK'), findsNothing);
     expect(find.text('Analyze stream layout'), findsOneWidget);
     expect(find.text('Backlog Stream'), findsNothing);
     expect(find.text('Workload'), findsNothing);
-    await tester.tap(find.byTooltip('Queue'));
-    await tester.pumpAndSettle();
     expect(find.byTooltip('Memory'), findsOneWidget);
     await tester.tap(find.byTooltip('Memory'));
     await tester.pumpAndSettle();
@@ -1944,7 +1993,7 @@ void main() {
       await tester.tap(find.text('Backlog').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('Review Changes'), findsOneWidget);
+      expect(find.text('REVIEW'), findsOneWidget);
       expect(find.text('Priority changed to high'), findsWidgets);
       await tester.tap(find.byTooltip('Focus change'));
       await tester.pumpAndSettle();

@@ -81,7 +81,7 @@ class _MemorySafetyEventTile extends StatelessWidget {
                   style: TextStyle(
                     color: colors.ink,
                     fontSize: 15,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),

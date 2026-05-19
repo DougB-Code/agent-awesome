@@ -457,6 +457,123 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 	}
 }
 
+// TestBrowserPilotToolConfigConstrainsAgentBrowser verifies the opt-in browser
+// pilot keeps local execution reviewed and domain-scoped.
+func TestBrowserPilotToolConfigConstrainsAgentBrowser(t *testing.T) {
+	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.browser-pilot.yaml"), true)
+	if err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+	if !cfg.LocalExec.Enabled {
+		t.Fatalf("LocalExec.Enabled = false, want browser pilot enabled")
+	}
+	if cfg.LocalExec.AllowPersistentApprovals {
+		t.Fatalf("AllowPersistentApprovals = true, want browser pilot approvals session-only")
+	}
+
+	var browserCommand schema.LocalExecCommand
+	for _, command := range cfg.LocalExec.Commands {
+		if command.Name == "agent_browser_example_research" {
+			browserCommand = command
+			break
+		}
+	}
+	if browserCommand.Name == "" {
+		t.Fatalf("agent_browser_example_research command not configured")
+	}
+	if browserCommand.Executable != "/usr/bin/env" {
+		t.Fatalf("Executable = %q, want /usr/bin/env", browserCommand.Executable)
+	}
+	expectedArgs := []string{
+		"HOME=/home/doug/dev/agentawesome/agent/build/agent-browser/home",
+		"AGENT_BROWSER_SESSION=aaex",
+		"/home/doug/dev/agentawesome/tools/bin/agent-browser",
+		"--allowed-domains",
+		"example.com",
+		"--max-output",
+		"20000",
+		"batch",
+		"--json",
+		"--bail",
+	}
+	if !reflect.DeepEqual(browserCommand.Args, expectedArgs) {
+		t.Fatalf("Args = %#v, want %#v", browserCommand.Args, expectedArgs)
+	}
+	if browserCommand.Approval.AlwaysAllow {
+		t.Fatalf("AlwaysAllow = true, want browser pilot to require confirmation")
+	}
+
+	var techCrunchCommand schema.LocalExecCommand
+	for _, command := range cfg.LocalExec.Commands {
+		if command.Name == "agent_browser_techcrunch_research" {
+			techCrunchCommand = command
+			break
+		}
+	}
+	if techCrunchCommand.Name == "" {
+		t.Fatalf("agent_browser_techcrunch_research command not configured")
+	}
+	expectedTechCrunchArgs := []string{
+		"HOME=/home/doug/dev/agentawesome/agent/build/agent-browser/home",
+		"AGENT_BROWSER_SESSION=aatc",
+		"/home/doug/dev/agentawesome/tools/bin/agent-browser",
+		"--allowed-domains",
+		"techcrunch.com,*.techcrunch.com",
+		"--max-output",
+		"30000",
+		"batch",
+		"--json",
+		"--bail",
+	}
+	if !reflect.DeepEqual(techCrunchCommand.Args, expectedTechCrunchArgs) {
+		t.Fatalf("TechCrunch Args = %#v, want %#v", techCrunchCommand.Args, expectedTechCrunchArgs)
+	}
+	if techCrunchCommand.Approval.AlwaysAllow {
+		t.Fatalf("TechCrunch AlwaysAllow = true, want browser pilot to require confirmation")
+	}
+}
+
+// TestWorkflowToolConfigExposesWorkflowMCP verifies the workflow MCP server is opt-in.
+func TestWorkflowToolConfigExposesWorkflowMCP(t *testing.T) {
+	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.workflow.yaml"), true)
+	if err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+	server, ok := mcpServerByName(cfg.MCP.Servers, "workflow")
+	if !ok {
+		t.Fatalf("workflow MCP server not configured")
+	}
+	if server.Endpoint != "http://127.0.0.1:8092/mcp" {
+		t.Fatalf("workflow endpoint = %q, want local workflowd MCP", server.Endpoint)
+	}
+	expectedTools := []string{
+		"workflow_list",
+		"workflow_describe",
+		"workflow_start",
+		"workflow_status",
+		"workflow_signal",
+		"workflow_cancel",
+		"workflow_history",
+		"workflow_action_types",
+		"workflow_draft_create",
+		"workflow_draft_update",
+		"workflow_draft_validate",
+		"workflow_draft_publish",
+		"workflow_template_list",
+		"workflow_template_instantiate",
+		"workflow_agent_spec_list",
+		"workflow_agent_spec_create",
+		"workflow_agent_spec_update",
+		"workflow_agent_spec_delete",
+	}
+	if !reflect.DeepEqual(server.Tools.Allow, expectedTools) {
+		t.Fatalf("workflow Tools.Allow = %#v, want %#v", server.Tools.Allow, expectedTools)
+	}
+	if cfg.LocalExec.Enabled {
+		t.Fatalf("LocalExec.Enabled = true, want workflow control through MCP only")
+	}
+}
+
 // TestStaticSlackMemoryToolConfigsExposeMemoryServer keeps Slack scoped to the
 // memory MCP server while allowing the server's full tool surface.
 func TestStaticSlackMemoryToolConfigsExposeMemoryServer(t *testing.T) {
@@ -954,8 +1071,13 @@ func repoRoot(t *testing.T) string {
 
 // memoryMCPServer returns the memory MCP server from a config server list.
 func memoryMCPServer(servers []schema.MCPServer) (schema.MCPServer, bool) {
+	return mcpServerByName(servers, "memory")
+}
+
+// mcpServerByName returns one named MCP server from a config server list.
+func mcpServerByName(servers []schema.MCPServer, name string) (schema.MCPServer, bool) {
 	for _, server := range servers {
-		if server.Name == "memory" {
+		if server.Name == name {
 			return server, true
 		}
 	}

@@ -12,32 +12,23 @@ enum _BacklogDetailMode {
   /// Screen-command review queue.
   aiReview,
 
-  /// Work-breakdown structure overview.
-  wbsOverview,
+  /// Task-fact stream projection.
+  stream,
 
-  /// Constellation projection overview.
-  constellationOverview,
+  /// Work-breakdown structure projection.
+  wbs,
 
-  /// Capture context summary.
-  captureContext,
+  /// Relationship-first task map.
+  map,
+
+  /// Task capture form.
+  capture,
 }
 
 /// _BacklogAreaIds stores stable ids for backlog command areas.
 abstract final class _BacklogAreaIds {
   /// Queue task list area.
   static const String queue = 'queue';
-
-  /// Stream projection area.
-  static const String stream = 'stream';
-
-  /// Work-breakdown structure area.
-  static const String wbs = 'wbs';
-
-  /// Constellation projection area.
-  static const String constellation = 'constellation';
-
-  /// Task capture form area.
-  static const String capture = 'capture';
 }
 
 /// Builds the canonical backlog command areas used by the command subshell.
@@ -52,81 +43,23 @@ List<SwitcherPanelArea> _backlogCommandAreas(
       builder: (query) =>
           _BacklogQueueContent(controller: controller, query: query),
     ),
-    SwitcherPanelArea(
-      id: _BacklogAreaIds.stream,
-      title: 'Stream',
-      icon: Icons.waves_outlined,
-      builder: (query) => TaskConceptProjectionPanel(
-        controller: controller,
-        kind: TaskConceptKind.stream,
-      ),
-    ),
-    SwitcherPanelArea(
-      id: _BacklogAreaIds.wbs,
-      title: 'WBS',
-      icon: Icons.account_tree_outlined,
-      builder: (query) => TaskConceptProjectionPanel(
-        controller: controller,
-        kind: TaskConceptKind.wbs,
-      ),
-    ),
-    SwitcherPanelArea(
-      id: _BacklogAreaIds.constellation,
-      title: 'Constellation',
-      icon: Icons.hub_outlined,
-      builder: (query) => TaskConceptProjectionPanel(
-        controller: controller,
-        kind: TaskConceptKind.constellation,
-      ),
-    ),
-    SwitcherPanelArea(
-      id: _BacklogAreaIds.capture,
-      title: 'Capture',
-      icon: Icons.add_task_outlined,
-      builder: (query) =>
-          _TaskCaptureContent(controller: controller, query: query),
-    ),
   ];
 }
 
 /// Returns the details modes available for the current backlog state.
 List<CommandPanelDetailMode> _visibleBacklogDetailModes(
   AgentAwesomeAppController controller,
-  SwitcherPanelArea area,
 ) {
-  switch (_backlogAreaId(area)) {
-    case _BacklogAreaIds.queue:
-      return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.inspector),
-        _backlogDetailMode(_BacklogDetailMode.memoryLinks),
-        if (_backlogReviewAvailable(controller))
-          _backlogDetailMode(_BacklogDetailMode.aiReview),
-      ];
-    case _BacklogAreaIds.stream:
-      return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.inspector),
-        _backlogDetailMode(_BacklogDetailMode.memoryLinks),
-      ];
-    case _BacklogAreaIds.wbs:
-      return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.wbsOverview),
-        _backlogDetailMode(_BacklogDetailMode.inspector),
-      ];
-    case _BacklogAreaIds.constellation:
-      return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.constellationOverview),
-        _backlogDetailMode(_BacklogDetailMode.inspector),
-      ];
-    case _BacklogAreaIds.capture:
-      return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.captureContext),
-        _backlogDetailMode(_BacklogDetailMode.memoryLinks),
-      ];
-    default:
-      return <CommandPanelDetailMode>[
-        _backlogDetailMode(_BacklogDetailMode.inspector),
-      ];
-  }
+  return <CommandPanelDetailMode>[
+    _backlogDetailMode(_BacklogDetailMode.inspector),
+    _backlogDetailMode(_BacklogDetailMode.memoryLinks),
+    if (_backlogReviewAvailable(controller))
+      _backlogDetailMode(_BacklogDetailMode.aiReview),
+    _backlogDetailMode(_BacklogDetailMode.stream),
+    _backlogDetailMode(_BacklogDetailMode.wbs),
+    _backlogDetailMode(_BacklogDetailMode.map),
+    _backlogDetailMode(_BacklogDetailMode.capture),
+  ];
 }
 
 /// Reports whether there is an AI screen-command run worth reviewing.
@@ -140,9 +73,10 @@ String _backlogDetailModeId(_BacklogDetailMode mode) {
     _BacklogDetailMode.inspector => 'inspector',
     _BacklogDetailMode.memoryLinks => 'memory_links',
     _BacklogDetailMode.aiReview => 'ai_review',
-    _BacklogDetailMode.wbsOverview => 'wbs_overview',
-    _BacklogDetailMode.constellationOverview => 'constellation_overview',
-    _BacklogDetailMode.captureContext => 'capture_context',
+    _BacklogDetailMode.stream => 'stream',
+    _BacklogDetailMode.wbs => 'wbs',
+    _BacklogDetailMode.map => 'map',
+    _BacklogDetailMode.capture => 'capture',
   };
 }
 
@@ -154,14 +88,17 @@ _BacklogDetailMode _backlogDetailModeForId(String id) {
   if (id == _backlogDetailModeId(_BacklogDetailMode.aiReview)) {
     return _BacklogDetailMode.aiReview;
   }
-  if (id == _backlogDetailModeId(_BacklogDetailMode.wbsOverview)) {
-    return _BacklogDetailMode.wbsOverview;
+  if (id == _backlogDetailModeId(_BacklogDetailMode.stream)) {
+    return _BacklogDetailMode.stream;
   }
-  if (id == _backlogDetailModeId(_BacklogDetailMode.constellationOverview)) {
-    return _BacklogDetailMode.constellationOverview;
+  if (id == _backlogDetailModeId(_BacklogDetailMode.wbs)) {
+    return _BacklogDetailMode.wbs;
   }
-  if (id == _backlogDetailModeId(_BacklogDetailMode.captureContext)) {
-    return _BacklogDetailMode.captureContext;
+  if (id == _backlogDetailModeId(_BacklogDetailMode.map)) {
+    return _BacklogDetailMode.map;
+  }
+  if (id == _backlogDetailModeId(_BacklogDetailMode.capture)) {
+    return _BacklogDetailMode.capture;
   }
   return _BacklogDetailMode.inspector;
 }
@@ -180,10 +117,11 @@ String _backlogDetailLabel(_BacklogDetailMode mode) {
   return switch (mode) {
     _BacklogDetailMode.inspector => 'Inspector',
     _BacklogDetailMode.memoryLinks => 'Memory',
-    _BacklogDetailMode.aiReview => 'AI review',
-    _BacklogDetailMode.wbsOverview => 'WBS',
-    _BacklogDetailMode.constellationOverview => 'Graph',
-    _BacklogDetailMode.captureContext => 'Capture',
+    _BacklogDetailMode.aiReview => 'Review',
+    _BacklogDetailMode.stream => 'Stream',
+    _BacklogDetailMode.wbs => 'WBS',
+    _BacklogDetailMode.map => 'Map',
+    _BacklogDetailMode.capture => 'Capture',
   };
 }
 
@@ -193,23 +131,9 @@ IconData _backlogDetailIcon(_BacklogDetailMode mode) {
     _BacklogDetailMode.inspector => Icons.edit_note_outlined,
     _BacklogDetailMode.memoryLinks => Icons.link_outlined,
     _BacklogDetailMode.aiReview => Icons.auto_awesome_outlined,
-    _BacklogDetailMode.wbsOverview => Icons.account_tree_outlined,
-    _BacklogDetailMode.constellationOverview => Icons.hub_outlined,
-    _BacklogDetailMode.captureContext => Icons.add_task_outlined,
-  };
-}
-
-/// Returns a stable area id for a backlog switcher area.
-String _backlogAreaId(SwitcherPanelArea area) {
-  return area.id.isEmpty ? area.title.toLowerCase() : area.id;
-}
-
-/// Returns the default right-side detail mode for a backlog area.
-_BacklogDetailMode _defaultBacklogDetailModeForArea(SwitcherPanelArea area) {
-  return switch (_backlogAreaId(area)) {
-    _BacklogAreaIds.wbs => _BacklogDetailMode.wbsOverview,
-    _BacklogAreaIds.constellation => _BacklogDetailMode.constellationOverview,
-    _BacklogAreaIds.capture => _BacklogDetailMode.captureContext,
-    _ => _BacklogDetailMode.inspector,
+    _BacklogDetailMode.stream => Icons.waves_outlined,
+    _BacklogDetailMode.wbs => Icons.account_tree_outlined,
+    _BacklogDetailMode.map => Icons.hub_outlined,
+    _BacklogDetailMode.capture => Icons.add_task_outlined,
   };
 }

@@ -41,7 +41,6 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
             selectedFileId: selected?.id,
             kindFilter: _kindFilter,
             onSelected: _selectFile,
-            onAddFile: widget.controller.importFileFromUi,
           ),
         ),
       ],

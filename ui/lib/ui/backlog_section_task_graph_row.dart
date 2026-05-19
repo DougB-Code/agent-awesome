@@ -35,7 +35,7 @@ class _TaskGraphRow extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 if (subtitle.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 3),

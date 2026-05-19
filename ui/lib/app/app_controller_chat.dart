@@ -3,13 +3,21 @@ part of 'app_controller.dart';
 
 extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
   /// Selects a chat session and loads its events when connected.
-  Future<void> selectSession(String sessionId) async {
+  Future<void> selectSession(String sessionId, {String chatKey = ''}) async {
     await _log('select session requested $sessionId');
+    selectedSessionId = sessionId;
+    selectedChatHistoryKey = chatKey.trim().isEmpty
+        ? runtimeProfilePath.isEmpty
+              ? ''
+              : _chatHistoryKey(runtimeProfilePath, sessionId)
+        : chatKey.trim();
+    pendingConfirmation = null;
+    messages = const <ChatMessage>[];
+    _notifyControllerListeners();
     try {
       final events = await assistantClient.loadSessionEvents(sessionId);
       final routedEvents = _chatEventsWithInheritedModelRefs(events);
       _rememberLiveSession(sessionId);
-      selectedSessionId = sessionId;
       await _touchHistoryChat(sessionId);
       _restoreChatModelRefFromEvents(routedEvents);
       messages = routedEvents
@@ -29,7 +37,6 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     } catch (error) {
       await _log('select session failed $sessionId: $error');
       if (selectedSessionId == sessionId) {
-        selectedSessionId = null;
         messages = const <ChatMessage>[];
       }
       await _log('preserving chat history entry for unavailable session');
@@ -56,6 +63,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       if (parsed == null) {
         return;
       }
+      _selectHistoryChatCard(chatKey, parsed.sessionId);
       if (parsed.profilePath != runtimeProfilePath) {
         try {
           await loadRuntimeProfileFromPath(
@@ -76,9 +84,10 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
         }
         await Future.wait(<Future<void>>[_loadMemory(), _loadTasks()]);
       }
-      await selectSession(parsed.sessionId);
+      await selectSession(parsed.sessionId, chatKey: chatKey);
       return;
     }
+    _selectHistoryChatCard(target.key, target.sessionId);
     if (target.profilePath != runtimeProfilePath) {
       try {
         await loadRuntimeProfileFromPath(target.profilePath, reloadData: false);
@@ -96,7 +105,16 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       }
       await Future.wait(<Future<void>>[_loadMemory(), _loadTasks()]);
     }
-    await selectSession(target.sessionId);
+    await selectSession(target.sessionId, chatKey: target.key);
+  }
+
+  /// Marks a history chat as the active left-panel selection immediately.
+  void _selectHistoryChatCard(String chatKey, String sessionId) {
+    selectedChatHistoryKey = chatKey;
+    selectedSessionId = sessionId;
+    pendingConfirmation = null;
+    messages = const <ChatMessage>[];
+    _notifyControllerListeners();
   }
 
   /// Deletes a saved chat and its backing runtime session.
@@ -136,6 +154,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
           pendingConfirmation = null;
           if (sessions.isEmpty) {
             selectedSessionId = null;
+            selectedChatHistoryKey = '';
             messages = const <ChatMessage>[];
           } else {
             selectedSessionId = sessions.first.id;
@@ -223,6 +242,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       final session = await assistantClient.createSession();
       sessions = <ChatSession>[session, ...sessions];
       selectedSessionId = session.id;
+      selectedChatHistoryKey = _chatHistoryKey(runtimeProfilePath, session.id);
       messages = const <ChatMessage>[];
       await _upsertHistoryChat(session);
       _setEndpoint('Agent API', ConnectionStateKind.connected, 'Created chat');
@@ -364,6 +384,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
           'load sessions empty; preserving local chat history ${chatHistory.length}',
         );
         selectedSessionId = null;
+        selectedChatHistoryKey = '';
         messages = const <ChatMessage>[];
       }
       _setEndpoint('Agent API', ConnectionStateKind.connected, 'Connected');
@@ -629,6 +650,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       await _log('selected session missing from live harness list $sessionId');
       await _log('preserving chat history entry for missing live session');
       selectedSessionId = null;
+      selectedChatHistoryKey = '';
       messages = const <ChatMessage>[];
     }
     await _log('no selected session; creating chat');

@@ -105,18 +105,16 @@ class _MemoryFilterBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Tooltip(
-                message: 'Search service',
-                child: IconButton.outlined(
-                  onPressed: () {
-                    unawaited(
-                      controller.applyMemoryFilters(
-                        filters.copyWith(text: query.trim()),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.travel_explore),
-                ),
+              PanelIconButton(
+                icon: Icons.travel_explore,
+                tooltip: 'Search service',
+                onPressed: () {
+                  unawaited(
+                    controller.applyMemoryFilters(
+                      filters.copyWith(text: query.trim()),
+                    ),
+                  );
+                },
               ),
             ],
           ),
@@ -127,24 +125,9 @@ class _MemoryFilterBar extends StatelessWidget {
             children: <Widget>[
               if (controller.memoryFirewallIds.contains('global') &&
                   filters.firewall != 'global')
-                FilterChip(
-                  label: Text(
-                    'Include ${controller.memoryFirewallLabel('global')}',
-                  ),
+                PanelFilterChip(
+                  label: 'Include ${controller.memoryFirewallLabel('global')}',
                   selected: filters.includeGlobal,
-                  showCheckmark: true,
-                  backgroundColor: colors.surface,
-                  selectedColor: colors.panelStrong,
-                  checkmarkColor: colors.green,
-                  side: BorderSide(
-                    color: filters.includeGlobal
-                        ? colors.borderStrong
-                        : colors.border,
-                  ),
-                  labelStyle: TextStyle(
-                    color: filters.includeGlobal ? colors.ink : colors.muted,
-                    fontWeight: FontWeight.w800,
-                  ),
                   onSelected: (value) {
                     unawaited(
                       controller.applyMemoryFilters(
@@ -159,20 +142,9 @@ class _MemoryFilterBar extends StatelessWidget {
                     final selected = filters.allowedSensitivities.contains(
                       sensitivity,
                     );
-                    return FilterChip(
-                      label: Text(_memoryLabel(sensitivity)),
+                    return PanelFilterChip(
+                      label: _memoryLabel(sensitivity),
                       selected: selected,
-                      showCheckmark: true,
-                      backgroundColor: colors.surface,
-                      selectedColor: colors.panelStrong,
-                      checkmarkColor: colors.green,
-                      side: BorderSide(
-                        color: selected ? colors.borderStrong : colors.border,
-                      ),
-                      labelStyle: TextStyle(
-                        color: selected ? colors.ink : colors.muted,
-                        fontWeight: FontWeight.w800,
-                      ),
                       onSelected: (_) {
                         unawaited(
                           controller.applyMemoryFilters(
@@ -279,7 +251,7 @@ class _RouteNoticePanel extends StatelessWidget {
                   style: TextStyle(
                     color: colors.ink,
                     fontSize: 17,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -352,7 +324,6 @@ class _MemoryRecordTile extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: colors.surface,
-          gradient: context.agentAwesomeCardGradient,
           border: Border.all(color: borderColor),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -361,7 +332,7 @@ class _MemoryRecordTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Container(width: 4, color: accentColor),
+              Container(width: 3, color: accentColor),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -383,7 +354,7 @@ class _MemoryRecordTile extends StatelessWidget {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: colors.ink,
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w800,
                                     fontSize: 16,
                                   ),
                                 ),
@@ -469,24 +440,24 @@ class _MemoryKindBadge extends StatelessWidget {
   /// Builds the compact record-kind badge for memory cards.
   @override
   Widget build(BuildContext context) {
-    final accent = _memoryRecordAccentColor(context, record);
+    final colors = context.agentAwesomeColors;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
-        border: Border.all(color: accent.withValues(alpha: 0.35)),
-        borderRadius: BorderRadius.circular(8),
+        color: colors.panel,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(_memoryRecordIcon(record), size: 16, color: accent),
+          Icon(_memoryRecordIcon(record), size: 16, color: colors.muted),
           const SizedBox(width: 5),
           Text(
             _memoryLabel(record.kind),
             style: TextStyle(
-              color: accent,
-              fontWeight: FontWeight.w900,
+              color: colors.muted,
+              fontWeight: FontWeight.w700,
               fontSize: 12,
             ),
           ),

@@ -31,6 +31,7 @@ type Server struct {
 	manager        *supervisor.Manager
 	apiProxy       *proxy.Proxy
 	contextProxy   *proxy.Proxy
+	workflowProxy  *proxy.Proxy
 	apiProxies     map[string]*proxy.Proxy
 	contextProxies map[string]*proxy.Proxy
 	memoryProxies  map[string]*proxy.Proxy
@@ -240,11 +241,16 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 	if err != nil {
 		return nil, err
 	}
+	workflowProxy, err := proxy.New(cfg.WorkflowBaseURL, "/api/workflows", cfg.RequestTimeout, proxy.WithRouteGroup("workflow"))
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
 		config:         cfg,
 		manager:        manager,
 		apiProxy:       apiProxy,
 		contextProxy:   contextProxy,
+		workflowProxy:  workflowProxy,
 		apiProxies:     apiProxies,
 		contextProxies: contextProxies,
 		memoryProxies:  memoryProxies,
@@ -354,6 +360,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/mcp", s.authenticated(s.memoryMCPHandler))
 	mux.HandleFunc("/mcp/", s.authenticated(s.memoryMCPHandler))
 	mux.HandleFunc("/api/context/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.contextAPIHandler)))
+	mux.HandleFunc("/api/workflows", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.workflowHandler)))
+	mux.HandleFunc("/api/workflows/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.workflowHandler)))
 	mux.HandleFunc("/api/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.apiHandler)))
 	return s.cors(mux)
 }
@@ -439,6 +447,14 @@ func (s *Server) contextAPIHandler(w http.ResponseWriter, r *http.Request) {
 		writePolicyError(w, policyError{status: http.StatusForbidden, message: "memory domain overrides must use the gateway domain_id field"})
 		return
 	}
+	if strings.TrimSpace(call.Name) == "export_memory_copy" {
+		if strings.TrimSpace(call.DomainID) != "" {
+			writePolicyError(w, policyError{status: http.StatusBadRequest, message: "export_memory_copy must not include a gateway domain_id"})
+			return
+		}
+		contextProxy.ServeHTTP(w, requestWithExecutionContext(requestWithBody(r, r.URL.Path, body), exec))
+		return
+	}
 	domainID, err := s.authorizeMemoryTool(exec.Policy, call.Name, call.DomainID)
 	if err != nil {
 		writePolicyError(w, err)
@@ -492,6 +508,11 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	memoryProxy.ServeHTTP(w, requestWithBody(r, "/mcp", body))
+}
+
+// workflowHandler proxies user-channel workflow requests to internal workflowd.
+func (s *Server) workflowHandler(w http.ResponseWriter, r *http.Request) {
+	s.workflowProxy.ServeHTTP(w, r)
 }
 
 // authorizeMemoryTool selects a domain and checks read/write grants for one tool.

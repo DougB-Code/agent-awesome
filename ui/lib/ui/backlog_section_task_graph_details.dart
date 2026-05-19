@@ -20,16 +20,14 @@ class _TaskGraphDetailsBlock extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           if (canUpsertRelation)
-            Tooltip(
-              message: 'Add relation',
-              child: IconButton(
-                onPressed: controller.tasksBusy
-                    ? null
-                    : () => unawaited(
-                        _showTaskRelationDialog(context, controller, task),
-                      ),
-                icon: const Icon(Icons.account_tree_outlined, size: 18),
-              ),
+            PanelInlineIconButton(
+              icon: Icons.account_tree_outlined,
+              tooltip: 'Add relation',
+              onPressed: controller.tasksBusy
+                  ? null
+                  : () => unawaited(
+                      _showTaskRelationDialog(context, controller, task),
+                    ),
             ),
         ],
       ),
@@ -73,7 +71,7 @@ class _TaskGraphSubsection extends StatelessWidget {
       children: <Widget>[
         Text(
           title,
-          style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13),
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
         ),
         const SizedBox(height: 8),
         if (children.isEmpty)

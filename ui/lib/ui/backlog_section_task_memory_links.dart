@@ -20,9 +20,6 @@ class _TaskMemoryLinkPanel extends StatelessWidget {
     return _TaskMemoryLinkScaffold(
       selectedMemory: selectedMemory,
       links: _filteredLinks(task.memoryLinks, query),
-      onLink: controller.tasksBusy || selectedMemory == null
-          ? null
-          : () => unawaited(controller.linkSelectedMemoryToTaskFromUi(task.id)),
     );
   }
 }
@@ -56,7 +53,7 @@ class _TaskSelectedMemoryBlock extends StatelessWidget {
                         record.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
                     if (record.kind.isNotEmpty) _TaskBadge(label: record.kind),

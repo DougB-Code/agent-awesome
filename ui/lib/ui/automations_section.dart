@@ -15,6 +15,14 @@ const String _automationPanelOperations = 'operations';
 const String _automationPanelWorkflows = 'workflows';
 const String _automationPanelTasks = 'tasks';
 const String _automationPanelAgents = 'agents';
+const String _automationOperationsAreaInbox = 'operations_inbox';
+const String _automationOperationsAreaPublished = 'operations_published';
+const String _automationOperationsAreaRuns = 'operations_runs';
+const String _automationWorkflowAreaDrafts = 'workflow_drafts';
+const String _automationWorkflowAreaTemplates = 'workflow_templates';
+const String _automationWorkflowAreaActions = 'workflow_actions';
+const String _automationTaskAreaDrafts = 'task_drafts';
+const String _automationTaskAreaTemplates = 'task_templates';
 const String _automationTaskAreaNodes = 'task_nodes';
 const String _automationAgentAreaProfiles = 'agent_profiles';
 
@@ -60,8 +68,6 @@ class AutomationOperationsCommandPanel extends StatelessWidget {
       icon: Icons.monitor_heart_outlined,
       filterHint: 'Filter runs and definitions...',
       detailModes: _detailModesForPanel(_automationPanelOperations),
-      contentBuilder: (query) =>
-          _AutomationOperationsContent(controller: controller, query: query),
       onAreaChanged: onAreaChanged,
     );
   }
@@ -93,12 +99,6 @@ class AutomationWorkflowsCommandPanel extends StatelessWidget {
       icon: Icons.route_outlined,
       filterHint: 'Filter workflows...',
       detailModes: _detailModesForPanel(_automationPanelWorkflows),
-      contentBuilder: (query) => _AutomationDraftListContent(
-        controller: controller,
-        query: query,
-        kind: 'state_machine',
-        emptyLabel: 'No workflow drafts',
-      ),
       onAreaChanged: onAreaChanged,
     );
   }
@@ -130,8 +130,6 @@ class AutomationTasksCommandPanel extends StatelessWidget {
       icon: Icons.account_tree_outlined,
       filterHint: 'Filter tasks or nodes...',
       detailModes: _detailModesForPanel(_automationPanelTasks),
-      contentBuilder: (query) =>
-          _AutomationTaskDraftListContent(controller: controller, query: query),
       split: const PanelSplit(left: 0.25, min: 0.12, max: 0.9),
       onAreaChanged: onAreaChanged,
     );
@@ -160,7 +158,7 @@ class AutomationAgentsCommandPanel extends StatelessWidget {
       controller: controller,
       panelId: _automationPanelAgents,
       title: 'Agent Profiles',
-      detailTitle: 'Agent Builder',
+      detailTitle: 'Agent Profile',
       icon: Icons.psychology_outlined,
       filterHint: 'Filter agents...',
       detailModes: _detailModesForPanel(_automationPanelAgents),
@@ -181,7 +179,7 @@ class _AutomationFocusedCommandPanel extends StatefulWidget {
     required this.icon,
     required this.filterHint,
     required this.detailModes,
-    required this.contentBuilder,
+    this.contentBuilder,
     this.split = const PanelSplit(left: 0.64, min: 0.12, max: 0.9),
     this.onAreaChanged,
   });
@@ -193,7 +191,7 @@ class _AutomationFocusedCommandPanel extends StatefulWidget {
   final IconData icon;
   final String filterHint;
   final List<CommandPanelDetailMode> detailModes;
-  final Widget Function(String query) contentBuilder;
+  final Widget Function(String query)? contentBuilder;
   final PanelSplit split;
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
@@ -253,10 +251,15 @@ class _AutomationFocusedCommandPanelState
         areaId: widget.panelId,
         modeId: modeId,
       ),
+      areaDetailBuilder: (area, modeId) => _AutomationDetailContent(
+        controller: widget.controller,
+        areaId: area.id,
+        modeId: modeId,
+      ),
       areaTabbedDetailBuilder: (area, modeId, tabId) =>
           _AutomationDetailContent(
             controller: widget.controller,
-            areaId: widget.panelId,
+            areaId: area.id,
             modeId: modeId,
             tabId: tabId,
           ),
@@ -268,12 +271,17 @@ class _AutomationFocusedCommandPanelState
         return _AutomationPanelActions(
           controller: widget.controller,
           panelId: widget.panelId,
+          areaId: area.id,
         );
       },
-      detailActionsBuilder: (context, area, mode) => _AutomationDetailActions(
-        controller: widget.controller,
-        panelId: widget.panelId,
-      ),
+      detailModesBuilder: _detailModesForArea,
+      detailActionsBuilder: (context, area, mode) {
+        return _AutomationDetailActions(
+          controller: widget.controller,
+          panelId: widget.panelId,
+          areaId: area.id,
+        );
+      },
       filterHint: widget.filterHint,
       split: widget.split,
     );
@@ -285,35 +293,143 @@ class _AutomationFocusedCommandPanelState
 
   /// Builds quick-access command areas for the current Automations screen.
   List<SwitcherPanelArea> _commandAreas() {
-    if (widget.panelId != _automationPanelTasks) {
+    if (widget.panelId == _automationPanelOperations) {
       return <SwitcherPanelArea>[
         SwitcherPanelArea(
-          id: widget.panelId == _automationPanelAgents
-              ? _automationAgentAreaProfiles
-              : widget.panelId,
-          title: widget.title,
-          icon: widget.icon,
-          builder: widget.contentBuilder,
+          id: _automationOperationsAreaInbox,
+          title: 'Inbox',
+          icon: Icons.inbox_outlined,
+          builder: (query) => _AutomationInboxContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationOperationsAreaPublished,
+          title: 'Published',
+          icon: Icons.inventory_2_outlined,
+          builder: (query) => _AutomationPublishedContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationOperationsAreaRuns,
+          title: 'Runs',
+          icon: Icons.history_outlined,
+          builder: (query) => _AutomationRunsContent(
+            controller: widget.controller,
+            query: query,
+          ),
         ),
       ];
     }
-    return <SwitcherPanelArea>[
-      SwitcherPanelArea(
-        id: widget.panelId,
-        title: widget.title,
-        icon: widget.icon,
-        builder: widget.contentBuilder,
-      ),
-      SwitcherPanelArea(
-        id: _automationTaskAreaNodes,
-        title: 'Nodes',
-        icon: Icons.hub_outlined,
-        builder: (query) => _AutomationTaskNodePaletteContent(
-          controller: widget.controller,
-          query: query,
+    if (widget.panelId == _automationPanelWorkflows) {
+      return <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          id: _automationWorkflowAreaDrafts,
+          title: 'Drafts',
+          icon: Icons.edit_note_outlined,
+          builder: (query) => _AutomationDraftsContent(
+            controller: widget.controller,
+            query: query,
+            kind: 'state_machine',
+            emptyLabel: 'No workflow drafts',
+          ),
         ),
-      ),
-    ];
+        SwitcherPanelArea(
+          id: _automationWorkflowAreaTemplates,
+          title: 'Templates',
+          icon: Icons.library_books_outlined,
+          builder: (query) => _AutomationTemplatesContent(
+            controller: widget.controller,
+            query: query,
+            kind: 'state_machine',
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationWorkflowAreaActions,
+          title: 'Actions',
+          icon: Icons.add_circle_outline,
+          builder: (query) => _AutomationActionPaletteContent(
+            controller: widget.controller,
+            query: query,
+            actionTypes: widget.controller.automationActionTypes,
+          ),
+        ),
+      ];
+    }
+    if (widget.panelId == _automationPanelTasks) {
+      return <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          id: _automationTaskAreaDrafts,
+          title: widget.title,
+          icon: widget.icon,
+          builder: (query) => _AutomationDraftsContent(
+            controller: widget.controller,
+            query: query,
+            kind: 'dag',
+            emptyLabel: 'No task DAG drafts',
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationTaskAreaTemplates,
+          title: 'Templates',
+          icon: Icons.library_books_outlined,
+          builder: (query) => _AutomationTemplatesContent(
+            controller: widget.controller,
+            query: query,
+            kind: 'dag',
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationTaskAreaNodes,
+          title: 'Nodes',
+          icon: Icons.hub_outlined,
+          builder: (query) => _AutomationTaskNodePaletteContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+      ];
+    }
+    if (widget.panelId == _automationPanelAgents) {
+      return <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          id: _automationAgentAreaProfiles,
+          title: widget.title,
+          icon: widget.icon,
+          builder: widget.contentBuilder ?? (_) => const SizedBox.shrink(),
+        ),
+      ];
+    }
+    if (widget.panelId != _automationPanelTasks) {
+      return <SwitcherPanelArea>[
+        SwitcherPanelArea(
+          id: widget.panelId,
+          title: widget.title,
+          icon: widget.icon,
+          builder: widget.contentBuilder ?? (_) => const SizedBox.shrink(),
+        ),
+      ];
+    }
+    return const <SwitcherPanelArea>[];
+  }
+
+  /// Returns area-specific right work modes where supporting areas need less UI.
+  List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
+    if (area.id == _automationWorkflowAreaTemplates ||
+        area.id == _automationTaskAreaTemplates ||
+        area.id == _automationWorkflowAreaActions) {
+      return const <CommandPanelDetailMode>[
+        CommandPanelDetailMode(
+          id: _automationDetailOverview,
+          label: 'Overview',
+          icon: Icons.info_outline,
+        ),
+      ];
+    }
+    return widget.detailModes;
   }
 }
 
@@ -352,10 +468,12 @@ class _AutomationPanelActions extends StatelessWidget {
   const _AutomationPanelActions({
     required this.controller,
     required this.panelId,
+    required this.areaId,
   });
 
   final AgentAwesomeAppController controller;
   final String panelId;
+  final String areaId;
 
   /// Builds common and section-specific Automations header actions.
   @override
@@ -374,7 +492,8 @@ class _AutomationPanelActions extends StatelessWidget {
           ),
           const SizedBox(width: 8),
         ],
-        if (panelId == _automationPanelWorkflows)
+        if (panelId == _automationPanelWorkflows &&
+            areaId == _automationWorkflowAreaDrafts)
           PanelIconButton(
             icon: Icons.add,
             tooltip: 'New workflow draft',
@@ -387,7 +506,8 @@ class _AutomationPanelActions extends StatelessWidget {
                     ),
                   ),
           ),
-        if (panelId == _automationPanelTasks)
+        if (panelId == _automationPanelTasks &&
+            areaId == _automationTaskAreaDrafts)
           PanelIconButton(
             icon: Icons.add,
             tooltip: 'New task DAG',
@@ -417,18 +537,39 @@ class _AutomationDetailActions extends StatelessWidget {
   const _AutomationDetailActions({
     required this.controller,
     required this.panelId,
+    required this.areaId,
   });
 
   final AgentAwesomeAppController controller;
   final String panelId;
+  final String areaId;
 
   /// Builds selected-object controls for the Automations detail panel.
   @override
   Widget build(BuildContext context) {
-    if (panelId == _automationPanelWorkflows ||
+    if (panelId == _automationPanelOperations) {
+      return _OperationsSelectedActions(controller: controller, areaId: areaId);
+    }
+    if (areaId == _automationWorkflowAreaTemplates ||
+        areaId == _automationTaskAreaTemplates) {
+      final template = _selectedAutomationTemplateForArea(controller, areaId);
+      return PanelIconButton(
+        icon: Icons.add,
+        tooltip: 'Use selected template',
+        onPressed: controller.automationsBusy || template == null
+            ? null
+            : () => unawaited(
+                controller.instantiateAutomationTemplateFromUi(template),
+              ),
+      );
+    }
+    final kind = _automationDraftKindForArea(areaId);
+    if (kind != null ||
+        panelId == _automationPanelWorkflows ||
         panelId == _automationPanelTasks) {
-      final kind = panelId == _automationPanelTasks ? 'dag' : 'state_machine';
-      final draft = _selectedAutomationDraftForKind(controller, kind);
+      final effectiveKind =
+          kind ?? (panelId == _automationPanelTasks ? 'dag' : 'state_machine');
+      final draft = _selectedAutomationDraftForKind(controller, effectiveKind);
       if (draft == null) {
         return const SizedBox.shrink();
       }
@@ -469,6 +610,61 @@ class _AutomationDetailActions extends StatelessWidget {
           : () =>
                 unawaited(controller.deleteSelectedAutomationAgentSpecFromUi()),
     );
+  }
+}
+
+class _OperationsSelectedActions extends StatelessWidget {
+  const _OperationsSelectedActions({
+    required this.controller,
+    required this.areaId,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String areaId;
+
+  /// Builds selected-object actions for the active Operations collection.
+  @override
+  Widget build(BuildContext context) {
+    if (areaId == _automationOperationsAreaInbox) {
+      final item = controller.selectedAutomationPendingItem;
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          PanelIconButton(
+            icon: Icons.check,
+            tooltip: 'Approve selected automation item',
+            onPressed: controller.automationsBusy || item == null
+                ? null
+                : () => unawaited(
+                    controller.approveAutomationPendingItemFromUi(item),
+                  ),
+          ),
+          const SizedBox(width: 8),
+          PanelIconButton(
+            icon: Icons.close,
+            tooltip: 'Reject selected automation item',
+            onPressed: controller.automationsBusy || item == null
+                ? null
+                : () => unawaited(
+                    controller.rejectAutomationPendingItemFromUi(item),
+                  ),
+          ),
+        ],
+      );
+    }
+    if (areaId == _automationOperationsAreaPublished) {
+      final definition = controller.selectedAutomationDefinition;
+      return PanelIconButton(
+        icon: Icons.play_arrow,
+        tooltip: 'Start selected automation',
+        onPressed: controller.automationsBusy || definition == null
+            ? null
+            : () => unawaited(
+                controller.startAutomationDefinitionFromUi(definition),
+              ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 
@@ -548,7 +744,8 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
 
 /// Returns second-level tabs available inside the selected right workspace.
 List<ShellTab> _detailTabsForMode(String panelId, String modeId) {
-  if (panelId != _automationPanelAgents) {
+  if (panelId != _automationPanelAgents ||
+      modeId != _automationAgentModeProfile) {
     return const <ShellTab>[];
   }
   return const <ShellTab>[
@@ -575,8 +772,8 @@ List<ShellTab> _detailTabsForMode(String panelId, String modeId) {
   ];
 }
 
-class _AutomationOperationsContent extends StatelessWidget {
-  const _AutomationOperationsContent({
+class _AutomationInboxContent extends StatelessWidget {
+  const _AutomationInboxContent({
     required this.controller,
     required this.query,
   });
@@ -584,62 +781,76 @@ class _AutomationOperationsContent extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
+  /// Builds pending operator approval items.
+  @override
+  Widget build(BuildContext context) {
+    final inbox = _filterPendingItems(controller.automationInbox, query);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (inbox.isEmpty)
+          const PanelEmptyBlock(label: 'No pending automation items')
+        else
+          for (final item in inbox)
+            _PendingItemTile(controller: controller, item: item),
+      ],
+    );
+  }
+}
+
+class _AutomationPublishedContent extends StatelessWidget {
+  const _AutomationPublishedContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds published automation definitions.
   @override
   Widget build(BuildContext context) {
     final definitions = _filterDefinitions(
       controller.automationDefinitions,
       query,
     );
-    final runs = _filterRuns(controller.automationRuns, query);
-    final inbox = controller.automationInbox;
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
-        PanelSectionBlock(
-          title: 'Inbox',
-          child: inbox.isEmpty
-              ? const PanelEmptyBlock(label: 'No pending automation items')
-              : Column(
-                  children: <Widget>[
-                    for (final item in inbox)
-                      _PendingItemTile(controller: controller, item: item),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 12),
-        PanelSectionBlock(
-          title: 'Published',
-          child: definitions.isEmpty
-              ? const PanelEmptyBlock(label: 'No published automations')
-              : Column(
-                  children: <Widget>[
-                    for (final definition in definitions)
-                      _DefinitionTile(
-                        controller: controller,
-                        definition: definition,
-                      ),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 12),
-        PanelSectionBlock(
-          title: 'Runs',
-          child: runs.isEmpty
-              ? const PanelEmptyBlock(label: 'No recent automation runs')
-              : Column(
-                  children: <Widget>[
-                    for (final run in runs)
-                      _RunTile(controller: controller, run: run),
-                  ],
-                ),
-        ),
+        if (definitions.isEmpty)
+          const PanelEmptyBlock(label: 'No published automations')
+        else
+          for (final definition in definitions)
+            _DefinitionTile(controller: controller, definition: definition),
       ],
     );
   }
 }
 
-class _AutomationDraftListContent extends StatelessWidget {
-  const _AutomationDraftListContent({
+class _AutomationRunsContent extends StatelessWidget {
+  const _AutomationRunsContent({required this.controller, required this.query});
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds selectable automation run history.
+  @override
+  Widget build(BuildContext context) {
+    final runs = _filterRuns(controller.automationRuns, query);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (runs.isEmpty)
+          const PanelEmptyBlock(label: 'No recent automation runs')
+        else
+          for (final run in runs) _RunTile(controller: controller, run: run),
+      ],
+    );
+  }
+}
+
+class _AutomationDraftsContent extends StatelessWidget {
+  const _AutomationDraftsContent({
     required this.controller,
     required this.query,
     required this.kind,
@@ -651,13 +862,39 @@ class _AutomationDraftListContent extends StatelessWidget {
   final String kind;
   final String emptyLabel;
 
-  /// Builds draft and template lists for one authoring section.
+  /// Builds draft rows for one authoring section.
   @override
   Widget build(BuildContext context) {
     final drafts = _filterDrafts(
       controller.automationDrafts.where((draft) => draft.kind == kind).toList(),
       query,
     );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: drafts.isEmpty
+          ? <Widget>[PanelEmptyBlock(label: emptyLabel)]
+          : <Widget>[
+              for (final draft in drafts)
+                _DraftTile(controller: controller, draft: draft),
+            ],
+    );
+  }
+}
+
+class _AutomationTemplatesContent extends StatelessWidget {
+  const _AutomationTemplatesContent({
+    required this.controller,
+    required this.query,
+    required this.kind,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+  final String kind;
+
+  /// Builds template source rows for one authoring section.
+  @override
+  Widget build(BuildContext context) {
     final templates = _filterTemplates(
       controller.automationTemplates.where((template) {
         return _templateMatchesKind(template, kind);
@@ -666,68 +903,46 @@ class _AutomationDraftListContent extends StatelessWidget {
     );
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        PanelSectionBlock(
-          title: 'Drafts',
-          child: drafts.isEmpty
-              ? PanelEmptyBlock(label: emptyLabel)
-              : Column(
-                  children: <Widget>[
-                    for (final draft in drafts)
-                      _DraftTile(controller: controller, draft: draft),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 12),
-        PanelSectionBlock(
-          title: 'Templates',
-          child: templates.isEmpty
-              ? const PanelEmptyBlock(label: 'No matching templates')
-              : Column(
-                  children: <Widget>[
-                    for (final template in templates)
-                      _TemplateTile(controller: controller, template: template),
-                  ],
-                ),
-        ),
-      ],
+      children: templates.isEmpty
+          ? const <Widget>[PanelEmptyBlock(label: 'No matching templates')]
+          : <Widget>[
+              for (final template in templates)
+                _TemplateTile(controller: controller, template: template),
+            ],
     );
   }
 }
 
-class _AutomationTaskDraftListContent extends StatelessWidget {
-  const _AutomationTaskDraftListContent({
+class _AutomationActionPaletteContent extends StatelessWidget {
+  const _AutomationActionPaletteContent({
     required this.controller,
     required this.query,
+    required this.actionTypes,
   });
 
   final AgentAwesomeAppController controller;
   final String query;
+  final List<AutomationActionType> actionTypes;
 
-  /// Builds the DAG draft selector for task automation authoring.
+  /// Builds a workflow action palette for selected draft editing.
   @override
   Widget build(BuildContext context) {
-    final drafts = _filterDrafts(
-      controller.automationDrafts
-          .where((draft) => draft.kind == 'dag')
-          .toList(),
-      query,
+    final selectedDraft = _selectedAutomationDraftForKind(
+      controller,
+      'state_machine',
     );
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: drafts.isEmpty
-          ? <Widget>[
-              Center(
-                child: SelectableText(
-                  'No task DAG drafts',
-                  style: TextStyle(color: context.agentAwesomeColors.muted),
-                ),
-              ),
-            ]
-          : <Widget>[
-              for (final draft in drafts)
-                _DraftTile(controller: controller, draft: draft),
-            ],
+    return _DagActionPalette(
+      actionTypes: actionTypes,
+      query: query,
+      onAddAction: (actionName) {
+        if (selectedDraft == null || controller.automationsBusy) {
+          return;
+        }
+        controller.selectAutomationDraft(selectedDraft.id);
+        unawaited(
+          controller.addAutomationActionToSelectedDraftFromUi(actionName),
+        );
+      },
     );
   }
 }
@@ -819,6 +1034,27 @@ class _AutomationDetailContent extends StatelessWidget {
     if (areaId == _automationPanelOperations) {
       return _OperationsDetail(controller: controller, modeId: modeId);
     }
+    if (_automationOperationsAreaIds.contains(areaId)) {
+      return _OperationsDetail(
+        controller: controller,
+        areaId: areaId,
+        modeId: modeId,
+      );
+    }
+    if (areaId == _automationWorkflowAreaTemplates ||
+        areaId == _automationTaskAreaTemplates) {
+      return _TemplateDetail(
+        template: _selectedAutomationTemplateForArea(controller, areaId),
+      );
+    }
+    final draftKind = _automationDraftKindForArea(areaId);
+    if (draftKind != null) {
+      return _DraftDetail(
+        controller: controller,
+        modeId: modeId,
+        draft: _selectedAutomationDraftForKind(controller, draftKind),
+      );
+    }
     if (areaId == _automationPanelWorkflows ||
         areaId == _automationPanelTasks) {
       final kind = areaId == _automationPanelTasks ? 'dag' : 'state_machine';
@@ -828,17 +1064,54 @@ class _AutomationDetailContent extends StatelessWidget {
         draft: _selectedAutomationDraftForKind(controller, kind),
       );
     }
-    if (areaId == _automationPanelAgents) {
+    if (areaId == _automationPanelAgents ||
+        areaId == _automationAgentAreaProfiles) {
       return _AgentDetail(controller: controller, tabId: tabId);
     }
     return _OperationsDetail(controller: controller, modeId: modeId);
   }
 }
 
+class _TemplateDetail extends StatelessWidget {
+  const _TemplateDetail({required this.template});
+
+  final AutomationTemplate? template;
+
+  /// Builds details for the selected automation template.
+  @override
+  Widget build(BuildContext context) {
+    final selectedTemplate = template;
+    if (selectedTemplate == null) {
+      return const PanelEmptyBlock(label: 'No template selected');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        PanelSectionBlock(
+          title: 'Template',
+          child: _DetailRows(
+            rows: <String>[
+              selectedTemplate.name,
+              selectedTemplate.id,
+              selectedTemplate.category,
+              selectedTemplate.description,
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _OperationsDetail extends StatelessWidget {
-  const _OperationsDetail({required this.controller, required this.modeId});
+  const _OperationsDetail({
+    required this.controller,
+    required this.modeId,
+    this.areaId = _automationOperationsAreaRuns,
+  });
 
   final AgentAwesomeAppController controller;
+  final String areaId;
   final String modeId;
 
   @override
@@ -849,19 +1122,28 @@ class _OperationsDetail extends StatelessWidget {
     if (modeId == _automationDetailSafety) {
       return _SafetyDetail(actionTypes: controller.automationActionTypes);
     }
-    final run = controller.selectedAutomationRun;
-    return _DetailList(
-      title: 'Operations',
-      rows: <String>[
-        'Published: ${controller.automationDefinitions.length}',
-        'Drafts: ${controller.automationDrafts.length}',
-        'Open inbox: ${controller.automationInbox.length}',
-        'Recent runs: ${controller.automationRuns.length}',
-        if (run != null) 'Selected run: ${run.id} / ${run.status}',
-      ],
-    );
+    return switch (areaId) {
+      _automationOperationsAreaInbox => _OperationsInboxOverview(
+        items: controller.automationInbox,
+        selectedItem: controller.selectedAutomationPendingItem,
+      ),
+      _automationOperationsAreaPublished => _OperationsPublishedOverview(
+        definitions: controller.automationDefinitions,
+        selectedDefinition: controller.selectedAutomationDefinition,
+      ),
+      _ => _OperationsRunOverview(
+        run: controller.selectedAutomationRun,
+        runCount: controller.automationRuns.length,
+      ),
+    };
   }
 }
+
+const Set<String> _automationOperationsAreaIds = <String>{
+  _automationOperationsAreaInbox,
+  _automationOperationsAreaPublished,
+  _automationOperationsAreaRuns,
+};
 
 class _DraftDetail extends StatelessWidget {
   const _DraftDetail({
@@ -920,18 +1202,6 @@ class _DraftOverview extends StatelessWidget {
               draft.kind,
               draft.status,
               if (draft.description.isNotEmpty) draft.description,
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        PanelSectionBlock(
-          title: 'Add Action',
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              for (final action in controller.automationActionTypes)
-                _ActionButton(controller: controller, action: action),
             ],
           ),
         ),
@@ -2124,8 +2394,8 @@ class _DagDependencySelector extends StatelessWidget {
       runSpacing: 8,
       children: <Widget>[
         for (final id in choices)
-          FilterChip(
-            label: Text(id),
+          PanelFilterChip(
+            label: id,
             selected: dependsOn.contains(id),
             onSelected: (selected) {
               final next = <String>{...dependsOn};
@@ -2749,10 +3019,10 @@ class _DagGraphMenu extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          IconButton(
+          PanelInlineIconButton(
+            icon: Icons.remove,
             tooltip: 'Zoom out',
             onPressed: () => onZoomChanged((zoom - 0.1).clamp(0.7, 1.4)),
-            icon: Icon(Icons.remove, size: 18, color: colors.muted),
           ),
           SizedBox(
             width: 56,
@@ -2762,10 +3032,10 @@ class _DagGraphMenu extends StatelessWidget {
               style: TextStyle(color: colors.ink, fontWeight: FontWeight.w700),
             ),
           ),
-          IconButton(
+          PanelInlineIconButton(
+            icon: Icons.add,
             tooltip: 'Zoom in',
             onPressed: () => onZoomChanged((zoom + 0.1).clamp(0.7, 1.4)),
-            icon: Icon(Icons.add, size: 18, color: colors.muted),
           ),
         ],
       ),
@@ -3027,7 +3297,7 @@ class _DagGraphNodeSurface extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: colors.ink,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -3732,24 +4002,20 @@ class _DraftSteps extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
-        PanelSectionBlock(
-          title: 'Steps',
-          child: items.isEmpty
-              ? const PanelEmptyBlock(label: 'No steps')
-              : Column(
-                  children: <Widget>[
-                    for (final item in items)
-                      _AutomationTile(
-                        title: '${_map(item)['id'] ?? 'step'}',
-                        subtitle: '${_map(item)['uses'] ?? ''}',
-                        badges: <String>[
-                          if (_map(item)['depends_on'] != null) 'depends',
-                          '${_map(item)['uses'] ?? 'action'}',
-                        ],
-                      ),
-                  ],
-                ),
-        ),
+        const PanelSectionLabel('Steps'),
+        const SizedBox(height: 12),
+        if (items.isEmpty)
+          const PanelEmptyBlock(label: 'No steps')
+        else
+          for (final item in items)
+            _AutomationTile(
+              title: '${_map(item)['id'] ?? 'step'}',
+              subtitle: '${_map(item)['uses'] ?? ''}',
+              badges: <String>[
+                if (_map(item)['depends_on'] != null) 'depends',
+                '${_map(item)['uses'] ?? 'action'}',
+              ],
+            ),
       ],
     );
   }
@@ -3766,36 +4032,28 @@ class _ValidationDetail extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
-        PanelSectionBlock(
-          title: 'Validation',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: <Widget>[
-                  PanelBadge(label: validation.valid ? 'valid' : 'invalid'),
-                  PanelBadge(
-                    label: validation.publishable
-                        ? 'publishable'
-                        : 'not publishable',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (validation.diagnostics.isEmpty)
-                const PanelEmptyBlock(label: 'No diagnostics')
-              else
-                for (final diagnostic in validation.diagnostics)
-                  _AutomationTile(
-                    title: diagnostic.message,
-                    subtitle: diagnostic.path,
-                    badges: <String>[diagnostic.severity],
-                  ),
-            ],
-          ),
+        const PanelSectionLabel('Validation'),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            PanelBadge(label: validation.valid ? 'valid' : 'invalid'),
+            PanelBadge(
+              label: validation.publishable ? 'publishable' : 'not publishable',
+            ),
+          ],
         ),
+        const SizedBox(height: 12),
+        if (validation.diagnostics.isEmpty)
+          const PanelEmptyBlock(label: 'No diagnostics')
+        else
+          for (final diagnostic in validation.diagnostics)
+            _AutomationTile(
+              title: diagnostic.message,
+              subtitle: diagnostic.path,
+              badges: <String>[diagnostic.severity],
+            ),
       ],
     );
   }
@@ -3845,22 +4103,95 @@ class _SafetyDetail extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
-        PanelSectionBlock(
-          title: 'Action Risk',
-          child: Column(
-            children: <Widget>[
-              for (final action in actionTypes)
-                _AutomationTile(
-                  title: action.label,
-                  subtitle: action.description,
-                  badges: <String>[
-                    action.risk,
-                    action.available ? 'available' : 'draft-only',
-                  ],
-                ),
+        const PanelSectionLabel('Action Risk'),
+        const SizedBox(height: 12),
+        for (final action in actionTypes)
+          _AutomationTile(
+            title: action.label,
+            subtitle: action.description,
+            badges: <String>[
+              action.risk,
+              action.available ? 'available' : 'draft-only',
             ],
           ),
-        ),
+      ],
+    );
+  }
+}
+
+class _OperationsInboxOverview extends StatelessWidget {
+  const _OperationsInboxOverview({
+    required this.items,
+    required this.selectedItem,
+  });
+
+  final List<AutomationPendingItem> items;
+  final AutomationPendingItem? selectedItem;
+
+  /// Builds detail context for pending operator approvals.
+  @override
+  Widget build(BuildContext context) {
+    final openItems = items.where((item) => item.status == 'open').length;
+    final item = selectedItem;
+    return _DetailList(
+      title: 'Inbox',
+      rows: <String>[
+        'Pending items: ${items.length}',
+        'Open approvals: $openItems',
+        if (item != null) 'Selected: ${item.prompt}',
+        if (item != null) 'Run: ${item.runId}',
+        if (item != null) 'Step: ${item.stepId}',
+        if (item != null) 'Status: ${item.status}',
+      ],
+    );
+  }
+}
+
+class _OperationsPublishedOverview extends StatelessWidget {
+  const _OperationsPublishedOverview({
+    required this.definitions,
+    required this.selectedDefinition,
+  });
+
+  final List<AutomationDefinition> definitions;
+  final AutomationDefinition? selectedDefinition;
+
+  /// Builds detail context for published automations.
+  @override
+  Widget build(BuildContext context) {
+    final kinds = definitions.map((definition) => definition.kind).toSet();
+    final definition = selectedDefinition;
+    return _DetailList(
+      title: 'Published',
+      rows: <String>[
+        'Published automations: ${definitions.length}',
+        if (kinds.isNotEmpty) 'Kinds: ${kinds.join(', ')}',
+        if (definition != null) 'Selected: ${definition.name}',
+        if (definition != null) 'Definition id: ${definition.id}',
+        if (definition != null) 'Hash: ${definition.hash}',
+      ],
+    );
+  }
+}
+
+class _OperationsRunOverview extends StatelessWidget {
+  const _OperationsRunOverview({required this.run, required this.runCount});
+
+  final AutomationRun? run;
+  final int runCount;
+
+  /// Builds detail context for selected automation runs.
+  @override
+  Widget build(BuildContext context) {
+    final selectedRun = run;
+    return _DetailList(
+      title: 'Runs',
+      rows: <String>[
+        'Recent runs: $runCount',
+        if (selectedRun != null) 'Selected run: ${selectedRun.id}',
+        if (selectedRun != null) 'Definition: ${selectedRun.definitionId}',
+        if (selectedRun != null) 'Status: ${selectedRun.status}',
+        if (selectedRun != null) 'State: ${selectedRun.state}',
       ],
     );
   }
@@ -3945,31 +4276,9 @@ class _PendingItemTile extends StatelessWidget {
     return _AutomationTile(
       title: item.prompt,
       subtitle: '${item.runId} / ${item.stepId}',
+      selected: controller.selectedAutomationPendingItem?.id == item.id,
       badges: <String>[item.status],
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          PanelIconButton(
-            icon: Icons.check,
-            tooltip: 'Approve',
-            onPressed: controller.automationsBusy
-                ? null
-                : () => unawaited(
-                    controller.approveAutomationPendingItemFromUi(item),
-                  ),
-          ),
-          const SizedBox(width: 8),
-          PanelIconButton(
-            icon: Icons.close,
-            tooltip: 'Reject',
-            onPressed: controller.automationsBusy
-                ? null
-                : () => unawaited(
-                    controller.rejectAutomationPendingItemFromUi(item),
-                  ),
-          ),
-        ],
-      ),
+      onTap: () => controller.selectAutomationPendingItem(item.id),
     );
   }
 }
@@ -3985,16 +4294,9 @@ class _DefinitionTile extends StatelessWidget {
     return _AutomationTile(
       title: definition.name,
       subtitle: definition.id,
+      selected: controller.selectedAutomationDefinition?.id == definition.id,
       badges: <String>[definition.kind],
-      trailing: PanelIconButton(
-        icon: Icons.play_arrow,
-        tooltip: 'Start automation',
-        onPressed: controller.automationsBusy
-            ? null
-            : () => unawaited(
-                controller.startAutomationDefinitionFromUi(definition),
-              ),
-      ),
+      onTap: () => controller.selectAutomationDefinition(definition.id),
     );
   }
 }
@@ -4429,16 +4731,12 @@ class _AgentStepList extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
-        PanelSectionBlock(
-          title: 'Used In',
-          child: steps.isEmpty
-              ? const PanelEmptyBlock(label: 'Unused')
-              : Column(
-                  children: <Widget>[
-                    for (final step in steps) _AgentStepTile(step: step),
-                  ],
-                ),
-        ),
+        const PanelSectionLabel('Used In'),
+        const SizedBox(height: 12),
+        if (steps.isEmpty)
+          const PanelEmptyBlock(label: 'Unused')
+        else
+          for (final step in steps) _AgentStepTile(step: step),
       ],
     );
   }
@@ -4475,37 +4773,8 @@ class _TemplateTile extends StatelessWidget {
       title: template.name,
       subtitle: template.description,
       badges: <String>[template.category, ...template.tags.take(2)],
-      trailing: PanelIconButton(
-        icon: Icons.add,
-        tooltip: 'Use template',
-        onPressed: controller.automationsBusy
-            ? null
-            : () => unawaited(
-                controller.instantiateAutomationTemplateFromUi(template),
-              ),
-      ),
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({required this.controller, required this.action});
-
-  final AgentAwesomeAppController controller;
-  final AutomationActionType action;
-
-  @override
-  Widget build(BuildContext context) {
-    return ActionChip(
-      avatar: Icon(action.available ? Icons.add : Icons.lock_outline, size: 16),
-      label: Text(action.label),
-      onPressed:
-          controller.selectedAutomationDraft == null ||
-              controller.automationsBusy
-          ? null
-          : () => unawaited(
-              controller.addAutomationActionToSelectedDraftFromUi(action.name),
-            ),
+      selected: controller.selectedAutomationTemplate?.id == template.id,
+      onTap: () => controller.selectAutomationTemplate(template.id),
     );
   }
 }
@@ -4515,7 +4784,6 @@ class _AutomationTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.badges = const <String>[],
-    this.trailing,
     this.selected = false,
     this.onTap,
   });
@@ -4523,7 +4791,6 @@ class _AutomationTile extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<String> badges;
-  final Widget? trailing;
   final bool selected;
   final VoidCallback? onTap;
 
@@ -4580,10 +4847,6 @@ class _AutomationTile extends StatelessWidget {
                   ],
                 ),
               ),
-              if (trailing != null) ...<Widget>[
-                const SizedBox(width: 12),
-                trailing!,
-              ],
             ],
           ),
         ),
@@ -4650,6 +4913,20 @@ List<AutomationRun> _filterRuns(List<AutomationRun> runs, String query) {
   }).toList();
 }
 
+List<AutomationPendingItem> _filterPendingItems(
+  List<AutomationPendingItem> items,
+  String query,
+) {
+  final needle = query.toLowerCase();
+  return items.where((item) {
+    return item.prompt.toLowerCase().contains(needle) ||
+        item.id.toLowerCase().contains(needle) ||
+        item.runId.toLowerCase().contains(needle) ||
+        item.stepId.toLowerCase().contains(needle) ||
+        item.status.toLowerCase().contains(needle);
+  }).toList();
+}
+
 List<AutomationTemplate> _filterTemplates(
   List<AutomationTemplate> templates,
   String query,
@@ -4691,6 +4968,53 @@ bool _templateMatchesKind(AutomationTemplate template, String kind) {
   return category.contains('dag') ||
       category.contains('task') ||
       category.contains('agent');
+}
+
+/// Returns the automation draft kind edited by a left command area.
+String? _automationDraftKindForArea(String areaId) {
+  if (areaId == _automationWorkflowAreaDrafts ||
+      areaId == _automationWorkflowAreaActions) {
+    return 'state_machine';
+  }
+  if (areaId == _automationTaskAreaDrafts ||
+      areaId == _automationTaskAreaNodes) {
+    return 'dag';
+  }
+  return null;
+}
+
+/// Returns the template kind represented by a template command area.
+String? _automationTemplateKindForArea(String areaId) {
+  if (areaId == _automationWorkflowAreaTemplates) {
+    return 'state_machine';
+  }
+  if (areaId == _automationTaskAreaTemplates) {
+    return 'dag';
+  }
+  return null;
+}
+
+/// Returns the selected template filtered to one template command area.
+AutomationTemplate? _selectedAutomationTemplateForArea(
+  AgentAwesomeAppController controller,
+  String areaId,
+) {
+  final kind = _automationTemplateKindForArea(areaId);
+  if (kind == null) {
+    return controller.selectedAutomationTemplate;
+  }
+  final templates = controller.automationTemplates
+      .where((template) => _templateMatchesKind(template, kind))
+      .toList();
+  if (templates.isEmpty) {
+    return null;
+  }
+  for (final template in templates) {
+    if (template.id == controller.selectedAutomationTemplateId) {
+      return template;
+    }
+  }
+  return templates.first;
 }
 
 /// Returns the selected draft for one builder kind.

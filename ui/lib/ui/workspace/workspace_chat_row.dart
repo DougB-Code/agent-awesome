@@ -4,10 +4,13 @@ part of 'workspace_widgets.dart';
 /// ChatRow renders one chat timeline entry.
 class ChatRow extends StatelessWidget {
   /// Creates one chat timeline row.
-  const ChatRow({super.key, required this.message});
+  const ChatRow({super.key, required this.message, this.compact = false});
 
   /// Message to display.
   final ChatMessage message;
+
+  /// Whether the row is rendering inside a narrow side chat panel.
+  final bool compact;
 
   /// Builds one chat timeline row.
   @override
@@ -17,47 +20,55 @@ class ChatRow extends StatelessWidget {
       return Align(
         alignment: Alignment.centerRight,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 20),
-          constraints: const BoxConstraints(maxWidth: 640),
-          padding: const EdgeInsets.all(24),
+          margin: EdgeInsets.only(bottom: compact ? 16 : 20),
+          constraints: BoxConstraints(maxWidth: compact ? 360 : 640),
+          padding: EdgeInsets.all(compact ? 18 : 24),
           decoration: BoxDecoration(
             color: colors.panel,
-            borderRadius: BorderRadius.circular(36),
+            borderRadius: BorderRadius.circular(compact ? 24 : 36),
           ),
-          child: _MessageText(message: message),
+          child: _MessageText(message: message, compact: compact),
         ),
       );
     }
     if (message.role == ChatRole.tool) {
       return Container(
-        margin: const EdgeInsets.only(bottom: 18),
-        padding: const EdgeInsets.all(16),
+        margin: EdgeInsets.only(bottom: compact ? 14 : 18),
+        padding: EdgeInsets.all(compact ? 12 : 16),
         decoration: BoxDecoration(
           color: colors.surface,
           border: Border.all(color: colors.border),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(compact ? 14 : 18),
         ),
         child: Row(
           children: <Widget>[
             Icon(Icons.extension_outlined, color: colors.green),
             const SizedBox(width: 12),
-            Expanded(child: _MessageText(message: message)),
+            Expanded(
+              child: _MessageText(message: message, compact: compact),
+            ),
           ],
         ),
       );
     }
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: compact ? 16 : 20),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           CircleAvatar(
-            radius: 25,
+            radius: compact ? 20 : 25,
             backgroundColor: colors.green,
-            child: Icon(Icons.auto_awesome, color: Colors.white),
+            child: Icon(
+              Icons.auto_awesome,
+              color: Colors.white,
+              size: compact ? 20 : 24,
+            ),
           ),
-          const SizedBox(width: 16),
-          Expanded(child: _MessageText(message: message)),
+          SizedBox(width: compact ? 12 : 16),
+          Expanded(
+            child: _MessageText(message: message, compact: compact),
+          ),
         ],
       ),
     );

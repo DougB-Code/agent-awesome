@@ -9,7 +9,6 @@ class _ContactsLibraryContent extends StatelessWidget {
     required this.selectedContactId,
     required this.filter,
     required this.onSelected,
-    required this.onAddContact,
   });
 
   /// All contacts known to the section.
@@ -27,9 +26,6 @@ class _ContactsLibraryContent extends StatelessWidget {
   /// Selects a contact card.
   final ValueChanged<String> onSelected;
 
-  /// Opens the add-contact affordance.
-  final VoidCallback onAddContact;
-
   /// Builds the contact library body.
   @override
   Widget build(BuildContext context) {
@@ -41,10 +37,7 @@ class _ContactsLibraryContent extends StatelessWidget {
         children: <Widget>[
           Expanded(
             child: visibleContacts.isEmpty
-                ? _ContactsEmptyState(
-                    hasAnyContact: contacts.isNotEmpty,
-                    onAddContact: onAddContact,
-                  )
+                ? _ContactsEmptyState(hasAnyContact: contacts.isNotEmpty)
                 : ListView.separated(
                     itemCount: visibleContacts.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -93,7 +86,6 @@ class _ContactCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: selected ? colors.panelStrong : colors.surface,
-          gradient: context.agentAwesomeCardGradient,
           border: Border.all(
             color: selected ? colors.borderStrong : colors.border,
           ),
@@ -106,7 +98,7 @@ class _ContactCard extends StatelessWidget {
               left: 0,
               top: 0,
               bottom: 0,
-              child: ColoredBox(color: accent, child: const SizedBox(width: 4)),
+              child: ColoredBox(color: accent, child: const SizedBox(width: 3)),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
@@ -131,8 +123,8 @@ class _ContactCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: colors.ink,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -214,7 +206,7 @@ class _ContactIconBox extends StatelessWidget {
       width: 36,
       decoration: BoxDecoration(
         color: color.withValues(alpha: context.agentAwesomeIsDark ? 0.14 : 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
       ),
       child: Icon(icon, color: color, size: 20),
     );
@@ -236,19 +228,19 @@ class _ContactStatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: context.agentAwesomeIsDark ? 0.12 : 0.1),
-        border: Border.all(color: color.withValues(alpha: 0.62)),
-        borderRadius: BorderRadius.circular(8),
+        color: context.agentAwesomeColors.panel,
+        border: Border.all(color: context.agentAwesomeColors.border),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: color,
+          color: context.agentAwesomeColors.muted,
           fontSize: 12,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -275,7 +267,7 @@ class _ContactMetadataBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.panel,
         border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

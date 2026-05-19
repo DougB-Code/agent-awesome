@@ -8,6 +8,8 @@ class _SettingsModelProviderCollection extends StatefulWidget {
     required this.icon,
     required this.entries,
     required this.assignedPath,
+    this.selectedPath,
+    this.onSelectedPathChanged,
     required this.query,
   });
 
@@ -16,6 +18,8 @@ class _SettingsModelProviderCollection extends StatefulWidget {
   final IconData icon;
   final List<ConfigFileEntry> entries;
   final String assignedPath;
+  final String? selectedPath;
+  final ValueChanged<String>? onSelectedPathChanged;
   final String query;
 
   @override
@@ -34,7 +38,7 @@ class _SettingsModelProviderCollectionState
   @override
   void initState() {
     super.initState();
-    _selectedPath = _initialSelectedPath();
+    _selectedPath = widget.selectedPath ?? _initialSelectedPath();
     unawaited(_load());
   }
 
@@ -42,6 +46,15 @@ class _SettingsModelProviderCollectionState
   @override
   void didUpdateWidget(covariant _SettingsModelProviderCollection oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.selectedPath != null &&
+        widget.selectedPath != oldWidget.selectedPath &&
+        widget.selectedPath != _selectedPath) {
+      _selectedPath = widget.selectedPath;
+      _document = null;
+      _loading = true;
+      unawaited(_load());
+      return;
+    }
     final selectedPath = _selectedPath;
     if (selectedPath == null ||
         !widget.entries.any((entry) => entry.path == selectedPath)) {
@@ -141,17 +154,17 @@ class _SettingsModelProviderCollectionState
                       ),
                     ),
                     const SizedBox(width: 8),
-                    IconButton(
-                      onPressed: () => unawaited(_duplicateProvider(provider)),
+                    PanelInlineIconButton(
+                      icon: Icons.content_copy,
                       tooltip: 'Duplicate provider',
-                      icon: const Icon(Icons.content_copy),
+                      onPressed: () => unawaited(_duplicateProvider(provider)),
                     ),
-                    IconButton(
+                    PanelInlineIconButton(
+                      icon: Icons.delete_outline,
+                      tooltip: 'Delete provider',
                       onPressed: providers.length <= 1
                           ? null
                           : () => unawaited(_deleteProvider(provider)),
-                      tooltip: 'Delete provider',
-                      icon: const Icon(Icons.delete_outline),
                     ),
                   ],
                 ),
@@ -277,6 +290,7 @@ class _SettingsModelProviderCollectionState
           _selectedPath = path;
           _loading = true;
         });
+        widget.onSelectedPathChanged?.call(path);
         await _load();
         entry = _selectedEntry();
       } catch (_) {

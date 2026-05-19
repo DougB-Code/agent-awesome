@@ -44,7 +44,7 @@ class _ChatMemoryContextTile extends StatelessWidget {
           Text(
             record.title,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w900),
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           if (record.summary.isNotEmpty) ...<Widget>[
             const SizedBox(height: 6),
@@ -118,7 +118,7 @@ class _ChatSourceContextTile extends StatelessWidget {
                 Text(
                   source.title,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 if (source.detail.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 6),
@@ -161,7 +161,7 @@ class _ChatPersonContextTile extends StatelessWidget {
                 Text(
                   person.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 6),
                 Wrap(
@@ -246,7 +246,7 @@ class _ChatRuntimeSummaryTile extends StatelessWidget {
                   Text(
                     summary.title,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 4),
                   Text(

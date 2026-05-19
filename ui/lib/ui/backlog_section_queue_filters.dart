@@ -2,28 +2,158 @@
 part of 'backlog_section.dart';
 
 class _BacklogQueueHeaderActions extends StatelessWidget {
-  const _BacklogQueueHeaderActions({required this.controller});
+  const _BacklogQueueHeaderActions({
+    required this.active,
+    required this.onCapture,
+  });
 
-  final AgentAwesomeAppController controller;
+  final bool active;
+  final VoidCallback onCapture;
 
-  /// Builds create controls beside the command-area icons.
+  /// Builds the collection-level create entry beside the command-area icons.
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        Tooltip(
-          message: 'New backlog item',
-          child: IconButton.filled(
-            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-            padding: EdgeInsets.zero,
-            onPressed: controller.tasksBusy
-                ? null
-                : () => unawaited(_showTaskCreateDialog(context, controller)),
-            icon: const Icon(Icons.add, size: 20),
-          ),
+        PanelIconButton(
+          icon: Icons.add_task_outlined,
+          tooltip: 'New backlog item',
+          selected: active,
+          onPressed: onCapture,
         ),
       ],
+    );
+  }
+}
+
+class _BacklogSelectedTaskActions extends StatelessWidget {
+  const _BacklogSelectedTaskActions({
+    required this.controller,
+    required this.task,
+  });
+
+  final AgentAwesomeAppController controller;
+  final WorkspaceTask task;
+
+  /// Builds selected-task actions beside the right-mode selector.
+  @override
+  Widget build(BuildContext context) {
+    final terminal = task.status == 'done' || task.status == 'canceled';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        PanelIconButton(
+          icon: Icons.today_outlined,
+          tooltip: 'Schedule selected backlog item today',
+          onPressed: controller.tasksBusy || terminal
+              ? null
+              : () => unawaited(_scheduleToday()),
+        ),
+        const SizedBox(width: 8),
+        PanelIconButton(
+          icon: Icons.schedule_outlined,
+          tooltip: 'Snooze selected backlog item',
+          onPressed: controller.tasksBusy || terminal
+              ? null
+              : () => unawaited(_snooze()),
+        ),
+        const SizedBox(width: 8),
+        PanelIconButton(
+          icon: Icons.check_circle_outline,
+          tooltip: 'Complete backlog item',
+          onPressed: controller.tasksBusy || terminal
+              ? null
+              : () => unawaited(_complete(context)),
+        ),
+        const SizedBox(width: 8),
+        PanelIconButton(
+          icon: Icons.block_outlined,
+          tooltip: 'Cancel backlog item',
+          onPressed: controller.tasksBusy || terminal
+              ? null
+              : () => unawaited(_cancel(context)),
+        ),
+        const SizedBox(width: 8),
+        PanelIconButton(
+          icon: Icons.delete_outline,
+          tooltip: 'Delete backlog item',
+          onPressed: controller.tasksBusy
+              ? null
+              : () => unawaited(_delete(context)),
+        ),
+      ],
+    );
+  }
+
+  /// Schedules the selected backlog item for today.
+  Future<void> _scheduleToday() {
+    return controller.updateTaskFromUi(
+      taskId: task.id,
+      scheduledAt: _todayDate(),
+    );
+  }
+
+  /// Moves the selected backlog item to tomorrow's schedule.
+  Future<void> _snooze() {
+    return controller.updateTaskFromUi(
+      taskId: task.id,
+      scheduledAt: _todayDate().add(const Duration(days: 1)),
+    );
+  }
+
+  /// Completes the selected backlog item after confirmation.
+  Future<void> _complete(BuildContext context) async {
+    if (!await _confirmTaskWrite(
+      context,
+      'Complete backlog item "${task.title}"?',
+    )) {
+      return;
+    }
+    await controller.completeTaskFromUi(task.id);
+  }
+
+  /// Cancels the selected backlog item after confirmation.
+  Future<void> _cancel(BuildContext context) async {
+    if (!await _confirmTaskWrite(
+      context,
+      'Cancel backlog item "${task.title}"?',
+    )) {
+      return;
+    }
+    await controller.cancelTaskFromUi(task.id);
+  }
+
+  /// Deletes the selected backlog item after confirmation.
+  Future<void> _delete(BuildContext context) async {
+    if (!await _confirmTaskWrite(
+      context,
+      'Delete backlog item "${task.title}"?',
+    )) {
+      return;
+    }
+    await controller.deleteTaskFromUi(task.id);
+  }
+}
+
+class _BacklogTaskMemoryActions extends StatelessWidget {
+  const _BacklogTaskMemoryActions({
+    required this.controller,
+    required this.task,
+  });
+
+  final AgentAwesomeAppController controller;
+  final WorkspaceTask task;
+
+  /// Builds selected-task memory actions beside the right-mode selector.
+  @override
+  Widget build(BuildContext context) {
+    return PanelIconButton(
+      icon: Icons.link_outlined,
+      tooltip: 'Link selected memory to backlog item',
+      onPressed: controller.tasksBusy || controller.selectedMemory == null
+          ? null
+          : () => unawaited(controller.linkSelectedMemoryToTaskFromUi(task.id)),
     );
   }
 }

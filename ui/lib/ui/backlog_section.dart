@@ -27,7 +27,6 @@ part 'backlog_section_review_panel.dart';
 part 'backlog_section_shell_modes.dart';
 part 'backlog_section_area_details.dart';
 part 'backlog_section_controls.dart';
-part 'backlog_section_create_dialog.dart';
 part 'backlog_section_constellation_edge_inspector.dart';
 part 'backlog_section_filter_helpers.dart';
 part 'backlog_section_formatting_helpers.dart';

@@ -312,6 +312,35 @@ func TestAPIProxyWaitsForHarnessReadiness(t *testing.T) {
 	}
 }
 
+// TestWorkflowProxyRoutesThroughGateway verifies user-channel workflow calls stay gateway-routed.
+func TestWorkflowProxyRoutesThroughGateway(t *testing.T) {
+	var upstreamPaths []string
+	workflowd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamPaths = append(upstreamPaths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[]}`))
+	}))
+	defer workflowd.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.WorkflowBaseURL = workflowd.URL + "/api/workflows"
+	})
+
+	paths := []string{"/api/workflows/inbox", "/api/workflows/drafts", "/api/workflows/action-types"}
+	for _, path := range paths {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		recorder := httptest.NewRecorder()
+		server.routes().ServeHTTP(recorder, req)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want 200; body = %q", path, recorder.Code, recorder.Body.String())
+		}
+	}
+	for index, path := range paths {
+		if upstreamPaths[index] != path {
+			t.Fatalf("workflow upstream path[%d] = %q, want %q", index, upstreamPaths[index], path)
+		}
+	}
+}
+
 // TestAPIProxyWaitsForProfileMemoryReadiness verifies cold agent turns wait for memory.
 func TestAPIProxyWaitsForProfileMemoryReadiness(t *testing.T) {
 	upstreamCalled := false
@@ -778,6 +807,45 @@ func TestContextAPIBlocksWritesOutsideWriteDomains(t *testing.T) {
 	}
 	if upstreamCalled {
 		t.Fatalf("context upstream was called for unauthorized write domain")
+	}
+}
+
+// TestContextAPIRoutesExportToHarness verifies export policy stays harness-owned.
+func TestContextAPIRoutesExportToHarness(t *testing.T) {
+	upstreamCalled := false
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upstreamCalled = true
+		var decoded map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+			t.Fatalf("decode context body: %v", err)
+		}
+		if decoded["domain_id"] != nil {
+			t.Fatalf("domain_id = %#v, want no gateway-selected domain", decoded["domain_id"])
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+		cfg.MemoryDomains = memoryDomains("family", "work")
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"family", "work"},
+			WriteDomains:         []string{"work"},
+			DefaultWriteDomain:   "work",
+			AllowedSensitivities: []string{"public"},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"export_memory_copy","arguments":{"source_domain":"family","target_domain":"work","source_memory_id":"memory-1","content":"reviewed"}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %q", recorder.Code, recorder.Body.String())
+	}
+	if !upstreamCalled {
+		t.Fatalf("context upstream was not called for export")
 	}
 }
 

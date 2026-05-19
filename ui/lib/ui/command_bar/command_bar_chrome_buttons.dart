@@ -270,6 +270,10 @@ class _CommandChromeButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     final compact = label.isEmpty;
+    final enabled = onTap != null;
+    final foreground = enabled
+        ? colors.ink
+        : colors.muted.withValues(alpha: 0.45);
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -282,9 +286,15 @@ class _CommandChromeButton extends StatelessWidget {
           width: compact ? size : 118,
           padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
           decoration: BoxDecoration(
-            color: colors.surface,
-            gradient: context.agentAwesomeControlGradient,
-            border: Border.all(color: colors.border),
+            color: enabled
+                ? colors.surface
+                : colors.surface.withValues(alpha: 0.42),
+            gradient: enabled ? context.agentAwesomeControlGradient : null,
+            border: Border.all(
+              color: enabled
+                  ? colors.border
+                  : colors.border.withValues(alpha: 0.45),
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -292,13 +302,7 @@ class _CommandChromeButton extends StatelessWidget {
                 ? MainAxisAlignment.center
                 : MainAxisAlignment.spaceBetween,
             children: <Widget>[
-              Icon(
-                icon,
-                size: 19,
-                color: onTap == null
-                    ? colors.muted.withValues(alpha: 0.45)
-                    : colors.ink,
-              ),
+              Icon(icon, size: 19, color: foreground),
               if (!compact) ...<Widget>[
                 const SizedBox(width: 8),
                 Expanded(
@@ -306,7 +310,7 @@ class _CommandChromeButton extends StatelessWidget {
                     label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: colors.ink,
+                      color: foreground,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0,

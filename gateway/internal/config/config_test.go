@@ -21,6 +21,12 @@ func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
 	if cfg.MemoryService.HealthURL != "http://127.0.0.1:8090/healthz" {
 		t.Fatalf("memory health = %q", cfg.MemoryService.HealthURL)
 	}
+	if cfg.WorkflowBaseURL != "http://127.0.0.1:8092/api/workflows" {
+		t.Fatalf("workflow base URL = %q", cfg.WorkflowBaseURL)
+	}
+	if cfg.WorkflowService.HealthURL != "http://127.0.0.1:8092/healthz" {
+		t.Fatalf("workflow health = %q", cfg.WorkflowService.HealthURL)
+	}
 	if len(cfg.MemoryDomains) != 1 || cfg.MemoryDomains[0].ID != "memory" || cfg.MemoryDomains[0].Endpoint != "http://127.0.0.1:8090/mcp" {
 		t.Fatalf("memory domains = %#v, want default memory endpoint", cfg.MemoryDomains)
 	}
@@ -369,6 +375,12 @@ func clearGatewayAuthEnv(t *testing.T) {
 	t.Setenv("AGENTAWESOME_MEMORY_DOMAINS_JSON", "")
 	t.Setenv("AGENTAWESOME_MEMORY_POLICY_JSON", "")
 	t.Setenv("AGENTAWESOME_MEMORY_SERVICES_JSON", "")
+	t.Setenv("AGENTAWESOME_WORKFLOW_BASE_URL", "")
+	t.Setenv("AGENTAWESOME_WORKFLOW_HEALTH_URL", "")
+	t.Setenv("AGENTAWESOME_WORKFLOW_COMMAND", "")
+	t.Setenv("AGENTAWESOME_WORKFLOW_ARGS", "")
+	t.Setenv("AGENTAWESOME_WORKFLOW_WORKDIR", "")
+	t.Setenv("AGENTAWESOME_WORKFLOW_AUTO_START", "")
 	t.Setenv("AGENTAWESOME_AGENT_PROFILES_JSON", "")
 	t.Setenv("AGENTAWESOME_ALLOWED_ORIGIN", "")
 	t.Setenv("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", "true")

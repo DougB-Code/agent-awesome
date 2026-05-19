@@ -19,6 +19,7 @@ class CommandBar extends StatefulWidget {
     required this.onOpenSettingsSection,
     required this.onOpenSettings,
     required this.onOpenSetup,
+    this.assistantChatEnabled = true,
   });
 
   /// Text controller for the global command input.
@@ -42,6 +43,9 @@ class CommandBar extends StatefulWidget {
 
   /// Toggles the auxiliary AI chat panel.
   final VoidCallback onToggleAssistantChat;
+
+  /// Whether the auxiliary AI chat pane can be opened for the current screen.
+  final bool assistantChatEnabled;
 
   /// Starts a blank chat with a chosen runtime profile.
   final ValueChanged<String> onStartChatWithProfile;
@@ -168,9 +172,13 @@ class _CommandBarState extends State<CommandBar> {
                 _CommandChromeButton(
                   icon: Icons.chat_bubble_outline,
                   label: '',
-                  tooltip: 'AI chat',
+                  tooltip: widget.assistantChatEnabled
+                      ? 'AI chat'
+                      : 'AI chat is unavailable in this view',
                   size: _buttonSize,
-                  onTap: _handleAssistantChatToggle,
+                  onTap: widget.assistantChatEnabled
+                      ? _handleAssistantChatToggle
+                      : null,
                 ),
               ],
             ),

@@ -83,6 +83,7 @@ func dependencyServices(cfg config.Config) []supervisor.Service {
 	for _, memoryService := range cfg.MemoryServices {
 		services = append(services, dependencyService(memoryService.ServiceConfig()))
 	}
+	services = append(services, dependencyService(cfg.WorkflowService))
 	return services
 }
 

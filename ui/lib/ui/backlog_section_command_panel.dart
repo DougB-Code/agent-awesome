@@ -22,28 +22,25 @@ class BacklogCommandPanel extends StatefulWidget {
 
 /// _BacklogCommandPanelState stores the selected backlog detail mode.
 class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
-  final Map<String, _BacklogDetailMode> _detailModesByArea =
-      <String, _BacklogDetailMode>{};
+  _BacklogDetailMode _detailMode = _BacklogDetailMode.inspector;
 
   /// Builds backlog areas and details inside the reusable command subshell.
   @override
   Widget build(BuildContext context) {
     return CommandPanelSubShell(
       areas: _backlogCommandAreas(widget.controller),
-      detailTitle: 'Backlog Inspector',
-      detailModes: const <CommandPanelDetailMode>[],
-      selectedDetailModeId: _backlogDetailModeId(_BacklogDetailMode.inspector),
+      detailTitle: 'Backlog',
+      detailModes: _visibleBacklogDetailModes(widget.controller),
+      selectedDetailModeId: _backlogDetailModeId(_effectiveDetailMode()),
       onDetailModeSelected: _selectDetailMode,
       detailBuilder: _buildDetailBody,
-      detailModesBuilder: (area) =>
-          _visibleBacklogDetailModes(widget.controller, area),
-      selectedDetailModeIdBuilder: (area) =>
-          _backlogDetailModeId(_effectiveDetailMode(area)),
-      onAreaDetailModeSelected: _selectAreaDetailMode,
-      areaDetailBuilder: _buildAreaDetailBody,
+      detailTabsBuilder: _buildDetailTabs,
+      areaTabbedDetailBuilder: _buildTabbedDetailBody,
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: _buildAreaActions,
+      detailActionsBuilder: _buildDetailActions,
       filterHint: 'Filter...',
+      split: const PanelSplit(left: 0.34, min: 0.24, max: 0.48),
     );
   }
 
@@ -52,24 +49,39 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
     if (area.title != 'Queue') {
       return null;
     }
-    return _BacklogQueueHeaderActions(controller: widget.controller);
-  }
-
-  /// Selects the right-side details mode and mirrors review state to controller.
-  void _selectDetailMode(String modeId) {
-    _selectAreaDetailMode(
-      const SwitcherPanelArea(
-        id: _BacklogAreaIds.queue,
-        title: 'Queue',
-        icon: Icons.task_alt_outlined,
-        builder: _emptyBacklogAreaBuilder,
-      ),
-      modeId,
+    return _BacklogQueueHeaderActions(
+      active: _effectiveDetailMode() == _BacklogDetailMode.capture,
+      onCapture: () =>
+          _selectDetailMode(_backlogDetailModeId(_BacklogDetailMode.capture)),
     );
   }
 
-  /// Selects an area-scoped details mode and mirrors review state to controller.
-  void _selectAreaDetailMode(SwitcherPanelArea area, String modeId) {
+  /// Builds selected-object actions for task-oriented detail modes.
+  Widget? _buildDetailActions(
+    BuildContext context,
+    SwitcherPanelArea area,
+    CommandPanelDetailMode mode,
+  ) {
+    final task = widget.controller.selectedTask;
+    if (task == null) {
+      return null;
+    }
+    final detailMode = _backlogDetailModeForId(mode.id);
+    return switch (detailMode) {
+      _BacklogDetailMode.inspector => _BacklogSelectedTaskActions(
+        controller: widget.controller,
+        task: task,
+      ),
+      _BacklogDetailMode.memoryLinks => _BacklogTaskMemoryActions(
+        controller: widget.controller,
+        task: task,
+      ),
+      _ => null,
+    };
+  }
+
+  /// Selects the right-side work mode and mirrors review state to controller.
+  void _selectDetailMode(String modeId) {
     final mode = _backlogDetailModeForId(modeId);
     if (mode == _BacklogDetailMode.aiReview) {
       widget.controller.openBacklogReviewPanel();
@@ -77,46 +89,30 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
       widget.controller.openBacklogInspectorPanel();
     }
     setState(() {
-      _detailModesByArea[_backlogAreaId(area)] = mode;
+      _detailMode = mode;
     });
   }
 
   /// Returns the visible details mode, honoring controller-owned AI review state.
-  _BacklogDetailMode _effectiveDetailMode(SwitcherPanelArea area) {
+  _BacklogDetailMode _effectiveDetailMode() {
     final hasReview = _backlogReviewAvailable(widget.controller);
-    if (_backlogAreaId(area) == _BacklogAreaIds.queue &&
-        widget.controller.backlogReviewPanelOpen &&
-        hasReview) {
+    if (widget.controller.backlogReviewPanelOpen && hasReview) {
       return _BacklogDetailMode.aiReview;
     }
     final visibleModes = _visibleBacklogDetailModes(
       widget.controller,
-      area,
     ).map((mode) => mode.id).toSet();
-    final selected =
-        _detailModesByArea[_backlogAreaId(area)] ??
-        _defaultBacklogDetailModeForArea(area);
+    final selected = _detailMode == _BacklogDetailMode.aiReview
+        ? _BacklogDetailMode.inspector
+        : _detailMode;
     if (visibleModes.contains(_backlogDetailModeId(selected))) {
       return selected;
     }
-    return _defaultBacklogDetailModeForArea(area);
+    return _BacklogDetailMode.inspector;
   }
 
   /// Builds the content for the current detail mode id.
   Widget _buildDetailBody(String modeId) {
-    return _buildAreaDetailBody(
-      const SwitcherPanelArea(
-        id: _BacklogAreaIds.queue,
-        title: 'Queue',
-        icon: Icons.task_alt_outlined,
-        builder: _emptyBacklogAreaBuilder,
-      ),
-      modeId,
-    );
-  }
-
-  /// Builds the content for the active area and detail mode id.
-  Widget _buildAreaDetailBody(SwitcherPanelArea area, String modeId) {
     final mode = _backlogDetailModeForId(modeId);
     final edge = widget.controller.selectedConstellationEdge;
     final task = widget.controller.selectedTask;
@@ -132,18 +128,21 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
       _BacklogDetailMode.aiReview => _BacklogReviewContent(
         controller: widget.controller,
       ),
-      _BacklogDetailMode.wbsOverview => _BacklogWbsDetailPanel(
+      _BacklogDetailMode.stream => TaskConceptProjectionPanel(
         controller: widget.controller,
+        kind: TaskConceptKind.stream,
       ),
-      _BacklogDetailMode.constellationOverview =>
-        edge != null
-            ? _TaskConstellationEdgeInspector(
-                controller: widget.controller,
-                edge: edge,
-              )
-            : _BacklogConstellationDetailPanel(controller: widget.controller),
-      _BacklogDetailMode.captureContext => _BacklogCaptureDetailPanel(
+      _BacklogDetailMode.wbs => TaskConceptProjectionPanel(
         controller: widget.controller,
+        kind: TaskConceptKind.wbs,
+      ),
+      _BacklogDetailMode.map => TaskConceptProjectionPanel(
+        controller: widget.controller,
+        kind: TaskConceptKind.constellation,
+      ),
+      _BacklogDetailMode.capture => _TaskCaptureContent(
+        controller: widget.controller,
+        query: '',
       ),
       _BacklogDetailMode.inspector =>
         edge != null
@@ -156,9 +155,57 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
             : _TaskDetailEditor(controller: widget.controller, task: task),
     };
   }
-}
 
-/// Builds an empty area for detail-mode calls that do not supply an area.
-Widget _emptyBacklogAreaBuilder(String query) {
-  return const SizedBox.shrink();
+  /// Returns labeled tabs inside projection work modes.
+  List<ShellTab> _buildDetailTabs(
+    SwitcherPanelArea area,
+    CommandPanelDetailMode mode,
+  ) {
+    final detailMode = _backlogDetailModeForId(mode.id);
+    if (detailMode == _BacklogDetailMode.wbs) {
+      return const <ShellTab>[
+        ShellTab(id: 'tree', label: 'Tree', icon: Icons.account_tree_outlined),
+        ShellTab(id: 'overview', label: 'Overview', icon: Icons.info_outline),
+      ];
+    }
+    if (detailMode == _BacklogDetailMode.map) {
+      return const <ShellTab>[
+        ShellTab(id: 'canvas', label: 'Canvas', icon: Icons.hub_outlined),
+        ShellTab(id: 'overview', label: 'Overview', icon: Icons.info_outline),
+      ];
+    }
+    if (detailMode == _BacklogDetailMode.capture) {
+      return const <ShellTab>[
+        ShellTab(id: 'form', label: 'Form', icon: Icons.add_task_outlined),
+        ShellTab(id: 'context', label: 'Context', icon: Icons.info_outline),
+      ];
+    }
+    return const <ShellTab>[];
+  }
+
+  /// Builds content for the selected projection subview.
+  Widget _buildTabbedDetailBody(
+    SwitcherPanelArea area,
+    String modeId,
+    String tabId,
+  ) {
+    final mode = _backlogDetailModeForId(modeId);
+    if (mode == _BacklogDetailMode.wbs && tabId == 'overview') {
+      return _BacklogWbsDetailPanel(controller: widget.controller);
+    }
+    if (mode == _BacklogDetailMode.map && tabId == 'overview') {
+      final edge = widget.controller.selectedConstellationEdge;
+      if (edge != null) {
+        return _TaskConstellationEdgeInspector(
+          controller: widget.controller,
+          edge: edge,
+        );
+      }
+      return _BacklogConstellationDetailPanel(controller: widget.controller);
+    }
+    if (mode == _BacklogDetailMode.capture && tabId == 'context') {
+      return _BacklogCaptureDetailPanel(controller: widget.controller);
+    }
+    return _buildDetailBody(modeId);
+  }
 }

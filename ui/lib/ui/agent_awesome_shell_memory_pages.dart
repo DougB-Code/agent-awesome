@@ -68,7 +68,7 @@ class _MemoryPagesContent extends StatelessWidget {
                   Text(
                     page.title,
                     style: const TextStyle(
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                       fontSize: 18,
                     ),
                   ),

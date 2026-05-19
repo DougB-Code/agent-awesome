@@ -26,86 +26,156 @@ class _ChatComposer extends StatelessWidget {
       color: colors.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 58),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: <BoxShadow>[
-              BoxShadow(
-                color: colors.softShadow,
-                blurRadius: 18,
-                offset: Offset(0, 8),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 560;
+            return Container(
+              constraints: const BoxConstraints(minHeight: 58),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 12 : 16,
+                vertical: compact ? 10 : 0,
               ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Icon(Icons.chat_bubble_outline, color: colors.muted),
+              decoration: BoxDecoration(
+                color: colors.surface,
+                border: Border.all(color: colors.border),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: colors.softShadow,
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  key: const ValueKey<String>('chat-thread-composer'),
-                  controller: controller,
-                  enabled: !sending,
-                  minLines: 1,
-                  maxLines: 5,
-                  textInputAction: TextInputAction.send,
-                  style: TextStyle(color: colors.ink),
-                  decoration: InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Message Agent Awesome in this chat...',
-                    hintStyle: TextStyle(color: colors.muted),
-                  ),
-                  onSubmitted: (_) {
-                    if (!sending) {
-                      onSubmit();
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              if (modelChoices.length > 1) ...<Widget>[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 9),
-                  child: _ChatModelMenuButton(
-                    choices: modelChoices,
-                    selectedRef: selectedModelRef,
-                    sending: sending,
-                    onSelected: onModelSelected,
-                  ),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: IconButton.filled(
-                  key: const ValueKey<String>('chat-thread-send-button'),
-                  style: IconButton.styleFrom(
-                    backgroundColor: colors.green,
-                    foregroundColor: Colors.white,
-                    fixedSize: const Size(42, 42),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: sending ? null : onSubmit,
-                  icon: Icon(
-                    sending ? Icons.hourglass_top : Icons.arrow_upward,
-                  ),
-                  tooltip: 'Send message',
-                ),
-              ),
-            ],
-          ),
+              child: compact
+                  ? _buildCompactComposer(context)
+                  : _buildWideComposer(context),
+            );
+          },
         ),
       ),
+    );
+  }
+
+  /// Builds the standard single-row composer for roomy chat panes.
+  Widget _buildWideComposer(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Icon(Icons.chat_bubble_outline, color: colors.muted),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: _buildTextField(context)),
+        const SizedBox(width: 12),
+        if (modelChoices.length > 1) ...<Widget>[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 9),
+            child: _buildModelMenu(),
+          ),
+          const SizedBox(width: 8),
+        ],
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _buildSendButton(context),
+        ),
+      ],
+    );
+  }
+
+  /// Builds a two-row composer for narrow auxiliary chat panes.
+  Widget _buildCompactComposer(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Icon(Icons.chat_bubble_outline, color: colors.muted),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: _buildTextField(context)),
+          ],
+        ),
+        if (modelChoices.length > 1) ...<Widget>[
+          const SizedBox(height: 8),
+          Row(
+            children: <Widget>[
+              const SizedBox(width: 34),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: _buildModelMenu(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _buildSendButton(context),
+            ],
+          ),
+        ] else ...<Widget>[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _buildSendButton(context),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Builds the shared chat text field.
+  Widget _buildTextField(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return TextField(
+      key: const ValueKey<String>('chat-thread-composer'),
+      controller: controller,
+      enabled: !sending,
+      minLines: 1,
+      maxLines: 5,
+      textInputAction: TextInputAction.send,
+      style: TextStyle(color: colors.ink),
+      decoration: InputDecoration(
+        border: InputBorder.none,
+        hintText: 'Message Agent Awesome in this chat...',
+        hintStyle: TextStyle(color: colors.muted),
+      ),
+      onSubmitted: (_) {
+        if (!sending) {
+          onSubmit();
+        }
+      },
+    );
+  }
+
+  /// Builds the shared chat model picker.
+  Widget _buildModelMenu() {
+    return _ChatModelMenuButton(
+      choices: modelChoices,
+      selectedRef: selectedModelRef,
+      sending: sending,
+      onSelected: onModelSelected,
+    );
+  }
+
+  /// Builds the shared send button.
+  Widget _buildSendButton(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return IconButton.filled(
+      key: const ValueKey<String>('chat-thread-send-button'),
+      style: IconButton.styleFrom(
+        backgroundColor: colors.green,
+        foregroundColor: Colors.white,
+        fixedSize: const Size(42, 42),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      onPressed: sending ? null : onSubmit,
+      icon: Icon(sending ? Icons.hourglass_top : Icons.arrow_upward),
+      tooltip: 'Send message',
     );
   }
 }

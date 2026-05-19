@@ -116,10 +116,47 @@ void main() {
 
       await controller.selectSession('stale-session');
 
-      expect(controller.selectedSessionId, isNull);
+      expect(controller.selectedSessionId, 'stale-session');
       expect(controller.messages, isEmpty);
       expect(historyStore.saved, hasLength(1));
       expect(historyStore.saved.single.sessionId, 'stale-session');
+    },
+  );
+
+  test(
+    'selectHistoryChat keeps a cross-profile history card selected on failure',
+    () async {
+      const missingProfilePath = '/tmp/missing-personal-profile.json';
+      const sessionId = 'stale-cross-profile-session';
+      const chatKey = '$missingProfilePath::$sessionId';
+      final historyStore = _MemoryChatHistoryStore(
+        entries: <ChatHistoryEntry>[
+          ChatHistoryEntry(
+            profilePath: missingProfilePath,
+            profileId: 'personal',
+            profileLabel: 'Personal',
+            sessionId: sessionId,
+            title: 'Chat session-',
+            createdAt: DateTime(2026, 5, 16, 9, 17),
+            updatedAt: DateTime(2026, 5, 16, 9, 17),
+          ),
+        ],
+      );
+      final controller = AgentAwesomeAppController(
+        config: _testConfig(),
+        assistantClient: _RejectingAssistantClient(),
+        chatHistoryStore: historyStore,
+      );
+      controller.runtimeProfile = _testProfile();
+      controller.runtimeProfilePath = '/tmp/agent-awesome-profile.json';
+      controller.chatHistory = await historyStore.load();
+      controller.sessions = const <ChatSession>[];
+
+      await controller.selectHistoryChat(chatKey);
+
+      expect(controller.selectedChatKey, chatKey);
+      expect(controller.selectedSessionId, sessionId);
+      expect(controller.messages, isEmpty);
     },
   );
 

@@ -78,6 +78,7 @@ class _SettingsToolSurfaceCommandPanel extends StatefulWidget {
 
 class _SettingsToolSurfaceCommandPanelState
     extends State<_SettingsToolSurfaceCommandPanel> {
+  String _detailModeId = _toolSurfaceEditMode;
   String? _selectedPath;
 
   /// Initializes the selected tool config path.
@@ -113,7 +114,7 @@ class _SettingsToolSurfaceCommandPanelState
       areas: <SwitcherPanelArea>[
         SwitcherPanelArea(
           id: widget.surface.id,
-          title: widget.title,
+          title: 'Configs',
           icon: widget.icon,
           builder: (query) => _SettingsToolConfigFileList(
             query: query,
@@ -126,12 +127,15 @@ class _SettingsToolSurfaceCommandPanelState
         ),
       ],
       detailTitle: widget.title,
-      detailModes: const <CommandPanelDetailMode>[],
-      selectedDetailModeId: '',
-      onDetailModeSelected: (_) {},
-      detailBuilder: (_) => _buildDetail(),
+      detailModes: _detailModes(),
+      selectedDetailModeId: _detailModeId,
+      onDetailModeSelected: (modeId) => setState(() {
+        _detailModeId = modeId;
+      }),
+      detailBuilder: _buildDetail,
       onAreaChanged: widget.onAreaChanged,
-      areaActionsBuilder: (context, area) => _buildActions(),
+      areaActionsBuilder: (context, area) => _buildAreaActions(),
+      detailActionsBuilder: (context, area, mode) => _buildDetailActions(),
       filterHint: widget.surface == _ToolSettingsSurface.osTools
           ? 'Filter tool configs...'
           : 'Filter MCP configs...',
@@ -139,17 +143,39 @@ class _SettingsToolSurfaceCommandPanelState
     );
   }
 
-  /// Builds CRUD controls for the selected tool config file.
-  Widget _buildActions() {
+  /// Builds the right-pane modes for the selected tool config.
+  List<CommandPanelDetailMode> _detailModes() {
+    return <CommandPanelDetailMode>[
+      CommandPanelDetailMode(
+        id: _toolSurfaceEditMode,
+        label: widget.surface == _ToolSettingsSurface.osTools
+            ? 'Commands'
+            : 'Servers',
+        icon: widget.icon,
+      ),
+      const CommandPanelDetailMode(
+        id: _toolSurfaceSourceMode,
+        label: 'Source',
+        icon: Icons.code,
+      ),
+    ];
+  }
+
+  /// Builds collection-level controls for the config-file list.
+  Widget _buildAreaActions() {
+    return PanelIconButton(
+      icon: Icons.add,
+      tooltip: 'Add tool config',
+      onPressed: () => unawaited(_create()),
+    );
+  }
+
+  /// Builds selected-config controls in the detail header.
+  Widget _buildDetailActions() {
     final selectedEntry = _selectedEntry();
     return Wrap(
       spacing: 8,
       children: <Widget>[
-        PanelIconButton(
-          icon: Icons.add,
-          tooltip: 'Add tool config',
-          onPressed: () => unawaited(_create()),
-        ),
         PanelIconButton(
           icon: Icons.content_copy,
           tooltip: 'Duplicate tool config',
@@ -169,12 +195,20 @@ class _SettingsToolSurfaceCommandPanelState
   }
 
   /// Builds the selected tool config editor.
-  Widget _buildDetail() {
+  Widget _buildDetail(String modeId) {
     final entry = _selectedEntry();
     if (entry == null) {
-      return _SettingsMissingToolConfig(
-        label: widget.emptyLabel,
-        onCreate: () => unawaited(_create()),
+      return _SettingsMissingToolConfig(label: widget.emptyLabel);
+    }
+    if (modeId == _toolSurfaceSourceMode) {
+      return FormPanel(
+        children: <Widget>[
+          _SettingsTextFileEditor(
+            controller: widget.controller,
+            title: 'Tool config source',
+            path: entry.path,
+          ),
+        ],
       );
     }
     return _SettingsToolConfigEditor(
@@ -345,7 +379,7 @@ class _SettingsToolConfigFileTile extends StatelessWidget {
                       entry.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -382,14 +416,13 @@ enum _ToolSettingsSurface {
   }
 }
 
+const String _toolSurfaceEditMode = 'edit';
+const String _toolSurfaceSourceMode = 'source';
+
 class _SettingsMissingToolConfig extends StatelessWidget {
-  const _SettingsMissingToolConfig({
-    required this.label,
-    required this.onCreate,
-  });
+  const _SettingsMissingToolConfig({required this.label});
 
   final String label;
-  final VoidCallback onCreate;
 
   /// Builds the empty state shown before a tool config file exists.
   @override
@@ -398,15 +431,7 @@ class _SettingsMissingToolConfig extends StatelessWidget {
       children: <Widget>[
         FormSectionCard(
           title: 'Tool config',
-          children: <Widget>[
-            PanelEmptyBlock(label: label),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: onCreate,
-              icon: const Icon(Icons.add),
-              label: const Text('Add tool config'),
-            ),
-          ],
+          children: <Widget>[PanelEmptyBlock(label: label)],
         ),
       ],
     );

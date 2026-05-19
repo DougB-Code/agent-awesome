@@ -10,7 +10,6 @@ class _FilesLibraryContent extends StatelessWidget {
     required this.selectedFileId,
     required this.kindFilter,
     required this.onSelected,
-    required this.onAddFile,
   });
 
   /// All file records known to the section.
@@ -28,9 +27,6 @@ class _FilesLibraryContent extends StatelessWidget {
   /// Selects a file card.
   final ValueChanged<String> onSelected;
 
-  /// Opens the add-file affordance.
-  final VoidCallback onAddFile;
-
   /// Builds the file library body.
   @override
   Widget build(BuildContext context) {
@@ -42,10 +38,7 @@ class _FilesLibraryContent extends StatelessWidget {
         children: <Widget>[
           Expanded(
             child: visibleFiles.isEmpty
-                ? _FilesEmptyState(
-                    hasAnyFile: files.isNotEmpty,
-                    onAddFile: onAddFile,
-                  )
+                ? _FilesEmptyState(hasAnyFile: files.isNotEmpty)
                 : ListView.separated(
                     itemCount: visibleFiles.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -94,7 +87,6 @@ class _AgentFileCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: selected ? colors.panelStrong : colors.surface,
-          gradient: context.agentAwesomeCardGradient,
           border: Border.all(
             color: selected ? colors.borderStrong : colors.border,
           ),
@@ -107,7 +99,7 @@ class _AgentFileCard extends StatelessWidget {
               left: 0,
               top: 0,
               bottom: 0,
-              child: ColoredBox(color: accent, child: const SizedBox(width: 4)),
+              child: ColoredBox(color: accent, child: const SizedBox(width: 3)),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 14, 12),
@@ -129,8 +121,8 @@ class _AgentFileCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: colors.ink,
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -200,7 +192,7 @@ class _FileIconBox extends StatelessWidget {
       width: 36,
       decoration: BoxDecoration(
         color: color.withValues(alpha: context.agentAwesomeIsDark ? 0.14 : 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
       ),
       child: Icon(icon, color: color, size: 20),
     );
@@ -222,19 +214,19 @@ class _FileTypeBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: context.agentAwesomeIsDark ? 0.12 : 0.1),
-        border: Border.all(color: color.withValues(alpha: 0.62)),
-        borderRadius: BorderRadius.circular(8),
+        color: context.agentAwesomeColors.panel,
+        border: Border.all(color: context.agentAwesomeColors.border),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: color,
+          color: context.agentAwesomeColors.muted,
           fontSize: 12,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -261,7 +253,7 @@ class _FileMetadataBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.panel,
         border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -288,65 +280,22 @@ class _FileMetadataBadge extends StatelessWidget {
 
 class _FilesEmptyState extends StatelessWidget {
   /// Creates the file empty state.
-  const _FilesEmptyState({required this.hasAnyFile, required this.onAddFile});
+  const _FilesEmptyState({required this.hasAnyFile});
 
   /// Whether files exist before filtering.
   final bool hasAnyFile;
 
-  /// Opens the add-file affordance.
-  final VoidCallback onAddFile;
-
   /// Builds the empty state with a clear file-only message.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
     final title = hasAnyFile ? 'No matching files' : 'No files indexed yet';
     final message = hasAnyFile
         ? 'Try a different file type or search.'
         : 'Files for your agent. Add PDFs, spreadsheets, images, and other source documents here. Chat messages belong in Memory, not Files.';
-    return PanelSectionBlock(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 30),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Icon(Icons.folder_open_outlined, color: colors.muted, size: 38),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colors.ink,
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: colors.muted, height: 1.35),
-              ),
-            ),
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: colors.green,
-                foregroundColor: colors.surface,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 14,
-                ),
-              ),
-              onPressed: onAddFile,
-              icon: const Icon(Icons.add),
-              label: const Text('Add file'),
-            ),
-          ],
-        ),
-      ),
+    return PanelGuidedEmptyBlock(
+      icon: Icons.folder_open_outlined,
+      title: title,
+      message: message,
     );
   }
 }

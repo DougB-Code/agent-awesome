@@ -40,6 +40,9 @@ const String _memoryRelationsDetailId = 'relations';
 const String _memoryMetadataDetailId = 'metadata';
 const String _memoryCorrectionsDetailId = 'corrections';
 const String _memoryPagesDetailId = 'pages';
+const String _memoryMapDetailId = 'map';
+const String _memorySafetyDetailId = 'safety';
+const String _memoryCaptureDetailId = 'capture';
 
 /// Builds the memory discovery areas used by the command subshell.
 List<SwitcherPanelArea> _memoryCommandAreas(
@@ -47,34 +50,18 @@ List<SwitcherPanelArea> _memoryCommandAreas(
 ) {
   return <SwitcherPanelArea>[
     SwitcherPanelArea(
-      title: 'Search',
+      id: 'memory_records',
+      title: 'Records',
       icon: Icons.manage_search,
       builder: (query) =>
           _MemorySearchContent(controller: controller, query: query),
     ),
     SwitcherPanelArea(
+      id: 'memory_review',
       title: 'Review',
       icon: Icons.rule_folder_outlined,
       builder: (query) =>
           _MemoryReviewContent(controller: controller, query: query),
-    ),
-    SwitcherPanelArea(
-      title: 'Safety',
-      icon: Icons.policy_outlined,
-      builder: (query) =>
-          _MemorySafetyContent(controller: controller, query: query),
-    ),
-    SwitcherPanelArea(
-      title: 'Map',
-      icon: Icons.account_tree_outlined,
-      builder: (query) =>
-          _MemoryMapContent(controller: controller, query: query),
-    ),
-    SwitcherPanelArea(
-      title: 'Capture',
-      icon: Icons.add_box_outlined,
-      builder: (query) =>
-          _MemoryCaptureContent(controller: controller, query: query),
     ),
   ];
 }
@@ -111,6 +98,21 @@ List<CommandPanelDetailMode> _memoryDetailModes() {
       id: _memoryPagesDetailId,
       label: 'Pages',
       icon: Icons.view_timeline_outlined,
+    ),
+    CommandPanelDetailMode(
+      id: _memoryMapDetailId,
+      label: 'Map',
+      icon: Icons.account_tree_outlined,
+    ),
+    CommandPanelDetailMode(
+      id: _memorySafetyDetailId,
+      label: 'Safety',
+      icon: Icons.policy_outlined,
+    ),
+    CommandPanelDetailMode(
+      id: _memoryCaptureDetailId,
+      label: 'Capture',
+      icon: Icons.add_box_outlined,
     ),
   ];
 }

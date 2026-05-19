@@ -34,7 +34,7 @@ class _StreamRowLabel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: colors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 if (row.subtitle.isNotEmpty)
@@ -71,7 +71,7 @@ class _StreamColumnHeader extends StatelessWidget {
           style: TextStyle(
             color: colors.subtle,
             fontSize: 12,
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w800,
             letterSpacing: 1.6,
           ),
         ),

@@ -32,14 +32,12 @@ class _TaskRelationTile extends StatelessWidget {
       ],
       actions: <Widget>[
         if (canDeleteRelation)
-          Tooltip(
-            message: 'Delete relation',
-            child: IconButton(
-              onPressed: controller.tasksBusy
-                  ? null
-                  : () => unawaited(_deleteRelation(context, relation)),
-              icon: const Icon(Icons.delete_outline, size: 18),
-            ),
+          PanelInlineIconButton(
+            icon: Icons.delete_outline,
+            tooltip: 'Delete relation',
+            onPressed: controller.tasksBusy
+                ? null
+                : () => unawaited(_deleteRelation(context, relation)),
           ),
       ],
     );

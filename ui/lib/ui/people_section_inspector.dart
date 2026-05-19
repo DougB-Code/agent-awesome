@@ -270,7 +270,7 @@ class _ContactContextSummaryRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: colors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -327,7 +327,7 @@ class _ContactContextCard extends StatelessWidget {
                       style: TextStyle(
                         color: colors.ink,
                         fontSize: 16,
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -517,7 +517,7 @@ class _ContactInspectorHeader extends StatelessWidget {
                 style: TextStyle(
                   color: colors.ink,
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   height: 1.15,
                 ),
               ),
@@ -587,7 +587,7 @@ class _ContactInspectorRow extends StatelessWidget {
               style: TextStyle(
                 color: colors.subtle,
                 fontSize: 13,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),

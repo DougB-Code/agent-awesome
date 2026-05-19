@@ -76,11 +76,11 @@ class _SettingsProfileMcpList extends StatelessWidget {
         runSpacing: 8,
         children: <Widget>[
           for (final server in servers)
-            InputChip(
-              avatar: const Icon(Icons.hub_outlined, size: 16),
-              label: Text(server.kind.isEmpty ? server.label : server.kind),
-              tooltip: server.endpoint,
-              onPressed: null,
+            Tooltip(
+              message: server.endpoint,
+              child: PanelBadge(
+                label: server.kind.isEmpty ? server.label : server.kind,
+              ),
             ),
         ],
       ),
@@ -114,13 +114,13 @@ class _SettingsMcpServerEditor extends StatelessWidget {
                 child: Text(
                   server.name.isEmpty ? 'MCP server' : server.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
-              IconButton(
-                onPressed: onDelete,
+              PanelInlineIconButton(
+                icon: Icons.delete_outline,
                 tooltip: 'Delete MCP server',
-                icon: const Icon(Icons.delete_outline),
+                onPressed: onDelete,
               ),
             ],
           ),

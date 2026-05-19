@@ -135,6 +135,10 @@ func (s *Server) listToolNames(ctx context.Context) ([]string, error) {
 	servers := configuredMCPServers(s.tools)
 	names := make([]string, 0)
 	seen := map[string]struct{}{}
+	if memoryExportAvailable(s.tools) {
+		seen[exportMemoryCopyToolName] = struct{}{}
+		names = append(names, exportMemoryCopyToolName)
+	}
 	for _, server := range servers {
 		session, err := connectMCP(ctx, server)
 		if err != nil {
@@ -162,6 +166,12 @@ func (s *Server) listToolNames(ctx context.Context) ([]string, error) {
 
 // callTool invokes one configured MCP tool by name and optional memory domain.
 func (s *Server) callTool(ctx context.Context, name string, domainID string, arguments map[string]any) (any, error) {
+	if strings.TrimSpace(name) == exportMemoryCopyToolName {
+		if strings.TrimSpace(domainID) != "" {
+			return nil, fmt.Errorf("%s must not include a domain_id override", exportMemoryCopyToolName)
+		}
+		return s.exportMemoryCopy(ctx, arguments)
+	}
 	server, err := s.serverForControlTool(ctx, name, domainID)
 	if err != nil {
 		return nil, err
@@ -185,6 +195,14 @@ func (s *Server) callTool(ctx context.Context, name string, domainID string, arg
 		return result.StructuredContent, nil
 	}
 	return map[string]any{"content": result.Content}, nil
+}
+
+// memoryExportAvailable reports whether harness memory policy can evaluate exports.
+func memoryExportAvailable(tools *schema.Tools) bool {
+	return tools != nil &&
+		len(tools.Memory.ReadDomains) > 0 &&
+		len(tools.Memory.WriteDomains) > 0 &&
+		strings.TrimSpace(tools.Memory.DefaultWriteDomain) != ""
 }
 
 // serverForControlTool returns the MCP server selected by control-plane policy.

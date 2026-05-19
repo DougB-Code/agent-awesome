@@ -9,17 +9,7 @@ class _MemoryPanelLabel extends StatelessWidget {
   /// Builds an uppercase memory panel label.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Text(
-      label.toUpperCase(),
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        color: colors.subtle,
-        fontSize: 11,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 2.4,
-      ),
-    );
+    return PanelSectionLabel(label);
   }
 }
 
@@ -44,11 +34,7 @@ class _MemoryActiveFilter extends StatelessWidget {
   /// Builds a removable active filter chip.
   @override
   Widget build(BuildContext context) {
-    return InputChip(
-      label: Text(label, overflow: TextOverflow.ellipsis),
-      onDeleted: onClear,
-      deleteIcon: const Icon(Icons.close, size: 16),
-    );
+    return PanelRemovableChip(label: label, onDeleted: onClear);
   }
 }
 
@@ -105,7 +91,6 @@ class _MemoryRelationshipLine extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isConflict ? colors.warningSoft : colors.surface,
-        gradient: isConflict ? null : context.agentAwesomeCardGradient,
         border: Border.all(color: isConflict ? colors.coral : colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -125,7 +110,7 @@ class _MemoryRelationshipLine extends StatelessWidget {
                   _memoryLabel(relationship.type),
                   style: TextStyle(
                     color: colors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),

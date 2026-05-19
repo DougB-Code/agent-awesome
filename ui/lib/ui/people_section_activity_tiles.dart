@@ -47,7 +47,7 @@ class _ContactTaskTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: colors.ink,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -109,7 +109,6 @@ class _ContactMemoryTile extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: selected ? colors.panelStrong : colors.surface,
-          gradient: context.agentAwesomeCardGradient,
           border: Border.all(
             color: selected ? colors.borderStrong : colors.border,
           ),
@@ -122,7 +121,7 @@ class _ContactMemoryTile extends StatelessWidget {
               record.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: colors.ink, fontWeight: FontWeight.w900),
+              style: TextStyle(color: colors.ink, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 6),
             Text(
@@ -181,7 +180,7 @@ class _ContactCompiledPagePreview extends StatelessWidget {
         children: <Widget>[
           Text(
             page.title,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20),
           ),
           const SizedBox(height: 8),
           Wrap(

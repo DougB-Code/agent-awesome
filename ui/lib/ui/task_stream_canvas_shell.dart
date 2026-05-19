@@ -80,7 +80,6 @@ class _TaskStreamCanvasState extends State<TaskStreamCanvas> {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: colors.surface,
-              gradient: context.agentAwesomeCardGradient,
               border: Border.all(color: colors.border),
               borderRadius: BorderRadius.circular(8),
             ),

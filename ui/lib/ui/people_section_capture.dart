@@ -4,60 +4,16 @@ part of 'people_section.dart';
 /// _ContactsEmptyState renders empty and no-match states for contacts.
 class _ContactsEmptyState extends StatelessWidget {
   /// Creates the contact empty state.
-  const _ContactsEmptyState({
-    required this.hasAnyContact,
-    required this.onAddContact,
-  });
+  const _ContactsEmptyState({required this.hasAnyContact});
 
   /// Whether contacts exist before filtering.
   final bool hasAnyContact;
 
-  /// Opens the add-contact affordance.
-  final VoidCallback onAddContact;
-
   /// Builds the empty state.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
     final title = hasAnyContact ? 'No matching contacts' : 'No contacts yet';
-    return PanelSectionBlock(
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Icon(Icons.people_alt_outlined, color: colors.muted, size: 38),
-              const SizedBox(height: 14),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: colors.ink,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 18),
-              FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.green,
-                  foregroundColor: colors.surface,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 14,
-                  ),
-                ),
-                onPressed: onAddContact,
-                icon: const Icon(Icons.person_add_alt_1_outlined),
-                label: const Text('Add contact'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return PanelGuidedEmptyBlock(icon: Icons.people_alt_outlined, title: title);
   }
 }
 

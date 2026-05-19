@@ -55,102 +55,128 @@ class SettingsCommandSubShell extends StatefulWidget {
 
 class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
   String? _selectedProfilePath;
+  String? _selectedModelConfigPath;
   String? _selectedMemoryDomainId;
 
   /// Builds the settings command panel and selected editor.
   @override
   Widget build(BuildContext context) {
-    final selected = _selectedSection();
     return CommandPanelSubShell(
-      areas: <SwitcherPanelArea>[
-        SwitcherPanelArea(
+      areas: _settingsAreas(),
+      detailTitle: 'Settings',
+      detailModes: const <CommandPanelDetailMode>[
+        CommandPanelDetailMode(
           id: 'settings',
-          title: 'Settings',
+          label: 'Settings',
           icon: Icons.tune,
-          builder: (query) => _SettingsSectionList(
-            query: query,
-            selected: selected.label,
-            onSelected: widget.onSectionSelected,
-          ),
         ),
       ],
-      detailTitle: selected.label,
-      detailModes: const <CommandPanelDetailMode>[],
+      detailModesBuilder: _detailModesForArea,
       selectedDetailModeId: '',
       onDetailModeSelected: (_) {},
-      detailBuilder: (_) => SettingsDetailsPanel(
-        controller: widget.controller,
-        section: selected.label,
-      ),
-      detailItemsBuilder: switch (selected.label) {
-        'Profiles' => _profileItems,
-        'Memory' => _memoryDomainItems,
-        _ => null,
+      detailBuilder: (_) =>
+          SettingsDetailsPanel(controller: widget.controller, section: 'App'),
+      searchableDetailBuilder: _buildAreaDetail,
+      areaActionsBuilder: _buildAreaActions,
+      detailActionsBuilder: _buildDetailActions,
+      onAreaChanged: (area) {
+        widget.onSectionSelected(area.id);
+        widget.onAreaChanged?.call(area);
       },
-      selectedDetailItemIdBuilder: switch (selected.label) {
-        'Profiles' => _selectedProfilePathFor,
-        'Memory' => _selectedMemoryDomainIdFor,
-        _ => null,
-      },
-      onDetailItemSelected: switch (selected.label) {
-        'Profiles' => (_, _, itemId) => unawaited(_selectProfile(itemId)),
-        'Memory' => (_, _, itemId) => setState(
-          () => _selectedMemoryDomainId = itemId,
-        ),
-        _ => null,
-      },
-      detailItemActionsBuilder: switch (selected.label) {
-        'Profiles' => _profileActions,
-        'Memory' => _memoryDomainActions,
-        _ => null,
-      },
-      itemDetailBuilder:
-          selected.label == 'Profiles' || selected.label == 'Memory'
-          ? (_, _, item, query) => SettingsDetailsPanel(
-              controller: widget.controller,
-              section: selected.label,
-              selectedProfilePath: selected.label == 'Profiles'
-                  ? item?.id
-                  : null,
-              selectedMemoryDomainId: selected.label == 'Memory'
-                  ? item?.id
-                  : null,
-              query: query,
-            )
-          : null,
-      searchableDetailBuilder:
-          selected.label == 'Profiles' || selected.label == 'Memory'
-          ? null
-          : (_, _, query) => SettingsDetailsPanel(
-              controller: widget.controller,
-              section: selected.label,
-              query: query,
-            ),
-      onAreaChanged: widget.onAreaChanged,
       filterHint: 'Filter settings...',
       split: const PanelSplit(left: 0.27, min: 0.22, max: 0.42),
       showDetailHeader: true,
     );
   }
 
-  /// Builds selectable runtime profiles for shared right-pane chrome.
-  List<CommandPanelContentItem> _profileItems(
+  /// Builds shell-owned settings section areas.
+  List<SwitcherPanelArea> _settingsAreas() {
+    return <SwitcherPanelArea>[
+      for (final section in _settingsSections)
+        SwitcherPanelArea(
+          id: section.label,
+          title: section.label,
+          icon: section.icon,
+          builder: (query) => _SettingsAreaContent(
+            controller: widget.controller,
+            section: section.label,
+            detail: section.detail,
+            query: query,
+            selectedProfilePath: _selectedProfilePathForArea(),
+            selectedModelConfigPath: _selectedModelConfigPathForArea(),
+            selectedMemoryDomainId: _selectedMemoryDomainIdForArea(),
+            onProfileSelected: (path) => unawaited(_selectProfile(path)),
+            onModelConfigSelected: (path) =>
+                setState(() => _selectedModelConfigPath = path),
+            onMemoryDomainSelected: (domainId) =>
+                setState(() => _selectedMemoryDomainId = domainId),
+          ),
+        ),
+    ];
+  }
+
+  /// Returns the single right-side settings mode for one left area.
+  List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
+    return <CommandPanelDetailMode>[
+      CommandPanelDetailMode(id: area.id, label: area.title, icon: area.icon),
+    ];
+  }
+
+  /// Builds the active settings editor for the selected left area.
+  Widget _buildAreaDetail(SwitcherPanelArea area, String modeId, String query) {
+    return SettingsDetailsPanel(
+      controller: widget.controller,
+      section: area.id,
+      selectedProfilePath: area.id == 'Profiles'
+          ? _selectedProfilePathForArea()
+          : null,
+      selectedModelConfigPath: area.id == 'Models'
+          ? _selectedModelConfigPathForArea()
+          : null,
+      onModelConfigSelected: area.id == 'Models'
+          ? (path) => setState(() => _selectedModelConfigPath = path)
+          : null,
+      selectedMemoryDomainId: area.id == 'Memory'
+          ? _selectedMemoryDomainIdForArea()
+          : null,
+      query: query,
+    );
+  }
+
+  /// Builds selected-object actions for settings areas.
+  Widget? _buildDetailActions(
+    BuildContext context,
     SwitcherPanelArea area,
     CommandPanelDetailMode mode,
   ) {
-    final profile = widget.controller.runtimeProfile;
-    return <CommandPanelContentItem>[
-      for (final entry in _profileEntries(profile))
-        CommandPanelContentItem(
-          id: entry.path,
-          label: entry.label,
-          detail: entry.path,
-          icon: Icons.person_outline,
-          badge: entry.path == widget.controller.runtimeProfilePath
-              ? 'Active'
-              : '',
-        ),
-    ];
+    return switch (area.id) {
+      'Profiles' => _profileActions(context, area, mode, null),
+      'Models' => _modelConfigActions(context, area, mode),
+      'Memory' => _memoryDomainActions(context, area, mode, null),
+      _ => null,
+    };
+  }
+
+  /// Builds collection-level settings actions in the left header.
+  Widget? _buildAreaActions(BuildContext context, SwitcherPanelArea area) {
+    return switch (area.id) {
+      'Profiles' => PanelIconButton(
+        icon: Icons.add,
+        tooltip: 'Add runtime profile',
+        onPressed: () => unawaited(_createProfile()),
+      ),
+      'Models' => PanelIconButton(
+        icon: Icons.add,
+        tooltip: 'Add model config',
+        onPressed: () => unawaited(_createModelConfig()),
+      ),
+      'Memory' => PanelIconButton(
+        icon: Icons.add,
+        tooltip: 'Add memory domain',
+        onPressed: () => unawaited(_createMemoryDomain()),
+      ),
+      _ => null,
+    };
   }
 
   /// Resolves the selected runtime profile path for the shared detail selector.
@@ -174,6 +200,43 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     return entries.first.path;
   }
 
+  /// Resolves the selected runtime profile path for left-area content.
+  String? _selectedProfilePathForArea() {
+    return _selectedProfilePathFor(
+      const SwitcherPanelArea(
+        id: 'Profiles',
+        title: 'Profiles',
+        icon: Icons.person_outline,
+        builder: _emptySettingsAreaBuilder,
+      ),
+      const CommandPanelDetailMode(
+        id: 'Profiles',
+        label: 'Profiles',
+        icon: Icons.person_outline,
+      ),
+    );
+  }
+
+  /// Resolves the selected model config path for left-area content.
+  String? _selectedModelConfigPathForArea() {
+    final entries = widget.controller.availableModelConfigs;
+    if (entries.isEmpty) {
+      return null;
+    }
+    final selectedPath = _selectedModelConfigPath;
+    if (selectedPath != null &&
+        entries.any((entry) => entry.path == selectedPath)) {
+      return selectedPath;
+    }
+    final assignedPath =
+        widget.controller.runtimeProfile?.harness.modelConfigPath ?? '';
+    if (assignedPath.isNotEmpty &&
+        entries.any((entry) => entry.path == assignedPath)) {
+      return assignedPath;
+    }
+    return entries.first.path;
+  }
+
   /// Builds profile-file CRUD controls in the shared detail header.
   Widget _profileActions(
     BuildContext context,
@@ -185,21 +248,120 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
       spacing: 8,
       children: <Widget>[
         PanelIconButton(
-          icon: Icons.add,
-          tooltip: 'Add runtime profile',
-          onPressed: () => unawaited(_createProfile()),
-        ),
-        PanelIconButton(
           icon: Icons.content_copy,
           tooltip: 'Duplicate runtime profile',
-          onPressed: item == null ? null : () => unawaited(_duplicateProfile()),
+          onPressed: _selectedProfilePathForArea() == null
+              ? null
+              : () => unawaited(_duplicateProfile()),
         ),
         PanelIconButton(
           icon: Icons.delete_outline,
           tooltip: 'Delete runtime profile',
-          onPressed: item == null ? null : () => unawaited(_deleteProfile()),
+          onPressed: _selectedProfilePathForArea() == null
+              ? null
+              : () => unawaited(_deleteProfile()),
         ),
       ],
+    );
+  }
+
+  /// Builds selected model-config controls in the right header.
+  Widget _modelConfigActions(
+    BuildContext context,
+    SwitcherPanelArea area,
+    CommandPanelDetailMode mode,
+  ) {
+    final entry = _selectedModelConfigEntry();
+    return Wrap(
+      spacing: 8,
+      children: <Widget>[
+        PanelIconButton(
+          icon: Icons.content_copy,
+          tooltip: 'Duplicate model config',
+          onPressed: entry == null
+              ? null
+              : () => unawaited(_duplicateModelConfig(entry)),
+        ),
+        PanelIconButton(
+          icon: Icons.delete_outline,
+          tooltip: 'Delete model config',
+          onPressed: entry == null
+              ? null
+              : () => unawaited(_deleteModelConfig(entry)),
+        ),
+      ],
+    );
+  }
+
+  /// Returns the selected model config entry, if one exists.
+  ConfigFileEntry? _selectedModelConfigEntry() {
+    final selectedPath = _selectedModelConfigPathForArea();
+    if (selectedPath == null) {
+      return null;
+    }
+    for (final entry in widget.controller.availableModelConfigs) {
+      if (entry.path == selectedPath) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  /// Creates a model config and selects it in the left area.
+  Future<void> _createModelConfig() async {
+    try {
+      final path = await widget.controller.createConfigFile(
+        ConfigFileKind.model,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _selectedModelConfigPath = path);
+    } catch (_) {}
+  }
+
+  /// Duplicates the selected model config and selects the duplicate.
+  Future<void> _duplicateModelConfig(ConfigFileEntry entry) async {
+    try {
+      final path = await widget.controller.duplicateConfigFile(entry);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _selectedModelConfigPath = path);
+    } catch (_) {}
+  }
+
+  /// Deletes the selected model config after confirmation.
+  Future<void> _deleteModelConfig(ConfigFileEntry entry) async {
+    final confirmed = await _confirmSettingsDelete(context, label: entry.label);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await widget.controller.deleteConfigFile(entry);
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _selectedModelConfigPath = _selectedModelConfigPathForArea(),
+      );
+    } catch (_) {}
+  }
+
+  /// Resolves the selected memory-domain id for left-area content.
+  String? _selectedMemoryDomainIdForArea() {
+    return _selectedMemoryDomainIdFor(
+      const SwitcherPanelArea(
+        id: 'Memory',
+        title: 'Memory',
+        icon: Icons.account_tree_outlined,
+        builder: _emptySettingsAreaBuilder,
+      ),
+      const CommandPanelDetailMode(
+        id: 'Memory',
+        label: 'Memory',
+        icon: Icons.account_tree_outlined,
+      ),
     );
   }
 
@@ -279,38 +441,6 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     } catch (_) {}
   }
 
-  /// Returns a valid settings section record for the selected label.
-  ({String label, IconData icon, String detail}) _selectedSection() {
-    for (final section in _settingsSections) {
-      if (section.label == widget.selectedSection) {
-        return section;
-      }
-    }
-    return _settingsSections.first;
-  }
-
-  /// Builds selectable memory domains for shared right-pane chrome.
-  List<CommandPanelContentItem> _memoryDomainItems(
-    SwitcherPanelArea area,
-    CommandPanelDetailMode mode,
-  ) {
-    final profile = widget.controller.runtimeProfile;
-    if (profile == null) {
-      return const <CommandPanelContentItem>[];
-    }
-    final domains = profile.memoryDomains;
-    return <CommandPanelContentItem>[
-      for (final server in domains)
-        CommandPanelContentItem(
-          id: server.id,
-          label: server.label.isEmpty ? server.id : server.label,
-          detail: server.endpoint,
-          icon: Icons.hub_outlined,
-          badge: server.enabled ? 'Enabled' : 'Disabled',
-        ),
-    ];
-  }
-
   /// Resolves the selected memory-domain id without section-owned chrome.
   String? _selectedMemoryDomainIdFor(
     SwitcherPanelArea area,
@@ -339,16 +469,13 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
       spacing: 8,
       children: <Widget>[
         PanelIconButton(
-          icon: Icons.add,
-          tooltip: 'Add memory domain',
-          onPressed: () => unawaited(_createMemoryDomain()),
-        ),
-        PanelIconButton(
           icon: Icons.delete_outline,
           tooltip: 'Remove memory domain',
-          onPressed: item == null
+          onPressed: _selectedMemoryDomainIdForArea() == null
               ? null
-              : () => unawaited(_deleteMemoryDomain(item.id)),
+              : () => unawaited(
+                  _deleteMemoryDomain(_selectedMemoryDomainIdForArea()!),
+                ),
         ),
       ],
     );
@@ -419,43 +546,174 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
   }
 }
 
-/// _SettingsSectionList renders filtered settings section navigation.
-class _SettingsSectionList extends StatelessWidget {
-  const _SettingsSectionList({
+/// Builds an empty placeholder for const shell-area references.
+Widget _emptySettingsAreaBuilder(String query) {
+  return const SizedBox.shrink();
+}
+
+/// _SettingsAreaContent renders the selected settings area context list.
+class _SettingsAreaContent extends StatelessWidget {
+  const _SettingsAreaContent({
+    required this.controller,
+    required this.section,
+    required this.detail,
     required this.query,
-    required this.selected,
-    required this.onSelected,
+    required this.selectedProfilePath,
+    required this.selectedModelConfigPath,
+    required this.selectedMemoryDomainId,
+    required this.onProfileSelected,
+    required this.onModelConfigSelected,
+    required this.onMemoryDomainSelected,
   });
 
+  final AgentAwesomeAppController controller;
+  final String section;
+  final String detail;
   final String query;
-  final String selected;
-  final ValueChanged<String> onSelected;
+  final String? selectedProfilePath;
+  final String? selectedModelConfigPath;
+  final String? selectedMemoryDomainId;
+  final ValueChanged<String> onProfileSelected;
+  final ValueChanged<String> onModelConfigSelected;
+  final ValueChanged<String> onMemoryDomainSelected;
 
-  /// Builds the filtered settings section list.
+  /// Builds area-specific supporting objects for Settings.
   @override
   Widget build(BuildContext context) {
-    final matches = _settingsSections.where((section) {
+    return switch (section) {
+      'Profiles' => _buildProfiles(),
+      'Models' => _buildModels(),
+      'Memory' => _buildMemoryDomains(),
+      _ => _buildSingleAppItem(),
+    };
+  }
+
+  Widget _buildSingleAppItem() {
+    if (!SettingsQuery.matches(query, <String>['App', detail])) {
+      return PanelEmptyState(query: query);
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        _SettingsSectionTile(
+          label: 'App settings',
+          icon: Icons.dashboard_customize_outlined,
+          detail: detail,
+          selected: true,
+          onTap: () {},
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfiles() {
+    final entries = _profileAreaEntries();
+    final matches = entries.where((entry) {
       return SettingsQuery.matches(query, <String>[
-        section.label,
-        section.detail,
+        entry.label,
+        entry.id,
+        entry.path,
+        if (entry.active) 'active',
       ]);
     }).toList();
+    if (entries.isEmpty) {
+      return const PanelEmptyBlock(label: 'No runtime profiles configured');
+    }
     if (matches.isEmpty) {
       return PanelEmptyState(query: query);
     }
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        for (final section in matches)
+        for (final entry in matches)
           _SettingsSectionTile(
-            label: section.label,
-            icon: section.icon,
-            detail: section.detail,
-            selected: selected == section.label,
-            onTap: () => onSelected(section.label),
+            label: entry.label,
+            icon: Icons.person_outline,
+            detail: entry.path,
+            selected: entry.path == selectedProfilePath,
+            onTap: () => onProfileSelected(entry.path),
           ),
       ],
     );
+  }
+
+  Widget _buildModels() {
+    final matches = controller.availableModelConfigs.where((entry) {
+      return SettingsQuery.matches(query, <String>[
+        entry.label,
+        entry.fileLabel,
+        entry.path,
+        if (entry.assigned) 'assigned',
+      ]);
+    }).toList();
+    if (controller.availableModelConfigs.isEmpty) {
+      return const PanelEmptyBlock(label: 'No model configs configured');
+    }
+    if (matches.isEmpty) {
+      return PanelEmptyState(query: query);
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        for (final entry in matches)
+          _SettingsSectionTile(
+            label: entry.label,
+            icon: Icons.memory_outlined,
+            detail: entry.path,
+            selected: entry.path == selectedModelConfigPath,
+            onTap: () => onModelConfigSelected(entry.path),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMemoryDomains() {
+    final domains = controller.runtimeProfile?.memoryDomains ?? const [];
+    final matches = domains.where((domain) {
+      return SettingsQuery.matches(query, <String>[
+        domain.id,
+        domain.label,
+        domain.endpoint,
+        if (domain.enabled) 'enabled' else 'disabled',
+      ]);
+    }).toList();
+    if (domains.isEmpty) {
+      return const PanelEmptyBlock(label: 'No memory domains configured');
+    }
+    if (matches.isEmpty) {
+      return PanelEmptyState(query: query);
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        for (final domain in matches)
+          _SettingsSectionTile(
+            label: domain.label.isEmpty ? domain.id : domain.label,
+            icon: Icons.hub_outlined,
+            detail: domain.endpoint,
+            selected: domain.id == selectedMemoryDomainId,
+            onTap: () => onMemoryDomainSelected(domain.id),
+          ),
+      ],
+    );
+  }
+
+  List<RuntimeProfileFileEntry> _profileAreaEntries() {
+    if (controller.availableProfiles.isNotEmpty) {
+      return controller.availableProfiles;
+    }
+    final profile = controller.runtimeProfile;
+    if (profile == null || controller.runtimeProfilePath.isEmpty) {
+      return const <RuntimeProfileFileEntry>[];
+    }
+    return <RuntimeProfileFileEntry>[
+      RuntimeProfileFileEntry(
+        path: controller.runtimeProfilePath,
+        id: profile.id,
+        label: profile.label,
+        active: true,
+      ),
+    ];
   }
 }
 
@@ -490,6 +748,7 @@ class _SettingsSectionTile extends StatelessWidget {
           style: PanelSurfaceStyle.card,
           selected: selected,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Icon(icon, color: selected ? colors.green : colors.muted),
               const SizedBox(width: 12),
@@ -499,7 +758,7 @@ class _SettingsSectionTile extends StatelessWidget {
                   children: <Widget>[
                     Text(
                       label,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -527,6 +786,8 @@ class SettingsDetailsPanel extends StatelessWidget {
     required this.controller,
     required this.section,
     this.selectedProfilePath,
+    this.selectedModelConfigPath,
+    this.onModelConfigSelected,
     this.selectedMemoryDomainId,
     this.query = '',
   });
@@ -534,6 +795,8 @@ class SettingsDetailsPanel extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String section;
   final String? selectedProfilePath;
+  final String? selectedModelConfigPath;
+  final ValueChanged<String>? onModelConfigSelected;
   final String? selectedMemoryDomainId;
   final String query;
 
@@ -574,6 +837,8 @@ class SettingsDetailsPanel extends StatelessWidget {
         icon: Icons.memory_outlined,
         entries: controller.availableModelConfigs,
         assignedPath: profile.harness.modelConfigPath,
+        selectedPath: selectedModelConfigPath,
+        onSelectedPathChanged: onModelConfigSelected,
         query: query,
       ),
       'Memory' => _SettingsServerContent(

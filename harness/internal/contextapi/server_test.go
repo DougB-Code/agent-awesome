@@ -3,6 +3,7 @@ package contextapi
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,6 +23,70 @@ func TestCallToolRejectsOversizedRequest(t *testing.T) {
 
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want 413", rec.Code)
+	}
+}
+
+// TestExportMemoryCopyBlocksMissingDomainFlow verifies harness-owned flow denial.
+func TestExportMemoryCopyBlocksMissingDomainFlow(t *testing.T) {
+	server := &Server{tools: &schema.Tools{
+		Memory: schema.Memory{
+			Actor: "agent:test",
+			ReadDomains: []schema.MemoryDomain{
+				{ID: "family", Label: "Family", Endpoint: "http://127.0.0.1:8091/mcp"},
+				{ID: "work", Label: "Work", Endpoint: "http://127.0.0.1:8092/mcp"},
+			},
+			WriteDomains:       []string{"work"},
+			DefaultWriteDomain: "work",
+		},
+	}}
+
+	result, err := server.exportMemoryCopy(context.Background(), map[string]any{
+		"source_domain":    "family",
+		"target_domain":    "work",
+		"source_memory_id": "memory-1",
+		"content":          "Reviewed family-safe project note.",
+	})
+	if err != nil {
+		t.Fatalf("exportMemoryCopy() error = %v", err)
+	}
+	if result["exported"] != false {
+		t.Fatalf("exported = %#v, want false", result["exported"])
+	}
+	event := result["safety_event"].(map[string]any)
+	if event["kind"] != "blocked_export" {
+		t.Fatalf("event kind = %#v, want blocked_export", event["kind"])
+	}
+	if event["detail"] != "memory domain flow is not allowed" {
+		t.Fatalf("event detail = %#v, want flow denial", event["detail"])
+	}
+}
+
+// TestMemoryExportCapturePayloadUsesHarnessProvenance verifies source ids are owned by the harness.
+func TestMemoryExportCapturePayloadUsesHarnessProvenance(t *testing.T) {
+	payload := memoryExportCapturePayload("agent:test", memoryExportRequest{
+		SourceDomain:   "family",
+		TargetDomain:   "work",
+		SourceMemoryID: "memory-1",
+		SourceEvidence: "evidence-1",
+		Title:          "Reviewed note",
+		Content:        "Project-safe note.",
+		Kind:           "summary",
+		Firewall:       "project",
+		Sensitivity:    "internal",
+	})
+	source, ok := payload["source"].(map[string]any)
+	if !ok {
+		raw, _ := json.Marshal(payload["source"])
+		t.Fatalf("source = %s, want object", raw)
+	}
+	if source["system"] != "agent_awesome_declassification" {
+		t.Fatalf("source system = %#v", source["system"])
+	}
+	if source["id"] != "family:memory-1:evidence-1" {
+		t.Fatalf("source id = %#v", source["id"])
+	}
+	if payload["actor"] != "agent:test" {
+		t.Fatalf("actor = %#v", payload["actor"])
 	}
 }
 

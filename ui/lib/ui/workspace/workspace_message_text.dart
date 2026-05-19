@@ -2,9 +2,10 @@
 part of 'workspace_widgets.dart';
 
 class _MessageText extends StatelessWidget {
-  const _MessageText({required this.message});
+  const _MessageText({required this.message, this.compact = false});
 
   final ChatMessage message;
+  final bool compact;
 
   /// Builds message author and text.
   @override
@@ -57,7 +58,11 @@ class _MessageText extends StatelessWidget {
         const SizedBox(height: 8),
         SelectableText(
           message.text,
-          style: TextStyle(color: colors.ink, fontSize: 16, height: 1.55),
+          style: TextStyle(
+            color: colors.ink,
+            fontSize: compact ? 15 : 16,
+            height: compact ? 1.45 : 1.55,
+          ),
         ),
       ],
     );

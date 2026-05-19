@@ -557,7 +557,7 @@ class _ConstellationSavedQueryItem extends StatelessWidget {
             style: TextStyle(
               color: colors.ink,
               fontSize: 13,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 3),
@@ -812,7 +812,6 @@ class _PositionedConstellationAnchor extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
             decoration: BoxDecoration(
               color: expanded ? colors.greenSoft : colors.surface,
-              gradient: expanded ? null : context.agentAwesomeCardGradient,
               border: Border.all(
                 color: expanded ? colors.green : colors.border,
                 width: expanded ? 2.2 : 1.2,
@@ -837,7 +836,7 @@ class _PositionedConstellationAnchor extends StatelessWidget {
                     color: colors.ink,
                     fontSize: 13,
                     height: 1.05,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -895,9 +894,6 @@ class _PositionedConstellationNode extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
             decoration: BoxDecoration(
               color: selected || expanded ? colors.greenSoft : colors.surface,
-              gradient: selected || expanded
-                  ? null
-                  : context.agentAwesomeCardGradient,
               border: Border.all(
                 color: selected || expanded ? colors.green : color,
                 width: expanded
@@ -926,7 +922,7 @@ class _PositionedConstellationNode extends StatelessWidget {
                     color: colors.ink,
                     fontSize: 12,
                     height: 1.08,
-                    fontWeight: FontWeight.w900,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 5),
@@ -1168,7 +1164,7 @@ class _ConstellationOffscreenIndicatorPainter extends CustomPainter {
         style: const TextStyle(
           color: Colors.white,
           fontSize: 9,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
       textDirection: TextDirection.ltr,

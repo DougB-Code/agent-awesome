@@ -1,0 +1,124 @@
+# This file configures an opt-in browser research pilot for Agent Awesome.
+local-exec:
+  enabled: true
+  allow-persistent-approvals: false
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  allowed-workdirs:
+    - .
+  commands:
+    - name: git_status
+      executable: git
+      description: Show repository status.
+      args:
+        - status
+        - --short
+      timeout: 5s
+      max-output-bytes: 16384
+      approval:
+        always-allow-within-workspace: false
+        always-allow-command-starts-with: []
+        always-allow: false
+    - name: agent_browser_example_research
+      executable: /usr/bin/env
+      description: Run agent-browser against example.com only; pass a JSON batch command array in stdin to open pages, wait, snapshot, and extract text.
+      args:
+        - HOME=/home/doug/dev/agentawesome/agent/build/agent-browser/home
+        - AGENT_BROWSER_SESSION=aaex
+        - /home/doug/dev/agentawesome/tools/bin/agent-browser
+        - --allowed-domains
+        - example.com
+        - --max-output
+        - "20000"
+        - batch
+        - --json
+        - --bail
+      timeout: 30s
+      max-output-bytes: 40000
+      approval:
+        always-allow-within-workspace: false
+        always-allow-command-starts-with: []
+        always-allow: false
+    - name: agent_browser_techcrunch_research
+      executable: /usr/bin/env
+      description: Run agent-browser against TechCrunch only; pass a JSON batch command array in stdin to open pages, wait, snapshot, and extract text.
+      args:
+        - HOME=/home/doug/dev/agentawesome/agent/build/agent-browser/home
+        - AGENT_BROWSER_SESSION=aatc
+        - /home/doug/dev/agentawesome/tools/bin/agent-browser
+        - --allowed-domains
+        - techcrunch.com,*.techcrunch.com
+        - --max-output
+        - "30000"
+        - batch
+        - --json
+        - --bail
+      timeout: 45s
+      max-output-bytes: 60000
+      approval:
+        always-allow-within-workspace: false
+        always-allow-command-starts-with: []
+        always-allow: false
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      require-confirmation-tools:
+        - remember
+        - save_memory_candidate
+        - refresh_compiled_page
+        - repair_memory_record
+        - submit_memory_correction
+        - query_context_graph
+        - mutate_context_graph
+        - create_task
+        - update_task
+        - complete_task
+        - cancel_task
+        - delete_task
+        - link_task_memory
+        - upsert_task_relation
+        - delete_task_relation
+      tools:
+        allow:
+          - remember
+          - save_memory_candidate
+          - search_memory
+          - search_sources
+          - load_entity_page
+          - load_timeline
+          - refresh_compiled_page
+          - repair_memory_record
+          - submit_memory_correction
+          - query_context_graph
+          - mutate_context_graph
+          - create_task
+          - get_task
+          - list_tasks
+          - task_graph_projection
+          - project_executive_summary
+          - explain_executive_summary_item
+          - update_task
+          - complete_task
+          - cancel_task
+          - delete_task
+          - link_task_memory
+          - list_task_relations
+          - traverse_task_relations
+          - upsert_task_relation
+          - delete_task_relation
+memory:
+  actor: agent:agent-awesome
+  read-domains:
+    - id: memory
+      label: Memory
+      endpoint: http://127.0.0.1:8090/mcp
+  write-domains:
+    - memory
+  default-write-domain: memory
+  allowed-sensitivities:
+    - public
+    - internal
+    - private

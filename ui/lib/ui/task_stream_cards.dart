@@ -42,7 +42,6 @@ class _StreamTaskCard extends StatelessWidget {
             ),
             decoration: BoxDecoration(
               color: emphasized ? colors.panelStrong : colors.surface,
-              gradient: context.agentAwesomeCardGradient,
               border: Border.all(color: borderColor, width: emphasized ? 2 : 1),
               borderRadius: BorderRadius.circular(8),
               boxShadow: <BoxShadow>[
@@ -68,7 +67,7 @@ class _StreamTaskCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 12,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 3),

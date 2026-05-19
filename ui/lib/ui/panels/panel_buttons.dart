@@ -32,28 +32,95 @@ class PanelIconButton extends StatelessWidget {
     return Tooltip(
       message: tooltip,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
         onTap: onPressed,
         child: Opacity(
           opacity: enabled ? 1 : 0.45,
           child: Container(
-            height: 36,
-            width: 36,
+            height: PanelStyleTokens.iconButtonSize,
+            width: PanelStyleTokens.iconButtonSize,
             decoration: BoxDecoration(
               color: selected ? colors.greenSoft : colors.panel,
-              gradient: selected
-                  ? context.agentAwesomeSelectedGradient
-                  : context.agentAwesomeControlGradient,
               border: Border.all(
-                color: selected ? colors.green : colors.border,
+                color: selected ? colors.borderStrong : colors.border,
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
             ),
             child: Icon(
               icon,
-              size: 18,
+              size: PanelStyleTokens.iconButtonIconSize,
               color: selected ? colors.green : colors.muted,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// PanelInlineIconButton renders compact icon actions inside content blocks.
+class PanelInlineIconButton extends StatelessWidget {
+  /// Creates a compact inline icon action.
+  const PanelInlineIconButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.selected = false,
+    this.loading = false,
+  });
+
+  /// Button icon.
+  final IconData icon;
+
+  /// Tooltip text.
+  final String tooltip;
+
+  /// Activation callback, or null when disabled.
+  final VoidCallback? onPressed;
+
+  /// Whether this button represents the active action state.
+  final bool selected;
+
+  /// Whether the button should show a compact busy indicator.
+  final bool loading;
+
+  /// Builds a quiet inline action button with panel styling.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final enabled = onPressed != null;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
+        onTap: onPressed,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: Container(
+            height: 32,
+            width: 32,
+            decoration: BoxDecoration(
+              color: selected ? colors.greenSoft : colors.panel,
+              border: Border.all(
+                color: selected ? colors.borderStrong : colors.border,
+              ),
+              borderRadius: BorderRadius.circular(
+                PanelStyleTokens.compactRadius,
+              ),
+            ),
+            child: loading
+                ? const Center(
+                    child: SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : Icon(
+                    icon,
+                    size: 17,
+                    color: selected ? colors.green : colors.muted,
+                  ),
           ),
         ),
       ),

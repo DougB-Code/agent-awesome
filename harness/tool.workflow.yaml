@@ -1,0 +1,107 @@
+# This file configures workflow control tools for Agent Awesome.
+local-exec:
+  enabled: false
+  allow-persistent-approvals: false
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  allowed-workdirs:
+    - .
+  commands:
+    - name: git_status
+      executable: git
+      description: Show repository status.
+      args:
+        - status
+        - --short
+      timeout: 5s
+      max-output-bytes: 16384
+      approval:
+        always-allow-within-workspace: false
+        always-allow-command-starts-with: []
+        always-allow: false
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      require-confirmation-tools:
+        - remember
+        - save_memory_candidate
+        - refresh_compiled_page
+        - repair_memory_record
+        - submit_memory_correction
+        - query_context_graph
+        - mutate_context_graph
+        - create_task
+        - update_task
+        - complete_task
+        - cancel_task
+        - delete_task
+        - link_task_memory
+        - upsert_task_relation
+        - delete_task_relation
+      tools:
+        allow:
+          - remember
+          - save_memory_candidate
+          - search_memory
+          - search_sources
+          - load_entity_page
+          - load_timeline
+          - refresh_compiled_page
+          - repair_memory_record
+          - submit_memory_correction
+          - query_context_graph
+          - mutate_context_graph
+          - create_task
+          - get_task
+          - list_tasks
+          - task_graph_projection
+          - project_executive_summary
+          - explain_executive_summary_item
+          - update_task
+          - complete_task
+          - cancel_task
+          - delete_task
+          - link_task_memory
+          - list_task_relations
+          - traverse_task_relations
+          - upsert_task_relation
+          - delete_task_relation
+    - name: workflow
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8092/mcp
+      tools:
+        allow:
+          - workflow_list
+          - workflow_describe
+          - workflow_start
+          - workflow_status
+          - workflow_signal
+          - workflow_cancel
+          - workflow_history
+          - workflow_action_types
+          - workflow_draft_create
+          - workflow_draft_update
+          - workflow_draft_validate
+          - workflow_draft_publish
+          - workflow_template_list
+          - workflow_template_instantiate
+          - workflow_agent_spec_list
+          - workflow_agent_spec_create
+          - workflow_agent_spec_update
+          - workflow_agent_spec_delete
+memory:
+  actor: agent:agent-awesome
+  read-domains:
+    - id: memory
+      label: Memory
+      endpoint: http://127.0.0.1:8090/mcp
+  write-domains:
+    - memory
+  default-write-domain: memory
+  allowed-sensitivities:
+    - public
+    - internal
+    - private

@@ -13,16 +13,13 @@ class _TaskMetadataBlock extends StatelessWidget {
     final rows = _taskMetadataRows(task);
     return PanelSectionBlock.gradient(
       title: 'Metadata',
-      trailing: Tooltip(
-        message: 'Edit graph metadata',
-        child: IconButton(
-          onPressed: controller.tasksBusy
-              ? null
-              : () => unawaited(
-                  _showTaskMetadataDialog(context, controller, task),
-                ),
-          icon: const Icon(Icons.tune_outlined, size: 18),
-        ),
+      trailing: PanelInlineIconButton(
+        icon: Icons.tune_outlined,
+        tooltip: 'Edit graph metadata',
+        onPressed: controller.tasksBusy
+            ? null
+            : () =>
+                  unawaited(_showTaskMetadataDialog(context, controller, task)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,14 +89,12 @@ class _TaskWbsBlock extends StatelessWidget {
     final hasContent = taskWbsHasContent(workBreakdown);
     return PanelSectionBlock.gradient(
       title: 'WBS',
-      trailing: Tooltip(
-        message: 'Edit WBS',
-        child: IconButton(
-          onPressed: controller.tasksBusy
-              ? null
-              : () => unawaited(_showTaskWbsDialog(context, controller, task)),
-          icon: const Icon(Icons.account_tree_outlined, size: 18),
-        ),
+      trailing: PanelInlineIconButton(
+        icon: Icons.account_tree_outlined,
+        tooltip: 'Edit WBS',
+        onPressed: controller.tasksBusy
+            ? null
+            : () => unawaited(_showTaskWbsDialog(context, controller, task)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

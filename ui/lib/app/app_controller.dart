@@ -342,6 +342,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Currently selected chat session id.
   String? selectedSessionId;
 
+  /// Stable history key for the currently selected chat card.
+  String selectedChatHistoryKey = '';
+
   /// Provider:model ref selected for the next chat turn.
   String chatModelRef = '';
 
@@ -472,6 +475,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Selected automation run id.
   String selectedAutomationRunId = '';
+
+  /// Selected pending automation inbox item id.
+  String selectedAutomationPendingItemId = '';
+
+  /// Selected published automation definition id.
+  String selectedAutomationDefinitionId = '';
+
+  /// Selected automation template id.
+  String selectedAutomationTemplateId = '';
 
   /// Selected reusable automation agent spec id.
   String selectedAutomationAgentSpecId = '';
@@ -1133,6 +1145,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Returns the selected chat history key, if a chat is active.
   String get selectedChatKey {
+    if (selectedChatHistoryKey.isNotEmpty) {
+      return selectedChatHistoryKey;
+    }
     final sessionId = selectedSessionId;
     if (sessionId == null || sessionId.isEmpty || runtimeProfilePath.isEmpty) {
       return '';

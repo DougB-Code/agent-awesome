@@ -1,4 +1,4 @@
-/// Backlog queue tile and quick action widgets.
+/// Backlog queue tile widgets.
 part of 'backlog_section.dart';
 
 class _TaskQueueTile extends StatelessWidget {
@@ -8,9 +8,6 @@ class _TaskQueueTile extends StatelessWidget {
     required this.focused,
     required this.changes,
     required this.onTap,
-    required this.onScheduleToday,
-    required this.onSnooze,
-    required this.onComplete,
   });
 
   final WorkspaceTask task;
@@ -18,9 +15,6 @@ class _TaskQueueTile extends StatelessWidget {
   final bool focused;
   final List<ScreenChange> changes;
   final VoidCallback onTap;
-  final VoidCallback onScheduleToday;
-  final VoidCallback onSnooze;
-  final VoidCallback? onComplete;
 
   /// Builds one selectable context row.
   @override
@@ -42,7 +36,6 @@ class _TaskQueueTile extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: colors.surface,
-          gradient: context.agentAwesomeCardGradient,
           border: Border.all(color: borderColor, width: borderWidth),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -51,7 +44,7 @@ class _TaskQueueTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Container(width: 4, color: accentColor),
+              Container(width: 3, color: accentColor),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -70,7 +63,7 @@ class _TaskQueueTile extends StatelessWidget {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
+                                    fontWeight: FontWeight.w800,
                                     fontSize: 16,
                                   ),
                                 ),
@@ -129,32 +122,6 @@ class _TaskQueueTile extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Divider(height: 1, color: colors.border),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                      child: Row(
-                        children: <Widget>[
-                          _TaskQuickActionButton(
-                            label: 'Schedule',
-                            icon: Icons.today_outlined,
-                            filled: task.scheduledAt == null,
-                            onPressed: onScheduleToday,
-                          ),
-                          const SizedBox(width: 8),
-                          _TaskQuickActionButton(
-                            label: 'Mark done',
-                            icon: Icons.check,
-                            onPressed: onComplete,
-                          ),
-                          const SizedBox(width: 8),
-                          _TaskQuickActionButton(
-                            label: 'Snooze',
-                            icon: Icons.schedule_outlined,
-                            onPressed: onSnooze,
-                          ),
-                        ],
-                      ),
-                    ),
                     if (changes.isNotEmpty) ...<Widget>[
                       Divider(height: 1, color: colors.border),
                       Padding(
@@ -169,38 +136,6 @@ class _TaskQueueTile extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// _TaskQuickActionButton renders one queue-row quick action.
-class _TaskQuickActionButton extends StatelessWidget {
-  const _TaskQuickActionButton({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-    this.filled = false,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback? onPressed;
-  final bool filled;
-
-  /// Builds a compact action button for queue items.
-  @override
-  Widget build(BuildContext context) {
-    if (filled) {
-      return FilledButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 16),
-        label: Text(label),
-      );
-    }
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 16),
-      label: Text(label),
     );
   }
 }

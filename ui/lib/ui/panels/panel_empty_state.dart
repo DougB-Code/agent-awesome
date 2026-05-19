@@ -20,3 +20,63 @@ class PanelEmptyState extends StatelessWidget {
     );
   }
 }
+
+/// PanelGuidedEmptyBlock renders a shared visual no-data state.
+class PanelGuidedEmptyBlock extends StatelessWidget {
+  /// Creates a guided empty state with optional supporting copy.
+  const PanelGuidedEmptyBlock({
+    super.key,
+    required this.icon,
+    required this.title,
+    this.message = '',
+  });
+
+  /// Empty-state icon.
+  final IconData icon;
+
+  /// Main empty-state title.
+  final String title;
+
+  /// Optional supporting empty-state message.
+  final String message;
+
+  /// Builds one quiet guided empty-state block.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final messageText = message.trim();
+    return PanelSectionBlock(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[
+            Icon(icon, color: colors.muted, size: 34),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (messageText.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Text(
+                  messageText,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: colors.muted, height: 1.35),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

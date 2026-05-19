@@ -10,6 +10,24 @@ enum PanelSurfaceStyle {
   card,
 }
 
+/// PanelStyleTokens stores shared dimensions for quiet panel chrome.
+class PanelStyleTokens {
+  /// Prevents construction because this type only exposes constants.
+  const PanelStyleTokens._();
+
+  /// Standard radius used by command panels, cards, controls, and sections.
+  static const double radius = 8;
+
+  /// Compact radius for low-emphasis badges and toolbar pills.
+  static const double compactRadius = 6;
+
+  /// Standard square icon button size for shell and panel actions.
+  static const double iconButtonSize = 36;
+
+  /// Standard icon size for shell and panel action buttons.
+  static const double iconButtonIconSize = 18;
+}
+
 /// PanelSurface renders the single shared bordered panel decoration.
 class PanelSurface extends StatelessWidget {
   /// Creates a reusable panel surface.
@@ -54,26 +72,31 @@ class PanelSurface extends StatelessWidget {
       padding: padding,
       clipBehavior: clipBehavior,
       decoration: BoxDecoration(
-        color: selected ? colors.greenSoft : colors.surface,
+        color: selected ? colors.greenSoft : _fillColor(colors),
         gradient: _gradient(context),
         border: showBorder
-            ? Border.all(color: selected ? colors.green : colors.border)
+            ? Border.all(color: selected ? colors.borderStrong : colors.border)
             : null,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
       ),
       child: child,
     );
   }
 
-  /// Returns the theme gradient for this panel style.
+  /// Returns the flat fill color for the panel role.
+  Color _fillColor(AgentAwesomePalette colors) {
+    return switch (style) {
+      PanelSurfaceStyle.primary => colors.surface,
+      PanelSurfaceStyle.card => colors.surface,
+    };
+  }
+
+  /// Returns the selected gradient only when it clarifies active state.
   LinearGradient? _gradient(BuildContext context) {
     if (selected) {
       return context.agentAwesomeSelectedGradient;
     }
-    return switch (style) {
-      PanelSurfaceStyle.primary => context.agentAwesomeSurfaceGradient,
-      PanelSurfaceStyle.card => context.agentAwesomeCardGradient,
-    };
+    return null;
   }
 }
 
@@ -90,10 +113,7 @@ class PanelBodySurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surface,
-        gradient: context.agentAwesomeSurfaceGradient,
-      ),
+      decoration: BoxDecoration(color: colors.surface),
       child: child,
     );
   }

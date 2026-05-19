@@ -61,6 +61,7 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   String _section = AppSections.today;
   String _todayRoute = '';
   String _settingsSection = 'App';
+  String _chatDetailModeId = _chatConversationDetailId;
   bool _sidebarExpanded = true;
   final Map<String, String> _activeAreas = <String, String>{};
 
@@ -95,13 +96,14 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
               onToggleSidebar: _toggleSidebar,
               onSubmit: _submitCommand,
               onNewChat: _startNewChat,
-              onToggleAssistantChat: widget.controller.toggleAssistantChatPanel,
+              onToggleAssistantChat: _toggleAssistantChatPanel,
               onStartChatWithProfile: _startNewChatWithProfile,
               onSelectHistoryChat: _selectHistoryChat,
               onOpenSection: _selectSection,
               onOpenSettingsSection: _openSettingsSection,
               onOpenSettings: () => _selectSection(AppSections.settings),
               onOpenSetup: _openSetupWizard,
+              assistantChatEnabled: _assistantChatEnabled,
               content: _buildContent(context),
             ),
           ),
@@ -140,10 +142,15 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           ),
         );
       case AppSections.chat:
-        return _ChatCommandSubShell(
+        final chatPanel = _ChatCommandSubShell(
           controller: widget.controller,
+          initialDetailModeId: _chatDetailModeId,
           onAreaChanged: _rememberArea(AppSections.chat),
+          onDetailModeChanged: _rememberChatDetailMode,
         );
+        return _assistantChatEnabled
+            ? _withAssistantChat(chatPanel)
+            : chatPanel;
       case AppSections.memory:
         return _withAssistantChat(
           _MemoryCommandSubShell(
@@ -247,10 +254,36 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
       return panel;
     }
     return SplitPanelShell(
-      split: const PanelSplit(left: 0.68, min: 0.5, max: 0.84),
+      split: const PanelSplit(left: 0.62, min: 0.46, max: 0.78),
       left: panel,
-      right: _ChatCommandPanel(controller: widget.controller),
+      right: Builder(
+        builder: (context) {
+          return DecoratedBox(
+            key: const ValueKey<String>('assistant-chat-split-pane'),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(color: context.agentAwesomeColors.border),
+              ),
+            ),
+            child: _ChatCommandPanel(controller: widget.controller),
+          );
+        },
+      ),
     );
+  }
+
+  /// Reports whether the auxiliary AI chat can open for the current screen.
+  bool get _assistantChatEnabled {
+    return _section != AppSections.chat ||
+        _chatDetailModeId != _chatConversationDetailId;
+  }
+
+  /// Toggles the auxiliary AI chat pane when the current shell permits it.
+  void _toggleAssistantChatPanel() {
+    if (!_assistantChatEnabled) {
+      return;
+    }
+    widget.controller.toggleAssistantChatPanel();
   }
 
   /// Selects a top-level app section from sidebar or command navigation.
@@ -258,6 +291,9 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     setState(() {
       _section = section;
       _todayRoute = '';
+      if (section == AppSections.chat) {
+        _chatDetailModeId = _chatConversationDetailId;
+      }
     });
     if (section == AppSections.chat) {
       widget.controller.openHome();
@@ -301,6 +337,7 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     _commandController.clear();
     setState(() {
       _section = AppSections.chat;
+      _chatDetailModeId = _chatConversationDetailId;
     });
     final created = await widget.controller.createChat(
       profilePath: profilePath,
@@ -381,10 +418,21 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     };
   }
 
+  /// Remembers the active Chat right mode for top-bar chat availability.
+  void _rememberChatDetailMode(String modeId) {
+    if (_chatDetailModeId == modeId) {
+      return;
+    }
+    setState(() {
+      _chatDetailModeId = modeId;
+    });
+  }
+
   /// Starts a blank chat from the global app bar.
   Future<void> _startNewChat() async {
     setState(() {
-      _section = 'Chat';
+      _section = AppSections.chat;
+      _chatDetailModeId = _chatConversationDetailId;
     });
     await widget.controller.createChat();
   }
@@ -392,7 +440,8 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   /// Starts a blank chat with a specific runtime profile.
   Future<void> _startNewChatWithProfile(String profilePath) async {
     setState(() {
-      _section = 'Chat';
+      _section = AppSections.chat;
+      _chatDetailModeId = _chatConversationDetailId;
     });
     await widget.controller.createChat(profilePath: profilePath);
   }
@@ -400,7 +449,8 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   /// Selects an existing saved chat from quick access.
   Future<void> _selectHistoryChat(String chatKey) async {
     setState(() {
-      _section = 'Chat';
+      _section = AppSections.chat;
+      _chatDetailModeId = _chatConversationDetailId;
     });
     await widget.controller.selectHistoryChat(chatKey);
   }
@@ -470,6 +520,7 @@ bool _matchesFuzzyQuery(String value, String query) {
 }
 
 const String _chatMemoryDetailId = 'memory';
+const String _chatConversationDetailId = 'conversation';
 const String _chatTasksDetailId = 'tasks';
 const String _chatFilesDetailId = 'files';
 const String _chatPeopleDetailId = 'people';

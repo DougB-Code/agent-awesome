@@ -19,7 +19,7 @@ class _MemoryCommandSubShellState extends State<_MemoryCommandSubShell> {
   Widget build(BuildContext context) {
     return CommandPanelSubShell(
       areas: _memoryCommandAreas(widget.controller),
-      detailTitle: 'Memory Inspector',
+      detailTitle: 'Memory',
       detailModes: _memoryDetailModes(),
       selectedDetailModeId: _detailModeId,
       onDetailModeSelected: _selectDetailMode,
@@ -57,6 +57,18 @@ class _MemoryCommandSubShellState extends State<_MemoryCommandSubShell> {
         query: query,
       ),
       _memoryPagesDetailId => _MemoryPagesContent(
+        controller: widget.controller,
+        query: query,
+      ),
+      _memoryMapDetailId => _MemoryMapContent(
+        controller: widget.controller,
+        query: query,
+      ),
+      _memorySafetyDetailId => _MemorySafetyContent(
+        controller: widget.controller,
+        query: query,
+      ),
+      _memoryCaptureDetailId => _MemoryCaptureContent(
         controller: widget.controller,
         query: query,
       ),

@@ -119,7 +119,6 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
               );
             },
           ),
-        _SettingsToolYamlPreview(document: document),
       ],
     );
   }

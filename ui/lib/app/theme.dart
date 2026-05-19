@@ -388,38 +388,17 @@ extension AgentAwesomeThemeLookup on BuildContext {
 
   /// Dark-mode card gradient for repeated work items.
   LinearGradient? get agentAwesomeCardGradient {
-    if (!agentAwesomeIsDark) {
-      return null;
-    }
-    return const LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: <Color>[Color(0xff0f1826), Color(0xff0a111b)],
-    );
+    return null;
   }
 
   /// Dark-mode control gradient for buttons, tabs, and filter triggers.
   LinearGradient? get agentAwesomeControlGradient {
-    if (!agentAwesomeIsDark) {
-      return null;
-    }
-    return const LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: <Color>[Color(0xff121d2c), Color(0xff0d1521)],
-    );
+    return null;
   }
 
   /// Dark-mode selected gradient for active controls without a green wash.
   LinearGradient? get agentAwesomeSelectedGradient {
-    if (!agentAwesomeIsDark) {
-      return null;
-    }
-    return const LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: <Color>[Color(0x2a8b5cf6), Color(0x1f8ca7c7)],
-    );
+    return null;
   }
 
   /// Dark-mode primary gradient for compact brand marks and main actions.

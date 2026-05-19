@@ -32,21 +32,6 @@ class _BacklogQueueContent extends StatelessWidget {
                   focused: controller.focusedBacklogTaskId == task.id,
                   changes: controller.screenChangesForTask(task.id),
                   onTap: () => controller.inspectBacklogTask(task.id),
-                  onScheduleToday: () => unawaited(
-                    controller.updateTaskFromUi(
-                      taskId: task.id,
-                      scheduledAt: _todayDate(),
-                    ),
-                  ),
-                  onSnooze: () => unawaited(
-                    controller.updateTaskFromUi(
-                      taskId: task.id,
-                      scheduledAt: _todayDate().add(const Duration(days: 1)),
-                    ),
-                  ),
-                  onComplete: task.done || task.status == 'canceled'
-                      ? null
-                      : () => unawaited(controller.completeTaskFromUi(task.id)),
                 ),
               ),
         ],

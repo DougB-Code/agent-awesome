@@ -147,21 +147,6 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
                         changes: const <ScreenChange>[],
                         onTap: () =>
                             widget.controller.inspectBacklogTask(task.id),
-                        onScheduleToday: () => unawaited(
-                          widget.controller.updateTaskFromUi(
-                            taskId: task.id,
-                            scheduledAt: _todayDate(),
-                          ),
-                        ),
-                        onSnooze: () => unawaited(
-                          widget.controller.updateTaskFromUi(
-                            taskId: task.id,
-                            scheduledAt: _todayDate().add(
-                              const Duration(days: 1),
-                            ),
-                          ),
-                        ),
-                        onComplete: null,
                       ),
                     ),
               ],
@@ -280,7 +265,6 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
   @override
   Widget build(BuildContext context) {
     final task = widget.task;
-    final terminal = task.status == 'done' || task.status == 'canceled';
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
       child: Column(
@@ -355,34 +339,6 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
               style: const TextStyle(color: AgentAwesomeColors.coral),
             ),
           ],
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              OutlinedButton.icon(
-                onPressed: widget.controller.tasksBusy || terminal
-                    ? null
-                    : () => unawaited(_complete()),
-                icon: const Icon(Icons.check_circle_outline),
-                label: const Text('Complete'),
-              ),
-              OutlinedButton.icon(
-                onPressed: widget.controller.tasksBusy || terminal
-                    ? null
-                    : () => unawaited(_cancel()),
-                icon: const Icon(Icons.block_outlined),
-                label: const Text('Cancel'),
-              ),
-              OutlinedButton.icon(
-                onPressed: widget.controller.tasksBusy
-                    ? null
-                    : () => unawaited(_delete()),
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Delete'),
-              ),
-            ],
-          ),
           const SizedBox(height: 14),
           _TaskMetadataBlock(controller: widget.controller, task: task),
           const SizedBox(height: 14),
@@ -468,38 +424,5 @@ class _TaskDetailEditorState extends State<_TaskDetailEditor> {
       'scheduledAt': _scheduledAt.text.trim(),
       'topics': splitCommaSeparatedValues(_topics.text),
     });
-  }
-
-  /// Completes the selected backlog item after confirmation.
-  Future<void> _complete() async {
-    if (!await _confirmTaskWrite(
-      context,
-      'Complete backlog item "${widget.task.title}"?',
-    )) {
-      return;
-    }
-    await widget.controller.completeTaskFromUi(widget.task.id);
-  }
-
-  /// Cancels the selected backlog item after confirmation.
-  Future<void> _cancel() async {
-    if (!await _confirmTaskWrite(
-      context,
-      'Cancel backlog item "${widget.task.title}"?',
-    )) {
-      return;
-    }
-    await widget.controller.cancelTaskFromUi(widget.task.id);
-  }
-
-  /// Deletes the selected backlog item after confirmation.
-  Future<void> _delete() async {
-    if (!await _confirmTaskWrite(
-      context,
-      'Delete backlog item "${widget.task.title}"?',
-    )) {
-      return;
-    }
-    await widget.controller.deleteTaskFromUi(widget.task.id);
   }
 }

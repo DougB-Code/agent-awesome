@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../app/theme.dart';
+import 'panels/panels.dart';
 
 /// TaskFilterMenuOption describes one selectable filter value.
 class TaskFilterMenuOption {
@@ -106,33 +107,17 @@ class TaskFilterMenuButton extends StatelessWidget {
         ),
       ],
       builder: (context, controller, child) {
-        return Tooltip(
-          message: active ? '$tooltip ($activeCount active)' : tooltip,
-          child: IconButton.outlined(
-            isSelected: active || controller.isOpen,
-            style: IconButton.styleFrom(
-              fixedSize: const Size.square(34),
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.compact,
-              backgroundColor: active ? colors.greenSoft : colors.surface,
-              foregroundColor: active ? colors.green : colors.ink,
-              side: BorderSide(color: active ? colors.green : colors.border),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            onPressed: () {
-              if (controller.isOpen) {
-                controller.close();
-              } else {
-                controller.open();
-              }
-            },
-            icon: Icon(
-              active ? Icons.filter_alt : Icons.filter_alt_outlined,
-              size: 18,
-            ),
-          ),
+        return PanelIconButton(
+          icon: active ? Icons.filter_alt : Icons.filter_alt_outlined,
+          tooltip: active ? '$tooltip ($activeCount active)' : tooltip,
+          selected: active || controller.isOpen,
+          onPressed: () {
+            if (controller.isOpen) {
+              controller.close();
+            } else {
+              controller.open();
+            }
+          },
         );
       },
     );
@@ -330,16 +315,7 @@ class _TaskFilterPanelTitle extends StatelessWidget {
   /// Builds the dropdown title.
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'FILTERS',
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        color: context.agentAwesomeColors.subtle,
-        fontSize: 12,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 2.4,
-      ),
-    );
+    return const PanelSectionLabel('Filters');
   }
 }
 
@@ -371,7 +347,7 @@ class _TaskFilterSectionView extends StatelessWidget {
                 style: TextStyle(
                   color: colors.ink,
                   fontSize: 13,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),

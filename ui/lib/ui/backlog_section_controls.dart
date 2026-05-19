@@ -9,17 +9,7 @@ class _TaskPanelLabel extends StatelessWidget {
   /// Builds an uppercase context panel label.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Text(
-      label.toUpperCase(),
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        color: colors.muted,
-        fontSize: 11,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 2.4,
-      ),
-    );
+    return PanelSectionLabel(label);
   }
 }
 
@@ -62,7 +52,7 @@ class _TaskTileScreenChanges extends StatelessWidget {
                           change.summary,
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w900,
+                            fontWeight: FontWeight.w800,
                             color: colors.green,
                           ),
                         ),

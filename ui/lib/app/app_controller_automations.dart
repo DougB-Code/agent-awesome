@@ -22,6 +22,36 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationRuns.isEmpty ? null : automationRuns.first;
   }
 
+  /// Returns the currently selected pending automation inbox item.
+  AutomationPendingItem? get selectedAutomationPendingItem {
+    for (final item in automationInbox) {
+      if (item.id == selectedAutomationPendingItemId) {
+        return item;
+      }
+    }
+    return automationInbox.isEmpty ? null : automationInbox.first;
+  }
+
+  /// Returns the currently selected published automation definition.
+  AutomationDefinition? get selectedAutomationDefinition {
+    for (final definition in automationDefinitions) {
+      if (definition.id == selectedAutomationDefinitionId) {
+        return definition;
+      }
+    }
+    return automationDefinitions.isEmpty ? null : automationDefinitions.first;
+  }
+
+  /// Returns the currently selected automation template.
+  AutomationTemplate? get selectedAutomationTemplate {
+    for (final template in automationTemplates) {
+      if (template.id == selectedAutomationTemplateId) {
+        return template;
+      }
+    }
+    return automationTemplates.isEmpty ? null : automationTemplates.first;
+  }
+
   /// Returns the currently selected reusable automation agent spec.
   AutomationAgentSpec? get selectedAutomationAgentSpec {
     for (final spec in automationAgentSpecs) {
@@ -72,6 +102,24 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     selectedAutomationRunId = runId;
     _notifyControllerListeners();
     await loadSelectedAutomationRunHistory();
+  }
+
+  /// Selects one pending automation inbox item for header actions.
+  void selectAutomationPendingItem(String itemId) {
+    selectedAutomationPendingItemId = itemId;
+    _notifyControllerListeners();
+  }
+
+  /// Selects one published automation definition for header actions.
+  void selectAutomationDefinition(String definitionId) {
+    selectedAutomationDefinitionId = definitionId;
+    _notifyControllerListeners();
+  }
+
+  /// Selects one automation template for header actions.
+  void selectAutomationTemplate(String templateId) {
+    selectedAutomationTemplateId = templateId;
+    _notifyControllerListeners();
   }
 
   /// Loads the selected automation run timeline.
@@ -442,6 +490,14 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
           automationAgentSpecs.isNotEmpty) {
         selectedAutomationAgentSpecId = automationAgentSpecs.first.id;
       }
+      if (selectedAutomationDefinitionId.isEmpty &&
+          automationDefinitions.isNotEmpty) {
+        selectedAutomationDefinitionId = automationDefinitions.first.id;
+      }
+      if (selectedAutomationTemplateId.isEmpty &&
+          automationTemplates.isNotEmpty) {
+        selectedAutomationTemplateId = automationTemplates.first.id;
+      }
     } catch (error) {
       automationsMessage = error.toString();
       await _log('automation catalog load failed: $error');
@@ -500,6 +556,10 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationInbox = await automationsClient.inbox();
       if (selectedAutomationRunId.isEmpty && automationRuns.isNotEmpty) {
         selectedAutomationRunId = automationRuns.first.id;
+      }
+      if (selectedAutomationPendingItemId.isEmpty &&
+          automationInbox.isNotEmpty) {
+        selectedAutomationPendingItemId = automationInbox.first.id;
       }
       await loadSelectedAutomationRunHistory();
     } catch (error) {

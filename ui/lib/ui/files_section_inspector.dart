@@ -217,7 +217,7 @@ class _InspectorHeader extends StatelessWidget {
                 style: TextStyle(
                   color: colors.ink,
                   fontSize: 22,
-                  fontWeight: FontWeight.w900,
+                  fontWeight: FontWeight.w800,
                   height: 1.15,
                 ),
               ),
@@ -287,7 +287,7 @@ class _InspectorRow extends StatelessWidget {
               style: TextStyle(
                 color: colors.subtle,
                 fontSize: 13,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),

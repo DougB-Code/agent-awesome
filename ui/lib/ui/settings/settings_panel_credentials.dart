@@ -77,41 +77,35 @@ class _SettingsCredentialFieldState extends State<_SettingsCredentialField> {
           suffixIcon: Wrap(
             spacing: 2,
             children: <Widget>[
-              IconButton(
+              PanelInlineIconButton(
+                icon: _obscureText
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+                tooltip: _obscureText ? 'Show API key' : 'Hide API key',
                 onPressed: canReveal
                     ? () => setState(() => _obscureText = !_obscureText)
                     : null,
-                tooltip: _obscureText ? 'Show API key' : 'Hide API key',
-                icon: Icon(
-                  _obscureText
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
               ),
               if (copyableSecret.isNotEmpty)
-                IconButton(
-                  onPressed: () => unawaited(_copySecret(copyableSecret)),
+                PanelInlineIconButton(
+                  icon: Icons.copy_outlined,
                   tooltip: 'Copy API key',
-                  icon: const Icon(Icons.copy_outlined),
+                  onPressed: () => unawaited(_copySecret(copyableSecret)),
                 ),
-              IconButton(
+              PanelInlineIconButton(
+                icon: Icons.save_outlined,
+                tooltip: 'Save API key to OS keyring',
+                loading: _saving,
                 onPressed: hasTypedSecret && !_saving
                     ? () => unawaited(_saveSecret())
                     : null,
-                tooltip: 'Save API key to OS keyring',
-                icon: _saving
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined),
               ),
-              IconButton(
+              PanelInlineIconButton(
+                icon: Icons.delete_outline,
+                tooltip: 'Delete API key from OS keyring',
                 onPressed: widget.reference.trim().isNotEmpty && !_saving
                     ? () => unawaited(_deleteSecret())
                     : null,
-                tooltip: 'Delete API key from OS keyring',
-                icon: const Icon(Icons.delete_outline),
               ),
             ],
           ),

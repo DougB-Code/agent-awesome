@@ -24,6 +24,7 @@ class AppShellFrame extends StatelessWidget {
     required this.onOpenSettings,
     required this.onOpenSetup,
     required this.content,
+    this.assistantChatEnabled = true,
   });
 
   /// Currently selected sidebar section.
@@ -78,6 +79,9 @@ class AppShellFrame extends StatelessWidget {
   /// Reopens the first-run setup shell.
   final VoidCallback onOpenSetup;
 
+  /// Whether the global auxiliary AI chat can open for the current content.
+  final bool assistantChatEnabled;
+
   /// Main workspace content.
   final Widget content;
 
@@ -114,6 +118,7 @@ class AppShellFrame extends StatelessWidget {
                 onOpenSettingsSection: onOpenSettingsSection,
                 onOpenSettings: onOpenSettings,
                 onOpenSetup: onOpenSetup,
+                assistantChatEnabled: assistantChatEnabled,
               ),
               Expanded(
                 child: DecoratedBox(

@@ -50,36 +50,3 @@ class _SettingsKeyValueField extends StatelessWidget {
     );
   }
 }
-
-class _SettingsToolYamlPreview extends StatelessWidget {
-  const _SettingsToolYamlPreview({required this.document});
-
-  final ToolConfigDocument document;
-
-  /// Builds a read-only YAML preview for the structured tool config.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return FormSectionCard(
-      title: 'Tool config YAML',
-      children: <Widget>[
-        Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxHeight: 320),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: SingleChildScrollView(
-            child: SelectableText(
-              document.toYaml(),
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}

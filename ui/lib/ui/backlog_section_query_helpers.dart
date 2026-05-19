@@ -34,7 +34,7 @@ bool _matchesTask(WorkspaceTask task, String query) {
   );
 }
 
-/// Returns the local date used by queue quick actions.
+/// Returns the local date used by selected-task scheduling actions.
 DateTime _todayDate() {
   final now = DateTime.now();
   return DateTime(now.year, now.month, now.day);

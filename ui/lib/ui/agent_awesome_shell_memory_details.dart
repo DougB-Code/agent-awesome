@@ -39,7 +39,7 @@ class _MemoryOverviewContent extends StatelessWidget {
                       child: Text(
                         memory.title,
                         style: const TextStyle(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w800,
                           fontSize: 20,
                         ),
                       ),
@@ -226,7 +226,6 @@ class _MemorySourceContent extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: context.agentAwesomeColors.surface,
-              gradient: context.agentAwesomeCardGradient,
               border: Border.all(color: context.agentAwesomeColors.border),
               borderRadius: BorderRadius.circular(8),
             ),

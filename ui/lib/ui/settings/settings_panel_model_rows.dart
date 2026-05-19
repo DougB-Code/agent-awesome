@@ -55,10 +55,10 @@ class _SettingsModelRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SettingsFieldRow(
-      trailing: IconButton(
-        onPressed: onDelete,
+      trailing: PanelInlineIconButton(
+        icon: Icons.delete_outline,
         tooltip: 'Delete model',
-        icon: const Icon(Icons.delete_outline),
+        onPressed: onDelete,
       ),
       child: SettingsFieldGrid(
         children: <Widget>[

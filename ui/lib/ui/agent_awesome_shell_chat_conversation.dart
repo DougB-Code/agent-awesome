@@ -74,34 +74,41 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
     final messages = widget.controller.messages.where((message) {
       return _matchesFuzzyQuery('${message.author} ${message.text}', query);
     }).toList();
-    final timelineChildren = <Widget>[
-      for (final message in messages) ChatRow(message: message),
-      if (widget.controller.sending)
-        const _ChatRuntimeNotice(
-          icon: Icons.sync,
-          label: 'Agent Awesome is responding',
-        ),
-    ];
     _scheduleScrollToBottom(messages.length);
-    return Column(
-      children: <Widget>[
-        Expanded(
-          child: ChatPanel(
-            controller: _timelineController,
-            empty: PanelEmptyState(query: query),
-            children: timelineChildren,
-          ),
-        ),
-        Divider(height: 1, color: context.agentAwesomeColors.border),
-        _ChatComposer(
-          controller: _replyController,
-          sending: widget.controller.sending,
-          modelChoices: widget.controller.chatModelChoices,
-          selectedModelRef: widget.controller.activeChatModelRef,
-          onModelSelected: widget.controller.selectChatModelRef,
-          onSubmit: _submitReply,
-        ),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        final timelineChildren = <Widget>[
+          for (final message in messages)
+            ChatRow(message: message, compact: compact),
+          if (widget.controller.sending)
+            const _ChatRuntimeNotice(
+              icon: Icons.sync,
+              label: 'Agent Awesome is responding',
+            ),
+        ];
+        return Column(
+          children: <Widget>[
+            Expanded(
+              child: ChatPanel(
+                controller: _timelineController,
+                empty: PanelEmptyState(query: query),
+                compact: compact,
+                children: timelineChildren,
+              ),
+            ),
+            Divider(height: 1, color: context.agentAwesomeColors.border),
+            _ChatComposer(
+              controller: _replyController,
+              sending: widget.controller.sending,
+              modelChoices: widget.controller.chatModelChoices,
+              selectedModelRef: widget.controller.activeChatModelRef,
+              onModelSelected: widget.controller.selectChatModelRef,
+              onSubmit: _submitReply,
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -141,6 +148,160 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
     _replyController.clear();
     await widget.controller.sendUserMessage(value);
   }
+}
+
+class _ChatSessionListContent extends StatelessWidget {
+  const _ChatSessionListContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds the left-side chat session collection.
+  @override
+  Widget build(BuildContext context) {
+    final entries = _chatSessionListEntries(controller).where((entry) {
+      return _matchesFuzzyQuery(
+        '${entry.title} ${entry.subtitle} ${entry.searchText}',
+        query,
+      );
+    }).toList();
+    if (entries.isEmpty) {
+      return query.trim().isEmpty
+          ? const PanelEmptyBlock(label: 'No chats yet')
+          : PanelEmptyState(query: query);
+    }
+    final selectedKey = controller.selectedChatKey;
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: entries.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final entry = entries[index];
+        return _ChatSessionTile(
+          entry: entry,
+          selected: entry.key == selectedKey,
+          onTap: () => unawaited(controller.selectHistoryChat(entry.key)),
+        );
+      },
+    );
+  }
+}
+
+class _ChatSessionTile extends StatelessWidget {
+  const _ChatSessionTile({
+    required this.entry,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _ChatSessionListEntry entry;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// Builds one selectable chat session card.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: PanelSurface(
+        fillWidth: true,
+        padding: const EdgeInsets.all(12),
+        style: PanelSurfaceStyle.card,
+        selected: selected,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              Icons.chat_bubble_outline,
+              color: selected ? colors.green : colors.muted,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    entry.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  if (entry.subtitle.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 5),
+                    Text(
+                      entry.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.muted, fontSize: 12),
+                    ),
+                  ],
+                  if (selected) ...<Widget>[
+                    const SizedBox(height: 8),
+                    const PanelBadge(label: 'Active'),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatSessionListEntry {
+  const _ChatSessionListEntry({
+    required this.key,
+    required this.title,
+    required this.subtitle,
+    required this.searchText,
+  });
+
+  final String key;
+  final String title;
+  final String subtitle;
+  final String searchText;
+}
+
+/// Builds selectable chat session rows from history and live sessions.
+List<_ChatSessionListEntry> _chatSessionListEntries(
+  AgentAwesomeAppController controller,
+) {
+  final entries = <_ChatSessionListEntry>[];
+  final seenKeys = <String>{};
+  for (final chat in controller.chatHistory) {
+    entries.add(
+      _ChatSessionListEntry(
+        key: chat.key,
+        title: chat.title,
+        subtitle:
+            '${chat.profileLabel} • ${formatLocalMonthDayTime(chat.updatedAt)}',
+        searchText:
+            '${chat.sessionId} ${chat.profileId} ${chat.profilePath} ${chat.titleStatus}',
+      ),
+    );
+    seenKeys.add(chat.key);
+  }
+  for (final session in controller.sessions) {
+    final key = '${controller.runtimeProfilePath}::${session.id}';
+    if (seenKeys.contains(key)) {
+      continue;
+    }
+    entries.add(
+      _ChatSessionListEntry(
+        key: key,
+        title: session.title,
+        subtitle: formatLocalMonthDayTime(session.updatedAt),
+        searchText: session.id,
+      ),
+    );
+  }
+  return entries;
 }
 
 class _ChatSessionPicker extends StatelessWidget {
@@ -190,27 +351,13 @@ class _ChatSessionPicker extends StatelessWidget {
 
   /// Builds chat selector rows from the app history or active sessions.
   List<SearchPickerOption<String>> _chatOptions() {
-    if (controller.chatHistory.isNotEmpty) {
-      return <SearchPickerOption<String>>[
-        for (final chat in controller.chatHistory)
-          SearchPickerOption<String>(
-            value: chat.key,
-            title: chat.title,
-            subtitle:
-                '${chat.profileLabel} • ${formatLocalMonthDayTime(chat.updatedAt)}',
-            searchText:
-                '${chat.sessionId} ${chat.profileId} ${chat.profilePath}',
-            icon: Icons.chat_bubble_outline,
-          ),
-      ];
-    }
     return <SearchPickerOption<String>>[
-      for (final session in controller.sessions)
+      for (final entry in _chatSessionListEntries(controller))
         SearchPickerOption<String>(
-          value: '${controller.runtimeProfilePath}::${session.id}',
-          title: session.title,
-          subtitle: formatLocalMonthDayTime(session.updatedAt),
-          searchText: session.id,
+          value: entry.key,
+          title: entry.title,
+          subtitle: entry.subtitle,
+          searchText: entry.searchText,
           icon: Icons.chat_bubble_outline,
         ),
     ];

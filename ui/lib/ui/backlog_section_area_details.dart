@@ -129,7 +129,7 @@ class _BacklogCaptureDetailPanel extends StatelessWidget {
               children: <Widget>[
                 Text(
                   memory.title,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 8),
                 Text(memory.summary),
@@ -182,7 +182,7 @@ class _BacklogSelectedTaskSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Text(task.title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          Text(task.title, style: const TextStyle(fontWeight: FontWeight.w800)),
           if (task.description.trim().isNotEmpty) ...<Widget>[
             const SizedBox(height: 8),
             Text(
@@ -328,7 +328,7 @@ class _BacklogMetricTile extends StatelessWidget {
           Text(
             metric.value,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
         ],
       ),

@@ -111,13 +111,13 @@ class _SettingsLocalExecCommandEditor extends StatelessWidget {
                 child: Text(
                   command.name.isEmpty ? 'Local command' : command.name,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
-              IconButton(
-                onPressed: onDelete,
+              PanelInlineIconButton(
+                icon: Icons.delete_outline,
                 tooltip: 'Delete command',
-                icon: const Icon(Icons.delete_outline),
+                onPressed: onDelete,
               ),
             ],
           ),

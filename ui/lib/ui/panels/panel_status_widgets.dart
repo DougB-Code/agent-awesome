@@ -140,8 +140,8 @@ class PanelSectionLabel extends StatelessWidget {
       style: TextStyle(
         color: colors.muted,
         fontSize: 12,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 3,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
       ),
     );
     if (onTap == null) {
@@ -171,20 +171,93 @@ class PanelBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: colors.panel,
         border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Text(
         label,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: colors.green,
+          color: colors.muted,
           fontSize: 11,
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+/// PanelFilterChip renders a shared selectable content-level filter chip.
+class PanelFilterChip extends StatelessWidget {
+  /// Creates one reusable panel filter chip.
+  const PanelFilterChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onSelected,
+  });
+
+  /// Chip label.
+  final String label;
+
+  /// Whether this filter is currently active.
+  final bool selected;
+
+  /// Handles selection changes.
+  final ValueChanged<bool> onSelected;
+
+  /// Builds a quiet selectable chip for content-level filters.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return FilterChip(
+      label: Text(label, overflow: TextOverflow.ellipsis),
+      selected: selected,
+      showCheckmark: true,
+      backgroundColor: colors.surface,
+      selectedColor: colors.panelStrong,
+      checkmarkColor: colors.green,
+      side: BorderSide(color: selected ? colors.borderStrong : colors.border),
+      labelStyle: TextStyle(
+        color: selected ? colors.ink : colors.muted,
+        fontWeight: FontWeight.w700,
+      ),
+      onSelected: onSelected,
+    );
+  }
+}
+
+/// PanelRemovableChip renders a shared selected-filter chip with removal.
+class PanelRemovableChip extends StatelessWidget {
+  /// Creates one removable panel chip.
+  const PanelRemovableChip({
+    super.key,
+    required this.label,
+    required this.onDeleted,
+  });
+
+  /// Chip label.
+  final String label;
+
+  /// Removes this chip.
+  final VoidCallback onDeleted;
+
+  /// Builds a quiet removable chip for active filters.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return InputChip(
+      label: Text(label, overflow: TextOverflow.ellipsis),
+      onDeleted: onDeleted,
+      deleteIcon: const Icon(Icons.close, size: 16),
+      backgroundColor: colors.panel,
+      side: BorderSide(color: colors.border),
+      labelStyle: TextStyle(color: colors.muted, fontWeight: FontWeight.w700),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
     );
   }
@@ -206,6 +279,7 @@ class PanelEmptyBlock extends StatelessWidget {
       fillWidth: true,
       padding: const EdgeInsets.all(14),
       style: PanelSurfaceStyle.card,
+      showBorder: false,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(22),
@@ -295,6 +369,7 @@ class ChatPanel extends StatelessWidget {
     required this.children,
     required this.empty,
     this.controller,
+    this.compact = false,
   });
 
   /// Timeline children.
@@ -306,6 +381,9 @@ class ChatPanel extends StatelessWidget {
   /// Optional scroll controller for callers that manage timeline position.
   final ScrollController? controller;
 
+  /// Whether the panel is rendering in a narrow auxiliary chat pane.
+  final bool compact;
+
   /// Builds the chat panel.
   @override
   Widget build(BuildContext context) {
@@ -314,7 +392,9 @@ class ChatPanel extends StatelessWidget {
     }
     return ListView(
       controller: controller,
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 28),
+      padding: compact
+          ? const EdgeInsets.fromLTRB(18, 16, 18, 22)
+          : const EdgeInsets.fromLTRB(22, 20, 22, 28),
       children: children,
     );
   }

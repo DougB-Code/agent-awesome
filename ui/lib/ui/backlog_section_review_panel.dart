@@ -21,26 +21,6 @@ class _BacklogReviewContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Text(
-                  'Review Changes',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              Tooltip(
-                message: 'Show inspector',
-                child: IconButton(
-                  onPressed: controller.openBacklogInspectorPanel,
-                  icon: const Icon(Icons.close, size: 18),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           _ScreenRunSummaryBlock(controller: controller, run: run),
           const SizedBox(height: 12),
           if (run.changes.isEmpty)
@@ -84,7 +64,7 @@ class _ScreenRunSummaryBlock extends StatelessWidget {
         children: <Widget>[
           Text(
             'AI found ${run.changes.length} changes',
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
           ),
           const SizedBox(height: 6),
           SelectableText(
@@ -128,9 +108,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: focused ? colors.greenSoft : colors.surface,
-          gradient: focused
-              ? context.agentAwesomeSelectedGradient
-              : context.agentAwesomeCardGradient,
+          gradient: focused ? context.agentAwesomeSelectedGradient : null,
           border: Border.all(color: focused ? colors.green : colors.border),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -149,7 +127,7 @@ class _ScreenChangeReviewCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     change.summary,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -175,52 +153,45 @@ class _ScreenChangeReviewCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: <Widget>[
-                Tooltip(
-                  message: 'Focus change',
-                  child: IconButton.outlined(
-                    onPressed: () =>
-                        controller.focusBacklogScreenChange(change.id),
-                    icon: const Icon(Icons.center_focus_strong, size: 18),
-                  ),
+                PanelInlineIconButton(
+                  icon: Icons.center_focus_strong,
+                  tooltip: 'Focus change',
+                  onPressed: () =>
+                      controller.focusBacklogScreenChange(change.id),
                 ),
                 const Spacer(),
                 if (change.status == ScreenChangeStatus.proposed &&
                     change.safety != ScreenChangeSafety.rejected) ...<Widget>[
-                  Tooltip(
-                    message: 'Apply change',
-                    child: IconButton.filled(
-                      onPressed: controller.screenCommandBusy
-                          ? null
-                          : () => unawaited(
-                              controller.applyScreenChangeFromUi(change.id),
-                            ),
-                      icon: const Icon(Icons.check, size: 18),
-                    ),
+                  PanelInlineIconButton(
+                    icon: Icons.check,
+                    tooltip: 'Apply change',
+                    selected: true,
+                    onPressed: controller.screenCommandBusy
+                        ? null
+                        : () => unawaited(
+                            controller.applyScreenChangeFromUi(change.id),
+                          ),
                   ),
                   const SizedBox(width: 8),
-                  Tooltip(
-                    message: 'Reject change',
-                    child: IconButton.outlined(
-                      onPressed: controller.screenCommandBusy
-                          ? null
-                          : () => unawaited(
-                              controller.rejectScreenChangeFromUi(change.id),
-                            ),
-                      icon: const Icon(Icons.close, size: 18),
-                    ),
+                  PanelInlineIconButton(
+                    icon: Icons.close,
+                    tooltip: 'Reject change',
+                    onPressed: controller.screenCommandBusy
+                        ? null
+                        : () => unawaited(
+                            controller.rejectScreenChangeFromUi(change.id),
+                          ),
                   ),
                 ],
                 if (controller.screenChangeCanUndo(change))
-                  Tooltip(
-                    message: 'Undo change',
-                    child: IconButton.outlined(
-                      onPressed: controller.screenCommandBusy
-                          ? null
-                          : () => unawaited(
-                              controller.undoScreenChangeFromUi(change.id),
-                            ),
-                      icon: const Icon(Icons.undo, size: 18),
-                    ),
+                  PanelInlineIconButton(
+                    icon: Icons.undo,
+                    tooltip: 'Undo change',
+                    onPressed: controller.screenCommandBusy
+                        ? null
+                        : () => unawaited(
+                            controller.undoScreenChangeFromUi(change.id),
+                          ),
                   ),
               ],
             ),
@@ -287,7 +258,7 @@ class _ScreenChangeDiffList extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: colors.green,
-                      fontWeight: FontWeight.w900,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),

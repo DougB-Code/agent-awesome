@@ -110,7 +110,6 @@ class _WbsBranchNode extends StatelessWidget {
         color: isRoot
             ? colors.greenSoft.withValues(alpha: 0.32)
             : colors.surface,
-        gradient: isRoot ? null : context.agentAwesomeCardGradient,
         border: Border(
           bottom: BorderSide(color: colors.border.withValues(alpha: 0.8)),
         ),
@@ -131,7 +130,7 @@ class _WbsBranchNode extends StatelessWidget {
               style: TextStyle(
                 color: isRoot ? colors.green : colors.ink,
                 fontSize: isRoot ? 15 : 14,
-                fontWeight: FontWeight.w900,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
@@ -248,7 +247,7 @@ class _WbsCodeBadge extends StatelessWidget {
             style: TextStyle(
               color: colors.ink,
               fontSize: 12,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),
@@ -322,7 +321,7 @@ class _WbsLeafSpend extends StatelessWidget {
         label,
         overflow: TextOverflow.ellipsis,
         textAlign: TextAlign.right,
-        style: const TextStyle(fontWeight: FontWeight.w900),
+        style: const TextStyle(fontWeight: FontWeight.w800),
       ),
     );
   }
@@ -349,7 +348,7 @@ class _WbsDetailBlock extends StatelessWidget {
             style: TextStyle(
               color: colors.subtle,
               fontSize: 11,
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 5),
@@ -380,7 +379,7 @@ class _WbsTaskSummary extends StatelessWidget {
             task.title,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: colors.ink, fontWeight: FontWeight.w900),
+            style: TextStyle(color: colors.ink, fontWeight: FontWeight.w800),
           ),
           if (workBreakdown.deliverable.isNotEmpty) ...<Widget>[
             const SizedBox(height: 4),
@@ -505,7 +504,7 @@ class _MiniBadge extends StatelessWidget {
         style: TextStyle(
           color: colors.green,
           fontSize: 11,
-          fontWeight: FontWeight.w900,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

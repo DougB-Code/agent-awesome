@@ -41,8 +41,6 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
             selectedContactId: selected?.id,
             filter: _filter,
             onSelected: _selectContact,
-            onAddContact: () =>
-                _showContactCaptureDialog(context, widget.controller),
           ),
         ),
       ],
