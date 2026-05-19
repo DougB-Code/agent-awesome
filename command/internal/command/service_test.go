@@ -226,6 +226,37 @@ func TestTemplateRequestValidatesParameterSchema(t *testing.T) {
 	}
 }
 
+// TestTemplateRenderingAllowsSpacedPlaceholders verifies discovery and rendering agree.
+func TestTemplateRenderingAllowsSpacedPlaceholders(t *testing.T) {
+	service, err := Open(Config{
+		DataDir:          t.TempDir(),
+		AllowedWorkdirs:  []string{t.TempDir()},
+		DefaultTimeout:   time.Second,
+		DefaultMaxOutput: 1024,
+		ApprovalTTL:      time.Minute,
+		RequireApproval:  false,
+		Templates: []Template{{
+			ID:         "spaced",
+			Executable: shellPath(),
+			Args:       []string{shellFlag(), "printf {{ name }}"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	status, err := service.Execute(context.Background(), ExecuteRequest{
+		TemplateID: "spaced",
+		Parameters: map[string]any{"name": "rendered"},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if status.StdoutTail != "rendered" {
+		t.Fatalf("StdoutTail = %q, want rendered", status.StdoutTail)
+	}
+}
+
 // TestTemplateRequestPersistsContractMetadata verifies approvals keep the full template contract.
 func TestTemplateRequestPersistsContractMetadata(t *testing.T) {
 	service, err := Open(Config{
@@ -413,6 +444,34 @@ func TestArbitraryCommandRequiresAllowedWorkdir(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "outside allowed roots") {
 		t.Fatalf("Request() error = %v, want workdir rejection", err)
+	}
+}
+
+// TestArbitraryCommandRejectsSymlinkEscapedWorkdir verifies cwd policy uses canonical paths.
+func TestArbitraryCommandRejectsSymlinkEscapedWorkdir(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	link := filepath.Join(root, "outside")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	service, err := Open(Config{
+		DataDir:         t.TempDir(),
+		AllowedWorkdirs: []string{root},
+		AllowArbitrary:  true,
+		ApprovalTTL:     time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	_, err = service.Request(context.Background(), Request{
+		Executable: shellPath(),
+		Args:       []string{shellFlag(), "true"},
+		WorkingDir: link,
+	})
+	if err == nil || !strings.Contains(err.Error(), "outside allowed roots") {
+		t.Fatalf("Request() error = %v, want symlink workdir rejection", err)
 	}
 }
 

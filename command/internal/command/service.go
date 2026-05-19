@@ -263,6 +263,8 @@ func (s *Service) Request(ctx context.Context, req Request) (RequestResult, erro
 
 // Run starts an approved command job asynchronously.
 func (s *Service) Run(ctx context.Context, req RunRequest) (RunResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	proposal, err := s.loadApproval(ctx, req.ApprovalID)
 	if err != nil {
 		return RunResult{}, err
@@ -289,9 +291,7 @@ func (s *Service) Run(ctx context.Context, req RunRequest) (RunResult, error) {
 		return RunResult{}, err
 	}
 	runCtx, cancel := context.WithTimeout(context.Background(), proposal.Timeout)
-	s.mu.Lock()
 	s.jobs[jobID] = cancel
-	s.mu.Unlock()
 	go s.execute(runCtx, jobID, proposal)
 	return RunResult{JobID: jobID, Status: statusRunning}, nil
 }
@@ -663,7 +663,11 @@ func (s *Service) safeWorkdir(value string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve cwd: %w", err)
 	}
-	clean := filepath.Clean(abs)
+	clean, err := filepath.EvalSymlinks(filepath.Clean(abs))
+	if err != nil {
+		return "", fmt.Errorf("resolve cwd %q: %w", cwd, err)
+	}
+	clean = filepath.Clean(clean)
 	for _, root := range s.roots {
 		rel, err := filepath.Rel(root, clean)
 		if err == nil && (rel == "." || (!strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != "..")) {
@@ -962,7 +966,11 @@ func cleanRoots(values []string) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolve allowed workdir %q: %w", value, err)
 		}
-		roots = append(roots, filepath.Clean(abs))
+		canonical, err := filepath.EvalSymlinks(filepath.Clean(abs))
+		if err != nil {
+			return nil, fmt.Errorf("resolve allowed workdir %q: %w", value, err)
+		}
+		roots = append(roots, filepath.Clean(canonical))
 	}
 	if len(roots) == 0 {
 		return nil, fmt.Errorf("at least one allowed workdir is required")
@@ -981,11 +989,17 @@ func renderStrings(values []string, params map[string]any) []string {
 
 // renderString expands simple {{name}} placeholders in one value.
 func renderString(value string, params map[string]any) string {
-	rendered := value
-	for key, replacement := range params {
-		rendered = strings.ReplaceAll(rendered, "{{"+key+"}}", fmt.Sprint(replacement))
-	}
-	return rendered
+	return templateParameterPattern.ReplaceAllStringFunc(value, func(match string) string {
+		parts := templateParameterPattern.FindStringSubmatch(match)
+		if len(parts) != 2 {
+			return match
+		}
+		replacement, ok := params[parts[1]]
+		if !ok {
+			return match
+		}
+		return fmt.Sprint(replacement)
+	})
 }
 
 // writeJSONFile writes one private JSON record atomically enough for local service state.

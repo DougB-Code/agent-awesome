@@ -61,6 +61,38 @@ func TestSnapshotRoundTrip(t *testing.T) {
 	}
 }
 
+// TestBuildSnapshotSkipsSymlinkedSources verifies snapshots do not follow data-root symlinks.
+func TestBuildSnapshotSkipsSymlinkedSources(t *testing.T) {
+	source := t.TempDir()
+	sourceDB := filepath.Join(source, "memory.db")
+	sourceData := filepath.Join(source, "data")
+	sourceDir := filepath.Join(sourceData, "sources")
+	if err := os.MkdirAll(sourceDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sourceDB, []byte("sqlite bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("outside secret"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(sourceDir, "linked-secret.txt")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	archive, err := buildSnapshot(sourceDB, sourceData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshotArchiveHasEntry(t, archive, "data/sources/linked-secret.txt") {
+		t.Fatal("snapshot included symlinked source entry")
+	}
+	if snapshotArchiveContainsText(t, archive, "outside secret") {
+		t.Fatal("snapshot archive contains symlink target content")
+	}
+}
+
 // TestSnapshotTargetRejectsUnsafeEntries verifies archive traversal is rejected.
 func TestSnapshotTargetRejectsUnsafeEntries(t *testing.T) {
 	if _, _, err := snapshotTarget("../secret", "/tmp/memory.db", "/tmp/data"); err == nil {
@@ -339,4 +371,50 @@ func testSnapshotArchive(t *testing.T, files map[string]string, extraHeaders []t
 		t.Fatal(err)
 	}
 	return buf.Bytes()
+}
+
+// snapshotArchiveHasEntry reports whether a tar.gz test snapshot contains name.
+func snapshotArchiveHasEntry(t *testing.T, archive []byte, name string) bool {
+	t.Helper()
+	return walkSnapshotArchive(t, archive, func(header *tar.Header, _ []byte) bool {
+		return header.Name == name
+	})
+}
+
+// snapshotArchiveContainsText reports whether any regular entry contains text.
+func snapshotArchiveContainsText(t *testing.T, archive []byte, text string) bool {
+	t.Helper()
+	return walkSnapshotArchive(t, archive, func(_ *tar.Header, body []byte) bool {
+		return bytes.Contains(body, []byte(text))
+	})
+}
+
+// walkSnapshotArchive scans entries in a tar.gz test snapshot.
+func walkSnapshotArchive(t *testing.T, archive []byte, visit func(*tar.Header, []byte) bool) bool {
+	t.Helper()
+	gzipReader, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gzipReader.Close()
+	tarReader := tar.NewReader(gzipReader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			return false
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body []byte
+		if header.Typeflag == tar.TypeReg || header.Typeflag == tar.TypeRegA {
+			body, err = io.ReadAll(tarReader)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if visit(header, body) {
+			return true
+		}
+	}
 }

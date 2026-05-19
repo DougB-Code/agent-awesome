@@ -177,14 +177,14 @@ func buildSnapshot(dbPath string, dataRoot string) ([]byte, error) {
 
 // addFileIfExists adds one file to the archive when it is present.
 func addFileIfExists(writer *tar.Writer, path string, name string) error {
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if info.IsDir() {
+	if info.IsDir() || !info.Mode().IsRegular() {
 		return nil
 	}
 	file, err := os.Open(path)
@@ -221,6 +221,9 @@ func addDirectory(writer *tar.Writer, root string, prefix string) error {
 			return err
 		}
 		if entry.IsDir() {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)

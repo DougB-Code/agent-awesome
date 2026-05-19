@@ -19,7 +19,7 @@ import (
 
 var branchSafePattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
 var refSafePattern = regexp.MustCompile(`^[A-Za-z0-9._/@-]+$`)
-var remoteSafePattern = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+var remoteSafePattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
 // Config stores source-control service paths and execution limits.
 type Config struct {
@@ -116,9 +116,22 @@ func Open(cfg Config) (*Service, error) {
 	if strings.TrimSpace(cfg.BuildDir) == "" {
 		cfg.BuildDir = filepath.Join("build", "sourcecontrol")
 	}
+	buildDir, err := cleanAbs(cfg.BuildDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve sourcecontrol build dir: %w", err)
+	}
+	cfg.BuildDir = buildDir
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 2 * time.Minute
 	}
+	if err := os.MkdirAll(buildDir, 0o700); err != nil {
+		return nil, fmt.Errorf("create sourcecontrol build dir: %w", err)
+	}
+	canonicalBuildDir, err := filepath.EvalSymlinks(buildDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolve sourcecontrol build dir: %w", err)
+	}
+	cfg.BuildDir = filepath.Clean(canonicalBuildDir)
 	if err := os.MkdirAll(filepath.Join(cfg.BuildDir, "backups"), 0o700); err != nil {
 		return nil, fmt.Errorf("create sourcecontrol backups: %w", err)
 	}
@@ -152,10 +165,16 @@ func (s *Service) PrepareWorktree(ctx context.Context, req PrepareWorktreeReques
 	}
 	worktree := strings.TrimSpace(req.WorktreePath)
 	if worktree == "" {
-		worktree = filepath.Join(s.cfg.BuildDir, "worktrees", safePathName(branch))
+		worktree = filepath.Join(s.worktreeRoot(), safePathName(branch))
 	}
 	worktree, err = cleanAbs(worktree)
 	if err != nil {
+		return WorktreeResult{}, err
+	}
+	if !pathWithin(worktree, s.worktreeRoot()) {
+		return WorktreeResult{}, fmt.Errorf("worktree path %q is outside sourcecontrol worktree root %q", worktree, s.worktreeRoot())
+	}
+	if err := requireExistingParentWithin(worktree, s.worktreeRoot()); err != nil {
 		return WorktreeResult{}, err
 	}
 	if _, err := os.Stat(worktree); err == nil {
@@ -181,7 +200,7 @@ func (s *Service) PrepareWorktree(ctx context.Context, req PrepareWorktreeReques
 
 // Status reports Git status for a prepared worktree.
 func (s *Service) Status(ctx context.Context, req StatusRequest) (StatusResult, error) {
-	meta, err := requirePrepared(req.WorktreePath)
+	meta, err := s.requirePrepared(req.WorktreePath)
 	if err != nil {
 		return StatusResult{}, err
 	}
@@ -198,7 +217,7 @@ func (s *Service) Status(ctx context.Context, req StatusRequest) (StatusResult, 
 
 // Commit stages all changes and creates a commit in a prepared worktree.
 func (s *Service) Commit(ctx context.Context, req CommitRequest) (CommitResult, error) {
-	meta, err := requirePrepared(req.WorktreePath)
+	meta, err := s.requirePrepared(req.WorktreePath)
 	if err != nil {
 		return CommitResult{}, err
 	}
@@ -227,7 +246,7 @@ func (s *Service) Commit(ctx context.Context, req CommitRequest) (CommitResult, 
 
 // Push pushes a prepared worktree branch to a remote.
 func (s *Service) Push(ctx context.Context, req PushRequest) (PushResult, error) {
-	meta, err := requirePrepared(req.WorktreePath)
+	meta, err := s.requirePrepared(req.WorktreePath)
 	if err != nil {
 		return PushResult{}, err
 	}
@@ -236,6 +255,9 @@ func (s *Service) Push(ctx context.Context, req PushRequest) (PushResult, error)
 		remote = "origin"
 	}
 	if err := validateRemoteName(remote); err != nil {
+		return PushResult{}, err
+	}
+	if err := requireConfiguredRemote(ctx, s.cfg.Timeout, meta.WorktreePath, remote); err != nil {
 		return PushResult{}, err
 	}
 	branch := strings.TrimSpace(req.Branch)
@@ -256,7 +278,7 @@ func (s *Service) Push(ctx context.Context, req PushRequest) (PushResult, error)
 
 // Backup snapshots non-Git worktree files under build/sourcecontrol.
 func (s *Service) Backup(ctx context.Context, req BackupRequest) (BackupResult, error) {
-	meta, err := requirePrepared(req.WorktreePath)
+	meta, err := s.requirePrepared(req.WorktreePath)
 	if err != nil {
 		return BackupResult{}, err
 	}
@@ -276,7 +298,7 @@ func (s *Service) Backup(ctx context.Context, req BackupRequest) (BackupResult, 
 
 // Restore replaces worktree files with a previously captured backup.
 func (s *Service) Restore(ctx context.Context, req RestoreRequest) (BackupResult, error) {
-	meta, err := requirePrepared(req.WorktreePath)
+	meta, err := s.requirePrepared(req.WorktreePath)
 	if err != nil {
 		return BackupResult{}, err
 	}
@@ -302,7 +324,7 @@ func (s *Service) Restore(ctx context.Context, req RestoreRequest) (BackupResult
 
 // CleanupWorktree removes a prepared worktree through Git and then deletes leftovers.
 func (s *Service) CleanupWorktree(ctx context.Context, req CleanupRequest) (WorktreeResult, error) {
-	meta, err := requirePrepared(req.WorktreePath)
+	meta, err := s.requirePrepared(req.WorktreePath)
 	if err != nil {
 		return WorktreeResult{}, err
 	}
@@ -345,6 +367,20 @@ func runGit(ctx context.Context, timeout time.Duration, dir string, args ...stri
 	return string(out), nil
 }
 
+// requireConfiguredRemote verifies that a push target is a named Git remote.
+func requireConfiguredRemote(ctx context.Context, timeout time.Duration, dir string, remote string) error {
+	out, err := runGit(ctx, timeout, dir, "remote")
+	if err != nil {
+		return err
+	}
+	for _, name := range splitLines(out) {
+		if name == remote {
+			return nil
+		}
+	}
+	return fmt.Errorf("remote %q is not configured for prepared worktree", remote)
+}
+
 // writePreparedMetadata writes the AA prepared-worktree marker.
 func writePreparedMetadata(worktree string, meta preparedMetadata) error {
 	dir := filepath.Join(worktree, ".agent-awesome")
@@ -359,10 +395,21 @@ func writePreparedMetadata(worktree string, meta preparedMetadata) error {
 }
 
 // requirePrepared reads and verifies the AA prepared-worktree marker.
-func requirePrepared(worktree string) (preparedMetadata, error) {
+func (s *Service) requirePrepared(worktree string) (preparedMetadata, error) {
 	clean, err := cleanAbs(worktree)
 	if err != nil {
 		return preparedMetadata{}, err
+	}
+	if !pathWithin(clean, s.worktreeRoot()) {
+		return preparedMetadata{}, fmt.Errorf("worktree %q is outside sourcecontrol worktree root %q", clean, s.worktreeRoot())
+	}
+	canonical, err := filepath.EvalSymlinks(clean)
+	if err != nil {
+		return preparedMetadata{}, fmt.Errorf("resolve prepared worktree %q: %w", clean, err)
+	}
+	canonical = filepath.Clean(canonical)
+	if canonical != clean {
+		return preparedMetadata{}, fmt.Errorf("prepared worktree %q resolves outside its managed path", clean)
 	}
 	data, err := os.ReadFile(filepath.Join(clean, ".agent-awesome", "sourcecontrol.json"))
 	if err != nil {
@@ -389,6 +436,47 @@ func cleanAbs(value string) (string, error) {
 		return "", err
 	}
 	return filepath.Clean(abs), nil
+}
+
+// worktreeRoot returns the private root for source-control managed worktrees.
+func (s *Service) worktreeRoot() string {
+	return filepath.Join(s.cfg.BuildDir, "worktrees")
+}
+
+// pathWithin reports whether path is equal to or inside root.
+func pathWithin(path string, root string) bool {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
+}
+
+// requireExistingParentWithin rejects worktree paths whose existing parent escapes via symlink.
+func requireExistingParentWithin(path string, root string) error {
+	current := filepath.Clean(path)
+	for {
+		if info, err := os.Lstat(current); err == nil {
+			if !info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+				return fmt.Errorf("worktree parent %q is not a directory", current)
+			}
+			canonical, err := filepath.EvalSymlinks(current)
+			if err != nil {
+				return fmt.Errorf("resolve worktree parent %q: %w", current, err)
+			}
+			if !pathWithin(filepath.Clean(canonical), root) {
+				return fmt.Errorf("worktree path %q escapes sourcecontrol worktree root %q through existing parent %q", path, root, current)
+			}
+			return nil
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("stat worktree parent %q: %w", current, err)
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return fmt.Errorf("worktree path %q has no existing parent", path)
+		}
+		current = parent
+	}
 }
 
 // validateBranchName rejects Git branch names that can be parsed as options or unsafe refs.
@@ -427,7 +515,11 @@ func validateBaseRef(ref string) error {
 
 // validateRemoteName rejects Git remote names that can be parsed as options.
 func validateRemoteName(remote string) error {
-	if remote == "" || strings.HasPrefix(remote, "-") || !remoteSafePattern.MatchString(remote) {
+	if remote == "" ||
+		strings.HasPrefix(remote, "-") ||
+		strings.Contains(remote, "..") ||
+		strings.ContainsAny(remote, `/\`) ||
+		!remoteSafePattern.MatchString(remote) {
 		return fmt.Errorf("remote %q is invalid", remote)
 	}
 	return nil
@@ -459,9 +551,15 @@ func copyWorktreeFiles(src string, dst string) error {
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o700)
 		}
+		if entry.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
 		info, err := entry.Info()
 		if err != nil {
 			return err
+		}
+		if !info.Mode().IsRegular() {
+			return nil
 		}
 		return copyFile(path, target, info.Mode())
 	})

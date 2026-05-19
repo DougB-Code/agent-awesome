@@ -15,14 +15,15 @@ import (
 func TestPreparedWorktreeCommitBackupRestoreAndCleanup(t *testing.T) {
 	ctx := context.Background()
 	repo := initRepo(t)
-	service, err := Open(Config{BuildDir: filepath.Join(t.TempDir(), "sourcecontrol"), Timeout: 5 * time.Second})
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
 
 	prepared, err := service.PrepareWorktree(ctx, PrepareWorktreeRequest{
 		RepositoryPath: repo,
-		WorktreePath:   filepath.Join(t.TempDir(), "worktree"),
+		WorktreePath:   testWorktreePath(buildDir, "worktree"),
 		Branch:         "feature/test",
 	})
 	if err != nil {
@@ -84,14 +85,15 @@ func TestPrepareWorktreeRejectsDirtyRepository(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("dirty"), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
-	service, err := Open(Config{BuildDir: filepath.Join(t.TempDir(), "sourcecontrol"), Timeout: 5 * time.Second})
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
 
 	_, err = service.PrepareWorktree(ctx, PrepareWorktreeRequest{
 		RepositoryPath: repo,
-		WorktreePath:   filepath.Join(t.TempDir(), "worktree"),
+		WorktreePath:   testWorktreePath(buildDir, "worktree"),
 		Branch:         "feature/dirty",
 	})
 	if err == nil || !strings.Contains(err.Error(), "uncommitted") {
@@ -103,14 +105,15 @@ func TestPrepareWorktreeRejectsDirtyRepository(t *testing.T) {
 func TestPrepareWorktreeRejectsUnsafeBranch(t *testing.T) {
 	ctx := context.Background()
 	repo := initRepo(t)
-	service, err := Open(Config{BuildDir: filepath.Join(t.TempDir(), "sourcecontrol"), Timeout: 5 * time.Second})
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
 
 	_, err = service.PrepareWorktree(ctx, PrepareWorktreeRequest{
 		RepositoryPath: repo,
-		WorktreePath:   filepath.Join(t.TempDir(), "worktree"),
+		WorktreePath:   testWorktreePath(buildDir, "worktree"),
 		Branch:         "-unsafe",
 	})
 	if err == nil || !strings.Contains(err.Error(), "branch") {
@@ -122,14 +125,15 @@ func TestPrepareWorktreeRejectsUnsafeBranch(t *testing.T) {
 func TestPrepareWorktreeRejectsUnsafeBaseRef(t *testing.T) {
 	ctx := context.Background()
 	repo := initRepo(t)
-	service, err := Open(Config{BuildDir: filepath.Join(t.TempDir(), "sourcecontrol"), Timeout: 5 * time.Second})
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
 
 	_, err = service.PrepareWorktree(ctx, PrepareWorktreeRequest{
 		RepositoryPath: repo,
-		WorktreePath:   filepath.Join(t.TempDir(), "worktree"),
+		WorktreePath:   testWorktreePath(buildDir, "worktree"),
 		Branch:         "feature/base",
 		BaseRef:        "-unsafe",
 	})
@@ -140,12 +144,17 @@ func TestPrepareWorktreeRejectsUnsafeBaseRef(t *testing.T) {
 
 // TestUnsafeOperationsRequirePreparedWorktree verifies marker enforcement.
 func TestUnsafeOperationsRequirePreparedWorktree(t *testing.T) {
-	service, err := Open(Config{BuildDir: filepath.Join(t.TempDir(), "sourcecontrol"), Timeout: 5 * time.Second})
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
+	unprepared := testWorktreePath(buildDir, "unprepared")
+	if err := os.MkdirAll(unprepared, 0o700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
 
-	_, err = service.Status(context.Background(), StatusRequest{WorktreePath: t.TempDir()})
+	_, err = service.Status(context.Background(), StatusRequest{WorktreePath: unprepared})
 	if err == nil || !strings.Contains(err.Error(), "not prepared") {
 		t.Fatalf("Status() error = %v, want prepared marker rejection", err)
 	}
@@ -158,13 +167,14 @@ func TestPushRequiresPreparedBranch(t *testing.T) {
 	remote := filepath.Join(t.TempDir(), "remote.git")
 	runCmd(t, "", "git", "init", "--bare", remote)
 	runCmd(t, repo, "git", "remote", "add", "origin", remote)
-	service, err := Open(Config{BuildDir: filepath.Join(t.TempDir(), "sourcecontrol"), Timeout: 5 * time.Second})
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
 	prepared, err := service.PrepareWorktree(ctx, PrepareWorktreeRequest{
 		RepositoryPath: repo,
-		WorktreePath:   filepath.Join(t.TempDir(), "worktree"),
+		WorktreePath:   testWorktreePath(buildDir, "worktree"),
 		Branch:         "feature/push",
 	})
 	if err != nil {
@@ -182,8 +192,123 @@ func TestPushRequiresPreparedBranch(t *testing.T) {
 	if _, err := service.Push(ctx, PushRequest{WorktreePath: prepared.WorktreePath, Remote: "-unsafe"}); err == nil || !strings.Contains(err.Error(), "remote") {
 		t.Fatalf("Push() unsafe remote error = %v, want rejection", err)
 	}
+	if _, err := service.Push(ctx, PushRequest{WorktreePath: prepared.WorktreePath, Remote: "missing"}); err == nil || !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("Push() unconfigured remote error = %v, want rejection", err)
+	}
 	if _, err := service.Push(ctx, PushRequest{WorktreePath: prepared.WorktreePath}); err != nil {
 		t.Fatalf("Push() error = %v", err)
+	}
+}
+
+// TestPrepareWorktreeRejectsOutsideBuildWorktree verifies cleanup cannot target arbitrary paths.
+func TestPrepareWorktreeRejectsOutsideBuildWorktree(t *testing.T) {
+	ctx := context.Background()
+	repo := initRepo(t)
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	_, err = service.PrepareWorktree(ctx, PrepareWorktreeRequest{
+		RepositoryPath: repo,
+		WorktreePath:   filepath.Join(t.TempDir(), "outside"),
+		Branch:         "feature/outside",
+	})
+	if err == nil || !strings.Contains(err.Error(), "outside sourcecontrol worktree root") {
+		t.Fatalf("PrepareWorktree() error = %v, want worktree root rejection", err)
+	}
+}
+
+// TestPrepareWorktreeRejectsSymlinkParentEscape verifies parent symlinks cannot redirect worktrees.
+func TestPrepareWorktreeRejectsSymlinkParentEscape(t *testing.T) {
+	ctx := context.Background()
+	repo := initRepo(t)
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	outside := t.TempDir()
+	link := testWorktreePath(buildDir, "escape")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, err = service.PrepareWorktree(ctx, PrepareWorktreeRequest{
+		RepositoryPath: repo,
+		WorktreePath:   filepath.Join(link, "worktree"),
+		Branch:         "feature/symlink-parent",
+	})
+	if err == nil || !strings.Contains(err.Error(), "escapes sourcecontrol worktree root") {
+		t.Fatalf("PrepareWorktree() error = %v, want symlink parent rejection", err)
+	}
+}
+
+// TestPreparedOperationRejectsSymlinkWorktree verifies prepared markers cannot be reached through symlinks.
+func TestPreparedOperationRejectsSymlinkWorktree(t *testing.T) {
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	outside := t.TempDir()
+	link := testWorktreePath(buildDir, "prepared-link")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if err := writePreparedMetadata(outside, preparedMetadata{
+		RepositoryPath: t.TempDir(),
+		WorktreePath:   link,
+		Branch:         "feature/fake",
+	}); err != nil {
+		t.Fatalf("writePreparedMetadata() error = %v", err)
+	}
+
+	_, err = service.Status(context.Background(), StatusRequest{WorktreePath: link})
+	if err == nil || !strings.Contains(err.Error(), "resolves outside") {
+		t.Fatalf("Status() error = %v, want symlink prepared worktree rejection", err)
+	}
+}
+
+// TestBackupSkipsSymlinkWithoutCopyingTarget verifies backups do not dereference symlinks.
+func TestBackupSkipsSymlinkWithoutCopyingTarget(t *testing.T) {
+	ctx := context.Background()
+	repo := initRepo(t)
+	buildDir := filepath.Join(t.TempDir(), "sourcecontrol")
+	service, err := Open(Config{BuildDir: buildDir, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	prepared, err := service.PrepareWorktree(ctx, PrepareWorktreeRequest{
+		RepositoryPath: repo,
+		WorktreePath:   testWorktreePath(buildDir, "symlink"),
+		Branch:         "feature/symlink",
+	})
+	if err != nil {
+		t.Fatalf("PrepareWorktree() error = %v", err)
+	}
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("outside secret"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(prepared.WorktreePath, "linked-secret")
+	if err := os.Symlink(secret, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	backup, err := service.Backup(ctx, BackupRequest{WorktreePath: prepared.WorktreePath})
+	if err != nil {
+		t.Fatalf("Backup() error = %v", err)
+	}
+	backupLink := filepath.Join(backup.BackupPath, "linked-secret")
+	if _, err := os.Lstat(backupLink); !os.IsNotExist(err) {
+		t.Fatalf("backup symlink stat error = %v, want missing symlink", err)
+	}
+	if entries, err := os.ReadDir(backup.BackupPath); err != nil {
+		t.Fatalf("ReadDir() error = %v", err)
+	} else if len(entries) != 1 || entries[0].Name() != "README.md" {
+		t.Fatalf("backup entries = %#v, want only tracked regular files", entries)
 	}
 }
 
@@ -200,6 +325,11 @@ func initRepo(t *testing.T) string {
 	runCmd(t, repo, "git", "add", "README.md")
 	runCmd(t, repo, "git", "commit", "-m", "initial")
 	return repo
+}
+
+// testWorktreePath returns a sourcecontrol-managed worktree test path.
+func testWorktreePath(buildDir string, name string) string {
+	return filepath.Join(buildDir, "worktrees", name)
 }
 
 // runCmd executes one test setup command.
