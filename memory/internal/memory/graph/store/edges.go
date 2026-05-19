@@ -72,7 +72,7 @@ func (s *Store) SetEdgeStatus(ctx context.Context, edgeID graph.EdgeID, status g
 	if !graph.ValidLifecycleStatus(status) {
 		return graph.Edge{}, fmt.Errorf("invalid edge status %q", status)
 	}
-	actor = normalize.Default(actor, "agent")
+	actor = normalize.Default(actor, graph.DefaultActor)
 	result, err := s.runner.ExecContext(ctx, `UPDATE graph_edges SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), edgeID)
 	if err != nil {
 		return graph.Edge{}, fmt.Errorf("set graph edge status: %w", err)

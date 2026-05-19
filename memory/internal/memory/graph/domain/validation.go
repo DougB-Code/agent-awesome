@@ -14,7 +14,7 @@ func NormalizeUpsertNodeRequest(req UpsertNodeRequest) (UpsertNodeRequest, error
 	req.StableKey = strings.TrimSpace(req.StableKey)
 	req.Title = strings.TrimSpace(req.Title)
 	req.Summary = strings.TrimSpace(req.Summary)
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, DefaultActor)
 	if !ValidNodeKind(req.Kind) {
 		return req, fmt.Errorf("invalid node kind %q", req.Kind)
 	}
@@ -40,7 +40,7 @@ func NormalizeUpsertNodeRequest(req UpsertNodeRequest) (UpsertNodeRequest, error
 
 // NormalizeUpsertEdgeRequest validates and defaults an edge write.
 func NormalizeUpsertEdgeRequest(req UpsertEdgeRequest) (UpsertEdgeRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, DefaultActor)
 	if req.FromNodeID == "" {
 		return req, errors.New("from_node_id is required")
 	}
@@ -83,7 +83,7 @@ func NormalizeUpsertEdgePropertyRequest(req UpsertEdgePropertyRequest) (UpsertEd
 	if req.Key == "" {
 		return req, errors.New("property key is required")
 	}
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, DefaultActor)
 	req.Status = vocabulary.DefaultLifecycleStatus(req.Status)
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid property status %q", req.Status)
@@ -141,7 +141,7 @@ func NormalizeAppendAuditRequest(req AppendAuditRequest) (AppendAuditRequest, er
 	if req.Kind == "" {
 		return req, errors.New("audit kind is required")
 	}
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, DefaultActor)
 	req.Message = strings.TrimSpace(req.Message)
 	req.DetailsJSON = strings.TrimSpace(req.DetailsJSON)
 	return req, nil
@@ -150,27 +150,49 @@ func NormalizeAppendAuditRequest(req AppendAuditRequest) (AppendAuditRequest, er
 // NormalizeSearchNodesQuery validates and defaults a lexical graph search.
 func NormalizeSearchNodesQuery(q SearchNodesQuery) (SearchNodesQuery, error) {
 	q.Text = strings.TrimSpace(q.Text)
-	q.Firewall = vocabulary.DefaultFirewall(q.Firewall)
-	if !ValidFirewall(q.Firewall) {
-		return q, fmt.Errorf("invalid firewall %q", q.Firewall)
+	policy, err := NormalizeAccessPolicy(AccessPolicy{
+		Firewall:             q.Firewall,
+		IncludeGlobal:        q.IncludeGlobal,
+		AllowedSensitivities: q.AllowedSensitivities,
+	})
+	if err != nil {
+		return q, err
 	}
+	q.Firewall = policy.Firewall
+	q.IncludeGlobal = policy.IncludeGlobal
+	q.AllowedSensitivities = policy.AllowedSensitivities
 	for _, kind := range q.Kinds {
 		if !ValidNodeKind(kind) {
 			return q, fmt.Errorf("invalid node kind %q", kind)
-		}
-	}
-	if len(q.AllowedSensitivities) == 0 {
-		q.AllowedSensitivities = []Sensitivity{SensitivityPublic, SensitivityInternal, SensitivityPrivate}
-	}
-	for _, sensitivity := range q.AllowedSensitivities {
-		if !ValidSensitivity(sensitivity) {
-			return q, fmt.Errorf("invalid sensitivity %q", sensitivity)
 		}
 	}
 	if q.Limit <= 0 || q.Limit > 100 {
 		q.Limit = 20
 	}
 	return q, nil
+}
+
+// NormalizeAccessPolicy validates and defaults shared graph boundary metadata.
+func NormalizeAccessPolicy(policy AccessPolicy) (AccessPolicy, error) {
+	policy.Actor = normalize.Default(policy.Actor, DefaultActor)
+	policy.Firewall = vocabulary.DefaultFirewall(policy.Firewall)
+	if !ValidFirewall(policy.Firewall) {
+		return policy, fmt.Errorf("invalid firewall %q", policy.Firewall)
+	}
+	if len(policy.AllowedSensitivities) == 0 {
+		policy.AllowedSensitivities = DefaultReadableSensitivities()
+	}
+	for _, sensitivity := range policy.AllowedSensitivities {
+		if !ValidSensitivity(sensitivity) {
+			return policy, fmt.Errorf("invalid sensitivity %q", sensitivity)
+		}
+	}
+	return policy, nil
+}
+
+// DefaultReadableSensitivities returns graph sensitivities allowed by default.
+func DefaultReadableSensitivities() []Sensitivity {
+	return vocabulary.DefaultReadableSensitivities()
 }
 
 // ValidNodeKind reports whether kind is in the controlled vocabulary.
@@ -225,7 +247,7 @@ func ValidValue(value Value) bool {
 
 // normalizePropertyFields defaults common node property metadata.
 func normalizePropertyFields(req UpsertNodePropertyRequest) (UpsertNodePropertyRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, DefaultActor)
 	req.Status = vocabulary.DefaultLifecycleStatus(req.Status)
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid property status %q", req.Status)

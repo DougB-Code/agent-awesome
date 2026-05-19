@@ -107,7 +107,7 @@ func (s *Store) SetNodeStatus(ctx context.Context, nodeID graph.NodeID, status g
 	if !graph.ValidLifecycleStatus(status) {
 		return graph.Node{}, fmt.Errorf("invalid node status %q", status)
 	}
-	actor = normalize.Default(actor, "agent")
+	actor = normalize.Default(actor, graph.DefaultActor)
 	result, err := s.runner.ExecContext(ctx, `UPDATE graph_nodes SET status = ?, actor = ?, updated_at = ? WHERE id = ?`, status, actor, timeString(s.now()), nodeID)
 	if err != nil {
 		return graph.Node{}, fmt.Errorf("set graph node status: %w", err)

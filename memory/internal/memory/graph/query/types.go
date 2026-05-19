@@ -187,33 +187,23 @@ type Token struct {
 
 // normalizeRequest validates shared graph query request metadata.
 func normalizeRequest(req Request) (Request, error) {
-	req.Actor = defaultString(req.Actor, "agent")
 	req.Query = strings.TrimSpace(req.Query)
 	req.SourceNodeID = strings.TrimSpace(req.SourceNodeID)
 	if req.Query == "" {
 		return req, errors.New("query is required")
 	}
-	if req.Firewall == "" {
-		req.Firewall = graph.FirewallUser
+	policy, err := graph.NormalizeAccessPolicy(graph.AccessPolicy{
+		Actor:                req.Actor,
+		Firewall:             req.Firewall,
+		IncludeGlobal:        req.IncludeGlobal,
+		AllowedSensitivities: req.AllowedSensitivities,
+	})
+	if err != nil {
+		return req, fmt.Errorf("normalize graph access policy: %w", err)
 	}
-	if !graph.ValidFirewall(req.Firewall) {
-		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
-	}
-	if len(req.AllowedSensitivities) == 0 {
-		req.AllowedSensitivities = []graph.Sensitivity{graph.SensitivityPublic, graph.SensitivityInternal, graph.SensitivityPrivate}
-	}
-	for _, sensitivity := range req.AllowedSensitivities {
-		if !graph.ValidSensitivity(sensitivity) {
-			return req, fmt.Errorf("invalid sensitivity %q", sensitivity)
-		}
-	}
+	req.Actor = policy.Actor
+	req.Firewall = policy.Firewall
+	req.IncludeGlobal = policy.IncludeGlobal
+	req.AllowedSensitivities = policy.AllowedSensitivities
 	return req, nil
-}
-
-// defaultString returns fallback when value is blank after trimming.
-func defaultString(value string, fallback string) string {
-	if trimmed := strings.TrimSpace(value); trimmed != "" {
-		return trimmed
-	}
-	return fallback
 }

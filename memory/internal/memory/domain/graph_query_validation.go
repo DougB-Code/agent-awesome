@@ -11,7 +11,7 @@ import (
 
 // NormalizeGraphQueryRequest validates shared graph query request metadata.
 func NormalizeGraphQueryRequest(req GraphQueryRequest) (GraphQueryRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultAgentActor)
 	req.Query = strings.TrimSpace(req.Query)
 	req.SourceNodeID = strings.TrimSpace(req.SourceNodeID)
 	if req.Query == "" {
@@ -22,7 +22,7 @@ func NormalizeGraphQueryRequest(req GraphQueryRequest) (GraphQueryRequest, error
 		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
 	}
 	if len(req.AllowedSensitivities) == 0 {
-		req.AllowedSensitivities = []Sensitivity{SensitivityPublic, SensitivityInternal, SensitivityPrivate}
+		req.AllowedSensitivities = vocabulary.DefaultReadableSensitivities()
 	}
 	for _, sensitivity := range req.AllowedSensitivities {
 		if !ValidSensitivity(sensitivity) {

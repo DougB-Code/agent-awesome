@@ -15,7 +15,7 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 	if req.Content == "" {
 		return req, errors.New("content is required")
 	}
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultAgentActor)
 	req.MediaType = normalize.Default(req.MediaType, "text/plain; charset=utf-8")
 	req.Title = strings.TrimSpace(req.Title)
 	if req.Title == "" {
@@ -48,7 +48,7 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 
 // NormalizeRetrievalQuery fills safe retrieval defaults and validates filters.
 func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
-	q.Actor = normalize.Default(q.Actor, "agent")
+	q.Actor = normalize.Default(q.Actor, vocabulary.DefaultAgentActor)
 	q.Firewall = vocabulary.DefaultFirewall(q.Firewall)
 	if !ValidFirewall(q.Firewall) {
 		return q, fmt.Errorf("invalid firewall %q", q.Firewall)
@@ -60,7 +60,7 @@ func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
 	}
 	q.Topics = NormalizeStrings(q.Topics)
 	if len(q.AllowedSensitivities) == 0 {
-		q.AllowedSensitivities = []Sensitivity{SensitivityPublic, SensitivityInternal, SensitivityPrivate}
+		q.AllowedSensitivities = vocabulary.DefaultReadableSensitivities()
 	}
 	for _, sensitivity := range q.AllowedSensitivities {
 		if !ValidSensitivity(sensitivity) {
@@ -75,7 +75,7 @@ func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
 
 // NormalizeRepairRequest validates a memory repair request.
 func NormalizeRepairRequest(req RepairRequest) (RepairRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultAgentActor)
 	if req.MemoryID == "" {
 		return req, errors.New("memory_id is required")
 	}
@@ -96,7 +96,7 @@ func NormalizeRepairRequest(req RepairRequest) (RepairRequest, error) {
 
 // NormalizeCorrectionRequest validates a user correction.
 func NormalizeCorrectionRequest(req CorrectionRequest) (CorrectionRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultAgentActor)
 	req.Text = strings.TrimSpace(req.Text)
 	if req.MemoryID == "" {
 		return req, errors.New("memory_id is required")
@@ -113,7 +113,7 @@ func NormalizeCorrectionRequest(req CorrectionRequest) (CorrectionRequest, error
 
 // NormalizeRefreshPageRequest validates a compiled page refresh request.
 func NormalizeRefreshPageRequest(req RefreshPageRequest) (RefreshPageRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "agent")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultAgentActor)
 	if req.Kind == "" {
 		req.Kind = KindEntityPage
 	}

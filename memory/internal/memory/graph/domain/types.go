@@ -146,6 +146,9 @@ const (
 	SensitivityRestricted = vocabulary.SensitivityRestricted
 )
 
+// DefaultActor is the graph actor used when a caller does not identify itself.
+const DefaultActor = vocabulary.DefaultAgentActor
+
 // TrustLevel describes where a graph fact came from.
 type TrustLevel = vocabulary.TrustLevel
 
@@ -386,4 +389,12 @@ type SearchNodesQuery struct {
 	IncludeGlobal        bool
 	AllowedSensitivities []Sensitivity
 	Limit                int
+}
+
+// AccessPolicy stores graph read/write boundary metadata shared by operations.
+type AccessPolicy struct {
+	Actor                string
+	Firewall             Firewall
+	IncludeGlobal        bool
+	AllowedSensitivities []Sensitivity
 }

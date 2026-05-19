@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"memory/internal/memory/normalize"
+	"memory/internal/memory/vocabulary"
 )
 
 // defaultTaskFollowUpDelay keeps inbox tasks from aging silently forever.
@@ -14,7 +15,7 @@ const defaultTaskFollowUpDelay = 7 * 24 * time.Hour
 
 // NormalizeCreateTaskRequest fills defaults and validates task creation.
 func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
 	req.Title = strings.TrimSpace(req.Title)
 	if req.Title == "" {
 		return req, errors.New("title is required")
@@ -53,7 +54,7 @@ func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error
 
 // NormalizeUpdateTaskRequest fills defaults and validates task patches.
 func NormalizeUpdateTaskRequest(req UpdateTaskRequest) (UpdateTaskRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
 	if req.TaskID == "" {
 		return req, errors.New("task_id is required")
 	}
@@ -158,7 +159,7 @@ func NormalizeTaskRelationTraversalQuery(q TaskRelationTraversalQuery) (TaskRela
 
 // NormalizeTaskIDRequest validates a request for one task.
 func NormalizeTaskIDRequest(req TaskIDRequest) (TaskIDRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
 	if req.TaskID == "" {
 		return req, errors.New("task_id is required")
 	}
@@ -167,7 +168,7 @@ func NormalizeTaskIDRequest(req TaskIDRequest) (TaskIDRequest, error) {
 
 // NormalizeUpsertTaskRelationRequest validates one task relationship edge.
 func NormalizeUpsertTaskRelationRequest(req UpsertTaskRelationRequest) (UpsertTaskRelationRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
 	req.Note = strings.TrimSpace(req.Note)
 	if req.FromTaskID == "" {
 		return req, errors.New("from_task_id is required")
@@ -195,7 +196,7 @@ func NormalizeUpsertTaskRelationRequest(req UpsertTaskRelationRequest) (UpsertTa
 
 // NormalizeDeleteTaskRelationRequest validates relation deletion.
 func NormalizeDeleteTaskRelationRequest(req DeleteTaskRelationRequest) (DeleteTaskRelationRequest, error) {
-	req.Actor = normalize.Default(req.Actor, "user")
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
 	if req.RelationID == "" {
 		return req, errors.New("relation_id is required")
 	}

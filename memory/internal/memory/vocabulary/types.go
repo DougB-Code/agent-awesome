@@ -65,6 +65,13 @@ const (
 	StatusDeleted LifecycleStatus = "deleted"
 )
 
+const (
+	// DefaultAgentActor is the actor used when automated memory work omits one.
+	DefaultAgentActor = "agent"
+	// DefaultUserActor is the actor used when user task work omits one.
+	DefaultUserActor = "user"
+)
+
 // FirewallStrings returns default firewall ids for schemas and diagnostics.
 func FirewallStrings() []string {
 	return StringValues([]Firewall{FirewallSession, FirewallUser, FirewallHousehold, FirewallTenant, FirewallProject, FirewallGlobal})
@@ -73,6 +80,11 @@ func FirewallStrings() []string {
 // SensitivityStrings returns sensitivity vocabulary values for schemas and diagnostics.
 func SensitivityStrings() []string {
 	return StringValues([]Sensitivity{SensitivityPublic, SensitivityInternal, SensitivityPrivate, SensitivityRestricted})
+}
+
+// DefaultReadableSensitivities returns the non-restricted sensitivity set.
+func DefaultReadableSensitivities() []Sensitivity {
+	return []Sensitivity{SensitivityPublic, SensitivityInternal, SensitivityPrivate}
 }
 
 // TrustLevelStrings returns trust vocabulary values for schemas and diagnostics.
