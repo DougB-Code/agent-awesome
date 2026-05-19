@@ -1,7 +1,7 @@
 /// Tests shared settings form feedback primitives.
 library;
 
-import 'package:agentawesome_ui/app/theme.dart';
+import 'package:agentawesome_ui/ui/theme.dart';
 import 'package:agentawesome_ui/ui/settings/settings_form.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/theme.dart';
+import '../theme.dart';
 import '../command_bar/command_bar.dart';
 import '../command_bar/command_context.dart';
 import '../panels/panels.dart';

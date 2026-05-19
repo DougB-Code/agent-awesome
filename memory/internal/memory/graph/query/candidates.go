@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"memory/internal/memory/domain"
 	graph "memory/internal/memory/graph/domain"
 )
 
@@ -22,7 +21,7 @@ type edgeMutationCandidate struct {
 }
 
 // row returns selected fields for one edge mutation result.
-func (c edgeMutationCandidate) row(fields []string) domain.GraphQueryRow {
+func (c edgeMutationCandidate) row(fields []string) Row {
 	return projectorRow(c, fields)
 }
 
@@ -52,13 +51,13 @@ func (c matchCandidate) matches(conditions []Condition) bool {
 }
 
 // row returns selected fields for one match candidate.
-func (c matchCandidate) row(fields []string) domain.GraphQueryRow {
+func (c matchCandidate) row(fields []string) Row {
 	return projectorRow(c, fields)
 }
 
 // path returns graph path metadata associated with one match row.
-func (c matchCandidate) path(rowIndex int) domain.GraphQueryPath {
-	return domain.GraphQueryPath{
+func (c matchCandidate) path(rowIndex int) Path {
+	return Path{
 		RowIndex: rowIndex,
 		Depth:    len(c.pathEdgeIDs),
 		NodeIDs:  graphNodeIDStrings(c.pathNodeIDs),
@@ -182,8 +181,8 @@ func projectorMatches(candidate graphQueryProjector, conditions []Condition) boo
 }
 
 // projectorRow returns selected fields for one projected candidate.
-func projectorRow(candidate graphQueryProjector, fields []string) domain.GraphQueryRow {
-	row := domain.GraphQueryRow{}
+func projectorRow(candidate graphQueryProjector, fields []string) Row {
+	row := Row{}
 	for _, field := range fields {
 		row[field] = candidate.typedField(field)
 	}
@@ -197,7 +196,7 @@ type groupAccumulator struct {
 }
 
 // groupCandidateRows groups filtered FIND or MATCH candidates and returns aggregate rows.
-func groupCandidateRows[T graphQueryProjector](candidates []T, stmt Statement) []domain.GraphQueryRow {
+func groupCandidateRows[T graphQueryProjector](candidates []T, stmt Statement) []Row {
 	groups := map[string]groupAccumulator{}
 	for _, candidate := range candidates {
 		value := candidate.typedField(stmt.GroupBy)
@@ -214,10 +213,10 @@ func groupCandidateRows[T graphQueryProjector](candidates []T, stmt Statement) [
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	rows := make([]domain.GraphQueryRow, 0, len(keys))
+	rows := make([]Row, 0, len(keys))
 	for _, key := range keys {
 		group := groups[key]
-		rows = append(rows, domain.GraphQueryRow{
+		rows = append(rows, Row{
 			stmt.GroupBy: group.value,
 			"count":      group.count,
 		})
@@ -236,7 +235,7 @@ func groupOrderField(stmt Statement) string {
 }
 
 // sortRows orders already projected aggregate rows by a typed value.
-func sortRows(rows []domain.GraphQueryRow, field string, order SortOrder) {
+func sortRows(rows []Row, field string, order SortOrder) {
 	if field == "" {
 		return
 	}
@@ -272,7 +271,7 @@ func compareRowValues(left any, right any) int {
 }
 
 // limitRows applies the validated row limit to aggregate output.
-func limitRows(rows []domain.GraphQueryRow, limit int) []domain.GraphQueryRow {
+func limitRows(rows []Row, limit int) []Row {
 	if len(rows) > limit {
 		return rows[:limit]
 	}
@@ -280,10 +279,10 @@ func limitRows(rows []domain.GraphQueryRow, limit int) []domain.GraphQueryRow {
 }
 
 // projectRows returns only the requested aggregate columns.
-func projectRows(rows []domain.GraphQueryRow, fields []string) []domain.GraphQueryRow {
-	projected := make([]domain.GraphQueryRow, 0, len(rows))
+func projectRows(rows []Row, fields []string) []Row {
+	projected := make([]Row, 0, len(rows))
 	for _, row := range rows {
-		projectedRow := domain.GraphQueryRow{}
+		projectedRow := Row{}
 		for _, field := range fields {
 			projectedRow[field] = row[field]
 		}
@@ -309,7 +308,7 @@ func (c queryCandidate) matches(conditions []Condition) bool {
 }
 
 // row returns selected fields for one candidate.
-func (c queryCandidate) row(fields []string) domain.GraphQueryRow {
+func (c queryCandidate) row(fields []string) Row {
 	return projectorRow(c, fields)
 }
 
@@ -363,8 +362,8 @@ func (c queryCandidate) field(field string) string {
 }
 
 // queryRowsFromCandidates projects node candidates into result rows.
-func queryRowsFromCandidates(candidates []queryCandidate, fields []string) []domain.GraphQueryRow {
-	rows := make([]domain.GraphQueryRow, 0, len(candidates))
+func queryRowsFromCandidates(candidates []queryCandidate, fields []string) []Row {
+	rows := make([]Row, 0, len(candidates))
 	for _, candidate := range candidates {
 		rows = append(rows, candidate.row(fields))
 	}
@@ -372,9 +371,9 @@ func queryRowsFromCandidates(candidates []queryCandidate, fields []string) []dom
 }
 
 // matchRowsAndPaths projects match candidates into result rows and path metadata.
-func matchRowsAndPaths(candidates []matchCandidate, fields []string) ([]domain.GraphQueryRow, []domain.GraphQueryPath) {
-	rows := make([]domain.GraphQueryRow, 0, len(candidates))
-	paths := make([]domain.GraphQueryPath, 0, len(candidates))
+func matchRowsAndPaths(candidates []matchCandidate, fields []string) ([]Row, []Path) {
+	rows := make([]Row, 0, len(candidates))
+	paths := make([]Path, 0, len(candidates))
 	for index, candidate := range candidates {
 		rows = append(rows, candidate.row(fields))
 		paths = append(paths, candidate.path(index))

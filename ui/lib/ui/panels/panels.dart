@@ -5,8 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../app/theme.dart';
-import '../../domain/models.dart';
+import '../theme.dart';
 
 part 'panel_basics.dart';
 part 'panel_surfaces.dart';

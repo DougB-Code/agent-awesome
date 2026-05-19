@@ -8,11 +8,11 @@ import 'dart:ui' show AppExitResponse, AppExitType;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../app/app_config.dart';
+import '../app/app_controller.dart';
 import '../domain/models.dart';
-import '../ui/agent_awesome_shell.dart';
-import '../ui/onboarding/setup_wizard_shell.dart';
-import 'app_config.dart';
-import 'app_controller.dart';
+import 'agent_awesome_shell.dart';
+import 'onboarding/setup_wizard_shell.dart';
 import 'theme.dart';
 
 /// AgentAwesomeApp owns app lifetime, theme, and controller creation.

@@ -9,8 +9,8 @@ Use it when reviewing startup, shutdown, local service cleanup, LiteRT inference
 The UI previously launched, tracked, and stopped subprocesses from several app modules.
 That made startup and shutdown slower, made cleanup behavior inconsistent, and left process-group signaling logic close to service-specific code.
 
-The fix moved app-owned subprocess handling into `lib/app/process_supervisor.dart`.
-Production UI code outside that file should not call `Process.run`, `Process.runSync`, `Process.start`, or `Process.killPid`.
+The fix moved app-owned subprocess handling into the `ProcessSupervisor` library rooted at `lib/app/process_supervisor.dart`.
+Production UI code outside the `lib/app/process_supervisor*.dart` library parts should not call `Process.run`, `Process.runSync`, `Process.start`, or `Process.killPid`.
 
 == Previous State
 
@@ -109,7 +109,7 @@ Run these checks after subprocess-related changes:
 cd ui
 flutter analyze
 flutter test
-rg -n "Process\.(run|runSync|start|killPid)" lib --glob '!lib/app/process_supervisor.dart'
+rg -n "Process\.(run|runSync|start|killPid)" lib --glob '!lib/app/process_supervisor*.dart'
 ----
 
 The final `rg` command should produce no matches.
@@ -122,4 +122,3 @@ For focused coverage, also run:
 cd ui
 flutter test test/process_supervisor_test.dart
 ----
-

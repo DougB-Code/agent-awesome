@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/theme.dart';
+import '../theme.dart';
 import '../../domain/local_models.dart';
 import '../../domain/onboarding_model_setup.dart';
 import '../../domain/system_capabilities.dart';

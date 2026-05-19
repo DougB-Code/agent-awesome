@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"memory/internal/memory/domain"
 	graph "memory/internal/memory/graph/domain"
 )
 
@@ -20,7 +19,7 @@ type mutationContext struct {
 }
 
 // mutationContextFromRequest validates required mutation provenance.
-func mutationContextFromRequest(stmt Statement, req domain.GraphQueryRequest, rawActor string) (mutationContext, error) {
+func mutationContextFromRequest(stmt Statement, req Request, rawActor string) (mutationContext, error) {
 	if !stmt.Mutating() {
 		return mutationContext{}, nil
 	}
@@ -382,7 +381,7 @@ func (e *Executor) nodeMutationResult(ctx context.Context, nodeID graph.NodeID, 
 		return executionResult{}, err
 	}
 	candidate := queryCandidate{node: node, properties: properties}
-	return executionResult{rows: []domain.GraphQueryRow{candidate.row(fields)}}, nil
+	return executionResult{rows: []Row{candidate.row(fields)}}, nil
 }
 
 // edgeMutationResult projects a mutated edge and its properties into a result.
@@ -396,7 +395,7 @@ func (e *Executor) edgeMutationResult(ctx context.Context, edgeID graph.EdgeID, 
 		return executionResult{}, err
 	}
 	candidate := edgeMutationCandidate{edge: edge, properties: properties}
-	return executionResult{rows: []domain.GraphQueryRow{candidate.row(fields)}}, nil
+	return executionResult{rows: []Row{candidate.row(fields)}}, nil
 }
 
 // auditNodeMutation appends an audit event for a node mutation.

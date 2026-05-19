@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
+import '../../../ui/theme.dart';
 import '../../../domain/executive_summary.dart';
 import '../../../domain/models.dart';
 import 'horizon_strip_card.dart';

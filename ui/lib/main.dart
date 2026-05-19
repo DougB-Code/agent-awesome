@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'app/agent_awesome_app.dart';
+import 'ui/agent_awesome_app.dart';
 import 'app/app_config.dart';
 
 /// Runs the configured Agent Awesome desktop application.

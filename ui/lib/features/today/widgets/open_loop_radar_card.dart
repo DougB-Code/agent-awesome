@@ -5,7 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../../app/theme.dart';
+import '../../../ui/theme.dart';
 import '../../../domain/executive_summary.dart';
 import 'today_card.dart';
 

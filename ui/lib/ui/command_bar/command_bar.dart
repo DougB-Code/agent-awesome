@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/theme.dart';
+import '../theme.dart';
 import '../../domain/date_formatting.dart';
 import '../shell/app_sections.dart';
 import 'command_context.dart';

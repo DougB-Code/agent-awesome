@@ -60,7 +60,51 @@ func (r *Repository) Close() error {
 // QueryContextGraph executes one graph query or audited mutation.
 func (r *Repository) QueryContextGraph(ctx context.Context, req domain.GraphQueryRequest) (domain.GraphQueryResult, error) {
 	executor := graphquery.NewExecutor(r.graph)
-	return executor.Execute(ctx, req)
+	result, err := executor.Execute(ctx, graphQueryRequest(req))
+	if err != nil {
+		return domain.GraphQueryResult{}, err
+	}
+	return graphQueryResult(result), nil
+}
+
+// graphQueryRequest converts service-level graph query metadata to graph-native execution input.
+func graphQueryRequest(req domain.GraphQueryRequest) graphquery.Request {
+	return graphquery.Request{
+		Actor:                req.Actor,
+		Query:                req.Query,
+		SourceNodeID:         req.SourceNodeID,
+		Firewall:             req.Firewall,
+		IncludeGlobal:        req.IncludeGlobal,
+		AllowedSensitivities: req.AllowedSensitivities,
+	}
+}
+
+// graphQueryResult converts graph-native execution output to service DTOs.
+func graphQueryResult(result graphquery.Result) domain.GraphQueryResult {
+	rows := make([]domain.GraphQueryRow, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		converted := domain.GraphQueryRow{}
+		for key, value := range row {
+			converted[key] = value
+		}
+		rows = append(rows, converted)
+	}
+	paths := make([]domain.GraphQueryPath, 0, len(result.Paths))
+	for _, path := range result.Paths {
+		paths = append(paths, domain.GraphQueryPath{
+			RowIndex: path.RowIndex,
+			Depth:    path.Depth,
+			NodeIDs:  append([]string{}, path.NodeIDs...),
+			EdgeIDs:  append([]string{}, path.EdgeIDs...),
+		})
+	}
+	return domain.GraphQueryResult{
+		Columns: append([]string{}, result.Columns...),
+		Rows:    rows,
+		Paths:   paths,
+		Limit:   result.Limit,
+		Query:   result.Query,
+	}
 }
 
 // Capture stores memory as graph nodes, edges, properties, aliases, evidence, and audit.

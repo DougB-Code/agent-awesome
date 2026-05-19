@@ -6,7 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/theme.dart';
+import '../../ui/theme.dart';
 import '../../domain/date_formatting.dart';
 import '../../domain/executive_summary.dart';
 import '../../domain/models.dart';

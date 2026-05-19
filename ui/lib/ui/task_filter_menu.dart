@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../app/theme.dart';
+import 'theme.dart';
 import 'panels/panels.dart';
 
 /// TaskFilterMenuOption describes one selectable filter value.

@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../app/theme.dart';
+import '../theme.dart';
 
 /// QuickAccessGroup describes one quick-access menu column.
 class QuickAccessGroup {

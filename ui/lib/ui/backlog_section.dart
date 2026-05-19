@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
-import '../app/theme.dart';
+import 'theme.dart';
 import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 import '../domain/screen_command.dart';

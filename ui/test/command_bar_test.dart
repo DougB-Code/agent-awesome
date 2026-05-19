@@ -5,7 +5,7 @@ import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
-import 'package:agentawesome_ui/app/theme.dart';
+import 'package:agentawesome_ui/ui/theme.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:agentawesome_ui/domain/runtime_profile.dart';
 import 'package:agentawesome_ui/ui/command_bar/command_bar.dart';

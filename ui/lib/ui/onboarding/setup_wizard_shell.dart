@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/theme.dart';
+import '../theme.dart';
 import 'getting_started_wizard.dart';
 
 /// SetupWizardShell renders only the first-run model connection experience.

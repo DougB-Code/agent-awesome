@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/theme.dart';
+import '../../ui/theme.dart';
 import '../../domain/executive_summary.dart';
 import 'widgets/delegation_agent_card.dart';
 import 'widgets/executive_summary_explanation_drawer.dart';

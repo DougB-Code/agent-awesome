@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"memory/internal/memory/domain"
 	graph "memory/internal/memory/graph/domain"
 	graphstore "memory/internal/memory/graph/store"
 )
@@ -36,7 +35,7 @@ func TestExecuteFindTaskFiltersNonEnglishProperty(t *testing.T) {
 		t.Fatalf("upsert status property: %v", err)
 	}
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `FIND task WHERE project = "Équipe Montréal" RETURN id, title, project, status ORDER BY title ASC LIMIT 5`,
 	})
 	if err != nil {
@@ -69,7 +68,7 @@ func TestExecuteFindComparisonPredicates(t *testing.T) {
 	upsertNumberProperty(t, store, done.ID, "risk_score", 8)
 	upsertTimeProperty(t, store, done.ID, "due_at", time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC))
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `FIND task WHERE status != "done" AND risk_score >= 6.5 AND due_at < "2026-05-03T00:00:00Z" RETURN title, status, risk_score, due_at LIMIT 10`,
 	})
 	if err != nil {
@@ -121,7 +120,7 @@ func TestExecuteMatchTaskDependencyReturnsEdgeRows(t *testing.T) {
 		t.Fatalf("upsert unrelated edge: %v", err)
 	}
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `MATCH task -[depends_on]-> task WHERE from.status = "open" RETURN from.title, edge.type, to.title ORDER BY to.title ASC LIMIT 10`,
 	})
 	if err != nil {
@@ -154,7 +153,7 @@ func TestExecuteVariableMatchReturnsBoundedPaths(t *testing.T) {
 	upsertEdge(t, store, grammar.ID, graph.RelationDependsOn, schema.ID)
 	upsertEdge(t, store, schema.ID, graph.RelationDependsOn, root.ID)
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `MATCH task -[depends_on*1..3]-> task WHERE from.title = "Render graph query results" RETURN from.title, path.depth, to.title, path.node_ids, path.edge_ids ORDER BY path.depth DESC LIMIT 10`,
 	})
 	if err != nil {
@@ -187,7 +186,7 @@ func TestExecuteVariableMatchFiltersPathDepthComparison(t *testing.T) {
 	upsertEdge(t, store, root.ID, graph.RelationDependsOn, middle.ID)
 	upsertEdge(t, store, middle.ID, graph.RelationDependsOn, leaf.ID)
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `MATCH task -[depends_on*1..3]-> task WHERE from.title = "Path root" AND path.depth >= 2 RETURN path.depth, to.title LIMIT 10`,
 	})
 	if err != nil {
@@ -217,7 +216,7 @@ func TestExecuteFindGroupsByPropertyCount(t *testing.T) {
 	upsertTextProperty(t, store, second.ID, "status", "open")
 	upsertTextProperty(t, store, done.ID, "status", "done")
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `FIND task GROUP BY status ORDER BY count DESC LIMIT 10`,
 	})
 	if err != nil {
@@ -252,7 +251,7 @@ func TestExecuteMatchGroupsByEndpointCount(t *testing.T) {
 	upsertEdge(t, store, second.ID, graph.RelationAssignedTo, doug.ID)
 	upsertEdge(t, store, third.ID, graph.RelationAssignedTo, mina.ID)
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `MATCH task -[assigned_to]-> person GROUP BY to.title RETURN to.title, count ORDER BY count DESC LIMIT 10`,
 	})
 	if err != nil {
@@ -283,7 +282,7 @@ func TestExecuteFindEnforcesFirewallAndSensitivity(t *testing.T) {
 	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:hidden:restricted", "Restricted hidden", graph.FirewallUser, graph.SensitivityRestricted)
 	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:hidden:project", "Project hidden", graph.FirewallProject, graph.SensitivityPrivate)
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `FIND task RETURN title, sensitivity, firewall ORDER BY title ASC LIMIT 10`,
 	})
 	if err != nil {
@@ -293,7 +292,7 @@ func TestExecuteFindEnforcesFirewallAndSensitivity(t *testing.T) {
 		t.Fatalf("rows = %#v, want same-firewall visible node only", result.Rows)
 	}
 
-	withGlobal, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	withGlobal, err := NewExecutor(store).Execute(ctx, Request{
 		Query:         `FIND task RETURN title, sensitivity, firewall ORDER BY title ASC LIMIT 10`,
 		IncludeGlobal: true,
 	})
@@ -307,9 +306,9 @@ func TestExecuteFindEnforcesFirewallAndSensitivity(t *testing.T) {
 		t.Fatalf("global rows = %#v, want opt-in global visibility", withGlobal.Rows)
 	}
 
-	restricted, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	restricted, err := NewExecutor(store).Execute(ctx, Request{
 		Query:                `FIND task RETURN title ORDER BY title ASC LIMIT 10`,
-		AllowedSensitivities: []domain.Sensitivity{domain.SensitivityRestricted},
+		AllowedSensitivities: []graph.Sensitivity{graph.SensitivityRestricted},
 	})
 	if err != nil {
 		t.Fatalf("execute restricted policy query: %v", err)
@@ -333,7 +332,7 @@ func TestExecuteMatchEnforcesEndpointAccess(t *testing.T) {
 	upsertEdge(t, store, work.ID, graph.RelationAssignedTo, restricted.ID)
 	upsertEdge(t, store, work.ID, graph.RelationAssignedTo, project.ID)
 
-	result, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	result, err := NewExecutor(store).Execute(ctx, Request{
 		Query: `MATCH task -[assigned_to]-> person RETURN from.title, to.title ORDER BY to.title ASC LIMIT 10`,
 	})
 	if err != nil {
@@ -343,9 +342,9 @@ func TestExecuteMatchEnforcesEndpointAccess(t *testing.T) {
 		t.Fatalf("rows = %#v, want only default-visible endpoint", result.Rows)
 	}
 
-	granted, err := NewExecutor(store).Execute(ctx, domain.GraphQueryRequest{
+	granted, err := NewExecutor(store).Execute(ctx, Request{
 		Query:                `MATCH task -[assigned_to]-> person RETURN to.title ORDER BY to.title ASC LIMIT 10`,
-		AllowedSensitivities: []domain.Sensitivity{domain.SensitivityPrivate, domain.SensitivityRestricted},
+		AllowedSensitivities: []graph.Sensitivity{graph.SensitivityPrivate, graph.SensitivityRestricted},
 	})
 	if err != nil {
 		t.Fatalf("execute granted endpoint policy query: %v", err)
@@ -363,14 +362,14 @@ func TestExecuteAuditedNodeMutations(t *testing.T) {
 
 	source := mustNode(t, store, graph.KindSource, "source:phase6:node", "Phase 6 source")
 	executor := NewExecutor(store)
-	missingActor := domain.GraphQueryRequest{
+	missingActor := Request{
 		Query:        `INSERT NODE task SET title = "No actor"`,
 		SourceNodeID: string(source.ID),
 	}
 	if _, err := executor.Execute(ctx, missingActor); err == nil {
 		t.Fatalf("mutation without actor returned nil error")
 	}
-	missingSource := domain.GraphQueryRequest{
+	missingSource := Request{
 		Actor: "tester",
 		Query: `INSERT NODE task SET title = "No source"`,
 	}
@@ -378,7 +377,7 @@ func TestExecuteAuditedNodeMutations(t *testing.T) {
 		t.Fatalf("mutation without source returned nil error")
 	}
 
-	insert, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	insert, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        `INSERT NODE task SET stable_key = "task:phase6", title = "Phase 6 task", status = "open", risk = 0.8 RETURN id, title, status, risk`,
@@ -390,7 +389,7 @@ func TestExecuteAuditedNodeMutations(t *testing.T) {
 		t.Fatalf("insert row = %#v, want typed node mutation row", insert.Rows)
 	}
 	nodeID := graph.NodeID(insert.Rows[0]["id"].(string))
-	reinsert, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	reinsert, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        `INSERT NODE task SET stable_key = "task:phase6", title = "Phase 6 task again" RETURN id, title`,
@@ -402,7 +401,7 @@ func TestExecuteAuditedNodeMutations(t *testing.T) {
 		t.Fatalf("reinsert row = %#v, want idempotent node upsert", reinsert.Rows[0])
 	}
 
-	set, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	set, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        fmt.Sprintf(`SET NODE %s SET title = "Updated Phase 6 task", priority = "high" RETURN title, priority`, nodeID),
@@ -414,7 +413,7 @@ func TestExecuteAuditedNodeMutations(t *testing.T) {
 		t.Fatalf("set row = %#v, want updated title and priority", set.Rows[0])
 	}
 
-	deleted, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	deleted, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        fmt.Sprintf(`DELETE NODE %s`, nodeID),
@@ -445,7 +444,7 @@ func TestExecuteAuditedEdgeMutations(t *testing.T) {
 	to := mustNode(t, store, graph.KindTask, "task:phase6:to", "Phase 6 to")
 	executor := NewExecutor(store)
 
-	insert, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	insert, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        fmt.Sprintf(`INSERT EDGE %s -[depends_on]-> %s SET note = "needs this first" RETURN edge.id, edge.type, note`, from.ID, to.ID),
@@ -457,7 +456,7 @@ func TestExecuteAuditedEdgeMutations(t *testing.T) {
 		t.Fatalf("insert edge row = %#v, want dependency edge with note", insert.Rows)
 	}
 	edgeID := graph.EdgeID(insert.Rows[0]["edge.id"].(string))
-	reinsert, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	reinsert, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        fmt.Sprintf(`INSERT EDGE %s -[depends_on]-> %s SET note = "needs this first" RETURN edge.id, note`, from.ID, to.ID),
@@ -469,7 +468,7 @@ func TestExecuteAuditedEdgeMutations(t *testing.T) {
 		t.Fatalf("reinsert edge row = %#v, want idempotent edge upsert", reinsert.Rows[0])
 	}
 
-	set, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	set, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        fmt.Sprintf(`SET EDGE %s SET confidence = 0.5, note = "updated note" RETURN edge.id, edge.confidence, note`, edgeID),
@@ -481,7 +480,7 @@ func TestExecuteAuditedEdgeMutations(t *testing.T) {
 		t.Fatalf("set edge row = %#v, want confidence and note", set.Rows[0])
 	}
 
-	deleted, err := executor.Execute(ctx, domain.GraphQueryRequest{
+	deleted, err := executor.Execute(ctx, Request{
 		Actor:        "tester",
 		SourceNodeID: string(source.ID),
 		Query:        fmt.Sprintf(`DELETE EDGE %s`, edgeID),

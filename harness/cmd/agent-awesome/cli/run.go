@@ -4,12 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 
 	"agentawesome/internal/app"
 	"agentawesome/internal/config"
-	"agentawesome/internal/console"
-	"agentawesome/internal/runtime"
 	"github.com/spf13/cobra"
 )
 
@@ -65,8 +62,5 @@ AA runtime syntax:
 
 // runtimeSyntax returns the runtime argument syntax shown in CLI help.
 func runtimeSyntax() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "Agent Awesome console:\n%s\n", console.Syntax())
-	fmt.Fprintf(&b, "Assistant runtime modes:\n%s", runtime.Syntax())
-	return b.String()
+	return app.RuntimeSyntax()
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"memory/internal/memory/domain"
 	graph "memory/internal/memory/graph/domain"
 )
 
@@ -41,8 +40,8 @@ type graphQueryAccessPolicy struct {
 
 // executionResult stores rows and optional paths produced by one query.
 type executionResult struct {
-	rows  []domain.GraphQueryRow
-	paths []domain.GraphQueryPath
+	rows  []Row
+	paths []Path
 }
 
 // NewExecutor creates a graph query executor.
@@ -51,26 +50,26 @@ func NewExecutor(store Store) *Executor {
 }
 
 // Execute parses and evaluates one graph query or audited mutation.
-func (e *Executor) Execute(ctx context.Context, req domain.GraphQueryRequest) (domain.GraphQueryResult, error) {
+func (e *Executor) Execute(ctx context.Context, req Request) (Result, error) {
 	rawActor := strings.TrimSpace(req.Actor)
-	req, err := domain.NormalizeGraphQueryRequest(req)
+	req, err := normalizeRequest(req)
 	if err != nil {
-		return domain.GraphQueryResult{}, err
+		return Result{}, err
 	}
 	stmt, err := Parse(req.Query)
 	if err != nil {
-		return domain.GraphQueryResult{}, err
+		return Result{}, err
 	}
 	mutationCtx, err := mutationContextFromRequest(stmt, req, rawActor)
 	if err != nil {
-		return domain.GraphQueryResult{}, err
+		return Result{}, err
 	}
 	policy := graphQueryAccessPolicyFromRequest(req)
 	output, err := e.executeStatement(ctx, stmt, policy, mutationCtx)
 	if err != nil {
-		return domain.GraphQueryResult{}, err
+		return Result{}, err
 	}
-	return domain.GraphQueryResult{
+	return Result{
 		Columns: stmt.Return,
 		Rows:    output.rows,
 		Paths:   output.paths,
@@ -80,7 +79,7 @@ func (e *Executor) Execute(ctx context.Context, req domain.GraphQueryRequest) (d
 }
 
 // graphQueryAccessPolicyFromRequest builds graph read policy from public request metadata.
-func graphQueryAccessPolicyFromRequest(req domain.GraphQueryRequest) graphQueryAccessPolicy {
+func graphQueryAccessPolicyFromRequest(req Request) graphQueryAccessPolicy {
 	allowed := make([]graph.Sensitivity, 0, len(req.AllowedSensitivities))
 	allowedSet := map[graph.Sensitivity]bool{}
 	for _, sensitivity := range req.AllowedSensitivities {

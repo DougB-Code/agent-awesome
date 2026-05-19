@@ -3,7 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../app/theme.dart';
+import 'theme.dart';
 import '../domain/date_formatting.dart';
 import '../domain/models.dart';
 

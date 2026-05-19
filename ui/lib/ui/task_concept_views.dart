@@ -6,7 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../app/app_controller.dart';
-import '../app/theme.dart';
+import 'theme.dart';
 import '../domain/models.dart';
 import '../domain/task_graph_query.dart';
 import '../domain/task_wbs_tree.dart';

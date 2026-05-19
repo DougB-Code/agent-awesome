@@ -9,7 +9,7 @@ import 'package:agentawesome_ui/app/file_import.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
-import 'package:agentawesome_ui/app/theme.dart';
+import 'package:agentawesome_ui/ui/theme.dart';
 import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/domain/executive_summary.dart';

@@ -1,6 +1,42 @@
 package query
 
-import graph "memory/internal/memory/graph/domain"
+import (
+	"errors"
+	"fmt"
+	"strings"
+
+	graph "memory/internal/memory/graph/domain"
+)
+
+// Request asks the graph query executor to evaluate one query or mutation.
+type Request struct {
+	Actor                string
+	Query                string
+	SourceNodeID         string
+	Firewall             graph.Firewall
+	IncludeGlobal        bool
+	AllowedSensitivities []graph.Sensitivity
+}
+
+// Result stores rows returned by a graph query or mutation.
+type Result struct {
+	Columns []string
+	Rows    []Row
+	Paths   []Path
+	Limit   int
+	Query   string
+}
+
+// Row stores one graph query row.
+type Row map[string]any
+
+// Path stores graph path metadata associated with one result row.
+type Path struct {
+	RowIndex int
+	Depth    int
+	NodeIDs  []string
+	EdgeIDs  []string
+}
 
 // StatementMode describes which graph grammar branch was parsed.
 type StatementMode string
@@ -147,4 +183,37 @@ const (
 type Token struct {
 	Type  TokenType
 	Value string
+}
+
+// normalizeRequest validates shared graph query request metadata.
+func normalizeRequest(req Request) (Request, error) {
+	req.Actor = defaultString(req.Actor, "agent")
+	req.Query = strings.TrimSpace(req.Query)
+	req.SourceNodeID = strings.TrimSpace(req.SourceNodeID)
+	if req.Query == "" {
+		return req, errors.New("query is required")
+	}
+	if req.Firewall == "" {
+		req.Firewall = graph.FirewallUser
+	}
+	if !graph.ValidFirewall(req.Firewall) {
+		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
+	}
+	if len(req.AllowedSensitivities) == 0 {
+		req.AllowedSensitivities = []graph.Sensitivity{graph.SensitivityPublic, graph.SensitivityInternal, graph.SensitivityPrivate}
+	}
+	for _, sensitivity := range req.AllowedSensitivities {
+		if !graph.ValidSensitivity(sensitivity) {
+			return req, fmt.Errorf("invalid sensitivity %q", sensitivity)
+		}
+	}
+	return req, nil
+}
+
+// defaultString returns fallback when value is blank after trimming.
+func defaultString(value string, fallback string) string {
+	if trimmed := strings.TrimSpace(value); trimmed != "" {
+		return trimmed
+	}
+	return fallback
 }

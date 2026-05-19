@@ -4,7 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:agentawesome_ui/app/agent_awesome_app.dart';
+import 'package:agentawesome_ui/ui/agent_awesome_app.dart';
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

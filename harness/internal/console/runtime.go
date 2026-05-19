@@ -7,8 +7,8 @@ import (
 	"iter"
 	"os"
 
+	aaruntime "agentawesome/internal/runtime"
 	"google.golang.org/adk/agent"
-	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/runner"
 	"google.golang.org/adk/session"
 	"google.golang.org/genai"
@@ -34,21 +34,21 @@ func (r adkConsoleRunner) Run(ctx context.Context, userID, sessionID string, msg
 }
 
 // Run starts Agent Awesome's built-in terminal runtime mode.
-func Run(ctx context.Context, cfg *launcher.Config, args []string) error {
+func Run(ctx context.Context, cfg *aaruntime.Config, args []string) error {
 	opts, err := parseConsoleOptions(args)
 	if err != nil {
 		return err
 	}
 
-	runtime, err := newConsoleRuntime(ctx, cfg)
+	consoleRuntime, err := newConsoleRuntime(ctx, cfg)
 	if err != nil {
 		return err
 	}
-	return NewConsole(os.Stdin, os.Stdout).Run(ctx, runtime.runner, runtime.userID, runtime.sessionID, opts.streamingMode)
+	return NewConsole(os.Stdin, os.Stdout).Run(ctx, consoleRuntime.runner, consoleRuntime.userID, consoleRuntime.sessionID, opts.streamingMode)
 }
 
 // newConsoleRuntime creates the ADK runner and session used by console mode.
-func newConsoleRuntime(ctx context.Context, cfg *launcher.Config) (consoleRuntime, error) {
+func newConsoleRuntime(ctx context.Context, cfg *aaruntime.Config) (consoleRuntime, error) {
 	// The console is a local single-user experience, so fixed IDs are enough to
 	// keep the session stable for the lifetime of the command.
 	userID, appName := "console_user", "console_app"

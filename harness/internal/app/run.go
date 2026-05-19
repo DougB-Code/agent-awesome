@@ -17,7 +17,6 @@ import (
 	"agentawesome/internal/runtime"
 	"agentawesome/internal/sessionstore"
 	"agentawesome/internal/tools/toolsets"
-	"google.golang.org/adk/cmd/launcher"
 )
 
 // Options contains CLI-selected runtime and config overrides.
@@ -76,7 +75,7 @@ func Run(ctx context.Context, opts Options) error {
 // NewRuntimeConfig resolves the selected model/provider, converts the configured
 // agent, attaches configured tools and toolsets, and returns the executable
 // runtime config.
-func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCfg schema.Agent, toolsCfg *schema.Tools, opts Options) (*launcher.Config, error) {
+func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCfg schema.Agent, toolsCfg *schema.Tools, opts Options) (*runtime.Config, error) {
 	modelFactory := model.NewFactory()
 	if err := modelFactory.ValidateConfig(modelCfg); err != nil {
 		return nil, err
@@ -130,6 +129,11 @@ func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCf
 		runtimeConfig.PluginConfig.Plugins = append(runtimeConfig.PluginConfig.Plugins, plugin)
 	}
 	return runtimeConfig, nil
+}
+
+// RuntimeSyntax returns the run command syntax owned by runtime packages.
+func RuntimeSyntax() string {
+	return fmt.Sprintf("Agent Awesome console:\n%s\nAssistant runtime modes:\n%s", console.Syntax(), runtime.Syntax())
 }
 
 // validateSelectedModelCapabilities rejects runtime requests that the selected

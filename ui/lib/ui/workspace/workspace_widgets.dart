@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/theme.dart';
+import '../theme.dart';
 import '../../domain/models.dart';
 import '../panels/panels.dart';
 import '../shell/app_sections.dart';

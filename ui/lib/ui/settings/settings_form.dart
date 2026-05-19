@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../app/theme.dart';
+import '../theme.dart';
 import '../panels/panels.dart';
 
 /// SettingsFormMetrics defines spacing and sizing used by settings forms.

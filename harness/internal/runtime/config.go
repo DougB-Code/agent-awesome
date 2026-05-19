@@ -23,10 +23,13 @@ import (
 	llmapi "google.golang.org/adk/model"
 )
 
+// Config is the runtime launch configuration owned by this package.
+type Config = launcher.Config
+
 // NewConfig builds a runtime configuration for a single Agent Awesome agent.
 // It converts the local agent definition into the runtime's LLM agent shape and
 // installs any configured tools and toolsets on that agent.
-func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools toolbundle.Bundle) (*launcher.Config, error) {
+func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools toolbundle.Bundle) (*Config, error) {
 	runtimeAgent, err := llmagent.New(llmagent.Config{
 		Name:        def.Name,
 		Model:       llm,
@@ -43,7 +46,7 @@ func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools toolbundle.Bundle)
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
 
-	return &launcher.Config{
+	return &Config{
 		AgentLoader: aaagent.NewSingleLoader(runtimeAgent),
 	}, nil
 }
@@ -51,7 +54,7 @@ func NewConfig(def agentpkg.Definition, llm llmapi.LLM, tools toolbundle.Bundle)
 // Execute runs the configured agent with runtime-specific arguments.
 // Help requests are treated as successful exits because the runtime has already
 // printed the requested help text for the user.
-func Execute(ctx context.Context, config *launcher.Config, args []string) error {
+func Execute(ctx context.Context, config *Config, args []string) error {
 	runtime := delegatedLauncher()
 	if err := runtime.Execute(ctx, config, args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
