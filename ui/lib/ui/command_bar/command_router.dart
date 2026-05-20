@@ -143,6 +143,8 @@ class CommandRouter {
       'automations': AppSections.automationOperations,
       'operation': AppSections.automationOperations,
       'operations': AppSections.automationOperations,
+      'workflow': AppSections.automationWorkflows,
+      'workflows': AppSections.automationWorkflows,
       'mcp': AppSections.automationMcpServers,
       'server': AppSections.automationMcpServers,
       'servers': AppSections.automationMcpServers,

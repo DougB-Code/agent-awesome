@@ -37,6 +37,11 @@ void main() {
     expect(profile.workflow.enabled, isTrue);
     expect(profile.workflow.apiBaseUrl, 'http://127.0.0.1:8092/api/workflows');
     expect(profile.workflow.mcpUrl, 'http://127.0.0.1:8092/mcp');
+    final workflowArguments = workflowArgumentsForProfile(profile);
+    expect(workflowArguments, contains('--harness-context-base-url'));
+    expect(workflowArguments, isNot(contains('--harness-base-url')));
+    expect(workflowArguments, isNot(contains('--app-name')));
+    expect(workflowArguments, isNot(contains('--user-id')));
     expect(
       profile.gateway.effectiveStatusUrl,
       'http://127.0.0.1:8070/api/gateway/beta-status',

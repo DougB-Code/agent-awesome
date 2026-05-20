@@ -193,6 +193,29 @@ func (s *Store) StepOutput(ctx context.Context, runID string, stepID string) (ma
 	return output, true, nil
 }
 
+// StepOutputs loads persisted step outputs for one workflow run.
+func (s *Store) StepOutputs(ctx context.Context, runID string) (map[string]map[string]any, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT step_id, output_json FROM workflow_step_outputs WHERE run_id = ?`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("list workflow step outputs %s: %w", runID, err)
+	}
+	defer rows.Close()
+	outputs := map[string]map[string]any{}
+	for rows.Next() {
+		var stepID string
+		var encoded string
+		if err := rows.Scan(&stepID, &encoded); err != nil {
+			return nil, err
+		}
+		var output map[string]any
+		if err := json.Unmarshal([]byte(encoded), &output); err != nil {
+			return nil, fmt.Errorf("decode workflow step output %s/%s: %w", runID, stepID, err)
+		}
+		outputs[stepID] = output
+	}
+	return outputs, rows.Err()
+}
+
 // GetTaskState loads one durable task-state record.
 func (s *Store) GetTaskState(ctx context.Context, runID string, stateID string) (TaskStateRecord, bool, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at

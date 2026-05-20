@@ -34,6 +34,11 @@ const (
 	taskTriggerFail    = "fail"
 )
 
+const (
+	processTriggerSucceeded = "succeeded"
+	processTriggerFailed    = "failed"
+)
+
 // Service owns workflow definitions, persistence, and execution.
 type Service struct {
 	cfg     Config
@@ -95,6 +100,7 @@ func (s *Service) ReloadDefinitions(ctx context.Context) error {
 	}
 	nextDefs := map[string]definition.Definition{}
 	nextHash := map[string]string{}
+	draftSources := make([]loadedDefinitionDraftSource, 0, len(loaded))
 	ids := make([]string, 0, len(loaded))
 	for _, item := range loaded {
 		body := map[string]any{}
@@ -113,8 +119,15 @@ func (s *Service) ReloadDefinitions(ctx context.Context) error {
 		ids = append(ids, item.Definition.ID)
 		nextDefs[item.Definition.ID] = item.Definition
 		nextHash[item.Definition.ID] = item.Hash
+		draftSources = append(draftSources, loadedDefinitionDraftSource{
+			definition: item.Definition,
+			body:       body,
+		})
 	}
 	if err := s.store.DeleteDefinitionsExcept(ctx, ids); err != nil {
+		return err
+	}
+	if err := s.ensureDraftsForDefinitions(ctx, draftSources); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -149,7 +162,7 @@ func (s *Service) StartWorkflow(ctx context.Context, definitionID string, input 
 	}
 	state := "running"
 	if !definition.HasTaskStates(def) {
-		state = def.Initial
+		state = initialProcessState(def)
 	}
 	run := store.RunRecord{
 		ID:           runID,
@@ -328,6 +341,11 @@ func (s *Service) executeRun(ctx context.Context, runID string) {
 		_ = s.store.UpdateRunState(ctx, run.ID, statusWaiting, run.State, run.Output)
 		return
 	}
+	if def.Kind == definition.KindStateMachine && !definition.HasTaskStates(def) {
+		if s.transitionProcessFailure(ctx, def, run, err) {
+			return
+		}
+	}
 	s.failRun(ctx, run, err)
 }
 
@@ -341,11 +359,21 @@ func (s *Service) completeStateMachineRun(ctx context.Context, def definition.De
 		s.failRun(ctx, run, fmt.Errorf("state %q is not defined", run.State))
 		return
 	}
-	if len(state.Transitions) > 0 {
+	if processTransitionExists(def, state.ID, processTriggerSucceeded) {
+		if err := s.fireStateTrigger(ctx, def, run, processTriggerSucceeded); err != nil {
+			s.failRun(ctx, run, err)
+			return
+		}
+		go s.executeRun(context.Background(), run.ID)
+		return
+	}
+	if processStateHasTransitions(def, state.ID) {
 		_ = s.store.UpdateRunState(ctx, run.ID, statusWaiting, run.State, run.Output)
 		return
 	}
-	_ = s.store.UpdateRunState(ctx, run.ID, statusSucceeded, run.State, map[string]any{"status": statusSucceeded})
+	output := cloneMap(run.Output)
+	output["status"] = statusSucceeded
+	_ = s.store.UpdateRunState(ctx, run.ID, statusSucceeded, run.State, output)
 	_ = s.store.AppendEvent(ctx, run.ID, "run_succeeded", "workflow run succeeded", nil)
 }
 
@@ -355,16 +383,69 @@ func (s *Service) executeStateEntry(ctx context.Context, def definition.Definiti
 	if !ok {
 		return fmt.Errorf("state %q is not defined", run.State)
 	}
-	for index, action := range state.OnEntry {
-		stepID := action.ID
-		if stepID == "" {
-			stepID = fmt.Sprintf("%s_entry_%d", state.ID, index+1)
-		}
-		if _, err := s.executeAction(ctx, run, stepID, action.Uses, action.With); err != nil {
-			return err
+	previousStateID, err := s.latestTransitionSource(ctx, run.ID, state.ID)
+	if err != nil {
+		return err
+	}
+	for _, entryState := range processEntryPath(def, previousStateID, state.ID) {
+		for index, action := range entryState.OnEntry {
+			stepID := action.ID
+			if stepID == "" {
+				stepID = fmt.Sprintf("%s_entry_%d", entryState.ID, index+1)
+			}
+			input, err := s.processStateInput(ctx, run)
+			if err != nil {
+				return err
+			}
+			if _, err := s.executeActionWithInput(ctx, run, stepID, action.Uses, action.With, input); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// transitionProcessFailure follows an explicit failed transition instead of ending the run.
+func (s *Service) transitionProcessFailure(ctx context.Context, def definition.Definition, run store.RunRecord, cause error) bool {
+	state, ok := stateByID(def, run.State)
+	if !ok || !processTransitionExists(def, state.ID, processTriggerFailed) {
+		return false
+	}
+	output := cloneMap(run.Output)
+	output["status"] = statusFailed
+	output["error"] = cause.Error()
+	if err := s.store.UpdateRunState(ctx, run.ID, statusRunning, run.State, output); err != nil {
+		s.failRun(ctx, run, err)
+		return true
+	}
+	nextRun, err := s.store.GetRun(ctx, run.ID)
+	if err != nil {
+		s.failRun(ctx, run, err)
+		return true
+	}
+	if err := s.fireStateTrigger(ctx, def, nextRun, processTriggerFailed); err != nil {
+		s.failRun(ctx, nextRun, err)
+		return true
+	}
+	go s.executeRun(context.Background(), run.ID)
+	return true
+}
+
+// processStateInput exposes workflow input and prior step outputs to entry actions.
+func (s *Service) processStateInput(ctx context.Context, run store.RunRecord) (map[string]any, error) {
+	input := cloneMap(run.Input)
+	input["workflow_input"] = run.Input
+	outputs, err := s.store.StepOutputs(ctx, run.ID)
+	if err != nil {
+		return nil, err
+	}
+	for stepID, output := range outputs {
+		input[stepID] = output
+	}
+	if len(run.Output) > 0 {
+		input["workflow_output"] = run.Output
+	}
+	return input, nil
 }
 
 // executeTaskStates schedules ready task states until the graph completes.
@@ -386,7 +467,8 @@ func (s *Service) executeTaskStates(ctx context.Context, def definition.Definiti
 		if failedID, failed := firstFailedTaskState(taskStates, statuses); failed {
 			return fmt.Errorf("task state %q failed: %s", failedID, statuses[failedID].Error)
 		}
-		for _, state := range def.States {
+		for _, item := range definition.FlattenStates(def.States) {
+			state := item.State
 			if _, ok := taskStates[state.ID]; !ok {
 				continue
 			}
@@ -559,8 +641,15 @@ func (s *Service) fireStateTrigger(ctx context.Context, def definition.Definitio
 		},
 		stateless.FiringQueued,
 	)
-	for _, state := range def.States {
+	for _, item := range definition.FlattenStates(def.States) {
+		state := item.State
 		cfg := machine.Configure(state.ID)
+		if item.Parent != "" {
+			cfg.SubstateOf(item.Parent)
+		}
+		if strings.TrimSpace(state.Initial) != "" {
+			cfg.InitialTransition(state.Initial)
+		}
 		for _, transition := range state.Transitions {
 			cfg.Permit(transition.Trigger, transition.To)
 		}
@@ -618,12 +707,139 @@ func (s *Service) failRun(ctx context.Context, run store.RunRecord, err error) {
 
 // stateByID returns one state definition by id.
 func stateByID(def definition.Definition, id string) (definition.StateDefinition, bool) {
-	for _, state := range def.States {
-		if state.ID == id {
-			return state, true
+	for _, item := range definition.FlattenStates(def.States) {
+		if item.State.ID == id {
+			return item.State, true
 		}
 	}
 	return definition.StateDefinition{}, false
+}
+
+// processStateHasTransitions reports whether a process state or ancestor has exits.
+func processStateHasTransitions(def definition.Definition, stateID string) bool {
+	states := processStatesByID(def)
+	parents := processParentsByID(def)
+	for currentID := stateID; currentID != ""; currentID = parents[currentID] {
+		state, ok := states[currentID]
+		if !ok {
+			break
+		}
+		if len(state.Transitions) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// processTransitionExists reports whether a process state or ancestor accepts a trigger.
+func processTransitionExists(def definition.Definition, stateID string, trigger string) bool {
+	states := processStatesByID(def)
+	parents := processParentsByID(def)
+	for currentID := stateID; currentID != ""; currentID = parents[currentID] {
+		state, ok := states[currentID]
+		if !ok {
+			break
+		}
+		for _, transition := range state.Transitions {
+			if strings.TrimSpace(transition.Trigger) == trigger {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// initialProcessState resolves root and composite initial transitions to a leaf state.
+func initialProcessState(def definition.Definition) string {
+	stateID := strings.TrimSpace(def.Initial)
+	states := processStatesByID(def)
+	seen := map[string]bool{}
+	for stateID != "" && !seen[stateID] {
+		seen[stateID] = true
+		state := states[stateID]
+		next := strings.TrimSpace(state.Initial)
+		if next == "" {
+			return stateID
+		}
+		stateID = next
+	}
+	return strings.TrimSpace(def.Initial)
+}
+
+// latestTransitionSource returns the previous active state for the latest transition into stateID.
+func (s *Service) latestTransitionSource(ctx context.Context, runID string, stateID string) (string, error) {
+	events, err := s.store.ListEvents(ctx, runID)
+	if err != nil {
+		return "", err
+	}
+	for index := len(events) - 1; index >= 0; index-- {
+		event := events[index]
+		if event.Type != "state_transitioned" || fmt.Sprint(event.Data["to"]) != stateID {
+			continue
+		}
+		return strings.TrimSpace(fmt.Sprint(event.Data["from"])), nil
+	}
+	return "", nil
+}
+
+// processEntryPath returns ancestor states newly entered on the way to target.
+func processEntryPath(def definition.Definition, sourceID string, targetID string) []definition.StateDefinition {
+	states := processStatesByID(def)
+	parents := processParentsByID(def)
+	targetIDs := processStatePathIDs(parents, targetID)
+	if sourceID == "" {
+		return statesForPathIDs(states, targetIDs)
+	}
+	sourceIDs := processStatePathIDs(parents, sourceID)
+	shared := 0
+	for shared < len(sourceIDs) && shared < len(targetIDs) {
+		if sourceIDs[shared] != targetIDs[shared] {
+			break
+		}
+		shared++
+	}
+	return statesForPathIDs(states, targetIDs[shared:])
+}
+
+// processStatePathIDs returns root-to-state hierarchy ids.
+func processStatePathIDs(parents map[string]string, stateID string) []string {
+	ids := []string{}
+	for currentID := stateID; currentID != ""; currentID = parents[currentID] {
+		ids = append(ids, currentID)
+	}
+	for left, right := 0, len(ids)-1; left < right; left, right = left+1, right-1 {
+		ids[left], ids[right] = ids[right], ids[left]
+	}
+	return ids
+}
+
+// statesForPathIDs resolves a path of state ids into definitions.
+func statesForPathIDs(states map[string]definition.StateDefinition, ids []string) []definition.StateDefinition {
+	path := make([]definition.StateDefinition, 0, len(ids))
+	for _, id := range ids {
+		if state, ok := states[id]; ok {
+			path = append(path, state)
+		}
+	}
+	return path
+}
+
+// processStatesByID indexes all process states by id.
+func processStatesByID(def definition.Definition) map[string]definition.StateDefinition {
+	states := map[string]definition.StateDefinition{}
+	for _, item := range definition.FlattenStates(def.States) {
+		states[item.State.ID] = item.State
+	}
+	return states
+}
+
+// processParentsByID indexes all process state parent ids.
+func processParentsByID(def definition.Definition) map[string]string {
+	parents := map[string]string{}
+	for _, item := range definition.FlattenStates(def.States) {
+		parents[item.State.ID] = item.Parent
+	}
+	return parents
 }
 
 // lockRun serializes in-process execution for one run id.
@@ -648,9 +864,9 @@ type taskStateResult struct {
 // taskStatesByID returns every executable task state by id.
 func taskStatesByID(def definition.Definition) map[string]definition.StateDefinition {
 	states := map[string]definition.StateDefinition{}
-	for _, state := range def.States {
-		if definition.IsTaskState(state) {
-			states[state.ID] = state
+	for _, item := range definition.FlattenStates(def.States) {
+		if definition.IsTaskState(item.State) {
+			states[item.State.ID] = item.State
 		}
 	}
 	return states

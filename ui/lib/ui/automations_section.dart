@@ -3,13 +3,17 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app/app_controller.dart';
 import 'theme.dart';
 import '../domain/models_automation.dart';
 import 'panels/panels.dart';
+
+part 'automations_state_machine_builder.dart';
 
 const String _automationPanelOperations = 'operations';
 const String _automationPanelWorkflows = 'workflows';
@@ -26,6 +30,7 @@ const String _automationTaskAreaNodes = 'task_nodes';
 
 const String _automationDetailOverview = 'overview';
 const String _automationDetailBuilder = 'builder';
+const String _automationDetailInspect = 'inspect';
 const String _automationDetailSteps = 'steps';
 const String _automationDetailMap = 'map';
 const String _automationDetailHistory = 'history';
@@ -34,6 +39,7 @@ const String _automationDetailSafety = 'safety';
 const Set<String> _taskGraphActionNames = <String>{
   'mcp.call',
   'tool.call',
+  'data.assert',
   'workflow.run',
 };
 
@@ -162,6 +168,7 @@ class _AutomationFocusedCommandPanel extends StatefulWidget {
 class _AutomationFocusedCommandPanelState
     extends State<_AutomationFocusedCommandPanel> {
   late final _TaskGraphActionIntentController _taskGraphActionIntents;
+  late final _StateMachineDraftEditController _stateMachineEditor;
   String _detailModeId = _automationDetailOverview;
 
   /// Triggers the first data load after the focused panel is attached.
@@ -169,14 +176,15 @@ class _AutomationFocusedCommandPanelState
   void initState() {
     super.initState();
     _taskGraphActionIntents = _TaskGraphActionIntentController();
-    if (widget.panelId == _automationPanelTasks) {
+    _stateMachineEditor = _StateMachineDraftEditController(
+      controller: widget.controller,
+    );
+    if (widget.panelId == _automationPanelWorkflows ||
+        widget.panelId == _automationPanelTasks) {
       _detailModeId = _automationDetailBuilder;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted &&
-          widget.controller.automationDefinitions.isEmpty &&
-          widget.controller.automationDrafts.isEmpty &&
-          !widget.controller.automationsBusy) {
+      if (mounted && !_hasPanelData() && !widget.controller.automationsBusy) {
         unawaited(widget.controller.refreshAutomationsFromUi());
       }
     });
@@ -186,7 +194,25 @@ class _AutomationFocusedCommandPanelState
   @override
   void dispose() {
     _taskGraphActionIntents.dispose();
+    _stateMachineEditor.dispose();
     super.dispose();
+  }
+
+  /// Reports whether the current panel already has its local collection data.
+  bool _hasPanelData() {
+    return switch (widget.panelId) {
+      _automationPanelOperations =>
+        widget.controller.automationDefinitions.isNotEmpty ||
+            widget.controller.automationRuns.isNotEmpty ||
+            widget.controller.automationInbox.isNotEmpty,
+      _automationPanelWorkflows => widget.controller.automationDrafts.any(
+        (draft) => draft.kind == 'state_machine',
+      ),
+      _automationPanelTasks => widget.controller.automationDrafts.any(
+        (draft) => draft.kind == 'task_graph',
+      ),
+      _ => true,
+    };
   }
 
   /// Builds one focused Automations command panel.
@@ -204,23 +230,29 @@ class _AutomationFocusedCommandPanelState
       detailTabsBuilder: (area, mode) =>
           _detailTabsForMode(widget.panelId, mode.id),
       selectedDetailModeId: selectedMode,
-      onDetailModeSelected: (modeId) => setState(() => _detailModeId = modeId),
+      onDetailModeSelected: _selectDetailMode,
       detailBuilder: (modeId) => _AutomationDetailContent(
         controller: widget.controller,
+        stateMachineEditor: _stateMachineEditor,
         areaId: widget.panelId,
         modeId: modeId,
+        onDetailModeRequested: _selectDetailMode,
       ),
       areaDetailBuilder: (area, modeId) => _AutomationDetailContent(
         controller: widget.controller,
+        stateMachineEditor: _stateMachineEditor,
         areaId: area.id,
         modeId: modeId,
+        onDetailModeRequested: _selectDetailMode,
       ),
       areaTabbedDetailBuilder: (area, modeId, tabId) =>
           _AutomationDetailContent(
             controller: widget.controller,
+            stateMachineEditor: _stateMachineEditor,
             areaId: area.id,
             modeId: modeId,
             tabId: tabId,
+            onDetailModeRequested: _selectDetailMode,
           ),
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: (context, area) {
@@ -234,6 +266,7 @@ class _AutomationFocusedCommandPanelState
         );
       },
       detailModesBuilder: _detailModesForArea,
+      companionAreaIdBuilder: _companionAreaForDetailMode,
       detailActionsBuilder: (context, area, mode) {
         return _AutomationDetailActions(
           controller: widget.controller,
@@ -242,15 +275,38 @@ class _AutomationFocusedCommandPanelState
         );
       },
       filterHint: widget.filterHint,
-      split: widget.split,
+      split: _splitForArea(areas),
     );
-    if (widget.panelId != _automationPanelTasks) {
+    if (widget.panelId != _automationPanelWorkflows &&
+        widget.panelId != _automationPanelTasks) {
       return shell;
     }
     return _TaskGraphActionIntentScope(
       notifier: _taskGraphActionIntents,
       child: shell,
     );
+  }
+
+  /// Selects a right-side Automations detail mode.
+  void _selectDetailMode(String modeId) {
+    final restoringCanvas =
+        _detailModeId == _automationDetailInspect &&
+        modeId == _automationDetailBuilder;
+    if (_detailModeId == _automationDetailBuilder &&
+        modeId == _automationDetailInspect) {
+      _stateMachineEditor.captureCanvasOffset();
+    }
+    if (restoringCanvas) {
+      _stateMachineEditor.prepareCanvasControllersForRestore();
+    }
+    setState(() => _detailModeId = modeId);
+    if (restoringCanvas) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _stateMachineEditor.restoreCanvasOffset();
+        }
+      });
+    }
   }
 
   /// Builds quick-access command areas for the current Automations screen.
@@ -313,10 +369,9 @@ class _AutomationFocusedCommandPanelState
           id: _automationWorkflowAreaActions,
           title: 'Actions',
           icon: Icons.add_circle_outline,
-          builder: (query) => _AutomationActionPaletteContent(
+          builder: (query) => _AutomationWorkflowStatePaletteContent(
             controller: widget.controller,
             query: query,
-            actionTypes: widget.controller.automationActionTypes,
           ),
         ),
       ];
@@ -371,8 +426,7 @@ class _AutomationFocusedCommandPanelState
   /// Returns area-specific right work modes where supporting areas need less UI.
   List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
     if (area.id == _automationWorkflowAreaTemplates ||
-        area.id == _automationTaskAreaTemplates ||
-        area.id == _automationWorkflowAreaActions) {
+        area.id == _automationTaskAreaTemplates) {
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
           id: _automationDetailOverview,
@@ -383,6 +437,27 @@ class _AutomationFocusedCommandPanelState
     }
     return widget.detailModes;
   }
+
+  /// Returns the left-pane companion area for right-side builder modes.
+  String _companionAreaForDetailMode(String modeId) {
+    if (modeId != _automationDetailBuilder) {
+      return '';
+    }
+    return switch (widget.panelId) {
+      _automationPanelWorkflows => _automationWorkflowAreaActions,
+      _automationPanelTasks => _automationTaskAreaNodes,
+      _ => '',
+    };
+  }
+
+  /// Returns an area-aware split so builder palettes do not crowd the canvas.
+  PanelSplit _splitForArea(List<SwitcherPanelArea> areas) {
+    if (widget.panelId == _automationPanelWorkflows ||
+        widget.panelId == _automationPanelTasks) {
+      return const PanelSplit(left: 0.24, min: 0.16, max: 0.42);
+    }
+    return widget.split;
+  }
 }
 
 class _TaskGraphActionIntentController extends ChangeNotifier {
@@ -392,7 +467,7 @@ class _TaskGraphActionIntentController extends ChangeNotifier {
   String get actionName => _actionName;
   int get revision => _revision;
 
-  /// Publishes one left-panel task action request to the active graph editor.
+  /// Publishes one left-panel action request to the active graph editor.
   void addAction(String actionName) {
     final trimmed = actionName.trim();
     if (trimmed.isEmpty) {
@@ -411,7 +486,7 @@ class _TaskGraphActionIntentScope
     required super.child,
   });
 
-  /// Finds the current task action intent publisher for the Tasks screen.
+  /// Finds the current action intent publisher for graph-builder screens.
   static _TaskGraphActionIntentController? maybeOf(BuildContext context) {
     return context
         .dependOnInheritedWidgetOfExactType<_TaskGraphActionIntentScope>()
@@ -436,16 +511,6 @@ class _AutomationPanelActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        if (panelId != _automationPanelTasks) ...<Widget>[
-          PanelIconButton(
-            icon: Icons.refresh,
-            tooltip: 'Refresh automations',
-            onPressed: controller.automationsBusy
-                ? null
-                : () => unawaited(controller.refreshAutomationsFromUi()),
-          ),
-          const SizedBox(width: 8),
-        ],
         if (panelId == _automationPanelWorkflows &&
             areaId == _automationWorkflowAreaDrafts)
           PanelIconButton(
@@ -625,6 +690,16 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
       ];
     case _automationPanelWorkflows:
       return const <CommandPanelDetailMode>[
+        CommandPanelDetailMode(
+          id: _automationDetailBuilder,
+          label: 'Builder',
+          icon: Icons.account_tree_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailInspect,
+          label: 'Inspect',
+          icon: Icons.tune_outlined,
+        ),
         CommandPanelDetailMode(
           id: _automationDetailOverview,
           label: 'Overview',
@@ -815,35 +890,48 @@ class _AutomationTemplatesContent extends StatelessWidget {
   }
 }
 
-class _AutomationActionPaletteContent extends StatelessWidget {
-  const _AutomationActionPaletteContent({
+class _AutomationWorkflowStatePaletteContent extends StatelessWidget {
+  const _AutomationWorkflowStatePaletteContent({
     required this.controller,
     required this.query,
-    required this.actionTypes,
   });
 
   final AgentAwesomeAppController controller;
   final String query;
-  final List<AutomationActionType> actionTypes;
 
-  /// Builds a workflow action palette for selected draft editing.
+  /// Builds the shell-owned workflow builder node palette.
   @override
   Widget build(BuildContext context) {
     final selectedDraft = _selectedAutomationDraftForKind(
       controller,
       'state_machine',
     );
-    return _TaskGraphActionPalette(
-      actionTypes: actionTypes,
+    final actionIntents = _TaskGraphActionIntentScope.maybeOf(context);
+    final selectedBody = _map(selectedDraft?.body);
+    if (_stateMachineHasTaskStates(selectedBody)) {
+      return _TaskGraphActionPalette(
+        actionTypes: _resolvedTaskGraphActionTypes(controller),
+        query: query,
+        onAddAction: (actionName) {
+          if (selectedDraft == null || controller.automationsBusy) {
+            return;
+          }
+          controller.selectAutomationDraft(selectedDraft.id);
+          actionIntents?.addAction(actionName);
+        },
+      );
+    }
+    return _StateMachinePalette(
+      actionTypes: _resolvedAutomationActionTypes(controller),
       query: query,
-      onAddAction: (actionName) {
+      onAddState: (actionName) {
         if (selectedDraft == null || controller.automationsBusy) {
           return;
         }
         controller.selectAutomationDraft(selectedDraft.id);
-        unawaited(
-          controller.addAutomationActionToSelectedDraftFromUi(actionName),
-        );
+        if (actionIntents != null) {
+          actionIntents.addAction(actionName);
+        }
       },
     );
   }
@@ -898,15 +986,19 @@ class _AutomationTaskNodePaletteContent extends StatelessWidget {
 class _AutomationDetailContent extends StatelessWidget {
   const _AutomationDetailContent({
     required this.controller,
+    required this.stateMachineEditor,
     required this.areaId,
     required this.modeId,
+    required this.onDetailModeRequested,
     this.tabId = '',
   });
 
   final AgentAwesomeAppController controller;
+  final _StateMachineDraftEditController stateMachineEditor;
   final String areaId;
   final String modeId;
   final String tabId;
+  final ValueChanged<String> onDetailModeRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -930,8 +1022,10 @@ class _AutomationDetailContent extends StatelessWidget {
     if (draftKind != null) {
       return _DraftDetail(
         controller: controller,
+        stateMachineEditor: stateMachineEditor,
         modeId: modeId,
         draft: _selectedAutomationDraftForKind(controller, draftKind),
+        onDetailModeRequested: onDetailModeRequested,
       );
     }
     if (areaId == _automationPanelWorkflows ||
@@ -941,8 +1035,10 @@ class _AutomationDetailContent extends StatelessWidget {
           : 'state_machine';
       return _DraftDetail(
         controller: controller,
+        stateMachineEditor: stateMachineEditor,
         modeId: modeId,
         draft: _selectedAutomationDraftForKind(controller, kind),
+        onDetailModeRequested: onDetailModeRequested,
       );
     }
     return _OperationsDetail(controller: controller, modeId: modeId);
@@ -1025,13 +1121,17 @@ const Set<String> _automationOperationsAreaIds = <String>{
 class _DraftDetail extends StatelessWidget {
   const _DraftDetail({
     required this.controller,
+    required this.stateMachineEditor,
     required this.modeId,
     required this.draft,
+    required this.onDetailModeRequested,
   });
 
   final AgentAwesomeAppController controller;
+  final _StateMachineDraftEditController stateMachineEditor;
   final String modeId;
   final AutomationDraft? draft;
+  final ValueChanged<String> onDetailModeRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -1046,11 +1146,55 @@ class _DraftDetail extends StatelessWidget {
         draft: selectedDraft,
       );
     }
+    final body = _map(selectedDraft.body);
+    final hasTaskStates = _stateMachineHasTaskStates(body);
+    if (modeId == _automationDetailBuilder ||
+        modeId == _automationDetailInspect ||
+        modeId == _automationDetailOverview) {
+      if (!hasTaskStates && modeId == _automationDetailBuilder) {
+        return _StateMachineBuilderWorkspace(
+          key: ValueKey<String>('${selectedDraft.id}:state-machine-workspace'),
+          editor: stateMachineEditor,
+          controller: controller,
+          draft: selectedDraft,
+          modeId: modeId,
+          onDetailModeRequested: onDetailModeRequested,
+        );
+      }
+      if (!hasTaskStates && modeId == _automationDetailInspect) {
+        return _StateMachineBuilderWorkspace(
+          key: ValueKey<String>('${selectedDraft.id}:state-machine-workspace'),
+          editor: stateMachineEditor,
+          controller: controller,
+          draft: selectedDraft,
+          modeId: modeId,
+          onDetailModeRequested: onDetailModeRequested,
+        );
+      }
+      if (!hasTaskStates) {
+        return _DraftOverview(controller: controller, draft: selectedDraft);
+      }
+      return _TaskGraphDraftEditor(
+        key: ValueKey<String>('${selectedDraft.id}:$modeId'),
+        controller: controller,
+        draft: selectedDraft,
+        view:
+            modeId == _automationDetailOverview ||
+                modeId == _automationDetailInspect
+            ? _TaskGraphDraftEditorView.overview
+            : _TaskGraphDraftEditorView.builder,
+      );
+    }
     if (modeId == _automationDetailSteps) {
       return _DraftSteps(controller: controller, draft: selectedDraft);
     }
     if (modeId == _automationDetailMap) {
-      return _StateMachineMapDetail(draft: selectedDraft);
+      return _StateMachineBuilderDetail(
+        editor: stateMachineEditor,
+        controller: controller,
+        draft: selectedDraft,
+        onDetailModeRequested: onDetailModeRequested,
+      );
     }
     if (modeId == _automationDetailSafety) {
       return _ValidationDetail(draft: selectedDraft);
@@ -1171,6 +1315,22 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   String _lastSavedFingerprint = '';
   _TaskGraphActionIntentController? _taskGraphActionIntents;
   int _lastTaskGraphActionIntentRevision = 0;
+
+  bool get _isStateMachineDraft => widget.draft.kind == 'state_machine';
+
+  String get _builderTitle => _isStateMachineDraft ? 'Workflow' : 'Task Graph';
+
+  String get _builderIdLabel =>
+      _isStateMachineDraft ? 'Workflow id' : 'Graph id';
+
+  String get _stepNodeTooltip =>
+      _isStateMachineDraft ? 'Add workflow step' : 'Add task node';
+
+  String get _deleteNodeTooltip =>
+      _isStateMachineDraft ? 'Delete workflow step' : 'Delete task node';
+
+  String get _unsupportedSurface =>
+      _isStateMachineDraft ? 'workflow task states' : 'task graphs';
 
   /// Initializes task-graph editor controllers from the selected draft.
   @override
@@ -1327,7 +1487,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
         PanelSectionBlock.plain(
-          title: 'Task Graph',
+          title: _builderTitle,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -1341,7 +1501,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
               const SizedBox(height: 10),
               _AutomationTextField(
                 controller: _taskGraphIdController,
-                label: 'Graph id',
+                label: _builderIdLabel,
               ),
             ],
           ),
@@ -1363,7 +1523,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
       title: 'Steps',
       trailing: PanelIconButton(
         icon: Icons.add,
-        tooltip: 'Add task node',
+        tooltip: _stepNodeTooltip,
         onPressed: widget.controller.automationsBusy ? null : _addNode,
       ),
       child: _nodes.isEmpty
@@ -1382,7 +1542,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
       title: 'Selected Step',
       trailing: PanelIconButton(
         icon: Icons.delete_outline,
-        tooltip: 'Delete task node',
+        tooltip: _deleteNodeTooltip,
         onPressed: widget.controller.automationsBusy ? null : _deleteNode,
       ),
       child: Column(
@@ -1529,10 +1689,17 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
             ),
           ],
         );
+      case 'data.assert':
+        return _AutomationTextField(
+          controller: _argumentsController,
+          label: 'Assertion JSON',
+          maxLines: 5,
+          monospace: true,
+        );
       default:
         return PanelEmptyBlock(
           label:
-              '${_fallbackActionLabel(_selectedAction)} is unsupported in task graphs',
+              '${_fallbackActionLabel(_selectedAction)} is unsupported in $_unsupportedSurface',
         );
     }
   }
@@ -1540,9 +1707,9 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   void _loadDraft(AutomationDraft draft) {
     _nameController.text = draft.name;
     _descriptionController.text = draft.description;
-    final body = _normalizedTaskGraphBody(draft);
+    final body = _normalizedWorkflowBuilderBody(draft);
     _taskGraphIdController.text = '${body['id'] ?? draft.id}';
-    _nodes = _taskGraphNodes(body);
+    _nodes = _workflowBuilderNodes(body);
     _selectedNodeId = _nodes.isEmpty ? '' : _nodeId(_nodes.first);
     _loadSelectedNode();
     _lastSavedFingerprint = _draftFingerprint(
@@ -1592,7 +1759,9 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     _endpointController.text = '${args['endpoint'] ?? ''}';
     _toolController.text = '${args['name'] ?? args['tool'] ?? ''}';
     _domainIdController.text = '${args['domain_id'] ?? ''}';
-    _argumentsController.text = _jsonText(_map(args['arguments']));
+    _argumentsController.text = _selectedAction == 'data.assert'
+        ? _jsonText(args)
+        : _jsonText(_map(args['arguments']));
     _commandController.text = '${args['command'] ?? ''}';
     _commandArgsController.text = _linesText(_list(args['arguments']));
     _promptController.text = '${args['prompt'] ?? ''}';
@@ -1614,6 +1783,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
       final id = _nextTaskGraphNodeId(_nodes, actionName);
       _nodes.add(<String, dynamic>{
         'id': id,
+        if (_isStateMachineDraft) 'type': 'task',
         'uses': actionName,
         if (dependencies.isNotEmpty) 'depends_on': dependencies,
         'with': _defaultTaskGraphActionArgs(actionName),
@@ -1630,6 +1800,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
       final id = _nextTaskGraphNodeId(_nodes, actionName);
       _nodes.add(<String, dynamic>{
         'id': id,
+        if (_isStateMachineDraft) 'type': 'task',
         'uses': actionName,
         'depends_on': <String>[dependencyId],
         'with': _defaultTaskGraphActionArgs(actionName),
@@ -1967,11 +2138,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
           : _nameController.text.trim(),
       description: _descriptionController.text.trim(),
       status: widget.draft.status,
-      body: <String, dynamic>{
-        'kind': 'task_graph',
-        'id': taskGraphId,
-        'nodes': _nodes,
-      },
+      body: _currentDraftBody(taskGraphId),
       validation: widget.draft.validation,
       createdAt: widget.draft.createdAt,
       updatedAt: widget.draft.updatedAt,
@@ -2000,6 +2167,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     }
     return <String, dynamic>{
       'id': id,
+      if (_isStateMachineDraft) 'type': 'task',
       'uses': _selectedAction,
       if (_dependsOn.isNotEmpty) 'depends_on': _dependsOn.toList()..sort(),
       if (_timeoutController.text.trim().isNotEmpty)
@@ -2050,9 +2218,54 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
           'workflow': _workflowController.text.trim(),
           'input': input,
         };
+      case 'data.assert':
+        return _parseJsonObject(_argumentsController.text, 'Assertion JSON');
       default:
         return _map(_selectedNode()?['with']);
     }
+  }
+
+  Map<String, dynamic> _currentDraftBody(String taskGraphId) {
+    if (!_isStateMachineDraft) {
+      return <String, dynamic>{
+        'kind': 'task_graph',
+        'id': taskGraphId,
+        'nodes': _nodes,
+      };
+    }
+    final original = Map<String, dynamic>.from(_map(widget.draft.body));
+    final originalHadTaskStates = _stateMachineHasTaskStates(original);
+    if (_nodes.isEmpty && !originalHadTaskStates) {
+      return <String, dynamic>{
+        ...original,
+        'kind': 'state_machine',
+        'id': taskGraphId,
+        'name': _nameController.text.trim().isEmpty
+            ? widget.draft.id
+            : _nameController.text.trim(),
+        'description': _descriptionController.text.trim(),
+      };
+    }
+    final states = <Map<String, dynamic>>[
+      for (final node in _nodes) _stateMachineTaskStateFromNode(node),
+    ];
+    final stateIds = states.map(_nodeId).where((id) => id.isNotEmpty).toSet();
+    final body = <String, dynamic>{
+      ...original,
+      'kind': 'state_machine',
+      'id': taskGraphId,
+      'name': _nameController.text.trim().isEmpty
+          ? widget.draft.id
+          : _nameController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'states': states,
+    };
+    body.remove('nodes');
+    final initial = '${body['initial'] ?? ''}'.trim();
+    if (initial.isNotEmpty && !stateIds.contains(initial)) {
+      body.remove('initial');
+    }
+    return body;
   }
 
   Map<String, dynamic>? _parseJsonObject(String value, String label) {
@@ -2123,7 +2336,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
           AutomationActionType(
             name: uses,
             label: _fallbackActionLabel(uses),
-            description: 'Unsupported in task graphs',
+            description: 'Unsupported in $_unsupportedSurface',
             risk: 'unsupported',
             available: false,
           ),
@@ -2147,6 +2360,7 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
       ? const <String>[
           'tool.call',
           'mcp.call',
+          'data.assert',
           'human.request',
           'delay.until',
           'workflow.run',
@@ -2166,7 +2380,7 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
   ];
 }
 
-/// Returns action types that may be newly created in task graphs.
+/// Returns action types that may be newly created as task-state steps.
 List<AutomationActionType> _resolvedTaskGraphActionTypes(
   AgentAwesomeAppController controller,
 ) {
@@ -2189,11 +2403,13 @@ List<AutomationActionType> _resolvedTaskGraphActionTypes(
 
 class _AutomationTextField extends PanelTextFormField {
   const _AutomationTextField({
+    super.key,
     required super.controller,
     required super.label,
     super.maxLines = 1,
     super.keyboardType,
     super.monospace = false,
+    super.onSubmitted,
   });
 }
 
@@ -2419,7 +2635,6 @@ class _TaskGraphActionPalette extends StatelessWidget {
   /// Builds the draggable action palette for task node creation.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
     final normalizedQuery = query.trim().toLowerCase();
     final filtered = actionTypes.where((action) {
       if (normalizedQuery.isEmpty) {
@@ -2429,32 +2644,24 @@ class _TaskGraphActionPalette extends StatelessWidget {
           action.label.toLowerCase().contains(normalizedQuery) ||
           action.description.toLowerCase().contains(normalizedQuery);
     }).toList();
-    return ColoredBox(
-      color: colors.surface.withValues(alpha: 0.64),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Expanded(
-              child: filtered.isEmpty
-                  ? PanelEmptyState(query: query)
-                  : ListView.separated(
-                      itemCount: filtered.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final action = filtered[index];
-                        return _TaskGraphActionPaletteTile(
-                          action: action,
-                          onAdd: () => onAddAction(action.name),
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
+    if (filtered.isEmpty) {
+      return KeyedSubtree(
+        key: const ValueKey<String>('task-graph-action-palette'),
+        child: PanelEmptyState(query: query),
+      );
+    }
+    return ListView.separated(
+      key: const ValueKey<String>('task-graph-action-palette'),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      itemCount: filtered.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final action = filtered[index];
+        return _TaskGraphActionPaletteTile(
+          action: action,
+          onAdd: () => onAddAction(action.name),
+        );
+      },
     );
   }
 }
@@ -3773,92 +3980,6 @@ class _TaskGraphMiniMapPainter extends CustomPainter {
   }
 }
 
-class _StateMachineMapDetail extends StatelessWidget {
-  const _StateMachineMapDetail({required this.draft});
-
-  final AutomationDraft draft;
-
-  /// Builds a visual state map for a state-machine draft.
-  @override
-  Widget build(BuildContext context) {
-    final body = _map(draft.body);
-    final states = _list(body['states']).map(_map).toList();
-    final initial = '${body['initial'] ?? ''}';
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        PanelSectionBlock(
-          title: 'State Map',
-          child: states.isEmpty
-              ? const PanelEmptyBlock(label: 'No states')
-              : Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: <Widget>[
-                    for (final state in states)
-                      _StateMapCard(state: state, initial: initial),
-                  ],
-                ),
-        ),
-      ],
-    );
-  }
-}
-
-class _StateMapCard extends StatelessWidget {
-  const _StateMapCard({required this.state, required this.initial});
-
-  final Map<String, dynamic> state;
-  final String initial;
-
-  /// Builds one visual state-machine state card.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    final stateId = '${state['id'] ?? 'state'}';
-    final actions = _list(state['on_entry']);
-    final transitions = _list(state['transitions']);
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 210, maxWidth: 320),
-      child: PanelSurface(
-        padding: const EdgeInsets.all(14),
-        style: PanelSurfaceStyle.card,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(Icons.radio_button_checked, size: 18, color: colors.green),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    stateId,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: colors.ink,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: <Widget>[
-                if (stateId == initial) const PanelBadge(label: 'initial'),
-                PanelBadge(label: '${actions.length} entry actions'),
-                PanelBadge(label: '${transitions.length} transitions'),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _DraftSteps extends StatelessWidget {
   const _DraftSteps({required this.controller, required this.draft});
 
@@ -3867,9 +3988,12 @@ class _DraftSteps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final body = _map(draft.body);
     final items = draft.kind == 'task_graph'
-        ? _list(draft.body['nodes'])
-        : _stateActions(draft.body);
+        ? _taskGraphNodes(body)
+        : _stateMachineHasTaskStates(body)
+        ? _stateMachineTaskNodes(body)
+        : _stateActions(body);
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
@@ -4429,11 +4553,78 @@ Map<String, dynamic> _normalizedTaskGraphBody(AutomationDraft draft) {
   };
 }
 
+/// Returns the builder-editable body shape for workflow and task drafts.
+Map<String, dynamic> _normalizedWorkflowBuilderBody(AutomationDraft draft) {
+  if (draft.kind != 'state_machine') {
+    return _normalizedTaskGraphBody(draft);
+  }
+  final body = _map(draft.body);
+  return <String, dynamic>{
+    'kind': 'state_machine',
+    'id': '${body['id'] ?? draft.id}',
+    'states': _stateMachineTaskNodes(body),
+  };
+}
+
+/// Returns graph-builder nodes from the current authoring body.
+List<Map<String, dynamic>> _workflowBuilderNodes(Map<String, dynamic> body) {
+  if ('${body['kind'] ?? ''}'.trim() == 'state_machine') {
+    return _stateMachineTaskNodes(body);
+  }
+  return _taskGraphNodes(body);
+}
+
 /// Returns detached task nodes from a draft body.
 List<Map<String, dynamic>> _taskGraphNodes(Map<String, dynamic> body) {
   return _list(
     body['nodes'],
   ).map((node) => Map<String, dynamic>.from(_map(node))).toList();
+}
+
+/// Reports whether a state-machine body already uses durable task states.
+bool _stateMachineHasTaskStates(Map<String, dynamic> body) {
+  return _list(body['states']).map(_map).any(_stateLooksLikeTaskNode);
+}
+
+/// Returns task-state entries that the visual workflow builder can edit.
+List<Map<String, dynamic>> _stateMachineTaskNodes(Map<String, dynamic> body) {
+  final nodes = <Map<String, dynamic>>[];
+  for (final state in _list(body['states']).map(_map)) {
+    if (!_stateLooksLikeTaskNode(state)) {
+      continue;
+    }
+    final node = Map<String, dynamic>.from(state);
+    node['type'] = 'task';
+    node.remove('on_entry');
+    node.remove('transitions');
+    nodes.add(node);
+  }
+  return nodes;
+}
+
+/// Reports whether a state definition belongs to the task-state model.
+bool _stateLooksLikeTaskNode(Map<String, dynamic> state) {
+  return '${state['type'] ?? ''}'.trim() == 'task' ||
+      '${state['uses'] ?? ''}'.trim().isNotEmpty ||
+      _list(state['depends_on']).isNotEmpty ||
+      '${state['timeout'] ?? ''}'.trim().isNotEmpty ||
+      '${state['retry'] ?? ''}'.trim().isNotEmpty ||
+      '${state['retry_delay'] ?? ''}'.trim().isNotEmpty;
+}
+
+/// Converts one graph-builder node into a durable state-machine task state.
+Map<String, dynamic> _stateMachineTaskStateFromNode(Map<String, dynamic> node) {
+  final state = Map<String, dynamic>.from(node);
+  state['type'] = 'task';
+  state.remove('on_entry');
+  state.remove('transitions');
+  final dependencies = _nodeDependsOn(state);
+  if (dependencies.isEmpty) {
+    state.remove('depends_on');
+  } else {
+    state['depends_on'] = dependencies;
+  }
+  return state;
 }
 
 /// Groups task nodes into dependency stages for visual graph rendering.
@@ -4526,6 +4717,7 @@ IconData _actionIcon(String actionName) {
   return switch (actionName) {
     'tool.call' => Icons.extension_outlined,
     'mcp.call' => Icons.extension_outlined,
+    'data.assert' => Icons.rule_outlined,
     'human.request' => Icons.how_to_reg_outlined,
     'delay.until' => Icons.schedule_outlined,
     'workflow.run' => Icons.account_tree_outlined,
@@ -4539,6 +4731,7 @@ String _fallbackActionLabel(String actionName) {
   return switch (actionName) {
     'tool.call' => 'Run Tool',
     'mcp.call' => 'Call MCP Tool',
+    'data.assert' => 'Assert Data',
     'human.request' => 'Prompt',
     'delay.until' => 'Delay',
     'workflow.run' => 'Run Workflow',
@@ -4552,6 +4745,7 @@ String _fallbackActionDescription(String actionName) {
   return switch (actionName) {
     'tool.call' => 'Harness-exposed tool call',
     'mcp.call' => 'External MCP tool call',
+    'data.assert' => 'Deterministic data check',
     'human.request' => 'Human approval or input',
     'delay.until' => 'Timed wait',
     'workflow.run' => 'Nested workflow run',
@@ -4566,6 +4760,7 @@ Color _actionColor(BuildContext context, String actionName) {
   return switch (actionName) {
     'tool.call' => colors.cardIcon,
     'mcp.call' => colors.cardIcon,
+    'data.assert' => colors.green,
     'human.request' => colors.green,
     'delay.until' => colors.muted,
     'workflow.run' => colors.orbit,
@@ -4705,6 +4900,7 @@ Map<String, dynamic> _defaultTaskGraphActionArgs(String actionName) {
       'tool': '',
       'arguments': <String, dynamic>{},
     },
+    'data.assert' => <String, dynamic>{'checks': <dynamic>[]},
     'workflow.run' => <String, dynamic>{
       'workflow': '',
       'input': <String, dynamic>{},

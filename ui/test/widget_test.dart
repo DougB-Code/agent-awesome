@@ -9,6 +9,7 @@ import 'package:agentawesome_ui/app/file_import.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
+import 'package:agentawesome_ui/clients/automations_client.dart';
 import 'package:agentawesome_ui/ui/theme.dart';
 import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
@@ -22,6 +23,7 @@ import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs widget tests for the shell.
@@ -303,14 +305,21 @@ void main() {
             'id': 'review_flow',
             'states': <Object>[
               <String, Object>{
-                'id': 'review',
-                'on_entry': <Object>[
-                  <String, Object>{
-                    'id': 'triage_agent',
-                    'uses': 'human.request',
-                    'with': <String, Object>{'prompt': 'Review'},
-                  },
-                ],
+                'id': 'fetch_context',
+                'type': 'task',
+                'uses': 'mcp.call',
+                'with': <String, Object>{
+                  'endpoint': 'http://127.0.0.1:8090/mcp',
+                  'tool': 'sourcecontrol.status',
+                  'arguments': <String, Object>{},
+                },
+              },
+              <String, Object>{
+                'id': 'assert_context',
+                'type': 'task',
+                'uses': 'data.assert',
+                'depends_on': <Object>['fetch_context'],
+                'with': <String, Object>{'checks': <Object>[]},
               },
             ],
           },
@@ -388,7 +397,7 @@ void main() {
     );
     expect(find.text('AUTOMATIONS'), findsOneWidget);
     expect(find.text('Operations'), findsWidgets);
-    expect(find.text('Workflows'), findsNothing);
+    expect(find.text('Workflows'), findsOneWidget);
     expect(find.text('Tasks'), findsNothing);
     expect(find.text('Agents'), findsNothing);
     expect(find.text('MCP Servers'), findsOneWidget);
@@ -415,6 +424,7 @@ void main() {
     expect(find.byTooltip('Inbox'), findsOneWidget);
     expect(find.byTooltip('Published'), findsOneWidget);
     expect(find.byTooltip('Runs'), findsOneWidget);
+    expect(find.byTooltip('Refresh automations'), findsNothing);
     expect(find.text('Approve archive?'), findsOneWidget);
     expect(find.text('Daily Email'), findsNothing);
     await tester.tap(find.byTooltip('Published'));
@@ -427,9 +437,42 @@ void main() {
     expect(find.byKey(const ValueKey<String>('sidebar-Agents')), findsNothing);
     expect(
       find.byKey(const ValueKey<String>('sidebar-Workflows')),
-      findsNothing,
+      findsOneWidget,
     );
     expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('ACTIONS'), findsWidgets);
+    expect(find.byTooltip('Builder'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('task-graph-canvas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('task-graph-action-data.assert')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
+
+    await tester.tap(find.byTooltip('Drafts'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('DRAFTS'), findsWidgets);
+    expect(find.text('Review Flow'), findsWidgets);
+
+    await tester.tap(find.byTooltip('Actions'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('task-graph-action-data.assert')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('task-graph-canvas')),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
@@ -468,6 +511,808 @@ void main() {
 
     expect(find.text('Status'), findsNothing);
     expect(find.text('Automations refreshed'), findsNothing);
+  });
+
+  testWidgets('shows process-state workflow lifecycle in Builder', (
+    tester,
+  ) async {
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_lifecycle',
+          kind: 'state_machine',
+          name: 'Lifecycle Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'lifecycle_flow',
+            'initial': 'plan',
+            'authoring': <String, Object>{
+              'builder': <String, Object>{
+                'positions': <String, Object>{
+                  'plan': <String, Object>{'x': 84.0, 'y': 84.0},
+                  'done': <String, Object>{'x': 2200.0, 'y': 1400.0},
+                },
+              },
+            },
+            'states': <Object>[
+              <String, Object>{
+                'id': 'plan',
+                'on_entry': <Object>[
+                  <String, Object>{'id': 'plan_change', 'uses': 'mcp.call'},
+                ],
+                'transitions': <Object>[
+                  <String, Object>{'trigger': 'succeeded', 'to': 'done'},
+                  <String, Object>{'trigger': 'failed', 'to': 'blocked'},
+                ],
+              },
+              <String, Object>{'id': 'blocked'},
+              <String, Object>{'id': 'done'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Builder'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-canvas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-palette')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-inspector')),
+      findsNothing,
+    );
+    expect(find.byTooltip('Inspect'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-plan')),
+      findsOneWidget,
+    );
+    expect(find.text('plan'), findsWidgets);
+    expect(find.text('succeeded -> done'), findsOneWidget);
+    expect(find.text('failed -> blocked'), findsWidgets);
+    expect(
+      find.byKey(
+        const ValueKey<String>('state-machine-exit-badge-plan-failed-blocked'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('task-graph-canvas')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('filters state-machine edges and centers badge targets', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_lifecycle',
+          kind: 'state_machine',
+          name: 'Lifecycle Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'lifecycle_flow',
+            'initial': 'plan',
+            'authoring': <String, Object>{
+              'builder': <String, Object>{
+                'positions': <String, Object>{
+                  'plan': <String, Object>{'x': 84.0, 'y': 84.0},
+                  'review': <String, Object>{'x': 330.0, 'y': 84.0},
+                  'blocked': <String, Object>{'x': 84.0, 'y': 320.0},
+                  'done': <String, Object>{'x': 576.0, 'y': 84.0},
+                },
+              },
+            },
+            'states': <Object>[
+              <String, Object>{
+                'id': 'plan',
+                'on_entry': <Object>[
+                  <String, Object>{'id': 'plan_change', 'uses': 'mcp.call'},
+                ],
+                'transitions': <Object>[
+                  <String, Object>{'trigger': 'succeeded', 'to': 'review'},
+                  <String, Object>{'trigger': 'failed', 'to': 'blocked'},
+                ],
+              },
+              <String, Object>{
+                'id': 'review',
+                'on_entry': <Object>[
+                  <String, Object>{
+                    'id': 'ask_operator',
+                    'uses': 'human.request',
+                  },
+                ],
+                'transitions': <Object>[
+                  <String, Object>{'trigger': 'approved', 'to': 'done'},
+                  <String, Object>{'trigger': 'rejected', 'to': 'blocked'},
+                ],
+              },
+              <String, Object>{'id': 'blocked'},
+              <String, Object>{'id': 'done'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    final failedBadge = find.byKey(
+      const ValueKey<String>('state-machine-exit-badge-plan-failed-blocked'),
+    );
+    expect(failedBadge, findsOneWidget);
+    final reviewRect = tester.getRect(
+      find.byKey(const ValueKey<String>('state-machine-node-review')),
+    );
+    final failedBadgeRect = tester.getRect(failedBadge);
+    final planRect = tester.getRect(
+      find.byKey(const ValueKey<String>('state-machine-node-plan')),
+    );
+    expect(failedBadgeRect.top, greaterThan(planRect.top + 72));
+    expect(failedBadgeRect.right, lessThan(reviewRect.left));
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-toolbar-plan')),
+      findsOneWidget,
+    );
+
+    await tester.tap(failedBadge);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-toolbar-blocked')),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('state-machine-edge-mode-all')),
+    );
+    await tester.pump();
+    expect(failedBadge, findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('state-machine-edge-mode-failures')),
+    );
+    await tester.pump();
+    expect(failedBadge, findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('state-machine-edge-mode-decisions')),
+    );
+    await tester.pump();
+    expect(failedBadge, findsNothing);
+    expect(find.text('rejected -> blocked'), findsWidgets);
+  });
+
+  testWidgets('lays out workflow nodes in compact semantic ranks and lanes', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(2200, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Map<String, Object> actionState(
+      String id,
+      List<Map<String, Object>> transitions,
+    ) {
+      return <String, Object>{
+        'id': id,
+        'on_entry': <Object>[
+          <String, Object>{'id': id, 'uses': 'mcp.call'},
+        ],
+        'transitions': transitions,
+      };
+    }
+
+    final controller = _readyController()
+      ..automationDrafts = <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_semantic_layout',
+          kind: 'state_machine',
+          name: 'Semantic Layout',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'semantic_layout',
+            'initial': 'plan_change',
+            'states': <Object>[
+              actionState('plan_change', <Map<String, Object>>[
+                <String, Object>{
+                  'trigger': 'succeeded',
+                  'to': 'implement_change',
+                },
+                <String, Object>{
+                  'trigger': 'failed',
+                  'to': 'operator_decision',
+                },
+              ]),
+              actionState('implement_change', <Map<String, Object>>[
+                <String, Object>{'trigger': 'succeeded', 'to': 'verify_change'},
+                <String, Object>{
+                  'trigger': 'failed',
+                  'to': 'operator_decision',
+                },
+              ]),
+              actionState('verify_change', <Map<String, Object>>[
+                <String, Object>{'trigger': 'succeeded', 'to': 'review_change'},
+                <String, Object>{'trigger': 'failed', 'to': 'repair_change'},
+                <String, Object>{
+                  'trigger': 'blocked',
+                  'to': 'operator_decision',
+                },
+              ]),
+              actionState('review_change', <Map<String, Object>>[
+                <String, Object>{'trigger': 'succeeded', 'to': 'completed'},
+                <String, Object>{'trigger': 'failed', 'to': 'repair_change'},
+              ]),
+              actionState('repair_change', <Map<String, Object>>[
+                <String, Object>{
+                  'trigger': 'succeeded',
+                  'to': 'implement_change',
+                },
+                <String, Object>{
+                  'trigger': 'failed',
+                  'to': 'operator_decision',
+                },
+              ]),
+              <String, Object>{
+                'id': 'operator_decision',
+                'on_entry': <Object>[
+                  <String, Object>{
+                    'id': 'operator_decision',
+                    'uses': 'human.request',
+                  },
+                ],
+                'transitions': <Object>[
+                  <String, Object>{'trigger': 'revise', 'to': 'plan_change'},
+                  <String, Object>{'trigger': 'approve', 'to': 'review_change'},
+                  <String, Object>{'trigger': 'abandon', 'to': 'abandoned'},
+                ],
+              },
+              <String, Object>{'id': 'completed'},
+              <String, Object>{'id': 'abandoned'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    Rect node(String id) =>
+        tester.getRect(find.byKey(ValueKey<String>('state-machine-node-$id')));
+
+    final plan = node('plan_change');
+    final implement = node('implement_change');
+    final verify = node('verify_change');
+    final review = node('review_change');
+    final repair = node('repair_change');
+    final operator = node('operator_decision');
+    final abandoned = node('abandoned');
+
+    expect(implement.left, greaterThan(plan.left));
+    expect(verify.left, greaterThan(implement.left));
+    expect(review.left, greaterThan(verify.left));
+    expect(implement.left - plan.left, lessThan(620));
+    expect(verify.left - implement.left, lessThan(620));
+    expect(repair.left, closeTo(review.left, 1));
+    expect(repair.top, greaterThan(verify.bottom));
+    expect(operator.top, greaterThan(repair.bottom));
+    expect(abandoned.top, greaterThan(operator.bottom));
+  });
+
+  testWidgets('collapses and expands composite workflow phases in Builder', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_hierarchy',
+          kind: 'state_machine',
+          name: 'Hierarchical Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'hierarchical_flow',
+            'initial': 'intake',
+            'authoring': <String, Object>{
+              'builder': <String, Object>{
+                'collapsed_phases': <Object>['intake'],
+              },
+            },
+            'states': <Object>[
+              <String, Object>{
+                'id': 'intake',
+                'initial': 'collect',
+                'states': <Object>[
+                  <String, Object>{
+                    'id': 'collect',
+                    'transitions': <Object>[
+                      <String, Object>{'trigger': 'succeeded', 'to': 'done'},
+                    ],
+                  },
+                ],
+              },
+              <String, Object>{'id': 'done'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-intake')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-collect')),
+      findsNothing,
+    );
+    expect(find.text('collapsed'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Expand phase'));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-collect')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('drops workflow states into expanded composite phases', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_hierarchy',
+          kind: 'state_machine',
+          name: 'Hierarchical Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'hierarchical_flow',
+            'initial': 'intake',
+            'states': <Object>[
+              <String, Object>{
+                'id': 'intake',
+                'initial': 'collect',
+                'states': <Object>[
+                  <String, Object>{'id': 'collect'},
+                ],
+              },
+              <String, Object>{'id': 'done'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    final paletteItem = find.byKey(
+      const ValueKey<String>('state-machine-palette-mcp.call'),
+    );
+    final phaseDrop = find.byKey(
+      const ValueKey<String>('state-machine-phase-drop-intake'),
+    );
+    expect(paletteItem, findsOneWidget);
+    expect(phaseDrop, findsOneWidget);
+
+    await tester.dragFrom(
+      tester.getCenter(paletteItem),
+      tester.getCenter(phaseDrop) - tester.getCenter(paletteItem),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-call_mcp_tool')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('renames nested phase initial child in Builder', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'collect');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('state-machine-state-id-field')),
+        matching: find.byType(EditableText),
+      ),
+      'gather',
+    );
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-gather')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-collect')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('deleting phase initial child selects remaining child', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'collect');
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('state-machine-node-toolbar-collect'),
+        ),
+        matching: find.byIcon(Icons.delete_outline),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-collect')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-review')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('setting nested initial updates containing phase', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'review');
+    await tester.pump();
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('state-machine-node-toolbar-review'),
+        ),
+        matching: find.byIcon(Icons.flag_outlined),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('state-machine-node-review')),
+        matching: find.text('initial'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('state-machine-node-collect')),
+        matching: find.text('initial'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('aggregates repeated phase failure exits into one badge', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_quality',
+          kind: 'state_machine',
+          name: 'Quality Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'quality_flow',
+            'initial': 'quality',
+            'states': <Object>[
+              <String, Object>{
+                'id': 'quality',
+                'initial': 'test',
+                'states': <Object>[
+                  <String, Object>{
+                    'id': 'test',
+                    'transitions': <Object>[
+                      <String, Object>{'trigger': 'succeeded', 'to': 'review'},
+                      <String, Object>{'trigger': 'failed', 'to': 'blocked'},
+                    ],
+                  },
+                  <String, Object>{
+                    'id': 'review',
+                    'transitions': <Object>[
+                      <String, Object>{'trigger': 'succeeded', 'to': 'done'},
+                      <String, Object>{'trigger': 'failed', 'to': 'blocked'},
+                    ],
+                  },
+                ],
+              },
+              <String, Object>{'id': 'blocked'},
+              <String, Object>{'id': 'done'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(
+        const ValueKey<String>(
+          'state-machine-exit-badge-quality-failed-blocked',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('failed x2 -> blocked'), findsOneWidget);
+    expect(
+      find.byKey(
+        const ValueKey<String>('state-machine-exit-badge-test-failed-blocked'),
+      ),
+      findsNothing,
+    );
+  });
+
+  testWidgets('edits process-state workflow nodes in Builder', (tester) async {
+    tester.view.physicalSize = const Size(1800, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_lifecycle',
+          kind: 'state_machine',
+          name: 'Lifecycle Flow',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'lifecycle_flow',
+            'initial': 'plan',
+            'states': <Object>[
+              <String, Object>{
+                'id': 'plan',
+                'on_entry': <Object>[
+                  <String, Object>{'id': 'plan_change', 'uses': 'mcp.call'},
+                ],
+                'transitions': <Object>[
+                  <String, Object>{'trigger': 'succeeded', 'to': 'done'},
+                ],
+              },
+              <String, Object>{'id': 'done'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    final nodeFinder = find.byKey(
+      const ValueKey<String>('state-machine-node-plan'),
+    );
+    final before = tester.getTopLeft(nodeFinder);
+    final dragGesture = await tester.startGesture(tester.getCenter(nodeFinder));
+    await tester.pump();
+    await dragGesture.moveBy(const Offset(72, 36));
+    await tester.pump();
+    final during = tester.getTopLeft(nodeFinder);
+
+    expect(during.dx, greaterThan(before.dx));
+    expect(during.dy, greaterThan(before.dy));
+
+    await dragGesture.up();
+    await tester.pump();
+    final after = tester.getTopLeft(nodeFinder);
+
+    expect(after.dx, greaterThan(before.dx));
+    expect(after.dy, greaterThan(before.dy));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-inspector')),
+      findsOneWidget,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-canvas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-inspector')),
+      findsNothing,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-inspector')),
+      findsOneWidget,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    final horizontalScroll = find.byKey(
+      const PageStorageKey<String>('state-machine-canvas-horizontal-scroll'),
+    );
+    final verticalScroll = find.byKey(
+      const PageStorageKey<String>('state-machine-canvas-vertical-scroll'),
+    );
+    final canvasCenter = tester.getCenter(horizontalScroll);
+    await tester.dragFrom(canvasCenter, const Offset(-220, 0));
+    await tester.pump();
+    await tester.dragFrom(canvasCenter, const Offset(0, -180));
+    await tester.pump();
+    final horizontalBeforeInspect = tester
+        .widget<SingleChildScrollView>(horizontalScroll)
+        .controller!
+        .offset;
+    final verticalBeforeInspect = tester
+        .widget<SingleChildScrollView>(verticalScroll)
+        .controller!
+        .offset;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-inspector')),
+      findsOneWidget,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-canvas')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-inspector')),
+      findsNothing,
+    );
+    expect(
+      tester.widget<SingleChildScrollView>(horizontalScroll).controller!.offset,
+      closeTo(horizontalBeforeInspect, 0.1),
+    );
+    expect(
+      tester.widget<SingleChildScrollView>(verticalScroll).controller!.offset,
+      closeTo(verticalBeforeInspect, 0.1),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('state-machine-state-id-field')),
+        matching: find.byType(EditableText),
+      ),
+      'planning',
+    );
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-planning')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-inspector')),
+      findsNothing,
+    );
+    expect(
+      tester.widget<SingleChildScrollView>(horizontalScroll).controller!.offset,
+      closeTo(horizontalBeforeInspect, 0.1),
+    );
+    expect(
+      tester.widget<SingleChildScrollView>(verticalScroll).controller!.offset,
+      closeTo(verticalBeforeInspect, 0.1),
+    );
   });
 
   testWidgets('opens global AI chat as a third pane from any workspace', (
@@ -1906,6 +2751,136 @@ AgentAwesomeAppController _readyController({AgentFileImporter? fileImporter}) {
     ),
   ];
   return controller;
+}
+
+/// Creates a ready app controller with an injectable automation client.
+_CapturingAutomationHarness _readyCapturingController() {
+  final client = _CapturingAutomationsClient();
+  final controller = AgentAwesomeAppController(
+    config: _testConfig(),
+    automationsClient: client,
+  );
+  controller.appSettings = const AgentAwesomeAppSettings(
+    gettingStartedCompleted: true,
+  );
+  controller.runtimeProfile = _settingsProfile();
+  controller.runtimeProfilePath = '/tmp/personal.json';
+  controller.availableModelConfigs = const <ConfigFileEntry>[
+    ConfigFileEntry(
+      path: '/tmp/model.yaml',
+      kind: ConfigFileKind.model,
+      assigned: true,
+      displayName: 'Configured Model',
+      modelChoices: <ModelConfigChoice>[
+        ModelConfigChoice(
+          providerId: 'openai',
+          providerName: 'OpenAI',
+          modelId: 'gpt-5-mini',
+          modelName: 'GPT-5 Mini',
+          isDefault: true,
+        ),
+      ],
+    ),
+  ];
+  return _CapturingAutomationHarness(controller: controller, client: client);
+}
+
+/// _CapturingAutomationHarness groups the controller under test and fake client.
+class _CapturingAutomationHarness {
+  /// Creates a harness for builder hierarchy assertions.
+  const _CapturingAutomationHarness({
+    required this.controller,
+    required this.client,
+  });
+
+  /// App controller configured with [client].
+  final AgentAwesomeAppController controller;
+
+  /// Fake automation client that keeps drafts in memory.
+  final _CapturingAutomationsClient client;
+}
+
+/// _CapturingAutomationsClient stores workflow drafts in memory for UI tests.
+class _CapturingAutomationsClient extends AutomationsClient {
+  /// Creates a fake workflow client.
+  _CapturingAutomationsClient() : super(baseUrl: 'http://127.0.0.1:1');
+
+  /// Editable draft list returned by [listDrafts].
+  List<AutomationDraft> drafts = const <AutomationDraft>[];
+
+  /// Last draft passed to [updateDraft].
+  AutomationDraft? savedDraft;
+
+  /// Replaces the in-memory draft list.
+  void seedDrafts(List<AutomationDraft> value) {
+    drafts = List<AutomationDraft>.of(value);
+    savedDraft = null;
+  }
+
+  @override
+  Future<List<AutomationDraft>> listDrafts() async {
+    return drafts;
+  }
+
+  @override
+  Future<AutomationDraft> updateDraft(AutomationDraft draft) async {
+    savedDraft = draft;
+    drafts = <AutomationDraft>[
+      for (final existing in drafts) existing.id == draft.id ? draft : existing,
+    ];
+    if (!drafts.any((existing) => existing.id == draft.id)) {
+      drafts = <AutomationDraft>[...drafts, draft];
+    }
+    return draft;
+  }
+}
+
+/// Creates a nested state-machine draft for hierarchy editing tests.
+AutomationDraft _hierarchyEditDraft() {
+  return const AutomationDraft(
+    id: 'draft_hierarchy_edit',
+    kind: 'state_machine',
+    name: 'Hierarchy Edit',
+    status: 'draft',
+    body: <String, dynamic>{
+      'kind': 'state_machine',
+      'id': 'hierarchy_edit',
+      'initial': 'intake',
+      'states': <Object>[
+        <String, Object>{
+          'id': 'intake',
+          'initial': 'collect',
+          'states': <Object>[
+            <String, Object>{'id': 'collect'},
+            <String, Object>{'id': 'review'},
+          ],
+        },
+        <String, Object>{'id': 'done'},
+      ],
+      'authoring': <String, Object>{
+        'builder': <String, Object>{
+          'positions': <String, Object>{
+            'intake': <String, double>{'x': 96, 'y': 140},
+            'collect': <String, double>{'x': 508, 'y': 140},
+            'review': <String, double>{'x': 508, 'y': 380},
+            'done': <String, double>{'x': 920, 'y': 140},
+          },
+        },
+      },
+    },
+  );
+}
+
+/// Taps the card face for one state-machine node.
+Future<void> _tapStateMachineNode(WidgetTester tester, String stateId) async {
+  final finder = find.byKey(ValueKey<String>('state-machine-node-$stateId'));
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  final textFinder = find
+      .descendant(of: finder, matching: find.text(stateId))
+      .first;
+  await tester.tap(textFinder);
+  await tester.pumpAndSettle();
 }
 
 class _NoopFileImporter implements AgentFileImporter {

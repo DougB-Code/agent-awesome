@@ -100,6 +100,12 @@ type taskGraphNodeDefinition struct {
 	RetryDelay string         `json:"retry_delay,omitempty"`
 }
 
+// loadedDefinitionDraftSource carries a disk-loaded definition into authoring.
+type loadedDefinitionDraftSource struct {
+	definition definition.Definition
+	body       map[string]any
+}
+
 // RunQuery selects workflow runs for the operations screen.
 type RunQuery struct {
 	Status       string
@@ -129,6 +135,63 @@ func (s *Service) ListRuns(ctx context.Context, query RunQuery) ([]store.RunReco
 // ListDrafts returns editable workflow drafts.
 func (s *Service) ListDrafts(ctx context.Context) ([]store.DraftRecord, error) {
 	return s.store.ListDrafts(ctx)
+}
+
+// ensureDraftsForDefinitions mirrors installed definitions into editable drafts.
+func (s *Service) ensureDraftsForDefinitions(ctx context.Context, sources []loadedDefinitionDraftSource) error {
+	if len(sources) == 0 {
+		return nil
+	}
+	drafts, err := s.store.ListDrafts(ctx)
+	if err != nil {
+		return err
+	}
+	draftIDs := map[string]struct{}{}
+	definitionIDs := map[string]struct{}{}
+	for _, draft := range drafts {
+		draftIDs[draft.ID] = struct{}{}
+		if definitionID := strings.TrimSpace(stringFromMap(draft.Body, "id", "")); definitionID != "" {
+			definitionIDs[definitionID] = struct{}{}
+		}
+	}
+	for _, source := range sources {
+		definitionID := strings.TrimSpace(source.definition.ID)
+		if definitionID == "" {
+			continue
+		}
+		if _, ok := definitionIDs[definitionID]; ok {
+			continue
+		}
+		draftID := draftIDForDefinition(definitionID)
+		if _, ok := draftIDs[draftID]; ok {
+			continue
+		}
+		name := strings.TrimSpace(source.definition.Name)
+		if name == "" {
+			name = definitionID
+		}
+		body := cloneMap(source.body)
+		body["kind"] = definition.KindStateMachine
+		body["id"] = definitionID
+		if strings.TrimSpace(stringFromMap(body, "name", "")) == "" {
+			body["name"] = name
+		}
+		record := store.DraftRecord{
+			ID:          draftID,
+			Kind:        definition.KindStateMachine,
+			Name:        name,
+			Description: strings.TrimSpace(source.definition.Description),
+			Status:      draftStatusPublished,
+			Body:        body,
+			Validation:  map[string]any{},
+		}
+		if err := s.store.UpsertDraft(ctx, record); err != nil {
+			return err
+		}
+		draftIDs[draftID] = struct{}{}
+		definitionIDs[definitionID] = struct{}{}
+	}
+	return nil
 }
 
 // GetDraft returns one editable workflow draft.
@@ -709,6 +772,11 @@ func definitionIDFromDraftID(id string) string {
 		return "automation_" + strings.ReplaceAll(strings.TrimSpace(id), "-", "_")
 	}
 	return trimmed
+}
+
+// draftIDForDefinition returns the editable draft id for a loaded definition.
+func draftIDForDefinition(id string) string {
+	return "draft_" + strings.TrimSpace(id)
 }
 
 // stringFromMap returns a string value from a JSON map.

@@ -46,7 +46,21 @@ func Validate(def Definition, actions ActionCatalog) error {
 	}
 }
 
-// validateStateMachine checks state and transition references.
+// HierarchyState couples one state with its resolved and containing parent ids.
+type HierarchyState struct {
+	State        StateDefinition
+	Parent       string
+	NestedParent string
+}
+
+// FlattenStates returns every state in author order with implicit parents resolved.
+func FlattenStates(states []StateDefinition) []HierarchyState {
+	flattened := make([]HierarchyState, 0, len(states))
+	appendFlattenedStates(&flattened, states, "")
+	return flattened
+}
+
+// validateStateMachine checks state, hierarchy, and transition references.
 func validateStateMachine(def Definition, actions ActionCatalog) error {
 	if len(def.States) == 0 {
 		return fmt.Errorf("state machine %q must define states", def.ID)
@@ -57,8 +71,12 @@ func validateStateMachine(def Definition, actions ActionCatalog) error {
 	if err := validateSafeID(def.Initial, "initial state"); err != nil {
 		return err
 	}
+	flattened := FlattenStates(def.States)
 	states := map[string]StateDefinition{}
-	for _, state := range def.States {
+	parents := map[string]string{}
+	children := map[string][]string{}
+	for _, item := range flattened {
+		state := item.State
 		if err := validateSafeID(state.ID, "state id"); err != nil {
 			return err
 		}
@@ -66,16 +84,47 @@ func validateStateMachine(def Definition, actions ActionCatalog) error {
 			return fmt.Errorf("state machine %q has duplicate state %q", def.ID, state.ID)
 		}
 		states[state.ID] = state
+		parents[state.ID] = item.Parent
 		for _, action := range state.OnEntry {
 			if err := validateAction(action.Uses, actions); err != nil {
 				return fmt.Errorf("state %s entry action: %w", state.ID, err)
 			}
 		}
 	}
+	for _, item := range flattened {
+		state := item.State
+		if err := validateNestedParentIntent(item); err != nil {
+			return err
+		}
+		if parent := parents[state.ID]; parent != "" {
+			if _, ok := states[parent]; !ok {
+				return fmt.Errorf("state %q parent %q is not defined", state.ID, parent)
+			}
+			if parent == state.ID {
+				return fmt.Errorf("state %q cannot be its own parent", state.ID)
+			}
+			children[parent] = append(children[parent], state.ID)
+		}
+	}
+	if err := validateHierarchyAcyclic(parents); err != nil {
+		return err
+	}
 	if _, ok := states[def.Initial]; !ok {
 		return fmt.Errorf("state machine %q initial state %q is not defined", def.ID, def.Initial)
 	}
-	for _, state := range def.States {
+	for _, item := range flattened {
+		state := item.State
+		if strings.TrimSpace(state.Initial) != "" {
+			if err := validateSafeID(state.Initial, "initial substate"); err != nil {
+				return err
+			}
+			if parents[state.Initial] != state.ID {
+				return fmt.Errorf("state %q initial substate %q is not a direct child", state.ID, state.Initial)
+			}
+		}
+		if len(children[state.ID]) > 0 && strings.TrimSpace(state.Initial) == "" {
+			return fmt.Errorf("composite state %q must define an initial substate", state.ID)
+		}
 		seenTriggers := map[string]struct{}{}
 		for _, transition := range state.Transitions {
 			if err := validateSafeID(transition.Trigger, "transition trigger"); err != nil {
@@ -99,10 +148,21 @@ func validateStateMachine(def Definition, actions ActionCatalog) error {
 	return nil
 }
 
-// validateTaskStateGraph checks task-state references and cycles.
+// validateNestedParentIntent rejects contradictory nested and explicit parents.
+func validateNestedParentIntent(item HierarchyState) error {
+	authoredParent := strings.TrimSpace(item.State.Parent)
+	if item.NestedParent == "" || authoredParent == "" || authoredParent == item.NestedParent {
+		return nil
+	}
+	return fmt.Errorf("state %q parent %q conflicts with containing state %q", item.State.ID, authoredParent, item.NestedParent)
+}
+
+// validateTaskStateGraph checks flat task-state references and cycles.
 func validateTaskStateGraph(def Definition, actions ActionCatalog) error {
 	states := map[string]StateDefinition{}
-	for _, state := range def.States {
+	flattened := FlattenStates(def.States)
+	for _, item := range flattened {
+		state := item.State
 		if err := validateSafeID(state.ID, "state id"); err != nil {
 			return err
 		}
@@ -111,6 +171,9 @@ func validateTaskStateGraph(def Definition, actions ActionCatalog) error {
 		}
 		if !IsTaskState(state) {
 			return fmt.Errorf("state %q cannot mix process states with task states", state.ID)
+		}
+		if item.Parent != "" || strings.TrimSpace(state.Initial) != "" || len(state.States) > 0 {
+			return fmt.Errorf("task state %q cannot define hierarchy fields", state.ID)
 		}
 		if len(state.OnEntry) > 0 || len(state.Transitions) > 0 {
 			return fmt.Errorf("task state %q must not define on_entry or transitions", state.ID)
@@ -140,7 +203,8 @@ func validateTaskStateGraph(def Definition, actions ActionCatalog) error {
 			return fmt.Errorf("state machine %q initial state %q is not defined", def.ID, def.Initial)
 		}
 	}
-	for _, state := range def.States {
+	for _, item := range flattened {
+		state := item.State
 		seenDeps := map[string]struct{}{}
 		for _, dep := range state.DependsOn {
 			if err := validateSafeID(dep, "state dependency"); err != nil {
@@ -158,7 +222,38 @@ func validateTaskStateGraph(def Definition, actions ActionCatalog) error {
 			seenDeps[dep] = struct{}{}
 		}
 	}
-	return validateTaskAcyclic(def.States)
+	return validateTaskAcyclic(statesFromHierarchy(flattened))
+}
+
+// validateHierarchyAcyclic rejects parent reference cycles.
+func validateHierarchyAcyclic(parents map[string]string) error {
+	visiting := map[string]bool{}
+	visited := map[string]bool{}
+	var visit func(string) error
+	visit = func(id string) error {
+		if visiting[id] {
+			return fmt.Errorf("state hierarchy has cycle involving %q", id)
+		}
+		if visited[id] {
+			return nil
+		}
+		visiting[id] = true
+		parent := parents[id]
+		if parent != "" {
+			if err := visit(parent); err != nil {
+				return err
+			}
+		}
+		visiting[id] = false
+		visited[id] = true
+		return nil
+	}
+	for id := range parents {
+		if err := visit(id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // validateDuration checks one optional task-state duration field.
@@ -280,10 +375,35 @@ func IsTaskState(state StateDefinition) bool {
 
 // hasTaskStates reports whether any state declares task-state metadata.
 func hasTaskStates(def Definition) bool {
-	for _, state := range def.States {
-		if IsTaskState(state) {
+	for _, item := range FlattenStates(def.States) {
+		if IsTaskState(item.State) {
 			return true
 		}
 	}
 	return false
+}
+
+// appendFlattenedStates appends nested states with implicit parent ids resolved.
+func appendFlattenedStates(flattened *[]HierarchyState, states []StateDefinition, parent string) {
+	for _, state := range states {
+		resolvedParent := strings.TrimSpace(state.Parent)
+		if resolvedParent == "" {
+			resolvedParent = parent
+		}
+		*flattened = append(*flattened, HierarchyState{
+			State:        state,
+			Parent:       resolvedParent,
+			NestedParent: parent,
+		})
+		appendFlattenedStates(flattened, state.States, state.ID)
+	}
+}
+
+// statesFromHierarchy returns only state definitions from flattened hierarchy data.
+func statesFromHierarchy(flattened []HierarchyState) []StateDefinition {
+	states := make([]StateDefinition, 0, len(flattened))
+	for _, item := range flattened {
+		states = append(states, item.State)
+	}
+	return states
 }

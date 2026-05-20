@@ -15,6 +15,9 @@ abstract final class AppSections {
   /// Workflow run and approval operations section.
   static const String automationOperations = 'Operations';
 
+  /// State-machine workflow authoring section.
+  static const String automationWorkflows = 'Workflows';
+
   /// MCP server toolset configuration section.
   static const String automationMcpServers = 'MCP Servers';
 

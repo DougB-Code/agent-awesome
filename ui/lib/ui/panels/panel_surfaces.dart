@@ -40,6 +40,7 @@ class PanelSurface extends StatelessWidget {
     this.showBorder = true,
     this.fillWidth = false,
     this.clipBehavior = Clip.none,
+    this.borderRadius,
   });
 
   /// Surface content.
@@ -63,6 +64,9 @@ class PanelSurface extends StatelessWidget {
   /// Clip behavior for rounded pane contents.
   final Clip clipBehavior;
 
+  /// Optional border radius override for specialized shared surfaces.
+  final BorderRadiusGeometry? borderRadius;
+
   /// Builds a shared bordered panel surface.
   @override
   Widget build(BuildContext context) {
@@ -77,7 +81,8 @@ class PanelSurface extends StatelessWidget {
         border: showBorder
             ? Border.all(color: selected ? colors.borderStrong : colors.border)
             : null,
-        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
+        borderRadius:
+            borderRadius ?? BorderRadius.circular(PanelStyleTokens.radius),
       ),
       child: child,
     );

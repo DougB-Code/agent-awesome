@@ -184,3 +184,170 @@ func TestValidateAcceptsStateMachine(t *testing.T) {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
+
+// TestLoadFileAcceptsNestedStateMachine verifies YAML can author composite phases.
+func TestLoadFileAcceptsNestedStateMachine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested.yaml")
+	if err := os.WriteFile(path, []byte(`
+kind: state_machine
+id: nested_flow
+initial: intake
+states:
+  - id: intake
+    initial: collect
+    on_entry:
+      - id: validate_input
+        uses: data.assert
+    transitions:
+      - trigger: failed
+        to: blocked
+    states:
+      - id: collect
+        transitions:
+          - trigger: succeeded
+            to: done
+  - id: blocked
+  - id: done
+`), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	loaded, err := LoadFile(path, testCatalog{"data.assert": true})
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	if loaded.Definition.States[0].Initial != "collect" {
+		t.Fatalf("composite initial = %q, want collect", loaded.Definition.States[0].Initial)
+	}
+	if len(loaded.Definition.States[0].States) != 1 {
+		t.Fatalf("nested states = %#v, want one child", loaded.Definition.States[0].States)
+	}
+}
+
+// TestValidateRejectsCompositeWithoutInitial verifies phases declare entry children.
+func TestValidateRejectsCompositeWithoutInitial(t *testing.T) {
+	err := Validate(Definition{
+		Kind:    KindStateMachine,
+		ID:      "missing_child_initial",
+		Initial: "phase",
+		States: []StateDefinition{
+			{ID: "phase", States: []StateDefinition{{ID: "child"}}},
+		},
+	}, testCatalog{})
+
+	if err == nil || !strings.Contains(err.Error(), "must define an initial substate") {
+		t.Fatalf("Validate() error = %v, want missing initial substate", err)
+	}
+}
+
+// TestValidateRejectsDuplicateNestedStateID verifies nested ids stay globally unique.
+func TestValidateRejectsDuplicateNestedStateID(t *testing.T) {
+	err := Validate(Definition{
+		Kind:    KindStateMachine,
+		ID:      "duplicate_nested",
+		Initial: "phase",
+		States: []StateDefinition{
+			{
+				ID:      "phase",
+				Initial: "child",
+				States:  []StateDefinition{{ID: "child"}},
+			},
+			{ID: "child"},
+		},
+	}, testCatalog{})
+
+	if err == nil || !strings.Contains(err.Error(), `duplicate state "child"`) {
+		t.Fatalf("Validate() error = %v, want duplicate nested state", err)
+	}
+}
+
+// TestValidateRejectsInvalidTransitionTarget verifies transitions target real states.
+func TestValidateRejectsInvalidTransitionTarget(t *testing.T) {
+	err := Validate(Definition{
+		Kind:    KindStateMachine,
+		ID:      "bad_transition",
+		Initial: "start",
+		States: []StateDefinition{
+			{ID: "start", Transitions: []TransitionDefinition{{Trigger: "go", To: "missing"}}},
+		},
+	}, testCatalog{})
+
+	if err == nil || !strings.Contains(err.Error(), `target "missing" is not defined`) {
+		t.Fatalf("Validate() error = %v, want invalid transition target", err)
+	}
+}
+
+// TestValidateRejectsInvalidHierarchyParent verifies flat parent references are checked.
+func TestValidateRejectsInvalidHierarchyParent(t *testing.T) {
+	err := Validate(Definition{
+		Kind:    KindStateMachine,
+		ID:      "bad_parent",
+		Initial: "child",
+		States: []StateDefinition{
+			{ID: "child", Parent: "missing"},
+		},
+	}, testCatalog{})
+
+	if err == nil || !strings.Contains(err.Error(), `parent "missing" is not defined`) {
+		t.Fatalf("Validate() error = %v, want invalid parent reference", err)
+	}
+}
+
+// TestValidateRejectsNestedParentConflict verifies nested YAML cannot contradict parent fields.
+func TestValidateRejectsNestedParentConflict(t *testing.T) {
+	err := Validate(Definition{
+		Kind:    KindStateMachine,
+		ID:      "conflicting_parent",
+		Initial: "phase_a",
+		States: []StateDefinition{
+			{
+				ID:      "phase_a",
+				Initial: "child",
+				States:  []StateDefinition{{ID: "child", Parent: "phase_b"}},
+			},
+			{ID: "phase_b", Initial: "child"},
+		},
+	}, testCatalog{})
+
+	if err == nil || !strings.Contains(err.Error(), `conflicts with containing state "phase_a"`) {
+		t.Fatalf("Validate() error = %v, want nested parent conflict", err)
+	}
+}
+
+// TestValidateRejectsHierarchyCycles verifies parent cycles cannot reach runtime.
+func TestValidateRejectsHierarchyCycles(t *testing.T) {
+	err := Validate(Definition{
+		Kind:    KindStateMachine,
+		ID:      "parent_cycle",
+		Initial: "a",
+		States: []StateDefinition{
+			{ID: "a", Parent: "b"},
+			{ID: "b", Parent: "a"},
+		},
+	}, testCatalog{})
+
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Fatalf("Validate() error = %v, want hierarchy cycle", err)
+	}
+}
+
+// TestValidateRejectsHierarchicalTaskStates verifies task graphs remain flat.
+func TestValidateRejectsHierarchicalTaskStates(t *testing.T) {
+	err := Validate(Definition{
+		Kind: KindStateMachine,
+		ID:   "hierarchical_tasks",
+		States: []StateDefinition{
+			{
+				ID:      "phase",
+				Initial: "task",
+				States: []StateDefinition{
+					{ID: "task", Type: StateTypeTask, Uses: "tool.call"},
+				},
+			},
+		},
+	}, testCatalog{"tool.call": true})
+
+	if err == nil || !strings.Contains(err.Error(), "cannot mix process states with task states") {
+		t.Fatalf("Validate() error = %v, want mixed task/process hierarchy", err)
+	}
+}

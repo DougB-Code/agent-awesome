@@ -170,6 +170,10 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _selectCompanionArea(_activeDetailModeId());
       _notifyAreaChanged();
     });
   }
@@ -184,6 +188,13 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     if (_activeAreaKey(oldWidget.areas) != _activeAreaKey(widget.areas)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _notifyAreaChanged();
+      });
+    }
+    if (oldWidget.selectedDetailModeId != widget.selectedDetailModeId) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _selectCompanionArea(_activeDetailModeId());
+        }
       });
     }
   }
@@ -504,6 +515,17 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     final boundedIndex = _selectedAreaIndex.clamp(0, areas.length - 1);
     final area = areas[boundedIndex];
     return area.id.isEmpty ? area.title : area.id;
+  }
+
+  /// Returns the active detail mode id for the currently selected area.
+  String _activeDetailModeId() {
+    if (widget.areas.isEmpty) {
+      return '';
+    }
+    final boundedIndex = _selectedAreaIndex.clamp(0, widget.areas.length - 1);
+    final area = widget.areas[boundedIndex];
+    final modes = _detailModesForArea(area);
+    return _selectedDetailMode(area, modes).id;
   }
 
   /// Selects a right-mode companion left area when one is declared.

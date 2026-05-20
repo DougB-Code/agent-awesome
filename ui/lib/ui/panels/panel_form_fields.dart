@@ -68,6 +68,7 @@ class PanelTextFormField extends PanelFormFieldBase {
     this.maxLines = 1,
     this.keyboardType,
     this.monospace = false,
+    this.onSubmitted,
   });
 
   /// Text controller owned by the parent editor.
@@ -85,6 +86,9 @@ class PanelTextFormField extends PanelFormFieldBase {
   /// Whether to render text in a monospace font.
   final bool monospace;
 
+  /// Optional callback for committing single-line edits.
+  final ValueChanged<String>? onSubmitted;
+
   /// Builds the shared command-panel text field.
   @override
   Widget build(BuildContext context) {
@@ -94,8 +98,14 @@ class PanelTextFormField extends PanelFormFieldBase {
       keyboardType:
           keyboardType ??
           (maxLines > 1 ? TextInputType.multiline : TextInputType.text),
+      textInputAction: maxLines == 1
+          ? TextInputAction.done
+          : TextInputAction.newline,
       minLines: minLines ?? (maxLines == 1 ? 1 : (maxLines < 3 ? maxLines : 3)),
       maxLines: maxLines,
+      onEditingComplete: onSubmitted == null
+          ? null
+          : () => onSubmitted!(controller.text),
       style: TextStyle(
         color: colors.ink,
         fontFamily: monospace ? 'monospace' : null,

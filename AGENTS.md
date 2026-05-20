@@ -92,6 +92,8 @@ NEVER add informational cards, status blocks, helper banners, explanatory panels
 
 For forms that edit an existing object or configuration, save on edit with bounded debouncing and lightweight field feedback. Do not require a separate Save button, and do not wait until blur as the primary persistence trigger. Keep explicit action buttons only for creation, destructive actions, approvals, credential submission, or other flows where the user is intentionally committing a new side effect.
 
+Keyboard flow MUST preserve user context. Pressing `Esc` exits the current section, mode, panel, or edit surface without forcing a save. Pressing `Enter` commits the current selection or edit, including any required save or flush. Both keys MUST return the user to the previous screen, section, view, mode, or canvas they came from, and MUST restore the prior scroll or canvas position when position is meaningful.
+
 In command-panel screens, place CRUD controls in the same panel header row as the relevant quick-select controls. Collection-level actions such as create belong in the left command panel action row; selected-object actions such as duplicate or delete belong in the right detail panel action row, aligned with the detail quick-select controls. Nested selected-object collections may use a right item selector only when the active right mode owns that nested collection. Do not put create, duplicate, or delete controls inside individual edit cards when they operate on the selected screen object; cards should focus on editing the selected object itself.
 
 Only show manual refresh controls for external resources that cannot reliably push or auto-refresh local app state. Local resources and locally owned services MUST refresh automatically; do not add refresh buttons for local collections, local drafts, or local configuration screens.
@@ -111,6 +113,8 @@ Command-panel UI MUST use the shared panel style system. Use shared panel compon
 Keep command-panel visuals quiet. Prefer flat bordered surfaces for repeated cards, inspector sections, event rows, source previews, and canvas frames. Reserve gradients for top-level shell chrome, selected states, or brand moments. Do not add routine content gradients to make ordinary cards feel special.
 
 Use consistent panel archetypes. Collection panels show selectable objects. Inspector panels summarize or edit the selected object. Form editors use shared form sections and fields. Dense editors use compact shared editor sections. Canvas panels use shared graph/map/timeline controls. Dashboard routes may use a separate dashboard style when they are outside the command-panel model.
+
+Left-pane selector, menu, source, reference, and palette panels MUST render as pane-native lists. Do not wrap the list in an extra bordered/background card or alternate pane color. The pane owns the background and spacing; only individual selectable or draggable rows/cards should carry item-level affordance. Apply this consistently whether rows switch the right panel, insert content, pick an object, or act as drag-and-drop sources.
 
 Selectable cards MUST use a shared card variant that matches their job: object card, entity card, config card, graph node card, or chat/session card. Selection is shown primarily through border and selected fill. Accent stripes are thin and reserved for object category, urgency, or risk; do not use the same accent treatment for multiple meanings in the same panel.
 

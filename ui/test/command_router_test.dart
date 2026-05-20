@@ -77,12 +77,25 @@ void main() {
     expect(route.section, AppSections.backlog);
   });
 
-  test('does not route removed workflow authoring aliases', () {
+  test('routes workflow authoring aliases to Workflows', () {
     final route = _router().route(
       const CommandContext(
         section: AppSections.memory,
         area: 'Library',
         text: 'open workflows',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.navigateSection);
+    expect(route.section, AppSections.automationWorkflows);
+  });
+
+  test('does not route removed task authoring aliases', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.memory,
+        area: 'Library',
+        text: 'open tasks',
       ),
     );
 

@@ -102,14 +102,8 @@ List<String> workflowArgumentsForProfile(RuntimeProfile profile) {
     workflow.definitionsDir,
     '--db',
     workflow.dbPath,
-    '--harness-base-url',
-    profile.harness.apiBaseUrl,
     '--harness-context-base-url',
     profile.gateway.contextBaseUrl,
-    '--app-name',
-    profile.harness.appName,
-    '--user-id',
-    profile.harness.userId,
   ];
 }
 

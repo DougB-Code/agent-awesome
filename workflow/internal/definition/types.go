@@ -17,6 +17,8 @@ type Definition struct {
 type StateDefinition struct {
 	ID          string                 `json:"id" yaml:"id"`
 	Type        string                 `json:"type,omitempty" yaml:"type,omitempty"`
+	Parent      string                 `json:"parent,omitempty" yaml:"parent,omitempty"`
+	Initial     string                 `json:"initial,omitempty" yaml:"initial,omitempty"`
 	Uses        string                 `json:"uses,omitempty" yaml:"uses,omitempty"`
 	DependsOn   []string               `json:"depends_on,omitempty" yaml:"depends_on,omitempty"`
 	With        map[string]any         `json:"with,omitempty" yaml:"with,omitempty"`
@@ -25,6 +27,7 @@ type StateDefinition struct {
 	RetryDelay  string                 `json:"retry_delay,omitempty" yaml:"retry_delay,omitempty"`
 	OnEntry     []ActionDefinition     `json:"on_entry,omitempty" yaml:"on_entry,omitempty"`
 	Transitions []TransitionDefinition `json:"transitions,omitempty" yaml:"transitions,omitempty"`
+	States      []StateDefinition      `json:"states,omitempty" yaml:"states,omitempty"`
 }
 
 // TransitionDefinition describes one trigger-driven state transition.

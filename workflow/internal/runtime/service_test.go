@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"workflow/internal/store"
 )
 
 // TestStateMachineWaitsForHumanSignal verifies pending user items resume by signal.
@@ -108,6 +110,391 @@ func TestContainsSensitiveKeyDetectsCredentials(t *testing.T) {
 
 	if !containsSensitiveKey(payload) {
 		t.Fatalf("containsSensitiveKey() = false, want credential-like key detected")
+	}
+}
+
+// TestProcessStateAutoTransitionsUsePriorOutputs verifies lifecycle states can advance and pass context.
+func TestProcessStateAutoTransitionsUsePriorOutputs(t *testing.T) {
+	ctx := context.Background()
+	var secondSawPrepare atomic.Bool
+	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		switch body["name"] {
+		case "prepare_tool":
+			writeJSON(w, map[string]any{"structuredContent": map[string]any{"worktree_path": "/tmp/worktree"}})
+		case "implement_tool":
+			arguments, _ := body["arguments"].(map[string]any)
+			prepareOutput, _ := arguments["prepare_worktree"].(map[string]any)
+			if prepareOutput["worktree_path"] == "/tmp/worktree" {
+				secondSawPrepare.Store(true)
+			}
+			writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
+		default:
+			http.Error(w, "unexpected tool", http.StatusBadRequest)
+		}
+	}))
+	defer toolServer.Close()
+
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "lifecycle.yaml", `
+kind: state_machine
+id: coding_lifecycle
+name: Coding Lifecycle
+initial: prepare
+states:
+  - id: prepare
+    on_entry:
+      - id: prepare_worktree
+        uses: tool.call
+        with:
+          name: prepare_tool
+          arguments: {}
+    transitions:
+      - trigger: succeeded
+        to: implement
+      - trigger: failed
+        to: blocked
+  - id: implement
+    on_entry:
+      - id: implement_change
+        uses: tool.call
+        with:
+          name: implement_tool
+          arguments: {}
+    transitions:
+      - trigger: succeeded
+        to: done
+      - trigger: failed
+        to: blocked
+  - id: blocked
+  - id: done
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir:        definitionsDir,
+		DatabasePath:          filepath.Join(t.TempDir(), "workflow.db"),
+		HarnessContextBaseURL: toolServer.URL + "/api/context",
+		RequestTimeout:        time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "coding_lifecycle", map[string]any{"change_request": "ship it"})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded && run.State == "done"
+	})
+	if !secondSawPrepare.Load() {
+		t.Fatalf("implement state did not receive prepare state output")
+	}
+}
+
+// TestProcessStateFailureTransition verifies failed entry actions can enter recovery states.
+func TestProcessStateFailureTransition(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "failure_lifecycle.yaml", `
+kind: state_machine
+id: failure_lifecycle
+name: Failure Lifecycle
+initial: check
+states:
+  - id: check
+    on_entry:
+      - id: assert_ready
+        uses: data.assert
+        with:
+          path: workflow_input.ready
+          mode: equals
+          value: true
+    transitions:
+      - trigger: succeeded
+        to: done
+      - trigger: failed
+        to: blocked
+  - id: blocked
+  - id: done
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "failure_lifecycle", map[string]any{"ready": false})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded && run.State == "blocked"
+	})
+	run, err := service.Status(ctx, started.ID)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if run.Output["error"] == nil {
+		t.Fatalf("run output = %#v, want failure error captured", run.Output)
+	}
+}
+
+// TestHierarchicalStateMachineUsesInitialChildTransition verifies composite targets enter child states.
+func TestHierarchicalStateMachineUsesInitialChildTransition(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "hierarchy_initial.yaml", `
+kind: state_machine
+id: hierarchy_initial
+name: Hierarchy Initial
+initial: intake
+states:
+  - id: intake
+    on_entry:
+      - id: assert_intake
+        uses: data.assert
+        with:
+          path: workflow_input.ready
+          mode: equals
+          value: true
+    transitions:
+      - trigger: succeeded
+        to: change
+  - id: change
+    initial: implement
+    states:
+      - id: implement
+        on_entry:
+          - id: assert_change
+            uses: data.assert
+            with:
+              path: workflow_input.ready
+              mode: equals
+              value: true
+        transitions:
+          - trigger: succeeded
+            to: done
+  - id: done
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "hierarchy_initial", map[string]any{"ready": true})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded && run.State == "done"
+	})
+	events, err := service.History(ctx, started.ID)
+	if err != nil {
+		t.Fatalf("History() error = %v", err)
+	}
+	if !historyTransitionedTo(events, "implement") {
+		t.Fatalf("history = %#v, want transition into composite initial child", events)
+	}
+}
+
+// TestHierarchicalStateMachineInheritsPhaseTransition verifies child states inherit parent exits.
+func TestHierarchicalStateMachineInheritsPhaseTransition(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "hierarchy_inherited.yaml", `
+kind: state_machine
+id: hierarchy_inherited
+name: Hierarchy Inherited
+initial: quality
+states:
+  - id: quality
+    initial: test
+    transitions:
+      - trigger: succeeded
+        to: publish
+      - trigger: failed
+        to: blocked
+    states:
+      - id: test
+        on_entry:
+          - id: assert_tests
+            uses: data.assert
+            with:
+              path: workflow_input.tests_passed
+              mode: equals
+              value: true
+  - id: publish
+  - id: blocked
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "hierarchy_inherited", map[string]any{"tests_passed": true})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded && run.State == "publish"
+	})
+}
+
+// TestHierarchicalStateMachineWaitsForInheritedManualTransition verifies phase exits keep child states nonterminal.
+func TestHierarchicalStateMachineWaitsForInheritedManualTransition(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "hierarchy_manual_exit.yaml", `
+kind: state_machine
+id: hierarchy_manual_exit
+name: Hierarchy Manual Exit
+initial: approval
+states:
+  - id: approval
+    initial: await_review
+    transitions:
+      - trigger: approved
+        to: done
+      - trigger: rejected
+        to: blocked
+    states:
+      - id: await_review
+        on_entry:
+          - id: assert_ready
+            uses: data.assert
+            with:
+              path: workflow_input.ready
+              mode: equals
+              value: true
+  - id: done
+  - id: blocked
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "hierarchy_manual_exit", map[string]any{"ready": true})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusWaiting && run.State == "await_review"
+	})
+	if _, err := service.Signal(ctx, started.ID, "approved", map[string]any{"approved": true}); err != nil {
+		t.Fatalf("Signal() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded && run.State == "done"
+	})
+}
+
+// TestHierarchicalStateMachineDoesNotReenterSharedParent verifies sibling transitions skip parent entry.
+func TestHierarchicalStateMachineDoesNotReenterSharedParent(t *testing.T) {
+	ctx := context.Background()
+	var phaseEntries atomic.Int64
+	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if body["name"] == "phase_tool" {
+			phaseEntries.Add(1)
+		}
+		writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
+	}))
+	defer toolServer.Close()
+
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "hierarchy_parent_entry.yaml", `
+kind: state_machine
+id: hierarchy_parent_entry
+name: Hierarchy Parent Entry
+initial: change
+states:
+  - id: change
+    initial: implement
+    on_entry:
+      - id: phase_entry
+        uses: tool.call
+        with:
+          name: phase_tool
+          arguments: {}
+    states:
+      - id: implement
+        on_entry:
+          - id: implement_entry
+            uses: tool.call
+            with:
+              name: implement_tool
+              arguments: {}
+        transitions:
+          - trigger: succeeded
+            to: review
+      - id: review
+        on_entry:
+          - id: review_entry
+            uses: tool.call
+            with:
+              name: review_tool
+              arguments: {}
+        transitions:
+          - trigger: succeeded
+            to: done
+  - id: done
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir:        definitionsDir,
+		DatabasePath:          filepath.Join(t.TempDir(), "workflow.db"),
+		HarnessContextBaseURL: toolServer.URL + "/api/context",
+		RequestTimeout:        time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "hierarchy_parent_entry", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded && run.State == "done"
+	})
+	if phaseEntries.Load() != 1 {
+		t.Fatalf("phase entry calls = %d, want 1", phaseEntries.Load())
 	}
 }
 
@@ -547,6 +934,19 @@ func writeTestDefinition(t *testing.T, dir string, name string, body string) {
 func writeJSON(w http.ResponseWriter, body map[string]any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// historyTransitionedTo reports whether transition history reached one target state.
+func historyTransitionedTo(events []store.EventRecord, target string) bool {
+	for _, event := range events {
+		if event.Type != "state_transitioned" {
+			continue
+		}
+		if event.Data["to"] == target {
+			return true
+		}
+	}
+	return false
 }
 
 // eventually waits for asynchronous workflow execution to reach a condition.
