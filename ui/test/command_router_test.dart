@@ -77,6 +77,19 @@ void main() {
     expect(route.section, AppSections.backlog);
   });
 
+  test('does not route removed workflow authoring aliases', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.memory,
+        area: 'Library',
+        text: 'open workflows',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.assistant);
+    expect(route.section, isEmpty);
+  });
+
   test('wraps unknown non-Backlog commands with current UI context', () {
     final route = _router().route(
       const CommandContext(

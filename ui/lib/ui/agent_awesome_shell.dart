@@ -175,22 +175,6 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           ),
           legacyOpen: widget.controller.automationsChatPanelOpen,
         );
-      case AppSections.automationWorkflows:
-        return _withAssistantChat(
-          AutomationWorkflowsCommandPanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea(AppSections.automationWorkflows),
-          ),
-          legacyOpen: widget.controller.automationsChatPanelOpen,
-        );
-      case AppSections.automationTasks:
-        return _withAssistantChat(
-          AutomationTasksCommandPanel(
-            controller: widget.controller,
-            onAreaChanged: _rememberArea(AppSections.automationTasks),
-          ),
-          legacyOpen: widget.controller.automationsChatPanelOpen,
-        );
       case AppSections.automationMcpServers:
         return _withAssistantChat(
           McpServersCommandPanel(

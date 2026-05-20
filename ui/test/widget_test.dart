@@ -254,7 +254,7 @@ void main() {
     expect(find.text('Inspector'), findsNothing);
   });
 
-  testWidgets('opens focused Automations menu sections', (tester) async {
+  testWidgets('opens exposed Automations menu sections', (tester) async {
     tester.view.physicalSize = const Size(1800, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -388,8 +388,8 @@ void main() {
     );
     expect(find.text('AUTOMATIONS'), findsOneWidget);
     expect(find.text('Operations'), findsWidgets);
-    expect(find.text('Workflows'), findsOneWidget);
-    expect(find.text('Tasks'), findsOneWidget);
+    expect(find.text('Workflows'), findsNothing);
+    expect(find.text('Tasks'), findsNothing);
     expect(find.text('Agents'), findsNothing);
     expect(find.text('MCP Servers'), findsOneWidget);
     expect(find.text('Tools'), findsOneWidget);
@@ -424,230 +424,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('run_1 / running'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('DRAFTS'), findsWidgets);
-    expect(find.text('Review Flow'), findsWidgets);
-    expect(find.text('ADD ACTION'), findsNothing);
-    await tester.tap(find.byTooltip('Templates'));
-    await tester.pumpAndSettle();
-    expect(find.text('TEMPLATES'), findsWidgets);
-    expect(find.text('Approval Workflow'), findsWidgets);
-    expect(find.byTooltip('Use selected template'), findsOneWidget);
-    await tester.tap(find.byTooltip('Actions'));
-    await tester.pumpAndSettle();
-    expect(find.text('ACTIONS'), findsWidgets);
-    expect(find.text('Call MCP Tool'), findsWidgets);
-    expect(find.text('Run Command'), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tasks')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('TASKS'), findsWidgets);
-    expect(find.text('Task Flow'), findsWidgets);
-    expect(find.text('INPUTS'), findsNothing);
-    expect(find.text('OUTPUTS'), findsNothing);
-    expect(find.text('CONFIGURATION'), findsNothing);
-    expect(find.text('100%'), findsOneWidget);
-    expect(find.text('fetch_email'), findsWidgets);
-    expect(find.text('classify_email'), findsWidgets);
-    expect(find.text('summarize_email'), findsWidgets);
-    expect(find.text('prepare_review'), findsWidgets);
-    expect(find.text('2 in'), findsOneWidget);
-    final fetchFinder = find.byKey(
-      const ValueKey<String>('task-graph-node-fetch_email'),
-    );
-    final classifyFinder = find.byKey(
-      const ValueKey<String>('task-graph-node-classify_email'),
-    );
-    expect(fetchFinder, findsOneWidget);
-    expect(classifyFinder, findsOneWidget);
-    expect(
-      find.byKey(const ValueKey<String>('task-graph-stage-drop-1')),
-      findsOneWidget,
-    );
-    final fetchConnect = find.descendant(
-      of: fetchFinder,
-      matching: find.byTooltip('Connect from node'),
-    );
-    await tester.tap(fetchConnect);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(
-        of: fetchFinder,
-        matching: find.byTooltip('Cancel connection'),
-      ),
-      findsWidgets,
-    );
-    await tester.tap(classifyFinder);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(of: classifyFinder, matching: find.text('entry')),
-      findsOneWidget,
-    );
-    await tester.tap(classifyFinder);
-    await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(of: classifyFinder, matching: find.text('1 in')),
-      findsOneWidget,
-    );
-    await tester.tap(
-      find
-          .descendant(
-            of: fetchFinder,
-            matching: find.byTooltip('Cancel connection'),
-          )
-          .first,
-    );
-    await tester.pumpAndSettle();
-
-    final fetchRect = tester.getRect(fetchFinder);
-    final classifyRect = tester.getRect(classifyFinder);
-    await tester.tapAt(
-      Offset(
-        (fetchRect.right + classifyRect.left) / 2,
-        (fetchRect.top + classifyRect.top) / 2 + 56,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byTooltip('Delete connection'), findsOneWidget);
-    await tester.tap(
-      find.byKey(
-        const ValueKey<String>(
-          'task-graph-edge-delete-fetch_email-classify_email',
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(of: classifyFinder, matching: find.text('entry')),
-      findsOneWidget,
-    );
-
-    expect(find.byType(Draggable<String>), findsWidgets);
-    expect(find.byType(DragTarget<Object>), findsWidgets);
-    expect(find.text('SELECTED STEP'), findsNothing);
-    expect(find.byTooltip('Steps'), findsNothing);
-    expect(find.byTooltip('Map'), findsNothing);
-    expect(find.textContaining('"nodes"'), findsNothing);
-    await tester.tap(find.byTooltip('Zoom in'));
-    await tester.pump();
-
-    expect(find.text('110%'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Nodes'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('NODES'), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey<String>('task-graph-action-mcp.call')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('task-graph-action-tool.call')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('task-graph-action-workflow.run')),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('task-graph-action-human.request')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('task-graph-action-delay.until')),
-      findsNothing,
-    );
-    expect(
-      find.byKey(const ValueKey<String>('task-graph-action-workflow.signal')),
-      findsNothing,
-    );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('task-graph-action-mcp.call')),
-    );
-    await tester.pump();
-
-    expect(find.text('mcp_call_5'), findsWidgets);
-
-    final newNodeFinder = find.byKey(
-      const ValueKey<String>('task-graph-node-mcp_call_5'),
-    );
-    await tester.ensureVisible(newNodeFinder);
-    await tester.pumpAndSettle();
-    final newNodeMoveUp = find.descendant(
-      of: newNodeFinder,
-      matching: find.byTooltip('Move up'),
-    );
-    final newNodeDelete = find.descendant(
-      of: newNodeFinder,
-      matching: find.byTooltip('Delete node'),
-    );
-
-    expect(newNodeMoveUp, findsOneWidget);
-    expect(
-      find.descendant(of: newNodeFinder, matching: find.byTooltip('Move down')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: newNodeFinder, matching: find.byTooltip('Move left')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: newNodeFinder,
-        matching: find.byTooltip('Move right'),
-      ),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(
-        of: newNodeFinder,
-        matching: find.byTooltip('Connect from node'),
-      ),
-      findsOneWidget,
-    );
-    expect(newNodeDelete, findsOneWidget);
-
-    final newNodeTopBeforeMove = tester.getTopLeft(newNodeFinder).dy;
-    expect(
-      newNodeTopBeforeMove,
-      greaterThan(tester.getTopLeft(fetchFinder).dy),
-    );
-
-    await tester.tap(newNodeMoveUp);
-    await tester.pumpAndSettle();
-
-    expect(tester.getTopLeft(newNodeFinder).dy, lessThan(newNodeTopBeforeMove));
-
-    await tester.tap(newNodeDelete);
-    await tester.pumpAndSettle();
-
-    expect(find.text('mcp_call_5'), findsNothing);
-
-    await tester.tap(find.byTooltip('Tasks'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('Overview').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('SELECTED STEP'), findsOneWidget);
-    expect(find.text('Action'), findsOneWidget);
-    expect(find.text('Retry delay'), findsOneWidget);
-    expect(find.byTooltip('New task graph'), findsOneWidget);
-    expect(find.byTooltip('Add task node'), findsOneWidget);
-    expect(find.byTooltip('Delete task node'), findsOneWidget);
-    expect(find.byTooltip('Validate draft'), findsOneWidget);
-    expect(find.byTooltip('Publish draft'), findsOneWidget);
-    expect(find.byTooltip('Templates'), findsOneWidget);
-
     expect(find.byKey(const ValueKey<String>('sidebar-Agents')), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('sidebar-Workflows')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
@@ -681,7 +463,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.text('Workflows').first);
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
     await tester.pumpAndSettle();
 
     expect(find.text('Status'), findsNothing);
@@ -717,14 +499,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.text('Workflows').first);
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('AI chat'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
     expect(controller.assistantChatPanelOpen, isTrue);
-    expect(find.text('DRAFTS'), findsWidgets);
+    expect(find.text('INBOX'), findsWidgets);
     expect(find.text('CONVERSATION'), findsOneWidget);
     expect(find.text('Draft ready.'), findsOneWidget);
     expect(find.byTooltip('Start new chat'), findsOneWidget);
