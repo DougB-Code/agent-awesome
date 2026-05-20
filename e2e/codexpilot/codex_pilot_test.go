@@ -1,4 +1,4 @@
-// This file drives the Codex CLI pilot workflow through real local daemons.
+// This file drives the Codex CLI pilot workflow through local daemon boundaries.
 package codexpilot
 
 import (
@@ -17,10 +17,10 @@ import (
 	"time"
 )
 
-// TestCodexCLIPilotWorkflowEndToEnd runs fake Codex, test, and gh CLIs through generic AA boundaries.
-func TestCodexCLIPilotWorkflowEndToEnd(t *testing.T) {
+// TestCodexCLIPilotFakeCLIsEndToEnd runs fake external CLIs through generic AA boundaries.
+func TestCodexCLIPilotFakeCLIsEndToEnd(t *testing.T) {
 	if os.Getenv("AGENTAWESOME_RUN_CODEX_PILOT_E2E") != "1" {
-		t.Skip("set AGENTAWESOME_RUN_CODEX_PILOT_E2E=1 to run daemon integration test")
+		t.Skip("set AGENTAWESOME_RUN_CODEX_PILOT_E2E=1 to run fake-CLI daemon integration test")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
@@ -41,7 +41,7 @@ printf '{"url":"https://example.test/pull/1"}'
 	remote := filepath.Join(tempRoot, "remote.git")
 	runCmd(t, "", "git", "init", "--bare", remote)
 	runCmd(t, repo, "git", "remote", "add", "origin", remote)
-	worktree := filepath.Join(tempRoot, "worktree")
+	worktree := filepath.Join(tempRoot, "build", "sourcecontrol", "worktrees", "feature-codex-pilot")
 
 	sourcecontrolAddr := freeAddr(t)
 	commandAddr := freeAddr(t)
@@ -116,6 +116,48 @@ printf '{"url":"https://example.test/pull/1"}'
 	runCmd(t, "", "git", "--git-dir", remote, "rev-parse", "feature/codex-pilot")
 }
 
+// TestRealCodexCLICommandBoundarySmoke verifies commandd can launch the configured Codex binary.
+func TestRealCodexCLICommandBoundarySmoke(t *testing.T) {
+	if os.Getenv("AGENTAWESOME_RUN_REAL_CODEX_SMOKE") != "1" {
+		t.Skip("set AGENTAWESOME_RUN_REAL_CODEX_SMOKE=1 to verify the real Codex executable through commandd")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	root := repoRoot(t)
+	tempRoot := t.TempDir()
+	codexExecutable := strings.TrimSpace(os.Getenv("AGENTAWESOME_CODEX_EXECUTABLE"))
+	if codexExecutable == "" {
+		codexExecutable = "codex"
+	}
+	commandAddr := freeAddr(t)
+	commandURL := "http://" + commandAddr + "/mcp"
+	templatesJSON := realCodexSmokeTemplatesJSON(t, codexExecutable)
+	commandCmd := startDaemon(ctx, t, filepath.Join(root, "command"),
+		"go", "run", "./cmd/commandd",
+		"-addr", commandAddr,
+		"-data", filepath.Join(tempRoot, "command-data"),
+		"-allow-workdir", tempRoot,
+		"-require-approval=false",
+		"-allow-arbitrary=false",
+		"-templates-json", templatesJSON,
+	)
+	defer stopDaemon(commandCmd)
+	waitHealth(t, "http://"+commandAddr+"/healthz")
+
+	status := callCommandExecute(t, commandURL, map[string]any{
+		"template_id": "codex_version",
+		"cwd":         tempRoot,
+	})
+	if status["status"] != "succeeded" {
+		t.Fatalf("real Codex command status = %#v, want succeeded", status)
+	}
+	stdout, _ := status["stdout_tail"].(string)
+	stderr, _ := status["stderr_tail"].(string)
+	if strings.TrimSpace(stdout) == "" && strings.TrimSpace(stderr) == "" {
+		t.Fatalf("real Codex version command returned no visible output: %#v", status)
+	}
+}
+
 // commandTemplatesJSON returns commandd templates for fake external CLIs.
 func commandTemplatesJSON(t *testing.T, fakeCodex string, fakeTest string, fakeGH string) string {
 	t.Helper()
@@ -126,6 +168,27 @@ func commandTemplatesJSON(t *testing.T, fakeCodex string, fakeTest string, fakeG
 		commandTemplate("codex_cleanup", fakeCodex, []string{"cleanup"}),
 		commandTemplate("test", fakeTest, nil),
 		commandTemplate("gh_pr_create", fakeGH, []string{"pr", "create"}),
+	}
+	data, err := json.Marshal(templates)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	return string(data)
+}
+
+// realCodexSmokeTemplatesJSON returns a commandd template for the configured Codex binary.
+func realCodexSmokeTemplatesJSON(t *testing.T, codexExecutable string) string {
+	t.Helper()
+	templates := []map[string]any{
+		{
+			"id":               "codex_version",
+			"description":      "Verify the configured Codex executable can launch.",
+			"executable":       codexExecutable,
+			"args":             []string{"--version"},
+			"timeout":          "15s",
+			"require_approval": false,
+			"output_contract":  map[string]any{"format": "text", "source": "stdout"},
+		},
 	}
 	data, err := json.Marshal(templates)
 	if err != nil {
@@ -536,6 +599,36 @@ func postJSON(t *testing.T, url string, payload any, target any) {
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
+}
+
+// callCommandExecute invokes command.execute over commandd's MCP transport.
+func callCommandExecute(t *testing.T, commandURL string, arguments map[string]any) map[string]any {
+	t.Helper()
+	var decoded map[string]any
+	postJSON(t, commandURL, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      "codex-smoke",
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "command.execute",
+			"arguments": arguments,
+		},
+	}, &decoded)
+	if rpcError, ok := decoded["error"].(map[string]any); ok {
+		t.Fatalf("command.execute JSON-RPC error = %#v", rpcError)
+	}
+	result, ok := decoded["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("command.execute response = %#v, want result object", decoded)
+	}
+	if isError, _ := result["isError"].(bool); isError {
+		t.Fatalf("command.execute returned tool error = %#v", result)
+	}
+	structured, ok := result["structuredContent"].(map[string]any)
+	if !ok {
+		t.Fatalf("command.execute result = %#v, want structured content", result)
+	}
+	return structured
 }
 
 // startDaemon starts one Go daemon command in a module directory.
