@@ -39,6 +39,12 @@ const (
 	processTriggerFailed    = "failed"
 )
 
+// processTransitionContext stores the event data that created the current state.
+type processTransitionContext struct {
+	SourceStateID string
+	Trigger       string
+}
+
 // Service owns workflow definitions, persistence, and execution.
 type Service struct {
 	cfg     Config
@@ -383,17 +389,17 @@ func (s *Service) executeStateEntry(ctx context.Context, def definition.Definiti
 	if !ok {
 		return fmt.Errorf("state %q is not defined", run.State)
 	}
-	previousStateID, err := s.latestTransitionSource(ctx, run.ID, state.ID)
+	transition, err := s.latestTransitionInto(ctx, run.ID, state.ID)
 	if err != nil {
 		return err
 	}
-	for _, entryState := range processEntryPath(def, previousStateID, state.ID) {
+	for _, entryState := range processEntryPath(def, transition.SourceStateID, state.ID) {
 		for index, action := range entryState.OnEntry {
 			stepID := action.ID
 			if stepID == "" {
 				stepID = fmt.Sprintf("%s_entry_%d", entryState.ID, index+1)
 			}
-			input, err := s.processStateInput(ctx, run)
+			input, err := s.processStateInput(ctx, def, run, state.ID)
 			if err != nil {
 				return err
 			}
@@ -431,8 +437,8 @@ func (s *Service) transitionProcessFailure(ctx context.Context, def definition.D
 	return true
 }
 
-// processStateInput exposes workflow input and prior step outputs to entry actions.
-func (s *Service) processStateInput(ctx context.Context, run store.RunRecord) (map[string]any, error) {
+// processStateInput exposes workflow input, prior outputs, and the incoming result envelope.
+func (s *Service) processStateInput(ctx context.Context, def definition.Definition, run store.RunRecord, currentStateID string) (map[string]any, error) {
 	input := cloneMap(run.Input)
 	input["workflow_input"] = run.Input
 	outputs, err := s.store.StepOutputs(ctx, run.ID)
@@ -445,6 +451,19 @@ func (s *Service) processStateInput(ctx context.Context, run store.RunRecord) (m
 	if len(run.Output) > 0 {
 		input["workflow_output"] = run.Output
 	}
+	transition, err := s.latestTransitionInto(ctx, run.ID, currentStateID)
+	if err != nil {
+		return nil, err
+	}
+	incomingData := map[string]any{}
+	incomingSteps := map[string]any{}
+	if transition.SourceStateID != "" {
+		if source, ok := stateByID(def, transition.SourceStateID); ok {
+			incomingData = stateOutputFromStepOutputs(outputs, source)
+			incomingSteps = stateStepOutputsFromStepOutputs(outputs, source)
+		}
+	}
+	input["incoming"] = processIncomingEnvelope(transition, incomingData, incomingSteps, processIncomingError(transition, run.Output))
 	return input, nil
 }
 
@@ -766,20 +785,108 @@ func initialProcessState(def definition.Definition) string {
 	return strings.TrimSpace(def.Initial)
 }
 
-// latestTransitionSource returns the previous active state for the latest transition into stateID.
-func (s *Service) latestTransitionSource(ctx context.Context, runID string, stateID string) (string, error) {
+// latestTransitionInto returns the latest transition event that entered stateID.
+func (s *Service) latestTransitionInto(ctx context.Context, runID string, stateID string) (processTransitionContext, error) {
 	events, err := s.store.ListEvents(ctx, runID)
 	if err != nil {
-		return "", err
+		return processTransitionContext{}, err
 	}
 	for index := len(events) - 1; index >= 0; index-- {
 		event := events[index]
 		if event.Type != "state_transitioned" || fmt.Sprint(event.Data["to"]) != stateID {
 			continue
 		}
-		return strings.TrimSpace(fmt.Sprint(event.Data["from"])), nil
+		return processTransitionContext{
+			SourceStateID: strings.TrimSpace(fmt.Sprint(event.Data["from"])),
+			Trigger:       strings.TrimSpace(fmt.Sprint(event.Data["trigger"])),
+		}, nil
 	}
-	return "", nil
+	return processTransitionContext{}, nil
+}
+
+// processIncomingEnvelope builds the standard node-to-node state-machine input.
+func processIncomingEnvelope(transition processTransitionContext, data map[string]any, steps map[string]any, errorMessage string) map[string]any {
+	result := map[string]any{
+		"status":      processIncomingStatus(transition.Trigger),
+		"data":        cloneMap(data),
+		"raw":         cloneMap(data),
+		"artifacts":   []any{},
+		"diagnostics": map[string]any{},
+		"metadata": map[string]any{
+			"source_state": transition.SourceStateID,
+			"trigger":      transition.Trigger,
+		},
+	}
+	if errorMessage != "" {
+		result["error"] = map[string]any{"message": errorMessage}
+	}
+	envelope := map[string]any{
+		"kind":         "aa.workflow.step_result",
+		"schema_ref":   "aa.workflow.step_result.v1",
+		"source_state": transition.SourceStateID,
+		"trigger":      transition.Trigger,
+		"result":       result,
+	}
+	if len(steps) > 0 {
+		envelope["steps"] = steps
+	}
+	return envelope
+}
+
+// processIncomingError returns the failure message available to recovery states.
+func processIncomingError(transition processTransitionContext, runOutput map[string]any) string {
+	if strings.TrimSpace(transition.Trigger) != processTriggerFailed {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(runOutput["error"]))
+}
+
+// processIncomingStatus derives a generic result status from a transition trigger.
+func processIncomingStatus(trigger string) string {
+	normalized := strings.ToLower(strings.TrimSpace(trigger))
+	switch normalized {
+	case processTriggerSucceeded:
+		return statusSucceeded
+	case processTriggerFailed:
+		return statusFailed
+	case "":
+		return ""
+	default:
+		return normalized
+	}
+}
+
+// stateOutputFromStepOutputs returns the visible output for a state node.
+func stateOutputFromStepOutputs(outputs map[string]map[string]any, state definition.StateDefinition) map[string]any {
+	if output, ok := outputs[state.ID]; ok {
+		return cloneMap(output)
+	}
+	var latest map[string]any
+	for index, action := range state.OnEntry {
+		stepID := action.ID
+		if stepID == "" {
+			stepID = fmt.Sprintf("%s_entry_%d", state.ID, index+1)
+		}
+		if output, ok := outputs[stepID]; ok {
+			latest = output
+		}
+	}
+	return cloneMap(latest)
+}
+
+// stateStepOutputsFromStepOutputs returns action-level outputs for one state.
+func stateStepOutputsFromStepOutputs(outputs map[string]map[string]any, state definition.StateDefinition) map[string]any {
+	steps := map[string]any{}
+	for index, action := range state.OnEntry {
+		stepID := action.ID
+		if stepID == "" {
+			stepID = fmt.Sprintf("%s_entry_%d", state.ID, index+1)
+		}
+		if output, ok := outputs[stepID]; ok {
+			steps[stepID] = cloneMap(output)
+		}
+	}
+	return steps
 }
 
 // processEntryPath returns ancestor states newly entered on the way to target.

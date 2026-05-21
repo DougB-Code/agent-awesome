@@ -30,6 +30,99 @@ void main() {
     expect(await store.read(path), 'default: local:model\n');
   });
 
+  test('creates tool configs inside package folders', () async {
+    final path = await store.create(ConfigFileKind.tool);
+
+    expect(path, '${tempRoot.path}/tools/tool/tool.yaml');
+
+    await store.write(path, 'name: Tool Package\n');
+    final entries = await store.list(kind: ConfigFileKind.tool);
+
+    expect(entries.single.path, path);
+    expect(entries.single.fileLabel, 'tool');
+    expect(entries.single.displayName, 'Tool Package');
+  });
+
+  test('creates MCP configs inside package folders', () async {
+    final path = await store.create(ConfigFileKind.mcp);
+
+    expect(path, '${tempRoot.path}/mcp/mcp/mcp.yaml');
+
+    await store.write(path, '''
+mcp:
+  servers:
+    - name: memory
+''');
+    final entries = await store.list(kind: ConfigFileKind.mcp);
+
+    expect(entries.single.path, path);
+    expect(entries.single.fileLabel, 'mcp');
+    expect(entries.single.displayName, 'memory');
+  });
+
+  test('duplicates complete config package directories', () async {
+    final sourcePath = await store.create(ConfigFileKind.tool);
+    await store.write(sourcePath, 'name: Package\n');
+    final helper = File('${File(sourcePath).parent.path}/bin/helper.sh');
+    await helper.parent.create(recursive: true);
+    await helper.writeAsString('#!/bin/sh\n');
+
+    final duplicatePath = await store.duplicate(
+      sourcePath,
+      ConfigFileKind.tool,
+    );
+    final duplicatePackage = File(duplicatePath).parent;
+
+    expect(duplicatePath, '${tempRoot.path}/tools/tool-copy/tool.yaml');
+    expect(await File(duplicatePath).readAsString(), 'name: Package\n');
+    expect(
+      await File('${duplicatePackage.path}/bin/helper.sh').readAsString(),
+      '#!/bin/sh\n',
+    );
+  });
+
+  test('renames config package directories', () async {
+    final path = await store.create(ConfigFileKind.mcp);
+    final renamed = await store.rename(
+      ConfigFileEntry(path: path, kind: ConfigFileKind.mcp, assigned: false),
+      'Memory Server',
+    );
+
+    expect(renamed, '${tempRoot.path}/mcp/memory-server/mcp.yaml');
+    expect(await File(renamed).exists(), isTrue);
+    expect(await Directory('${tempRoot.path}/mcp/mcp').exists(), isFalse);
+  });
+
+  test('deletes config package directories', () async {
+    final path = await store.create(ConfigFileKind.tool);
+    final helper = File('${File(path).parent.path}/bin/helper.sh');
+    await helper.parent.create(recursive: true);
+    await helper.writeAsString('#!/bin/sh\n');
+
+    await store.delete(path, kind: ConfigFileKind.tool);
+
+    expect(await File(path).exists(), isFalse);
+    expect(await helper.exists(), isFalse);
+    expect(await Directory('${tempRoot.path}/tools/tool').exists(), isFalse);
+  });
+
+  test(
+    'deletes legacy flat package config files without deleting root',
+    () async {
+      final root = Directory('${tempRoot.path}/tools');
+      await root.create(recursive: true);
+      final path = '${root.path}/tool.yaml';
+      await File(path).writeAsString('name: Legacy\n');
+      await File('${root.path}/other.yaml').writeAsString('name: Other\n');
+
+      await store.delete(path, kind: ConfigFileKind.tool);
+
+      expect(await File(path).exists(), isFalse);
+      expect(await File('${root.path}/other.yaml').exists(), isTrue);
+      expect(await root.exists(), isTrue);
+    },
+  );
+
   test('rejects config reads outside managed directories', () async {
     final outside = File('${tempRoot.path}/outside.yaml');
     await outside.writeAsString('name: outside\n');

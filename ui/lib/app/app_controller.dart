@@ -319,6 +319,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Tool config files available in the app config directory.
   List<ConfigFileEntry> availableToolConfigs = const <ConfigFileEntry>[];
 
+  /// MCP config packages available in the app config directory.
+  List<ConfigFileEntry> availableMcpConfigs = const <ConfigFileEntry>[];
+
   /// App-specific settings outside runtime profile ownership.
   AgentAwesomeAppSettings appSettings = const AgentAwesomeAppSettings();
 
@@ -988,6 +991,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       kind: ConfigFileKind.tool,
       assignedPath: profile?.harness.toolConfigPath ?? '',
     );
+    availableMcpConfigs = await configFiles.list(kind: ConfigFileKind.mcp);
   }
 
   /// Refreshes file-backed profile, model, and agent collections.

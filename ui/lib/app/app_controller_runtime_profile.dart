@@ -131,7 +131,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
         entry.path,
       );
     }
-    await configFiles.delete(entry.path);
+    await configFiles.delete(entry.path, kind: entry.kind);
     await _refreshConfigCollections();
     _notifyControllerListeners();
   }
@@ -268,6 +268,11 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     if (profile.harness.toolConfigPath == entry.path) {
       harness = harness.copyWith(toolConfigPath: nextPath);
     }
+    if (entry.kind == ConfigFileKind.mcp) {
+      runtimeProfile = profile;
+      await saveRuntimeProfile(runtimeProfile!);
+      return nextPath;
+    }
     runtimeProfile = profile.copyWith(harness: harness);
     await saveRuntimeProfile(runtimeProfile!);
     return nextPath;
@@ -280,6 +285,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       ConfigFileKind.model => profile.harness.copyWith(modelConfigPath: path),
       ConfigFileKind.agent => profile.harness.copyWith(agentConfigPath: path),
       ConfigFileKind.tool => profile.harness.copyWith(toolConfigPath: path),
+      ConfigFileKind.mcp => profile.harness,
     };
     await saveRuntimeProfile(profile.copyWith(harness: harness));
   }
@@ -304,13 +310,13 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     );
     final toolPath = await _copyConfigIntoAppDirectory(
       sourcePath: harness.toolConfigPath,
-      targetDirectory: toolConfigsDirectoryPath(),
-      targetName: '${profile.id}-tool.yaml',
+      targetDirectory: '${toolConfigsDirectoryPath()}/${profile.id}',
+      targetName: aaToolPackageConfigFilename,
     );
     final graphToolPath = await _writeDefaultGraphToolConfig(
       profile: storageProfile,
       requestedPath: toolPath ?? harness.toolConfigPath,
-      targetName: '${profile.id}-tool.yaml',
+      targetName: aaToolPackageConfigFilename,
     );
     final next = storageProfile.copyWith(
       harness: harness.copyWith(
@@ -486,9 +492,14 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       throw FileSystemException('Memory domains are missing', profile.id);
     }
     var path = requestedPath.trim();
+    if (!_isToolPackageConfigPath(path)) {
+      path = toolPackageConfigPath(profile.id);
+    }
     var file = File(path);
     if (path.isEmpty || !await file.exists()) {
-      final directory = Directory(toolConfigsDirectoryPath());
+      final directory = Directory(
+        '${toolConfigsDirectoryPath()}/${profile.id}',
+      );
       await directory.create(recursive: true);
       path = '${directory.path}/$targetName';
       file = File(path);
@@ -508,9 +519,15 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     if (validationError.isNotEmpty) {
       throw FileSystemException(validationError, path);
     }
+    final toolDocument = target.copyWith(mcp: emptyToolConfigDocument().mcp);
+    final mcpDocument = emptyToolConfigDocument().copyWith(mcp: target.mcp);
+    final mcpFile = File(mcpPackageConfigPath(profile.id));
     await file.parent.create(recursive: true);
-    await file.writeAsString(target.toYaml());
-    await _log('wrote graph-backed MCP tool config $path');
+    await mcpFile.parent.create(recursive: true);
+    await file.writeAsString(toolDocument.toYaml());
+    await mcpFile.writeAsString(mcpDocument.toYaml());
+    await _log('wrote graph-backed tool package $path');
+    await _log('wrote graph-backed MCP package ${mcpFile.path}');
     return path;
   }
 
@@ -521,15 +538,22 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     final toolPath = await _writeDefaultGraphToolConfig(
       profile: profile,
       requestedPath: profile.harness.toolConfigPath,
-      targetName: _pathFilename(profile.harness.toolConfigPath).isEmpty
-          ? '${profile.id}-tool.yaml'
-          : _pathFilename(profile.harness.toolConfigPath),
+      targetName: aaToolPackageConfigFilename,
     );
     await saveRuntimeProfile(
       profile.copyWith(
         harness: profile.harness.copyWith(toolConfigPath: toolPath),
       ),
     );
+  }
+
+  /// Reports whether a path points at one package-scoped tool.yaml file.
+  bool _isToolPackageConfigPath(String path) {
+    final normalized = path.trim().replaceAll('\\', '/');
+    if (!normalized.endsWith('/$aaToolPackageConfigFilename')) {
+      return false;
+    }
+    return normalized.startsWith('${toolConfigsDirectoryPath()}/');
   }
 
   /// Validates a profile by round-tripping through the target schema parser.
@@ -701,11 +725,6 @@ extension AgentAwesomeAppControllerRuntimeProfiles
         .where((part) => part.isNotEmpty)
         .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
         .join(' ');
-  }
-
-  /// Returns the final path segment without importing UI helpers.
-  String _pathFilename(String path) {
-    return path.replaceAll('\\', '/').split('/').last;
   }
 
   /// Rebuilds owned service clients from the active runtime profile.

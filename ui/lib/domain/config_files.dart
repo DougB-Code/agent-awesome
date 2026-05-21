@@ -3,6 +3,18 @@ library;
 
 import 'model_config.dart';
 
+/// Directory name for installed AA tool packages.
+const aaToolPackageDirectoryName = 'tools';
+
+/// Directory name for installed AA MCP packages.
+const aaMcpPackageDirectoryName = 'mcp';
+
+/// Canonical config filename inside one AA tool package.
+const aaToolPackageConfigFilename = 'tool.yaml';
+
+/// Canonical config filename inside one AA MCP package.
+const aaMcpPackageConfigFilename = 'mcp.yaml';
+
 /// ConfigFileKind identifies a managed configuration file collection.
 enum ConfigFileKind {
   /// Model runtime configuration files.
@@ -13,6 +25,9 @@ enum ConfigFileKind {
 
   /// Tool and MCP configuration files.
   tool,
+
+  /// MCP server package configuration files.
+  mcp,
 }
 
 /// ConfigFileEntry describes one editable configuration file.
@@ -58,7 +73,13 @@ class ConfigFileEntry {
   /// Human-readable filename without extension.
   String get fileLabel {
     final normalized = path.replaceAll('\\', '/');
-    final filename = normalized.split('/').last;
+    final parts = normalized.split('/');
+    final filename = parts.last;
+    if ((filename == aaToolPackageConfigFilename ||
+            filename == aaMcpPackageConfigFilename) &&
+        parts.length >= 2) {
+      return parts[parts.length - 2];
+    }
     final dot = filename.lastIndexOf('.');
     if (dot <= 0) {
       return filename;

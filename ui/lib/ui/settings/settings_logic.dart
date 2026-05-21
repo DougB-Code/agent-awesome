@@ -94,6 +94,7 @@ class SettingsConfigLabels {
       ConfigFileKind.model => 'Model',
       ConfigFileKind.agent => 'Agent',
       ConfigFileKind.tool => 'Tool',
+      ConfigFileKind.mcp => 'MCP',
     };
   }
 

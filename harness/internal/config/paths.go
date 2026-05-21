@@ -28,5 +28,15 @@ func DefaultAgentPath() string {
 
 // DefaultToolPath returns the default tool configuration path.
 func DefaultToolPath() string {
-	return filepath.Join(DefaultConfigDir(), schema.DefaultToolFilename)
+	return filepath.Join(DefaultToolConfigDir(), "default", schema.DefaultToolFilename)
+}
+
+// DefaultToolConfigDir returns the package directory for installed tool configs.
+func DefaultToolConfigDir() string {
+	return filepath.Join(DefaultConfigDir(), schema.DefaultToolConfigDirName)
+}
+
+// DefaultMCPConfigDir returns the package directory for installed MCP configs.
+func DefaultMCPConfigDir() string {
+	return filepath.Join(DefaultConfigDir(), schema.DefaultMCPConfigDirName)
 }

@@ -19,8 +19,10 @@ class _StateMachineDraftEditController extends ChangeNotifier {
   String _draftFingerprint = '';
   List<Map<String, dynamic>> _states = <Map<String, dynamic>>[];
   Map<String, Offset> _positions = <String, Offset>{};
+  Map<String, Offset> _focusOffsets = <String, Offset>{};
   Set<String> _collapsedPhaseIds = <String>{};
   String _initialStateId = '';
+  String _focusedPhaseId = '';
   String _selectedStateId = '';
   String _connectionSourceId = '';
   double _zoom = 1;
@@ -41,6 +43,26 @@ class _StateMachineDraftEditController extends ChangeNotifier {
 
   /// Initial state id for the selected workflow.
   String get initialStateId => _initialStateId;
+
+  /// Current composite state id being edited as the active canvas scope.
+  String get focusedPhaseId => _focusedPhaseId;
+
+  /// Breadcrumb entries from the workflow root to the focused phase.
+  List<String> get focusPath =>
+      _stateMachineFocusPath(_states, _focusedPhaseId);
+
+  /// Initial state id for the active focus scope.
+  String get focusedInitialStateId {
+    if (_focusedPhaseId.isEmpty) {
+      return _initialStateId;
+    }
+    for (final state in _states) {
+      if (_stateId(state) == _focusedPhaseId) {
+        return '${state['initial'] ?? ''}'.trim();
+      }
+    }
+    return '';
+  }
 
   /// Currently selected state id.
   String get selectedStateId => _selectedStateId;
@@ -74,8 +96,6 @@ class _StateMachineDraftEditController extends ChangeNotifier {
     }
     _draft = draft;
     _draftFingerprint = fingerprint;
-    _canvasOffset =
-        _stateMachineCanvasOffsetsByDraft[draft.id] ?? _canvasOffset;
     _loadDraft(draft);
     notifyListeners();
   }
@@ -140,6 +160,10 @@ class _StateMachineDraftEditController extends ChangeNotifier {
 
   /// Adds a new process state from a palette action.
   void addStateFromPalette(String actionName) {
+    if (_focusedPhaseId.isNotEmpty) {
+      addStateToPhase(_focusedPhaseId, actionName);
+      return;
+    }
     _mutateStates(() {
       final state = _newProcessState(_states, actionName);
       _states.add(state);
@@ -147,7 +171,9 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       if (_initialStateId.isEmpty) {
         _initialStateId = _selectedStateId;
       }
-      _positions[_selectedStateId] = _nextStateMachinePosition(_positions);
+      _positions[_selectedStateId] = _nextStateMachinePosition(
+        _stateMachinePositionsForScope(_states, _positions, ''),
+      );
     });
   }
 
@@ -174,15 +200,35 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       }
       _states.add(state);
       _selectedStateId = stateId;
-      final parentPosition = _stateMachinePositionForState(
-        parentStateId,
-        _states,
-        _positions,
-        _initialStateId,
+      _positions[stateId] = _nextStateMachinePosition(
+        _stateMachinePositionsForScope(_states, _positions, parentStateId),
       );
-      _positions[stateId] = parentPosition + const Offset(32, 128);
       _collapsedPhaseIds.remove(parentStateId);
     });
+  }
+
+  /// Focuses the canvas into one composite phase.
+  void focusPhase(String stateId) {
+    if (stateId.isNotEmpty &&
+        !_stateMachineChildIdsByParent(_states).containsKey(stateId)) {
+      return;
+    }
+    _captureCurrentFocusOffset();
+    _focusedPhaseId = stateId;
+    _canvasOffset = _offsetForFocus(stateId);
+    if (stateId.isNotEmpty) {
+      _selectedStateId = stateId;
+    }
+    _connectionSourceId = '';
+    prepareCanvasControllersForRestore();
+    notifyListeners();
+  }
+
+  /// Focuses the canvas scope that contains a state and selects it.
+  void focusStateScope(String stateId) {
+    final parentId = _stateMachineParentOf(_states, stateId);
+    focusPhase(parentId);
+    selectState(stateId);
   }
 
   /// Collapses or expands one composite phase on the canvas.
@@ -320,8 +366,12 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       if (deleted.contains(_connectionSourceId)) {
         _connectionSourceId = '';
       }
+      if (deleted.contains(_focusedPhaseId)) {
+        _focusedPhaseId = '';
+      }
       for (final id in deleted) {
         _positions.remove(id);
+        _focusOffsets.remove(_stateMachineFocusOffsetKey(id));
         _collapsedPhaseIds.remove(id);
       }
     });
@@ -342,6 +392,50 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       _positions[stateId] = Offset(
         (current.dx + delta.dx).clamp(24.0, 10000.0).toDouble(),
         (current.dy + delta.dy).clamp(24.0, 10000.0).toDouble(),
+      );
+      _selectedStateId = stateId;
+    });
+  }
+
+  /// Reparents one state into a new containing phase or the root scope.
+  void reparentState(String stateId, String parentStateId) {
+    if (stateId.isEmpty || stateId == parentStateId) {
+      return;
+    }
+    if (parentStateId.isNotEmpty &&
+        _stateMachineIsDescendantOf(
+          parentStateId,
+          stateId,
+          _stateMachineParentById(_states),
+        )) {
+      return;
+    }
+    final stateIndex = _states.indexWhere(
+      (state) => _stateId(state) == stateId,
+    );
+    if (stateIndex < 0) {
+      return;
+    }
+    if (parentStateId.isNotEmpty &&
+        !_states.any((state) => _stateId(state) == parentStateId)) {
+      return;
+    }
+    final oldParentId = _stateParentId(_states[stateIndex]);
+    if (oldParentId == parentStateId) {
+      return;
+    }
+    _mutateStates(() {
+      final updated = Map<String, dynamic>.from(_states[stateIndex]);
+      if (parentStateId.isEmpty) {
+        updated.remove('parent');
+      } else {
+        updated['parent'] = parentStateId;
+      }
+      _states[stateIndex] = updated;
+      _repairInitialAfterReparent(
+        stateId: stateId,
+        oldParentId: oldParentId,
+        parentStateId: parentStateId,
       );
       _selectedStateId = stateId;
     });
@@ -392,9 +486,18 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       if (_collapsedPhaseIds.remove(oldStateId)) {
         _collapsedPhaseIds.add(nextId);
       }
+      if (_focusedPhaseId == oldStateId) {
+        _focusedPhaseId = nextId;
+      }
       final position = _positions.remove(oldStateId);
       if (position != null) {
         _positions[nextId] = position;
+      }
+      final focusOffset = _focusOffsets.remove(
+        _stateMachineFocusOffsetKey(oldStateId),
+      );
+      if (focusOffset != null) {
+        _focusOffsets[_stateMachineFocusOffsetKey(nextId)] = focusOffset;
       }
     });
   }
@@ -504,9 +607,14 @@ class _StateMachineDraftEditController extends ChangeNotifier {
   /// Stores the latest visible canvas x/y position.
   void rememberCanvasOffset(Offset offset) {
     _canvasOffset = offset;
+    _focusOffsets[_stateMachineFocusOffsetKey(_focusedPhaseId)] = offset;
     final draftId = _draft?.id ?? '';
     if (draftId.isNotEmpty) {
-      _stateMachineCanvasOffsetsByDraft[draftId] = offset;
+      _stateMachineCanvasOffsetsByDraft[_stateMachineSessionOffsetKey(
+            draftId,
+            _focusedPhaseId,
+          )] =
+          offset;
     }
   }
 
@@ -585,6 +693,10 @@ class _StateMachineDraftEditController extends ChangeNotifier {
     final initial = '${body['initial'] ?? ''}'.trim();
     _states = states;
     _initialStateId = initial;
+    if (_focusedPhaseId.isNotEmpty &&
+        !_states.any((state) => _stateId(state) == _focusedPhaseId)) {
+      _focusedPhaseId = '';
+    }
     if (_selectedStateId.isEmpty ||
         !_states.any((state) => _stateId(state) == _selectedStateId)) {
       _selectedStateId = initial.isNotEmpty
@@ -595,7 +707,14 @@ class _StateMachineDraftEditController extends ChangeNotifier {
     }
     _connectionSourceId = '';
     _positions = _stateMachinePositionsFromAuthoring(body);
+    _focusOffsets = _stateMachineFocusOffsetsFromAuthoring(body);
     _collapsedPhaseIds = _stateMachineCollapsedPhasesFromAuthoring(body);
+    _canvasOffset =
+        _stateMachineCanvasOffsetsByDraft[_stateMachineSessionOffsetKey(
+          draft.id,
+          _focusedPhaseId,
+        )] ??
+        _offsetForFocus(_focusedPhaseId);
   }
 
   /// Applies a local graph mutation and schedules persistence.
@@ -651,6 +770,7 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       _map(body['authoring']),
       _positions,
       _collapsedPhaseIds,
+      _focusOffsets,
     );
     return AutomationDraft(
       id: source.id,
@@ -672,6 +792,57 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       'updated_at': draft.updatedAt,
       'body': draft.body,
     });
+  }
+
+  /// Captures the active scroll position before changing focus scope.
+  void _captureCurrentFocusOffset() {
+    final x = _horizontalCanvasController.hasClients
+        ? _horizontalCanvasController.offset
+        : _canvasOffset.dx;
+    final y = _verticalCanvasController.hasClients
+        ? _verticalCanvasController.offset
+        : _canvasOffset.dy;
+    rememberCanvasOffset(Offset(x, y));
+  }
+
+  /// Returns the remembered offset for one focus scope.
+  Offset _offsetForFocus(String focusPhaseId) {
+    return _focusOffsets[_stateMachineFocusOffsetKey(focusPhaseId)] ??
+        Offset.zero;
+  }
+
+  /// Repairs root or phase initial markers after a state changes scope.
+  void _repairInitialAfterReparent({
+    required String stateId,
+    required String oldParentId,
+    required String parentStateId,
+  }) {
+    if (oldParentId.isEmpty && _initialStateId == stateId) {
+      _initialStateId = _stateMachineFirstRootId(_states);
+    }
+    if (parentStateId.isEmpty && _initialStateId.isEmpty) {
+      _initialStateId = stateId;
+    }
+    _states = _states.map((state) {
+      final stateIdForRow = _stateId(state);
+      final next = Map<String, dynamic>.from(state);
+      if (oldParentId.isNotEmpty &&
+          stateIdForRow == oldParentId &&
+          '${next['initial'] ?? ''}'.trim() == stateId) {
+        final replacement = _stateMachineFirstChildId(_states, oldParentId);
+        if (replacement.isEmpty) {
+          next.remove('initial');
+        } else {
+          next['initial'] = replacement;
+        }
+      }
+      if (parentStateId.isNotEmpty &&
+          stateIdForRow == parentStateId &&
+          '${next['initial'] ?? ''}'.trim().isEmpty) {
+        next['initial'] = stateId;
+      }
+      return next;
+    }).toList();
   }
 }
 
@@ -863,6 +1034,9 @@ class _StateMachineBuilderDetailState
             positions: widget.editor.positions,
             collapsedPhaseIds: widget.editor.collapsedPhaseIds,
             initialStateId: widget.editor.initialStateId,
+            focusedPhaseId: widget.editor.focusedPhaseId,
+            focusedInitialStateId: widget.editor.focusedInitialStateId,
+            focusPath: widget.editor.focusPath,
             selectedStateId: widget.editor.selectedStateId,
             connectionSourceId: widget.editor.connectionSourceId,
             canvasOffset: widget.editor.canvasOffset,
@@ -873,6 +1047,8 @@ class _StateMachineBuilderDetailState
             onCanvasOffsetChanged: widget.editor.rememberCanvasOffset,
             onZoomChanged: widget.editor.setZoom,
             onSelectState: widget.editor.selectOrConnectState,
+            onFocusPhase: widget.editor.focusPhase,
+            onFocusStateScope: widget.editor.focusStateScope,
             onStartConnection: widget.editor.startConnection,
             onSetInitial: widget.editor.setInitialState,
             onDeleteState: widget.editor.deleteState,
@@ -881,6 +1057,7 @@ class _StateMachineBuilderDetailState
             onAddEntryAction: widget.editor.addEntryActionToState,
             onTogglePhaseCollapsed: widget.editor.togglePhaseCollapsed,
             onMoveStateBy: widget.editor.moveStateBy,
+            onReparentState: widget.editor.reparentState,
             isOpenInspectorModifierPressed: () =>
                 widget.editor.openInspectorModifierPressed,
             onOpenInspector: _openInspector,
@@ -994,16 +1171,17 @@ class _StateMachineInspectorDetailState
             child: SizedBox.expand(
               child: _StateMachineInspector(
                 state: widget.editor.selectedState(),
+                states: widget.editor.states,
                 stateIds: widget.editor.states
                     .map(_stateId)
                     .where((id) => id.isNotEmpty)
                     .toList(),
-                actionNames: _resolvedAutomationActionTypes(
-                  widget.controller,
-                ).map((action) => action.name).toList(),
+                actionTypes: _resolvedAutomationActionTypes(widget.controller),
                 initialStateId: widget.editor.initialStateId,
+                focusedPhaseId: widget.editor.focusedPhaseId,
                 connectionSourceId: widget.editor.connectionSourceId,
                 onSetInitial: widget.editor.setInitialState,
+                onFocusPhase: widget.editor.focusPhase,
                 onStartConnection: widget.editor.startConnection,
                 onDeleteState: widget.editor.deleteState,
                 onRenameState: widget.editor.renameState,
@@ -1201,6 +1379,9 @@ class _StateMachineCanvasViewport extends StatefulWidget {
     required this.positions,
     required this.collapsedPhaseIds,
     required this.initialStateId,
+    required this.focusedPhaseId,
+    required this.focusedInitialStateId,
+    required this.focusPath,
     required this.selectedStateId,
     required this.connectionSourceId,
     required this.canvasOffset,
@@ -1210,6 +1391,8 @@ class _StateMachineCanvasViewport extends StatefulWidget {
     required this.onCanvasOffsetChanged,
     required this.onZoomChanged,
     required this.onSelectState,
+    required this.onFocusPhase,
+    required this.onFocusStateScope,
     required this.onStartConnection,
     required this.onSetInitial,
     required this.onDeleteState,
@@ -1218,6 +1401,7 @@ class _StateMachineCanvasViewport extends StatefulWidget {
     required this.onAddEntryAction,
     required this.onTogglePhaseCollapsed,
     required this.onMoveStateBy,
+    required this.onReparentState,
     required this.isOpenInspectorModifierPressed,
     required this.onOpenInspector,
   });
@@ -1226,6 +1410,9 @@ class _StateMachineCanvasViewport extends StatefulWidget {
   final Map<String, Offset> positions;
   final Set<String> collapsedPhaseIds;
   final String initialStateId;
+  final String focusedPhaseId;
+  final String focusedInitialStateId;
+  final List<String> focusPath;
   final String selectedStateId;
   final String connectionSourceId;
   final Offset canvasOffset;
@@ -1235,6 +1422,8 @@ class _StateMachineCanvasViewport extends StatefulWidget {
   final ValueChanged<Offset> onCanvasOffsetChanged;
   final ValueChanged<double> onZoomChanged;
   final ValueChanged<String> onSelectState;
+  final ValueChanged<String> onFocusPhase;
+  final ValueChanged<String> onFocusStateScope;
   final ValueChanged<String> onStartConnection;
   final ValueChanged<String> onSetInitial;
   final ValueChanged<String> onDeleteState;
@@ -1244,6 +1433,7 @@ class _StateMachineCanvasViewport extends StatefulWidget {
   final void Function(String stateId, String actionName) onAddEntryAction;
   final ValueChanged<String> onTogglePhaseCollapsed;
   final void Function(String stateId, Offset delta) onMoveStateBy;
+  final void Function(String stateId, String parentStateId) onReparentState;
   final bool Function() isOpenInspectorModifierPressed;
   final ValueChanged<String> onOpenInspector;
 
@@ -1272,7 +1462,9 @@ class _StateMachineCanvasViewportState
     super.didUpdateWidget(oldWidget);
     if (oldWidget.horizontalScrollController !=
             widget.horizontalScrollController ||
-        oldWidget.verticalScrollController != widget.verticalScrollController) {
+        oldWidget.verticalScrollController != widget.verticalScrollController ||
+        oldWidget.canvasOffset != widget.canvasOffset ||
+        oldWidget.focusedPhaseId != widget.focusedPhaseId) {
       _restoreCanvasOffset();
     }
   }
@@ -1290,7 +1482,10 @@ class _StateMachineCanvasViewportState
     final colors = context.agentAwesomeColors;
     final layout = _StateMachineCanvasLayout.fromStates(
       widget.states,
-      initialStateId: widget.initialStateId,
+      initialStateId: widget.focusedPhaseId.isEmpty
+          ? widget.initialStateId
+          : widget.focusedInitialStateId,
+      focusedPhaseId: widget.focusedPhaseId,
       positions: _effectivePositions(),
       collapsedPhaseIds: widget.collapsedPhaseIds,
       edgeViewMode: _edgeViewMode,
@@ -1408,7 +1603,8 @@ class _StateMachineCanvasViewportState
                                                   ),
                                               initial:
                                                   _stateId(placement.state) ==
-                                                      widget.initialStateId ||
+                                                      widget
+                                                          .focusedInitialStateId ||
                                                   _stateMachineIsPhaseInitial(
                                                     widget.states,
                                                     _stateId(placement.state),
@@ -1428,6 +1624,10 @@ class _StateMachineCanvasViewportState
                                               onTap: () => widget.onSelectState(
                                                 _stateId(placement.state),
                                               ),
+                                              onFocusPhase: () =>
+                                                  widget.onFocusPhase(
+                                                    _stateId(placement.state),
+                                                  ),
                                               onStartConnection: () =>
                                                   widget.onStartConnection(
                                                     _stateId(placement.state),
@@ -1491,10 +1691,12 @@ class _StateMachineCanvasViewportState
               child: _StateMachineCanvasControls(
                 zoom: widget.zoom,
                 edgeViewMode: _edgeViewMode,
+                focusPath: widget.focusPath,
                 onZoomChanged: widget.onZoomChanged,
                 onEdgeViewModeChanged: (mode) {
                   setState(() => _edgeViewMode = mode);
                 },
+                onFocusPhase: widget.onFocusPhase,
               ),
             ),
             if (widget.states.isNotEmpty)
@@ -1593,10 +1795,63 @@ class _StateMachineCanvasViewportState
 
   /// Persists the final node move and clears the transient preview.
   void _commitStateMoveBy(String stateId, Offset delta) {
+    final parentStateId = _dropParentForState(stateId, delta);
     if (mounted) {
       setState(() => _dragPreviewOffsets.remove(stateId));
     }
     widget.onMoveStateBy(stateId, delta);
+    if (parentStateId != null &&
+        parentStateId != _stateMachineParentOf(widget.states, stateId)) {
+      widget.onReparentState(stateId, parentStateId);
+    }
+  }
+
+  /// Returns the containing phase implied by the current drag preview.
+  String? _dropParentForState(String stateId, Offset delta) {
+    final layout = _StateMachineCanvasLayout.fromStates(
+      widget.states,
+      initialStateId: widget.focusedPhaseId.isEmpty
+          ? widget.initialStateId
+          : widget.focusedInitialStateId,
+      focusedPhaseId: widget.focusedPhaseId,
+      positions: widget.positions,
+      collapsedPhaseIds: widget.collapsedPhaseIds,
+      edgeViewMode: _edgeViewMode,
+      selectedStateId: widget.selectedStateId,
+    );
+    final placement = layout.byId[stateId];
+    if (placement == null) {
+      return null;
+    }
+    final dropPoint = placement.rect.shift(delta).center;
+    final forbiddenIds = _stateMachineDescendantIds(widget.states, stateId)
+      ..add(stateId);
+    final phaseNodeTargets = layout.placements.where(
+      (candidate) =>
+          candidate.childCount > 0 &&
+          !forbiddenIds.contains(_stateId(candidate.state)) &&
+          candidate.rect.contains(dropPoint),
+    );
+    if (phaseNodeTargets.isNotEmpty) {
+      return _stateId(phaseNodeTargets.last.state);
+    }
+    final phaseContainerTargets =
+        layout.phases
+            .where(
+              (phase) =>
+                  !forbiddenIds.contains(phase.stateId) &&
+                  phase.rect.contains(dropPoint),
+            )
+            .toList()
+          ..sort(
+            (a, b) => (a.rect.width * a.rect.height).compareTo(
+              b.rect.width * b.rect.height,
+            ),
+          );
+    if (phaseContainerTargets.isNotEmpty) {
+      return phaseContainerTargets.first.stateId;
+    }
+    return widget.focusedPhaseId;
   }
 
   /// Cancels a transient node move preview.
@@ -1618,6 +1873,7 @@ class _StateMachineCanvasViewportState
         : badge.targetStateId;
     final placement = layout.byId[targetId];
     if (placement == null) {
+      widget.onFocusStateScope(targetId);
       return;
     }
     widget.onSelectState(targetId);
@@ -1659,8 +1915,10 @@ class _StateMachineCanvasControls extends StatelessWidget {
   const _StateMachineCanvasControls({
     required this.zoom,
     required this.edgeViewMode,
+    required this.focusPath,
     required this.onZoomChanged,
     required this.onEdgeViewModeChanged,
+    required this.onFocusPhase,
   });
 
   /// Current zoom factor.
@@ -1669,11 +1927,17 @@ class _StateMachineCanvasControls extends StatelessWidget {
   /// Active edge visibility mode.
   final _StateMachineEdgeViewMode edgeViewMode;
 
+  /// Focus breadcrumb state ids from root to current phase.
+  final List<String> focusPath;
+
   /// Handles zoom changes.
   final ValueChanged<double> onZoomChanged;
 
   /// Handles edge mode changes.
   final ValueChanged<_StateMachineEdgeViewMode> onEdgeViewModeChanged;
+
+  /// Changes the active focused phase.
+  final ValueChanged<String> onFocusPhase;
 
   /// Builds functional canvas controls.
   @override
@@ -1683,6 +1947,11 @@ class _StateMachineCanvasControls extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         _TaskGraphGraphMenu(zoom: zoom, onZoomChanged: onZoomChanged),
+        const SizedBox(width: 8),
+        _StateMachineFocusBreadcrumbs(
+          focusPath: focusPath,
+          onFocusPhase: onFocusPhase,
+        ),
         const SizedBox(width: 8),
         DecoratedBox(
           decoration: BoxDecoration(
@@ -1705,6 +1974,80 @@ class _StateMachineCanvasControls extends StatelessWidget {
       ],
     );
   }
+}
+
+/// _StateMachineFocusBreadcrumbs renders focused phase navigation.
+class _StateMachineFocusBreadcrumbs extends StatelessWidget {
+  /// Creates breadcrumb controls for the active hierarchy focus.
+  const _StateMachineFocusBreadcrumbs({
+    required this.focusPath,
+    required this.onFocusPhase,
+  });
+
+  /// Focus breadcrumb state ids from root to current phase.
+  final List<String> focusPath;
+
+  /// Changes the active focused phase.
+  final ValueChanged<String> onFocusPhase;
+
+  /// Builds compact scope navigation for the canvas.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final crumbs = <_StateMachineFocusCrumb>[
+      const _StateMachineFocusCrumb(id: '', label: 'Workflow'),
+      for (final id in focusPath) _StateMachineFocusCrumb(id: id, label: id),
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.panel.withValues(alpha: 0.95),
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (var index = 0; index < crumbs.length; index++) ...<Widget>[
+            if (index > 0)
+              Icon(Icons.chevron_right, size: 15, color: colors.muted),
+            InkWell(
+              key: ValueKey<String>(
+                'state-machine-focus-${_safeCanvasKey(crumbs[index].id)}',
+              ),
+              onTap: () => onFocusPhase(crumbs[index].id),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 8),
+                child: Text(
+                  crumbs[index].label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: index == crumbs.length - 1
+                        ? colors.ink
+                        : colors.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// _StateMachineFocusCrumb stores one focus breadcrumb entry.
+class _StateMachineFocusCrumb {
+  /// Creates immutable focus breadcrumb metadata.
+  const _StateMachineFocusCrumb({required this.id, required this.label});
+
+  /// Focus phase id, or empty for the workflow root.
+  final String id;
+
+  /// Visible breadcrumb label.
+  final String label;
 }
 
 /// _StateMachineEdgeModeButton renders one compact edge-view segment.
@@ -1844,6 +2187,7 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
     required this.connectingFromThis,
     required this.connectionTarget,
     required this.onTap,
+    required this.onFocusPhase,
     required this.onStartConnection,
     required this.onSetInitial,
     required this.onDeleteState,
@@ -1865,6 +2209,7 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
   final bool connectingFromThis;
   final bool connectionTarget;
   final VoidCallback onTap;
+  final VoidCallback onFocusPhase;
   final VoidCallback onStartConnection;
   final VoidCallback onSetInitial;
   final VoidCallback onDeleteState;
@@ -1936,7 +2281,9 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
                     }
                     _handleTap(stateId, controlPressedOnTapDown);
                   },
-                  onDoubleTap: () => onOpenInspector(stateId),
+                  onDoubleTap: childCount > 0
+                      ? onFocusPhase
+                      : () => onOpenInspector(stateId),
                   child: PanelSurface(
                     selected:
                         selected ||
@@ -2046,7 +2393,9 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
                     ),
                     child: _StateMachineNodeToolbar(
                       connectingFromThis: connectingFromThis,
+                      phase: childCount > 0,
                       onStartConnection: onStartConnection,
+                      onFocusPhase: onFocusPhase,
                       onSetInitial: onSetInitial,
                       onDeleteState: onDeleteState,
                       onOpenInspector: () => onOpenInspector(stateId),
@@ -2193,14 +2542,18 @@ class _StateMachineNodeToolbar extends StatelessWidget {
   /// Creates compact controls for one selected state.
   const _StateMachineNodeToolbar({
     required this.connectingFromThis,
+    required this.phase,
     required this.onStartConnection,
+    required this.onFocusPhase,
     required this.onSetInitial,
     required this.onDeleteState,
     required this.onOpenInspector,
   });
 
   final bool connectingFromThis;
+  final bool phase;
   final VoidCallback onStartConnection;
+  final VoidCallback onFocusPhase;
   final VoidCallback onSetInitial;
   final VoidCallback onDeleteState;
   final VoidCallback onOpenInspector;
@@ -2225,6 +2578,12 @@ class _StateMachineNodeToolbar extends StatelessWidget {
               tooltip: 'Inspect state',
               onPressed: onOpenInspector,
             ),
+            if (phase)
+              _TaskGraphNodeToolbarButton(
+                icon: Icons.open_in_full,
+                tooltip: 'Focus phase',
+                onPressed: onFocusPhase,
+              ),
             _TaskGraphNodeToolbarButton(
               icon: Icons.link,
               tooltip: connectingFromThis
@@ -2255,11 +2614,14 @@ class _StateMachineInspector extends StatefulWidget {
   /// Creates an inspector for the selected state.
   const _StateMachineInspector({
     required this.state,
+    required this.states,
     required this.stateIds,
-    required this.actionNames,
+    required this.actionTypes,
     required this.initialStateId,
+    required this.focusedPhaseId,
     required this.connectionSourceId,
     required this.onSetInitial,
+    required this.onFocusPhase,
     required this.onStartConnection,
     required this.onDeleteState,
     required this.onRenameState,
@@ -2269,11 +2631,14 @@ class _StateMachineInspector extends StatefulWidget {
   });
 
   final Map<String, dynamic>? state;
+  final List<Map<String, dynamic>> states;
   final List<String> stateIds;
-  final List<String> actionNames;
+  final List<AutomationActionType> actionTypes;
   final String initialStateId;
+  final String focusedPhaseId;
   final String connectionSourceId;
   final ValueChanged<String> onSetInitial;
+  final ValueChanged<String> onFocusPhase;
   final ValueChanged<String> onStartConnection;
   final ValueChanged<String> onDeleteState;
   final void Function(String oldStateId, String nextStateId) onRenameState;
@@ -2299,8 +2664,6 @@ class _StateMachineInspector extends StatefulWidget {
 class _StateMachineInspectorState extends State<_StateMachineInspector> {
   late final TextEditingController _stateIdController;
   final List<TextEditingController> _actionIdControllers =
-      <TextEditingController>[];
-  final List<TextEditingController> _actionWithControllers =
       <TextEditingController>[];
   final List<TextEditingController> _transitionTriggerControllers =
       <TextEditingController>[];
@@ -2358,6 +2721,8 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
     final stateId = _stateId(selected);
     final actions = _stateEntryActions(selected);
     final transitions = _stateTransitions(selected);
+    final childCount =
+        _stateMachineChildIdsByParent(widget.states)[stateId]?.length ?? 0;
     return PanelSurface(
       key: const ValueKey<String>('state-machine-inspector'),
       style: PanelSurfaceStyle.card,
@@ -2408,8 +2773,11 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
             children: <Widget>[
               if (stateId == widget.initialStateId)
                 const PanelBadge(label: 'initial'),
+              if (stateId == widget.focusedPhaseId)
+                const PanelBadge(label: 'focused'),
               PanelBadge(label: '${actions.length} entry actions'),
               PanelBadge(label: '${transitions.length} transitions'),
+              if (childCount > 0) PanelBadge(label: '$childCount states'),
             ],
           ),
           const SizedBox(height: 12),
@@ -2423,6 +2791,14 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
                 selected: widget.connectionSourceId == stateId,
                 onPressed: () => widget.onStartConnection(stateId),
               ),
+              if (childCount > 0) ...<Widget>[
+                const SizedBox(width: 8),
+                PanelInlineIconButton(
+                  icon: Icons.open_in_full,
+                  tooltip: 'Focus phase',
+                  onPressed: () => widget.onFocusPhase(stateId),
+                ),
+              ],
               const SizedBox(width: 8),
               PanelInlineIconButton(
                 icon: Icons.flag_outlined,
@@ -2446,10 +2822,12 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
             for (var index = 0; index < actions.length; index++)
               _StateMachineEntryActionEditor(
                 action: _map(actions[index]),
-                actionNames: _actionNamesFor(_map(actions[index])),
+                actionTypes: _actionTypesFor(_map(actions[index])),
+                states: widget.states,
+                currentStateId: stateId,
                 idController: _actionIdControllers[index],
-                withController: _actionWithControllers[index],
                 onUsesChanged: (uses) => _emitAction(index, uses: uses),
+                onWithChanged: (withValue) => _emitActionWith(index, withValue),
                 onSubmitEdit: widget.onSubmitEdit,
               ),
           const SizedBox(height: 16),
@@ -2475,7 +2853,6 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
   List<TextEditingController> _rowControllers() {
     return <TextEditingController>[
       ..._actionIdControllers,
-      ..._actionWithControllers,
       ..._transitionTriggerControllers,
     ];
   }
@@ -2486,7 +2863,6 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
       controller.dispose();
     }
     _actionIdControllers.clear();
-    _actionWithControllers.clear();
     _transitionTriggerControllers.clear();
     _stateIdController
       ..removeListener(_emitStateId)
@@ -2499,10 +2875,6 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
       final action = _map(actions[index]);
       _actionIdControllers.add(
         TextEditingController(text: '${action['id'] ?? ''}')
-          ..addListener(() => _emitAction(index)),
-      );
-      _actionWithControllers.add(
-        TextEditingController(text: _jsonText(_map(action['with'])))
           ..addListener(() => _emitAction(index)),
       );
     }
@@ -2532,22 +2904,35 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
   void _emitAction(int index, {String? uses}) {
     if (_loadingControllers ||
         widget.state == null ||
-        index >= _actionIdControllers.length ||
-        index >= _actionWithControllers.length) {
+        index >= _actionIdControllers.length) {
       return;
     }
     final current = _map(_stateEntryActions(widget.state!)[index]);
-    final parsedWith = _tryParseJsonObject(_actionWithControllers[index].text);
-    if (parsedWith == null) {
-      return;
-    }
     widget.onUpdateEntryAction(
       _stateId(widget.state ?? const <String, dynamic>{}),
       index,
       <String, dynamic>{
         'id': _actionIdControllers[index].text.trim(),
         'uses': uses ?? '${current['uses'] ?? ''}',
-        'with': parsedWith,
+        'with': _map(current['with']),
+      },
+    );
+  }
+
+  void _emitActionWith(int index, Map<String, dynamic> withValue) {
+    if (_loadingControllers ||
+        widget.state == null ||
+        index >= _actionIdControllers.length) {
+      return;
+    }
+    final current = _map(_stateEntryActions(widget.state!)[index]);
+    widget.onUpdateEntryAction(
+      _stateId(widget.state ?? const <String, dynamic>{}),
+      index,
+      <String, dynamic>{
+        'id': _actionIdControllers[index].text.trim(),
+        'uses': '${current['uses'] ?? ''}',
+        'with': withValue,
       },
     );
   }
@@ -2571,9 +2956,22 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
     );
   }
 
-  List<String> _actionNamesFor(Map<String, dynamic> action) {
+  List<AutomationActionType> _actionTypesFor(Map<String, dynamic> action) {
     final uses = '${action['uses'] ?? ''}'.trim();
-    return <String>{if (uses.isNotEmpty) uses, ...widget.actionNames}.toList();
+    final byName = <String, AutomationActionType>{
+      for (final actionType in widget.actionTypes) actionType.name: actionType,
+    };
+    return <AutomationActionType>[
+      if (uses.isNotEmpty && !byName.containsKey(uses))
+        AutomationActionType(
+          name: uses,
+          label: _fallbackActionLabel(uses),
+          description: _fallbackActionDescription(uses),
+          risk: 'workflow',
+          available: true,
+        ),
+      ...widget.actionTypes,
+    ];
   }
 }
 
@@ -2582,24 +2980,39 @@ class _StateMachineEntryActionEditor extends StatelessWidget {
   /// Creates an entry-action editor row.
   const _StateMachineEntryActionEditor({
     required this.action,
-    required this.actionNames,
+    required this.actionTypes,
+    required this.states,
+    required this.currentStateId,
     required this.idController,
-    required this.withController,
     required this.onUsesChanged,
+    required this.onWithChanged,
     required this.onSubmitEdit,
   });
 
   final Map<String, dynamic> action;
-  final List<String> actionNames;
+  final List<AutomationActionType> actionTypes;
+  final List<Map<String, dynamic>> states;
+  final String currentStateId;
   final TextEditingController idController;
-  final TextEditingController withController;
   final ValueChanged<String> onUsesChanged;
+  final ValueChanged<Map<String, dynamic>> onWithChanged;
   final VoidCallback onSubmitEdit;
 
   /// Builds editable fields for an entry action.
   @override
   Widget build(BuildContext context) {
     final uses = '${action['uses'] ?? ''}'.trim();
+    final actionType = _stateMachineActionTypeFor(uses, actionTypes);
+    final actionNames = <String>{
+      if (uses.isNotEmpty) uses,
+      for (final type in actionTypes) type.name,
+    }.toList();
+    final actionLabels = <String, String>{
+      for (final type in actionTypes) type.name: type.label,
+      if (uses.isNotEmpty) uses: actionType.label,
+    };
+    final withValue = _map(action['with']);
+    final inputSchema = _stateMachineActionInputSchema(actionType, withValue);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: PanelSurface(
@@ -2618,20 +3031,1254 @@ class _StateMachineEntryActionEditor extends StatelessWidget {
               label: 'Action',
               value: uses,
               values: actionNames,
+              labels: actionLabels,
               onChanged: onUsesChanged,
             ),
             const SizedBox(height: 8),
-            _AutomationTextField(
-              controller: withController,
-              label: 'Arguments JSON',
-              maxLines: 4,
-              monospace: true,
+            _StateMachineActionArgumentsEditor(
+              value: withValue,
+              schema: inputSchema,
+              states: states,
+              currentStateId: currentStateId,
+              onChanged: onWithChanged,
+            ),
+            _StateMachineRawActionArgumentsEditor(
+              value: withValue,
+              onChanged: onWithChanged,
             ),
           ],
         ),
       ),
     );
   }
+}
+
+/// _StateMachineActionArgumentsEditor renders action input mappings.
+class _StateMachineActionArgumentsEditor extends StatelessWidget {
+  /// Creates a generic contract-to-binding editor.
+  const _StateMachineActionArgumentsEditor({
+    required this.value,
+    required this.schema,
+    required this.states,
+    required this.currentStateId,
+    required this.onChanged,
+  });
+
+  /// Current action argument map.
+  final Map<String, dynamic> value;
+
+  /// JSON-schema-like input descriptor for the action contract.
+  final Map<String, dynamic> schema;
+
+  /// Workflow states used to infer available binding sources.
+  final List<Map<String, dynamic>> states;
+
+  /// State currently being edited.
+  final String currentStateId;
+
+  /// Emits a complete replacement argument map.
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  /// Builds a source-mapping surface instead of exposing schema fields.
+  @override
+  Widget build(BuildContext context) {
+    final properties = _schemaProperties(schema);
+    final keys = _orderedArgumentKeys(value, properties);
+    if (keys.isEmpty) {
+      return const PanelEmptyBlock(label: 'No configurable inputs');
+    }
+    final sources = _stateMachineBindingSources(states, currentStateId, value);
+    final autoMapped = _autoMappedActionArguments(value, schema, sources);
+    if (!_deepEquals(autoMapped, value)) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => onChanged(autoMapped),
+      );
+    }
+    final required = _schemaRequired(schema);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const PanelSectionLabel('Inputs'),
+        const SizedBox(height: 8),
+        for (final key in keys) ...<Widget>[
+          _StateMachineInputMappingEditor(
+            fieldKey: key,
+            required: required.contains(key),
+            value: autoMapped[key],
+            schema: _map(properties[key]),
+            sources: sources,
+            onChanged: (nextValue) {
+              final next = Map<String, dynamic>.from(autoMapped);
+              next[key] = nextValue;
+              onChanged(next);
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+/// _StateMachineInputMappingEditor edits one action input mapping.
+class _StateMachineInputMappingEditor extends StatelessWidget {
+  /// Creates one input mapping editor.
+  const _StateMachineInputMappingEditor({
+    required this.fieldKey,
+    required this.required,
+    required this.value,
+    required this.schema,
+    required this.sources,
+    required this.onChanged,
+  });
+
+  /// Contract input key.
+  final String fieldKey;
+
+  /// Whether the contract requires this input.
+  final bool required;
+
+  /// Current input value.
+  final dynamic value;
+
+  /// JSON-schema-like descriptor for the input.
+  final Map<String, dynamic> schema;
+
+  /// Available binding sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Emits a replacement input value.
+  final ValueChanged<dynamic> onChanged;
+
+  /// Builds either nested mapping rows or one scalar mapping row.
+  @override
+  Widget build(BuildContext context) {
+    final schemaType = '${schema['type'] ?? ''}'.trim();
+    if (value is Map || schemaType == 'object') {
+      return _StateMachineObjectMappingEditor(
+        fieldKey: fieldKey,
+        value: _map(value),
+        schema: schema,
+        sources: sources,
+        onChanged: (next) => onChanged(next),
+      );
+    }
+    if (value is List || schemaType == 'array') {
+      return _StateMachineLiteralInputEditor(
+        label: _argumentLabel(fieldKey, required),
+        value: value,
+        onChanged: onChanged,
+      );
+    }
+    return _StateMachineScalarMappingEditor(
+      fieldKey: fieldKey,
+      required: required,
+      value: value,
+      sources: sources,
+      onChanged: onChanged,
+    );
+  }
+}
+
+/// _StateMachineObjectMappingEditor edits mappings inside an object input.
+class _StateMachineObjectMappingEditor extends StatelessWidget {
+  /// Creates an object-mapping editor.
+  const _StateMachineObjectMappingEditor({
+    required this.fieldKey,
+    required this.value,
+    required this.schema,
+    required this.sources,
+    required this.onChanged,
+  });
+
+  /// Object input key.
+  final String fieldKey;
+
+  /// Current object input value.
+  final Map<String, dynamic> value;
+
+  /// JSON-schema-like descriptor for this object.
+  final Map<String, dynamic> schema;
+
+  /// Available binding sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Emits a replacement object value.
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  /// Builds nested mapping rows.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final properties = _schemaProperties(schema);
+    final keys = _orderedArgumentKeys(value, properties);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                _argumentLabel(fieldKey, false),
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            PanelInlineIconButton(
+              icon: Icons.add,
+              tooltip: 'Add input',
+              onPressed: () {
+                final next = Map<String, dynamic>.from(value);
+                final key = _nextArgumentFieldName(next.keys);
+                next[key] = _autoMappedInputValue(key, sources) ?? '';
+                onChanged(next);
+              },
+            ),
+          ],
+        ),
+        if (keys.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: PanelEmptyBlock(label: 'No inputs'),
+          )
+        else
+          for (final key in keys) ...<Widget>[
+            _StateMachineObjectMappingRow(
+              fieldKey: key,
+              value: value[key],
+              sources: sources,
+              onKeyChanged: (nextKey) {
+                final normalized = _safeArgumentFieldName(nextKey);
+                if (normalized.isEmpty || normalized == key) {
+                  return;
+                }
+                final next = Map<String, dynamic>.from(value);
+                final currentValue = next.remove(key);
+                next[normalized] = _isEmptyArgumentValue(currentValue)
+                    ? (_autoMappedInputValue(normalized, sources) ?? '')
+                    : currentValue;
+                onChanged(next);
+              },
+              onValueChanged: (nextValue) {
+                final next = Map<String, dynamic>.from(value);
+                next[key] = nextValue;
+                onChanged(next);
+              },
+              onDelete: () {
+                final next = Map<String, dynamic>.from(value)..remove(key);
+                onChanged(next);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+      ],
+    );
+  }
+}
+
+/// _StateMachineObjectMappingRow edits one object input mapping.
+class _StateMachineObjectMappingRow extends StatelessWidget {
+  /// Creates one editable object mapping row.
+  const _StateMachineObjectMappingRow({
+    required this.fieldKey,
+    required this.value,
+    required this.sources,
+    required this.onKeyChanged,
+    required this.onValueChanged,
+    required this.onDelete,
+  });
+
+  /// Input key.
+  final String fieldKey;
+
+  /// Current mapped or literal value.
+  final dynamic value;
+
+  /// Available binding sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Emits a renamed key.
+  final ValueChanged<String> onKeyChanged;
+
+  /// Emits a replacement value.
+  final ValueChanged<dynamic> onValueChanged;
+
+  /// Removes this mapping.
+  final VoidCallback onDelete;
+
+  /// Builds the mapping row.
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 190,
+          child: _StateMachineEditableMappingKey(
+            value: fieldKey,
+            onChanged: onKeyChanged,
+            onDelete: onDelete,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _StateMachineScalarMappingEditor(
+            fieldKey: fieldKey,
+            required: false,
+            value: value,
+            sources: _stateMachineObjectFieldSources(sources, fieldKey),
+            onChanged: onValueChanged,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// _StateMachineScalarMappingEditor edits one scalar input binding.
+class _StateMachineScalarMappingEditor extends StatelessWidget {
+  /// Creates one scalar mapping editor.
+  const _StateMachineScalarMappingEditor({
+    required this.fieldKey,
+    required this.required,
+    required this.value,
+    required this.sources,
+    required this.onChanged,
+  });
+
+  /// Input key.
+  final String fieldKey;
+
+  /// Whether the input is required by the action contract.
+  final bool required;
+
+  /// Current input value.
+  final dynamic value;
+
+  /// Available binding sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Emits a replacement input value.
+  final ValueChanged<dynamic> onChanged;
+
+  /// Builds source selection and literal override controls.
+  @override
+  Widget build(BuildContext context) {
+    final binding = _stateMachineBindingPath(value);
+    final relevantSources = _stateMachineRelevantBindingSources(
+      fieldKey,
+      sources,
+      binding,
+    );
+    if (binding.isEmpty && relevantSources.isEmpty) {
+      return _StateMachineLiteralInputEditor(
+        label: _argumentLabel(fieldKey, required),
+        value: value,
+        onChanged: onChanged,
+      );
+    }
+    final auto = binding.isEmpty
+        ? _autoMappedInputValue(fieldKey, relevantSources)
+        : null;
+    final effectiveBinding = binding.isNotEmpty
+        ? binding
+        : _stateMachineBindingPath(auto);
+    final options = <String>{
+      '',
+      if (effectiveBinding.isNotEmpty) effectiveBinding,
+      for (final source in relevantSources) source.path,
+    }.toList();
+    final labels = <String, String>{
+      '': _isEmptyArgumentValue(value)
+          ? (required ? 'Needs source' : 'No source')
+          : 'Literal value',
+      for (final source in relevantSources) source.path: source.label,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _AutomationDropdown(
+          label: _argumentLabel(fieldKey, required),
+          value: options.contains(effectiveBinding) ? effectiveBinding : '',
+          values: options,
+          labels: labels,
+          onChanged: (nextPath) {
+            if (nextPath.isEmpty) {
+              onChanged(_isEmptyArgumentValue(value) ? '' : value);
+            } else {
+              onChanged('\${$nextPath}');
+            }
+          },
+        ),
+        if (effectiveBinding.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: _StateMachineLiteralInputEditor(
+              label: _argumentLabel(fieldKey, required),
+              value: value,
+              onChanged: onChanged,
+            ),
+          )
+        else if (binding.isEmpty && auto != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: _StateMachineAutoMappingNotice(
+              source: labels[effectiveBinding] ?? effectiveBinding,
+              onApply: () => onChanged(auto),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// _StateMachineAutoMappingNotice shows unapplied automatic binding choices.
+class _StateMachineAutoMappingNotice extends StatelessWidget {
+  /// Creates an automatic mapping notice.
+  const _StateMachineAutoMappingNotice({
+    required this.source,
+    required this.onApply,
+  });
+
+  /// Source label selected by convention.
+  final String source;
+
+  /// Persists the automatic mapping into the draft.
+  final VoidCallback onApply;
+
+  /// Builds a compact auto-map action row.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            'Auto: $source',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: colors.muted, fontSize: 12),
+          ),
+        ),
+        PanelInlineIconButton(
+          icon: Icons.check,
+          tooltip: 'Apply automatic mapping',
+          onPressed: onApply,
+        ),
+      ],
+    );
+  }
+}
+
+/// _StateMachineLiteralInputEditor edits a literal value override.
+class _StateMachineLiteralInputEditor extends StatefulWidget {
+  /// Creates a literal input editor.
+  const _StateMachineLiteralInputEditor({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  /// Field label.
+  final String label;
+
+  /// Current literal value.
+  final dynamic value;
+
+  /// Emits a replacement literal value.
+  final ValueChanged<dynamic> onChanged;
+
+  /// Creates mutable text-controller state.
+  @override
+  State<_StateMachineLiteralInputEditor> createState() =>
+      _StateMachineLiteralInputEditorState();
+}
+
+class _StateMachineLiteralInputEditorState
+    extends State<_StateMachineLiteralInputEditor> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  /// Initializes the literal controller.
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _literalInputText(widget.value))
+      ..addListener(_emit);
+  }
+
+  /// Synchronizes literal text when another control changes the value.
+  @override
+  void didUpdateWidget(covariant _StateMachineLiteralInputEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final text = _literalInputText(widget.value);
+    if (_controller.text == text) {
+      return;
+    }
+    _loading = true;
+    _controller.text = text;
+    _loading = false;
+  }
+
+  /// Disposes the literal controller.
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_emit)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Builds the literal text field.
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTextField(
+      controller: _controller,
+      label: widget.label,
+      maxLines: widget.value is Map || widget.value is List ? 3 : 1,
+      monospace: widget.value is Map || widget.value is List,
+    );
+  }
+
+  void _emit() {
+    if (_loading) {
+      return;
+    }
+    widget.onChanged(_parseLiteralInput(_controller.text, widget.value));
+  }
+}
+
+/// _StateMachineEditableMappingKey edits an object input key.
+class _StateMachineEditableMappingKey extends StatefulWidget {
+  /// Creates an editable mapping key field.
+  const _StateMachineEditableMappingKey({
+    required this.value,
+    required this.onChanged,
+    required this.onDelete,
+  });
+
+  /// Current input key.
+  final String value;
+
+  /// Emits a renamed key.
+  final ValueChanged<String> onChanged;
+
+  /// Removes this input key.
+  final VoidCallback onDelete;
+
+  /// Creates mutable key-controller state.
+  @override
+  State<_StateMachineEditableMappingKey> createState() =>
+      _StateMachineEditableMappingKeyState();
+}
+
+class _StateMachineEditableMappingKeyState
+    extends State<_StateMachineEditableMappingKey> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  /// Initializes the key controller.
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value)..addListener(_emit);
+  }
+
+  /// Syncs the key controller when the selected action changes.
+  @override
+  void didUpdateWidget(covariant _StateMachineEditableMappingKey oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value == widget.value || _controller.text == widget.value) {
+      return;
+    }
+    _loading = true;
+    _controller.text = widget.value;
+    _loading = false;
+  }
+
+  /// Disposes the key controller.
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_emit)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Builds one editable key field with remove affordance.
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: _AutomationTextField(controller: _controller, label: 'Input'),
+        ),
+        const SizedBox(width: 6),
+        PanelInlineIconButton(
+          icon: Icons.delete_outline,
+          tooltip: 'Remove input',
+          onPressed: widget.onDelete,
+        ),
+      ],
+    );
+  }
+
+  void _emit() {
+    if (_loading) {
+      return;
+    }
+    widget.onChanged(_controller.text);
+  }
+}
+
+/// _StateMachineBindingSource stores one selectable workflow data source.
+class _StateMachineBindingSource {
+  /// Creates one workflow data source.
+  const _StateMachineBindingSource({required this.path, required this.label});
+
+  /// Runtime input-reference path.
+  final String path;
+
+  /// User-facing source label.
+  final String label;
+}
+
+/// Returns selectable input-reference sources for the selected state.
+List<_StateMachineBindingSource> _stateMachineBindingSources(
+  List<Map<String, dynamic>> states,
+  String currentStateId,
+  Map<String, dynamic> currentValue,
+) {
+  final byPath = <String, _StateMachineBindingSource>{};
+  final currentStatePrefix = currentStateId.trim().isEmpty
+      ? ''
+      : '${currentStateId.trim()}.';
+  void add(String path, String label) {
+    final normalized = path.trim();
+    if (normalized.isEmpty) {
+      return;
+    }
+    byPath.putIfAbsent(
+      normalized,
+      () => _StateMachineBindingSource(path: normalized, label: label),
+    );
+  }
+
+  add('incoming.result.data', 'Incoming result / data');
+  add('incoming.result.status', 'Incoming result / status');
+  add('incoming.result.error.message', 'Incoming result / error');
+  add('incoming.trigger', 'Incoming trigger');
+  add('incoming.source_state', 'Incoming source');
+  for (final field in _stateMachineWorkflowInputFields(states, currentValue)) {
+    add('workflow_input.$field', 'Workflow input / $field');
+  }
+  for (final path in _stateMachineReferencedBindingPaths(currentValue)) {
+    final label =
+        currentStatePrefix.isNotEmpty &&
+            path.trim().startsWith(currentStatePrefix)
+        ? 'Current state / ${path.trim().substring(currentStatePrefix.length)}'
+        : _stateMachineBindingLabel(path);
+    add(path, label);
+  }
+  return byPath.values.toList()..sort((a, b) {
+    final rank = _stateMachineBindingSourceRank(
+      a.path,
+    ).compareTo(_stateMachineBindingSourceRank(b.path));
+    if (rank != 0) {
+      return rank;
+    }
+    return a.label.compareTo(b.label);
+  });
+}
+
+/// Returns field-specific incoming data sources for object argument rows.
+List<_StateMachineBindingSource> _stateMachineObjectFieldSources(
+  List<_StateMachineBindingSource> sources,
+  String fieldKey,
+) {
+  final normalized = _safeArgumentFieldName(fieldKey);
+  if (normalized.isEmpty) {
+    return sources;
+  }
+  final path = 'incoming.result.data.$normalized';
+  if (sources.any((source) => source.path == path)) {
+    return sources;
+  }
+  return <_StateMachineBindingSource>[
+    ...sources,
+    _StateMachineBindingSource(
+      path: path,
+      label: 'Incoming result / $normalized',
+    ),
+  ];
+}
+
+/// Returns only the binding choices that are useful for one input field.
+List<_StateMachineBindingSource> _stateMachineRelevantBindingSources(
+  String fieldKey,
+  List<_StateMachineBindingSource> sources,
+  String currentBinding,
+) {
+  final byPath = <String, _StateMachineBindingSource>{};
+  final normalizedKey = _normalizeMappingKey(fieldKey);
+  final safeKey = _safeArgumentFieldName(fieldKey);
+
+  void include(_StateMachineBindingSource source) {
+    final path = source.path.trim();
+    if (path.isEmpty) {
+      return;
+    }
+    byPath.putIfAbsent(path, () => source);
+  }
+
+  for (final source in sources) {
+    final path = source.path.trim();
+    if (path == currentBinding) {
+      include(source);
+      continue;
+    }
+    if (safeKey.isNotEmpty && path == 'incoming.result.data.$safeKey') {
+      include(source);
+      continue;
+    }
+    final lastSegment = path.split('.').last;
+    if (_normalizeMappingKey(lastSegment) == normalizedKey) {
+      include(source);
+      continue;
+    }
+    if (_stateMachineCanonicalSourceMatchesField(path, normalizedKey)) {
+      include(source);
+    }
+  }
+  if (currentBinding.isNotEmpty && !byPath.containsKey(currentBinding)) {
+    byPath[currentBinding] = _StateMachineBindingSource(
+      path: currentBinding,
+      label: _stateMachineBindingLabel(currentBinding),
+    );
+  }
+  return byPath.values.toList();
+}
+
+/// Reports whether a canonical envelope path matches a user-facing field name.
+bool _stateMachineCanonicalSourceMatchesField(
+  String path,
+  String normalizedKey,
+) {
+  if (path == 'incoming.result.status') {
+    return normalizedKey == 'status';
+  }
+  if (path == 'incoming.result.error.message') {
+    return normalizedKey == 'error' ||
+        normalizedKey == 'errormessage' ||
+        normalizedKey == 'message';
+  }
+  if (path == 'incoming.trigger') {
+    return normalizedKey == 'trigger';
+  }
+  if (path == 'incoming.source_state') {
+    return normalizedKey == 'source' ||
+        normalizedKey == 'sourcestate' ||
+        normalizedKey == 'sourceid';
+  }
+  return false;
+}
+
+/// Orders canonical incoming values before workflow input and explicit refs.
+int _stateMachineBindingSourceRank(String path) {
+  final normalized = path.trim();
+  if (normalized.startsWith('incoming.')) {
+    return 0;
+  }
+  if (normalized.startsWith('workflow_input.')) {
+    return 1;
+  }
+  return 2;
+}
+
+/// Returns likely workflow input field names from assertions and bindings.
+Set<String> _stateMachineWorkflowInputFields(
+  List<Map<String, dynamic>> states,
+  Map<String, dynamic> currentValue,
+) {
+  final fields = <String>{};
+  for (final state in states) {
+    for (final action in _stateEntryActions(state).map(_map)) {
+      final withValue = _map(action['with']);
+      final path = '${withValue['path'] ?? ''}'.trim();
+      final field = _workflowInputFieldFromPath(path);
+      if (field.isNotEmpty) {
+        fields.add(field);
+      }
+      for (final check in _list(withValue['checks']).map(_map)) {
+        final checkPath = '${check['path'] ?? ''}'.trim();
+        final checkField = _workflowInputFieldFromPath(checkPath);
+        if (checkField.isNotEmpty) {
+          fields.add(checkField);
+        }
+      }
+      for (final binding in _stateMachineReferencedBindingPaths(withValue)) {
+        final bindingField = _workflowInputFieldFromPath(binding);
+        if (bindingField.isNotEmpty) {
+          fields.add(bindingField);
+        }
+      }
+    }
+  }
+  for (final binding in _stateMachineReferencedBindingPaths(currentValue)) {
+    final bindingField = _workflowInputFieldFromPath(binding);
+    if (bindingField.isNotEmpty) {
+      fields.add(bindingField);
+    }
+  }
+  return fields;
+}
+
+/// Extracts one workflow_input child field from a reference path.
+String _workflowInputFieldFromPath(String path) {
+  final normalized = path.trim();
+  const prefix = 'workflow_input.';
+  if (!normalized.startsWith(prefix)) {
+    return '';
+  }
+  final remainder = normalized.substring(prefix.length);
+  if (remainder.isEmpty) {
+    return '';
+  }
+  return remainder.split('.').first;
+}
+
+/// Returns input-reference paths found inside a value tree.
+Set<String> _stateMachineReferencedBindingPaths(dynamic value) {
+  final paths = <String>{};
+  void visit(dynamic current) {
+    if (current is String) {
+      for (final match in RegExp(r'\$\{([^}]+)\}').allMatches(current)) {
+        final path = match.group(1)?.trim() ?? '';
+        if (path.isNotEmpty) {
+          paths.add(path);
+        }
+      }
+      return;
+    }
+    if (current is Map) {
+      for (final item in current.values) {
+        visit(item);
+      }
+      return;
+    }
+    if (current is List) {
+      for (final item in current) {
+        visit(item);
+      }
+    }
+  }
+
+  visit(value);
+  return paths;
+}
+
+/// Returns a readable label for a runtime input-reference path.
+String _stateMachineBindingLabel(String path) {
+  final normalized = path.trim();
+  if (normalized.startsWith('workflow_input.')) {
+    return 'Workflow input / ${normalized.substring('workflow_input.'.length)}';
+  }
+  if (normalized == 'incoming.result.data') {
+    return 'Incoming result / data';
+  }
+  if (normalized.startsWith('incoming.result.data.')) {
+    return 'Incoming result / ${normalized.substring('incoming.result.data.'.length)}';
+  }
+  if (normalized == 'incoming.result.status') {
+    return 'Incoming result / status';
+  }
+  if (normalized == 'incoming.result.error.message') {
+    return 'Incoming result / error';
+  }
+  if (normalized == 'incoming.trigger') {
+    return 'Incoming trigger';
+  }
+  if (normalized == 'incoming.source_state') {
+    return 'Incoming source';
+  }
+  final parts = normalized.split('.');
+  if (parts.length >= 2 && parts[1] == 'output') {
+    final suffix = parts.length > 2 ? ' / ${parts.sublist(2).join('.')}' : '';
+    return 'Output from ${parts.first}$suffix';
+  }
+  return normalized;
+}
+
+/// Returns the referenced path when a value is exactly an input reference.
+String _stateMachineBindingPath(dynamic value) {
+  if (value is! String) {
+    return '';
+  }
+  final match = RegExp(r'^\$\{([^}]+)\}$').firstMatch(value.trim());
+  return match?.group(1)?.trim() ?? '';
+}
+
+/// Returns an automatic mapping value for a field when a matching source exists.
+dynamic _autoMappedInputValue(
+  String fieldKey,
+  List<_StateMachineBindingSource> sources,
+) {
+  final normalizedKey = _normalizeMappingKey(fieldKey);
+  for (final source in sources) {
+    final last = source.path.split('.').last;
+    if (_normalizeMappingKey(last) == normalizedKey) {
+      return '\${${source.path}}';
+    }
+  }
+  return null;
+}
+
+/// Returns action arguments with obvious missing bindings filled in.
+Map<String, dynamic> _autoMappedActionArguments(
+  Map<String, dynamic> value,
+  Map<String, dynamic> schema,
+  List<_StateMachineBindingSource> sources, {
+  bool allowIncomingFieldDefaults = false,
+}) {
+  final properties = _schemaProperties(schema);
+  final keys = _orderedArgumentKeys(value, properties);
+  final next = Map<String, dynamic>.from(value);
+  for (final key in keys) {
+    final current = next[key];
+    final property = _map(properties[key]);
+    final propertyType = '${property['type'] ?? ''}'.trim();
+    final childAllowsIncoming =
+        allowIncomingFieldDefaults ||
+        key == 'arguments' ||
+        key == 'input' ||
+        key == 'payload';
+    if (current is Map || propertyType == 'object') {
+      next[key] = _autoMappedActionArguments(
+        _map(current),
+        property,
+        sources,
+        allowIncomingFieldDefaults: childAllowsIncoming,
+      );
+      continue;
+    }
+    if (_isEmptyArgumentValue(current)) {
+      final fieldSources = allowIncomingFieldDefaults
+          ? _stateMachineObjectFieldSources(sources, key)
+          : sources;
+      final mapped = _autoMappedInputValue(key, fieldSources);
+      if (mapped != null) {
+        next[key] = mapped;
+      }
+    }
+  }
+  return next;
+}
+
+/// Performs a small recursive equality check for JSON-like values.
+bool _deepEquals(dynamic left, dynamic right) {
+  if (left is Map && right is Map) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (final key in left.keys) {
+      if (!right.containsKey(key) || !_deepEquals(left[key], right[key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (left is List && right is List) {
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index++) {
+      if (!_deepEquals(left[index], right[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return left == right;
+}
+
+/// Returns whether an argument value should be treated as unresolved.
+bool _isEmptyArgumentValue(dynamic value) {
+  if (value == null) {
+    return true;
+  }
+  if (value is String) {
+    return value.trim().isEmpty;
+  }
+  if (value is Map || value is List) {
+    return false;
+  }
+  return false;
+}
+
+/// Normalizes field names for convention-based mapping.
+String _normalizeMappingKey(String value) {
+  return value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '');
+}
+
+/// Formats a literal value for editing.
+String _literalInputText(dynamic value) {
+  if (value is Map || value is List) {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  }
+  if (value == null) {
+    return '';
+  }
+  return '$value';
+}
+
+/// Parses a literal editor value while preserving JSON objects and arrays.
+dynamic _parseLiteralInput(String text, dynamic previous) {
+  if (previous is Map || previous is List) {
+    try {
+      return jsonDecode(text);
+    } catch (_) {
+      return previous;
+    }
+  }
+  if (previous is int) {
+    return int.tryParse(text.trim()) ?? previous;
+  }
+  if (previous is num) {
+    return double.tryParse(text.trim()) ?? previous;
+  }
+  if (previous is bool) {
+    final normalized = text.trim().toLowerCase();
+    if (normalized == 'true') {
+      return true;
+    }
+    if (normalized == 'false') {
+      return false;
+    }
+    return previous;
+  }
+  return text;
+}
+
+/// _StateMachineRawActionArgumentsEditor keeps raw JSON available for experts.
+class _StateMachineRawActionArgumentsEditor extends StatefulWidget {
+  /// Creates an advanced raw action-arguments editor.
+  const _StateMachineRawActionArgumentsEditor({
+    required this.value,
+    required this.onChanged,
+  });
+
+  /// Current argument map.
+  final Map<String, dynamic> value;
+
+  /// Emits a parsed raw argument replacement.
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  /// Creates mutable raw JSON controller state.
+  @override
+  State<_StateMachineRawActionArgumentsEditor> createState() =>
+      _StateMachineRawActionArgumentsEditorState();
+}
+
+class _StateMachineRawActionArgumentsEditorState
+    extends State<_StateMachineRawActionArgumentsEditor> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  /// Initializes the raw JSON controller.
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _jsonText(widget.value))
+      ..addListener(_emit);
+  }
+
+  /// Syncs raw JSON when the selected action changes.
+  @override
+  void didUpdateWidget(
+    covariant _StateMachineRawActionArgumentsEditor oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    final nextText = _jsonText(widget.value);
+    if (nextText == _controller.text) {
+      return;
+    }
+    _loading = true;
+    _controller.text = nextText;
+    _loading = false;
+  }
+
+  /// Disposes the raw JSON controller.
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_emit)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Builds the advanced raw definition disclosure.
+  @override
+  Widget build(BuildContext context) {
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: EdgeInsets.zero,
+      title: const Text('Advanced definition'),
+      children: <Widget>[
+        _AutomationTextField(
+          controller: _controller,
+          label: 'Raw arguments JSON',
+          maxLines: 5,
+          monospace: true,
+        ),
+      ],
+    );
+  }
+
+  void _emit() {
+    if (_loading) {
+      return;
+    }
+    final parsed = _tryParseJsonObject(_controller.text);
+    if (parsed != null) {
+      widget.onChanged(parsed);
+    }
+  }
+}
+
+/// Returns the action contract matching an action name.
+AutomationActionType _stateMachineActionTypeFor(
+  String actionName,
+  List<AutomationActionType> actionTypes,
+) {
+  for (final actionType in actionTypes) {
+    if (actionType.name == actionName) {
+      return actionType;
+    }
+  }
+  return AutomationActionType(
+    name: actionName,
+    label: _fallbackActionLabel(actionName),
+    description: _fallbackActionDescription(actionName),
+    risk: 'workflow',
+    available: true,
+  );
+}
+
+/// Builds a schema-like descriptor from the catalog contract and current value.
+Map<String, dynamic> _stateMachineActionInputSchema(
+  AutomationActionType actionType,
+  Map<String, dynamic> value,
+) {
+  final base = Map<String, dynamic>.from(_map(actionType.inputSchema));
+  if ('${base['type'] ?? ''}'.trim().isEmpty) {
+    base['type'] = 'object';
+  }
+  final properties = Map<String, dynamic>.from(_schemaProperties(base));
+  for (final entry in _defaultStateMachineActionArgs(actionType.name).entries) {
+    properties.putIfAbsent(entry.key, () => _inferArgumentSchema(entry.value));
+  }
+  for (final entry in value.entries) {
+    properties.putIfAbsent(entry.key, () => _inferArgumentSchema(entry.value));
+  }
+  base['properties'] = properties;
+  return base;
+}
+
+/// Returns object properties from a JSON-schema-like descriptor.
+Map<String, dynamic> _schemaProperties(Map<String, dynamic> schema) {
+  return Map<String, dynamic>.from(_map(schema['properties']));
+}
+
+/// Returns required field names from a JSON-schema-like descriptor.
+Set<String> _schemaRequired(Map<String, dynamic> schema) {
+  return _list(
+    schema['required'],
+  ).map((item) => '$item'.trim()).where((item) => item.isNotEmpty).toSet();
+}
+
+/// Returns stable argument keys with schema order before ad hoc fields.
+List<String> _orderedArgumentKeys(
+  Map<String, dynamic> value,
+  Map<String, dynamic> properties,
+) {
+  final seen = <String>{};
+  final keys = <String>[];
+  for (final key in properties.keys) {
+    if (key.trim().isNotEmpty && seen.add(key)) {
+      keys.add(key);
+    }
+  }
+  final extras =
+      value.keys.where((key) => key.trim().isNotEmpty && seen.add(key)).toList()
+        ..sort();
+  keys.addAll(extras);
+  return keys;
+}
+
+/// Returns a readable argument label.
+String _argumentLabel(String key, bool required) {
+  final words = key
+      .replaceAll('_', ' ')
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .toList();
+  if (words.isEmpty) {
+    return required ? 'Field *' : 'Field';
+  }
+  final label = words
+      .map((word) => word[0].toUpperCase() + word.substring(1))
+      .join(' ');
+  return required ? '$label *' : label;
+}
+
+/// Returns a safe object-key name for user-authored argument fields.
+String _safeArgumentFieldName(String value) {
+  return value.trim().replaceAll(RegExp(r'\s+'), '_');
+}
+
+/// Returns a non-conflicting generic field name for an object argument.
+String _nextArgumentFieldName(Iterable<String> existing) {
+  final names = existing.toSet();
+  var index = names.length + 1;
+  var candidate = 'field_$index';
+  while (names.contains(candidate)) {
+    index++;
+    candidate = 'field_$index';
+  }
+  return candidate;
+}
+
+/// Infers a schema-like descriptor from an existing argument value.
+Map<String, dynamic> _inferArgumentSchema(dynamic value) {
+  if (value is Map) {
+    return <String, dynamic>{
+      'type': 'object',
+      'properties': <String, dynamic>{
+        for (final entry in value.entries)
+          '${entry.key}': _inferArgumentSchema(entry.value),
+      },
+    };
+  }
+  if (value is List) {
+    final first = value.isEmpty ? null : value.first;
+    return <String, dynamic>{
+      'type': 'array',
+      if (first != null) 'items': _inferArgumentSchema(first),
+    };
+  }
+  if (value is bool) {
+    return <String, dynamic>{'type': 'boolean'};
+  }
+  if (value is int) {
+    return <String, dynamic>{'type': 'integer'};
+  }
+  if (value is num) {
+    return <String, dynamic>{'type': 'number'};
+  }
+  return <String, dynamic>{'type': 'string'};
 }
 
 /// _StateMachineTransitionEditor edits one state transition.
@@ -2669,12 +4316,12 @@ class _StateMachineTransitionEditor extends StatelessWidget {
           children: <Widget>[
             _AutomationTextField(
               controller: triggerController,
-              label: 'Trigger',
+              label: 'Outcome',
               onSubmitted: (_) => onSubmitEdit(),
             ),
             const SizedBox(height: 8),
             _AutomationDropdown(
-              label: 'Target',
+              label: 'Go to state',
               value: target,
               values: values,
               onChanged: onTargetChanged,
@@ -2894,13 +4541,19 @@ class _StateMachineCanvasLayout {
   static _StateMachineCanvasLayout fromStates(
     List<Map<String, dynamic>> states, {
     required String initialStateId,
+    String focusedPhaseId = '',
     required Map<String, Offset> positions,
     Set<String> collapsedPhaseIds = const <String>{},
     _StateMachineEdgeViewMode edgeViewMode = _StateMachineEdgeViewMode.success,
     String selectedStateId = '',
   }) {
     final childIdsByParent = _stateMachineChildIdsByParent(states);
-    final visibleStates = _stateMachineVisibleStates(states, collapsedPhaseIds);
+    final scoped = _stateMachineScopedStates(
+      states,
+      focusedPhaseId: focusedPhaseId,
+      collapsedPhaseIds: collapsedPhaseIds,
+    );
+    final visibleStates = scoped.states;
     const padding = 84.0;
     const nodeWidth = _stateMachineNodeWidth;
     const nodeHeight = _stateMachineNodeHeight;
@@ -2952,7 +4605,9 @@ class _StateMachineCanvasLayout {
           .toSet(),
       childIdsByParent: childIdsByParent,
       byId: byId,
-      collapsedPhaseIds: collapsedPhaseIds,
+      collapsedPhaseIds: scoped.focused
+          ? childIdsByParent.keys.toSet()
+          : collapsedPhaseIds,
     );
     final phaseById = <String, _StateMachinePhasePlacement>{
       for (final phase in phases) phase.stateId: phase,
@@ -2966,37 +4621,35 @@ class _StateMachineCanvasLayout {
     final edgeKeys = <String>{};
     for (final state in states) {
       final sourceId = _stateId(state);
-      final visibleSourceId = _stateMachineVisibleAncestor(
-        sourceId,
-        visibleIds,
-        parents,
-      );
+      final visibleSourceId = scoped.focused
+          ? (visibleIds.contains(sourceId) ? sourceId : '')
+          : _stateMachineVisibleAncestor(sourceId, visibleIds, parents);
       if (visibleSourceId.isEmpty) {
         continue;
       }
       for (final transition in _stateTransitions(state).map(_map)) {
         final trigger = _transitionTrigger(transition);
         final targetId = _transitionTarget(transition);
-        final visibleTargetId = _stateMachineVisibleAncestor(
-          targetId,
-          visibleIds,
-          parents,
-        );
-        if (visibleTargetId.isEmpty || visibleSourceId == visibleTargetId) {
+        final visibleTargetId = scoped.focused
+            ? _stateMachineFocusedVisibleTarget(targetId, visibleIds, parents)
+            : _stateMachineVisibleAncestor(targetId, visibleIds, parents);
+        final targetInScope = visibleTargetId.isNotEmpty;
+        if (targetInScope && visibleSourceId == visibleTargetId) {
           continue;
         }
         final transitionView = _StateMachineTransitionView(
           sourceStateId: sourceId,
           visibleSourceStateId: visibleSourceId,
           targetStateId: targetId,
-          visibleTargetStateId: visibleTargetId,
+          visibleTargetStateId: targetInScope ? visibleTargetId : targetId,
           trigger: trigger,
         );
-        if (_stateMachineTransitionUsesExitBadge(
-          transitionView,
-          edgeViewMode,
-          selectedStateId,
-        )) {
+        if (!targetInScope ||
+            _stateMachineTransitionUsesExitBadge(
+              transitionView,
+              edgeViewMode,
+              selectedStateId,
+            )) {
           final badgeSourceId = _stateMachineExitBadgeSourceId(
             transitionView,
             visibleIds: visibleIds,
@@ -3004,14 +4657,14 @@ class _StateMachineCanvasLayout {
             childIdsByParent: childIdsByParent,
           );
           final key =
-              '$badgeSourceId|$visibleTargetId|${transitionView.trigger}';
+              '$badgeSourceId|${transitionView.visibleTargetStateId}|${transitionView.trigger}';
           exitBadgeGroups
               .putIfAbsent(
                 key,
                 () => _StateMachineExitBadgeGroup(
                   sourceStateId: badgeSourceId,
                   targetStateId: targetId,
-                  visibleTargetStateId: visibleTargetId,
+                  visibleTargetStateId: transitionView.visibleTargetStateId,
                   trigger: transitionView.trigger,
                 ),
               )
@@ -3019,11 +4672,12 @@ class _StateMachineCanvasLayout {
               .add(sourceId);
           continue;
         }
-        if (!_stateMachineTransitionShowsEdge(
-          transitionView,
-          edgeViewMode,
-          selectedStateId,
-        )) {
+        if (!targetInScope ||
+            !_stateMachineTransitionShowsEdge(
+              transitionView,
+              edgeViewMode,
+              selectedStateId,
+            )) {
           continue;
         }
         final edgeKey =
@@ -3521,6 +5175,24 @@ String _stateMachineParentOf(
   return '';
 }
 
+/// Returns the root-to-phase path for the active focus id.
+List<String> _stateMachineFocusPath(
+  List<Map<String, dynamic>> states,
+  String focusedPhaseId,
+) {
+  if (focusedPhaseId.isEmpty) {
+    return const <String>[];
+  }
+  final parents = _stateMachineParentById(states);
+  final path = <String>[];
+  var current = focusedPhaseId;
+  while (current.isNotEmpty && !path.contains(current)) {
+    path.add(current);
+    current = parents[current] ?? '';
+  }
+  return path.reversed.toList();
+}
+
 /// Reports whether one state is the initial child of its containing phase.
 bool _stateMachineIsPhaseInitial(
   List<Map<String, dynamic>> states,
@@ -3645,6 +5317,21 @@ class _StateMachineExitBadgeGroup {
 
   /// Authored source states represented by this group.
   final Set<String> sourceStateIds = <String>{};
+}
+
+/// _StateMachineScopeProjection stores the states visible in one focus scope.
+class _StateMachineScopeProjection {
+  /// Creates immutable focus-scope projection data.
+  const _StateMachineScopeProjection({
+    required this.states,
+    required this.focused,
+  });
+
+  /// States visible on the current canvas.
+  final List<Map<String, dynamic>> states;
+
+  /// Whether the canvas is focused inside a composite phase.
+  final bool focused;
 }
 
 /// Returns expanded composite phase group placements.
@@ -3789,6 +5476,43 @@ List<Map<String, dynamic>> _stateMachineVisibleStates(
       ))
         state,
   ];
+}
+
+/// Returns the state projection for the active canvas focus scope.
+_StateMachineScopeProjection _stateMachineScopedStates(
+  List<Map<String, dynamic>> states, {
+  required String focusedPhaseId,
+  required Set<String> collapsedPhaseIds,
+}) {
+  if (focusedPhaseId.isEmpty) {
+    return _StateMachineScopeProjection(
+      states: _stateMachineVisibleStates(states, collapsedPhaseIds),
+      focused: false,
+    );
+  }
+  return _StateMachineScopeProjection(
+    states: <Map<String, dynamic>>[
+      for (final state in states)
+        if (_stateParentId(state) == focusedPhaseId) state,
+    ],
+    focused: true,
+  );
+}
+
+/// Returns the visible target for one transition inside a focused phase.
+String _stateMachineFocusedVisibleTarget(
+  String targetId,
+  Set<String> visibleIds,
+  Map<String, String> parents,
+) {
+  var current = targetId;
+  while (current.isNotEmpty) {
+    if (visibleIds.contains(current)) {
+      return current;
+    }
+    current = parents[current] ?? '';
+  }
+  return '';
 }
 
 /// Reports whether any ancestor of stateId is collapsed.
@@ -4747,6 +6471,7 @@ Map<String, dynamic> _stateMachineAuthoringWithPositions(
   Map<String, dynamic> authoring,
   Map<String, Offset> positions,
   Set<String> collapsedPhaseIds,
+  Map<String, Offset> focusOffsets,
 ) {
   final next = Map<String, dynamic>.from(authoring);
   final builder = Map<String, dynamic>.from(_map(next['builder']));
@@ -4755,8 +6480,26 @@ Map<String, dynamic> _stateMachineAuthoringWithPositions(
       entry.key: <String, double>{'x': entry.value.dx, 'y': entry.value.dy},
   };
   builder['collapsed_phases'] = collapsedPhaseIds.toList()..sort();
+  builder['focus_offsets'] = <String, Map<String, double>>{
+    for (final entry in focusOffsets.entries)
+      entry.key: <String, double>{'x': entry.value.dx, 'y': entry.value.dy},
+  };
   next['builder'] = builder;
   return next;
+}
+
+/// Reads per-focus canvas offsets from definition authoring metadata.
+Map<String, Offset> _stateMachineFocusOffsetsFromAuthoring(
+  Map<String, dynamic> body,
+) {
+  final offsets = _map(
+    _map(_map(body['authoring'])['builder'])['focus_offsets'],
+  );
+  return <String, Offset>{
+    for (final entry in offsets.entries)
+      if (_positionFromValue(entry.value) != null)
+        entry.key: _positionFromValue(entry.value)!,
+  };
 }
 
 /// Reads collapsed composite phase ids from definition authoring metadata.
@@ -4816,6 +6559,32 @@ Offset _nextStateMachinePosition(Map<String, Offset> positions) {
       .where((offset) => offset.dx == maxX)
       .length;
   return Offset(maxX + 160, 84 + countAtRight * 112);
+}
+
+/// Returns saved positions for direct children of one focus scope.
+Map<String, Offset> _stateMachinePositionsForScope(
+  List<Map<String, dynamic>> states,
+  Map<String, Offset> positions,
+  String parentId,
+) {
+  final ids = <String>{
+    for (final state in states)
+      if (_stateParentId(state) == parentId) _stateId(state),
+  };
+  return <String, Offset>{
+    for (final entry in positions.entries)
+      if (ids.contains(entry.key)) entry.key: entry.value,
+  };
+}
+
+/// Returns the persisted key for one focus scope offset.
+String _stateMachineFocusOffsetKey(String focusPhaseId) {
+  return focusPhaseId.isEmpty ? 'root' : focusPhaseId;
+}
+
+/// Returns the in-memory key for a draft and focus scope offset.
+String _stateMachineSessionOffsetKey(String draftId, String focusPhaseId) {
+  return '$draftId::${_stateMachineFocusOffsetKey(focusPhaseId)}';
 }
 
 /// Builds a stable process-state id from an action name.

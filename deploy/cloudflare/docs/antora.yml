@@ -1,4 +1,0 @@
-name: agent-awesome
-version: '0.1'
-nav:
-  - modules/cloudflare/nav.adoc

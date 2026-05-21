@@ -108,7 +108,7 @@ func TestRunCommandUsesExplicitDefaults(t *testing.T) {
 	if got, want := captured.AgentConfigPath, filepath.Join(configHome, "agent-awesome", "agent.yaml"); got != want {
 		t.Fatalf("AgentConfigPath = %q, want %q", got, want)
 	}
-	if got, want := captured.ToolPath, filepath.Join(configHome, "agent-awesome", "tool.yaml"); got != want {
+	if got, want := captured.ToolPath, filepath.Join(configHome, "agent-awesome", "tools", "default", "tool.yaml"); got != want {
 		t.Fatalf("ToolPath = %q, want %q", got, want)
 	}
 	if captured.ToolSet {

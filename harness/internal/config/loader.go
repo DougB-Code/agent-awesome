@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"agentawesome/internal/config/schema"
@@ -56,9 +58,13 @@ func LoadTools(path string, explicit bool) (*schema.Tools, error) {
 	var cfg schema.Tools
 	if err := loadYAML(path, &cfg); err != nil {
 		if !explicit && path == DefaultToolPath() && isNotExist(err) {
-			return &schema.Tools{}, nil
+			cfg = schema.Tools{}
+		} else {
+			return nil, fmt.Errorf("decode %s: %w", path, err)
 		}
-		return nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	if err := loadMCPPackageConfigs(mcpConfigDirForToolPath(path), &cfg); err != nil {
+		return nil, err
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
@@ -92,4 +98,88 @@ func isNotExist(err error) bool {
 		err = errors.Unwrap(err)
 	}
 	return false
+}
+
+// loadMCPPackageConfigs merges package-scoped MCP server configs beside tools.
+func loadMCPPackageConfigs(directory string, cfg *schema.Tools) error {
+	if strings.TrimSpace(directory) == "" {
+		return nil
+	}
+	paths, err := mcpPackageConfigPaths(directory)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		var packageCfg schema.Tools
+		if err := loadYAML(path, &packageCfg); err != nil {
+			return fmt.Errorf("decode MCP package %s: %w", path, err)
+		}
+		mergeMCPConfig(cfg, packageCfg.MCP)
+	}
+	return nil
+}
+
+// mcpPackageConfigPaths returns package mcp.yaml files in stable order.
+func mcpPackageConfigPaths(directory string) ([]string, error) {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("list MCP package directory %s: %w", directory, err)
+	}
+	paths := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		path := filepath.Join(directory, entry.Name())
+		if entry.IsDir() {
+			candidate := filepath.Join(path, schema.DefaultMCPFilename)
+			if _, err := os.Stat(candidate); err == nil {
+				paths = append(paths, candidate)
+			} else if err != nil && !os.IsNotExist(err) {
+				return nil, fmt.Errorf("stat MCP package %s: %w", candidate, err)
+			}
+			continue
+		}
+		if isYAMLConfigPath(path) {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+// mergeMCPConfig appends MCP package servers into the root tool config.
+func mergeMCPConfig(cfg *schema.Tools, mcp schema.MCP) {
+	if !mcp.Enabled && len(mcp.Servers) == 0 {
+		return
+	}
+	cfg.MCP.Enabled = cfg.MCP.Enabled || mcp.Enabled || len(mcp.Servers) > 0
+	cfg.MCP.Servers = append(cfg.MCP.Servers, mcp.Servers...)
+}
+
+// mcpConfigDirForToolPath resolves the sibling MCP package directory for a tool config.
+func mcpConfigDirForToolPath(path string) string {
+	clean := filepath.Clean(path)
+	for dir := filepath.Dir(clean); dir != "." && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if filepath.Base(dir) == schema.DefaultToolConfigDirName {
+			return filepath.Join(filepath.Dir(dir), schema.DefaultMCPConfigDirName)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+	}
+	if clean == filepath.Clean(DefaultToolPath()) {
+		return DefaultMCPConfigDir()
+	}
+	return ""
+}
+
+// isYAMLConfigPath reports whether a path is a YAML config file.
+func isYAMLConfigPath(path string) bool {
+	lower := strings.ToLower(path)
+	return strings.HasSuffix(lower, ".yaml") || strings.HasSuffix(lower, ".yml")
 }

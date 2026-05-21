@@ -197,6 +197,91 @@ states:
 	}
 }
 
+// TestProcessStateInputIncludesIncomingEnvelope verifies state-to-state inputs use the standard envelope.
+func TestProcessStateInputIncludesIncomingEnvelope(t *testing.T) {
+	ctx := context.Background()
+	var secondSawIncoming atomic.Bool
+	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		switch body["name"] {
+		case "prepare_tool":
+			writeJSON(w, map[string]any{"structuredContent": map[string]any{"worktree_path": "/tmp/worktree"}})
+		case "implement_tool":
+			arguments, _ := body["arguments"].(map[string]any)
+			if arguments["worktree_path"] == "/tmp/worktree" &&
+				arguments["status"] == statusSucceeded &&
+				arguments["trigger"] == processTriggerSucceeded &&
+				arguments["source"] == "prepare" {
+				secondSawIncoming.Store(true)
+			}
+			writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
+		default:
+			http.Error(w, "unexpected tool", http.StatusBadRequest)
+		}
+	}))
+	defer toolServer.Close()
+
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "incoming_envelope.yaml", `
+kind: state_machine
+id: incoming_envelope
+name: Incoming Envelope
+initial: prepare
+states:
+  - id: prepare
+    on_entry:
+      - id: prepare_action
+        uses: tool.call
+        with:
+          name: prepare_tool
+          arguments: {}
+    transitions:
+      - trigger: succeeded
+        to: implement
+  - id: implement
+    on_entry:
+      - id: implement_action
+        uses: tool.call
+        with:
+          name: implement_tool
+          arguments:
+            worktree_path: "${incoming.result.data.worktree_path}"
+            status: "${incoming.result.status}"
+            trigger: "${incoming.trigger}"
+            source: "${incoming.source_state}"
+    transitions:
+      - trigger: succeeded
+        to: done
+  - id: done
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir:        definitionsDir,
+		DatabasePath:          filepath.Join(t.TempDir(), "workflow.db"),
+		HarnessContextBaseURL: toolServer.URL + "/api/context",
+		RequestTimeout:        time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "incoming_envelope", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusSucceeded && run.State == "done"
+	})
+	if !secondSawIncoming.Load() {
+		t.Fatalf("implement state did not receive incoming result envelope")
+	}
+}
+
 // TestProcessStateFailureTransition verifies failed entry actions can enter recovery states.
 func TestProcessStateFailureTransition(t *testing.T) {
 	ctx := context.Background()

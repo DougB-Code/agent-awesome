@@ -204,6 +204,25 @@ void main() {
     );
   });
 
+  test('uses app-root package paths for tool and MCP configs', () {
+    expect(
+      toolConfigsDirectoryPath(),
+      '${agentAwesomeAppConfigDirectoryPath()}/tools',
+    );
+    expect(
+      mcpConfigsDirectoryPath(),
+      '${agentAwesomeAppConfigDirectoryPath()}/mcp',
+    );
+    expect(
+      toolPackageConfigPath('Agent Awesome!'),
+      '${toolConfigsDirectoryPath()}/agent-awesome/tool.yaml',
+    );
+    expect(
+      mcpPackageConfigPath('Memory Server!'),
+      '${mcpConfigsDirectoryPath()}/memory-server/mcp.yaml',
+    );
+  });
+
   test('rejects configured profile with missing harness config', () {
     expect(
       () => RuntimeProfile.fromJson(<String, dynamic>{

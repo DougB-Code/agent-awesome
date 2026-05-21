@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../domain/config_files.dart';
 import '../domain/runtime_profile.dart';
 import 'app_config.dart';
 
@@ -443,7 +444,22 @@ String agentConfigsDirectoryPath() {
 
 /// Returns the directory where editable tool config files live.
 String toolConfigsDirectoryPath() {
-  return '${agentAwesomeConfigDirectoryPath()}/tools';
+  return '${agentAwesomeAppConfigDirectoryPath()}/$aaToolPackageDirectoryName';
+}
+
+/// Returns the directory where editable MCP server package configs live.
+String mcpConfigsDirectoryPath() {
+  return '${agentAwesomeAppConfigDirectoryPath()}/$aaMcpPackageDirectoryName';
+}
+
+/// Returns the package config path for one tool package id.
+String toolPackageConfigPath(String packageId) {
+  return '${toolConfigsDirectoryPath()}/${_safePackageId(packageId)}/$aaToolPackageConfigFilename';
+}
+
+/// Returns the package config path for one MCP package id.
+String mcpPackageConfigPath(String packageId) {
+  return '${mcpConfigsDirectoryPath()}/${_safePackageId(packageId)}/$aaMcpPackageConfigFilename';
 }
 
 /// Returns the directory where editable memory domain metadata lives.
@@ -484,6 +500,17 @@ String memoryDomainDataDirectoryPath(String domainId) {
 /// Returns the app-owned memory firewall policy path consumed by memoryd.
 String memoryFirewallPolicyPath() {
   return '${agentAwesomeAppConfigDirectoryPath()}/memory_firewall_policy.json';
+}
+
+/// Returns a filesystem-safe config package id.
+String _safePackageId(String value) {
+  final safe = value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
+  return safe.isEmpty ? 'default' : safe;
 }
 
 /// Returns the health-check URL for a base service endpoint.

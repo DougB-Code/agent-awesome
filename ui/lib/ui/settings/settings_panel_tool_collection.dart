@@ -93,9 +93,7 @@ class _SettingsToolSurfaceCommandPanelState
   void didUpdateWidget(covariant _SettingsToolSurfaceCommandPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_selectedPath == null ||
-        !widget.controller.availableToolConfigs.any(
-          (entry) => entry.path == _selectedPath,
-        )) {
+        !_entries().any((entry) => entry.path == _selectedPath)) {
       _selectedPath = _initialSelectedPath();
     }
   }
@@ -118,7 +116,7 @@ class _SettingsToolSurfaceCommandPanelState
           icon: widget.icon,
           builder: (query) => _SettingsToolConfigFileList(
             query: query,
-            entries: widget.controller.availableToolConfigs,
+            entries: _entries(),
             selectedPath: _selectedPath,
             emptyLabel: widget.emptyLabel,
             icon: widget.icon,
@@ -165,7 +163,9 @@ class _SettingsToolSurfaceCommandPanelState
   Widget _buildAreaActions() {
     return PanelIconButton(
       icon: Icons.add,
-      tooltip: 'Add tool config',
+      tooltip: widget.surface == _ToolSettingsSurface.osTools
+          ? 'Add tool config'
+          : 'Add MCP config',
       onPressed: () => unawaited(_create()),
     );
   }
@@ -178,14 +178,18 @@ class _SettingsToolSurfaceCommandPanelState
       children: <Widget>[
         PanelIconButton(
           icon: Icons.content_copy,
-          tooltip: 'Duplicate tool config',
+          tooltip: widget.surface == _ToolSettingsSurface.osTools
+              ? 'Duplicate tool config'
+              : 'Duplicate MCP config',
           onPressed: selectedEntry == null
               ? null
               : () => unawaited(_duplicate(selectedEntry)),
         ),
         PanelIconButton(
           icon: Icons.delete_outline,
-          tooltip: 'Delete tool config',
+          tooltip: widget.surface == _ToolSettingsSurface.osTools
+              ? 'Delete tool config'
+              : 'Delete MCP config',
           onPressed: selectedEntry == null
               ? null
               : () => unawaited(_delete(selectedEntry)),
@@ -205,7 +209,9 @@ class _SettingsToolSurfaceCommandPanelState
         children: <Widget>[
           _SettingsTextFileEditor(
             controller: widget.controller,
-            title: 'Tool config source',
+            title: widget.surface == _ToolSettingsSurface.osTools
+                ? 'Tool config source'
+                : 'MCP config source',
             path: entry.path,
           ),
         ],
@@ -223,24 +229,26 @@ class _SettingsToolSurfaceCommandPanelState
   ConfigFileEntry? _selectedEntry() {
     final selectedPath = _selectedPath;
     if (selectedPath != null) {
-      for (final entry in widget.controller.availableToolConfigs) {
+      for (final entry in _entries()) {
         if (entry.path == selectedPath) {
           return entry;
         }
       }
     }
-    if (widget.controller.availableToolConfigs.isEmpty) {
+    final entries = _entries();
+    if (entries.isEmpty) {
       return null;
     }
-    return widget.controller.availableToolConfigs.first;
+    return entries.first;
   }
 
   /// Returns the active profile assignment or first available tool config.
   String? _initialSelectedPath() {
-    final entries = widget.controller.availableToolConfigs;
+    final entries = _entries();
     final assignedPath =
         widget.controller.runtimeProfile?.harness.toolConfigPath ?? '';
-    if (assignedPath.isNotEmpty &&
+    if (widget.surface == _ToolSettingsSurface.osTools &&
+        assignedPath.isNotEmpty &&
         entries.any((entry) => entry.path == assignedPath)) {
       return assignedPath;
     }
@@ -253,14 +261,26 @@ class _SettingsToolSurfaceCommandPanelState
   /// Creates a new tool config file.
   Future<void> _create() async {
     try {
-      final path = await widget.controller.createConfigFile(
-        ConfigFileKind.tool,
-      );
+      final path = await widget.controller.createConfigFile(_configKind());
       if (!mounted) {
         return;
       }
       setState(() => _selectedPath = path);
     } catch (_) {}
+  }
+
+  /// Returns the config entries for the selected tool surface.
+  List<ConfigFileEntry> _entries() {
+    return widget.surface == _ToolSettingsSurface.osTools
+        ? widget.controller.availableToolConfigs
+        : widget.controller.availableMcpConfigs;
+  }
+
+  /// Returns the config file kind owned by the selected tool surface.
+  ConfigFileKind _configKind() {
+    return widget.surface == _ToolSettingsSurface.osTools
+        ? ConfigFileKind.tool
+        : ConfigFileKind.mcp;
   }
 
   /// Duplicates a tool config file.

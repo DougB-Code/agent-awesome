@@ -1,8 +1,0 @@
-# This file excludes Worker dependency installs and local secret files.
-node_modules/
-pnpm-lock.yaml
-.wrangler/
-.dev.vars
-.dev.vars.*
-.env
-.env.*

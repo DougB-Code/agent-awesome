@@ -1075,6 +1075,518 @@ void main() {
     );
   });
 
+  testWidgets('focuses composite phases with breadcrumb navigation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'intake');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Workflow'), findsOneWidget);
+    expect(find.text('intake'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-collect')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-review')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-intake')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-done')),
+      findsNothing,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('state-machine-focus-empty')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-intake')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-done')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('palette add in phase focus creates a child state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'intake');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('state-machine-palette-mcp.call')),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-call_mcp_tool')),
+      findsOneWidget,
+    );
+    expect(find.text('call_mcp_tool'), findsWidgets);
+  });
+
+  testWidgets('focused phase initials update the phase not root', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'intake');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+    await _tapStateMachineNode(tester, 'review');
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('state-machine-node-toolbar-review'),
+        ),
+        matching: find.byIcon(Icons.flag_outlined),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('state-machine-node-review')),
+        matching: find.text('initial'),
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('state-machine-focus-empty')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('state-machine-node-intake')),
+        matching: find.text('initial'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('focus supports nested phases independently', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = <AutomationDraft>[_nestedPhaseFocusDraft()];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'quality');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-review_phase')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-review')),
+      findsNothing,
+    );
+
+    await _tapStateMachineNode(tester, 'review_phase');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('quality'), findsWidgets);
+    expect(find.text('review_phase'), findsWidgets);
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-review')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-test')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('dragging onto a focused child phase reparents the state', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = <AutomationDraft>[_nestedPhaseFocusDraft()];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'quality');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+
+    final testNode = find.byKey(
+      const ValueKey<String>('state-machine-node-test'),
+    );
+    final reviewPhaseNode = find.byKey(
+      const ValueKey<String>('state-machine-node-review_phase'),
+    );
+    final delta =
+        tester.getCenter(reviewPhaseNode) - tester.getCenter(testNode);
+    final dragGesture = await tester.startGesture(tester.getCenter(testNode));
+    await tester.pump();
+    await dragGesture.moveBy(delta);
+    await tester.pump();
+    await dragGesture.up();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-test')),
+      findsNothing,
+    );
+
+    await _tapStateMachineNode(tester, 'review_phase');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-test')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-review')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('focused external exits render as badges and navigate scope', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = <AutomationDraft>[_focusedExitDraft()];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'intake');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+
+    final badge = find.byKey(
+      const ValueKey<String>('state-machine-exit-badge-collect-succeeded-done'),
+    );
+    expect(badge, findsOneWidget);
+    expect(find.text('succeeded -> done'), findsWidgets);
+
+    await tester.tap(badge);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-done')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-intake')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-collect')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('inspector auto-maps action inputs from workflow contracts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_structured_action',
+          kind: 'state_machine',
+          name: 'Structured Action',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'structured_action',
+            'initial': 'assert_input',
+            'states': <Object>[
+              <String, Object>{
+                'id': 'assert_input',
+                'on_entry': <Object>[
+                  <String, Object>{
+                    'id': 'assert_input',
+                    'uses': 'data.assert',
+                    'with': <String, Object>{
+                      'checks': <Object>[
+                        <String, Object>{
+                          'path': 'workflow_input.base_ref',
+                          'mode': 'exists',
+                        },
+                      ],
+                    },
+                  },
+                ],
+                'transitions': <Object>[
+                  <String, Object>{'trigger': 'succeeded', 'to': 'prepare'},
+                ],
+              },
+              <String, Object>{
+                'id': 'prepare',
+                'on_entry': <Object>[
+                  <String, Object>{
+                    'id': 'prepare',
+                    'uses': 'mcp.call',
+                    'with': <String, Object>{
+                      'endpoint': 'command',
+                      'tool': 'source.prepare',
+                      'arguments': <String, Object>{'base_ref': ''},
+                    },
+                  },
+                ],
+                'transitions': <Object>[
+                  <String, Object>{'trigger': 'succeeded', 'to': 'done'},
+                ],
+              },
+              <String, Object>{'id': 'done'},
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'prepare');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Arguments JSON'), findsNothing);
+    expect(find.text('Raw arguments JSON'), findsNothing);
+    expect(find.text('Endpoint'), findsOneWidget);
+    expect(find.text('Tool'), findsWidgets);
+    expect(find.text('Arguments'), findsOneWidget);
+    expect(find.text('base_ref'), findsOneWidget);
+    expect(find.text('Workflow input / base_ref'), findsOneWidget);
+    expect(find.text(r'${workflow_input.base_ref}'), findsNothing);
+    expect(find.text('Advanced definition'), findsOneWidget);
+  });
+
+  testWidgets(
+    'inspector offers incoming envelope instead of every state output',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = _readyController()
+        ..automationDrafts = const <AutomationDraft>[
+          AutomationDraft(
+            id: 'draft_incoming_sources',
+            kind: 'state_machine',
+            name: 'Incoming Sources',
+            status: 'draft',
+            body: <String, dynamic>{
+              'kind': 'state_machine',
+              'id': 'incoming_sources',
+              'initial': 'source',
+              'states': <Object>[
+                <String, Object>{
+                  'id': 'source',
+                  'on_entry': <Object>[
+                    <String, Object>{
+                      'id': 'source_action',
+                      'uses': 'mcp.call',
+                      'with': <String, Object>{
+                        'endpoint': 'command',
+                        'tool': 'source.fetch',
+                        'arguments': <String, Object>{},
+                      },
+                    },
+                  ],
+                  'transitions': <Object>[
+                    <String, Object>{'trigger': 'succeeded', 'to': 'target'},
+                  ],
+                },
+                <String, Object>{
+                  'id': 'target',
+                  'on_entry': <Object>[
+                    <String, Object>{
+                      'id': 'target_action',
+                      'uses': 'mcp.call',
+                      'with': <String, Object>{
+                        'endpoint': 'command',
+                        'tool': 'target.apply',
+                        'arguments': <String, Object>{'ticket_id': ''},
+                      },
+                    },
+                  ],
+                },
+                <String, Object>{
+                  'id': 'unrelated',
+                  'on_entry': <Object>[
+                    <String, Object>{
+                      'id': 'unrelated_action',
+                      'uses': 'mcp.call',
+                      'with': <String, Object>{
+                        'endpoint': 'command',
+                        'tool': 'other.fetch',
+                        'arguments': <String, Object>{},
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          ),
+        ];
+
+      await tester.pumpWidget(
+        MaterialApp(home: AgentAwesomeShell(controller: controller)),
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+      await tester.pumpAndSettle();
+
+      await _tapStateMachineNode(tester, 'target');
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Incoming result / ticket_id'), findsOneWidget);
+      expect(find.text('Output from unrelated'), findsNothing);
+
+      await tester.tap(find.text('Incoming result / ticket_id'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Literal value'), findsOneWidget);
+      expect(find.text('Incoming result / ticket_id'), findsWidgets);
+      expect(find.text('Incoming result / data'), findsNothing);
+      expect(find.text('Incoming trigger'), findsNothing);
+      expect(find.text('Output from source'), findsNothing);
+      expect(find.text('Output from unrelated'), findsNothing);
+    },
+  );
+
+  testWidgets('inspector handles list-valued action inputs', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..automationDrafts = const <AutomationDraft>[
+        AutomationDraft(
+          id: 'draft_list_input',
+          kind: 'state_machine',
+          name: 'List Input',
+          status: 'draft',
+          body: <String, dynamic>{
+            'kind': 'state_machine',
+            'id': 'list_input',
+            'initial': 'assert_input',
+            'states': <Object>[
+              <String, Object>{
+                'id': 'assert_input',
+                'on_entry': <Object>[
+                  <String, Object>{
+                    'id': 'assert_input',
+                    'uses': 'data.assert',
+                    'with': <String, Object>{
+                      'checks': <Object>[
+                        <String, Object>{
+                          'path': 'workflow_input.base_ref',
+                          'mode': 'exists',
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    await _tapStateMachineNode(tester, 'assert_input');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Checks'), findsOneWidget);
+    expect(find.textContaining('workflow_input.base_ref'), findsOneWidget);
+  });
+
   testWidgets('aggregates repeated phase failure exits into one badge', (
     tester,
   ) async {
@@ -1502,6 +2014,14 @@ void main() {
         displayName: 'Personal Tools',
       ),
     ];
+    controller.availableMcpConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/mcp/memory/mcp.yaml',
+        kind: ConfigFileKind.mcp,
+        assigned: false,
+        displayName: 'Memory MCP',
+      ),
+    ];
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
@@ -1557,13 +2077,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('SERVERS'), findsWidgets);
-    expect(find.text('Personal Tools'), findsOneWidget);
+    expect(find.text('Memory MCP'), findsOneWidget);
     expect(find.text('CONFIGS'), findsWidgets);
     expect(find.byTooltip('Servers'), findsOneWidget);
     expect(find.byTooltip('Source'), findsOneWidget);
-    expect(find.byTooltip('Add tool config'), findsOneWidget);
-    expect(find.byTooltip('Duplicate tool config'), findsOneWidget);
-    expect(find.byTooltip('Delete tool config'), findsOneWidget);
+    expect(find.byTooltip('Add MCP config'), findsOneWidget);
+    expect(find.byTooltip('Duplicate MCP config'), findsOneWidget);
+    expect(find.byTooltip('Delete MCP config'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tools')));
     await tester.pump();
@@ -2871,15 +3391,86 @@ AutomationDraft _hierarchyEditDraft() {
   );
 }
 
+/// Creates a nested phase draft for focused hierarchy navigation tests.
+AutomationDraft _nestedPhaseFocusDraft() {
+  return const AutomationDraft(
+    id: 'draft_nested_focus',
+    kind: 'state_machine',
+    name: 'Nested Focus',
+    status: 'draft',
+    body: <String, dynamic>{
+      'kind': 'state_machine',
+      'id': 'nested_focus',
+      'initial': 'quality',
+      'authoring': <String, Object>{
+        'builder': <String, Object>{
+          'positions': <String, Object>{
+            'quality': <String, double>{'x': 96, 'y': 140},
+            'test': <String, double>{'x': 96, 'y': 140},
+            'review_phase': <String, double>{'x': 508, 'y': 140},
+            'review': <String, double>{'x': 96, 'y': 140},
+            'done': <String, double>{'x': 920, 'y': 140},
+          },
+        },
+      },
+      'states': <Object>[
+        <String, Object>{
+          'id': 'quality',
+          'initial': 'test',
+          'states': <Object>[
+            <String, Object>{'id': 'test'},
+            <String, Object>{
+              'id': 'review_phase',
+              'initial': 'review',
+              'states': <Object>[
+                <String, Object>{'id': 'review'},
+              ],
+            },
+          ],
+        },
+        <String, Object>{'id': 'done'},
+      ],
+    },
+  );
+}
+
+/// Creates a focused phase draft with an exit that leaves the current scope.
+AutomationDraft _focusedExitDraft() {
+  return const AutomationDraft(
+    id: 'draft_focused_exit',
+    kind: 'state_machine',
+    name: 'Focused Exit',
+    status: 'draft',
+    body: <String, dynamic>{
+      'kind': 'state_machine',
+      'id': 'focused_exit',
+      'initial': 'intake',
+      'states': <Object>[
+        <String, Object>{
+          'id': 'intake',
+          'initial': 'collect',
+          'states': <Object>[
+            <String, Object>{
+              'id': 'collect',
+              'transitions': <Object>[
+                <String, Object>{'trigger': 'succeeded', 'to': 'done'},
+              ],
+            },
+          ],
+        },
+        <String, Object>{'id': 'done'},
+      ],
+    },
+  );
+}
+
 /// Taps the card face for one state-machine node.
 Future<void> _tapStateMachineNode(WidgetTester tester, String stateId) async {
   final finder = find.byKey(ValueKey<String>('state-machine-node-$stateId'));
   await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
-  final textFinder = find
-      .descendant(of: finder, matching: find.text(stateId))
-      .first;
-  await tester.tap(textFinder);
+  final rect = tester.getRect(finder);
+  await tester.tapAt(rect.topLeft + const Offset(36, 110));
   await tester.pumpAndSettle();
 }
 

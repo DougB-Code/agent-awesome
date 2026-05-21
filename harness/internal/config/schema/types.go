@@ -17,6 +17,13 @@ const (
 	// DefaultToolFilename is the tool config filename under the config
 	// directory.
 	DefaultToolFilename = "tool.yaml"
+	// DefaultMCPFilename is the MCP server config filename under one MCP
+	// package directory.
+	DefaultMCPFilename = "mcp.yaml"
+	// DefaultToolConfigDirName is the package directory for installed tools.
+	DefaultToolConfigDirName = "tools"
+	// DefaultMCPConfigDirName is the package directory for installed MCP servers.
+	DefaultMCPConfigDirName = "mcp"
 
 	defaultLocalExecTimeout        = 10 * time.Second
 	defaultLocalExecMaxOutputBytes = 65536

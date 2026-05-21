@@ -24,8 +24,11 @@ func TestDefaultConfigPathsUseOSConfigDir(t *testing.T) {
 	if got, want := DefaultAgentPath(), filepath.Join(configHome, "agent-awesome", "agent.yaml"); got != want {
 		t.Fatalf("DefaultAgentPath() = %q, want %q", got, want)
 	}
-	if got, want := DefaultToolPath(), filepath.Join(configHome, "agent-awesome", "tool.yaml"); got != want {
+	if got, want := DefaultToolPath(), filepath.Join(configHome, "agent-awesome", "tools", "default", "tool.yaml"); got != want {
 		t.Fatalf("DefaultToolPath() = %q, want %q", got, want)
+	}
+	if got, want := DefaultMCPConfigDir(), filepath.Join(configHome, "agent-awesome", "mcp"); got != want {
+		t.Fatalf("DefaultMCPConfigDir() = %q, want %q", got, want)
 	}
 }
 
@@ -241,6 +244,9 @@ func TestLoadToolsUsesDefaultOSConfigPath(t *testing.T) {
 	if err := os.MkdirAll(DefaultConfigDir(), 0o700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
+	if err := os.MkdirAll(filepath.Dir(DefaultToolPath()), 0o700); err != nil {
+		t.Fatalf("MkdirAll(tool package) error = %v", err)
+	}
 	writeFile(t, DefaultToolPath(), `
 local-exec:
   enabled: false
@@ -252,6 +258,44 @@ local-exec:
 	}
 	if cfg.LocalExec.Enabled {
 		t.Fatalf("LocalExec.Enabled = true, want false")
+	}
+}
+
+func TestLoadToolsMergesMCPPackageConfigs(t *testing.T) {
+	root := t.TempDir()
+	toolPath := filepath.Join(root, "tools", "agent-awesome", "tool.yaml")
+	mcpPath := filepath.Join(root, "mcp", "memory", "mcp.yaml")
+	if err := os.MkdirAll(filepath.Dir(toolPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(tool package) error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(mcpPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(mcp package) error = %v", err)
+	}
+	writeFile(t, toolPath, `
+local-exec:
+  enabled: false
+`)
+	writeFile(t, mcpPath, `
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+`)
+
+	cfg, err := LoadTools(toolPath, true)
+	if err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+	if !cfg.MCP.Enabled {
+		t.Fatalf("MCP.Enabled = false, want true")
+	}
+	if got, want := len(cfg.MCP.Servers), 1; got != want {
+		t.Fatalf("len(MCP.Servers) = %d, want %d", got, want)
+	}
+	if got, want := cfg.MCP.Servers[0].Name, "memory"; got != want {
+		t.Fatalf("MCP server name = %q, want %q", got, want)
 	}
 }
 

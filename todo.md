@@ -2,25 +2,37 @@
 
 ## Priority 1
 
-- Prove app can run Codex CLI remotely. 
+- Run Codex CLI remotely on remote VM. 
+- Open PR and publish to protected GitHub repo. 
+- Enable remove coding via Slack.
+- Enable overnight coding via CRON job.
 
 ## Priority 2
 
-- Prove multi-user, multi-memory model. 
+- Migrate dedicated daemons/clis to reusable packages and integrate them into harness/workflow to elminiate all/most inter-process code and security concerns. 
+
+## Priority 3
+
+- Integrate/sync with Apple calendars through external plugin architecture.
+- Setup credential pattern to allow agents to login to website to take autonomous actions (D2l downloads).
+
+## Tooling
+
+- Add a `go get` style feature so AA can download tools from SCM platforms. Does Go have a dedicated support for GitHub, GitLab, Go.dev, etc? Is everything routed through Go.dev?
+
+## Priority 5
+
 - Run cleanup passes to eliminate excess logic and duplicate implementations.
 
-## Priority 3
-
-Would making MCP and CLI re-usable packages, instead of daemons, help improve security as everything would be in process. That would allow for one implementation and consistency across services. 
 
 
-## Priority 3
+## Roadmap
+
+- Add UI plugins backed by Starlark script processing to allow for user plugins and custom UIs. 
+
 
 - Add button to include new files in chat. 
 
-- Integrate/sync with Apple calendars through external plugin architecture.
-
-- Integrate Codex, Claude Code, Gemini, and Copilot CLIs as tools. Cloud login and credential management may require server deployments.
 
 - Add basic/advanced UI views. Users should be able to create additional, local or cloud memory stores with just a few mouse clicks. 
 

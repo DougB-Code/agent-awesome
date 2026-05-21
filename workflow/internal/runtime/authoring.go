@@ -29,12 +29,15 @@ var authoringIDPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
 // ActionType describes one action node the authoring UI can place in a draft.
 type ActionType struct {
-	Name        string         `json:"name"`
-	Label       string         `json:"label"`
-	Description string         `json:"description"`
-	Risk        string         `json:"risk"`
-	Available   bool           `json:"available"`
-	InputSchema map[string]any `json:"input_schema"`
+	Name            string         `json:"name"`
+	Label           string         `json:"label"`
+	Description     string         `json:"description"`
+	Risk            string         `json:"risk"`
+	Available       bool           `json:"available"`
+	InputSchema     map[string]any `json:"input_schema"`
+	OutputSchema    map[string]any `json:"output_schema,omitempty"`
+	InputContracts  []string       `json:"input_contracts,omitempty"`
+	OutputContracts []string       `json:"output_contracts,omitempty"`
 }
 
 // DraftRequest carries a workflow draft create or update payload.
@@ -613,39 +616,71 @@ func blankDefinitionBody(id string, kind string, name string, description string
 
 // actionTypeForName returns authoring metadata for one registered action.
 func actionTypeForName(name string) ActionType {
-	action := ActionType{Name: name, Label: name, Description: "Workflow action.", Risk: "read", Available: true, InputSchema: map[string]any{"type": "object"}}
+	action := ActionType{
+		Name:           name,
+		Label:          name,
+		Description:    "Workflow action.",
+		Risk:           "read",
+		Available:      true,
+		InputSchema:    map[string]any{"type": "object"},
+		OutputSchema:   map[string]any{"type": "object"},
+		InputContracts: []string{"aa.workflow.action_input.v1"},
+	}
 	switch name {
 	case "tool.call":
 		action.Label = "Run Tool"
 		action.Description = "Call a harness-exposed context or MCP-backed tool."
 		action.Risk = "tool"
 		action.InputSchema = map[string]any{"type": "object", "required": []any{"name"}, "properties": map[string]any{"name": map[string]any{"type": "string"}, "domain_id": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}}}
+		action.InputContracts = []string{"aa.external_call_request.v1"}
+		action.OutputContracts = []string{"aa.external_call_result.v1"}
 	case "mcp.call":
 		action.Label = "Call MCP Tool"
 		action.Description = "Call an installed MCP tool endpoint."
 		action.Risk = "tool"
 		action.InputSchema = map[string]any{"type": "object", "required": []any{"endpoint", "tool"}, "properties": map[string]any{"endpoint": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}}}
+		action.InputContracts = []string{"aa.external_call_request.v1"}
+		action.OutputContracts = []string{"aa.external_call_result.v1"}
 	case "data.assert":
 		action.Label = "Assert Data"
 		action.Description = "Gate workflow progression on deterministic input data checks."
 		action.Risk = "validation"
 		action.InputSchema = map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}, "mode": map[string]any{"type": "string"}, "value": map[string]any{}, "checks": map[string]any{"type": "array"}}}
+		action.OutputSchema = map[string]any{"type": "object", "properties": map[string]any{"passed": map[string]any{"type": "boolean"}, "checks": map[string]any{"type": "array"}}}
+		action.InputContracts = []string{"aa.validation_request.v1"}
+		action.OutputContracts = []string{"aa.validation_result.v1"}
 	case "workflow.run":
 		action.Label = "Run Workflow"
 		action.Description = "Start a nested workflow definition."
 		action.Risk = "workflow"
+		action.InputSchema = map[string]any{"type": "object", "required": []any{"workflow"}, "properties": map[string]any{"workflow": map[string]any{"type": "string"}, "input": map[string]any{"type": "object"}}}
+		action.OutputSchema = map[string]any{"type": "object", "properties": map[string]any{"run_id": map[string]any{"type": "string"}, "definition_id": map[string]any{"type": "string"}, "status": map[string]any{"type": "string"}}}
+		action.InputContracts = []string{"aa.workflow_run_request.v1"}
+		action.OutputContracts = []string{"aa.workflow_run_result.v1"}
 	case "workflow.signal":
 		action.Label = "Signal Workflow"
 		action.Description = "Emit a workflow signal."
 		action.Risk = "workflow"
+		action.InputSchema = map[string]any{"type": "object", "required": []any{"signal"}, "properties": map[string]any{"run_id": map[string]any{"type": "string"}, "signal": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}}}
+		action.OutputSchema = map[string]any{"type": "object", "properties": map[string]any{"run_id": map[string]any{"type": "string"}, "signal": map[string]any{"type": "string"}}}
+		action.InputContracts = []string{"aa.workflow_signal_request.v1"}
+		action.OutputContracts = []string{"aa.workflow_signal_result.v1"}
 	case "human.request":
 		action.Label = "Ask User"
 		action.Description = "Create a pending user item through the gateway-facing inbox."
 		action.Risk = "approval"
+		action.InputSchema = map[string]any{"type": "object", "required": []any{"prompt"}, "properties": map[string]any{"prompt": map[string]any{"type": "string"}, "payload": map[string]any{"type": "object"}}}
+		action.OutputSchema = map[string]any{"type": "object", "properties": map[string]any{"pending_id": map[string]any{"type": "string"}}}
+		action.InputContracts = []string{"aa.human_request.v1"}
+		action.OutputContracts = []string{"aa.human_request_result.v1"}
 	case "delay.until":
 		action.Label = "Wait"
 		action.Description = "Pause until a timestamp or duration elapses."
 		action.Risk = "time"
+		action.InputSchema = map[string]any{"type": "object", "properties": map[string]any{"until": map[string]any{"type": "string"}, "duration": map[string]any{"type": "string"}}}
+		action.OutputSchema = map[string]any{"type": "object", "properties": map[string]any{"waited": map[string]any{"type": "string"}}}
+		action.InputContracts = []string{"aa.wait_request.v1"}
+		action.OutputContracts = []string{"aa.wait_result.v1"}
 	}
 	return action
 }

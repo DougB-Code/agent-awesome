@@ -40,11 +40,7 @@ class ConfigFileStore {
     final entries = <ConfigFileEntry>[];
     if (!await _hasSymlinkPathComponent(directory.path) &&
         await directory.exists()) {
-      final files = await directory
-          .list()
-          .where((entity) => entity is File && _isConfigFile(entity.path))
-          .cast<File>()
-          .toList();
+      final files = await _configFilesInDirectory(directory, kind);
       files.sort((left, right) => left.path.compareTo(right.path));
       for (final file in files) {
         entries.add(
@@ -83,11 +79,15 @@ class ConfigFileStore {
   Future<String> create(ConfigFileKind kind) async {
     final directory = Directory(_directoryPath(kind));
     await directory.create(recursive: true);
-    final path = await _uniquePath(
-      directory.path,
-      '${_defaultPrefix(kind)}.yaml',
-    );
+    final path = _isPackageConfigKind(kind)
+        ? await _uniquePackageConfigPath(
+            directory.path,
+            _defaultPrefix(kind),
+            kind,
+          )
+        : await _uniquePath(directory.path, '${_defaultPrefix(kind)}.yaml');
     final file = await _validatedConfigFile(path);
+    await file.parent.create(recursive: true);
     await file.writeAsString('');
     return path;
   }
@@ -97,17 +97,31 @@ class ConfigFileStore {
     final source = await _validatedConfigFile(sourcePath, requireExists: true);
     final directory = Directory(_directoryPath(kind));
     await directory.create(recursive: true);
-    final sourceName = sourcePath.replaceAll('\\', '/').split('/').last;
-    final path = await _uniquePath(directory.path, _copyName(sourceName));
+    final path = _isCanonicalPackageConfigFile(source.path, kind)
+        ? await _duplicatePackageConfigPath(source.path, directory.path, kind)
+        : await _uniquePath(
+            directory.path,
+            _copyName(sourcePath.replaceAll('\\', '/').split('/').last),
+          );
     final target = await _validatedConfigFile(path);
+    if (_isCanonicalPackageConfigFile(target.path, kind)) {
+      await _copyPackageDirectory(source.parent, target.parent);
+      return target.path;
+    }
+    await target.parent.create(recursive: true);
     await target.writeAsString(await source.readAsString());
     return path;
   }
 
   /// Deletes an existing config file.
-  Future<void> delete(String path) async {
+  Future<void> delete(String path, {ConfigFileKind? kind}) async {
     final file = await _validatedConfigFile(path);
     if (!await file.exists()) {
+      return;
+    }
+    if (kind != null && _isCanonicalPackageConfigFile(file.path, kind)) {
+      final packageDir = file.parent;
+      await packageDir.delete(recursive: true);
       return;
     }
     await file.delete();
@@ -122,9 +136,14 @@ class ConfigFileStore {
     final file = await _validatedConfigFile(entry.path, requireExists: true);
     final directory = Directory(_directoryPath(entry.kind));
     await directory.create(recursive: true);
-    final extension = _extension(entry.path);
     final sanitized = _sanitizeFileName(trimmed);
-    final target = '${directory.path}/$sanitized$extension';
+    final sourceIsPackage = _isCanonicalPackageConfigFile(
+      file.path,
+      entry.kind,
+    );
+    final target = sourceIsPackage
+        ? '${directory.path}/$sanitized/${_packageConfigFilename(entry.kind)}'
+        : '${directory.path}/$sanitized${_extension(entry.path)}';
     if (target == entry.path) {
       return target;
     }
@@ -132,8 +151,32 @@ class ConfigFileStore {
       throw FileSystemException('Configuration name already exists', target);
     }
     final targetFile = await _validatedConfigFile(target);
+    if (sourceIsPackage) {
+      if (await targetFile.parent.exists()) {
+        throw FileSystemException(
+          'Configuration package already exists',
+          targetFile.parent.path,
+        );
+      }
+      await file.parent.rename(targetFile.parent.path);
+      return targetFile.path;
+    }
     await file.rename(targetFile.path);
     return target;
+  }
+
+  /// Reports whether a managed path is the canonical file inside one package.
+  bool _isCanonicalPackageConfigFile(String path, ConfigFileKind kind) {
+    if (!_isPackageConfigKind(kind)) {
+      return false;
+    }
+    final normalized = path.replaceAll('\\', '/');
+    final filename = normalized.split('/').last;
+    if (filename != _packageConfigFilename(kind)) {
+      return false;
+    }
+    final packageRoot = _normalizedAbsolutePath(File(path).parent.parent.path);
+    return packageRoot == _normalizedAbsolutePath(_directoryPath(kind));
   }
 
   String _directoryPath(ConfigFileKind kind) {
@@ -141,7 +184,8 @@ class ConfigFileStore {
     return switch (kind) {
       ConfigFileKind.model => '$root/models',
       ConfigFileKind.agent => '$root/agents',
-      ConfigFileKind.tool => '$root/tools',
+      ConfigFileKind.tool => _toolConfigRootPath(),
+      ConfigFileKind.mcp => _mcpConfigRootPath(),
     };
   }
 
@@ -150,6 +194,7 @@ class ConfigFileStore {
       ConfigFileKind.model => 'model',
       ConfigFileKind.agent => 'agent',
       ConfigFileKind.tool => 'tool',
+      ConfigFileKind.mcp => 'mcp',
     };
   }
 
@@ -157,6 +202,25 @@ class ConfigFileStore {
   String _configRootPath() {
     final trimmed = configDirectoryPath.trim();
     return trimmed.isEmpty ? agentAwesomeConfigDirectoryPath() : trimmed;
+  }
+
+  /// Returns the app OS config root that owns package config folders.
+  String _appConfigRootPath() {
+    final trimmed = configDirectoryPath.trim();
+    if (trimmed.isEmpty) {
+      return agentAwesomeAppConfigDirectoryPath();
+    }
+    return Directory(trimmed).parent.path;
+  }
+
+  /// Returns the tool package config directory for this store.
+  String _toolConfigRootPath() {
+    return '${_appConfigRootPath()}/$aaToolPackageDirectoryName';
+  }
+
+  /// Returns the MCP package config directory for this store.
+  String _mcpConfigRootPath() {
+    return '${_appConfigRootPath()}/$aaMcpPackageDirectoryName';
   }
 
   /// Returns a managed config file after validating its path and extension.
@@ -213,12 +277,12 @@ class ConfigFileStore {
   /// Reports whether any existing managed-path segment is a symbolic link.
   Future<bool> _hasSymlinkPathComponent(String path) async {
     final candidate = _normalizedAbsolutePath(path);
-    final root = _normalizedAbsolutePath(_configRootPath());
+    final root = _managedRootForPath(candidate);
+    if (root == null) {
+      return true;
+    }
     if (candidate == root) {
       return false;
-    }
-    if (!candidate.startsWith('$root/')) {
-      return true;
     }
     final relative = candidate.substring(root.length + 1);
     var current = root;
@@ -236,6 +300,21 @@ class ConfigFileStore {
       }
     }
     return false;
+  }
+
+  /// Returns the managed root that contains an absolute normalized path.
+  String? _managedRootForPath(String normalizedPath) {
+    final roots = <String>{
+      _normalizedAbsolutePath(_configRootPath()),
+      _normalizedAbsolutePath(_toolConfigRootPath()),
+      _normalizedAbsolutePath(_mcpConfigRootPath()),
+    }.toList()..sort((left, right) => right.length.compareTo(left.length));
+    for (final root in roots) {
+      if (normalizedPath == root || normalizedPath.startsWith('$root/')) {
+        return root;
+      }
+    }
+    return null;
   }
 }
 
@@ -274,7 +353,24 @@ Future<String> _displayName(String path, ConfigFileKind kind) async {
     ConfigFileKind.model => modelConfigDisplayName(content),
     ConfigFileKind.agent => _configScalar(content, 'name') ?? '',
     ConfigFileKind.tool => _configScalar(content, 'name') ?? '',
+    ConfigFileKind.mcp => _mcpConfigDisplayName(content),
   };
+}
+
+/// Returns a display label for a package-scoped MCP config.
+String _mcpConfigDisplayName(String content) {
+  final direct = _configScalar(content, 'name') ?? '';
+  if (direct.isNotEmpty) {
+    return direct;
+  }
+  final match = RegExp(
+    r'^\s*-\s*name\s*:\s*(.*?)\s*$',
+    multiLine: true,
+  ).firstMatch(content);
+  if (match == null) {
+    return '';
+  }
+  return _unquoteYamlScalar((match.group(1) ?? '').trim());
 }
 
 /// Returns a top-level JSON or YAML scalar value for display labels.
@@ -340,6 +436,102 @@ bool _isConfigFile(String path) {
   return lower.endsWith('.yaml') ||
       lower.endsWith('.yml') ||
       lower.endsWith('.json');
+}
+
+/// Returns the files managed directly by a config collection.
+Future<List<File>> _configFilesInDirectory(
+  Directory directory,
+  ConfigFileKind kind,
+) async {
+  final files = <File>[];
+  await for (final entity in directory.list()) {
+    if (entity is File && _isConfigFile(entity.path)) {
+      files.add(entity);
+      continue;
+    }
+    if (!_isPackageConfigKind(kind) || entity is! Directory) {
+      continue;
+    }
+    final packageFile = File('${entity.path}/${_packageConfigFilename(kind)}');
+    if (await packageFile.exists()) {
+      files.add(packageFile);
+    }
+  }
+  return files;
+}
+
+/// Reports whether config files for a kind live inside package folders.
+bool _isPackageConfigKind(ConfigFileKind kind) {
+  return kind == ConfigFileKind.tool || kind == ConfigFileKind.mcp;
+}
+
+/// Returns the canonical config filename for one package kind.
+String _packageConfigFilename(ConfigFileKind kind) {
+  return switch (kind) {
+    ConfigFileKind.tool => aaToolPackageConfigFilename,
+    ConfigFileKind.mcp => aaMcpPackageConfigFilename,
+    ConfigFileKind.model => 'model.yaml',
+    ConfigFileKind.agent => 'agent.yaml',
+  };
+}
+
+/// Returns a unique package config path using a package folder.
+Future<String> _uniquePackageConfigPath(
+  String directory,
+  String baseName,
+  ConfigFileKind kind,
+) async {
+  var packageId = _sanitizeFileName(baseName);
+  var candidate = '$directory/$packageId/${_packageConfigFilename(kind)}';
+  var index = 2;
+  while (await Directory('$directory/$packageId').exists()) {
+    packageId = '${_sanitizeFileName(baseName)}-$index';
+    candidate = '$directory/$packageId/${_packageConfigFilename(kind)}';
+    index++;
+  }
+  return candidate;
+}
+
+/// Returns the target package config path for duplicating a package.
+Future<String> _duplicatePackageConfigPath(
+  String sourcePath,
+  String directory,
+  ConfigFileKind kind,
+) async {
+  final packageId = File(
+    sourcePath,
+  ).parent.path.replaceAll('\\', '/').split('/').last;
+  return _uniquePackageConfigPath(directory, _copyName(packageId), kind);
+}
+
+/// Copies all package-owned files while rejecting symlink package contents.
+Future<void> _copyPackageDirectory(Directory source, Directory target) async {
+  if (await target.exists()) {
+    throw FileSystemException(
+      'Configuration package already exists',
+      target.path,
+    );
+  }
+  await target.create(recursive: true);
+  await for (final entity in source.list(recursive: true, followLinks: false)) {
+    final relative = entity.path.substring(source.path.length + 1);
+    final targetPath = '${target.path}/$relative';
+    final type = await FileSystemEntity.type(entity.path, followLinks: false);
+    if (type == FileSystemEntityType.link) {
+      throw FileSystemException(
+        'Configuration package cannot include symbolic links',
+        entity.path,
+      );
+    }
+    if (type == FileSystemEntityType.directory) {
+      await Directory(targetPath).create(recursive: true);
+      continue;
+    }
+    if (type == FileSystemEntityType.file) {
+      await File(targetPath).parent.create(recursive: true);
+      await File(entity.path).copy(targetPath);
+    }
+  }
 }
 
 String _copyName(String filename) {

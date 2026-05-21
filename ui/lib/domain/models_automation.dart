@@ -11,6 +11,9 @@ class AutomationActionType {
     required this.risk,
     required this.available,
     this.inputSchema = const <String, dynamic>{},
+    this.outputSchema = const <String, dynamic>{},
+    this.inputContracts = const <String>[],
+    this.outputContracts = const <String>[],
   });
 
   /// Registered workflow action name.
@@ -30,6 +33,15 @@ class AutomationActionType {
 
   /// JSON schema-like input descriptor.
   final Map<String, dynamic> inputSchema;
+
+  /// JSON schema-like output descriptor.
+  final Map<String, dynamic> outputSchema;
+
+  /// Generic input contract ids accepted by this action.
+  final List<String> inputContracts;
+
+  /// Generic output contract ids emitted by this action.
+  final List<String> outputContracts;
 }
 
 /// AutomationDefinition stores one installed workflow definition snapshot.
@@ -341,6 +353,9 @@ AutomationActionType parseAutomationActionType(dynamic value) {
     risk: _string(map['risk']),
     available: map['available'] == true,
     inputSchema: _map(map['input_schema']),
+    outputSchema: _map(map['output_schema']),
+    inputContracts: _stringList(map['input_contracts']),
+    outputContracts: _stringList(map['output_contracts']),
   );
 }
 

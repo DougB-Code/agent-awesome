@@ -16,8 +16,11 @@ Keeping those files separate preserves the boundary between provider selection, 
 |`agent.yaml`
 |Agent name, description, and instructions.
 
-|`tool.yaml`
-|Local execution and MCP tool configuration.
+|`tools/default/tool.yaml`
+|Default local execution tool package configuration.
+
+|`mcp/<package>/mcp.yaml`
+|Installed MCP server package configuration merged with the active tool package.
 
 |`tool.local.yaml`
 |Default local desktop tool profile.
@@ -62,6 +65,8 @@ When enabled, review prompts display the workspace and global approval policy fi
 
 == MCP Tools
 
-MCP servers are configured under `mcp.servers`.
+MCP servers can be configured under `mcp.servers` in the active tool package or
+as installed MCP packages in `mcp/<package>/mcp.yaml` beside the `tools`
+directory.
 The harness validates the configuration, creates MCP transports, and passes MCP toolsets into the assistant runtime.
 The assistant runtime owns MCP sessions, tool discovery, invocation, result conversion, and confirmation.

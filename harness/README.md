@@ -56,9 +56,10 @@ go mod tidy
 
 ## MCP tools
 
-MCP servers are configured in `tool.yaml`. The harness validates the YAML,
-creates the MCP transport, and passes MCP toolsets into the agent runtime; the runtime owns
-MCP sessions, discovery, invocation, result conversion, and confirmation.
+MCP servers are configured in the active tool package or installed beside it as
+`mcp/<package>/mcp.yaml`. The harness validates the YAML, creates the MCP
+transport, and passes MCP toolsets into the agent runtime; the runtime owns MCP
+sessions, discovery, invocation, result conversion, and confirmation.
 
 ```yaml
 mcp:
