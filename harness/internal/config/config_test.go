@@ -588,7 +588,7 @@ func TestWorkflowToolConfigExposesWorkflowMCP(t *testing.T) {
 		t.Fatalf("workflow MCP server not configured")
 	}
 	if server.Endpoint != "http://127.0.0.1:8092/mcp" {
-		t.Fatalf("workflow endpoint = %q, want local workflowd MCP", server.Endpoint)
+		t.Fatalf("workflow endpoint = %q, want local workflow MCP", server.Endpoint)
 	}
 	expectedTools := []string{
 		"workflow_list",

@@ -72,7 +72,7 @@ const List<String> graphBackedMcpReadOnlyToolNames = <String>[
   'traverse_task_relations',
 ];
 
-/// Workflow MCP tools exposed by workflowd.
+/// Workflow MCP tools exposed by the workflow service.
 const List<String> workflowMcpToolNames = <String>[
   'workflow_list',
   'workflow_describe',

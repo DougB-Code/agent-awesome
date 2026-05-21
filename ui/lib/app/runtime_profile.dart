@@ -24,26 +24,7 @@ extension HarnessRuntimeLaunch on HarnessRuntime {
 
   /// Command arguments passed to the built harness executable.
   List<String> get arguments {
-    return <String>[
-      'run',
-      '--model',
-      modelConfigPath,
-      '--agent',
-      agentConfigPath,
-      '--tool',
-      toolConfigPath,
-      if (contextApiBaseUrl.isNotEmpty) ...<String>[
-        '--context-api-addr',
-        _listenAddress(contextApiBaseUrl, _contextPort(contextApiBaseUrl)),
-      ],
-      '--',
-      'web',
-      '--port',
-      port.toString(),
-      'api',
-      '--webui_address',
-      webUiAddress,
-    ];
+    return _harnessBaseArguments(this);
   }
 
   /// Host and optional port passed to the assistant API for CORS headers.
@@ -57,6 +38,36 @@ extension HarnessRuntimeLaunch on HarnessRuntime {
     }
     return uri.host;
   }
+}
+
+/// Builds harness launch arguments for the complete active runtime profile.
+List<String> harnessArgumentsForProfile(RuntimeProfile profile) {
+  final arguments = _harnessBaseArguments(profile.harness);
+  if (!profile.workflow.enabled || !profile.workflow.hostedByHarness) {
+    return arguments;
+  }
+  return _insertBeforeRuntimeArgs(arguments, <String>[
+    '--workflow-api-addr',
+    _listenAddress(profile.workflow.apiBaseUrl, profile.workflow.port),
+    '--workflow-definitions',
+    profile.workflow.definitionsDir,
+    '--workflow-db',
+    profile.workflow.dbPath,
+    '--workflow-context-base-url',
+    profile.gateway.contextBaseUrl,
+    '--command-mcp-addr',
+    _listenAddress(_embeddedCommandMcpUrl(), _embeddedCommandPort),
+    '--command-data-dir',
+    defaultCommandDataDirectoryPath(),
+    '--command-parser-dir',
+    defaultCommandParserDirectoryPath(),
+    '--command-allow-workdir',
+    _commandAllowedWorkdir(profile.harness),
+    '--mcp-manager-addr',
+    _listenAddress(_embeddedMcpManagerUrl(), _embeddedMcpManagerPort),
+    '--mcp-servers-json',
+    jsonEncode(_embeddedMcpManagerServers(profile)),
+  ]);
 }
 
 /// GatewayRuntimeLaunch derives app launch details from gateway profile data.
@@ -84,7 +95,7 @@ extension GatewayRuntimeLaunch on GatewayRuntime {
   }
 }
 
-/// WorkflowRuntimeLaunch derives workflowd launch and MCP endpoint details.
+/// WorkflowRuntimeLaunch derives workflow launch and MCP endpoint details.
 extension WorkflowRuntimeLaunch on WorkflowRuntime {
   /// Workflow MCP endpoint exposed directly to the harness.
   String get mcpUrl {
@@ -93,9 +104,12 @@ extension WorkflowRuntimeLaunch on WorkflowRuntime {
   }
 }
 
-/// Builds workflowd launch arguments for the active runtime profile.
+/// Builds standalone workflow launch arguments for the active runtime profile.
 List<String> workflowArgumentsForProfile(RuntimeProfile profile) {
   final workflow = profile.workflow;
+  if (workflow.hostedByHarness) {
+    return <String>[];
+  }
   return <String>[
     '--addr',
     _listenAddress(workflow.apiBaseUrl, workflow.port),
@@ -116,6 +130,8 @@ List<String> gatewayArgumentsForProfile(RuntimeProfile profile) {
       '--workflow-base-url',
       profile.workflow.apiBaseUrl,
     ],
+    if (profile.workflow.enabled && profile.workflow.hostedByHarness)
+      '--harness-embedded-services',
     '--memory-domains-json',
     jsonEncode(_gatewayMemoryDomainJson(profile.memoryServers)),
     '--memory-policy-json',
@@ -125,6 +141,80 @@ List<String> gatewayArgumentsForProfile(RuntimeProfile profile) {
     '--memory-services-json',
     jsonEncode(_gatewayMemoryServiceJson(profile.memoryServers)),
   ];
+}
+
+/// Builds harness arguments that do not depend on other profile services.
+List<String> _harnessBaseArguments(HarnessRuntime harness) {
+  return <String>[
+    'run',
+    '--model',
+    harness.modelConfigPath,
+    '--agent',
+    harness.agentConfigPath,
+    '--tool',
+    harness.toolConfigPath,
+    if (harness.contextApiBaseUrl.isNotEmpty) ...<String>[
+      '--context-api-addr',
+      _listenAddress(
+        harness.contextApiBaseUrl,
+        _contextPort(harness.contextApiBaseUrl),
+      ),
+    ],
+    '--',
+    'web',
+    '--port',
+    harness.port.toString(),
+    'api',
+    '--webui_address',
+    harness.webUiAddress,
+  ];
+}
+
+/// Inserts harness flags before delegated runtime arguments.
+List<String> _insertBeforeRuntimeArgs(
+  List<String> arguments,
+  List<String> flags,
+) {
+  final boundary = arguments.indexOf('--');
+  if (boundary == -1) {
+    return <String>[...arguments, ...flags];
+  }
+  return <String>[
+    ...arguments.sublist(0, boundary),
+    ...flags,
+    ...arguments.sublist(boundary),
+  ];
+}
+
+/// Encodes embedded MCP manager endpoints owned by the harness process.
+List<Map<String, dynamic>> _embeddedMcpManagerServers(RuntimeProfile profile) {
+  final ids = <String>{'command'};
+  return <Map<String, dynamic>>[
+    <String, dynamic>{
+      'id': 'command',
+      'name': 'Command',
+      'endpoint': _embeddedCommandMcpUrl(),
+      'health_url': _embeddedCommandHealthUrl(),
+    },
+    for (final server in profile.memoryServers)
+      if (ids.add(server.id))
+        <String, dynamic>{
+          'id': server.id,
+          'name': server.label,
+          'endpoint': server.endpoint,
+          if (server.healthUrl.trim().isNotEmpty)
+            'health_url': server.healthUrl,
+        },
+  ];
+}
+
+/// Returns the command working-directory root implied by the harness package.
+String _commandAllowedWorkdir(HarnessRuntime harness) {
+  final workingDirectory = harness.workingDirectory.trim();
+  if (workingDirectory.isEmpty) {
+    return '.';
+  }
+  return Directory(workingDirectory).parent.path;
 }
 
 /// Encodes the active runtime profile as a gateway agent profile registry.
@@ -352,12 +442,13 @@ class RuntimeProfileLoader {
       'label': 'Agent Awesome Workflow',
       'api_base_url': _workflowApiBaseUrl(),
       'health_url': _healthUrl(_workflowApiBaseUrl()),
-      'working_directory': '${config.workspaceRoot}/workflow',
-      'package_path': './cmd/workflowd',
+      'hosted_by_harness': true,
+      'working_directory': '',
+      'package_path': '',
       'definitions_dir': defaultWorkflowDefinitionsDirectoryPath(),
       'db_path': defaultWorkflowDatabasePath(),
       'port': 8092,
-      'auto_start': managed,
+      'auto_start': false,
       'enabled': managed,
     };
   }
@@ -482,9 +573,19 @@ String defaultWorkflowDefinitionsDirectoryPath() {
   return '${agentAwesomeConfigDirectoryPath()}/workflows';
 }
 
-/// Returns the default SQLite database path for workflowd.
+/// Returns the default SQLite database path for local workflow state.
 String defaultWorkflowDatabasePath() {
   return '${agentAwesomeDataDirectoryPath()}/workflow/workflow.db';
+}
+
+/// Returns the default data directory for the harness-hosted command service.
+String defaultCommandDataDirectoryPath() {
+  return '${agentAwesomeDataDirectoryPath()}/command';
+}
+
+/// Returns the default parser catalog directory for command output parsers.
+String defaultCommandParserDirectoryPath() {
+  return '${agentAwesomeConfigDirectoryPath()}/command/parsers';
 }
 
 /// Returns the SQLite database path for one local memory domain.
@@ -522,6 +623,25 @@ String _healthUrl(String endpoint) {
 /// Returns the default local workflow API base URL.
 String _workflowApiBaseUrl() {
   return 'http://127.0.0.1:8092/api/workflows';
+}
+
+const int _embeddedCommandPort = 8093;
+const int _embeddedMcpManagerPort = 8094;
+
+/// Returns the harness-hosted command MCP endpoint.
+String _embeddedCommandMcpUrl() {
+  return 'http://127.0.0.1:$_embeddedCommandPort/mcp';
+}
+
+/// Returns the harness-hosted command health endpoint.
+String _embeddedCommandHealthUrl() {
+  final uri = Uri.parse(_embeddedCommandMcpUrl());
+  return uri.replace(path: '/healthz', query: null).toString();
+}
+
+/// Returns the harness-hosted MCP manager endpoint.
+String _embeddedMcpManagerUrl() {
+  return 'http://127.0.0.1:$_embeddedMcpManagerPort/mcp';
 }
 
 /// Returns the beta status URL for a gateway base endpoint.

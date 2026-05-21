@@ -510,7 +510,7 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 	memoryProxy.ServeHTTP(w, requestWithBody(r, "/mcp", body))
 }
 
-// workflowHandler proxies user-channel workflow requests to internal workflowd.
+// workflowHandler proxies user-channel workflow requests to the configured workflow service.
 func (s *Server) workflowHandler(w http.ResponseWriter, r *http.Request) {
 	s.workflowProxy.ServeHTTP(w, r)
 }

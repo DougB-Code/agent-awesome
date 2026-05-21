@@ -203,7 +203,7 @@ mcp:
         apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
         healthUrl: 'http://127.0.0.1:8092/healthz',
         workingDirectory: '/tmp/workflow',
-        packagePath: './cmd/workflowd',
+        packagePath: './cmd/workflow-service',
         definitionsDir: '/tmp/workflows',
         dbPath: '/tmp/workflow.db',
         port: 8092,

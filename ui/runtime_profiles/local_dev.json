@@ -40,12 +40,13 @@
     "label": "Local Dev Workflow",
     "api_base_url": "${WORKFLOW_API_BASE_URL}",
     "health_url": "${WORKFLOW_HEALTH_URL}",
-    "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/workflow",
-    "package_path": "./cmd/workflowd",
+    "hosted_by_harness": true,
+    "working_directory": "",
+    "package_path": "",
     "definitions_dir": "${WORKFLOW_DEFINITIONS_DIR}",
     "db_path": "${WORKFLOW_DB_PATH}",
     "port": ${WORKFLOW_API_PORT},
-    "auto_start": ${AUTO_START_LOCAL_SERVICES},
+    "auto_start": false,
     "enabled": true
   },
   "memory_domains": [

@@ -315,14 +315,14 @@ func TestAPIProxyWaitsForHarnessReadiness(t *testing.T) {
 // TestWorkflowProxyRoutesThroughGateway verifies user-channel workflow calls stay gateway-routed.
 func TestWorkflowProxyRoutesThroughGateway(t *testing.T) {
 	var upstreamPaths []string
-	workflowd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	workflowService := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamPaths = append(upstreamPaths, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[]}`))
 	}))
-	defer workflowd.Close()
+	defer workflowService.Close()
 	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
-		cfg.WorkflowBaseURL = workflowd.URL + "/api/workflows"
+		cfg.WorkflowBaseURL = workflowService.URL + "/api/workflows"
 	})
 
 	paths := []string{"/api/workflows/inbox", "/api/workflows/drafts", "/api/workflows/action-types"}

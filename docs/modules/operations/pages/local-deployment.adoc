@@ -2,7 +2,7 @@
 :description: Step-by-step local Agent Awesome deployment.
 
 This page starts Agent Awesome locally before any Cloudflare resources are changed.
-Use it to prove the memory service, harness, gateway, and UI can run on the workstation.
+Use it to prove the memory service, harness-hosted control services, gateway, and UI can run on the workstation.
 
 == Credential
 
@@ -33,6 +33,7 @@ go run ./cmd/agent-awesome models check \
 
 This is the normal desktop app path.
 The default UI runtime profile starts memory, the harness, and the gateway.
+The harness owns workflow, command, and MCP-manager listeners for the local profile.
 
 [source,sh]
 ----
@@ -56,6 +57,15 @@ The default profile uses:
 |Harness context API
 |`http://127.0.0.1:8081/api/context`
 
+|Workflow API
+|`http://127.0.0.1:8092/api/workflows`
+
+|Command MCP
+|`http://127.0.0.1:8093/mcp`
+
+|MCP manager
+|`http://127.0.0.1:8094/mcp`
+
 |Gateway API
 |`http://127.0.0.1:8070/api`
 |===
@@ -71,6 +81,9 @@ Verify the managed services from another terminal:
 ----
 curl -fsS http://127.0.0.1:8090/healthz
 curl -fsS http://127.0.0.1:8081/api/context/healthz
+curl -fsS http://127.0.0.1:8092/healthz
+curl -fsS http://127.0.0.1:8093/healthz
+curl -fsS http://127.0.0.1:8094/healthz
 curl -fsS http://127.0.0.1:8070/healthz
 curl -fsS http://127.0.0.1:8070/api/gateway/status
 ----
@@ -110,11 +123,25 @@ Terminal 2, harness:
 [source,sh]
 ----
 cd /home/doug/dev/agentawesome/agent
+APP_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-awesome/config"
+APP_DATA_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-awesome/data"
+mkdir -p "$APP_CONFIG_DIR/workflows" "$APP_CONFIG_DIR/command/parsers" "$APP_DATA_DIR/workflow" "$APP_DATA_DIR/command" build/local/logs
+MCP_SERVERS_JSON='[{"id":"command","endpoint":"http://127.0.0.1:8093/mcp","health_url":"http://127.0.0.1:8093/healthz"},{"id":"memory","endpoint":"http://127.0.0.1:8090/mcp","health_url":"http://127.0.0.1:8090/healthz"}]'
 ./build/package/bin/agent-awesome run \
   --model harness/model.yaml \
   --agent harness/agent.yaml \
   --tool harness/tool.local.yaml \
   --context-api-addr 127.0.0.1:8081 \
+  --workflow-api-addr 127.0.0.1:8092 \
+  --workflow-definitions "$APP_CONFIG_DIR/workflows" \
+  --workflow-db "$APP_DATA_DIR/workflow/workflow.db" \
+  --workflow-context-base-url http://127.0.0.1:8081/api/context \
+  --command-mcp-addr 127.0.0.1:8093 \
+  --command-data-dir "$APP_DATA_DIR/command" \
+  --command-parser-dir "$APP_CONFIG_DIR/command/parsers" \
+  --command-allow-workdir "$PWD" \
+  --mcp-manager-addr 127.0.0.1:8094 \
+  --mcp-servers-json "$MCP_SERVERS_JSON" \
   --log-file build/local/logs/harness.log \
   -- web --port 8080 api --webui_address 127.0.0.1:8080
 ----
@@ -128,6 +155,8 @@ cd /home/doug/dev/agentawesome/agent
   --addr 127.0.0.1:8070 \
   --harness-base-url http://127.0.0.1:8080/api \
   --context-base-url http://127.0.0.1:8081/api/context \
+  --workflow-base-url http://127.0.0.1:8092/api/workflows \
+  --harness-embedded-services \
   --memory-mcp-url http://127.0.0.1:8090/mcp \
   --app-name agent_awesome \
   --user-id doug
@@ -161,5 +190,5 @@ On Linux, check for leftover local listeners with:
 
 [source,sh]
 ----
-ss -ltnp '( sport = :8070 or sport = :8080 or sport = :8081 or sport = :8090 )'
+ss -ltnp '( sport = :8070 or sport = :8080 or sport = :8081 or sport = :8090 or sport = :8092 or sport = :8093 or sport = :8094 )'
 ----

@@ -1,4 +1,4 @@
-// This file drives the Codex CLI pilot workflow through local daemon boundaries.
+// This file drives the Codex CLI pilot workflow through harness-hosted service boundaries.
 package codexpilot
 
 import (
@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,58 +44,44 @@ printf '{"url":"https://example.test/pull/1"}'
 	runCmd(t, repo, "git", "remote", "add", "origin", remote)
 	worktree := filepath.Join(tempRoot, "build", "sourcecontrol", "worktrees", "feature-codex-pilot")
 
-	sourcecontrolAddr := freeAddr(t)
 	commandAddr := freeAddr(t)
 	mcpAddr := freeAddr(t)
 	workflowAddr := freeAddr(t)
-	sourcecontrolURL := "http://" + sourcecontrolAddr + "/mcp"
+	webAddr := freeAddr(t)
+	sourcecontrol := startSourceControlMCP(t)
+	defer sourcecontrol.Close()
+	sourcecontrolURL := sourcecontrol.URL + "/mcp"
 	commandURL := "http://" + commandAddr + "/mcp"
 	mcpURL := "http://" + mcpAddr + "/mcp"
 	workflowURL := "http://" + workflowAddr
-
-	sourcecontrolCmd := startDaemon(ctx, t, filepath.Join(root, "sourcecontrol"),
-		"go", "run", "./cmd/sourcecontrold",
-		"-addr", sourcecontrolAddr,
-		"-build-dir", filepath.Join(tempRoot, "build", "sourcecontrol"),
-	)
-	defer stopDaemon(sourcecontrolCmd)
-	waitHealth(t, "http://"+sourcecontrolAddr+"/healthz")
-
-	templatesJSON := commandTemplatesJSON(t, fakeCodex, fakeTest, fakeGH)
-	commandCmd := startDaemon(ctx, t, filepath.Join(root, "command"),
-		"go", "run", "./cmd/commandd",
-		"-addr", commandAddr,
-		"-data", filepath.Join(tempRoot, "command-data"),
-		"-allow-workdir", tempRoot,
-		"-require-approval=false",
-		"-allow-arbitrary=false",
-		"-templates-json", templatesJSON,
-	)
-	defer stopDaemon(commandCmd)
-	waitHealth(t, "http://"+commandAddr+"/healthz")
-
-	serversJSON := mcpServersJSON(t, sourcecontrolURL, commandURL)
-	mcpCmd := startDaemon(ctx, t, filepath.Join(root, "mcp"),
-		"go", "run", "./cmd/mcpd",
-		"-addr", mcpAddr,
-		"-servers-json", serversJSON,
-	)
-	defer stopDaemon(mcpCmd)
-	waitHealth(t, "http://"+mcpAddr+"/healthz")
 
 	definitionsDir := filepath.Join(tempRoot, "workflows")
 	if err := os.MkdirAll(definitionsDir, 0o700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 	writeWorkflowDefinition(t, filepath.Join(definitionsDir, "codex-pilot.yaml"), mcpURL)
-	workflowCmd := startDaemon(ctx, t, filepath.Join(root, "workflow"),
-		"go", "run", "./cmd/workflowd",
-		"-addr", workflowAddr,
-		"-definitions", definitionsDir,
-		"-db", filepath.Join(tempRoot, "workflow.db"),
-		"-request-timeout", "15s",
+
+	templatesJSON := commandTemplatesJSON(t, fakeCodex, fakeTest, fakeGH)
+	serversJSON := mcpServersJSON(t, sourcecontrolURL, commandURL)
+	harnessCmd := startHarness(ctx, t, filepath.Join(root, "harness"), tempRoot,
+		"--command-mcp-addr", commandAddr,
+		"--command-data-dir", filepath.Join(tempRoot, "command-data"),
+		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
+		"--command-allow-workdir", tempRoot,
+		"--command-require-approval=false",
+		"--command-allow-arbitrary=false",
+		"--command-templates-json", templatesJSON,
+		"--mcp-manager-addr", mcpAddr,
+		"--mcp-servers-json", serversJSON,
+		"--workflow-api-addr", workflowAddr,
+		"--workflow-definitions", definitionsDir,
+		"--workflow-db", filepath.Join(tempRoot, "workflow.db"),
+		"--session-db", filepath.Join(tempRoot, "sessions.db"),
+		"--", "web", "--port", portFromAddr(t, webAddr), "api", "--webui_address", webAddr,
 	)
-	defer stopDaemon(workflowCmd)
+	defer stopDaemon(harnessCmd)
+	waitHealth(t, "http://"+commandAddr+"/healthz")
+	waitHealth(t, "http://"+mcpAddr+"/healthz")
 	waitHealth(t, workflowURL+"/healthz")
 
 	runID := startWorkflow(t, workflowURL, map[string]any{
@@ -116,10 +103,10 @@ printf '{"url":"https://example.test/pull/1"}'
 	runCmd(t, "", "git", "--git-dir", remote, "rev-parse", "feature/codex-pilot")
 }
 
-// TestRealCodexCLICommandBoundarySmoke verifies commandd can launch the configured Codex binary.
+// TestRealCodexCLICommandBoundarySmoke verifies the harness command boundary can launch the configured Codex binary.
 func TestRealCodexCLICommandBoundarySmoke(t *testing.T) {
 	if os.Getenv("AGENTAWESOME_RUN_REAL_CODEX_SMOKE") != "1" {
-		t.Skip("set AGENTAWESOME_RUN_REAL_CODEX_SMOKE=1 to verify the real Codex executable through commandd")
+		t.Skip("set AGENTAWESOME_RUN_REAL_CODEX_SMOKE=1 to verify the real Codex executable through the harness command boundary")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -130,18 +117,21 @@ func TestRealCodexCLICommandBoundarySmoke(t *testing.T) {
 		codexExecutable = "codex"
 	}
 	commandAddr := freeAddr(t)
+	webAddr := freeAddr(t)
 	commandURL := "http://" + commandAddr + "/mcp"
 	templatesJSON := realCodexSmokeTemplatesJSON(t, codexExecutable)
-	commandCmd := startDaemon(ctx, t, filepath.Join(root, "command"),
-		"go", "run", "./cmd/commandd",
-		"-addr", commandAddr,
-		"-data", filepath.Join(tempRoot, "command-data"),
-		"-allow-workdir", tempRoot,
-		"-require-approval=false",
-		"-allow-arbitrary=false",
-		"-templates-json", templatesJSON,
+	harnessCmd := startHarness(ctx, t, filepath.Join(root, "harness"), tempRoot,
+		"--command-mcp-addr", commandAddr,
+		"--command-data-dir", filepath.Join(tempRoot, "command-data"),
+		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
+		"--command-allow-workdir", tempRoot,
+		"--command-require-approval=false",
+		"--command-allow-arbitrary=false",
+		"--command-templates-json", templatesJSON,
+		"--session-db", filepath.Join(tempRoot, "sessions.db"),
+		"--", "web", "--port", portFromAddr(t, webAddr), "api", "--webui_address", webAddr,
 	)
-	defer stopDaemon(commandCmd)
+	defer stopDaemon(harnessCmd)
 	waitHealth(t, "http://"+commandAddr+"/healthz")
 
 	status := callCommandExecute(t, commandURL, map[string]any{
@@ -158,7 +148,7 @@ func TestRealCodexCLICommandBoundarySmoke(t *testing.T) {
 	}
 }
 
-// commandTemplatesJSON returns commandd templates for fake external CLIs.
+// commandTemplatesJSON returns command templates for fake external CLIs.
 func commandTemplatesJSON(t *testing.T, fakeCodex string, fakeTest string, fakeGH string) string {
 	t.Helper()
 	templates := []map[string]any{
@@ -176,7 +166,7 @@ func commandTemplatesJSON(t *testing.T, fakeCodex string, fakeTest string, fakeG
 	return string(data)
 }
 
-// realCodexSmokeTemplatesJSON returns a commandd template for the configured Codex binary.
+// realCodexSmokeTemplatesJSON returns a command template for the configured Codex binary.
 func realCodexSmokeTemplatesJSON(t *testing.T, codexExecutable string) string {
 	t.Helper()
 	templates := []map[string]any{
@@ -208,7 +198,7 @@ func commandTemplate(id string, executable string, args []string) map[string]any
 	}
 }
 
-// mcpServersJSON returns mcpd server configuration for command and source-control daemons.
+// mcpServersJSON returns MCP manager configuration for command and source-control endpoints.
 func mcpServersJSON(t *testing.T, sourcecontrolURL string, commandURL string) string {
 	t.Helper()
 	servers := []map[string]any{
@@ -534,6 +524,294 @@ func initRepo(t *testing.T, root string) string {
 	return repo
 }
 
+// startHarness starts the harness with minimal model, agent, and tool configs.
+func startHarness(ctx context.Context, t *testing.T, dir string, tempRoot string, args ...string) *exec.Cmd {
+	t.Helper()
+	cliArgs := []string{
+		"run",
+		"--model", writeHarnessModelConfig(t, tempRoot),
+		"--agent", writeHarnessAgentConfig(t, tempRoot),
+		"--tool", writeHarnessToolConfig(t, tempRoot),
+		"--provider", "local-test",
+		"--model-id", "noop",
+	}
+	cliArgs = append(cliArgs, args...)
+	goArgs := append([]string{"run", "./cmd/agent-awesome"}, cliArgs...)
+	return startDaemon(ctx, t, dir, "go", goArgs...)
+}
+
+// writeHarnessModelConfig writes a loopback-only model config for harness startup.
+func writeHarnessModelConfig(t *testing.T, root string) string {
+	t.Helper()
+	path := filepath.Join(root, "harness-model.yaml")
+	body := `
+default: local-test:noop
+providers:
+  local-test:
+    adapter: openai
+    auth: optional
+    url: http://127.0.0.1:9/v1/chat/completions
+    models:
+      - id: noop
+        model: noop
+`
+	writeTextFile(t, path, body)
+	return path
+}
+
+// writeHarnessAgentConfig writes the minimal agent config required to boot web mode.
+func writeHarnessAgentConfig(t *testing.T, root string) string {
+	t.Helper()
+	path := filepath.Join(root, "harness-agent.yaml")
+	body := `
+name: codex_pilot_e2e
+description: Codex pilot integration harness.
+instruction: Keep the harness web runtime alive for embedded service tests.
+`
+	writeTextFile(t, path, body)
+	return path
+}
+
+// writeHarnessToolConfig writes an empty tool config for harness startup.
+func writeHarnessToolConfig(t *testing.T, root string) string {
+	t.Helper()
+	path := filepath.Join(root, "harness-tool.yaml")
+	body := `
+local-exec: {}
+mcp: {}
+memory: {}
+`
+	writeTextFile(t, path, body)
+	return path
+}
+
+// startSourceControlMCP serves the source-control tools needed by the pilot workflow.
+func startSourceControlMCP(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req sourceControlRPCRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeSourceControlRPCError(w, nil, -32700, "parse error", err.Error())
+			return
+		}
+		switch req.Method {
+		case "initialize":
+			writeSourceControlRPCResult(w, req.ID, map[string]any{
+				"protocolVersion": "2025-06-18",
+				"capabilities":    map[string]any{"tools": map[string]any{"listChanged": false}},
+				"serverInfo":      map[string]any{"name": "codex-pilot-source-control", "version": "test"},
+			})
+		case "tools/list":
+			writeSourceControlRPCResult(w, req.ID, map[string]any{"tools": sourceControlToolDefinitions()})
+		case "tools/call":
+			handleSourceControlToolCall(w, req)
+		default:
+			writeSourceControlRPCError(w, req.ID, -32601, "method not found", req.Method)
+		}
+	}))
+}
+
+// handleSourceControlToolCall decodes and dispatches one fake source-control tool.
+func handleSourceControlToolCall(w http.ResponseWriter, req sourceControlRPCRequest) {
+	var call sourceControlToolCall
+	if err := json.Unmarshal(req.Params, &call); err != nil {
+		writeSourceControlRPCError(w, req.ID, -32602, "invalid params", err.Error())
+		return
+	}
+	result, err := callSourceControlTool(call.Name, call.Arguments)
+	if err != nil {
+		writeSourceControlRPCResult(w, req.ID, sourceControlToolResult(map[string]string{"error": err.Error()}, true))
+		return
+	}
+	writeSourceControlRPCResult(w, req.ID, sourceControlToolResult(result, false))
+}
+
+// callSourceControlTool performs the Git side effects used by the workflow.
+func callSourceControlTool(name string, args map[string]any) (map[string]any, error) {
+	switch name {
+	case "sourcecontrol.prepare_worktree":
+		return sourceControlPrepareWorktree(args)
+	case "sourcecontrol.backup":
+		return map[string]any{"backup_id": "codex-pilot-e2e"}, nil
+	case "sourcecontrol.commit":
+		return sourceControlCommit(args)
+	case "sourcecontrol.push":
+		return sourceControlPush(args)
+	default:
+		return nil, fmt.Errorf("unsupported source-control tool %q", name)
+	}
+}
+
+// sourceControlPrepareWorktree creates a branch worktree for the test repository.
+func sourceControlPrepareWorktree(args map[string]any) (map[string]any, error) {
+	repo, err := requiredStringArg(args, "repository_path")
+	if err != nil {
+		return nil, err
+	}
+	worktree, err := requiredStringArg(args, "worktree_path")
+	if err != nil {
+		return nil, err
+	}
+	branch, err := requiredStringArg(args, "branch")
+	if err != nil {
+		return nil, err
+	}
+	baseRef, err := requiredStringArg(args, "base_ref")
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Dir(worktree), 0o700); err != nil {
+		return nil, err
+	}
+	if _, err := runSourceControlCommand(repo, "git", "worktree", "add", "-B", branch, worktree, baseRef); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"repository_path": repo,
+		"worktree_path":   worktree,
+		"branch":          branch,
+		"base_ref":        baseRef,
+	}, nil
+}
+
+// sourceControlCommit commits workflow-produced changes in the worktree.
+func sourceControlCommit(args map[string]any) (map[string]any, error) {
+	worktree, err := requiredStringArg(args, "worktree_path")
+	if err != nil {
+		return nil, err
+	}
+	message, err := requiredStringArg(args, "message")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := runSourceControlCommand(worktree, "git", "add", "-A"); err != nil {
+		return nil, err
+	}
+	if _, err := runSourceControlCommand(worktree, "git", "commit", "-m", message); err != nil {
+		return nil, err
+	}
+	commit, err := runSourceControlCommand(worktree, "git", "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"commit": strings.TrimSpace(commit)}, nil
+}
+
+// sourceControlPush pushes the current worktree HEAD to the requested branch.
+func sourceControlPush(args map[string]any) (map[string]any, error) {
+	worktree, err := requiredStringArg(args, "worktree_path")
+	if err != nil {
+		return nil, err
+	}
+	remote, err := requiredStringArg(args, "remote")
+	if err != nil {
+		return nil, err
+	}
+	branch, err := requiredStringArg(args, "branch")
+	if err != nil {
+		return nil, err
+	}
+	if _, err := runSourceControlCommand(worktree, "git", "push", remote, "HEAD:"+branch); err != nil {
+		return nil, err
+	}
+	return map[string]any{"remote": remote, "branch": branch}, nil
+}
+
+// requiredStringArg returns one required string argument from a tool call.
+func requiredStringArg(args map[string]any, name string) (string, error) {
+	value, _ := args[name].(string)
+	if strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("%s is required", name)
+	}
+	return strings.TrimSpace(value), nil
+}
+
+// runSourceControlCommand executes one Git command for the fake source-control server.
+func runSourceControlCommand(dir string, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
+// sourceControlToolDefinitions lists the tools exposed by the fake server.
+func sourceControlToolDefinitions() []map[string]any {
+	names := []string{
+		"sourcecontrol.prepare_worktree",
+		"sourcecontrol.backup",
+		"sourcecontrol.commit",
+		"sourcecontrol.push",
+	}
+	tools := make([]map[string]any, 0, len(names))
+	for _, name := range names {
+		tools = append(tools, map[string]any{
+			"name":        name,
+			"description": name,
+			"inputSchema": map[string]any{"type": "object"},
+		})
+	}
+	return tools
+}
+
+// sourceControlToolResult wraps structured MCP content.
+func sourceControlToolResult(content any, isError bool) map[string]any {
+	data, _ := json.Marshal(content)
+	return map[string]any{
+		"content":           []map[string]string{{"type": "text", "text": string(data)}},
+		"structuredContent": content,
+		"isError":           isError,
+	}
+}
+
+// writeSourceControlRPCResult writes a JSON-RPC result response.
+func writeSourceControlRPCResult(w http.ResponseWriter, id json.RawMessage, result any) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      json.RawMessage(id),
+		"result":  result,
+	})
+}
+
+// writeSourceControlRPCError writes a JSON-RPC error response.
+func writeSourceControlRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string, data any) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      json.RawMessage(id),
+		"error": map[string]any{
+			"code":    code,
+			"message": message,
+			"data":    data,
+		},
+	})
+}
+
+// writeJSON writes one JSON test response.
+func writeJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
+}
+
+// sourceControlRPCRequest stores one JSON-RPC request for the fake server.
+type sourceControlRPCRequest struct {
+	ID     json.RawMessage `json:"id"`
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params"`
+}
+
+// sourceControlToolCall stores one MCP tools/call request.
+type sourceControlToolCall struct {
+	Name      string         `json:"name"`
+	Arguments map[string]any `json:"arguments"`
+}
+
 // startWorkflow posts one workflow run request and returns the run id.
 func startWorkflow(t *testing.T, baseURL string, payload map[string]any) string {
 	t.Helper()
@@ -601,7 +879,7 @@ func postJSON(t *testing.T, url string, payload any, target any) {
 	}
 }
 
-// callCommandExecute invokes command.execute over commandd's MCP transport.
+// callCommandExecute invokes command.execute over the command boundary MCP transport.
 func callCommandExecute(t *testing.T, commandURL string, arguments map[string]any) map[string]any {
 	t.Helper()
 	var decoded map[string]any
@@ -695,6 +973,24 @@ func freeAddr(t *testing.T) string {
 		t.Fatalf("Close() error = %v", err)
 	}
 	return addr
+}
+
+// portFromAddr returns the TCP port component of a host:port address.
+func portFromAddr(t *testing.T, address string) string {
+	t.Helper()
+	_, port, err := net.SplitHostPort(address)
+	if err != nil {
+		t.Fatalf("SplitHostPort(%q) error = %v", address, err)
+	}
+	return port
+}
+
+// writeTextFile writes a private text file.
+func writeTextFile(t *testing.T, path string, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
 }
 
 // repoRoot resolves the repository root from the e2e module.

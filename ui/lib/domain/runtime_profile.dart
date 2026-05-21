@@ -16,6 +16,7 @@ class RuntimeProfile {
       label: 'Workflow',
       apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
       healthUrl: 'http://127.0.0.1:8092/healthz',
+      hostedByHarness: false,
       workingDirectory: '',
       packagePath: '',
       definitionsDir: '',
@@ -350,6 +351,7 @@ class WorkflowRuntime {
     required this.label,
     required this.apiBaseUrl,
     required this.healthUrl,
+    this.hostedByHarness = false,
     required this.workingDirectory,
     required this.packagePath,
     required this.definitionsDir,
@@ -371,10 +373,13 @@ class WorkflowRuntime {
   /// Workflow health URL used before and after launching.
   final String healthUrl;
 
-  /// Directory where the Go workflow package is built and run.
+  /// Whether the harness process owns this workflow listener.
+  final bool hostedByHarness;
+
+  /// Working directory for an externally launched workflow service.
   final String workingDirectory;
 
-  /// Go package path for workflowd.
+  /// Package or command path for an externally launched workflow service.
   final String packagePath;
 
   /// Directory containing user-authored workflow YAML files.
@@ -386,7 +391,7 @@ class WorkflowRuntime {
   /// Workflow service listen port.
   final int port;
 
-  /// Whether the UI should start workflowd.
+  /// Whether the UI should start an external workflow service process.
   final bool autoStart;
 
   /// Whether this profile exposes workflow orchestration.
@@ -399,6 +404,7 @@ class WorkflowRuntime {
       'label': label,
       'api_base_url': apiBaseUrl,
       'health_url': healthUrl,
+      'hosted_by_harness': hostedByHarness,
       'working_directory': workingDirectory,
       'package_path': packagePath,
       'definitions_dir': definitionsDir,
@@ -416,6 +422,7 @@ class WorkflowRuntime {
       label: _requiredString(json, 'label'),
       apiBaseUrl: _requiredString(json, 'api_base_url'),
       healthUrl: _requiredString(json, 'health_url'),
+      hostedByHarness: _optionalBool(json['hosted_by_harness']),
       workingDirectory: _optionalString(json['working_directory']),
       packagePath: _optionalString(json['package_path']),
       definitionsDir: _optionalString(json['definitions_dir']),
@@ -783,7 +790,15 @@ void _validateWorkflowRuntime(WorkflowRuntime workflow) {
       'Enabled workflow runtime requires api_base_url and health_url',
     );
   }
-  if (workflow.autoStart &&
+  if (workflow.hostedByHarness &&
+      (workflow.definitionsDir.trim().isEmpty ||
+          workflow.dbPath.trim().isEmpty)) {
+    throw const FormatException(
+      'Harness-hosted workflow runtime requires definitions_dir and db_path',
+    );
+  }
+  if (!workflow.hostedByHarness &&
+      workflow.autoStart &&
       (workflow.workingDirectory.trim().isEmpty ||
           workflow.packagePath.trim().isEmpty ||
           workflow.definitionsDir.trim().isEmpty ||
@@ -926,4 +941,22 @@ bool _requiredBool(Map<String, dynamic> json, String field) {
     return false;
   }
   throw FormatException('Runtime profile field "$field" must be a boolean');
+}
+
+/// Converts an optional profile field to a boolean with a false default.
+bool _optionalBool(dynamic value) {
+  if (value == null) {
+    return false;
+  }
+  if (value is bool) {
+    return value;
+  }
+  final text = _optionalString(value).toLowerCase();
+  if (text == 'true') {
+    return true;
+  }
+  if (text == 'false') {
+    return false;
+  }
+  throw const FormatException('Runtime profile optional boolean is invalid');
 }

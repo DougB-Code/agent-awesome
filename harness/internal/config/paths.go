@@ -40,3 +40,28 @@ func DefaultToolConfigDir() string {
 func DefaultMCPConfigDir() string {
 	return filepath.Join(DefaultConfigDir(), schema.DefaultMCPConfigDirName)
 }
+
+// DefaultDataDir returns the user data directory for Agent Awesome.
+func DefaultDataDir() string {
+	return filepath.Join(DefaultConfigDir(), "data")
+}
+
+// DefaultWorkflowDefinitionsDir returns the editable workflow definition path.
+func DefaultWorkflowDefinitionsDir() string {
+	return filepath.Join(DefaultConfigDir(), "workflows")
+}
+
+// DefaultWorkflowDatabasePath returns the embedded workflow SQLite path.
+func DefaultWorkflowDatabasePath() string {
+	return filepath.Join(DefaultDataDir(), "workflow", "workflow.db")
+}
+
+// DefaultCommandDataDir returns the embedded command service data path.
+func DefaultCommandDataDir() string {
+	return filepath.Join(DefaultDataDir(), "command")
+}
+
+// DefaultCommandParserDir returns the editable command parser catalog path.
+func DefaultCommandParserDir() string {
+	return filepath.Join(DefaultConfigDir(), "command", "parsers")
+}

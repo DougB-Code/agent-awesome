@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"agentawesome/internal/app"
 )
@@ -26,6 +27,26 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--context-api-addr", "127.0.0.1:8081",
 		"--context-api-token", "context-secret",
 		"--session-db", "/tmp/agent-sessions.db",
+		"--workflow-api-addr", "127.0.0.1:8092",
+		"--workflow-definitions", "/tmp/workflows",
+		"--workflow-db", "/tmp/workflow.db",
+		"--workflow-context-base-url", "http://127.0.0.1:8081/api/context",
+		"--command-mcp-addr", "127.0.0.1:8093",
+		"--command-data-dir", "/tmp/command-data",
+		"--command-allow-workdir", "/work/a",
+		"--command-allow-workdir", "/work/b",
+		"--command-allow-env", "PATH",
+		"--command-allow-env", "HOME",
+		"--command-templates-json", `[{"id":"status","executable":"git","args":["status"]}]`,
+		"--command-parser-dir", "/tmp/parsers",
+		"--command-timeout", "7s",
+		"--command-max-output-bytes", "2048",
+		"--command-approval-ttl", "9s",
+		"--command-require-approval=false",
+		"--command-allow-arbitrary=false",
+		"--mcp-manager-addr", "127.0.0.1:8094",
+		"--mcp-servers-json", `[{"id":"tools","endpoint":"http://127.0.0.1:9999/mcp"}]`,
+		"--mcp-request-timeout", "11s",
 		"console",
 		"--input-file", "prompt.txt",
 	})
@@ -62,6 +83,60 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	}
 	if got, want := captured.SessionDatabase, "/tmp/agent-sessions.db"; got != want {
 		t.Fatalf("SessionDatabase = %q, want %q", got, want)
+	}
+	if got, want := captured.WorkflowAPIAddr, "127.0.0.1:8092"; got != want {
+		t.Fatalf("WorkflowAPIAddr = %q, want %q", got, want)
+	}
+	if got, want := captured.WorkflowDefinitionsDir, "/tmp/workflows"; got != want {
+		t.Fatalf("WorkflowDefinitionsDir = %q, want %q", got, want)
+	}
+	if got, want := captured.WorkflowDatabasePath, "/tmp/workflow.db"; got != want {
+		t.Fatalf("WorkflowDatabasePath = %q, want %q", got, want)
+	}
+	if got, want := captured.WorkflowContextBaseURL, "http://127.0.0.1:8081/api/context"; got != want {
+		t.Fatalf("WorkflowContextBaseURL = %q, want %q", got, want)
+	}
+	if got, want := captured.CommandMCPAddr, "127.0.0.1:8093"; got != want {
+		t.Fatalf("CommandMCPAddr = %q, want %q", got, want)
+	}
+	if got, want := captured.CommandDataDir, "/tmp/command-data"; got != want {
+		t.Fatalf("CommandDataDir = %q, want %q", got, want)
+	}
+	if want := []string{"/work/a", "/work/b"}; !reflect.DeepEqual(captured.CommandAllowedWorkdirs, want) {
+		t.Fatalf("CommandAllowedWorkdirs = %#v, want %#v", captured.CommandAllowedWorkdirs, want)
+	}
+	if want := []string{"PATH", "HOME"}; !reflect.DeepEqual(captured.CommandAllowedEnv, want) {
+		t.Fatalf("CommandAllowedEnv = %#v, want %#v", captured.CommandAllowedEnv, want)
+	}
+	if got, want := captured.CommandTemplatesJSON, `[{"id":"status","executable":"git","args":["status"]}]`; got != want {
+		t.Fatalf("CommandTemplatesJSON = %q, want %q", got, want)
+	}
+	if got, want := captured.CommandParserDir, "/tmp/parsers"; got != want {
+		t.Fatalf("CommandParserDir = %q, want %q", got, want)
+	}
+	if got, want := captured.CommandDefaultTimeout, 7*time.Second; got != want {
+		t.Fatalf("CommandDefaultTimeout = %s, want %s", got, want)
+	}
+	if got, want := captured.CommandMaxOutputBytes, int64(2048); got != want {
+		t.Fatalf("CommandMaxOutputBytes = %d, want %d", got, want)
+	}
+	if got, want := captured.CommandApprovalTTL, 9*time.Second; got != want {
+		t.Fatalf("CommandApprovalTTL = %s, want %s", got, want)
+	}
+	if captured.CommandRequireApproval {
+		t.Fatalf("CommandRequireApproval = true, want false")
+	}
+	if captured.CommandAllowArbitrary {
+		t.Fatalf("CommandAllowArbitrary = true, want false")
+	}
+	if got, want := captured.MCPManagerAddr, "127.0.0.1:8094"; got != want {
+		t.Fatalf("MCPManagerAddr = %q, want %q", got, want)
+	}
+	if got, want := captured.MCPServersJSON, `[{"id":"tools","endpoint":"http://127.0.0.1:9999/mcp"}]`; got != want {
+		t.Fatalf("MCPServersJSON = %q, want %q", got, want)
+	}
+	if got, want := captured.MCPRequestTimeout, 11*time.Second; got != want {
+		t.Fatalf("MCPRequestTimeout = %s, want %s", got, want)
 	}
 	if want := []string{"console", "--input-file", "prompt.txt"}; !reflect.DeepEqual(captured.Args, want) {
 		t.Fatalf("args = %#v, want %#v", captured.Args, want)

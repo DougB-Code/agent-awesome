@@ -1,0 +1,11 @@
+# This file configures Slack ingress tools for the Family memory profile.
+local-exec:
+  enabled: false
+  allow-persistent-approvals: false
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8091/mcp
+memory: {}

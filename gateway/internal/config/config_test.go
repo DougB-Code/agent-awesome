@@ -1,7 +1,10 @@
 // This file tests gateway configuration parsing and safety validation.
 package config
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 // TestFromFlagsDerivesDefaultHealthURLs verifies local dependency health defaults.
 func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
@@ -41,6 +44,97 @@ func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
 	}
 	if cfg.GatewayBaseURL != "http://127.0.0.1:8070/api" {
 		t.Fatalf("gateway base URL = %q", cfg.GatewayBaseURL)
+	}
+}
+
+// TestFromFlagsConfiguresHarnessEmbeddedServices verifies gateway launcher mode.
+func TestFromFlagsConfiguresHarnessEmbeddedServices(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	cfg, err := FromFlags([]string{
+		"--harness-embedded-services",
+		"--harness-auto-start",
+		"--harness-command", "/usr/local/bin/agent-awesome",
+		"--harness-arg", "run",
+		"--harness-arg", "--model",
+		"--harness-arg", "model.yaml",
+		"--harness-arg", "--",
+		"--harness-arg", "web",
+		"--harness-arg", "--port",
+		"--harness-arg", "8080",
+		"--context-base-url", "http://127.0.0.1:8081/api/context",
+		"--workflow-base-url", "http://127.0.0.1:8092/api/workflows",
+	})
+	if err != nil {
+		t.Fatalf("FromFlags() error = %v", err)
+	}
+	wantOrder := []string{
+		"run",
+		"--model",
+		"model.yaml",
+		"--context-api-addr",
+		"127.0.0.1:8081",
+		"--workflow-api-addr",
+		"127.0.0.1:8092",
+		"--workflow-context-base-url",
+		"http://127.0.0.1:8081/api/context",
+		"--command-mcp-addr",
+		"127.0.0.1:8093",
+		"--mcp-manager-addr",
+		"127.0.0.1:8094",
+		"--mcp-servers-json",
+		"--",
+		"web",
+		"--port",
+		"8080",
+	}
+	if !containsAllInOrder(cfg.HarnessService.Arguments, wantOrder) {
+		t.Fatalf("harness args = %#v, want ordered values %#v", cfg.HarnessService.Arguments, wantOrder)
+	}
+	serversJSON := flagValue(cfg.HarnessService.Arguments, "--mcp-servers-json")
+	var servers []map[string]string
+	if err := json.Unmarshal([]byte(serversJSON), &servers); err != nil {
+		t.Fatalf("decode mcp servers = %v", err)
+	}
+	if len(servers) != 2 || servers[0]["id"] != "command" || servers[0]["endpoint"] != "http://127.0.0.1:8093/mcp" {
+		t.Fatalf("mcp servers = %#v, want command first", servers)
+	}
+	if servers[1]["id"] != "memory" || servers[1]["endpoint"] != "http://127.0.0.1:8090/mcp" {
+		t.Fatalf("mcp servers = %#v, want memory second", servers)
+	}
+	if !cfg.HarnessEmbeddedServices {
+		t.Fatalf("HarnessEmbeddedServices = false, want true")
+	}
+	if cfg.StatusView()["harness_embedded_services"] != true {
+		t.Fatalf("status view omitted embedded services: %#v", cfg.StatusView())
+	}
+}
+
+// TestFromFlagsRejectsDuplicateControlServiceLaunchers avoids competing daemons.
+func TestFromFlagsRejectsDuplicateControlServiceLaunchers(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--harness-embedded-services",
+		"--workflow-auto-start",
+		"--workflow-command",
+		"/usr/local/bin/workflow-service",
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want duplicate launcher validation")
+	}
+}
+
+// TestFromFlagsRejectsRemoteHarnessEmbeddedServiceURLs keeps inner services local.
+func TestFromFlagsRejectsRemoteHarnessEmbeddedServiceURLs(t *testing.T) {
+	clearGatewayAuthEnv(t)
+	_, err := FromFlags([]string{
+		"--harness-embedded-services",
+		"--harness-auto-start",
+		"--harness-command", "/usr/local/bin/agent-awesome",
+		"--harness-arg", "run",
+		"--workflow-base-url", "https://agent-awesome.com/api/workflows",
+	})
+	if err == nil {
+		t.Fatalf("FromFlags() error = nil, want loopback validation")
 	}
 }
 
@@ -370,6 +464,27 @@ func TestContextAPITokenCanBeConfigured(t *testing.T) {
 	}
 }
 
+// containsAllInOrder reports whether every expected value appears in order.
+func containsAllInOrder(values []string, expected []string) bool {
+	index := 0
+	for _, value := range values {
+		if index < len(expected) && value == expected[index] {
+			index++
+		}
+	}
+	return index == len(expected)
+}
+
+// flagValue returns the next argument after flag.
+func flagValue(values []string, flag string) string {
+	for index, value := range values {
+		if value == flag && index+1 < len(values) {
+			return values[index+1]
+		}
+	}
+	return ""
+}
+
 // clearGatewayAuthEnv removes ambient auth settings from validation tests.
 func clearGatewayAuthEnv(t *testing.T) {
 	t.Helper()
@@ -378,12 +493,23 @@ func clearGatewayAuthEnv(t *testing.T) {
 	t.Setenv("AGENTAWESOME_MEMORY_DOMAINS_JSON", "")
 	t.Setenv("AGENTAWESOME_MEMORY_POLICY_JSON", "")
 	t.Setenv("AGENTAWESOME_MEMORY_SERVICES_JSON", "")
+	t.Setenv("AGENTAWESOME_HARNESS_HEALTH_URL", "")
+	t.Setenv("AGENTAWESOME_HARNESS_COMMAND", "")
+	t.Setenv("AGENTAWESOME_HARNESS_ARGS", "")
+	t.Setenv("AGENTAWESOME_HARNESS_WORKDIR", "")
+	t.Setenv("AGENTAWESOME_HARNESS_AUTO_START", "")
 	t.Setenv("AGENTAWESOME_WORKFLOW_BASE_URL", "")
 	t.Setenv("AGENTAWESOME_WORKFLOW_HEALTH_URL", "")
 	t.Setenv("AGENTAWESOME_WORKFLOW_COMMAND", "")
 	t.Setenv("AGENTAWESOME_WORKFLOW_ARGS", "")
 	t.Setenv("AGENTAWESOME_WORKFLOW_WORKDIR", "")
 	t.Setenv("AGENTAWESOME_WORKFLOW_AUTO_START", "")
+	t.Setenv("AGENTAWESOME_COMMAND_HEALTH_URL", "")
+	t.Setenv("AGENTAWESOME_COMMAND_COMMAND", "")
+	t.Setenv("AGENTAWESOME_COMMAND_ARGS", "")
+	t.Setenv("AGENTAWESOME_COMMAND_WORKDIR", "")
+	t.Setenv("AGENTAWESOME_COMMAND_AUTO_START", "")
+	t.Setenv("AGENTAWESOME_HARNESS_EMBEDDED_SERVICES", "")
 	t.Setenv("AGENTAWESOME_AGENT_PROFILES_JSON", "")
 	t.Setenv("AGENTAWESOME_ALLOWED_ORIGIN", "")
 	t.Setenv("AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY", "true")

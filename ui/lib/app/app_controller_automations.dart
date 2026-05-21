@@ -52,7 +52,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationTemplates.isEmpty ? null : automationTemplates.first;
   }
 
-  /// Refreshes all Automations data from workflowd through the gateway.
+  /// Refreshes all Automations data from the workflow service through the gateway.
   Future<void> refreshAutomationsFromUi() async {
     if (automationsBusy) {
       return;

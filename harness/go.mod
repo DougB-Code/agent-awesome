@@ -1,6 +1,6 @@
 module agentawesome
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/glebarez/sqlite v1.8.0
@@ -10,9 +10,11 @@ require (
 	github.com/knadh/koanf/v2 v2.3.4
 	github.com/modelcontextprotocol/go-sdk v1.4.1
 	github.com/openai/openai-go v1.12.0
+	github.com/qmuntal/stateless v1.8.0
 	github.com/rs/zerolog v1.35.1
 	github.com/spf13/cobra v1.8.1
 	github.com/zalando/go-keyring v0.2.8
+	go.starlark.net v0.0.0-20260326113308-fadfc96def35
 	golang.org/x/term v0.42.0
 	google.golang.org/adk v1.2.0
 	google.golang.org/genai v1.54.0
@@ -70,7 +72,7 @@ require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/glebarez/go-sqlite v1.21.1 // indirect
+	github.com/glebarez/go-sqlite v1.21.1
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/jsonschema-go v0.4.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect

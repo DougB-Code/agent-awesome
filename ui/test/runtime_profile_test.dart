@@ -21,8 +21,40 @@ void main() {
     expect(profile.agentMemory.readDomains, <String>['memory']);
     expect(profile.agentMemory.writeDomains, <String>['memory']);
     expect(profile.toJson(), isNot(contains('mcp_servers')));
+    final harnessArguments = harnessArgumentsForProfile(profile);
     expect(
-      profile.harness.arguments,
+      harnessArguments,
+      containsAllInOrder(<String>[
+        '--workflow-api-addr',
+        '127.0.0.1:8092',
+        '--workflow-definitions',
+        defaultWorkflowDefinitionsDirectoryPath(),
+        '--workflow-db',
+        defaultWorkflowDatabasePath(),
+        '--workflow-context-base-url',
+        'http://127.0.0.1:8081/api/context',
+        '--command-mcp-addr',
+        '127.0.0.1:8093',
+        '--command-data-dir',
+        defaultCommandDataDirectoryPath(),
+        '--command-parser-dir',
+        defaultCommandParserDirectoryPath(),
+        '--mcp-manager-addr',
+        '127.0.0.1:8094',
+      ]),
+    );
+    expect(
+      harnessArguments.indexOf('--workflow-api-addr'),
+      lessThan(harnessArguments.indexOf('--')),
+    );
+    final mcpServersJson = jsonDecode(
+      harnessArguments[harnessArguments.indexOf('--mcp-servers-json') + 1],
+    );
+    expect(mcpServersJson, isA<List<dynamic>>());
+    expect(mcpServersJson.first['id'], 'command');
+    expect(mcpServersJson.first['endpoint'], 'http://127.0.0.1:8093/mcp');
+    expect(
+      harnessArguments,
       containsAllInOrder(<String>[
         'web',
         '--port',
@@ -35,13 +67,12 @@ void main() {
     expect(profile.gateway.enabled, isTrue);
     expect(profile.gateway.apiBaseUrl, 'http://127.0.0.1:8070/api');
     expect(profile.workflow.enabled, isTrue);
+    expect(profile.workflow.hostedByHarness, isTrue);
+    expect(profile.workflow.autoStart, isFalse);
     expect(profile.workflow.apiBaseUrl, 'http://127.0.0.1:8092/api/workflows');
     expect(profile.workflow.mcpUrl, 'http://127.0.0.1:8092/mcp');
     final workflowArguments = workflowArgumentsForProfile(profile);
-    expect(workflowArguments, contains('--harness-context-base-url'));
-    expect(workflowArguments, isNot(contains('--harness-base-url')));
-    expect(workflowArguments, isNot(contains('--app-name')));
-    expect(workflowArguments, isNot(contains('--user-id')));
+    expect(workflowArguments, isEmpty);
     expect(
       profile.gateway.effectiveStatusUrl,
       'http://127.0.0.1:8070/api/gateway/beta-status',
@@ -64,6 +95,7 @@ void main() {
     final gatewayArguments = gatewayArgumentsForProfile(profile);
     expect(gatewayArguments, contains('--workflow-base-url'));
     expect(gatewayArguments, contains('http://127.0.0.1:8092/api/workflows'));
+    expect(gatewayArguments, contains('--harness-embedded-services'));
     expect(gatewayArguments, contains('--memory-domains-json'));
     expect(gatewayArguments, contains('--memory-policy-json'));
     expect(gatewayArguments, contains('--agent-profiles-json'));
@@ -163,8 +195,10 @@ void main() {
     ).load();
 
     expect(profile.workflow.enabled, isTrue);
-    expect(profile.workflow.autoStart, isTrue);
-    expect(profile.workflow.workingDirectory, '${root.path}/workflow');
+    expect(profile.workflow.hostedByHarness, isTrue);
+    expect(profile.workflow.autoStart, isFalse);
+    expect(profile.workflow.workingDirectory, isEmpty);
+    expect(profile.workflow.packagePath, isEmpty);
     expect(
       profile.workflow.definitionsDir,
       defaultWorkflowDefinitionsDirectoryPath(),
@@ -565,7 +599,7 @@ Map<String, dynamic> _workflowJson({bool enabled = true}) {
     'api_base_url': 'http://127.0.0.1:8092/api/workflows',
     'health_url': 'http://127.0.0.1:8092/healthz',
     'working_directory': '/tmp/workflow',
-    'package_path': './cmd/workflowd',
+    'package_path': './cmd/workflow-service',
     'definitions_dir': '/tmp/workflows',
     'db_path': '/tmp/workflow.db',
     'port': 8092,

@@ -20,10 +20,12 @@ const (
 	DefaultHarnessServiceName = "harness"
 	// DefaultMemoryServiceName is the supervisor name for memoryd.
 	DefaultMemoryServiceName = "memory"
-	// DefaultWorkflowServiceName is the supervisor name for workflowd.
+	// DefaultWorkflowServiceName is the supervisor name for the workflow service.
 	DefaultWorkflowServiceName = "workflow"
-	// DefaultCommandServiceName is the supervisor name for commandd.
+	// DefaultCommandServiceName is the supervisor name for the command service.
 	DefaultCommandServiceName = "command"
+	// defaultEmbeddedMCPManagerAddr is the local harness-owned MCP manager bind.
+	defaultEmbeddedMCPManagerAddr = "127.0.0.1:8094"
 )
 
 // Config stores all runtime settings for one personal gateway process.
@@ -51,6 +53,7 @@ type Config struct {
 	ModelID                          string
 	LogFile                          string
 	CheckConfig                      bool
+	HarnessEmbeddedServices          bool
 	RequestTimeout                   time.Duration
 	ServiceStartTimeout              time.Duration
 	HarnessService                   ServiceConfig
@@ -166,6 +169,7 @@ func FromFlags(args []string) (Config, error) {
 		ModelProviderID:                  envString("AGENTAWESOME_MODEL_PROVIDER_ID", ""),
 		ModelID:                          envString("AGENTAWESOME_MODEL_ID", ""),
 		LogFile:                          envString("AGENTAWESOME_GATEWAY_LOG_FILE", ""),
+		HarnessEmbeddedServices:          envBool("AGENTAWESOME_HARNESS_EMBEDDED_SERVICES", false),
 		RequestTimeout:                   envDuration("AGENTAWESOME_GATEWAY_REQUEST_TIMEOUT", 10*time.Minute),
 		ServiceStartTimeout:              envDuration("AGENTAWESOME_SERVICE_START_TIMEOUT", 30*time.Second),
 	}
@@ -240,6 +244,7 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.ModelID, "model-id", cfg.ModelID, "current non-secret model identifier for beta status")
 	fs.StringVar(&cfg.LogFile, "log-file", cfg.LogFile, "optional gateway log file path")
 	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit without starting the gateway")
+	fs.BoolVar(&cfg.HarnessEmbeddedServices, "harness-embedded-services", cfg.HarnessEmbeddedServices, "start workflow and command services inside the harness process")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "maximum upstream request duration")
 	fs.DurationVar(&cfg.ServiceStartTimeout, "service-start-timeout", cfg.ServiceStartTimeout, "maximum local service readiness wait")
 	fs.BoolVar(&cfg.Slack.Enabled, "slack-enabled", cfg.Slack.Enabled, "enable Slack channel adapter")
@@ -282,6 +287,9 @@ func FromFlags(args []string) (Config, error) {
 	}
 	if cfg.CommandService.HealthURL == "" {
 		cfg.CommandService.HealthURL = "http://127.0.0.1:8093/healthz"
+	}
+	if err := cfg.applyHarnessEmbeddedServices(); err != nil {
+		return Config{}, err
 	}
 	if err := cfg.applyMemoryServices(memoryServicesJSON); err != nil {
 		return Config{}, err
@@ -435,13 +443,14 @@ func (c Config) StatusView() map[string]any {
 			"provider_id": c.ModelProviderID,
 			"model_id":    c.ModelID,
 		},
-		"has_log_file":     strings.TrimSpace(c.LogFile) != "",
-		"check_config":     c.CheckConfig,
-		"harness_service":  c.HarnessService.StatusView(),
-		"memory_service":   c.MemoryService.StatusView(),
-		"workflow_service": c.WorkflowService.StatusView(),
-		"command_service":  c.CommandService.StatusView(),
-		"slack":            c.Slack.StatusView(),
+		"has_log_file":              strings.TrimSpace(c.LogFile) != "",
+		"check_config":              c.CheckConfig,
+		"harness_embedded_services": c.HarnessEmbeddedServices,
+		"harness_service":           c.HarnessService.StatusView(),
+		"memory_service":            c.MemoryService.StatusView(),
+		"workflow_service":          c.WorkflowService.StatusView(),
+		"command_service":           c.CommandService.StatusView(),
+		"slack":                     c.Slack.StatusView(),
 	}
 }
 
@@ -941,6 +950,162 @@ func memoryServiceFlagConfigured(service ServiceConfig) bool {
 		strings.TrimSpace(service.Command) != "" ||
 		strings.TrimSpace(service.WorkingDir) != "" ||
 		len(service.Arguments) > 0
+}
+
+// applyHarnessEmbeddedServices configures harness to own local control services.
+func (c *Config) applyHarnessEmbeddedServices() error {
+	if !c.HarnessEmbeddedServices {
+		return nil
+	}
+	if serviceProcessConfigured(c.WorkflowService) {
+		return fmt.Errorf("workflow service process flags cannot be used with harness-embedded-services")
+	}
+	if serviceProcessConfigured(c.CommandService) {
+		return fmt.Errorf("command service process flags cannot be used with harness-embedded-services")
+	}
+	if !c.HarnessService.AutoStart {
+		return nil
+	}
+	args := append([]string(nil), c.HarnessService.Arguments...)
+	contextAddr, err := listenAddressFromRequestURL(c.ContextBaseURL)
+	if err != nil {
+		return fmt.Errorf("context base URL for harness embedded services: %w", err)
+	}
+	workflowAddr, err := listenAddressFromRequestURL(c.WorkflowBaseURL)
+	if err != nil {
+		return fmt.Errorf("workflow base URL for harness embedded services: %w", err)
+	}
+	commandAddr, err := listenAddressFromRequestURL(c.CommandService.HealthURL)
+	if err != nil {
+		return fmt.Errorf("command health URL for harness embedded services: %w", err)
+	}
+	commandEndpoint, err := mcpEndpointFromHealthURL(c.CommandService.HealthURL)
+	if err != nil {
+		return fmt.Errorf("command health URL for embedded MCP manager: %w", err)
+	}
+	mcpServersJSON, err := embeddedMCPServersJSON(commandEndpoint, c.MemoryDomains)
+	if err != nil {
+		return fmt.Errorf("embedded MCP manager servers: %w", err)
+	}
+	args = insertHarnessFlagValue(args, "--context-api-addr", contextAddr)
+	args = insertHarnessFlagValue(args, "--workflow-api-addr", workflowAddr)
+	args = insertHarnessFlagValue(args, "--workflow-context-base-url", c.ContextBaseURL)
+	args = insertHarnessFlagValue(args, "--command-mcp-addr", commandAddr)
+	args = insertHarnessFlagValue(args, "--mcp-manager-addr", defaultEmbeddedMCPManagerAddr)
+	args = insertHarnessFlagValue(args, "--mcp-servers-json", mcpServersJSON)
+	c.HarnessService.Arguments = args
+	return nil
+}
+
+// embeddedMCPServersJSON returns the harness-owned manager's endpoint registry.
+func embeddedMCPServersJSON(commandEndpoint string, memoryDomains []MemoryDomain) (string, error) {
+	servers := []map[string]string{{
+		"id":         DefaultCommandServiceName,
+		"name":       "Command",
+		"endpoint":   commandEndpoint,
+		"health_url": strings.TrimSpace(strings.Replace(commandEndpoint, "/mcp", "/healthz", 1)),
+	}}
+	seen := map[string]struct{}{DefaultCommandServiceName: {}}
+	for _, domain := range memoryDomains {
+		id := strings.TrimSpace(domain.ID)
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		server := map[string]string{
+			"id":       id,
+			"name":     strings.TrimSpace(domain.Label),
+			"endpoint": strings.TrimSpace(domain.Endpoint),
+		}
+		if strings.TrimSpace(domain.HealthURL) != "" {
+			server["health_url"] = strings.TrimSpace(domain.HealthURL)
+		}
+		servers = append(servers, server)
+	}
+	body, err := json.Marshal(servers)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
+}
+
+// mcpEndpointFromHealthURL returns the sibling MCP endpoint for a health URL.
+func mcpEndpointFromHealthURL(value string) (string, error) {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil {
+		return "", err
+	}
+	parsed.Path = "/mcp"
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return parsed.String(), nil
+}
+
+// serviceProcessConfigured reports whether a service would start separately.
+func serviceProcessConfigured(service ServiceConfig) bool {
+	return service.AutoStart ||
+		strings.TrimSpace(service.Command) != "" ||
+		strings.TrimSpace(service.WorkingDir) != "" ||
+		len(service.Arguments) > 0
+}
+
+// insertHarnessFlagValue inserts one harness run flag before runtime args.
+func insertHarnessFlagValue(args []string, flag string, value string) []string {
+	if strings.TrimSpace(value) == "" || hasFlag(args, flag) {
+		return args
+	}
+	insertAt := len(args)
+	for index, arg := range args {
+		if arg == "--" {
+			insertAt = index
+			break
+		}
+	}
+	next := make([]string, 0, len(args)+2)
+	next = append(next, args[:insertAt]...)
+	next = append(next, flag, value)
+	next = append(next, args[insertAt:]...)
+	return next
+}
+
+// hasFlag reports whether args already include a flag or flag=value.
+func hasFlag(args []string, flag string) bool {
+	for _, arg := range args {
+		if arg == flag || strings.HasPrefix(arg, flag+"=") {
+			return true
+		}
+	}
+	return false
+}
+
+// listenAddressFromRequestURL returns the host:port bind value beside a URL.
+func listenAddressFromRequestURL(value string) (string, error) {
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil {
+		return "", err
+	}
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return "", fmt.Errorf("host is required")
+	}
+	if !isLoopbackHost(host) {
+		return "", fmt.Errorf("host %q must be loopback", host)
+	}
+	port := strings.TrimSpace(parsed.Port())
+	if port == "" {
+		switch parsed.Scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		default:
+			return "", fmt.Errorf("port is required")
+		}
+	}
+	return net.JoinHostPort(host, port), nil
 }
 
 // memoryDomainByID returns one configured memory domain by id.

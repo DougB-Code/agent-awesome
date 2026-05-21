@@ -27,10 +27,14 @@ launcher or cloud process manager owns those binaries.
 ## Local Launcher Mode
 
 The gateway can also start sibling binaries when the configured health checks
-are not reachable. Arguments are repeatable so callers do not need a shell.
+are not reachable. Arguments are repeatable so callers do not need a shell. For
+the current local/server migration shape, prefer `--harness-embedded-services`:
+the gateway starts only the harness plus memory domains, and the harness hosts
+workflow, command, and MCP-manager endpoints in-process.
 
 ```sh
 go run ./cmd/agent-gateway \
+  --harness-embedded-services \
   --harness-auto-start \
   --harness-command /path/to/agent-awesome \
   --harness-workdir /home/doug/dev/agentawesome/agent/harness \
@@ -52,6 +56,13 @@ go run ./cmd/agent-gateway \
   --memory-arg 127.0.0.1:8090
 ```
 
+When `--harness-embedded-services` is enabled, do not also configure
+`--workflow-auto-start`, `--workflow-command`, `--command-auto-start`, or
+`--command-command`; those would create competing process owners. The gateway
+still checks workflow and command health URLs, but the listeners are owned by
+the harness process. The gateway also injects the embedded MCP manager with
+command and memory endpoints when it launches the harness.
+
 For packaged pilots, the same values can be supplied with environment variables:
 
 - `AGENTAWESOME_GATEWAY_ADDR`
@@ -66,6 +77,7 @@ For packaged pilots, the same values can be supplied with environment variables:
 - `AGENTAWESOME_ALLOWED_ORIGIN`
 - `AGENTAWESOME_ALLOW_UNAUTHENTICATED_LOOPBACK_ONLY`
 - `AGENTAWESOME_RUNTIME_POLICY_TEXT`
+- `AGENTAWESOME_HARNESS_EMBEDDED_SERVICES`
 - `AGENTAWESOME_HARNESS_AUTO_START`
 - `AGENTAWESOME_HARNESS_COMMAND`
 - `AGENTAWESOME_HARNESS_ARGS`, as a JSON string array

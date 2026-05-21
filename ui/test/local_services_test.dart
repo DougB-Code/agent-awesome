@@ -243,6 +243,12 @@ void main() {
         '127.0.0.1:8070',
         '--context-api-addr',
         '[::1]:8081',
+        '--workflow-api-addr',
+        '127.0.0.1:8092',
+        '--command-mcp-addr',
+        '127.0.0.1:8093',
+        '--mcp-manager-addr',
+        '127.0.0.1:8094',
         '--',
         'web',
         '--port',
@@ -250,7 +256,7 @@ void main() {
       ],
     );
 
-    expect(ports, <int>{8070, 8080, 8081});
+    expect(ports, <int>{8070, 8080, 8081, 8092, 8093, 8094});
   });
 
   test('closed supervisor refuses later service startup', () async {

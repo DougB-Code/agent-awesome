@@ -123,7 +123,7 @@ class LocalServiceSupervisor {
       await _writeStatusLog(status);
       statuses.add(status);
     }
-    if (profile.workflow.enabled) {
+    if (profile.workflow.enabled && !profile.workflow.hostedByHarness) {
       final workflowStatus = await _ensureWorkflowStatus(
         profile,
         restartAutoStarted: restartAutoStarted,
@@ -137,6 +137,14 @@ class LocalServiceSupervisor {
     );
     await _writeStatusLog(harnessStatus);
     statuses.add(harnessStatus);
+    if (profile.workflow.enabled && profile.workflow.hostedByHarness) {
+      final workflowStatus = await _ensureWorkflowStatus(
+        profile,
+        restartAutoStarted: restartAutoStarted,
+      );
+      await _writeStatusLog(workflowStatus);
+      statuses.add(workflowStatus);
+    }
     final gatewayStatus = await _ensureGatewayStatus(
       profile,
       profile.gateway,
@@ -430,7 +438,7 @@ class LocalServiceSupervisor {
     }
   }
 
-  /// Ensures workflowd and converts launch failures into a status.
+  /// Ensures workflow and converts launch failures into a status.
   Future<ServiceProcessStatus> _ensureWorkflowStatus(
     RuntimeProfile profile, {
     required bool restartAutoStarted,
@@ -532,7 +540,7 @@ class LocalServiceSupervisor {
     return status;
   }
 
-  /// Ensures workflowd is reachable, starting it when the profile manages it.
+  /// Ensures workflow is reachable, starting it when the profile manages it.
   Future<ServiceProcessStatus> _ensureWorkflow(
     RuntimeProfile profile, {
     required bool restartAutoStarted,
@@ -540,6 +548,22 @@ class LocalServiceSupervisor {
     final workflow = profile.workflow;
     final health = Uri.parse(workflow.healthUrl);
     final arguments = workflowArgumentsForProfile(profile);
+    if (workflow.hostedByHarness) {
+      if (await _isHealthy(health)) {
+        return _status(
+          workflow.label,
+          workflow.healthUrl,
+          ConnectionStateKind.connected,
+          'Hosted by harness',
+        );
+      }
+      return _status(
+        workflow.label,
+        workflow.healthUrl,
+        ConnectionStateKind.disconnected,
+        'Harness-owned workflow service is not reachable',
+      );
+    }
     _rememberServiceEndpoint(
       id: workflow.id,
       name: workflow.label,
@@ -606,11 +630,12 @@ class LocalServiceSupervisor {
   }) async {
     final harness = profile.harness;
     final health = Uri.parse(harness.sessionsUrl);
+    final arguments = harnessArgumentsForProfile(profile);
     _rememberServiceEndpoint(
       id: harness.id,
       name: harness.label,
       health: health,
-      arguments: harness.arguments,
+      arguments: arguments,
     );
     if (restartAutoStarted && harness.autoStart) {
       await _restartAutoStartedEndpoint(
@@ -624,7 +649,7 @@ class LocalServiceSupervisor {
         id: harness.id,
         name: harness.label,
         health: health,
-        arguments: harness.arguments,
+        arguments: arguments,
       );
       return _status(
         harness.label,
@@ -641,6 +666,7 @@ class LocalServiceSupervisor {
         'External harness is not reachable',
       );
     }
+    await _createArgumentDirectories(arguments);
     final process = await _startProcess(
       id: harness.id,
       profile: profile,
@@ -648,7 +674,7 @@ class LocalServiceSupervisor {
       health: health,
       workingDirectory: harness.workingDirectory,
       packagePath: harness.packagePath,
-      arguments: _withHarnessLogFile(harness.arguments),
+      arguments: _withHarnessLogFile(arguments),
     );
     _started[harness.id] = process;
     final status = await _waitForProcessHealth(
@@ -1040,6 +1066,15 @@ class LocalServiceSupervisor {
       if (flag == '--definitions') {
         await Directory(value).create(recursive: true);
       }
+      if (flag == '--workflow-db') {
+        final parent = File(value).parent;
+        await parent.create(recursive: true);
+      }
+      if (flag == '--workflow-definitions' ||
+          flag == '--command-data-dir' ||
+          flag == '--command-parser-dir') {
+        await Directory(value).create(recursive: true);
+      }
     }
   }
 
@@ -1231,6 +1266,12 @@ String servicePortsDescription({
       ports.add('api=${_listenDescription(value)}');
     } else if (flag == '--context-api-addr') {
       ports.add('context=${_listenDescription(value)}');
+    } else if (flag == '--workflow-api-addr') {
+      ports.add('workflow=${_listenDescription(value)}');
+    } else if (flag == '--command-mcp-addr') {
+      ports.add('command=${_listenDescription(value)}');
+    } else if (flag == '--mcp-manager-addr') {
+      ports.add('mcp=${_listenDescription(value)}');
     }
   }
   return ports.isEmpty ? 'unknown' : ports.join(', ');
@@ -1248,7 +1289,12 @@ Set<int> serviceLocalPorts({
   for (var index = 0; index < arguments.length - 1; index++) {
     final flag = arguments[index];
     final value = arguments[index + 1];
-    if (flag == '--addr' || flag == '--port' || flag == '--context-api-addr') {
+    if (flag == '--addr' ||
+        flag == '--port' ||
+        flag == '--context-api-addr' ||
+        flag == '--workflow-api-addr' ||
+        flag == '--command-mcp-addr' ||
+        flag == '--mcp-manager-addr') {
       final port = _listenPort(value);
       if (port != null) {
         ports.add(port);

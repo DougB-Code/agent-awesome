@@ -3,6 +3,7 @@
 
 The desktop UI is a Flutter application in `ui`.
 It starts with the default runtime profile and connects to the local gateway, harness, and memory services described by that profile.
+The default local harness hosts workflow, command, and MCP-manager endpoints in the same process.
 
 The default profile expects the checked-in Agent Awesome harness config under `harness`.
 It also needs a model credential, such as `OPENAI_API_KEY`, available to the harness keyring or environment.
