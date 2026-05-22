@@ -33,26 +33,17 @@ void main() {
         defaultWorkflowDatabasePath(),
         '--workflow-context-base-url',
         'http://127.0.0.1:8081/api/context',
-        '--command-mcp-addr',
-        '127.0.0.1:8093',
         '--command-data-dir',
         defaultCommandDataDirectoryPath(),
         '--command-parser-dir',
         defaultCommandParserDirectoryPath(),
-        '--mcp-manager-addr',
-        '127.0.0.1:8094',
       ]),
     );
     expect(
       harnessArguments.indexOf('--workflow-api-addr'),
       lessThan(harnessArguments.indexOf('--')),
     );
-    final mcpServersJson = jsonDecode(
-      harnessArguments[harnessArguments.indexOf('--mcp-servers-json') + 1],
-    );
-    expect(mcpServersJson, isA<List<dynamic>>());
-    expect(mcpServersJson.first['id'], 'command');
-    expect(mcpServersJson.first['endpoint'], 'http://127.0.0.1:8093/mcp');
+    expect(harnessArguments, isNot(contains('--mcp-servers-json')));
     expect(
       harnessArguments,
       containsAllInOrder(<String>[

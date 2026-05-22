@@ -55,18 +55,12 @@ List<String> harnessArgumentsForProfile(RuntimeProfile profile) {
     profile.workflow.dbPath,
     '--workflow-context-base-url',
     profile.gateway.contextBaseUrl,
-    '--command-mcp-addr',
-    _listenAddress(_embeddedCommandMcpUrl(), _embeddedCommandPort),
     '--command-data-dir',
     defaultCommandDataDirectoryPath(),
     '--command-parser-dir',
     defaultCommandParserDirectoryPath(),
     '--command-allow-workdir',
     _commandAllowedWorkdir(profile.harness),
-    '--mcp-manager-addr',
-    _listenAddress(_embeddedMcpManagerUrl(), _embeddedMcpManagerPort),
-    '--mcp-servers-json',
-    jsonEncode(_embeddedMcpManagerServers(profile)),
   ]);
 }
 
@@ -183,28 +177,6 @@ List<String> _insertBeforeRuntimeArgs(
     ...arguments.sublist(0, boundary),
     ...flags,
     ...arguments.sublist(boundary),
-  ];
-}
-
-/// Encodes embedded MCP manager endpoints owned by the harness process.
-List<Map<String, dynamic>> _embeddedMcpManagerServers(RuntimeProfile profile) {
-  final ids = <String>{'command'};
-  return <Map<String, dynamic>>[
-    <String, dynamic>{
-      'id': 'command',
-      'name': 'Command',
-      'endpoint': _embeddedCommandMcpUrl(),
-      'health_url': _embeddedCommandHealthUrl(),
-    },
-    for (final server in profile.memoryServers)
-      if (ids.add(server.id))
-        <String, dynamic>{
-          'id': server.id,
-          'name': server.label,
-          'endpoint': server.endpoint,
-          if (server.healthUrl.trim().isNotEmpty)
-            'health_url': server.healthUrl,
-        },
   ];
 }
 
@@ -623,25 +595,6 @@ String _healthUrl(String endpoint) {
 /// Returns the default local workflow API base URL.
 String _workflowApiBaseUrl() {
   return 'http://127.0.0.1:8092/api/workflows';
-}
-
-const int _embeddedCommandPort = 8093;
-const int _embeddedMcpManagerPort = 8094;
-
-/// Returns the harness-hosted command MCP endpoint.
-String _embeddedCommandMcpUrl() {
-  return 'http://127.0.0.1:$_embeddedCommandPort/mcp';
-}
-
-/// Returns the harness-hosted command health endpoint.
-String _embeddedCommandHealthUrl() {
-  final uri = Uri.parse(_embeddedCommandMcpUrl());
-  return uri.replace(path: '/healthz', query: null).toString();
-}
-
-/// Returns the harness-hosted MCP manager endpoint.
-String _embeddedMcpManagerUrl() {
-  return 'http://127.0.0.1:$_embeddedMcpManagerPort/mcp';
 }
 
 /// Returns the beta status URL for a gateway base endpoint.

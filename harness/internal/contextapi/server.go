@@ -76,6 +76,22 @@ func StartWithConfig(ctx context.Context, cfg Config, tools *schema.Tools) (*Ser
 	return server, nil
 }
 
+// List returns tool names available through configured MCP servers.
+func (s *Server) List(ctx context.Context) ([]string, error) {
+	if s == nil {
+		return nil, fmt.Errorf("context API server is not configured")
+	}
+	return s.listToolNames(ctx)
+}
+
+// Call invokes one configured context tool and returns structured data.
+func (s *Server) Call(ctx context.Context, name string, domainID string, arguments map[string]any) (any, error) {
+	if s == nil {
+		return nil, fmt.Errorf("context API server is not configured")
+	}
+	return s.callTool(ctx, name, domainID, arguments)
+}
+
 // routes builds the context API request multiplexer.
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()

@@ -84,7 +84,9 @@ func dependencyServices(cfg config.Config) []supervisor.Service {
 		services = append(services, dependencyService(memoryService.ServiceConfig()))
 	}
 	services = append(services, dependencyService(cfg.WorkflowService))
-	services = append(services, dependencyService(cfg.CommandService))
+	if !cfg.HarnessEmbeddedServices {
+		services = append(services, dependencyService(cfg.CommandService))
+	}
 	return services
 }
 

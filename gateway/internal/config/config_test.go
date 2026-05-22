@@ -1,10 +1,7 @@
 // This file tests gateway configuration parsing and safety validation.
 package config
 
-import (
-	"encoding/json"
-	"testing"
-)
+import "testing"
 
 // TestFromFlagsDerivesDefaultHealthURLs verifies local dependency health defaults.
 func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
@@ -77,11 +74,6 @@ func TestFromFlagsConfiguresHarnessEmbeddedServices(t *testing.T) {
 		"127.0.0.1:8092",
 		"--workflow-context-base-url",
 		"http://127.0.0.1:8081/api/context",
-		"--command-mcp-addr",
-		"127.0.0.1:8093",
-		"--mcp-manager-addr",
-		"127.0.0.1:8094",
-		"--mcp-servers-json",
 		"--",
 		"web",
 		"--port",
@@ -90,16 +82,8 @@ func TestFromFlagsConfiguresHarnessEmbeddedServices(t *testing.T) {
 	if !containsAllInOrder(cfg.HarnessService.Arguments, wantOrder) {
 		t.Fatalf("harness args = %#v, want ordered values %#v", cfg.HarnessService.Arguments, wantOrder)
 	}
-	serversJSON := flagValue(cfg.HarnessService.Arguments, "--mcp-servers-json")
-	var servers []map[string]string
-	if err := json.Unmarshal([]byte(serversJSON), &servers); err != nil {
-		t.Fatalf("decode mcp servers = %v", err)
-	}
-	if len(servers) != 2 || servers[0]["id"] != "command" || servers[0]["endpoint"] != "http://127.0.0.1:8093/mcp" {
-		t.Fatalf("mcp servers = %#v, want command first", servers)
-	}
-	if servers[1]["id"] != "memory" || servers[1]["endpoint"] != "http://127.0.0.1:8090/mcp" {
-		t.Fatalf("mcp servers = %#v, want memory second", servers)
+	if flagValue(cfg.HarnessService.Arguments, "--mcp-servers-json") != "" {
+		t.Fatalf("harness args = %#v, want no embedded MCP manager config", cfg.HarnessService.Arguments)
 	}
 	if !cfg.HarnessEmbeddedServices {
 		t.Fatalf("HarnessEmbeddedServices = false, want true")

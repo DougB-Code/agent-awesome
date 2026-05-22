@@ -27,6 +27,7 @@ type Config struct {
 	DatabasePath          string
 	HarnessContextBaseURL string
 	RequestTimeout        time.Duration
+	ToolClient            runtime.ContextToolClient
 	ReadHeaderTimeout     time.Duration
 	ShutdownTimeout       time.Duration
 }
@@ -50,6 +51,7 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		DatabasePath:          cfg.DatabasePath,
 		HarnessContextBaseURL: cfg.HarnessContextBaseURL,
 		RequestTimeout:        cfg.RequestTimeout,
+		ToolClient:            cfg.ToolClient,
 	})
 	if err != nil {
 		return nil, err

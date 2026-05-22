@@ -29,8 +29,9 @@ launcher or cloud process manager owns those binaries.
 The gateway can also start sibling binaries when the configured health checks
 are not reachable. Arguments are repeatable so callers do not need a shell. For
 the current local/server migration shape, prefer `--harness-embedded-services`:
-the gateway starts only the harness plus memory domains, and the harness hosts
-workflow, command, and MCP-manager endpoints in-process.
+the gateway starts only the harness plus memory domains. The harness hosts the
+workflow endpoint in-process, while command tools are wired directly into ADK
+without a command MCP loopback or embedded MCP-manager listener.
 
 ```sh
 go run ./cmd/agent-gateway \
@@ -59,9 +60,8 @@ go run ./cmd/agent-gateway \
 When `--harness-embedded-services` is enabled, do not also configure
 `--workflow-auto-start`, `--workflow-command`, `--command-auto-start`, or
 `--command-command`; those would create competing process owners. The gateway
-still checks workflow and command health URLs, but the listeners are owned by
-the harness process. The gateway also injects the embedded MCP manager with
-command and memory endpoints when it launches the harness.
+still checks the workflow health URL, but the listener is owned by the harness
+process.
 
 For packaged pilots, the same values can be supplied with environment variables:
 

@@ -2,7 +2,7 @@
 :description: User-facing local chat workflow.
 
 Local chat uses the Flutter UI, the gateway, the harness, and memory.
-For the default local profile, workflow, command, and MCP-manager services run inside the harness process.
+For the default local profile, the workflow endpoint runs inside the harness process, and command tools are attached directly to the ADK runtime.
 The UI sends assistant traffic through the configured gateway endpoint; the gateway forwards agent calls to the harness and memory calls to the memory service.
 
 == Before You Chat

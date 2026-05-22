@@ -50,7 +50,7 @@ type Service struct {
 	cfg     Config
 	store   *store.Store
 	actions *actions.Registry
-	tools   *ToolClient
+	tools   ContextToolClient
 	mcp     *MCPClient
 	mu      sync.RWMutex
 	defs    map[string]definition.Definition
@@ -65,11 +65,15 @@ func Open(ctx context.Context, cfg Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	toolClient := cfg.ToolClient
+	if toolClient == nil {
+		toolClient = NewToolClient(cfg.HarnessContextBaseURL, cfg.RequestTimeout)
+	}
 	service := &Service{
 		cfg:     cfg,
 		store:   workflowStore,
 		actions: registry,
-		tools:   NewToolClient(cfg.HarnessContextBaseURL, cfg.RequestTimeout),
+		tools:   toolClient,
 		mcp:     NewMCPClient(cfg.RequestTimeout),
 		defs:    map[string]definition.Definition{},
 		defHash: map[string]string{},

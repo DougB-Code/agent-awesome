@@ -24,8 +24,6 @@ const (
 	DefaultWorkflowServiceName = "workflow"
 	// DefaultCommandServiceName is the supervisor name for the command service.
 	DefaultCommandServiceName = "command"
-	// defaultEmbeddedMCPManagerAddr is the local harness-owned MCP manager bind.
-	defaultEmbeddedMCPManagerAddr = "127.0.0.1:8094"
 )
 
 // Config stores all runtime settings for one personal gateway process.
@@ -975,73 +973,11 @@ func (c *Config) applyHarnessEmbeddedServices() error {
 	if err != nil {
 		return fmt.Errorf("workflow base URL for harness embedded services: %w", err)
 	}
-	commandAddr, err := listenAddressFromRequestURL(c.CommandService.HealthURL)
-	if err != nil {
-		return fmt.Errorf("command health URL for harness embedded services: %w", err)
-	}
-	commandEndpoint, err := mcpEndpointFromHealthURL(c.CommandService.HealthURL)
-	if err != nil {
-		return fmt.Errorf("command health URL for embedded MCP manager: %w", err)
-	}
-	mcpServersJSON, err := embeddedMCPServersJSON(commandEndpoint, c.MemoryDomains)
-	if err != nil {
-		return fmt.Errorf("embedded MCP manager servers: %w", err)
-	}
 	args = insertHarnessFlagValue(args, "--context-api-addr", contextAddr)
 	args = insertHarnessFlagValue(args, "--workflow-api-addr", workflowAddr)
 	args = insertHarnessFlagValue(args, "--workflow-context-base-url", c.ContextBaseURL)
-	args = insertHarnessFlagValue(args, "--command-mcp-addr", commandAddr)
-	args = insertHarnessFlagValue(args, "--mcp-manager-addr", defaultEmbeddedMCPManagerAddr)
-	args = insertHarnessFlagValue(args, "--mcp-servers-json", mcpServersJSON)
 	c.HarnessService.Arguments = args
 	return nil
-}
-
-// embeddedMCPServersJSON returns the harness-owned manager's endpoint registry.
-func embeddedMCPServersJSON(commandEndpoint string, memoryDomains []MemoryDomain) (string, error) {
-	servers := []map[string]string{{
-		"id":         DefaultCommandServiceName,
-		"name":       "Command",
-		"endpoint":   commandEndpoint,
-		"health_url": strings.TrimSpace(strings.Replace(commandEndpoint, "/mcp", "/healthz", 1)),
-	}}
-	seen := map[string]struct{}{DefaultCommandServiceName: {}}
-	for _, domain := range memoryDomains {
-		id := strings.TrimSpace(domain.ID)
-		if id == "" {
-			continue
-		}
-		if _, exists := seen[id]; exists {
-			continue
-		}
-		seen[id] = struct{}{}
-		server := map[string]string{
-			"id":       id,
-			"name":     strings.TrimSpace(domain.Label),
-			"endpoint": strings.TrimSpace(domain.Endpoint),
-		}
-		if strings.TrimSpace(domain.HealthURL) != "" {
-			server["health_url"] = strings.TrimSpace(domain.HealthURL)
-		}
-		servers = append(servers, server)
-	}
-	body, err := json.Marshal(servers)
-	if err != nil {
-		return "", err
-	}
-	return string(body), nil
-}
-
-// mcpEndpointFromHealthURL returns the sibling MCP endpoint for a health URL.
-func mcpEndpointFromHealthURL(value string) (string, error) {
-	parsed, err := url.ParseRequestURI(value)
-	if err != nil {
-		return "", err
-	}
-	parsed.Path = "/mcp"
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return parsed.String(), nil
 }
 
 // serviceProcessConfigured reports whether a service would start separately.

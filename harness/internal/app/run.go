@@ -19,9 +19,13 @@ import (
 	commandservice "agentawesome/internal/services/command/command"
 	commandembedded "agentawesome/internal/services/command/embedded"
 	mcpembedded "agentawesome/internal/services/mcp/embedded"
+	workflowactions "agentawesome/internal/services/workflow/actions"
 	workflowembedded "agentawesome/internal/services/workflow/embedded"
+	workflowruntime "agentawesome/internal/services/workflow/runtime"
 	"agentawesome/internal/sessionstore"
+	"agentawesome/internal/tools/commandtools"
 	"agentawesome/internal/tools/toolsets"
+	adktool "google.golang.org/adk/tool"
 )
 
 // Options contains CLI-selected runtime and config overrides.
@@ -73,13 +77,14 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	if _, err := contextapi.StartWithConfig(ctx, contextapi.Config{
+	contextServer, err := contextapi.StartWithConfig(ctx, contextapi.Config{
 		Addr:      opts.ContextAPIAddr,
 		AuthToken: opts.ContextAPIToken,
-	}, toolsCfg); err != nil {
+	}, toolsCfg)
+	if err != nil {
 		return err
 	}
-	commandServer, commandEndpoint, err := startEmbeddedCommand(ctx, opts, toolsCfg)
+	commandServer, err := startEmbeddedCommand(ctx, opts, toolsCfg)
 	if err != nil {
 		return err
 	} else if commandServer != nil {
@@ -98,7 +103,7 @@ func Run(ctx context.Context, opts Options) error {
 			_ = mcpServer.Close(shutdownCtx)
 		}()
 	}
-	if workflowServer, err := startEmbeddedWorkflow(ctx, opts); err != nil {
+	if workflowServer, err := startEmbeddedWorkflow(ctx, opts, contextServer); err != nil {
 		return err
 	} else if workflowServer != nil {
 		defer func() {
@@ -108,7 +113,7 @@ func Run(ctx context.Context, opts Options) error {
 		}()
 	}
 
-	runtimeConfig, err := NewRuntimeConfig(ctx, modelCfg, agent, toolsWithEmbeddedCommandEndpoint(toolsCfg, commandEndpoint), opts)
+	runtimeConfig, err := NewRuntimeConfig(ctx, modelCfg, agent, toolsCfg, opts)
 	if err != nil {
 		return err
 	}
@@ -117,17 +122,14 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 // startEmbeddedCommand serves command MCP routes from the harness process when enabled.
-func startEmbeddedCommand(ctx context.Context, opts Options, toolsCfg *schema.Tools) (*commandembedded.Server, string, error) {
+func startEmbeddedCommand(ctx context.Context, opts Options, toolsCfg *schema.Tools) (*commandembedded.Server, error) {
 	listenAddress := strings.TrimSpace(opts.CommandMCPAddr)
-	if listenAddress == "" && localExecRuntimeEnabled(toolsCfg) {
-		listenAddress = "127.0.0.1:0"
-	}
 	if listenAddress == "" {
-		return nil, "", nil
+		return nil, nil
 	}
-	templates, err := localExecCommandTemplates(toolsCfg)
+	templates, err := commandServiceTemplates(opts, toolsCfg)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	server, err := commandembedded.Start(ctx, commandembedded.Config{
 		ListenAddress:     listenAddress,
@@ -135,7 +137,6 @@ func startEmbeddedCommand(ctx context.Context, opts Options, toolsCfg *schema.To
 		AllowedWorkdirs:   commandAllowedWorkdirs(opts, toolsCfg),
 		AllowedEnv:        defaultedStrings(opts.CommandAllowedEnv, defaultCommandAllowedEnv()),
 		Templates:         templates,
-		TemplatesJSON:     opts.CommandTemplatesJSON,
 		ParserDir:         defaulted(opts.CommandParserDir, config.DefaultCommandParserDir()),
 		DefaultTimeout:    defaultedDuration(opts.CommandDefaultTimeout, 10*time.Minute),
 		DefaultMaxOutput:  defaultedInt64(opts.CommandMaxOutputBytes, 64<<10),
@@ -143,9 +144,9 @@ func startEmbeddedCommand(ctx context.Context, opts Options, toolsCfg *schema.To
 		ReadHeaderTimeout: 5 * time.Second,
 	})
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-	return server, "http://" + server.Address() + "/mcp", nil
+	return server, nil
 }
 
 // startEmbeddedMCP serves MCP manager routes from the harness process when enabled.
@@ -163,7 +164,7 @@ func startEmbeddedMCP(ctx context.Context, opts Options) (*mcpembedded.Server, e
 }
 
 // startEmbeddedWorkflow serves workflow routes from the harness process when enabled.
-func startEmbeddedWorkflow(ctx context.Context, opts Options) (*workflowembedded.Server, error) {
+func startEmbeddedWorkflow(ctx context.Context, opts Options, contextServer *contextapi.Server) (*workflowembedded.Server, error) {
 	if strings.TrimSpace(opts.WorkflowAPIAddr) == "" {
 		return nil, nil
 	}
@@ -177,7 +178,38 @@ func startEmbeddedWorkflow(ctx context.Context, opts Options) (*workflowembedded
 		DatabasePath:          defaulted(opts.WorkflowDatabasePath, config.DefaultWorkflowDatabasePath()),
 		HarnessContextBaseURL: contextBaseURL,
 		RequestTimeout:        10 * time.Minute,
+		ToolClient:            embeddedWorkflowToolClient(contextServer),
 	})
+}
+
+// embeddedWorkflowToolClient returns a direct tool client when workflow shares this process.
+func embeddedWorkflowToolClient(contextServer *contextapi.Server) workflowruntime.ContextToolClient {
+	if contextServer == nil {
+		return nil
+	}
+	return workflowContextToolClient{contextServer: contextServer}
+}
+
+// workflowContextToolClient adapts the context API service to workflow tool.call actions.
+type workflowContextToolClient struct {
+	contextServer *contextapi.Server
+}
+
+// List returns harness context tool names without an HTTP loopback.
+func (c workflowContextToolClient) List(ctx context.Context) ([]string, error) {
+	return c.contextServer.List(ctx)
+}
+
+// Call invokes a harness context tool without an HTTP loopback.
+func (c workflowContextToolClient) Call(ctx context.Context, req workflowactions.ToolRequest) (map[string]any, error) {
+	result, err := c.contextServer.Call(ctx, req.Name, req.DomainID, req.Arguments)
+	if err != nil {
+		return nil, err
+	}
+	if resultMap, ok := result.(map[string]any); ok {
+		return resultMap, nil
+	}
+	return map[string]any{"value": result}, nil
 }
 
 // contextBaseURLFromAddress builds the harness context API URL for workflow calls.
@@ -225,8 +257,65 @@ func defaultCommandAllowedEnv() []string {
 	return []string{"PATH", "HOME", "USER", "TMPDIR"}
 }
 
+// commandRuntimeEnabled reports whether command templates should be model-visible
+// through direct ADK tools.
+func commandRuntimeEnabled(opts Options, toolsCfg *schema.Tools) bool {
+	return localExecRuntimeEnabled(toolsCfg) || strings.TrimSpace(opts.CommandTemplatesJSON) != ""
+}
+
+// commandServiceTools creates direct ADK tools for configured command templates.
+func commandServiceTools(opts Options, toolsCfg *schema.Tools) ([]adktool.Tool, error) {
+	if !commandRuntimeEnabled(opts, toolsCfg) {
+		return nil, nil
+	}
+	cfg, err := commandServiceConfig(opts, toolsCfg)
+	if err != nil {
+		return nil, err
+	}
+	service, err := commandservice.Open(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("open command service: %w", err)
+	}
+	tools, err := commandtools.New(service)
+	if err != nil {
+		service.Close()
+		return nil, err
+	}
+	return tools, nil
+}
+
+// commandServiceConfig translates harness options into command service config.
+func commandServiceConfig(opts Options, toolsCfg *schema.Tools) (commandservice.Config, error) {
+	templates, err := commandServiceTemplates(opts, toolsCfg)
+	if err != nil {
+		return commandservice.Config{}, err
+	}
+	return commandservice.Config{
+		DataDir:          defaulted(opts.CommandDataDir, config.DefaultCommandDataDir()),
+		AllowedWorkdirs:  commandAllowedWorkdirs(opts, toolsCfg),
+		AllowedEnv:       defaultedStrings(opts.CommandAllowedEnv, defaultCommandAllowedEnv()),
+		Templates:        templates,
+		ParserDir:        defaulted(opts.CommandParserDir, config.DefaultCommandParserDir()),
+		DefaultTimeout:   defaultedDuration(opts.CommandDefaultTimeout, 10*time.Minute),
+		DefaultMaxOutput: defaultedInt64(opts.CommandMaxOutputBytes, 64<<10),
+	}, nil
+}
+
+// commandServiceTemplates merges JSON command templates with local-exec aliases.
+func commandServiceTemplates(opts Options, toolsCfg *schema.Tools) ([]commandservice.Template, error) {
+	templates, err := commandservice.ParseTemplatesJSON(opts.CommandTemplatesJSON)
+	if err != nil {
+		return nil, err
+	}
+	localTemplates, err := localExecCommandTemplates(toolsCfg)
+	if err != nil {
+		return nil, err
+	}
+	return append(templates, localTemplates...), nil
+}
+
 // localExecRuntimeEnabled reports whether legacy local-exec aliases should be
-// served through the command MCP boundary.
+// exposed through the command service boundary.
 func localExecRuntimeEnabled(toolsCfg *schema.Tools) bool {
 	return toolsCfg != nil && toolsCfg.LocalExec.Enabled
 }
@@ -280,76 +369,6 @@ func commandAllowedWorkdirs(opts Options, toolsCfg *schema.Tools) []string {
 	return uniqueNonEmptyStrings(roots)
 }
 
-// toolsWithEmbeddedCommandEndpoint adds the embedded command MCP endpoint to the runtime tool config.
-func toolsWithEmbeddedCommandEndpoint(toolsCfg *schema.Tools, endpoint string) *schema.Tools {
-	if strings.TrimSpace(endpoint) == "" {
-		return toolsCfg
-	}
-	next := cloneToolsConfig(toolsCfg)
-	if commandMCPServerConfigured(next, endpoint) {
-		return next
-	}
-	next.MCP.Enabled = true
-	next.MCP.Servers = append(next.MCP.Servers, schema.MCPServer{
-		Name:                     "command",
-		Transport:                "streamable-http",
-		Endpoint:                 strings.TrimSpace(endpoint),
-		RequireConfirmationTools: []string{"command_execute"},
-		Tools: schema.MCPToolFilter{
-			Allow: []string{
-				"command_execute",
-				"command_template_list",
-				"command_status",
-			},
-		},
-	})
-	return next
-}
-
-// commandMCPServerConfigured reports whether command MCP is already model-visible.
-func commandMCPServerConfigured(toolsCfg *schema.Tools, endpoint string) bool {
-	if toolsCfg == nil {
-		return false
-	}
-	endpoint = strings.TrimSpace(endpoint)
-	for _, server := range toolsCfg.MCP.Servers {
-		if strings.TrimSpace(server.Name) == "command" || strings.TrimSpace(server.Endpoint) == endpoint || strings.TrimSpace(server.URL) == endpoint {
-			return true
-		}
-	}
-	return false
-}
-
-// cloneToolsConfig clones the slices/maps touched by runtime tool augmentation.
-func cloneToolsConfig(toolsCfg *schema.Tools) *schema.Tools {
-	if toolsCfg == nil {
-		return &schema.Tools{}
-	}
-	next := *toolsCfg
-	next.MCP.Servers = append([]schema.MCPServer(nil), toolsCfg.MCP.Servers...)
-	for i := range next.MCP.Servers {
-		next.MCP.Servers[i].Args = append([]string(nil), toolsCfg.MCP.Servers[i].Args...)
-		next.MCP.Servers[i].RequireConfirmationTools = append([]string(nil), toolsCfg.MCP.Servers[i].RequireConfirmationTools...)
-		next.MCP.Servers[i].Tools.Allow = append([]string(nil), toolsCfg.MCP.Servers[i].Tools.Allow...)
-		next.MCP.Servers[i].Env = cloneStringMap(toolsCfg.MCP.Servers[i].Env)
-		next.MCP.Servers[i].Headers = cloneStringMap(toolsCfg.MCP.Servers[i].Headers)
-		next.MCP.Servers[i].HeadersFromEnv = cloneStringMap(toolsCfg.MCP.Servers[i].HeadersFromEnv)
-	}
-	return &next
-}
-
-// cloneStringMap returns a shallow copy of a string map.
-func cloneStringMap(values map[string]string) map[string]string {
-	if values == nil {
-		return nil
-	}
-	next := make(map[string]string, len(values))
-	for key, value := range values {
-		next[key] = value
-	}
-	return next
-}
-
 // uniqueNonEmptyStrings returns stable first-seen values after trimming.
 func uniqueNonEmptyStrings(values []string) []string {
 	seen := map[string]struct{}{}
@@ -396,6 +415,11 @@ func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCf
 	if err != nil {
 		return nil, err
 	}
+	commandTools, err := commandServiceTools(opts, toolsCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create command tools: %w", err)
+	}
+	tools.Tools = append(tools.Tools, commandTools...)
 	memoryService, memoryEnabled, err := adkmemory.NewFromToolsConfig(toolsCfg)
 	if err != nil {
 		return nil, err
