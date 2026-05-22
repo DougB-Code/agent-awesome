@@ -1,0 +1,103 @@
+= Local Model HTTP Runtime
+:description: How local model execution stays outside the harness provider adapters.
+
+The harness treats local models like any other OpenAI-compatible HTTP provider.
+It should not import LiteRT-LM or llama.cpp packages, start local model
+subprocesses, or translate model prompts directly.
+
+== Runtime Contract
+
+The UI-owned local model runtime is the boundary for local runtime tools. It can
+install or verify LiteRT-LM artifacts, resolve the `litert-lm` executable, or
+supervise a `llama-server` process from llama.cpp. Each runtime exposes:
+
+[source,text]
+----
+POST /v1/chat/completions
+GET /health
+----
+
+The model config written by LiteRT-LM setup uses the generic OpenAI-compatible
+adapter and a distinct provider id:
+
+[source,yaml]
+----
+default: litert-lm:gemma-4-e2b-it
+providers:
+  litert-lm:
+    name: LiteRT-LM
+    adapter: openai
+    auth: optional
+    runtime: litert-lm
+    url: http://127.0.0.1:11666/v1/chat/completions
+    default: gemma-4-e2b-it
+    executable: /path/to/litert-lm
+    models:
+      - id: gemma-4-e2b-it
+        model: gemma-4-E2B-it
+        path: /path/to/gemma-4-E2B-it.litertlm
+----
+
+The model config written by llama.cpp setup uses its own provider id, endpoint,
+and runtime metadata:
+
+[source,yaml]
+----
+default: llama-cpp:llama-gemma-4-e2b-it-q8
+providers:
+  llama-cpp:
+    name: Llama.cpp
+    adapter: openai
+    auth: optional
+    runtime: llama-cpp
+    hf-repo: ggml-org/gemma-4-E2B-it-GGUF:Q8_0
+    url: http://127.0.0.1:11667/v1/chat/completions
+    default: llama-gemma-4-e2b-it-q8
+    executable: /path/to/llama-server
+    models:
+      - id: llama-gemma-4-e2b-it-q8
+        model: gemma-4-E2B-it-GGUF-Q8_0
+        path: /path/to/managed/llama-cpp/manifest-marker
+----
+
+`executable`, `runtime`, `hf-repo`, and model `path` are local runtime
+metadata. The harness ignores them for OpenAI-compatible requests.
+
+== Ownership
+
+ADK owns chat orchestration and MCP tool execution.
+The local model HTTP runtime owns LiteRT-LM subprocess handling, llama.cpp
+process supervision, prompt serialization, bounded output capture, tool-call
+markup parsing, and health.
+
+Do not move tool execution, idempotency policy, MCP calls, or chat loop logic
+into the local model server. Those responsibilities belong to ADK, runtime
+callbacks, and tool implementations.
+
+== Regression Checks
+
+Run these checks after changing local model setup or the local HTTP runtime:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/harness
+go test -count=1 ./internal/model/...
+
+cd /home/doug/dev/agentawesome/agent/ui
+flutter test test/local_model_runtime_test.dart test/app_controller_local_model_test.dart
+----
+
+For an end-to-end local check, start the UI, choose the local model setup path,
+and send:
+
+[source,text]
+----
+Make a reminder to buy milk
+----
+
+Expected behavior:
+
+* The UI starts the local model endpoint on loopback.
+* The harness sends the turn through its generic OpenAI-compatible adapter.
+* ADK executes any emitted MCP tool call.
+* The final assistant message does not expose local model control tokens.

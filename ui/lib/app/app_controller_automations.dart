@@ -521,7 +521,7 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
       final failures = localProcessStatuses
           .where(
             (status) =>
-                status.name != 'Local model' &&
+                !_isLocalModelProcessStatus(status) &&
                 status.state == ConnectionStateKind.disconnected,
           )
           .toList();

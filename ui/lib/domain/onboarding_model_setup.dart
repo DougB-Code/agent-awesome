@@ -175,21 +175,27 @@ const List<OnboardingProviderOption> onboardingCloudProviders =
       ),
     ];
 
-/// Apache-licensed local LiteRT-LM model presets supported by setup.
+/// Local model presets supported by first-run setup.
 const List<OnboardingModelOption> onboardingLocalModels =
     <OnboardingModelOption>[
       OnboardingModelOption(
         id: 'gemma-4-e2b-it',
-        name: 'Gemma 4 E2B',
+        name: 'LiteRT-LM Gemma 4 E2B',
         model: 'gemma-4-E2B-it',
         detail: 'Apache-licensed LiteRT-LM model installed on this device.',
+      ),
+      OnboardingModelOption(
+        id: 'llama-gemma-4-e2b-it-q8',
+        name: 'Llama.cpp Gemma 4 E2B',
+        model: 'gemma-4-E2B-it-GGUF-Q8_0',
+        detail: 'GGUF model served by llama.cpp on this device.',
       ),
     ];
 
 /// LiteRT-LM artifact used for first-run local setup.
 const LocalModelDescriptor gemma4E2BLocalModel = LocalModelDescriptor(
   id: 'gemma-4-e2b-it',
-  displayName: 'Gemma 4 E2B',
+  displayName: 'LiteRT-LM Gemma 4 E2B',
   modelName: 'gemma-4-E2B-it',
   repository: 'litert-community/gemma-4-E2B-it-litert-lm',
   revision: 'b4f4f4df93418ddb4aa7da8bf33b584602a5b9f8',
@@ -200,6 +206,24 @@ const LocalModelDescriptor gemma4E2BLocalModel = LocalModelDescriptor(
   expectedSha256:
       '181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c',
   license: 'Apache-2.0',
+);
+
+/// llama.cpp Hugging Face model preset used for first-run local setup.
+const LocalModelDescriptor llamaGemma4E2BLocalModel = LocalModelDescriptor(
+  id: 'llama-gemma-4-e2b-it-q8',
+  displayName: 'Llama.cpp Gemma 4 E2B',
+  modelName: 'gemma-4-E2B-it-GGUF-Q8_0',
+  repository: 'ggml-org/gemma-4-E2B-it-GGUF',
+  revision: '',
+  fileName: 'hf-repo.txt',
+  downloadUrl: '',
+  expectedBytes: 0,
+  expectedSha256: '',
+  license: 'Model repository license',
+  runtimeKind: LocalModelRuntimeKind.llamaCpp,
+  providerId: 'llama-cpp',
+  providerName: 'Llama.cpp',
+  hfRepo: 'ggml-org/gemma-4-E2B-it-GGUF:Q8_0',
 );
 
 /// Returns a cloud provider by id, falling back to OpenAI.
@@ -227,27 +251,38 @@ LocalModelDescriptor onboardingLocalModelDescriptor(String modelId) {
   final model = onboardingLocalModelById(modelId);
   return switch (model.id) {
     'gemma-4-e2b-it' => gemma4E2BLocalModel,
+    'llama-gemma-4-e2b-it-q8' => llamaGemma4E2BLocalModel,
     _ => gemma4E2BLocalModel,
   };
 }
 
-/// Returns a local LiteRT provider config for first-run setup.
+/// Returns a loopback HTTP provider config for first-run local setup.
 ModelProviderConfig onboardingLocalProviderConfig({
   required String modelId,
   required String executable,
   required String modelPath,
+  required String url,
 }) {
   final selected = onboardingLocalModelById(modelId);
+  final descriptor = onboardingLocalModelDescriptor(selected.id);
   return ModelProviderConfig(
-    id: 'local',
-    name: 'Local model',
-    adapter: 'litert',
+    id: descriptor.providerId,
+    name: descriptor.providerName,
+    adapter: 'openai',
     apiKey: '',
     defaultModel: selected.id,
-    url: '',
+    url: url,
     executable: executable,
     models: <ModelConfigModel>[
       ModelConfigModel(id: selected.id, model: selected.model, path: modelPath),
     ],
+    extra: <String, dynamic>{
+      'auth': 'optional',
+      'runtime': switch (descriptor.runtimeKind) {
+        LocalModelRuntimeKind.litertLm => 'litert-lm',
+        LocalModelRuntimeKind.llamaCpp => 'llama-cpp',
+      },
+      if (descriptor.hfRepo.isNotEmpty) 'hf-repo': descriptor.hfRepo,
+    },
   );
 }

@@ -28,6 +28,17 @@ String _formatBytes(int bytes) {
   return '$bytes bytes';
 }
 
+/// Returns source metadata text for one local model setup option.
+String _localModelSourceLabel(LocalModelDescriptor descriptor) {
+  if (descriptor.usesManagedDownload) {
+    return '${descriptor.fileName} (${_formatBytes(descriptor.expectedBytes)})';
+  }
+  if (descriptor.hfRepo.trim().isNotEmpty) {
+    return descriptor.hfRepo;
+  }
+  return descriptor.repository;
+}
+
 /// Formats optional byte counts for system-check cards.
 String _formatOptionalBytes(int? bytes) {
   if (bytes == null) {

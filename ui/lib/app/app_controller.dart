@@ -55,6 +55,17 @@ const List<String> _requiredTaskProjectionTools = <String>[
   'task_graph_projection',
 ];
 
+/// Provider ids owned by the app-managed local model setup flow.
+const Set<String> _managedLocalModelProviderIds = <String>{
+  'litert-lm',
+  'llama-cpp',
+};
+
+/// Reports whether a provider id belongs to an app-managed local runtime.
+bool _isManagedLocalModelProviderId(String providerId) {
+  return _managedLocalModelProviderIds.contains(providerId.trim());
+}
+
 /// RuntimeProfileFileEntry describes one editable profile JSON file.
 class RuntimeProfileFileEntry {
   /// Creates a runtime profile file entry.
@@ -733,7 +744,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Reports whether a required non-model service failed before data loading.
   bool _requiredLocalServiceStartupFailed() {
     for (final status in localProcessStatuses) {
-      if (status.name == 'Local model') {
+      if (_isLocalModelProcessStatus(status)) {
         continue;
       }
       if (status.state == ConnectionStateKind.disconnected) {
@@ -833,16 +844,18 @@ class AgentAwesomeAppController extends ChangeNotifier {
     if (provider == null) {
       return;
     }
-    final descriptor = onboardingLocalModelDescriptor(provider.defaultModel);
+    final descriptor = _localModelDescriptorForProvider(provider);
     if (!await localModels.isInstalled(descriptor)) {
       final status = ServiceProcessStatus(
-        name: 'Local model',
-        url: config.localModelHealthUrl,
+        name: descriptor.providerName,
+        url: _localRuntimeHealthUrlFor(descriptor),
         state: ConnectionStateKind.disconnected,
         message: '${descriptor.displayName} is not installed',
       );
       localProcessStatuses = <ServiceProcessStatus>[
-        ...localProcessStatuses.where((item) => item.name != 'Local model'),
+        ...localProcessStatuses.where(
+          (item) => !_isLocalModelProcessStatus(item),
+        ),
         status,
       ];
       await _log('local model not installed: ${descriptor.id}');
@@ -850,13 +863,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     final status = await localModels.start(descriptor);
     localProcessStatuses = <ServiceProcessStatus>[
-      ...localProcessStatuses.where((item) => item.name != 'Local model'),
+      ...localProcessStatuses.where(
+        (item) => !_isLocalModelProcessStatus(item),
+      ),
       status,
     ];
     await _log('local model status ${status.state.name}: ${status.message}');
   }
 
-  /// Restores local LiteRT config from a verified app-managed model artifact.
+  /// Restores local model config from a verified app-managed artifact.
   Future<bool> _restoreLocalModelIfAvailable({
     required bool allowDefaultModel,
   }) async {
@@ -864,8 +879,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
     if (provider == null && !allowDefaultModel) {
       return false;
     }
-    final modelId = provider?.defaultModel ?? onboardingLocalModels.first.id;
-    final descriptor = onboardingLocalModelDescriptor(modelId);
+    final descriptor = provider == null
+        ? onboardingLocalModelDescriptor(onboardingLocalModels.first.id)
+        : _localModelDescriptorForProvider(provider);
     final configuredModelPath = provider == null
         ? ''
         : _configuredLocalModelPath(provider);
@@ -879,12 +895,14 @@ class AgentAwesomeAppController extends ChangeNotifier {
       await _log('local model restore skipped: ${descriptor.id} not found');
       return false;
     }
-    final executable = await _localModelExecutableForConfig();
+    final executable = await _localModelExecutableForConfig(descriptor);
     if (executable == null) {
       return false;
     }
     if (configuredModelPath == install.modelPath &&
-        provider?.executable == executable) {
+        provider?.executable == executable &&
+        provider != null &&
+        _usesDescriptorLocalModelProviderShape(provider, descriptor)) {
       return true;
     }
     final result = await _saveOnboardingProviderConfig(
@@ -892,6 +910,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
         modelId: descriptor.id,
         executable: executable,
         modelPath: install.modelPath,
+        url: _localRuntimeChatCompletionsUrlFor(descriptor),
       ),
     );
     if (result.success) {
@@ -908,11 +927,25 @@ class AgentAwesomeAppController extends ChangeNotifier {
   }
 
   /// Returns the executable path to persist for local model provider config.
-  Future<String?> _localModelExecutableForConfig() async {
-    final configured = config.litertLmExecutable.trim();
+  Future<String?> _localModelExecutableForConfig(
+    LocalModelDescriptor descriptor,
+  ) async {
+    final configured = switch (descriptor.runtimeKind) {
+      LocalModelRuntimeKind.litertLm => config.litertLmExecutable.trim(),
+      LocalModelRuntimeKind.llamaCpp => config.llamaCppExecutable.trim(),
+    };
+    final aliases = switch (descriptor.runtimeKind) {
+      LocalModelRuntimeKind.litertLm => const <String>[
+        'litert_lm',
+        'litert-lm',
+      ],
+      LocalModelRuntimeKind.llamaCpp => const <String>['llama-server'],
+    };
     try {
       return await LocalModelExecutableResolver(
         commandRunner: ProcessSupervisorCommandRunner(processSupervisor),
+        aliases: aliases,
+        displayName: descriptor.providerName,
       ).resolve(
         configuredExecutable: configured,
         dataDirectory: agentAwesomeDataDirectoryPath(),
@@ -930,7 +963,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       return;
     }
     for (final status in localProcessStatuses) {
-      if (status.name == 'Local model' &&
+      if (_isLocalModelProcessStatus(status) &&
           status.state == ConnectionStateKind.disconnected) {
         final detail = status.message.trim();
         statusMessage = detail.isEmpty
@@ -942,7 +975,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
   }
 
-  /// Returns the active configured LiteRT artifact path.
+  /// Returns the active configured local model artifact path.
   String _configuredLocalModelPath(ModelProviderConfig provider) {
     for (final model in provider.models) {
       if (model.id == provider.defaultModel) {
@@ -968,15 +1001,95 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     final document = ModelConfigDocument.parse(await file.readAsString());
     final defaultProvider = document.defaultRef.split(':').first.trim();
-    if (defaultProvider != 'local') {
+    if (!_isManagedLocalModelProviderId(defaultProvider)) {
       return null;
     }
     for (final provider in document.providers) {
-      if (provider.id == defaultProvider && provider.adapter == 'litert') {
+      if (_isLocalModelProviderCandidate(provider, defaultProvider)) {
         return provider;
       }
     }
     return null;
+  }
+
+  /// Reports whether a provider points to the app-managed local model.
+  bool _isLocalModelProviderCandidate(
+    ModelProviderConfig provider,
+    String defaultProvider,
+  ) {
+    if (provider.id != defaultProvider ||
+        !_isManagedLocalModelProviderId(provider.id)) {
+      return false;
+    }
+    return _usesCurrentLocalModelProviderShape(provider);
+  }
+
+  /// Reports whether a provider already uses the current loopback HTTP shape.
+  bool _usesCurrentLocalModelProviderShape(ModelProviderConfig provider) {
+    final auth = stringValue(provider.extra['auth'], trim: true);
+    final descriptor = onboardingLocalModelDescriptor(provider.defaultModel);
+    final runtime = stringValue(provider.extra['runtime'], trim: true);
+    if (provider.id != descriptor.providerId) {
+      return false;
+    }
+    return provider.adapter.trim() == 'openai' &&
+        auth == 'optional' &&
+        runtime == _localRuntimeConfigValue(descriptor.runtimeKind) &&
+        provider.url.trim() ==
+            _localRuntimeChatCompletionsUrlForKind(descriptor.runtimeKind);
+  }
+
+  /// Reports whether a provider already matches the persisted descriptor shape.
+  bool _usesDescriptorLocalModelProviderShape(
+    ModelProviderConfig provider,
+    LocalModelDescriptor descriptor,
+  ) {
+    final runtime = stringValue(provider.extra['runtime'], trim: true);
+    return provider.id == descriptor.providerId &&
+        _usesCurrentLocalModelProviderShape(provider) &&
+        runtime == _localRuntimeConfigValue(descriptor.runtimeKind);
+  }
+
+  /// Reports whether a process status belongs to a managed local model runtime.
+  bool _isLocalModelProcessStatus(ServiceProcessStatus status) {
+    return status.name == gemma4E2BLocalModel.providerName ||
+        status.name == llamaGemma4E2BLocalModel.providerName;
+  }
+
+  /// Returns local model metadata for a persisted provider config.
+  LocalModelDescriptor _localModelDescriptorForProvider(
+    ModelProviderConfig provider,
+  ) {
+    return onboardingLocalModelDescriptor(provider.defaultModel);
+  }
+
+  /// Returns the chat endpoint URL for one local model descriptor.
+  String _localRuntimeChatCompletionsUrlFor(LocalModelDescriptor descriptor) {
+    return _localRuntimeChatCompletionsUrlForKind(descriptor.runtimeKind);
+  }
+
+  /// Returns the chat endpoint URL for one local runtime kind.
+  String _localRuntimeChatCompletionsUrlForKind(LocalModelRuntimeKind kind) {
+    return switch (kind) {
+      LocalModelRuntimeKind.litertLm => config.localModelChatCompletionsUrl,
+      LocalModelRuntimeKind.llamaCpp => config.llamaCppChatCompletionsUrl,
+    };
+  }
+
+  /// Returns the model config runtime value for one local runtime kind.
+  String _localRuntimeConfigValue(LocalModelRuntimeKind kind) {
+    return switch (kind) {
+      LocalModelRuntimeKind.litertLm => 'litert-lm',
+      LocalModelRuntimeKind.llamaCpp => 'llama-cpp',
+    };
+  }
+
+  /// Returns the health endpoint URL for one local model descriptor.
+  String _localRuntimeHealthUrlFor(LocalModelDescriptor descriptor) {
+    return switch (descriptor.runtimeKind) {
+      LocalModelRuntimeKind.litertLm => config.localModelHealthUrl,
+      LocalModelRuntimeKind.llamaCpp => config.llamaCppHealthUrl,
+    };
   }
 
   /// Reloads profile, model, and agent file collection metadata.
@@ -1364,22 +1477,23 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
   }
 
-  /// Makes a local LiteRT model artifact the active default.
+  /// Makes a local model runtime provider the active default.
   Future<OnboardingModelSetupResult> configureOnboardingLocalModel({
     required String modelId,
     void Function(LocalModelInstallProgress progress)? onProgress,
   }) async {
-    if (_isClosing) {
-      return const OnboardingModelSetupResult(
-        success: false,
-        message: 'Agent Awesome runtime is shutting down',
-        providerName: 'Local model',
-      );
-    }
     final model = onboardingLocalModelById(modelId);
     final descriptor = onboardingLocalModelDescriptor(model.id);
+    if (_isClosing) {
+      return OnboardingModelSetupResult(
+        success: false,
+        message: 'Agent Awesome runtime is shutting down',
+        providerName: descriptor.providerName,
+        modelId: model.id,
+      );
+    }
     final targetCheck = _onboardingModelConfigTargetCheck(
-      providerName: 'Local model',
+      providerName: descriptor.providerName,
       modelId: model.id,
     );
     if (targetCheck != null) {
@@ -1397,13 +1511,14 @@ class AgentAwesomeAppController extends ChangeNotifier {
           await localModels.ensureInstalled(descriptor, onProgress: onProgress);
       _throwIfClosing();
       executable = await localModels.ensureRuntimeInstalled(
+        model: descriptor,
         onProgress: onProgress,
       );
     } catch (error) {
       return OnboardingModelSetupResult(
         success: false,
         message: error.toString(),
-        providerName: 'Local model',
+        providerName: descriptor.providerName,
         modelId: model.id,
       );
     }
@@ -1418,6 +1533,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
         modelId: model.id,
         executable: executable,
         modelPath: install.modelPath,
+        url: _localRuntimeChatCompletionsUrlFor(descriptor),
       ),
     );
     if (!result.success) {
@@ -1425,8 +1541,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     return OnboardingModelSetupResult(
       success: true,
-      message: 'Local model saved',
-      providerName: 'Local model',
+      message: '${descriptor.providerName} model saved',
+      providerName: descriptor.providerName,
       modelId: model.id,
     );
   }

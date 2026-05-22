@@ -96,13 +96,21 @@ class _LocalModelSetup extends StatelessWidget {
                 'Choose a model endpoint preset. You can change this later in Settings.',
           ),
           const SizedBox(height: 14),
-          _LocalModelCard(
-            model: selectedModel,
-            descriptor: selectedDescriptor,
-            selected: true,
-            recommended: true,
-            onSelected: () => onModelChanged(selectedModel.id),
-          ),
+          ...onboardingLocalModels.map((model) {
+            final descriptor = onboardingLocalModelDescriptor(model.id);
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: model.id == onboardingLocalModels.last.id ? 0 : 12,
+              ),
+              child: _LocalModelCard(
+                model: model,
+                descriptor: descriptor,
+                selected: model.id == selectedModel.id,
+                recommended: model.id == onboardingLocalModels.first.id,
+                onSelected: () => onModelChanged(model.id),
+              ),
+            );
+          }),
           if (statusMessage.isNotEmpty) ...<Widget>[
             const SizedBox(height: 14),
             _StatusBanner(message: statusMessage),
@@ -126,8 +134,10 @@ class _LocalModelSetup extends StatelessWidget {
               SizedBox(
                 width: 300,
                 child: _SetupButton(
-                  label: _continueLabel,
-                  icon: installed ? Icons.arrow_forward : Icons.download,
+                  label: _continueLabel(selectedDescriptor),
+                  icon: installed || !selectedDescriptor.usesManagedDownload
+                      ? Icons.arrow_forward
+                      : Icons.download,
                   filled: true,
                   onPressed: busy ? null : () => unawaited(onContinue()),
                   iconBefore: true,
@@ -141,11 +151,21 @@ class _LocalModelSetup extends StatelessWidget {
   }
 
   /// Returns primary action copy for fresh and already-installed local models.
-  String get _continueLabel {
+  String _continueLabel(LocalModelDescriptor descriptor) {
     if (busy) {
-      return installed ? 'Saving local model' : 'Downloading local model';
+      if (installed) {
+        return 'Saving local model';
+      }
+      return descriptor.usesManagedDownload
+          ? 'Downloading local model'
+          : 'Preparing local model';
     }
-    return installed ? 'Continue' : 'Download and continue';
+    if (installed) {
+      return 'Continue';
+    }
+    return descriptor.usesManagedDownload
+        ? 'Download and continue'
+        : 'Use llama.cpp';
   }
 }
 
@@ -287,9 +307,10 @@ class _LocalModelCard extends StatelessWidget {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: <Widget>[
                       _ModelMetadataChip(
-                        icon: Icons.file_download_outlined,
-                        label:
-                            '${descriptor.fileName} (${_formatBytes(descriptor.expectedBytes)})',
+                        icon: descriptor.usesManagedDownload
+                            ? Icons.file_download_outlined
+                            : Icons.link,
+                        label: _localModelSourceLabel(descriptor),
                       ),
                       _ModelMetadataChip(
                         icon: Icons.verified_outlined,

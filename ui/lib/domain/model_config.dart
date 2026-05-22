@@ -11,7 +11,6 @@ const List<String> supportedModelAdapters = <String>[
   'openai',
   'anthropic',
   'google',
-  'litert',
 ];
 
 /// ModelConfigDocument represents one model config YAML file.

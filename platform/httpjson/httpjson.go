@@ -4,6 +4,7 @@ package httpjson
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 )
 
@@ -22,6 +23,21 @@ func DecodeBounded(w http.ResponseWriter, r *http.Request, limit int64, target a
 		return err
 	}
 	return nil
+}
+
+// ReadBounded reads one request body with a maximum byte count.
+func ReadBounded(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, error) {
+	body := http.MaxBytesReader(w, r.Body, limit)
+	defer body.Close()
+	data, err := io.ReadAll(body)
+	if err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, ErrPayloadTooLarge
+		}
+		return nil, err
+	}
+	return data, nil
 }
 
 // Write writes a JSON response without HTML escaping.

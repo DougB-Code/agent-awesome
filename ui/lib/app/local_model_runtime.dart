@@ -1,4 +1,4 @@
-/// Installs and serves local LiteRT-LM models for Agent Awesome.
+/// Installs and serves local OpenAI-compatible models for Agent Awesome.
 library;
 
 import 'dart:async';
@@ -64,19 +64,23 @@ LocalModelRuntimeArtifact? _defaultRuntimeArtifactForHost() {
   return null;
 }
 
-/// LocalModelExecutableResolver locates or prepares a runnable LiteRT-LM binary.
+/// LocalModelExecutableResolver locates or prepares a runnable model binary.
 class LocalModelExecutableResolver {
   /// Creates an executable resolver with injectable environment and commands.
   const LocalModelExecutableResolver({
     Map<String, String>? environment,
     CommandRunner? commandRunner,
+    List<String> aliases = const <String>['litert_lm', 'litert-lm'],
+    String displayName = 'LiteRT-LM',
   }) : _environment = environment,
-       _commandRunner = commandRunner;
+       _commandRunner = commandRunner,
+       _aliases = aliases,
+       _displayName = displayName;
 
   final Map<String, String>? _environment;
   final CommandRunner? _commandRunner;
-
-  static const List<String> _aliases = <String>['litert_lm', 'litert-lm'];
+  final List<String> _aliases;
+  final String _displayName;
 
   /// Returns a runnable executable path or throws a diagnostic error.
   Future<String> resolve({
@@ -256,8 +260,8 @@ class LocalModelExecutableResolver {
     final blocked = presentButBlocked.isEmpty
         ? ''
         : ' Found but not executable: ${presentButBlocked.join(', ')}.';
-    return 'LiteRT-LM executable "$requested" was not found or is not executable. '
-        'Install litert_lm, make it executable, or set AGENTAWESOME_LITERT_LM. '
+    return '$_displayName executable "$requested" was not found or is not executable. '
+        'Install ${_aliases.first}, make it executable, or update app configuration. '
         '$blocked Checked: $inspected';
   }
 }
@@ -282,6 +286,7 @@ abstract class LocalModelRuntime {
 
   /// Ensures the local runtime executable is installed and launchable.
   Future<String> ensureRuntimeInstalled({
+    LocalModelDescriptor? model,
     void Function(LocalModelInstallProgress progress)? onProgress,
   });
 
@@ -322,6 +327,7 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
   final LocalModelExecutableResolver _executableResolver;
   final Set<String> _verifiedInstallPaths = <String>{};
   _LiteRtOpenAiServer? _server;
+  _LlamaCppOpenAiServer? _llamaServer;
   bool _closed = false;
 
   /// Ensures the selected model artifact exists and matches its manifest.
@@ -336,6 +342,18 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
         const LocalModelInstallProgress(
           phase: 'ready',
           message: 'Local model already installed',
+        ),
+      );
+      return install;
+    }
+    if (!model.usesManagedDownload) {
+      await Directory(install.directory).create(recursive: true);
+      await _writeManifest(install);
+      _verifiedInstallPaths.add(install.modelPath);
+      onProgress?.call(
+        LocalModelInstallProgress(
+          phase: 'ready',
+          message: '${model.providerName} model ready',
         ),
       );
       return install;
@@ -408,13 +426,22 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     return _isCurrentInstall(_installFor(model));
   }
 
-  /// Ensures the app-managed LiteRT runtime executable is installed.
+  /// Ensures the selected local runtime executable is installed.
   @override
   Future<String> ensureRuntimeInstalled({
+    LocalModelDescriptor? model,
     void Function(LocalModelInstallProgress progress)? onProgress,
   }) async {
     if (_isClosed) {
       throw StateError('Local model runtime is closed');
+    }
+    if (model?.runtimeKind == LocalModelRuntimeKind.llamaCpp) {
+      final executable = await _resolveLlamaExecutable();
+      final validationError = await _validateLlamaExecutable(executable);
+      if (validationError.isNotEmpty) {
+        throw StateError(validationError);
+      }
+      return executable;
     }
     final existing = await _resolvedLaunchableExecutable();
     if (existing != null) {
@@ -441,22 +468,25 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
   @override
   Future<ServiceProcessStatus> start(LocalModelDescriptor model) async {
     if (_isClosed) {
-      return _closedStatus();
+      return _closedStatus(model);
     }
     if (!await isInstalled(model)) {
       return ServiceProcessStatus(
-        name: 'Local model',
-        url: config.localModelHealthUrl,
+        name: model.providerName,
+        url: _healthUrlFor(model),
         state: ConnectionStateKind.disconnected,
         message: '${model.displayName} is not installed',
       );
     }
     if (_isClosed) {
-      return _closedStatus();
+      return _closedStatus(model);
+    }
+    if (model.runtimeKind == LocalModelRuntimeKind.llamaCpp) {
+      return _startLlama(model);
     }
     if (_server != null) {
       return ServiceProcessStatus(
-        name: 'Local model',
+        name: model.providerName,
         url: config.localModelHealthUrl,
         state: ConnectionStateKind.connected,
         message: 'Already running',
@@ -468,7 +498,7 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
       return executable.status!;
     }
     if (_isClosed) {
-      return _closedStatus();
+      return _closedStatus(model);
     }
     final server = _LiteRtOpenAiServer(
       baseUrl: config.localModelBaseUrl,
@@ -480,11 +510,11 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     await server.start();
     if (_isClosed) {
       await server.close();
-      return _closedStatus();
+      return _closedStatus(model);
     }
     _server = server;
     return ServiceProcessStatus(
-      name: 'Local model',
+      name: model.providerName,
       url: config.localModelHealthUrl,
       state: ConnectionStateKind.connected,
       message: 'Started locally',
@@ -499,7 +529,9 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     }
     _closed = true;
     await _server?.close();
+    await _llamaServer?.close();
     _server = null;
+    _llamaServer = null;
     _http.close();
   }
 
@@ -509,13 +541,57 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
   }
 
   /// Returns a user-facing status for shutdown races.
-  ServiceProcessStatus _closedStatus() {
+  ServiceProcessStatus _closedStatus(LocalModelDescriptor model) {
     return ServiceProcessStatus(
-      name: 'Local model',
-      url: config.localModelHealthUrl,
+      name: model.providerName,
+      url: _healthUrlFor(model),
       state: ConnectionStateKind.disconnected,
       message: 'Local model runtime is closed',
     );
+  }
+
+  /// Starts llama.cpp's OpenAI-compatible server for one GGUF model.
+  Future<ServiceProcessStatus> _startLlama(LocalModelDescriptor model) async {
+    if (_llamaServer != null) {
+      return ServiceProcessStatus(
+        name: model.providerName,
+        url: config.llamaCppHealthUrl,
+        state: ConnectionStateKind.connected,
+        message: 'Already running',
+      );
+    }
+    final executable = await _resolveLlamaExecutableStatus();
+    if (executable.status != null) {
+      return executable.status!;
+    }
+    final install = _installFor(model);
+    final server = _LlamaCppOpenAiServer(
+      baseUrl: config.llamaCppBaseUrl,
+      executable: executable.path,
+      install: install,
+      dataDirectory: _dataDirectory,
+      processSupervisor: _processSupervisor,
+      httpClient: _http,
+    );
+    await server.start();
+    if (_isClosed) {
+      await server.close();
+      return _closedStatus(model);
+    }
+    _llamaServer = server;
+    return ServiceProcessStatus(
+      name: model.providerName,
+      url: config.llamaCppHealthUrl,
+      state: ConnectionStateKind.connected,
+      message: 'Started locally',
+    );
+  }
+
+  /// Returns the configured health endpoint for one local runtime.
+  String _healthUrlFor(LocalModelDescriptor model) {
+    return model.runtimeKind == LocalModelRuntimeKind.llamaCpp
+        ? config.llamaCppHealthUrl
+        : config.localModelHealthUrl;
   }
 
   /// Returns an already configured executable only when it passes validation.
@@ -530,6 +606,19 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Resolves the configured llama.cpp server executable.
+  Future<String> _resolveLlamaExecutable() {
+    final resolver = LocalModelExecutableResolver(
+      commandRunner: ProcessSupervisorCommandRunner(_processSupervisor),
+      aliases: const <String>['llama-server'],
+      displayName: 'Llama.cpp',
+    );
+    return resolver.resolve(
+      configuredExecutable: config.llamaCppExecutable,
+      dataDirectory: _dataDirectory,
+    );
   }
 
   /// Downloads or repairs the managed runtime binary and returns its path.
@@ -684,7 +773,11 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
   }
 
   LocalModelInstall _installFor(LocalModelDescriptor model) {
-    final directory = '$_dataDirectory/models/litert-lm/${model.id}';
+    final runtimeDirectory = switch (model.runtimeKind) {
+      LocalModelRuntimeKind.litertLm => 'litert-lm',
+      LocalModelRuntimeKind.llamaCpp => 'llama-cpp',
+    };
+    final directory = '$_dataDirectory/models/$runtimeDirectory/${model.id}';
     return LocalModelInstall(
       model: model,
       directory: directory,
@@ -704,7 +797,7 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
         return _ExecutableResolution(
           path: '',
           status: ServiceProcessStatus(
-            name: 'Local model',
+            name: 'LiteRT-LM',
             url: config.localModelHealthUrl,
             state: ConnectionStateKind.disconnected,
             message: validationError,
@@ -716,8 +809,37 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
       return _ExecutableResolution(
         path: '',
         status: ServiceProcessStatus(
-          name: 'Local model',
+          name: 'LiteRT-LM',
           url: config.localModelHealthUrl,
+          state: ConnectionStateKind.disconnected,
+          message: error.toString(),
+        ),
+      );
+    }
+  }
+
+  Future<_ExecutableResolution> _resolveLlamaExecutableStatus() async {
+    try {
+      final path = await _resolveLlamaExecutable();
+      final validationError = await _validateLlamaExecutable(path);
+      if (validationError.isNotEmpty) {
+        return _ExecutableResolution(
+          path: '',
+          status: ServiceProcessStatus(
+            name: 'Llama.cpp',
+            url: config.llamaCppHealthUrl,
+            state: ConnectionStateKind.disconnected,
+            message: validationError,
+          ),
+        );
+      }
+      return _ExecutableResolution(path: path);
+    } catch (error) {
+      return _ExecutableResolution(
+        path: '',
+        status: ServiceProcessStatus(
+          name: 'Llama.cpp',
+          url: config.llamaCppHealthUrl,
           state: ConnectionStateKind.disconnected,
           message: error.toString(),
         ),
@@ -749,10 +871,47 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     }
   }
 
+  Future<String> _validateLlamaExecutable(String path) async {
+    try {
+      final result = await _processSupervisor.run(
+        ManagedProcessSpec(
+          id: 'llama-help-${DateTime.now().microsecondsSinceEpoch}',
+          name: 'Llama.cpp validation',
+          executable: path,
+          arguments: const <String>['--help'],
+          environment: _localModelProcessEnvironment(path, _dataDirectory),
+          kind: ManagedProcessKind.systemProbe,
+          shutdownMode: ManagedProcessShutdownMode.processGroup,
+          timeout: const Duration(seconds: 10),
+          scope: 'local-model',
+        ),
+      );
+      if (result.exitCode == 0) {
+        return '';
+      }
+      return 'Llama.cpp could not start: ${_processFailureText(result)}';
+    } catch (error) {
+      return 'Llama.cpp could not start: $error';
+    }
+  }
+
   Future<bool> _isCurrentInstall(LocalModelInstall install) async {
     final file = File(install.modelPath);
     final manifest = File(install.manifestPath);
-    if (!await file.exists() || !await manifest.exists()) {
+    if (!await manifest.exists()) {
+      return false;
+    }
+    if (!install.model.usesManagedDownload) {
+      final decoded = jsonDecode(await manifest.readAsString());
+      if (decoded is! Map<String, dynamic>) {
+        return false;
+      }
+      return decoded['id'] == install.model.id &&
+          decoded['runtime'] ==
+              _runtimeConfigValue(install.model.runtimeKind) &&
+          decoded['hf_repo'] == install.model.hfRepo;
+    }
+    if (!await file.exists()) {
       return false;
     }
     final stat = await file.stat();
@@ -809,6 +968,9 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
     File candidate,
     LocalModelDescriptor model,
   ) async {
+    if (!model.usesManagedDownload) {
+      return false;
+    }
     if (!await candidate.exists()) {
       return false;
     }
@@ -905,6 +1067,8 @@ class LiteRtLocalModelRuntime implements LocalModelRuntime {
       'bytes': install.model.expectedBytes,
       'sha256': install.model.expectedSha256,
       'license': install.model.license,
+      'runtime': _runtimeConfigValue(install.model.runtimeKind),
+      if (install.model.hfRepo.isNotEmpty) 'hf_repo': install.model.hfRepo,
       'installed_at': DateTime.now().toUtc().toIso8601String(),
     };
     await File(
@@ -918,13 +1082,14 @@ class _ExecutableResolution {
   /// Creates a local model executable resolution result.
   const _ExecutableResolution({required this.path, this.status});
 
-  /// Runnable LiteRT-LM executable path.
+  /// Runnable local model executable path.
   final String path;
 
   /// Startup failure status when the executable cannot be resolved.
   final ServiceProcessStatus? status;
 }
 
+/// _LiteRtOpenAiServer adapts LiteRT-LM CLI calls to HTTP chat completions.
 class _LiteRtOpenAiServer {
   _LiteRtOpenAiServer({
     required this.baseUrl,
@@ -1385,6 +1550,97 @@ class _LiteRtOpenAiServer {
   }
 }
 
+/// _LlamaCppOpenAiServer supervises llama.cpp's native HTTP endpoint.
+class _LlamaCppOpenAiServer {
+  _LlamaCppOpenAiServer({
+    required this.baseUrl,
+    required this.executable,
+    required this.install,
+    required this.dataDirectory,
+    required this.processSupervisor,
+    required this.httpClient,
+  });
+
+  final String baseUrl;
+  final String executable;
+  final LocalModelInstall install;
+  final String dataDirectory;
+  final ProcessSupervisor processSupervisor;
+  final http.Client httpClient;
+  ManagedProcessHandle? _handle;
+
+  /// Starts llama.cpp's OpenAI-compatible HTTP server.
+  Future<void> start() async {
+    final uri = Uri.parse(baseUrl);
+    final arguments = <String>[
+      '--host',
+      uri.host,
+      '--port',
+      uri.port.toString(),
+      ..._modelArguments(),
+    ];
+    _handle = await processSupervisor.start(
+      ManagedProcessSpec(
+        id: 'llama-cpp-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'Llama.cpp',
+        executable: executable,
+        arguments: arguments,
+        environment: _localModelProcessEnvironment(executable, dataDirectory),
+        kind: ManagedProcessKind.longRunningService,
+        shutdownMode: ManagedProcessShutdownMode.processGroup,
+        persistence: ManagedProcessPersistence.pidRecord,
+        outputLogPath: '$dataDirectory/logs/llama-cpp.log',
+        scope: 'local-model',
+      ),
+    );
+    try {
+      await _waitForReadiness();
+    } catch (_) {
+      await close();
+      rethrow;
+    }
+  }
+
+  /// Stops the supervised llama.cpp server.
+  Future<void> close() async {
+    final handle = _handle;
+    _handle = null;
+    if (handle != null) {
+      await processSupervisor.stop(handle);
+    }
+  }
+
+  /// Returns llama.cpp model arguments for managed HF or local-file models.
+  List<String> _modelArguments() {
+    if (install.model.hfRepo.trim().isNotEmpty) {
+      return <String>['--hf-repo', install.model.hfRepo.trim()];
+    }
+    return <String>['--model', install.modelPath];
+  }
+
+  /// Waits until llama.cpp reports a healthy HTTP endpoint.
+  Future<void> _waitForReadiness() async {
+    final health = Uri.parse(baseUrl).replace(path: '/health', query: null);
+    final deadline = DateTime.now().add(const Duration(minutes: 20));
+    Object? lastError;
+    while (DateTime.now().isBefore(deadline)) {
+      try {
+        final response = await httpClient
+            .get(health)
+            .timeout(const Duration(seconds: 2));
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          return;
+        }
+        lastError = 'HTTP ${response.statusCode}';
+      } catch (error) {
+        lastError = error;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    throw StateError('Llama.cpp did not become ready: $lastError');
+  }
+}
+
 /// _LocalModelToolCall stores one parsed local-model tool request.
 class _LocalModelToolCall {
   /// Creates a local model tool call.
@@ -1436,6 +1692,14 @@ String _assistantTextFromOutput(String output) {
       .where((line) => !line.startsWith('INFO: Created TensorFlow Lite '))
       .toList();
   return lines.join('\n').trim();
+}
+
+/// Returns the model-config value for one local runtime kind.
+String _runtimeConfigValue(LocalModelRuntimeKind kind) {
+  return switch (kind) {
+    LocalModelRuntimeKind.litertLm => 'litert-lm',
+    LocalModelRuntimeKind.llamaCpp => 'llama-cpp',
+  };
 }
 
 /// Returns the SHA-256 digest for a file.

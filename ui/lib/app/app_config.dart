@@ -17,12 +17,22 @@ class AppConfig {
     required this.autoStartLocalServices,
     required this.runtimeProfilePath,
     this.litertLmExecutable = 'litert-lm',
+    this.llamaCppExecutable = 'llama-server',
     this.localModelBaseUrl = 'http://127.0.0.1:11666',
+    this.llamaCppBaseUrl = 'http://127.0.0.1:11667',
     this.gatewayAuthorizationHeader = '',
   });
 
   /// Builds configuration from Flutter compile-time environment values.
   factory AppConfig.fromEnvironment() {
+    final workspaceRoot = _environmentValue(
+      compiled: const String.fromEnvironment(
+        'AGENTAWESOME_WORKSPACE_ROOT',
+        defaultValue: '',
+      ),
+      runtimeName: 'AGENTAWESOME_WORKSPACE_ROOT',
+      fallback: _defaultWorkspaceRoot(),
+    );
     return AppConfig(
       agentApiBaseUrl: _environmentValue(
         compiled: const String.fromEnvironment(
@@ -72,14 +82,7 @@ class AppConfig {
         runtimeName: 'AGENT_USER_ID',
         fallback: 'doug',
       ),
-      workspaceRoot: _environmentValue(
-        compiled: const String.fromEnvironment(
-          'AGENTAWESOME_WORKSPACE_ROOT',
-          defaultValue: '',
-        ),
-        runtimeName: 'AGENTAWESOME_WORKSPACE_ROOT',
-        fallback: _defaultWorkspaceRoot(),
-      ),
+      workspaceRoot: workspaceRoot,
       autoStartLocalServices: _boolEnvironmentValue(
         compiled: const String.fromEnvironment(
           'AUTO_START_LOCAL_SERVICES',
@@ -104,6 +107,14 @@ class AppConfig {
         runtimeName: 'AGENTAWESOME_LITERT_LM',
         fallback: 'litert-lm',
       ),
+      llamaCppExecutable: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENTAWESOME_LLAMA_CPP_SERVER',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENTAWESOME_LLAMA_CPP_SERVER',
+        fallback: _defaultLlamaCppExecutable(workspaceRoot),
+      ),
       localModelBaseUrl: _environmentValue(
         compiled: const String.fromEnvironment(
           'AGENTAWESOME_LOCAL_MODEL_BASE_URL',
@@ -111,6 +122,14 @@ class AppConfig {
         ),
         runtimeName: 'AGENTAWESOME_LOCAL_MODEL_BASE_URL',
         fallback: 'http://127.0.0.1:11666',
+      ),
+      llamaCppBaseUrl: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENTAWESOME_LLAMA_CPP_BASE_URL',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENTAWESOME_LLAMA_CPP_BASE_URL',
+        fallback: 'http://127.0.0.1:11667',
       ),
       gatewayAuthorizationHeader: _gatewayAuthorizationHeaderFromEnvironment(),
     );
@@ -158,18 +177,36 @@ class AppConfig {
   /// LiteRT-LM executable path used by the local model runtime.
   final String litertLmExecutable;
 
-  /// Loopback base URL exposed by the local model runtime.
+  /// llama.cpp server executable path used by the local model runtime.
+  final String llamaCppExecutable;
+
+  /// Loopback base URL exposed by the LiteRT-LM local model runtime.
   final String localModelBaseUrl;
 
-  /// OpenAI-compatible chat completions URL exposed by the local runtime.
+  /// Loopback base URL exposed by the llama.cpp local model runtime.
+  final String llamaCppBaseUrl;
+
+  /// OpenAI-compatible chat completions URL exposed by LiteRT-LM.
   String get localModelChatCompletionsUrl {
     final uri = Uri.parse(localModelBaseUrl);
     return uri.replace(path: '/v1/chat/completions', query: null).toString();
   }
 
-  /// Health URL exposed by the local model runtime.
+  /// Health URL exposed by LiteRT-LM.
   String get localModelHealthUrl {
     final uri = Uri.parse(localModelBaseUrl);
+    return uri.replace(path: '/health', query: null).toString();
+  }
+
+  /// OpenAI-compatible chat completions URL exposed by llama.cpp.
+  String get llamaCppChatCompletionsUrl {
+    final uri = Uri.parse(llamaCppBaseUrl);
+    return uri.replace(path: '/v1/chat/completions', query: null).toString();
+  }
+
+  /// Health URL exposed by llama.cpp.
+  String get llamaCppHealthUrl {
+    final uri = Uri.parse(llamaCppBaseUrl);
     return uri.replace(path: '/health', query: null).toString();
   }
 
@@ -293,4 +330,20 @@ bool _isAgentAwesomeWorkspace(Directory directory) {
       hasServiceDirectories &&
       (hasPrebuiltReleaseServices ||
           File('${directory.path}/harness/go.mod').existsSync());
+}
+
+/// Returns the bundled llama.cpp server path when present.
+String _defaultLlamaCppExecutable(String workspaceRoot) {
+  final workspace = Directory(workspaceRoot);
+  final candidates = <String>[
+    '${workspace.parent.path}/tools/ggml.ai/llama.cpp/llama-server',
+    '${workspace.path}/tools/ggml.ai/llama.cpp/llama-server',
+    'llama-server',
+  ];
+  for (final candidate in candidates) {
+    if (File(candidate).existsSync()) {
+      return candidate;
+    }
+  }
+  return 'llama-server';
 }

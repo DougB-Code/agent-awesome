@@ -418,6 +418,11 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       if (candidate.id == replacingProvider?.id) {
         continue;
       }
+      if (replacingProvider != null &&
+          _isManagedLocalModelProviderId(replacingProvider.id) &&
+          _isManagedLocalModelProviderId(candidate.id)) {
+        continue;
+      }
       if (await _isConfiguredModelProvider(candidate)) {
         providers.add(candidate);
       }
@@ -430,7 +435,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
 
   /// Returns whether a provider has local runtime or stored credential backing.
   Future<bool> _isConfiguredModelProvider(ModelProviderConfig provider) async {
-    if (provider.id == 'local') {
+    if (_isManagedLocalModelProviderId(provider.id)) {
       return true;
     }
     if (provider.apiKey.trim().isEmpty) {

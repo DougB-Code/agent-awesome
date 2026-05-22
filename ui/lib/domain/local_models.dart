@@ -1,7 +1,16 @@
 /// Defines local model artifact and installation data.
 library;
 
-/// LocalModelDescriptor describes one downloadable LiteRT-LM model artifact.
+/// LocalModelRuntimeKind names the local runtime that serves one model.
+enum LocalModelRuntimeKind {
+  /// Models served through the LiteRT-LM command-line runtime.
+  litertLm,
+
+  /// Models served through llama.cpp's OpenAI-compatible server.
+  llamaCpp,
+}
+
+/// LocalModelDescriptor describes one locally managed model artifact.
 class LocalModelDescriptor {
   /// Creates immutable metadata for a locally managed model.
   const LocalModelDescriptor({
@@ -15,6 +24,10 @@ class LocalModelDescriptor {
     required this.expectedBytes,
     required this.expectedSha256,
     required this.license,
+    this.runtimeKind = LocalModelRuntimeKind.litertLm,
+    this.providerId = 'litert-lm',
+    this.providerName = 'LiteRT-LM',
+    this.hfRepo = '',
   });
 
   /// Stable Agent Awesome model id.
@@ -46,6 +59,31 @@ class LocalModelDescriptor {
 
   /// Source model license label.
   final String license;
+
+  /// Local runtime that can serve this model.
+  final LocalModelRuntimeKind runtimeKind;
+
+  /// Provider id written into harness model config.
+  final String providerId;
+
+  /// User-facing provider name written into harness model config.
+  final String providerName;
+
+  /// Optional llama.cpp Hugging Face repository selector.
+  final String hfRepo;
+
+  /// Whether AA downloads and verifies the model file itself.
+  bool get usesManagedDownload {
+    return downloadUrl.trim().isNotEmpty &&
+        expectedBytes > 0 &&
+        expectedSha256.trim().isNotEmpty;
+  }
+
+  /// Whether llama.cpp should resolve the model from Hugging Face.
+  bool get usesLlamaHfRepo {
+    return runtimeKind == LocalModelRuntimeKind.llamaCpp &&
+        hfRepo.trim().isNotEmpty;
+  }
 }
 
 /// LocalModelInstall stores the installed file paths for a model.
@@ -64,7 +102,7 @@ class LocalModelInstall {
   /// Directory that owns the model artifact and manifest.
   final String directory;
 
-  /// Installed LiteRT-LM artifact path.
+  /// Installed artifact path or runtime-owned model marker path.
   final String modelPath;
 
   /// Installation manifest path.

@@ -99,6 +99,18 @@ func CompactToolResult(value any, isError bool) any {
 	}
 }
 
+// IndentedToolResult wraps structured MCP content in readable text form.
+func IndentedToolResult(value any, isError bool) any {
+	data, _ := json.MarshalIndent(value, "", "  ")
+	return map[string]any{
+		"content": []map[string]string{
+			{"type": "text", "text": string(data)},
+		},
+		"structuredContent": value,
+		"isError":           isError,
+	}
+}
+
 // handle dispatches supported MCP methods.
 func (s Server) handle(ctx context.Context, req rpcRequest) (any, *RPCError) {
 	switch req.Method {

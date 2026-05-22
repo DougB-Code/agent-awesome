@@ -106,7 +106,7 @@ void main() {
 
     expect(title, 'Migration Plan');
     expect(runBody['stateDelta'], <String, dynamic>{
-      'agentawesome.model_ref': 'local:gemma',
+      'agentawesome.model_ref': 'litert-lm:gemma',
     });
     client.close();
   });
@@ -201,10 +201,14 @@ providers:
 ''';
 
 const String _localModelConfig = '''
-default: local:gemma
+default: litert-lm:gemma
 providers:
-  local:
-    adapter: litert
+  litert-lm:
+    name: LiteRT-LM
+    adapter: openai
+    auth: optional
+    runtime: litert-lm
+    url: http://127.0.0.1:11666/v1/chat/completions
     default: gemma
     models:
       - id: gemma

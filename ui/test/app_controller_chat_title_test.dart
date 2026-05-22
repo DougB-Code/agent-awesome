@@ -46,7 +46,7 @@ void main() {
         configDirectoryPath: '${tempRoot.path}/config',
       );
       final modelConfigPath = await configFiles.create(ConfigFileKind.model);
-      const modelConfigContent = 'default: local:test\nproviders: {}\n';
+      const modelConfigContent = 'default: openai:test\nproviders: {}\n';
       await configFiles.write(modelConfigPath, modelConfigContent);
       final controller = AgentAwesomeAppController(
         config: _testConfig(),

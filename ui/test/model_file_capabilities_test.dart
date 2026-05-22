@@ -10,12 +10,13 @@ void main() {
   test('uses base64 fallback for models without known native files', () {
     final capabilities = modelFileCapabilitiesFor(
       provider: const ModelProviderConfig(
-        id: 'local',
-        name: 'Local',
-        adapter: 'litert',
+        id: 'litert-lm',
+        name: 'LiteRT-LM',
+        adapter: 'openai',
         apiKey: '',
         defaultModel: 'small',
-        url: '',
+        url: 'http://127.0.0.1:11666/v1/chat/completions',
+        extra: <String, dynamic>{'auth': 'optional', 'runtime': 'litert-lm'},
         models: <ModelConfigModel>[
           ModelConfigModel(id: 'small', model: 'gemma-3n'),
         ],

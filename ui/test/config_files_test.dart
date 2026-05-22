@@ -25,9 +25,9 @@ void main() {
   test('reads and writes managed config files', () async {
     final path = await store.create(ConfigFileKind.model);
 
-    await store.write(path, 'default: local:model\n');
+    await store.write(path, 'default: openai:model\n');
 
-    expect(await store.read(path), 'default: local:model\n');
+    expect(await store.read(path), 'default: openai:model\n');
   });
 
   test('creates tool configs inside package folders', () async {

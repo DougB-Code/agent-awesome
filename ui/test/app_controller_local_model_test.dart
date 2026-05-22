@@ -174,7 +174,15 @@ void main() {
       expect(settingsStore.saved.gettingStartedCompleted, isTrue);
       expect(controller.hasConfiguredModel, isTrue);
       final modelConfig = await modelFile.readAsString();
-      expect(modelConfig, contains('local'));
+      expect(modelConfig, contains('default: litert-lm:gemma-4-e2b-it'));
+      expect(modelConfig, contains('name: LiteRT-LM'));
+      expect(modelConfig, contains('adapter: openai'));
+      expect(modelConfig, contains('auth: optional'));
+      expect(modelConfig, contains('runtime: litert-lm'));
+      expect(
+        modelConfig,
+        contains('url: http://127.0.0.1:11666/v1/chat/completions'),
+      );
       expect(modelConfig, contains('gemma-4-e2b-it'));
     },
   );
@@ -210,26 +218,27 @@ void main() {
     },
   );
 
-  test(
-    'startup keeps setup complete when restored local model cannot start',
-    () async {
-      final root = await Directory.systemTemp.createTemp(
-        'agentawesome-controller-local-model-bad-runtime-',
-      );
-      addTearDown(() async {
-        if (await root.exists()) {
-          await root.delete(recursive: true);
-        }
-      });
-      final configDirectory = Directory('${root.path}/config');
-      final modelFile = File('${configDirectory.path}/models/model.yaml');
-      await modelFile.parent.create(recursive: true);
-      await modelFile.writeAsString('''
-default: local:gemma-4-e2b-it
+  test('startup keeps setup complete when LiteRT-LM cannot start', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-controller-local-model-bad-runtime-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final configDirectory = Directory('${root.path}/config');
+    final modelFile = File('${configDirectory.path}/models/model.yaml');
+    await modelFile.parent.create(recursive: true);
+    await modelFile.writeAsString('''
+default: litert-lm:gemma-4-e2b-it
 providers:
-  local:
-    name: Local model
-    adapter: litert
+  litert-lm:
+    name: LiteRT-LM
+    adapter: openai
+    auth: optional
+    runtime: litert-lm
+    url: http://127.0.0.1:11666/v1/chat/completions
     default: gemma-4-e2b-it
     executable: missing-litert-lm
     models:
@@ -237,51 +246,120 @@ providers:
         model: gemma-4-E2B-it
         path: ${root.path}/data/models/litert-lm/gemma-4-e2b-it/gemma-4-E2B-it.litertlm
 ''');
-      final profileFile = File('${root.path}/profile.json');
-      await profileFile.writeAsString(
-        encodeRuntimeProfileJson(
-          _runtimeProfile(root.path, modelConfigPath: modelFile.path),
-        ),
-      );
-      final settingsStore = _MemoryAppSettingsStore(
-        saved: const AgentAwesomeAppSettings(gettingStartedCompleted: true),
-      );
-      final controller = AgentAwesomeAppController(
-        config: _testConfig(
-          workspaceRoot: root.path,
-          runtimeProfilePath: profileFile.path,
-          litertLmExecutable: 'missing-litert-lm',
-        ),
-        appSettingsStore: settingsStore,
-        configFiles: ConfigFileStore(configDirectoryPath: configDirectory.path),
-        localModels: _RecoveringLocalModelRuntime(
-          root.path,
-          startConnected: false,
-        ),
-      );
-      addTearDown(() async {
-        await controller.close();
-      });
+    final profileFile = File('${root.path}/profile.json');
+    await profileFile.writeAsString(
+      encodeRuntimeProfileJson(
+        _runtimeProfile(root.path, modelConfigPath: modelFile.path),
+      ),
+    );
+    final settingsStore = _MemoryAppSettingsStore(
+      saved: const AgentAwesomeAppSettings(gettingStartedCompleted: true),
+    );
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(
+        workspaceRoot: root.path,
+        runtimeProfilePath: profileFile.path,
+        litertLmExecutable: Platform.resolvedExecutable,
+      ),
+      appSettingsStore: settingsStore,
+      configFiles: ConfigFileStore(configDirectoryPath: configDirectory.path),
+      localModels: _RecoveringLocalModelRuntime(
+        root.path,
+        startConnected: false,
+      ),
+    );
+    addTearDown(() async {
+      await controller.close();
+    });
 
-      await controller.initialize();
+    await controller.initialize();
 
-      expect(controller.shellDecisionReady, isTrue);
-      expect(controller.gettingStartedCompleted, isTrue);
-      expect(settingsStore.saved.gettingStartedCompleted, isTrue);
-      expect(
-        controller.localProcessStatuses.any(
-          (status) =>
-              status.name == 'Local model' &&
-              status.state == ConnectionStateKind.disconnected &&
-              status.message.contains('Executable unavailable'),
-        ),
-        isTrue,
-      );
-      expect(await controller.createChat(), isFalse);
-      expect(controller.messages, isNotEmpty);
-      expect(controller.messages.last.text, contains('local model'));
-    },
-  );
+    expect(controller.shellDecisionReady, isTrue);
+    expect(controller.gettingStartedCompleted, isTrue);
+    expect(settingsStore.saved.gettingStartedCompleted, isTrue);
+    expect(
+      controller.localProcessStatuses.any(
+        (status) =>
+            status.name == 'LiteRT-LM' &&
+            status.state == ConnectionStateKind.disconnected &&
+            status.message.contains('Executable unavailable'),
+      ),
+      isTrue,
+    );
+    expect(await controller.createChat(), isFalse);
+    expect(controller.messages, isNotEmpty);
+    expect(controller.messages.last.text, contains('local model'));
+    final repairedConfig = await modelFile.readAsString();
+    expect(repairedConfig, contains('default: litert-lm:gemma-4-e2b-it'));
+    expect(repairedConfig, contains('name: LiteRT-LM'));
+    expect(repairedConfig, contains('adapter: openai'));
+    expect(repairedConfig, contains('auth: optional'));
+    expect(repairedConfig, contains('runtime: litert-lm'));
+    expect(
+      repairedConfig,
+      contains('executable: ${Platform.resolvedExecutable}'),
+    );
+    expect(repairedConfig, isNot(contains('adapter: litert')));
+    expect(repairedConfig, isNot(contains('name: Local model')));
+  });
+
+  test('local model setup writes llama.cpp provider config', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-controller-llama-model-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final configDirectory = Directory('${root.path}/config');
+    final modelFile = File('${configDirectory.path}/models/model.yaml');
+    await modelFile.parent.create(recursive: true);
+    await modelFile.writeAsString('');
+    final profileFile = File('${root.path}/profile.json');
+    await profileFile.writeAsString(
+      encodeRuntimeProfileJson(
+        _runtimeProfile(root.path, modelConfigPath: modelFile.path),
+      ),
+    );
+    final localModels = _SetupLocalModelRuntime(root.path);
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(
+        workspaceRoot: root.path,
+        runtimeProfilePath: profileFile.path,
+        llamaCppExecutable: Platform.resolvedExecutable,
+      ),
+      appSettingsStore: _MemoryAppSettingsStore(),
+      configFiles: ConfigFileStore(configDirectoryPath: configDirectory.path),
+      localModels: localModels,
+    );
+    addTearDown(() async {
+      await controller.close();
+    });
+
+    await controller.initialize();
+    final result = await controller.configureOnboardingLocalModel(
+      modelId: 'llama-gemma-4-e2b-it-q8',
+    );
+
+    expect(result.success, isTrue);
+    expect(result.providerName, 'Llama.cpp');
+    expect(
+      localModels.runtimeModel?.runtimeKind,
+      LocalModelRuntimeKind.llamaCpp,
+    );
+    final modelConfig = await modelFile.readAsString();
+    expect(modelConfig, contains('default: llama-cpp:llama-gemma-4-e2b-it-q8'));
+    expect(modelConfig, contains('name: Llama.cpp'));
+    expect(modelConfig, contains('adapter: openai'));
+    expect(modelConfig, contains('auth: optional'));
+    expect(modelConfig, contains('runtime: llama-cpp'));
+    expect(modelConfig, contains('hf-repo: ggml-org/gemma-4-E2B-it-GGUF:Q8_0'));
+    expect(
+      modelConfig,
+      contains('url: http://127.0.0.1:11667/v1/chat/completions'),
+    );
+  });
 }
 
 class _MemoryAppSettingsStore extends AgentAwesomeAppSettingsStore {
@@ -333,6 +411,7 @@ class _RecoveringLocalModelRuntime implements LocalModelRuntime {
   /// Returns a synthetic executable for local setup configuration.
   @override
   Future<String> ensureRuntimeInstalled({
+    LocalModelDescriptor? model,
     void Function(LocalModelInstallProgress progress)? onProgress,
   }) async {
     return Platform.resolvedExecutable;
@@ -352,8 +431,10 @@ class _RecoveringLocalModelRuntime implements LocalModelRuntime {
   @override
   Future<ServiceProcessStatus> start(LocalModelDescriptor model) async {
     return ServiceProcessStatus(
-      name: 'Local model',
-      url: 'http://127.0.0.1:11666/health',
+      name: model.providerName,
+      url: model.runtimeKind == LocalModelRuntimeKind.llamaCpp
+          ? 'http://127.0.0.1:11667/health'
+          : 'http://127.0.0.1:11666/health',
       state: startConnected
           ? ConnectionStateKind.connected
           : ConnectionStateKind.disconnected,
@@ -362,7 +443,10 @@ class _RecoveringLocalModelRuntime implements LocalModelRuntime {
   }
 
   LocalModelInstall _installFor(LocalModelDescriptor model) {
-    final directory = '$root/data/models/litert-lm/${model.id}';
+    final runtimeDirectory = model.runtimeKind == LocalModelRuntimeKind.llamaCpp
+        ? 'llama-cpp'
+        : 'litert-lm';
+    final directory = '$root/data/models/$runtimeDirectory/${model.id}';
     return LocalModelInstall(
       model: model,
       directory: directory,
@@ -397,6 +481,7 @@ class _MissingLocalModelRuntime implements LocalModelRuntime {
   /// Returns no runtime because setup has not selected local models.
   @override
   Future<String> ensureRuntimeInstalled({
+    LocalModelDescriptor? model,
     void Function(LocalModelInstallProgress progress)? onProgress,
   }) {
     throw UnimplementedError('runtime install should not run during startup');
@@ -449,6 +534,7 @@ class _CountingLocalModelRuntime implements LocalModelRuntime {
   /// Records unexpected runtime install attempts.
   @override
   Future<String> ensureRuntimeInstalled({
+    LocalModelDescriptor? model,
     void Function(LocalModelInstallProgress progress)? onProgress,
   }) async {
     runtimeInstallAttempts++;
@@ -477,6 +563,71 @@ class _CountingLocalModelRuntime implements LocalModelRuntime {
       directory: '/tmp/${model.id}',
       modelPath: '/tmp/${model.id}/${model.fileName}',
       manifestPath: '/tmp/${model.id}/manifest.json',
+    );
+  }
+}
+
+class _SetupLocalModelRuntime implements LocalModelRuntime {
+  _SetupLocalModelRuntime(this.root);
+
+  final String root;
+  LocalModelDescriptor? runtimeModel;
+
+  /// Closes no resources because the fake starts no process.
+  @override
+  Future<void> close() async {}
+
+  /// Returns a synthetic install for the selected setup model.
+  @override
+  Future<LocalModelInstall> ensureInstalled(
+    LocalModelDescriptor model, {
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    return _installFor(model);
+  }
+
+  /// Reports no installed model before setup writes the config.
+  @override
+  Future<bool> isInstalled(LocalModelDescriptor model) async {
+    return false;
+  }
+
+  /// Records which runtime setup requested.
+  @override
+  Future<String> ensureRuntimeInstalled({
+    LocalModelDescriptor? model,
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    runtimeModel = model;
+    return Platform.resolvedExecutable;
+  }
+
+  /// Returns no recovered model so setup exercises ensureInstalled.
+  @override
+  Future<LocalModelInstall?> recoverInstalled(
+    LocalModelDescriptor model, {
+    List<String> candidatePaths = const <String>[],
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    return null;
+  }
+
+  /// Does not start because setup only writes configuration.
+  @override
+  Future<ServiceProcessStatus> start(LocalModelDescriptor model) {
+    throw UnimplementedError('local model should not start during setup');
+  }
+
+  LocalModelInstall _installFor(LocalModelDescriptor model) {
+    final runtimeDirectory = model.runtimeKind == LocalModelRuntimeKind.llamaCpp
+        ? 'llama-cpp'
+        : 'litert-lm';
+    final directory = '$root/data/models/$runtimeDirectory/${model.id}';
+    return LocalModelInstall(
+      model: model,
+      directory: directory,
+      modelPath: '$directory/${model.fileName}',
+      manifestPath: '$directory/manifest.json',
     );
   }
 }
@@ -576,6 +727,7 @@ AppConfig _testConfig({
   required String workspaceRoot,
   required String runtimeProfilePath,
   String litertLmExecutable = 'litert-lm',
+  String llamaCppExecutable = 'llama-server',
   bool autoStartLocalServices = false,
 }) {
   return AppConfig(
@@ -589,5 +741,6 @@ AppConfig _testConfig({
     autoStartLocalServices: autoStartLocalServices,
     runtimeProfilePath: runtimeProfilePath,
     litertLmExecutable: litertLmExecutable,
+    llamaCppExecutable: llamaCppExecutable,
   );
 }

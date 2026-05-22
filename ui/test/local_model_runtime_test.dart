@@ -1,4 +1,4 @@
-/// Tests local LiteRT-LM model installation behavior.
+/// Tests local model installation and runtime behavior.
 library;
 
 import 'dart:convert';
@@ -52,6 +52,37 @@ void main() {
     );
     expect(manifest['sha256'], descriptor.expectedSha256);
     expect(manifest['license'], descriptor.license);
+  });
+
+  test('records a llama.cpp Hugging Face model without app download', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-llama-model-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final descriptor = _llamaDescriptor();
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        fail('llama.cpp HF models should not use the app downloader');
+      }),
+    );
+    addTearDown(runtime.close);
+
+    final install = await runtime.ensureInstalled(descriptor);
+
+    expect(await File(install.modelPath).exists(), isFalse);
+    expect(await runtime.isInstalled(descriptor), isTrue);
+    final manifest = jsonDecode(
+      await File(install.manifestPath).readAsString(),
+    );
+    expect(manifest['runtime'], 'llama-cpp');
+    expect(manifest['hf_repo'], descriptor.hfRepo);
   });
 
   test('rejects a downloaded model when the checksum does not match', () async {
@@ -463,6 +494,25 @@ LocalModelDescriptor _testDescriptor(
     expectedBytes: bytes.length,
     expectedSha256: expectedSha256 ?? sha256.convert(bytes).toString(),
     license: 'Apache-2.0',
+  );
+}
+
+LocalModelDescriptor _llamaDescriptor() {
+  return const LocalModelDescriptor(
+    id: 'test-llama',
+    displayName: 'Test Llama',
+    modelName: 'test-llama-q4',
+    repository: 'example/test-llama-gguf',
+    revision: '',
+    fileName: 'hf-repo.txt',
+    downloadUrl: '',
+    expectedBytes: 0,
+    expectedSha256: '',
+    license: 'Test',
+    runtimeKind: LocalModelRuntimeKind.llamaCpp,
+    providerId: 'llama-cpp',
+    providerName: 'Llama.cpp',
+    hfRepo: 'example/test-llama-gguf:Q4_K_M',
   );
 }
 

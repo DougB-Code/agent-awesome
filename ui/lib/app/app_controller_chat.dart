@@ -707,7 +707,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       }
     }
     for (final status in localProcessStatuses) {
-      if (status.name == 'Local model' &&
+      if (_isLocalModelProcessStatus(status) &&
           status.state == ConnectionStateKind.disconnected &&
           status.message.isNotEmpty) {
         return 'Agent Awesome could not start the local model: ${status.message}';

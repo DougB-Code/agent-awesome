@@ -2,4 +2,4 @@
 ** xref:development:setup.adoc[Development Setup]
 ** xref:development:contributor-setup.adoc[Contributor Setup]
 ** xref:development:build-package.adoc[Build And Package]
-** xref:development:litert-gemma-tool-calls.adoc[LiteRT Gemma Tool Calls]
+** xref:development:local-model-http-runtime.adoc[Local Model HTTP Runtime]
