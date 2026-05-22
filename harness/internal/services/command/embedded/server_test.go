@@ -62,4 +62,19 @@ func TestStartServesHealthAndMCP(t *testing.T) {
 	if len(payload.Result.Tools) == 0 {
 		t.Fatalf("tools/list returned no tools")
 	}
+	if !toolListed(payload.Result.Tools, "command_execute") {
+		t.Fatalf("tools/list = %#v, want command_execute alias for model-facing calls", payload.Result.Tools)
+	}
+}
+
+// toolListed reports whether an MCP tools/list response includes a name.
+func toolListed(tools []struct {
+	Name string `json:"name"`
+}, name string) bool {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
 }

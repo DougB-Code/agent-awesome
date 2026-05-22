@@ -131,14 +131,14 @@ void main() {
     controller.appSettings = const AgentAwesomeAppSettings(
       gettingStartedCompleted: true,
     );
-    controller.runtimeProfilePath = '/tmp/cloudflare_context.json';
+    controller.runtimeProfilePath = '/tmp/external_gateway.json';
     controller.runtimeProfile = _externalGatewayProfile();
     controller.availableModelConfigs = const <ConfigFileEntry>[];
     controller.availableProfiles = const <RuntimeProfileFileEntry>[
       RuntimeProfileFileEntry(
-        path: '/tmp/cloudflare_context.json',
-        id: 'cloudflare-doug',
-        label: 'Cloudflare Doug',
+        path: '/tmp/external_gateway.json',
+        id: 'external-shared',
+        label: 'External Shared',
         active: true,
         runtimeKind: 'Cloud',
         memoryDomainLabels: <String>['Doug Memory'],
@@ -547,14 +547,14 @@ AppConfig _testConfig() {
   );
 }
 
-/// Returns a cloud-style profile whose model is selected by the gateway.
+/// Returns an external profile whose model is selected by the gateway.
 RuntimeProfile _externalGatewayProfile() {
   return const RuntimeProfile(
-    id: 'cloudflare-doug',
-    label: 'Cloudflare Doug',
+    id: 'external-shared',
+    label: 'External Shared',
     harness: HarnessRuntime(
-      id: 'cloudflare-harness',
-      label: 'Cloudflare Harness',
+      id: 'external-harness',
+      label: 'External Harness',
       apiBaseUrl: 'http://127.0.0.1:18070/api',
       contextApiBaseUrl: 'http://127.0.0.1:18070/api/context',
       appName: 'agent_awesome',
@@ -568,8 +568,8 @@ RuntimeProfile _externalGatewayProfile() {
       autoStart: false,
     ),
     gateway: GatewayRuntime(
-      id: 'cloudflare-gateway',
-      label: 'Cloudflare Gateway',
+      id: 'external-gateway',
+      label: 'External Gateway',
       apiBaseUrl: 'http://127.0.0.1:18070/api',
       healthUrl: 'http://127.0.0.1:18070/healthz',
       workingDirectory: '/tmp/gateway',

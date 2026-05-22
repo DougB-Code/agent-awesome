@@ -11,15 +11,10 @@ Run commands from the repository root unless a step explicitly changes directori
 cd /home/doug/dev/agentawesome/agent
 
 npm install --cache ./build/npm-cache
-npm --prefix deploy/cloudflare/worker install --cache ./build/npm-cache
 npm test
-(cd deploy/cloudflare/worker && npm test)
 ----
 
-The GitHub `CI Verification` workflow runs Go module tests, the Cloudflare Worker smoke test, Flutter analysis/tests, the Linux release build, the Cloudflare container build, and the Antora documentation build.
-
-`npx wrangler` commands require Node 22 or newer.
-If the Worker smoke test passes but Wrangler refuses to start, update the active Node version before deploying Cloudflare resources.
+The GitHub `CI Verification` workflow runs Go module tests, Flutter analysis/tests, the Linux release build, Codex pilot E2E, and the Antora documentation build.
 
 == Verify Model IDs
 
@@ -87,7 +82,7 @@ ui/build/linux/x64/release/bundle
 
 == Assemble Release Bundle
 
-Copy the Flutter bundle, runtime profile templates, harness configs, and installer into the release directory:
+Copy the Flutter bundle, runtime profile templates, and harness configs into the release directory:
 
 [source,sh]
 ----
@@ -97,28 +92,19 @@ RELEASE_ROOT="$PWD/build/release/agent-awesome-linux-x64"
 cp -a ui/build/linux/x64/release/bundle/. "$RELEASE_ROOT/"
 mkdir -p "$RELEASE_ROOT/ui" "$RELEASE_ROOT/harness" "$RELEASE_ROOT/gateway" "$RELEASE_ROOT/memory"
 cp -a ui/runtime_profiles "$RELEASE_ROOT/ui/"
-cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml harness/tool.cloudflare.yaml "$RELEASE_ROOT/harness/"
+cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml "$RELEASE_ROOT/harness/"
 cp -a gateway/slack-manifest.json "$RELEASE_ROOT/gateway/"
-cp deploy/linux/install.sh "$RELEASE_ROOT/install.sh"
-chmod 0755 "$RELEASE_ROOT/install.sh"
 
 cat > "$RELEASE_ROOT/README.txt" <<'EOF'
 Agent Awesome Linux x64 release bundle
 
 Quick start:
   1. Extract this directory somewhere writable.
-  2. Run ./install.sh to register a desktop launcher, or run ./agentawesome_ui directly.
+  2. Run ./agentawesome_ui directly.
   3. Complete the in-app model setup on first launch.
 
 Go is not required for release users. The bundled service binaries live under harness/build/profiles/agent-awesome/bin.
 EOF
-----
-
-The installer is inside the bundle at:
-
-[source,text]
-----
-build/release/agent-awesome-linux-x64/install.sh
 ----
 
 == Create Release Archive

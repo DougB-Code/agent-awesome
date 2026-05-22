@@ -17,7 +17,7 @@ Keeping those files separate preserves the boundary between provider selection, 
 |Agent name, description, and instructions.
 
 |`tools/default/tool.yaml`
-|Default local execution tool package configuration.
+|Default ADK/MCP tool package configuration.
 
 |`mcp/<package>/mcp.yaml`
 |Installed MCP server package configuration merged with the active tool package.
@@ -25,16 +25,13 @@ Keeping those files separate preserves the boundary between provider selection, 
 |`tool.local.yaml`
 |Default local desktop tool profile.
 
-|`tool.cloudflare.yaml`
-|Tool profile for the Cloudflare-hosted memory endpoint.
-
 |===
 
 == Run With Explicit Config
 
 [source,sh]
 ----
-go run ./cmd/agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- console
+go run ./cmd/agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- web --port 8080 api
 ----
 
 == Model Providers
@@ -55,13 +52,10 @@ go run ./cmd/agent-awesome models check \
   --model-id gpt-mini
 ----
 
-== Local Exec
+== Command Tools
 
-Local OS command tools are disabled in shipped beta configs.
-To expose `local_exec` or `request_command`, set `local-exec.enabled: true` and configure explicit command aliases, allowed workdirs, timeouts, and output caps.
-
-Saved `request_command` approvals are disabled unless `local-exec.allow-persistent-approvals: true` is set.
-When enabled, review prompts display the workspace and global approval policy files that can be reused without another prompt.
+Local OS command aliases are migrated into command-service templates and exposed through the command MCP boundary.
+Set `local-exec.enabled: true` only to define legacy aliases; the runtime no longer exposes direct `local_exec` or `request_command` ADK function tools.
 
 == MCP Tools
 

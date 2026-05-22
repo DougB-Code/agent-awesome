@@ -48,19 +48,16 @@ Install these before the first build:
 |Clone the repository and manage contribution branches.
 
 |Go `1.26.0`
-|Build and test the harness, memory service, gateway, and provisioning CLI.
+|Build and test the harness, memory service, and gateway.
 
 |Node.js `22.15.0` or compatible
-|Build the Antora docs site and run Cloudflare Wrangler checks.
+|Build the Antora docs site.
 
 |npm
-|Install Antora, Lunr search, and Cloudflare Worker dependencies.
+|Install Antora and Lunr search dependencies.
 
 |Flutter with Dart `3.10.4` or compatible
 |Analyze and build the desktop UI.
-
-|Cloudflare Wrangler
-|Installed through the Cloudflare Worker package; used for cloud deployment checks.
 |===
 
 Verify the toolchain:
@@ -95,14 +92,8 @@ Root-adjacent directories wire complete systems together; deeper `internal` pack
 |`gateway`
 |HTTP/WebSocket gateway used by local and cloud surfaces, including Slack-facing paths.
 
-|`provision`
-|Provisioning CLI and state reconciliation for Cloudflare resources and generated operations records.
-
 |`ui`
 |Flutter desktop workspace for the Agent Awesome local interface.
-
-|`deploy/cloudflare`
-|Cloudflare Worker, Container, Wrangler config, Dockerfile, and deployment scripts.
 
 |`pilots`
 |Ignored local or experimental pilot configuration profiles.
@@ -127,15 +118,7 @@ npm install --cache ./build/npm-cache
 ----
 
 The root npm package owns the Antora documentation build.
-Cloudflare Worker dependencies are installed separately because they belong to `deploy/cloudflare/worker`.
 Disabling npm lifecycle scripts is a local workstation safety setting; explicit commands such as `npm run docs:build` and `npm test` still run when invoked.
-
-[source,sh]
-----
-cd deploy/cloudflare/worker
-npm install --cache ../../../build/npm-cache
-cd ../../..
-----
 
 == Build The Docs
 
@@ -183,7 +166,6 @@ cd /home/doug/dev/agentawesome/agent
 cd harness && go test ./... && cd ..
 cd memory && go test ./... && cd ..
 cd gateway && go test ./... && cd ..
-cd provision && go test ./... && cd ..
 ----
 
 Expected command packages:
@@ -194,22 +176,7 @@ harness/cmd/agent-awesome
 memory/cmd/memory
 memory/cmd/memoryd
 gateway/cmd/agent-gateway
-provision/cmd/agent-awesome-provision
 ----
-
-== Check Cloudflare Worker
-
-Use Node.js `22` or newer for Wrangler.
-
-[source,sh]
-----
-cd /home/doug/dev/agentawesome/agent/deploy/cloudflare/worker
-npm run check
-cd ../../..
-----
-
-This TypeScript check does not deploy anything.
-Deployment steps and required secrets are covered in xref:operations:cloudflare-setup.adoc[] and xref:operations:cloud-agents.adoc[].
 
 == Check The Desktop UI
 
@@ -237,53 +204,6 @@ Flutter writes the bundle to:
 ui/build/linux/x64/release/bundle
 ----
 
-== Check Release E2E
-
-The release E2E suite builds the Cloudflare release container, starts a mock
-OpenAI-compatible provider, launches the rendered Flutter desktop UI, and drives
-chat plus task-creation requests through the UI.
-It writes logs and request captures under `build/e2e`.
-
-Install the Linux desktop and headless display packages used by CI:
-
-[source,sh]
-----
-sudo apt-get update
-sudo apt-get install -y clang cmake libgtk-3-dev liblzma-dev ninja-build pkg-config xvfb
-----
-
-Make sure Docker is running and the current user can run `docker` without an
-interactive sudo prompt.
-If Flutter Linux desktop support is not already enabled, enable it once:
-
-[source,sh]
-----
-flutter config --enable-linux-desktop
-flutter doctor
-----
-
-Run the suite from the repository root:
-
-[source,sh]
-----
-cd /home/doug/dev/agentawesome/agent
-./e2e/run-release-e2e.sh
-----
-
-When `DISPLAY` is set, the suite uses the current desktop display.
-On headless Linux, installing `xvfb` is enough; the script detects `xvfb-run`
-and wraps `flutter drive` in `xvfb-run -a`.
-If neither `DISPLAY` nor `xvfb-run` is available, the script exits before the
-expensive builds and prints:
-
-[source,text]
-----
-DISPLAY is not set and xvfb-run is unavailable; install Xvfb or run from a desktop session.
-----
-
-CI installs the same Xvfb and Linux desktop build dependencies before running
-the `release-e2e` job.
-
 == Build Local Binaries
 
 Create local binaries under `build/package/bin`:
@@ -299,8 +219,6 @@ cd ../memory
 go build -trimpath -o ../build/package/bin/memoryd ./cmd/memoryd
 cd ../gateway
 go build -trimpath -o ../build/package/bin/agent-gateway ./cmd/agent-gateway
-cd ../provision
-go build -trimpath -o ../build/package/bin/agent-awesome-provision ./cmd/agent-awesome-provision
 cd ..
 ----
 
@@ -317,9 +235,7 @@ npm run docs:build
 cd harness && go test ./... && cd ..
 cd memory && go test ./... && cd ..
 cd gateway && go test ./... && cd ..
-cd provision && go test ./... && cd ..
 
-cd deploy/cloudflare/worker && npm run check && cd ../../..
 cd ui && flutter analyze && flutter test && cd ..
 ----
 

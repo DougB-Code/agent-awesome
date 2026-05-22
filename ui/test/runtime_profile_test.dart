@@ -205,13 +205,65 @@ void main() {
     );
   });
 
-  test('loads cloud profile as an external gateway topology', () async {
+  test('loads external gateway topology', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-external-profile-',
+    );
+    addTearDown(() => root.delete(recursive: true));
+    final file = File('${root.path}/external_gateway.json');
+    await file.writeAsString(
+      jsonEncode(<String, dynamic>{
+        'id': 'external-shared',
+        'label': 'External Shared',
+        'harness': <String, dynamic>{..._harnessJson(), 'auto_start': false},
+        'gateway': <String, dynamic>{
+          ..._gatewayJson(),
+          'api_base_url': r'${AGENT_GATEWAY_BASE_URL}',
+          'health_url': r'${AGENT_GATEWAY_HEALTH_URL}',
+          'status_url': r'${AGENT_GATEWAY_STATUS_URL}',
+          'memory_mcp_url': r'${AGENT_GATEWAY_MCP_URL}',
+          'profile_id': 'shared',
+          'auth_credential': 'AGENTAWESOME_GATEWAY_TOKEN',
+          'auto_start': false,
+        },
+        'workflow': <String, dynamic>{
+          ..._workflowJson(enabled: false),
+          'working_directory': '',
+          'package_path': '',
+          'definitions_dir': '',
+          'db_path': '',
+        },
+        'memory_domains': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'shared',
+            'label': 'Shared Memory',
+            'kind': 'memory',
+            'endpoint': r'${AGENT_GATEWAY_MCP_URL}/shared',
+            'health_url': r'${AGENT_GATEWAY_HEALTH_URL}',
+            'working_directory': '',
+            'package_path': '',
+            'db_path': '',
+            'data_dir': '',
+            'arguments': <String>[],
+            'auto_start': false,
+            'enabled': true,
+          },
+        ],
+        'agent_memory': <String, dynamic>{
+          'actor': 'agent:shared',
+          'read_domains': <String>['shared'],
+          'write_domains': <String>['shared'],
+          'default_write_domain': 'shared',
+          'allowed_sensitivities': <String>['public', 'internal', 'private'],
+        },
+      }),
+    );
+
     final profile = await RuntimeProfileLoader(
       _testConfig(
         agentGatewayBaseUrl: 'https://agent-awesome.com/api',
         autoStartLocalServices: false,
-        runtimeProfilePath:
-            '${Directory.current.path}/runtime_profiles/cloudflare_context.json',
+        runtimeProfilePath: file.path,
       ),
     ).load();
 
@@ -219,16 +271,16 @@ void main() {
     expect(profile.gateway.memoryMcpUrl, 'https://agent-awesome.com/mcp');
     expect(profile.gateway.autoStart, isFalse);
     expect(profile.harness.autoStart, isFalse);
-    expect(profile.gateway.profileId, 'doug');
+    expect(profile.gateway.profileId, 'shared');
     expect(profile.gateway.authCredential, 'AGENTAWESOME_GATEWAY_TOKEN');
-    expect(profile.memoryServers.single.id, 'doug');
+    expect(profile.memoryServers.single.id, 'shared');
     expect(
       profile.memoryServers.single.endpoint,
-      'https://agent-awesome.com/mcp/doug',
+      'https://agent-awesome.com/mcp/shared',
     );
     expect(profile.memoryServers.single.autoStart, isFalse);
-    expect(profile.agentMemory.actor, 'agent:doug');
-    expect(profile.agentMemory.readDomains, <String>['doug']);
+    expect(profile.agentMemory.actor, 'agent:shared');
+    expect(profile.agentMemory.readDomains, <String>['shared']);
   });
 
   test('uses one shared app model config path', () {

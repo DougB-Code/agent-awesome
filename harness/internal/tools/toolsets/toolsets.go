@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	"agentawesome/internal/config/schema"
-	"agentawesome/internal/tools/localexec"
 	"agentawesome/internal/tools/mcptransport"
 	"agentawesome/internal/tools/toolbundle"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/adk/agent"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/mcptoolset"
 )
@@ -23,18 +23,12 @@ func Build(cfg *schema.Tools) (toolbundle.Bundle, error) {
 		}
 	}
 
-	localTools, err := localexec.NewTools(cfg)
-	if err != nil {
-		return toolbundle.Bundle{}, fmt.Errorf("create local tools: %w", err)
-	}
-
 	mcpToolsets, err := buildMCPToolsets(cfg)
 	if err != nil {
 		return toolbundle.Bundle{}, fmt.Errorf("create mcp toolsets: %w", err)
 	}
 
 	return toolbundle.Bundle{
-		Tools:    localTools,
 		Toolsets: mcpToolsets,
 	}, nil
 }
@@ -47,7 +41,10 @@ func buildMCPToolsets(cfg *schema.Tools) ([]tool.Toolset, error) {
 
 	toolsets := make([]tool.Toolset, 0, len(cfg.MCP.Servers))
 	for _, server := range cfg.MCP.Servers {
-		ts, err := buildMCPToolset(server)
+		if !hasConfiguredModelVisibleTools(server, cfg) {
+			continue
+		}
+		ts, err := buildMCPToolset(server, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -57,7 +54,7 @@ func buildMCPToolsets(cfg *schema.Tools) ([]tool.Toolset, error) {
 }
 
 // buildMCPToolset creates one ADK toolset for an MCP server.
-func buildMCPToolset(server schema.MCPServer) (tool.Toolset, error) {
+func buildMCPToolset(server schema.MCPServer, cfg *schema.Tools) (tool.Toolset, error) {
 	transport, err := buildMCPTransport(server)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", server.Name, err)
@@ -72,11 +69,93 @@ func buildMCPToolset(server schema.MCPServer) (tool.Toolset, error) {
 		return nil, fmt.Errorf("%s: %w", server.Name, err)
 	}
 
-	if len(server.Tools.Allow) > 0 {
-		ts = tool.FilterToolset(ts, tool.AllowedToolsPredicate(server.Tools.Allow))
+	if predicate := modelVisibleToolPredicate(server, cfg); predicate != nil {
+		ts = tool.FilterToolset(ts, predicate)
 	}
 
 	return ts, nil
+}
+
+// hasConfiguredModelVisibleTools reports whether an explicit allow list leaves
+// any tools after runtime-only tools are removed.
+func hasConfiguredModelVisibleTools(server schema.MCPServer, cfg *schema.Tools) bool {
+	if len(server.Tools.Allow) == 0 {
+		return true
+	}
+	blocked := blockedModelVisibleTools(cfg)
+	for _, name := range server.Tools.Allow {
+		if _, ok := blocked[strings.TrimSpace(name)]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// modelVisibleToolPredicate combines configured allow lists with AA runtime
+// tools that should not be exposed as ordinary LLM-callable MCP tools.
+func modelVisibleToolPredicate(server schema.MCPServer, cfg *schema.Tools) tool.Predicate {
+	allowed := stringSet(server.Tools.Allow)
+	blocked := blockedModelVisibleTools(cfg)
+	if len(allowed) == 0 && len(blocked) == 0 {
+		return nil
+	}
+	return func(_ agent.ReadonlyContext, candidate tool.Tool) bool {
+		name := strings.TrimSpace(candidate.Name())
+		if _, ok := blocked[name]; ok {
+			return false
+		}
+		if len(allowed) == 0 {
+			return true
+		}
+		_, ok := allowed[name]
+		return ok
+	}
+}
+
+// blockedModelVisibleTools returns MCP tool names kept behind AA-owned service
+// or ADK memory boundaries instead of being exposed directly to the model.
+func blockedModelVisibleTools(cfg *schema.Tools) map[string]struct{} {
+	blocked := stringSet([]string{
+		"mcp.server_list",
+		"mcp.tool_list",
+		"mcp.call",
+		"mcp.start",
+		"mcp.stop",
+		"mcp.restart",
+		"mcp.status",
+	})
+	if memoryRuntimeEnabled(cfg) {
+		for name := range stringSet([]string{
+			"remember",
+			"save_memory_candidate",
+			"search_memory",
+			"search_sources",
+			"load_entity_page",
+			"load_timeline",
+			"refresh_compiled_page",
+			"repair_memory_record",
+			"submit_memory_correction",
+		}) {
+			blocked[name] = struct{}{}
+		}
+	}
+	return blocked
+}
+
+// memoryRuntimeEnabled reports whether ADK memory tools should own memory access.
+func memoryRuntimeEnabled(cfg *schema.Tools) bool {
+	return cfg != nil && len(cfg.Memory.ReadDomains) > 0
+}
+
+// stringSet builds a trimmed lookup table.
+func stringSet(values []string) map[string]struct{} {
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			set[trimmed] = struct{}{}
+		}
+	}
+	return set
 }
 
 // buildMCPTransport creates the configured MCP transport.

@@ -1,5 +1,5 @@
-# This workflow builds distributable Agent Awesome artifacts without deploying
-# them. Tagged runs publish GitHub release assets and a GHCR container image.
+# This workflow builds distributable Agent Awesome artifacts without hosting
+# them. Tagged runs publish GitHub release assets.
 name: Release Build
 
 on:
@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 concurrency:
   group: release-${{ github.workflow }}-${{ github.ref }}
@@ -20,8 +19,6 @@ env:
   GOFLAGS: -mod=readonly
   GOCACHE: ${{ github.workspace }}/build/go/cache
   GOMODCACHE: ${{ github.workspace }}/build/go/pkg/mod
-  DOCKER_CONFIG: ${{ github.workspace }}/build/docker-config
-  BUILDX_CONFIG: ${{ github.workspace }}/build/docker-buildx
   PUB_CACHE: ${{ github.workspace }}/build/pub-cache
   FLUTTER_VERSION: 3.38.5
 
@@ -99,16 +96,14 @@ jobs:
           cp -a ui/build/linux/x64/release/bundle/. "$release_root/"
           mkdir -p "${release_root}/ui" "${release_root}/harness" "${release_root}/gateway" "${release_root}/memory"
           cp -a ui/runtime_profiles "${release_root}/ui/"
-          cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml harness/tool.cloudflare.yaml "${release_root}/harness/"
+          cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml "${release_root}/harness/"
           cp -a gateway/slack-manifest.json "${release_root}/gateway/"
-          cp deploy/linux/install.sh "${release_root}/install.sh"
-          chmod 0755 "${release_root}/install.sh"
           printf '%s\n' \
             'Agent Awesome Linux x64 release bundle' \
             '' \
             'Quick start:' \
             '  1. Extract this directory somewhere writable.' \
-            '  2. Run ./install.sh to register a desktop launcher, or run ./agentawesome_ui directly.' \
+            '  2. Run ./agentawesome_ui directly.' \
             '  3. Complete the in-app model setup on first launch.' \
             '' \
             'Go is not required for release users. The bundled service binaries live under harness/build/profiles/agent-awesome/bin.' \
@@ -146,44 +141,3 @@ jobs:
           else
             gh release create "$tag" "${assets[@]}" --title "Agent Awesome ${tag}" --generate-notes
           fi
-
-  cloudflare-container:
-    name: Cloudflare container image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Prepare Docker build state
-        run: mkdir -p "$DOCKER_CONFIG" "$BUILDX_CONFIG" build/release
-
-      - name: Build container image
-        run: |
-          set -euo pipefail
-          raw_tag="${GITHUB_REF_NAME:-manual}"
-          image_tag="$(printf '%s' "$raw_tag" | tr '/:@ ' '----' | tr -cd 'A-Za-z0-9_.-')"
-          image_tag="${image_tag:-manual}"
-          image="ghcr.io/${GITHUB_REPOSITORY,,}/cloudflare:${image_tag}"
-          docker build --file Dockerfile.cloudflare --tag "$image" .
-          mkdir -p build/release
-          docker save "$image" -o build/release/agent-awesome-cloudflare-image.tar
-          sha256sum build/release/agent-awesome-cloudflare-image.tar > build/release/agent-awesome-cloudflare-image.tar.sha256
-          echo "image=$image" >> "$GITHUB_ENV"
-
-      - name: Upload container image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-awesome-cloudflare-image
-          path: |
-            build/release/agent-awesome-cloudflare-image.tar
-            build/release/agent-awesome-cloudflare-image.tar.sha256
-          if-no-files-found: error
-
-      - name: Push GHCR image
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker push "$image"

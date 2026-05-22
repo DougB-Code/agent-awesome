@@ -26,6 +26,7 @@ type Config struct {
 	DataDir           string
 	AllowedWorkdirs   []string
 	AllowedEnv        []string
+	Templates         []command.Template
 	TemplatesJSON     string
 	ParserDir         string
 	DefaultTimeout    time.Duration
@@ -117,6 +118,7 @@ func openService(cfg Config) (*command.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	templates = append(templates, cfg.Templates...)
 	return command.Open(command.Config{
 		DataDir:          cfg.DataDir,
 		AllowedWorkdirs:  append([]string(nil), cfg.AllowedWorkdirs...),

@@ -1,7 +1,7 @@
-= Local Deployment
-:description: Step-by-step local Agent Awesome deployment.
+= Local Run
+:description: Step-by-step local Agent Awesome runtime startup.
 
-This page starts Agent Awesome locally before any Cloudflare resources are changed.
+This page starts Agent Awesome locally without relying on external release or hosting assets.
 Use it to prove the memory service, harness-hosted control services, gateway, and UI can run on the workstation.
 
 == Credential

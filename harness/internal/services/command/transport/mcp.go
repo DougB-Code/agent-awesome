@@ -91,7 +91,7 @@ func (s *MCPServer) handleToolCall(ctx context.Context, params json.RawMessage) 
 // callTool decodes command tool arguments and calls the service.
 func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMessage) (any, error) {
 	switch name {
-	case "command.execute":
+	case "command.execute", "command_execute":
 		var req command.ExecuteRequest
 		if err := decodeArgs(args, &req); err != nil {
 			return nil, err
@@ -132,6 +132,7 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 func toolDefinitions() []map[string]any {
 	names := []string{
 		"command.execute",
+		"command_execute",
 		"command_template_list",
 		"command_request",
 		"command_run",
@@ -152,7 +153,7 @@ func toolDefinitions() []map[string]any {
 // toolDescription returns one concise model-facing tool description.
 func toolDescription(name string) string {
 	switch name {
-	case "command.execute":
+	case "command.execute", "command_execute":
 		return "Create, run, poll, and return one structured configured command result."
 	case "command_template_list":
 		return "List configured command templates."

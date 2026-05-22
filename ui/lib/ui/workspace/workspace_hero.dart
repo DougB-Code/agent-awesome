@@ -97,7 +97,7 @@ class _HeroCopy extends StatelessWidget {
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 610),
           child: Text(
-            'Agent Awesome gives you everything you need to build, run, and ship reliable AI agents with the models, tools, memory, workflows, and deployment paths you control.',
+            'Agent Awesome gives you everything you need to build and run reliable AI agents with the models, tools, memory, and workflows you control.',
             style: TextStyle(
               color: colors.muted,
               fontSize: 24,

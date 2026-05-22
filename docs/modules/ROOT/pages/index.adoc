@@ -7,7 +7,7 @@
     <div class="hero-content">
       <div class="eyebrow">Agent Awesome</div>
       <h1>Design and run your AI agent system</h1>
-      <p>Agent Awesome gives you everything you need to build, run, and ship reliable AI agents with the models, tools, memory, workflows, and deployment paths you control.</p>
+      <p>Agent Awesome gives you everything you need to build and run reliable AI agents with the models, tools, memory, and workflows you control.</p>
       <div class="button-row">
         <a class="button button-primary" href="user/local-chat.html">Start Building <span>→</span></a>
         <a class="button" href="docs-architecture.html">Explore the Mental Model <span>→</span></a>
@@ -31,7 +31,7 @@
   <div class="section-title-row">
     <h2>Choose your path</h2>
   </div>
-  <section class="card-grid five">
+  <section class="card-grid four">
     <a class="aa-card" href="user/local-chat.html" style="--card-color:#0f66ff">
       <span class="card-icon">▷</span>
       <h3>Run my first agent</h3>
@@ -51,11 +51,6 @@
       <span class="card-icon">⌘</span>
       <h3>Build a workflow</h3>
       <p>Orchestrate steps and make decisions.</p>
-    </a>
-    <a class="aa-card" href="operations/cloud-agents.html" style="--card-color:#0f66ff">
-      <span class="card-icon">☁</span>
-      <h3>Deploy it</h3>
-      <p>Deploy locally or to the cloud with confidence.</p>
     </a>
   </section>
 
@@ -77,7 +72,7 @@
     <h2>Build your system</h2>
   </div>
   <section class="card-grid six">
-    <a class="aa-card" href="operations/cloudflare-setup.html"><span class="step-badge">1</span><h3>Choose providers</h3><p>Select model and infrastructure providers.</p></a>
+    <a class="aa-card" href="harness/configuration.html"><span class="step-badge">1</span><h3>Choose providers</h3><p>Select model providers and local runtime configuration.</p></a>
     <a class="aa-card" href="ui/runtime-profiles.html"><span class="step-badge">2</span><h3>Define profiles</h3><p>Create profiles with roles, goals, and instructions.</p></a>
     <a class="aa-card" href="memory/mcp.html"><span class="step-badge">3</span><h3>Register tools</h3><p>Add tools and define schemas, auth, and permissions.</p></a>
     <a class="aa-card" href="memory/index.html"><span class="step-badge">4</span><h3>Attach memory</h3><p>Connect memory stores for context and state.</p></a>

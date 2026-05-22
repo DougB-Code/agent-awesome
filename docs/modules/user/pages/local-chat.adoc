@@ -19,18 +19,18 @@ go run ./cmd/agent-awesome credentials set OPENAI_API_KEY
 
 == Run From The Harness
 
-For a direct console session, run the harness from `harness`:
+For a direct ADK API session, run the harness from `harness`:
 
 [source,sh]
 ----
-go run ./cmd/agent-awesome run -- console
+go run ./cmd/agent-awesome run -- web --port 8080 api
 ----
 
-For a web API session:
+For a browser-backed web UI session:
 
 [source,sh]
 ----
-go run ./cmd/agent-awesome run -- web --port 8080
+go run ./cmd/agent-awesome run -- web --port 8080 webui api
 ----
 
 The desktop UI always uses the gateway profile.

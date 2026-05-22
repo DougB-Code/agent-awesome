@@ -169,13 +169,13 @@ class LocalExecToolConfig {
     this.extra = const <String, dynamic>{},
   });
 
-  /// Whether local command tools are installed on the agent.
+  /// Whether local command aliases are exposed through the command MCP service.
   final bool enabled;
 
   /// Optional schema value; when present the harness only accepts true.
   final bool? requireConfirmation;
 
-  /// Whether request_command may save workspace/global approvals.
+  /// Whether command proposals may save workspace/global approvals.
   final bool allowPersistentApprovals;
 
   /// Default Go-style duration for command execution.
@@ -187,7 +187,7 @@ class LocalExecToolConfig {
   /// Workspace roots where commands may run.
   final List<String> allowedWorkdirs;
 
-  /// Allowlisted command aliases exposed through local_exec.
+  /// Allowlisted command aliases exposed through command templates.
   final List<LocalExecCommandConfig> commands;
 
   /// Fields preserved outside the known schema.
@@ -294,7 +294,7 @@ class LocalExecCommandConfig {
     this.extra = const <String, dynamic>{},
   });
 
-  /// Alias the model uses when calling local_exec.
+  /// Alias used to create the command template.
   final String name;
 
   /// Executable command run by the harness.

@@ -15,9 +15,7 @@ content:
         - harness/docs
         - memory/docs
         - gateway/docs
-        - provision/docs
         - ui/docs
-        - deploy/cloudflare/docs
 runtime:
   cache_dir: ./build/antora-cache
 asciidoc:

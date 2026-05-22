@@ -4,11 +4,6 @@
   "private": true,
   "description": "Antora documentation build for Agent Awesome.",
   "scripts": {
-    "cloudflare:check": "npm --prefix deploy/cloudflare/worker run check",
-    "cloudflare:deploy": "npm --prefix deploy/cloudflare/worker run deploy",
-    "cloudflare:deploy:dry-run": "npm --prefix deploy/cloudflare/worker run deploy:dry-run",
-    "cloudflare:r2:create": "npm --prefix deploy/cloudflare/worker run r2:create",
-    "cloudflare:test": "npm --prefix deploy/cloudflare/worker test",
     "docs:build": "antora antora-playbook.yml",
     "docs:clean": "rm -rf build/site build/antora-cache",
     "test": "npm run docs:build"

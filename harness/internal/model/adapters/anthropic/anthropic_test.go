@@ -189,7 +189,7 @@ func TestAnthropicSendsToolsAndParsesToolUse(t *testing.T) {
 			t.Fatalf("Decode() error = %v", err)
 		}
 		w.Header().Set("content-type", "application/json")
-		_, _ = w.Write([]byte(`{"content":[{"type":"tool_use","id":"call-1","name":"local_exec","input":{"command":"git_status"}}]}`))
+		_, _ = w.Write([]byte(`{"content":[{"type":"tool_use","id":"call-1","name":"city_time","input":{"city":"Lisbon"}}]}`))
 	}))
 	defer server.Close()
 
@@ -206,8 +206,8 @@ func TestAnthropicSendsToolsAndParsesToolUse(t *testing.T) {
 				{
 					FunctionDeclarations: []*genai.FunctionDeclaration{
 						{
-							Name:        "local_exec",
-							Description: "Run a command.",
+							Name:        "city_time",
+							Description: "Return the time for a city.",
 							ParametersJsonSchema: map[string]any{
 								"type": "object",
 							},
@@ -221,15 +221,15 @@ func TestAnthropicSendsToolsAndParsesToolUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate() error = %v", err)
 	}
-	if len(decoded.Tools) != 1 || decoded.Tools[0].Name != "local_exec" {
-		t.Fatalf("request tools = %#v, want local_exec", decoded.Tools)
+	if len(decoded.Tools) != 1 || decoded.Tools[0].Name != "city_time" {
+		t.Fatalf("request tools = %#v, want city_time", decoded.Tools)
 	}
 	if got.Content == nil || len(got.Content.Parts) != 1 || got.Content.Parts[0].FunctionCall == nil {
 		t.Fatalf("generate() content = %#v, want function call", got.Content)
 	}
 	call := got.Content.Parts[0].FunctionCall
-	if call.ID != "call-1" || call.Name != "local_exec" || call.Args["command"] != "git_status" {
-		t.Fatalf("function call = %#v, want local_exec git_status", call)
+	if call.ID != "call-1" || call.Name != "city_time" || call.Args["city"] != "Lisbon" {
+		t.Fatalf("function call = %#v, want city_time Lisbon", call)
 	}
 }
 
@@ -242,8 +242,8 @@ func TestAnthropicMessagesSerializesToolResponses(t *testing.T) {
 					{
 						FunctionResponse: &genai.FunctionResponse{
 							ID:       "call-1",
-							Name:     "local_exec",
-							Response: map[string]any{"stdout": "ok"},
+							Name:     "city_time",
+							Response: map[string]any{"summary": "ok"},
 						},
 					},
 				},
@@ -257,7 +257,7 @@ func TestAnthropicMessagesSerializesToolResponses(t *testing.T) {
 		{
 			Role: "user",
 			Content: []anthropicContentBlock{
-				{Type: "tool_result", ToolUseID: "call-1", Content: `{"stdout":"ok"}`},
+				{Type: "tool_result", ToolUseID: "call-1", Content: `{"summary":"ok"}`},
 			},
 		},
 	}

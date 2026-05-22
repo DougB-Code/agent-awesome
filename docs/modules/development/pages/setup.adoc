@@ -12,11 +12,11 @@ The repository declares them in `.tool-versions` so `asdf` and compatible tool m
 
 |Go
 |`1.26.0`
-|Matches the Go module requirements for `gateway`, `harness`, `memory`, and `provision`.
+|Matches the Go module requirements for `gateway`, `harness`, and `memory`.
 
 |Node.js
 |`22.15.0`
-|Satisfies the Cloudflare Worker package engine requirement of Node `>=22.0.0`.
+|Matches the documentation build environment used by CI.
 |===
 
 Install with a `.tool-versions` aware manager:
@@ -39,14 +39,11 @@ npm --version
 
 == Dependencies
 
-Install root documentation dependencies and Worker dependencies separately:
+Install root documentation dependencies:
 
 [source,sh]
 ----
 npm install --cache ./build/npm-cache
-cd deploy/cloudflare/worker
-npm install --cache ../../../build/npm-cache
-cd ../../..
 ----
 
 == CI Verification
@@ -58,4 +55,4 @@ Run the documentation check from the repository root:
 npm test
 ----
 
-The GitHub `CI Verification` workflow runs the full source gate for Go modules, the Cloudflare Worker, the desktop UI, the Cloudflare container, provisioning preflight, and docs.
+The GitHub `CI Verification` workflow runs the full source gate for Go modules, the desktop UI, Codex pilot E2E, and docs.

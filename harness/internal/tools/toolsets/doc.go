@@ -1,7 +1,7 @@
 // Package toolsets builds runtime tool and toolset bundles from configuration.
 //
 // Intended use cases:
-//   - Combine local execution tools and MCP toolsets for the runtime.
+//   - Combine configured MCP toolsets for the ADK runtime.
 //   - Build MCP transports from validated tool configuration.
 //   - Provide confirmation routing for tool names that need review.
 //

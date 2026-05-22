@@ -463,10 +463,6 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 	root := repoRoot(t)
 	paths := []string{
 		filepath.Join(root, "harness", "tool.local.yaml"),
-		filepath.Join(root, "harness", "tool.cloudflare.yaml"),
-		filepath.Join(root, "deploy", "cloudflare", "config", "tool.yaml"),
-		filepath.Join(root, "deploy", "cloudflare", "config", "tool.doug.yaml"),
-		filepath.Join(root, "deploy", "cloudflare", "config", "tool.family.yaml"),
 	}
 
 	for _, path := range paths {
@@ -614,46 +610,6 @@ func TestWorkflowToolConfigExposesWorkflowMCP(t *testing.T) {
 	}
 	if len(cfg.LocalExec.Commands) != 0 {
 		t.Fatalf("LocalExec.Commands = %#v, want workflow profile to expose no direct commands", cfg.LocalExec.Commands)
-	}
-}
-
-// TestStaticSlackMemoryToolConfigsExposeMemoryServer keeps Slack scoped to the
-// memory MCP server while allowing the server's full tool surface.
-func TestStaticSlackMemoryToolConfigsExposeMemoryServer(t *testing.T) {
-	root := repoRoot(t)
-	paths := []string{
-		filepath.Join(root, "deploy", "cloudflare", "config", "tool.slack.doug.yaml"),
-		filepath.Join(root, "deploy", "cloudflare", "config", "tool.slack.family.yaml"),
-	}
-
-	for _, path := range paths {
-		t.Run(filepath.ToSlash(path), func(t *testing.T) {
-			cfg, err := LoadTools(path, true)
-			if err != nil {
-				t.Fatalf("LoadTools() error = %v", err)
-			}
-			server, ok := memoryMCPServer(cfg.MCP.Servers)
-			if !ok {
-				t.Fatalf("memory MCP server not configured")
-			}
-			if len(cfg.MCP.Servers) != 1 {
-				t.Fatalf("MCP.Servers = %#v, want only memory server", cfg.MCP.Servers)
-			}
-			if len(server.Tools.Allow) != 0 {
-				t.Fatalf("Tools.Allow = %#v, want all memory server tools", server.Tools.Allow)
-			}
-			for _, tool := range []string{"remember", "save_memory_candidate", "create_task", "update_task", "mutate_context_graph", "delete_task_relation"} {
-				if !toolVisibleFromMCPServer(server, tool) {
-					t.Fatalf("Slack config filters memory tool %q", tool)
-				}
-			}
-			if len(server.RequireConfirmationTools) != 0 || server.RequireConfirmation {
-				t.Fatalf("Slack config requires confirmation: all=%v tools=%#v", server.RequireConfirmation, server.RequireConfirmationTools)
-			}
-			if len(cfg.Memory.ReadDomains) != 0 {
-				t.Fatalf("Slack config enabled runtime memory capture: %#v", cfg.Memory.ReadDomains)
-			}
-		})
 	}
 }
 
@@ -1130,11 +1086,6 @@ func mcpServerByName(servers []schema.MCPServer, name string) (schema.MCPServer,
 // allowsTool reports whether an MCP server allowlist includes a tool.
 func allowsTool(server schema.MCPServer, tool string) bool {
 	return containsString(server.Tools.Allow, tool)
-}
-
-// toolVisibleFromMCPServer reports whether a tool survives the optional allowlist.
-func toolVisibleFromMCPServer(server schema.MCPServer, tool string) bool {
-	return len(server.Tools.Allow) == 0 || containsString(server.Tools.Allow, tool)
 }
 
 // requiresConfirmation reports whether an MCP server confirmation list includes a tool.

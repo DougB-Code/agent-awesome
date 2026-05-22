@@ -2,7 +2,7 @@
 :description: User-facing Agent Awesome documentation.
 
 This module is for people using Agent Awesome as an assistant.
-It avoids infrastructure setup, deployment secrets, and operations-only controls.
+It avoids infrastructure setup, hosting secrets, and operations-only controls.
 
 Use these pages when you need to:
 

@@ -68,11 +68,3 @@ responses for the UI.
 
 - `runtime_profiles/local_dev.json` starts local memory and points the harness
   at `harness/tool.local.yaml`.
-- `runtime_profiles/cloudflare_context.json` points the desktop UI at a hosted
-  Cloudflare gateway. It does not start local harness, gateway, or memory
-  binaries.
-
-For the Cloudflare profile, set `AGENT_GATEWAY_BASE_URL`,
-`AGENTAWESOME_GATEWAY_TOKEN`, and `AGENTAWESOME_RUNTIME_PROFILE` before starting
-the release binary. The UI sends chat, memory, and task requests through that
-gateway.

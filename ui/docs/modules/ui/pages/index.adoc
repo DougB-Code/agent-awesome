@@ -13,7 +13,7 @@ It provides the desktop-first workspace for chat, memory, and task context surfa
 * Keep UI state and presentation separate from business logic and service clients.
 * Supervise UI-owned subprocesses through one lifecycle boundary.
 
-The UI should not implement model provider calls, memory persistence, Slack event handling, or Cloudflare reconciliation.
+The UI should not implement model provider calls, memory persistence, Slack event handling, or hosting reconciliation.
 
 == Main Areas
 
@@ -34,7 +34,7 @@ The UI should not implement model provider calls, memory persistence, Slack even
 |Widgets, layouts, and visual presentation.
 
 |`runtime_profiles`
-|JSON service topologies for local and Cloudflare-backed runs.
+|JSON service topologies for local runs.
 |===
 
 == Operational Notes

@@ -25,13 +25,13 @@ class _SettingsLocalExecCard extends StatelessWidget {
       children: <Widget>[
         SettingsToggleField(
           title: 'Enabled',
-          subtitle: 'local_exec + request_command',
+          subtitle: 'Command MCP templates',
           value: config.enabled,
           onChanged: (enabled) => onChanged(config.copyWith(enabled: enabled)),
         ),
         SettingsToggleField(
           title: 'Persistent approvals',
-          subtitle: 'Allow saved request_command approvals',
+          subtitle: 'Allow saved command approvals',
           value: config.allowPersistentApprovals,
           onChanged: (value) =>
               onChanged(config.copyWith(allowPersistentApprovals: value)),

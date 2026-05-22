@@ -133,8 +133,8 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
       _ToolSettingsSurface.osTools => <String>[
         ...base,
         'OS Tools',
-        'local_exec',
-        'request_command',
+        'command_execute',
+        'command_template',
         for (final command in document.localExec.commands) ...<String>[
           command.name,
           command.executable,

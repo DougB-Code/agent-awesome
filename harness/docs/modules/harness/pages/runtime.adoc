@@ -1,25 +1,16 @@
 = Harness Runtime
 :description: Harness runtime modes and credential commands.
 
-The harness can run as a console process for direct testing or as a web API for UI and gateway traffic.
+The harness runs ADK web/API runtime modes for UI and gateway traffic.
 
-== Console Mode
-
-[source,sh]
-----
-go run ./cmd/agent-awesome run -- console
-----
-
-Use console mode for fast local validation of model and tool configuration.
-
-== Web Mode
+== Web/API Mode
 
 [source,sh]
 ----
-go run ./cmd/agent-awesome run -- web --port 8080
+go run ./cmd/agent-awesome run -- web --port 8080 api
 ----
 
-Use web mode when the UI or gateway needs an assistant API endpoint.
+Use web/API mode when the UI or gateway needs an assistant endpoint.
 
 == Credentials
 

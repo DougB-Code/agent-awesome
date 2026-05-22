@@ -47,8 +47,8 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--mcp-manager-addr", "127.0.0.1:8094",
 		"--mcp-servers-json", `[{"id":"tools","endpoint":"http://127.0.0.1:9999/mcp"}]`,
 		"--mcp-request-timeout", "11s",
-		"console",
-		"--input-file", "prompt.txt",
+		"web",
+		"--port", "9090",
 	})
 
 	if err := cmd.Execute(); err != nil {
@@ -138,7 +138,7 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	if got, want := captured.MCPRequestTimeout, 11*time.Second; got != want {
 		t.Fatalf("MCPRequestTimeout = %s, want %s", got, want)
 	}
-	if want := []string{"console", "--input-file", "prompt.txt"}; !reflect.DeepEqual(captured.Args, want) {
+	if want := []string{"web", "--port", "9090"}; !reflect.DeepEqual(captured.Args, want) {
 		t.Fatalf("args = %#v, want %#v", captured.Args, want)
 	}
 }
@@ -152,14 +152,14 @@ func TestRunCommandUsesDoubleDashPassthrough(t *testing.T) {
 	cmd.SetArgs([]string{
 		"--provider", "cloudflare",
 		"--",
-		"console",
+		"web",
 		"--help",
 	})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
-	if want := []string{"console", "--help"}; !reflect.DeepEqual(captured.Args, want) {
+	if want := []string{"web", "--help"}; !reflect.DeepEqual(captured.Args, want) {
 		t.Fatalf("args = %#v, want %#v", captured.Args, want)
 	}
 }
@@ -172,7 +172,7 @@ func TestRunCommandUsesExplicitDefaults(t *testing.T) {
 		captured = opts
 		return nil
 	})
-	cmd.SetArgs([]string{"console"})
+	cmd.SetArgs([]string{"web"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -203,7 +203,7 @@ func TestRunCommandPassesFlagsAfterRuntimeArgsThrough(t *testing.T) {
 		captured = opts
 		return nil
 	})
-	cmd.SetArgs([]string{"console", "--provider", "cloudflare"})
+	cmd.SetArgs([]string{"web", "--provider", "cloudflare"})
 
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("Execute() error = %v", err)
@@ -211,7 +211,7 @@ func TestRunCommandPassesFlagsAfterRuntimeArgsThrough(t *testing.T) {
 	if captured.ProviderName != "" {
 		t.Fatalf("providerName = %q, want empty", captured.ProviderName)
 	}
-	if want := []string{"console", "--provider", "cloudflare"}; !reflect.DeepEqual(captured.Args, want) {
+	if want := []string{"web", "--provider", "cloudflare"}; !reflect.DeepEqual(captured.Args, want) {
 		t.Fatalf("args = %#v, want %#v", captured.Args, want)
 	}
 }
@@ -242,20 +242,22 @@ func TestRunCommandUsesExpectedConfigPathFlags(t *testing.T) {
 	}
 }
 
-func TestRuntimeSyntaxSeparatesHarnessConsoleFromAssistantModes(t *testing.T) {
+func TestRuntimeSyntaxUsesADKRuntimeModes(t *testing.T) {
 	syntax := runtimeSyntax()
 	for _, want := range []string{
-		"Agent Awesome console:",
-		"console - runs an agent in Agent Awesome console mode.",
-		"-streaming_mode",
-		"Assistant runtime modes:",
 		"web - starts web server",
 	} {
 		if !strings.Contains(syntax, want) {
 			t.Fatalf("runtimeSyntax() = %q, want substring %q", syntax, want)
 		}
 	}
-	if strings.Contains(syntax, "Console shutdown timeout") {
-		t.Fatalf("runtimeSyntax() includes delegated console-only flags: %q", syntax)
+	for _, unwanted := range []string{
+		"Agent Awesome console:",
+		"console - runs an agent in Agent Awesome console mode.",
+		"-streaming_mode",
+	} {
+		if strings.Contains(syntax, unwanted) {
+			t.Fatalf("runtimeSyntax() = %q, want no substring %q", syntax, unwanted)
+		}
 	}
 }

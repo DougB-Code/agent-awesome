@@ -5,7 +5,7 @@
 //   - Start the Cobra command tree from process startup.
 //
 // High-level examples:
-//   - go run ./cmd/agent-awesome run -- console
+//   - go run ./cmd/agent-awesome run -- web --port 8080 api
 //   - agent-awesome credentials set OPENAI_API_KEY
 //
 // Other packages should not import this package. Reusable command wiring lives

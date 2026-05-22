@@ -3,23 +3,23 @@
 ## Commands
 
 ```sh
-go run ./cmd/agent-awesome run -- console
+go run ./cmd/agent-awesome run -- web --port 8080 api
 ```
 
 ```sh
-go run ./cmd/agent-awesome run --provider google --model-id gemini-flash-lite -- console -streaming_mode sse
+go run ./cmd/agent-awesome run --provider google --model-id gemini-flash-lite -- web --port 8080 api
 ```
 
 ```sh
-go run ./cmd/agent-awesome run -- web --port 8080
+go run ./cmd/agent-awesome run -- web --port 8080 webui api
 ```
 
 ```sh
-go run ./cmd/agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- console
+go run ./cmd/agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- web --port 8080 api
 ```
 
 ```sh
-go run ./cmd/agent-awesome run --provider cloudflare --model-id gemma-4 -- console
+go run ./cmd/agent-awesome run --provider cloudflare --model-id gemma-4 -- web --port 8080 api
 ```
 
 ```sh

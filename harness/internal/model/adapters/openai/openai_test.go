@@ -232,7 +232,7 @@ func TestOpenAICompatibleSendsToolsAndParsesToolCalls(t *testing.T) {
 			t.Fatalf("Decode() error = %v", err)
 		}
 		w.Header().Set("content-type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"local_exec","arguments":"{\"command\":\"git_status\"}"}}]}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call-1","type":"function","function":{"name":"city_time","arguments":"{\"city\":\"Lisbon\"}"}}]}}]}`))
 	}))
 	defer server.Close()
 
@@ -248,8 +248,8 @@ func TestOpenAICompatibleSendsToolsAndParsesToolCalls(t *testing.T) {
 				{
 					FunctionDeclarations: []*genai.FunctionDeclaration{
 						{
-							Name:        "local_exec",
-							Description: "Run a command.",
+							Name:        "city_time",
+							Description: "Return the time for a city.",
 							ParametersJsonSchema: map[string]any{
 								"type": "object",
 							},
@@ -263,8 +263,8 @@ func TestOpenAICompatibleSendsToolsAndParsesToolCalls(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate() error = %v", err)
 	}
-	if len(decoded.Tools) != 1 || decoded.Tools[0].Type != "function" || decoded.Tools[0].Function.Name != "local_exec" {
-		t.Fatalf("request tools = %#v, want local_exec", decoded.Tools)
+	if len(decoded.Tools) != 1 || decoded.Tools[0].Type != "function" || decoded.Tools[0].Function.Name != "city_time" {
+		t.Fatalf("request tools = %#v, want city_time", decoded.Tools)
 	}
 	if got, want := decoded.Tools[0].Function.Parameters["type"], "object"; got != want {
 		t.Fatalf("tool parameter type = %#v, want %q", got, want)
@@ -273,8 +273,8 @@ func TestOpenAICompatibleSendsToolsAndParsesToolCalls(t *testing.T) {
 		t.Fatalf("generate() content = %#v, want function call", got.Content)
 	}
 	call := got.Content.Parts[0].FunctionCall
-	if call.ID != "call-1" || call.Name != "local_exec" || call.Args["command"] != "git_status" {
-		t.Fatalf("function call = %#v, want local_exec git_status", call)
+	if call.ID != "call-1" || call.Name != "city_time" || call.Args["city"] != "Lisbon" {
+		t.Fatalf("function call = %#v, want city_time Lisbon", call)
 	}
 }
 
@@ -354,8 +354,8 @@ func TestOpenAIMessagesSerializesToolResponses(t *testing.T) {
 					{
 						FunctionResponse: &genai.FunctionResponse{
 							ID:       "call-1",
-							Name:     "local_exec",
-							Response: map[string]any{"stdout": "ok"},
+							Name:     "city_time",
+							Response: map[string]any{"summary": "ok"},
 						},
 					},
 				},
@@ -386,7 +386,7 @@ func TestOpenAIMessagesSerializesToolResponses(t *testing.T) {
 	if got, want := decoded[0].ToolCallID, "call-1"; got != want {
 		t.Fatalf("tool_call_id = %q, want %q", got, want)
 	}
-	if got, want := decoded[0].Content, `{"stdout":"ok"}`; got != want {
+	if got, want := decoded[0].Content, `{"summary":"ok"}`; got != want {
 		t.Fatalf("content = %q, want %q", got, want)
 	}
 }

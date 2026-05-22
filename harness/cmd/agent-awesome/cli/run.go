@@ -21,6 +21,8 @@ func newRunCommand(ctx context.Context) *cobra.Command {
 // newRunCommandWithRunner creates a run command with an injectable runtime
 // runner so tests can assert parsed options without launching the full runtime.
 func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, app.Options) error) *cobra.Command {
+	commandRequireApproval, commandApprovalSet := envBoolWithPresence("AGENTAWESOME_COMMAND_REQUIRE_APPROVAL", true)
+	commandAllowArbitrary, commandArbitrarySet := envBoolWithPresence("AGENTAWESOME_COMMAND_ALLOW_ARBITRARY", true)
 	opts := app.Options{
 		AgentConfigPath:        config.DefaultAgentPath(),
 		ModelConfigPath:        config.DefaultModelPath(),
@@ -39,10 +41,10 @@ func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, a
 		CommandDefaultTimeout:  envDuration("AGENTAWESOME_COMMAND_TIMEOUT", 10*time.Minute),
 		CommandMaxOutputBytes:  envInt64("AGENTAWESOME_COMMAND_MAX_OUTPUT_BYTES", 64<<10),
 		CommandApprovalTTL:     envDuration("AGENTAWESOME_COMMAND_APPROVAL_TTL", 10*time.Minute),
-		CommandRequireApproval: envBool("AGENTAWESOME_COMMAND_REQUIRE_APPROVAL", true),
-		CommandAllowArbitrary:  envBool("AGENTAWESOME_COMMAND_ALLOW_ARBITRARY", true),
-		CommandApprovalSet:     true,
-		CommandArbitrarySet:    true,
+		CommandRequireApproval: commandRequireApproval,
+		CommandAllowArbitrary:  commandAllowArbitrary,
+		CommandApprovalSet:     commandApprovalSet,
+		CommandArbitrarySet:    commandArbitrarySet,
 		MCPManagerAddr:         os.Getenv("AGENTAWESOME_MCP_ADDR"),
 		MCPServersJSON:         os.Getenv("AGENTAWESOME_MCP_SERVERS_JSON"),
 		MCPRequestTimeout:      envDuration("AGENTAWESOME_MCP_REQUEST_TIMEOUT", 10*time.Minute),
@@ -57,7 +59,7 @@ Runtime arguments are passed to the Agent Awesome runtime. Put Agent Awesome fla
 before runtime arguments, or use -- to make the boundary explicit.
 
 Examples:
-  agent-awesome run -- console
+  agent-awesome run -- web --port 8080 api
   agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- web --port 8080 api
 
 AA runtime syntax:
@@ -66,6 +68,8 @@ AA runtime syntax:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Args = args
 			opts.ToolSet = cmd.Flags().Changed("tool")
+			opts.CommandApprovalSet = opts.CommandApprovalSet || cmd.Flags().Changed("command-require-approval")
+			opts.CommandArbitrarySet = opts.CommandArbitrarySet || cmd.Flags().Changed("command-allow-arbitrary")
 			return runner(ctx, opts)
 		},
 	}
@@ -114,13 +118,13 @@ func envString(name string, fallback string) string {
 	return fallback
 }
 
-// envBool returns a bool environment value or fallback.
-func envBool(name string, fallback bool) bool {
+// envBoolWithPresence returns a bool environment value and whether it was configured.
+func envBoolWithPresence(name string, fallback bool) (bool, bool) {
 	value := strings.TrimSpace(os.Getenv(name))
 	if value == "" {
-		return fallback
+		return fallback, false
 	}
-	return value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes")
+	return value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes"), true
 }
 
 // envDuration returns a duration environment value or fallback.

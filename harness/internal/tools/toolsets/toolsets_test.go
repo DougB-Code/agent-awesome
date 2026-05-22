@@ -10,7 +10,7 @@ import (
 	"agentawesome/internal/config/schema"
 )
 
-func TestBuildReturnsLocalToolsAndMCPToolsets(t *testing.T) {
+func TestBuildReturnsMCPToolsetsOnly(t *testing.T) {
 	cfg := &schema.Tools{
 		LocalExec: schema.LocalExec{
 			Enabled: true,
@@ -50,11 +50,48 @@ func TestBuildReturnsLocalToolsAndMCPToolsets(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build() error = %v", err)
 	}
-	if got, want := len(bundle.Tools), 2; got != want {
+	if got, want := len(bundle.Tools), 0; got != want {
 		t.Fatalf("len(Tools) = %d, want %d", got, want)
 	}
 	if got, want := len(bundle.Toolsets), 2; got != want {
 		t.Fatalf("len(Toolsets) = %d, want %d", got, want)
+	}
+}
+
+func TestModelVisibleToolPredicateFiltersMCPManagerTools(t *testing.T) {
+	server := schema.MCPServer{}
+	predicate := modelVisibleToolPredicate(server, &schema.Tools{})
+	if predicate == nil {
+		t.Fatalf("modelVisibleToolPredicate() = nil")
+	}
+	if predicate(nil, namedTool{name: "mcp.call"}) {
+		t.Fatalf("mcp.call exposed to model, want manager tools filtered")
+	}
+	if !predicate(nil, namedTool{name: "read_file"}) {
+		t.Fatalf("read_file filtered, want ordinary MCP tool exposed")
+	}
+}
+
+func TestModelVisibleToolPredicateFiltersRawMemoryToolsWhenMemoryEnabled(t *testing.T) {
+	cfg := &schema.Tools{
+		Memory: schema.Memory{
+			ReadDomains: []schema.MemoryDomain{{ID: "memory", Endpoint: "http://127.0.0.1:8090/mcp"}},
+		},
+	}
+	server := schema.MCPServer{
+		Tools: schema.MCPToolFilter{
+			Allow: []string{"search_memory", "create_task"},
+		},
+	}
+	predicate := modelVisibleToolPredicate(server, cfg)
+	if predicate == nil {
+		t.Fatalf("modelVisibleToolPredicate() = nil")
+	}
+	if predicate(nil, namedTool{name: "search_memory"}) {
+		t.Fatalf("search_memory exposed to model, want ADK memory tools to own memory search")
+	}
+	if !predicate(nil, namedTool{name: "create_task"}) {
+		t.Fatalf("create_task filtered, want non-memory-plumbing domain tool exposed")
 	}
 }
 
@@ -88,8 +125,6 @@ func TestShippedGraphMutationToolRequiresRuntimeConfirmation(t *testing.T) {
 	root := repoRoot(t)
 	for _, path := range []string{
 		filepath.Join(root, "harness", "tool.local.yaml"),
-		filepath.Join(root, "harness", "tool.cloudflare.yaml"),
-		filepath.Join(root, "deploy", "cloudflare", "config", "tool.yaml"),
 	} {
 		t.Run(filepath.ToSlash(path), func(t *testing.T) {
 			cfg, err := config.LoadTools(path, true)
@@ -140,4 +175,24 @@ func repoRoot(t *testing.T) string {
 		t.Fatal("runtime.Caller() failed")
 	}
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", "..", "..", ".."))
+}
+
+// namedTool is a minimal ADK tool used to test runtime tool predicates.
+type namedTool struct {
+	name string
+}
+
+// Name returns the test tool name.
+func (t namedTool) Name() string {
+	return t.name
+}
+
+// Description returns the test tool description.
+func (t namedTool) Description() string {
+	return ""
+}
+
+// IsLongRunning reports that the test tool is synchronous.
+func (t namedTool) IsLongRunning() bool {
+	return false
 }
