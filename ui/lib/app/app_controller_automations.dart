@@ -632,6 +632,11 @@ Map<String, dynamic> _defaultAutomationActionArgs(String actionName) {
       'tool': '',
       'arguments': <String, dynamic>{},
     },
+    'command.execute' => <String, dynamic>{
+      'template_id': '',
+      'cwd': '',
+      'parameters': <String, dynamic>{},
+    },
     'workflow.run' => <String, dynamic>{
       'workflow': '',
       'input': <String, dynamic>{},

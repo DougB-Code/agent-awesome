@@ -7,187 +7,130 @@ import (
 	"errors"
 	"net/http"
 
+	platformmcp "agentawesome.dev/platform/mcptransport"
+
 	"agentawesome/internal/services/workflow/runtime"
 )
 
 // MCPServer serves the workflow MCP tool surface.
 type MCPServer struct {
 	service *runtime.Service
+	mcp     platformmcp.Server
 }
 
 // NewMCPServer creates an MCP transport adapter for workflow control.
 func NewMCPServer(service *runtime.Service) *MCPServer {
-	return &MCPServer{service: service}
+	server := &MCPServer{service: service}
+	server.mcp = platformmcp.Server{
+		Info:            platformmcp.ServerInfo{Name: "agentawesome-workflow", Version: "0.1.0"},
+		MaxRequestBytes: maxRequestBytes,
+		Tools:           workflowToolDefinitions,
+		Call:            server.callTool,
+		FormatResult:    platformmcp.CompactToolResult,
+	}
+	return server
 }
 
 // ServeHTTP handles JSON-RPC MCP requests.
 func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body := http.MaxBytesReader(w, r.Body, maxRequestBytes)
-	defer body.Close()
-	var req rpcRequest
-	if err := json.NewDecoder(body).Decode(&req); err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			http.Error(w, "payload too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		writeRPCError(w, nil, -32700, "parse error", err.Error())
-		return
-	}
-	if len(req.ID) == 0 {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	result, rpcErr := s.handle(r.Context(), req)
-	if rpcErr != nil {
-		writeRPCError(w, req.ID, rpcErr.Code, rpcErr.Message, rpcErr.Data)
-		return
-	}
-	writeRPCResult(w, req.ID, result)
-}
-
-// handle dispatches supported MCP methods.
-func (s *MCPServer) handle(ctx context.Context, req rpcRequest) (any, *rpcError) {
-	switch req.Method {
-	case "initialize":
-		return map[string]any{
-			"protocolVersion": "2025-06-18",
-			"capabilities": map[string]any{
-				"tools": map[string]any{"listChanged": false},
-			},
-			"serverInfo": map[string]any{
-				"name":    "agentawesome-workflow",
-				"version": "0.1.0",
-			},
-		}, nil
-	case "tools/list":
-		return map[string]any{"tools": workflowToolDefinitions()}, nil
-	case "tools/call":
-		return s.handleToolCall(ctx, req.Params)
-	default:
-		return nil, &rpcError{Code: -32601, Message: "method not found", Data: req.Method}
-	}
-}
-
-// handleToolCall invokes one workflow MCP tool.
-func (s *MCPServer) handleToolCall(ctx context.Context, params json.RawMessage) (any, *rpcError) {
-	var call toolCallParams
-	if err := json.Unmarshal(params, &call); err != nil {
-		return nil, &rpcError{Code: -32602, Message: "invalid params", Data: err.Error()}
-	}
-	result, err := s.callTool(ctx, call.Name, call.Arguments)
-	if err != nil {
-		return toolResult(map[string]string{"error": err.Error()}, true), nil
-	}
-	return toolResult(result, false), nil
+	s.mcp.ServeHTTP(w, r)
 }
 
 // callTool decodes workflow tool arguments and calls the service.
 func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMessage) (any, error) {
 	switch name {
 	case "workflow_list":
-		defs, err := s.service.ListDefinitions(ctx)
-		return map[string]any{"definitions": defs}, err
+		return keyedResult("definitions", func() (any, error) {
+			return s.service.ListDefinitions(ctx)
+		})
 	case "workflow_describe":
-		var req definitionRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		def, ok := s.service.DescribeDefinition(req.DefinitionID)
-		if !ok {
-			return nil, errors.New("workflow definition not found")
-		}
-		return map[string]any{"definition": def}, nil
+		return decodeWorkflowArgs(args, func(req definitionRequest) (any, error) {
+			def, ok := s.service.DescribeDefinition(req.DefinitionID)
+			if !ok {
+				return nil, errors.New("workflow definition not found")
+			}
+			return map[string]any{"definition": def}, nil
+		})
 	case "workflow_start":
-		var req startRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		run, err := s.service.StartWorkflow(ctx, req.DefinitionID, req.Input)
-		return map[string]any{"run": run}, err
+		return decodeKeyedResult(args, "run", func(req startRequest) (any, error) {
+			return s.service.StartWorkflow(ctx, req.DefinitionID, req.Input)
+		})
 	case "workflow_status":
-		var req runRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		run, err := s.service.Status(ctx, req.RunID)
-		return map[string]any{"run": run}, err
+		return decodeKeyedResult(args, "run", func(req runRequest) (any, error) {
+			return s.service.Status(ctx, req.RunID)
+		})
 	case "workflow_signal":
-		var req workflowSignalRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		run, err := s.service.Signal(ctx, req.RunID, req.Signal, req.Payload)
-		return map[string]any{"run": run}, err
+		return decodeKeyedResult(args, "run", func(req workflowSignalRequest) (any, error) {
+			return s.service.Signal(ctx, req.RunID, req.Signal, req.Payload)
+		})
 	case "workflow_cancel":
-		var req runRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		run, err := s.service.Cancel(ctx, req.RunID)
-		return map[string]any{"run": run}, err
+		return decodeKeyedResult(args, "run", func(req runRequest) (any, error) {
+			return s.service.Cancel(ctx, req.RunID)
+		})
 	case "workflow_history":
-		var req runRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		events, err := s.service.History(ctx, req.RunID)
-		return map[string]any{"events": events}, err
+		return decodeKeyedResult(args, "events", func(req runRequest) (any, error) {
+			return s.service.History(ctx, req.RunID)
+		})
 	case "workflow_action_types":
 		return map[string]any{"action_types": s.service.ActionTypes()}, nil
 	case "workflow_draft_create":
-		var req runtime.DraftRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		draft, err := s.service.CreateDraft(ctx, req)
-		return map[string]any{"draft": draft}, err
+		return decodeKeyedResult(args, "draft", func(req runtime.DraftRequest) (any, error) {
+			return s.service.CreateDraft(ctx, req)
+		})
 	case "workflow_draft_update":
-		var req workflowDraftUpdateRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		draft, err := s.service.UpdateDraft(ctx, req.DraftID, runtime.DraftRequest{
-			Kind:        req.Kind,
-			Name:        req.Name,
-			Description: req.Description,
-			Body:        req.Body,
+		return decodeKeyedResult(args, "draft", func(req workflowDraftUpdateRequest) (any, error) {
+			return s.service.UpdateDraft(ctx, req.DraftID, runtime.DraftRequest{
+				Kind:        req.Kind,
+				Name:        req.Name,
+				Description: req.Description,
+				Body:        req.Body,
+			})
 		})
-		return map[string]any{"draft": draft}, err
 	case "workflow_draft_validate":
-		var req workflowDraftRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		result, err := s.service.ValidateDraft(ctx, req.DraftID)
-		return map[string]any{"validation": result}, err
-	case "workflow_draft_publish":
-		var req workflowDraftRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		definition, err := s.service.PublishDraft(ctx, req.DraftID)
-		return map[string]any{"definition": definition}, err
-	case "workflow_template_list":
-		templates, err := s.service.ListTemplates(ctx)
-		return map[string]any{"templates": templates}, err
-	case "workflow_template_instantiate":
-		var req workflowTemplateInstantiateRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		draft, err := s.service.InstantiateTemplate(ctx, req.TemplateID, runtime.TemplateInstantiateRequest{
-			Parameters: req.Parameters,
-			Name:       req.Name,
+		return decodeKeyedResult(args, "validation", func(req workflowDraftRequest) (any, error) {
+			return s.service.ValidateDraft(ctx, req.DraftID)
 		})
-		return map[string]any{"draft": draft}, err
+	case "workflow_draft_publish":
+		return decodeKeyedResult(args, "definition", func(req workflowDraftRequest) (any, error) {
+			return s.service.PublishDraft(ctx, req.DraftID)
+		})
+	case "workflow_template_list":
+		return keyedResult("templates", func() (any, error) {
+			return s.service.ListTemplates(ctx)
+		})
+	case "workflow_template_instantiate":
+		return decodeKeyedResult(args, "draft", func(req workflowTemplateInstantiateRequest) (any, error) {
+			return s.service.InstantiateTemplate(ctx, req.TemplateID, runtime.TemplateInstantiateRequest{
+				Parameters: req.Parameters,
+				Name:       req.Name,
+			})
+		})
 	default:
 		return nil, errors.New("workflow tool is not supported")
 	}
+}
+
+// decodeKeyedResult decodes tool arguments and wraps the service result.
+func decodeKeyedResult[T any](args json.RawMessage, key string, call func(T) (any, error)) (any, error) {
+	return decodeWorkflowArgs(args, func(req T) (any, error) {
+		value, err := call(req)
+		return map[string]any{key: value}, err
+	})
+}
+
+// decodeWorkflowArgs decodes tool arguments before running workflow logic.
+func decodeWorkflowArgs[T any](args json.RawMessage, call func(T) (any, error)) (any, error) {
+	var req T
+	if err := decodeArgs(args, &req); err != nil {
+		return nil, err
+	}
+	return call(req)
+}
+
+// keyedResult wraps a service call return value under its MCP response key.
+func keyedResult(key string, call func() (any, error)) (any, error) {
+	value, err := call()
+	return map[string]any{key: value}, err
 }
 
 // workflowToolDefinitions returns the MCP tool descriptors.
@@ -261,57 +204,6 @@ func decodeArgs(args json.RawMessage, target any) error {
 		args = []byte(`{}`)
 	}
 	return json.Unmarshal(args, target)
-}
-
-// toolResult wraps structured MCP content.
-func toolResult(content any, isError bool) map[string]any {
-	data, _ := json.Marshal(content)
-	return map[string]any{
-		"content": []map[string]string{
-			{"type": "text", "text": string(data)},
-		},
-		"structuredContent": content,
-		"isError":           isError,
-	}
-}
-
-// writeRPCResult writes a JSON-RPC result response.
-func writeRPCResult(w http.ResponseWriter, id json.RawMessage, result any) {
-	writeJSON(w, http.StatusOK, rpcResponse{JSONRPC: "2.0", ID: id, Result: result})
-}
-
-// writeRPCError writes a JSON-RPC error response.
-func writeRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string, data any) {
-	writeJSON(w, http.StatusOK, rpcResponse{JSONRPC: "2.0", ID: id, Error: &rpcError{Code: code, Message: message, Data: data}})
-}
-
-// rpcRequest stores one JSON-RPC request.
-type rpcRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params"`
-}
-
-// rpcResponse stores one JSON-RPC response.
-type rpcResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Result  any             `json:"result,omitempty"`
-	Error   *rpcError       `json:"error,omitempty"`
-}
-
-// rpcError stores one JSON-RPC error.
-type rpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    any    `json:"data,omitempty"`
-}
-
-// toolCallParams stores MCP tools/call params.
-type toolCallParams struct {
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments"`
 }
 
 // definitionRequest stores a workflow definition id argument.

@@ -127,7 +127,6 @@ mkdir -p "$APP_CONFIG_DIR/workflows" "$APP_CONFIG_DIR/command/parsers" "$APP_DAT
   --workflow-api-addr 127.0.0.1:8092 \
   --workflow-definitions "$APP_CONFIG_DIR/workflows" \
   --workflow-db "$APP_DATA_DIR/workflow/workflow.db" \
-  --workflow-context-base-url http://127.0.0.1:8081/api/context \
   --command-data-dir "$APP_DATA_DIR/command" \
   --command-parser-dir "$APP_CONFIG_DIR/command/parsers" \
   --command-allow-workdir "$PWD" \

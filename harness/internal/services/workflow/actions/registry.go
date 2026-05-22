@@ -29,6 +29,7 @@ type Host interface {
 	RequestHuman(context.Context, HumanRequest) (string, error)
 	CallTool(context.Context, ToolRequest) (map[string]any, error)
 	CallMCP(context.Context, MCPRequest) (map[string]any, error)
+	ExecuteCommand(context.Context, CommandRequest) (map[string]any, error)
 	SignalWorkflow(context.Context, WorkflowSignal) error
 	StartNestedWorkflow(context.Context, NestedWorkflowRequest) (map[string]any, error)
 }
@@ -55,6 +56,16 @@ type ToolRequest struct {
 	Arguments map[string]any
 }
 
+// CommandRequest describes one configured command execution action.
+type CommandRequest struct {
+	TemplateID string
+	Parameters map[string]any
+	WorkingDir string
+	Reason     string
+	Actor      string
+	SessionID  string
+}
+
 // WorkflowSignal describes an internal workflow signal action.
 type WorkflowSignal struct {
 	RunID   string
@@ -78,6 +89,7 @@ func NewRegistry() *Registry {
 	r := &Registry{actions: map[string]Executor{}}
 	r.Register("tool.call", toolCall)
 	r.Register("mcp.call", mcpCall)
+	r.Register("command.execute", commandExecute)
 	r.Register("data.assert", dataAssert)
 	r.Register("workflow.run", workflowRun)
 	r.Register("workflow.signal", workflowSignal)
@@ -146,6 +158,21 @@ func mcpCall(ctx context.Context, execCtx Context, args map[string]any) (map[str
 		Endpoint:  resolvedStringArg(args, "endpoint", execCtx.Input),
 		Tool:      resolvedStringArg(args, "tool", execCtx.Input),
 		Arguments: resolvedMapArg(args, "arguments", nil, execCtx.Input),
+	})
+}
+
+// commandExecute runs a configured command template through the command boundary.
+func commandExecute(ctx context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
+	if execCtx.Host == nil {
+		return nil, fmt.Errorf("command.execute host is not configured")
+	}
+	return execCtx.Host.ExecuteCommand(ctx, CommandRequest{
+		TemplateID: resolvedStringArg(args, "template_id", execCtx.Input),
+		Parameters: resolvedMapArg(args, "parameters", nil, execCtx.Input),
+		WorkingDir: resolvedStringArg(args, "cwd", execCtx.Input),
+		Reason:     resolvedStringArg(args, "reason", execCtx.Input),
+		Actor:      resolvedStringArg(args, "actor", execCtx.Input),
+		SessionID:  resolvedStringArg(args, "session_id", execCtx.Input),
 	})
 }
 
@@ -247,15 +274,6 @@ func stringArg(args map[string]any, key string) string {
 func mapArg(args map[string]any, key string, fallback map[string]any) map[string]any {
 	value, ok := args[key].(map[string]any)
 	if !ok || value == nil {
-		return fallback
-	}
-	return value
-}
-
-// mapArgWithInputFallback returns action input when an editable JSON object is empty.
-func mapArgWithInputFallback(args map[string]any, key string, fallback map[string]any) map[string]any {
-	value := mapArg(args, key, fallback)
-	if len(value) == 0 && len(fallback) > 0 {
 		return fallback
 	}
 	return value

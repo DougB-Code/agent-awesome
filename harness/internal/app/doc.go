@@ -8,8 +8,9 @@
 //
 // High-level examples:
 //   - app.Run(ctx, opts) executes the application.
-//   - app.NewRuntimeConfig(ctx, modelCfg, agentCfg, toolsCfg, opts) prepares a
-//     launcher configuration for tests or callers that already loaded config.
+//   - app.NewRuntimeConfig(ctx, modelCfg, agentCfg, toolsCfg, opts, commands)
+//     prepares a launcher configuration for tests or callers that already loaded
+//     config.
 //
 // This package is the place for application-level orchestration across internal
 // packages. It should not own Cobra command definitions, provider protocols,

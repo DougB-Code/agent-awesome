@@ -29,7 +29,7 @@ func TestStartServesHealth(t *testing.T) {
 		_ = server.Close(shutdownCtx)
 	}()
 
-	resp, err := http.Get("http://" + server.Address() + "/healthz")
+	resp, err := http.Get("http://" + server.http.Addr + "/healthz")
 	if err != nil {
 		t.Fatalf("GET /healthz error = %v", err)
 	}

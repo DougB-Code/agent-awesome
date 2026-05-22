@@ -22,8 +22,6 @@ const (
 	DefaultMemoryServiceName = "memory"
 	// DefaultWorkflowServiceName is the supervisor name for the workflow service.
 	DefaultWorkflowServiceName = "workflow"
-	// DefaultCommandServiceName is the supervisor name for the command service.
-	DefaultCommandServiceName = "command"
 )
 
 // Config stores all runtime settings for one personal gateway process.
@@ -57,7 +55,6 @@ type Config struct {
 	HarnessService                   ServiceConfig
 	MemoryService                    ServiceConfig
 	WorkflowService                  ServiceConfig
-	CommandService                   ServiceConfig
 	Slack                            SlackConfig
 }
 
@@ -205,19 +202,9 @@ func FromFlags(args []string) (Config, error) {
 		"AGENTAWESOME_WORKFLOW_WORKDIR",
 		"AGENTAWESOME_WORKFLOW_AUTO_START",
 	)
-	cfg.CommandService = envServiceConfig(
-		DefaultCommandServiceName,
-		"AGENTAWESOME_COMMAND_HEALTH_URL",
-		"AGENTAWESOME_COMMAND_COMMAND",
-		"AGENTAWESOME_COMMAND_ARGS",
-		"AGENTAWESOME_COMMAND_WORKDIR",
-		"AGENTAWESOME_COMMAND_AUTO_START",
-	)
-
 	harnessArgs := repeatedStrings(cfg.HarnessService.Arguments)
 	memoryArgs := repeatedStrings(cfg.MemoryService.Arguments)
 	workflowArgs := repeatedStrings(cfg.WorkflowService.Arguments)
-	commandArgs := repeatedStrings(cfg.CommandService.Arguments)
 	fs := flag.NewFlagSet("agent-gateway", flag.ContinueOnError)
 	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, "gateway listen address")
 	fs.StringVar(&cfg.GatewayBaseURL, "gateway-base-url", cfg.GatewayBaseURL, "gateway API base URL used by channel adapters")
@@ -242,7 +229,7 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.ModelID, "model-id", cfg.ModelID, "current non-secret model identifier for beta status")
 	fs.StringVar(&cfg.LogFile, "log-file", cfg.LogFile, "optional gateway log file path")
 	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit without starting the gateway")
-	fs.BoolVar(&cfg.HarnessEmbeddedServices, "harness-embedded-services", cfg.HarnessEmbeddedServices, "start workflow and command services inside the harness process")
+	fs.BoolVar(&cfg.HarnessEmbeddedServices, "harness-embedded-services", cfg.HarnessEmbeddedServices, "start workflow services inside the harness process")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "maximum upstream request duration")
 	fs.DurationVar(&cfg.ServiceStartTimeout, "service-start-timeout", cfg.ServiceStartTimeout, "maximum local service readiness wait")
 	fs.BoolVar(&cfg.Slack.Enabled, "slack-enabled", cfg.Slack.Enabled, "enable Slack channel adapter")
@@ -256,7 +243,6 @@ func FromFlags(args []string) (Config, error) {
 	bindServiceFlags(fs, &cfg.HarnessService, &harnessArgs, DefaultHarnessServiceName)
 	bindServiceFlags(fs, &cfg.MemoryService, &memoryArgs, DefaultMemoryServiceName)
 	bindServiceFlags(fs, &cfg.WorkflowService, &workflowArgs, DefaultWorkflowServiceName)
-	bindServiceFlags(fs, &cfg.CommandService, &commandArgs, DefaultCommandServiceName)
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -264,7 +250,6 @@ func FromFlags(args []string) (Config, error) {
 	cfg.HarnessService.Arguments = harnessArgs
 	cfg.MemoryService.Arguments = memoryArgs
 	cfg.WorkflowService.Arguments = workflowArgs
-	cfg.CommandService.Arguments = commandArgs
 	if err := cfg.applyMemoryTopology(memoryDomainsJSON, memoryPolicyJSON); err != nil {
 		return Config{}, err
 	}
@@ -282,9 +267,6 @@ func FromFlags(args []string) (Config, error) {
 	}
 	if cfg.WorkflowService.HealthURL == "" {
 		cfg.WorkflowService.HealthURL = workflowHealthURL(cfg.WorkflowBaseURL)
-	}
-	if cfg.CommandService.HealthURL == "" {
-		cfg.CommandService.HealthURL = "http://127.0.0.1:8093/healthz"
 	}
 	if err := cfg.applyHarnessEmbeddedServices(); err != nil {
 		return Config{}, err
@@ -356,9 +338,6 @@ func (c Config) Validate() error {
 	if err := c.WorkflowService.Validate(); err != nil {
 		return fmt.Errorf("workflow service: %w", err)
 	}
-	if err := c.CommandService.Validate(); err != nil {
-		return fmt.Errorf("command service: %w", err)
-	}
 	if err := c.validateMemoryServices(); err != nil {
 		return err
 	}
@@ -424,10 +403,10 @@ func (c Config) StatusView() map[string]any {
 		"workflow_base_url":                   c.WorkflowBaseURL,
 		"has_context_api_token":               strings.TrimSpace(c.ContextAPIToken) != "",
 		"memory_mcp_url":                      c.MemoryMCPURL,
-		"memory_domains":                      memoryDomainStatusViews(c.MemoryDomains),
+		"memory_domains":                      statusViews(c.MemoryDomains),
 		"memory_policy":                       c.MemoryPolicy.StatusView(),
-		"memory_services":                     memoryServiceStatusViews(c.MemoryServices),
-		"agent_profiles":                      agentProfileStatusViews(c.AgentProfiles),
+		"memory_services":                     statusViews(c.MemoryServices),
+		"agent_profiles":                      statusViews(c.AgentProfiles),
 		"app_name":                            c.AppName,
 		"user_id":                             c.UserID,
 		"auth_required":                       c.AuthToken != "",
@@ -447,8 +426,17 @@ func (c Config) StatusView() map[string]any {
 		"harness_service":           c.HarnessService.StatusView(),
 		"memory_service":            c.MemoryService.StatusView(),
 		"workflow_service":          c.WorkflowService.StatusView(),
-		"command_service":           c.CommandService.StatusView(),
 		"slack":                     c.Slack.StatusView(),
+	}
+}
+
+// StatusView returns sanitized memory domain routing settings.
+func (d MemoryDomain) StatusView() map[string]any {
+	return map[string]any{
+		"id":         d.ID,
+		"label":      d.Label,
+		"endpoint":   d.Endpoint,
+		"health_url": d.HealthURL,
 	}
 }
 
@@ -958,9 +946,6 @@ func (c *Config) applyHarnessEmbeddedServices() error {
 	if serviceProcessConfigured(c.WorkflowService) {
 		return fmt.Errorf("workflow service process flags cannot be used with harness-embedded-services")
 	}
-	if serviceProcessConfigured(c.CommandService) {
-		return fmt.Errorf("command service process flags cannot be used with harness-embedded-services")
-	}
 	if !c.HarnessService.AutoStart {
 		return nil
 	}
@@ -975,7 +960,6 @@ func (c *Config) applyHarnessEmbeddedServices() error {
 	}
 	args = insertHarnessFlagValue(args, "--context-api-addr", contextAddr)
 	args = insertHarnessFlagValue(args, "--workflow-api-addr", workflowAddr)
-	args = insertHarnessFlagValue(args, "--workflow-context-base-url", c.ContextBaseURL)
 	c.HarnessService.Arguments = args
 	return nil
 }
@@ -1064,38 +1048,6 @@ func defaultActor(appName string) string {
 	return "agent:" + normalized
 }
 
-// memoryDomainStatusViews renders sanitized memory domain rows.
-func memoryDomainStatusViews(domains []MemoryDomain) []map[string]any {
-	views := make([]map[string]any, 0, len(domains))
-	for _, domain := range domains {
-		views = append(views, map[string]any{
-			"id":         domain.ID,
-			"label":      domain.Label,
-			"endpoint":   domain.Endpoint,
-			"health_url": domain.HealthURL,
-		})
-	}
-	return views
-}
-
-// memoryServiceStatusViews renders sanitized memory service rows.
-func memoryServiceStatusViews(services []MemoryDomainService) []map[string]any {
-	views := make([]map[string]any, 0, len(services))
-	for _, service := range services {
-		views = append(views, service.StatusView())
-	}
-	return views
-}
-
-// agentProfileStatusViews renders sanitized profile rows.
-func agentProfileStatusViews(profiles []AgentProfile) []map[string]any {
-	views := make([]map[string]any, 0, len(profiles))
-	for _, profile := range profiles {
-		views = append(views, profile.StatusView())
-	}
-	return views
-}
-
 // slackBindingStatusViews renders Slack scopes without token fields.
 func slackBindingStatusViews(bindings []SlackProfileBinding) []map[string]any {
 	views := make([]map[string]any, 0, len(bindings))
@@ -1114,6 +1066,15 @@ func memoryFlowStatusViews(flows []MemoryDomainFlow) []map[string]string {
 	views := make([]map[string]string, 0, len(flows))
 	for _, flow := range flows {
 		views = append(views, map[string]string{"from": flow.From, "to": flow.To})
+	}
+	return views
+}
+
+// statusViews renders sanitized rows for config models with StatusView methods.
+func statusViews[T interface{ StatusView() map[string]any }](values []T) []map[string]any {
+	views := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		views = append(views, value.StatusView())
 	}
 	return views
 }

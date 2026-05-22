@@ -1268,10 +1268,6 @@ String servicePortsDescription({
       ports.add('context=${_listenDescription(value)}');
     } else if (flag == '--workflow-api-addr') {
       ports.add('workflow=${_listenDescription(value)}');
-    } else if (flag == '--command-mcp-addr') {
-      ports.add('command=${_listenDescription(value)}');
-    } else if (flag == '--mcp-manager-addr') {
-      ports.add('mcp=${_listenDescription(value)}');
     }
   }
   return ports.isEmpty ? 'unknown' : ports.join(', ');
@@ -1292,9 +1288,7 @@ Set<int> serviceLocalPorts({
     if (flag == '--addr' ||
         flag == '--port' ||
         flag == '--context-api-addr' ||
-        flag == '--workflow-api-addr' ||
-        flag == '--command-mcp-addr' ||
-        flag == '--mcp-manager-addr') {
+        flag == '--workflow-api-addr') {
       final port = _listenPort(value);
       if (port != null) {
         ports.add(port);

@@ -11,26 +11,26 @@ import (
 	"google.golang.org/genai"
 )
 
-// TestDefaultDatabasePathUsesDataDirEnv verifies UI-owned data directories are honored.
-func TestDefaultDatabasePathUsesDataDirEnv(t *testing.T) {
+// TestResolveDatabasePathUsesDataDirEnv verifies UI-owned data directories are honored.
+func TestResolveDatabasePathUsesDataDirEnv(t *testing.T) {
 	t.Setenv(dataDirEnv, "/tmp/agentawesome-data")
 	t.Setenv(sessionDatabaseEnv, "")
 	t.Setenv(memoryDatabaseEnv, "")
 
-	got := DefaultDatabasePath()
+	got := ResolveDatabasePath("")
 	want := filepath.Join("/tmp/agentawesome-data", "memory", "memory.db")
 	if got != want {
-		t.Fatalf("DefaultDatabasePath() = %q, want %q", got, want)
+		t.Fatalf("ResolveDatabasePath() = %q, want %q", got, want)
 	}
 }
 
-// TestDefaultDatabasePathUsesMemoryDBEnv verifies memory DB profiles are honored.
-func TestDefaultDatabasePathUsesMemoryDBEnv(t *testing.T) {
+// TestResolveDatabasePathUsesMemoryDBEnv verifies memory DB profiles are honored.
+func TestResolveDatabasePathUsesMemoryDBEnv(t *testing.T) {
 	t.Setenv(sessionDatabaseEnv, "")
 	t.Setenv(memoryDatabaseEnv, "/tmp/memory.db")
 
-	if got := DefaultDatabasePath(); got != "/tmp/memory.db" {
-		t.Fatalf("DefaultDatabasePath() = %q, want memory env path", got)
+	if got := ResolveDatabasePath(""); got != "/tmp/memory.db" {
+		t.Fatalf("ResolveDatabasePath() = %q, want memory env path", got)
 	}
 }
 

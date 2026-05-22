@@ -58,10 +58,9 @@ go run ./cmd/agent-gateway \
 ```
 
 When `--harness-embedded-services` is enabled, do not also configure
-`--workflow-auto-start`, `--workflow-command`, `--command-auto-start`, or
-`--command-command`; those would create competing process owners. The gateway
-still checks the workflow health URL, but the listener is owned by the harness
-process.
+`--workflow-auto-start` or `--workflow-command`; those would create competing
+process owners. The gateway still checks the workflow health URL, but the
+listener is owned by the harness process.
 
 For packaged pilots, the same values can be supplied with environment variables:
 

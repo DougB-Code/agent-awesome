@@ -3,6 +3,7 @@ module agentawesome
 go 1.26.0
 
 require (
+	agentawesome.dev/platform v0.0.0
 	github.com/glebarez/sqlite v1.8.0
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/knadh/koanf/parsers/yaml v1.1.0
@@ -21,6 +22,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/gorm v1.31.0
 )
+
+replace agentawesome.dev/platform => ../platform
 
 require (
 	cloud.google.com/go v0.123.0 // indirect

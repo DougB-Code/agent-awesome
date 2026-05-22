@@ -14,6 +14,7 @@ import (
 
 	"github.com/qmuntal/stateless"
 
+	"agentawesome/internal/services/command/command"
 	"agentawesome/internal/services/workflow/actions"
 	"agentawesome/internal/services/workflow/definition"
 	"agentawesome/internal/services/workflow/store"
@@ -47,15 +48,16 @@ type processTransitionContext struct {
 
 // Service owns workflow definitions, persistence, and execution.
 type Service struct {
-	cfg     Config
-	store   *store.Store
-	actions *actions.Registry
-	tools   ContextToolClient
-	mcp     *MCPClient
-	mu      sync.RWMutex
-	defs    map[string]definition.Definition
-	defHash map[string]string
-	runMu   map[string]*sync.Mutex
+	cfg      Config
+	store    *store.Store
+	actions  *actions.Registry
+	tools    ContextToolClient
+	commands CommandClient
+	mcp      *MCPClient
+	mu       sync.RWMutex
+	defs     map[string]definition.Definition
+	defHash  map[string]string
+	runMu    map[string]*sync.Mutex
 }
 
 // Open creates a workflow service and loads declarative definitions.
@@ -70,14 +72,15 @@ func Open(ctx context.Context, cfg Config) (*Service, error) {
 		toolClient = NewToolClient(cfg.HarnessContextBaseURL, cfg.RequestTimeout)
 	}
 	service := &Service{
-		cfg:     cfg,
-		store:   workflowStore,
-		actions: registry,
-		tools:   toolClient,
-		mcp:     NewMCPClient(cfg.RequestTimeout),
-		defs:    map[string]definition.Definition{},
-		defHash: map[string]string{},
-		runMu:   map[string]*sync.Mutex{},
+		cfg:      cfg,
+		store:    workflowStore,
+		actions:  registry,
+		tools:    toolClient,
+		commands: cfg.CommandClient,
+		mcp:      NewMCPClient(cfg.RequestTimeout),
+		defs:     map[string]definition.Definition{},
+		defHash:  map[string]string{},
+		runMu:    map[string]*sync.Mutex{},
 	}
 	if err := service.ReloadDefinitions(ctx); err != nil {
 		_ = workflowStore.Close()
@@ -290,6 +293,38 @@ func (s *Service) CallTool(ctx context.Context, req actions.ToolRequest) (map[st
 // CallMCP invokes one MCP tool endpoint.
 func (s *Service) CallMCP(ctx context.Context, req actions.MCPRequest) (map[string]any, error) {
 	return s.mcp.Call(ctx, req)
+}
+
+// ExecuteCommand runs one configured command template.
+func (s *Service) ExecuteCommand(ctx context.Context, req actions.CommandRequest) (map[string]any, error) {
+	if s.commands == nil {
+		return nil, fmt.Errorf("command.execute host is not configured")
+	}
+	status, err := s.commands.Execute(ctx, command.ExecuteRequest{
+		TemplateID: strings.TrimSpace(req.TemplateID),
+		Parameters: req.Parameters,
+		WorkingDir: strings.TrimSpace(req.WorkingDir),
+		Reason:     strings.TrimSpace(req.Reason),
+		Actor:      strings.TrimSpace(req.Actor),
+		SessionID:  strings.TrimSpace(req.SessionID),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return commandStatusMap(status)
+}
+
+// commandStatusMap converts command results into workflow step output data.
+func commandStatusMap(status command.StatusResult) (map[string]any, error) {
+	data, err := json.Marshal(status)
+	if err != nil {
+		return nil, fmt.Errorf("encode command result: %w", err)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("decode command result: %w", err)
+	}
+	return result, nil
 }
 
 // SignalWorkflow applies an internal signal from an action.
@@ -600,11 +635,6 @@ func stateRetryDelay(state definition.StateDefinition) (time.Duration, error) {
 		return 0, fmt.Errorf("task state %q retry_delay: %w", state.ID, err)
 	}
 	return delay, nil
-}
-
-// executeAction runs one registered action and persists its output.
-func (s *Service) executeAction(ctx context.Context, run store.RunRecord, stepID string, action string, args map[string]any) (map[string]any, error) {
-	return s.executeActionWithInput(ctx, run, stepID, action, args, run.Input)
 }
 
 // executeActionWithInput runs one action with explicit step input and stores its output.

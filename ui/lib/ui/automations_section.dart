@@ -39,6 +39,7 @@ const String _automationDetailSafety = 'safety';
 const Set<String> _taskGraphActionNames = <String>{
   'mcp.call',
   'tool.call',
+  'command.execute',
   'data.assert',
   'workflow.run',
 };
@@ -1672,6 +1673,28 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
             ),
           ],
         );
+      case 'command.execute':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _AutomationTextField(
+              controller: _toolController,
+              label: 'Template id',
+            ),
+            const SizedBox(height: 10),
+            _AutomationTextField(
+              controller: _domainIdController,
+              label: 'Working directory',
+            ),
+            const SizedBox(height: 10),
+            _AutomationTextField(
+              controller: _argumentsController,
+              label: 'Parameters JSON',
+              maxLines: 5,
+              monospace: true,
+            ),
+          ],
+        );
       case 'workflow.run':
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1757,10 +1780,13 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     _instructionsController.text = '${args['instructions'] ?? ''}';
     _agentInputController.text = _jsonText(_map(args['input']));
     _endpointController.text = '${args['endpoint'] ?? ''}';
-    _toolController.text = '${args['name'] ?? args['tool'] ?? ''}';
-    _domainIdController.text = '${args['domain_id'] ?? ''}';
+    _toolController.text =
+        '${args['name'] ?? args['tool'] ?? args['template_id'] ?? ''}';
+    _domainIdController.text = '${args['domain_id'] ?? args['cwd'] ?? ''}';
     _argumentsController.text = _selectedAction == 'data.assert'
         ? _jsonText(args)
+        : _selectedAction == 'command.execute'
+        ? _jsonText(_map(args['parameters']))
         : _jsonText(_map(args['arguments']));
     _commandController.text = '${args['command'] ?? ''}';
     _commandArgsController.text = _linesText(_list(args['arguments']));
@@ -2209,6 +2235,20 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
           'tool': _toolController.text.trim(),
           'arguments': args,
         };
+      case 'command.execute':
+        final params = _parseJsonObject(
+          _argumentsController.text,
+          'Parameters JSON',
+        );
+        if (params == null) {
+          return null;
+        }
+        return <String, dynamic>{
+          'template_id': _toolController.text.trim(),
+          if (_domainIdController.text.trim().isNotEmpty)
+            'cwd': _domainIdController.text.trim(),
+          'parameters': params,
+        };
       case 'workflow.run':
         final input = _parseJsonObject(_payloadController.text, 'Input JSON');
         if (input == null) {
@@ -2360,6 +2400,7 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
       ? const <String>[
           'tool.call',
           'mcp.call',
+          'command.execute',
           'data.assert',
           'human.request',
           'delay.until',
@@ -4717,6 +4758,7 @@ IconData _actionIcon(String actionName) {
   return switch (actionName) {
     'tool.call' => Icons.extension_outlined,
     'mcp.call' => Icons.extension_outlined,
+    'command.execute' => Icons.terminal_outlined,
     'data.assert' => Icons.rule_outlined,
     'human.request' => Icons.how_to_reg_outlined,
     'delay.until' => Icons.schedule_outlined,
@@ -4731,6 +4773,7 @@ String _fallbackActionLabel(String actionName) {
   return switch (actionName) {
     'tool.call' => 'Run Tool',
     'mcp.call' => 'Call MCP Tool',
+    'command.execute' => 'Run Command',
     'data.assert' => 'Assert Data',
     'human.request' => 'Prompt',
     'delay.until' => 'Delay',
@@ -4745,6 +4788,7 @@ String _fallbackActionDescription(String actionName) {
   return switch (actionName) {
     'tool.call' => 'Harness-exposed tool call',
     'mcp.call' => 'External MCP tool call',
+    'command.execute' => 'Configured command template',
     'data.assert' => 'Deterministic data check',
     'human.request' => 'Human approval or input',
     'delay.until' => 'Timed wait',
@@ -4760,6 +4804,7 @@ Color _actionColor(BuildContext context, String actionName) {
   return switch (actionName) {
     'tool.call' => colors.cardIcon,
     'mcp.call' => colors.cardIcon,
+    'command.execute' => colors.cardIcon,
     'data.assert' => colors.green,
     'human.request' => colors.green,
     'delay.until' => colors.muted,
@@ -4899,6 +4944,11 @@ Map<String, dynamic> _defaultTaskGraphActionArgs(String actionName) {
       'endpoint': '',
       'tool': '',
       'arguments': <String, dynamic>{},
+    },
+    'command.execute' => <String, dynamic>{
+      'template_id': '',
+      'cwd': '',
+      'parameters': <String, dynamic>{},
     },
     'data.assert' => <String, dynamic>{'checks': <dynamic>[]},
     'workflow.run' => <String, dynamic>{

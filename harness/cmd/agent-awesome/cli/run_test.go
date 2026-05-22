@@ -30,8 +30,6 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--workflow-api-addr", "127.0.0.1:8092",
 		"--workflow-definitions", "/tmp/workflows",
 		"--workflow-db", "/tmp/workflow.db",
-		"--workflow-context-base-url", "http://127.0.0.1:8081/api/context",
-		"--command-mcp-addr", "127.0.0.1:8093",
 		"--command-data-dir", "/tmp/command-data",
 		"--command-allow-workdir", "/work/a",
 		"--command-allow-workdir", "/work/b",
@@ -41,9 +39,6 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--command-parser-dir", "/tmp/parsers",
 		"--command-timeout", "7s",
 		"--command-max-output-bytes", "2048",
-		"--mcp-manager-addr", "127.0.0.1:8094",
-		"--mcp-servers-json", `[{"id":"tools","endpoint":"http://127.0.0.1:9999/mcp"}]`,
-		"--mcp-request-timeout", "11s",
 		"web",
 		"--port", "9090",
 	})
@@ -90,12 +85,6 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	if got, want := captured.WorkflowDatabasePath, "/tmp/workflow.db"; got != want {
 		t.Fatalf("WorkflowDatabasePath = %q, want %q", got, want)
 	}
-	if got, want := captured.WorkflowContextBaseURL, "http://127.0.0.1:8081/api/context"; got != want {
-		t.Fatalf("WorkflowContextBaseURL = %q, want %q", got, want)
-	}
-	if got, want := captured.CommandMCPAddr, "127.0.0.1:8093"; got != want {
-		t.Fatalf("CommandMCPAddr = %q, want %q", got, want)
-	}
 	if got, want := captured.CommandDataDir, "/tmp/command-data"; got != want {
 		t.Fatalf("CommandDataDir = %q, want %q", got, want)
 	}
@@ -116,15 +105,6 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	}
 	if got, want := captured.CommandMaxOutputBytes, int64(2048); got != want {
 		t.Fatalf("CommandMaxOutputBytes = %d, want %d", got, want)
-	}
-	if got, want := captured.MCPManagerAddr, "127.0.0.1:8094"; got != want {
-		t.Fatalf("MCPManagerAddr = %q, want %q", got, want)
-	}
-	if got, want := captured.MCPServersJSON, `[{"id":"tools","endpoint":"http://127.0.0.1:9999/mcp"}]`; got != want {
-		t.Fatalf("MCPServersJSON = %q, want %q", got, want)
-	}
-	if got, want := captured.MCPRequestTimeout, 11*time.Second; got != want {
-		t.Fatalf("MCPRequestTimeout = %s, want %s", got, want)
 	}
 	if want := []string{"web", "--port", "9090"}; !reflect.DeepEqual(captured.Args, want) {
 		t.Fatalf("args = %#v, want %#v", captured.Args, want)

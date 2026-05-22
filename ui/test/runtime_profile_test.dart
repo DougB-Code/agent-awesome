@@ -31,8 +31,6 @@ void main() {
         defaultWorkflowDefinitionsDirectoryPath(),
         '--workflow-db',
         defaultWorkflowDatabasePath(),
-        '--workflow-context-base-url',
-        'http://127.0.0.1:8081/api/context',
         '--command-data-dir',
         defaultCommandDataDirectoryPath(),
         '--command-parser-dir',
@@ -43,7 +41,6 @@ void main() {
       harnessArguments.indexOf('--workflow-api-addr'),
       lessThan(harnessArguments.indexOf('--')),
     );
-    expect(harnessArguments, isNot(contains('--mcp-servers-json')));
     expect(
       harnessArguments,
       containsAllInOrder(<String>[

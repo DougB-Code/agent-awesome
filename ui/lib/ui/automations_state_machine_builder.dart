@@ -6397,6 +6397,11 @@ Map<String, dynamic> _defaultStateMachineActionArgs(String actionName) {
       'tool': '',
       'arguments': <String, dynamic>{},
     },
+    'command.execute' => <String, dynamic>{
+      'template_id': '',
+      'cwd': '',
+      'parameters': <String, dynamic>{},
+    },
     'data.assert' => <String, dynamic>{'checks': <dynamic>[]},
     'human.request' => <String, dynamic>{
       'prompt': '',
@@ -6628,6 +6633,7 @@ String _stateBaseNameForAction(String actionName) {
     _terminalStatePaletteAction => 'done',
     'tool.call' => 'run_tool',
     'mcp.call' => 'call_mcp_tool',
+    'command.execute' => 'run_command',
     'data.assert' => 'assert_data',
     'human.request' => 'operator_decision',
     'delay.until' => 'wait',

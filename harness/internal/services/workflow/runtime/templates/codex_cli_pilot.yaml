@@ -8,21 +8,14 @@ tags:
   - sourcecontrol
   - state-machine
 parameters:
-  - id: mcp_endpoint
-    label: MCP manager endpoint
+  - id: sourcecontrol_mcp_endpoint
+    label: Source-control MCP endpoint
     type: string
-    default: http://127.0.0.1:8094/mcp
-  - id: sourcecontrol_server_id
-    label: Source-control server id
-    type: string
-    default: sourcecontrol
-  - id: command_server_id
-    label: Command server id
-    type: string
-    default: command
+    default: http://127.0.0.1:8095/mcp
 requirements:
   actions:
     - mcp.call
+    - command.execute
     - data.assert
     - human.request
   input:
@@ -87,16 +80,13 @@ body:
             - id: prepare
               uses: mcp.call
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
+                endpoint: "{{sourcecontrol_mcp_endpoint}}"
+                tool: sourcecontrol.prepare_worktree
                 arguments:
-                  server_id: "{{sourcecontrol_server_id}}"
-                  tool: sourcecontrol.prepare_worktree
-                  arguments:
-                    repository_path: "${workflow_input.repository_path}"
-                    worktree_path: "${workflow_input.worktree_path}"
-                    branch: "${workflow_input.branch}"
-                    base_ref: "${workflow_input.base_ref}"
+                  repository_path: "${workflow_input.repository_path}"
+                  worktree_path: "${workflow_input.worktree_path}"
+                  branch: "${workflow_input.branch}"
+                  base_ref: "${workflow_input.base_ref}"
           transitions:
             - trigger: succeeded
               to: plan
@@ -105,16 +95,10 @@ body:
         - id: plan
           on_entry:
             - id: plan
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: codex_plan
-                    cwd: "${prepare.worktree_path}"
+                template_id: codex_plan
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: assert_plan
@@ -160,13 +144,10 @@ body:
             - id: backup
               uses: mcp.call
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
+                endpoint: "{{sourcecontrol_mcp_endpoint}}"
+                tool: sourcecontrol.backup
                 arguments:
-                  server_id: "{{sourcecontrol_server_id}}"
-                  tool: sourcecontrol.backup
-                  arguments:
-                    worktree_path: "${prepare.worktree_path}"
+                  worktree_path: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: change
@@ -181,16 +162,10 @@ body:
         - id: implement
           on_entry:
             - id: implement
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: codex_implement
-                    cwd: "${prepare.worktree_path}"
+                template_id: codex_implement
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: assert_implement
@@ -222,16 +197,10 @@ body:
         - id: test
           on_entry:
             - id: test
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: test
-                    cwd: "${prepare.worktree_path}"
+                template_id: test
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: assert_tests
@@ -257,16 +226,10 @@ body:
         - id: post_review
           on_entry:
             - id: post_review
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: codex_review
-                    cwd: "${prepare.worktree_path}"
+                template_id: codex_review
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: cleanup
@@ -275,16 +238,10 @@ body:
         - id: cleanup
           on_entry:
             - id: cleanup
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: codex_cleanup
-                    cwd: "${prepare.worktree_path}"
+                template_id: codex_cleanup
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: assert_cleanup
@@ -310,16 +267,10 @@ body:
         - id: retest
           on_entry:
             - id: retest
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: test
-                    cwd: "${prepare.worktree_path}"
+                template_id: test
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: assert_retest
@@ -345,16 +296,10 @@ body:
         - id: final_review
           on_entry:
             - id: final_review
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: codex_review
-                    cwd: "${prepare.worktree_path}"
+                template_id: codex_review
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: assert_review
@@ -385,14 +330,11 @@ body:
             - id: commit
               uses: mcp.call
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
+                endpoint: "{{sourcecontrol_mcp_endpoint}}"
+                tool: sourcecontrol.commit
                 arguments:
-                  server_id: "{{sourcecontrol_server_id}}"
-                  tool: sourcecontrol.commit
-                  arguments:
-                    worktree_path: "${prepare.worktree_path}"
-                    message: "${workflow_input.commit_message}"
+                  worktree_path: "${prepare.worktree_path}"
+                  message: "${workflow_input.commit_message}"
           transitions:
             - trigger: succeeded
               to: push
@@ -403,15 +345,12 @@ body:
             - id: push
               uses: mcp.call
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
+                endpoint: "{{sourcecontrol_mcp_endpoint}}"
+                tool: sourcecontrol.push
                 arguments:
-                  server_id: "{{sourcecontrol_server_id}}"
-                  tool: sourcecontrol.push
-                  arguments:
-                    worktree_path: "${prepare.worktree_path}"
-                    remote: "${workflow_input.remote}"
-                    branch: "${workflow_input.branch}"
+                  worktree_path: "${prepare.worktree_path}"
+                  remote: "${workflow_input.remote}"
+                  branch: "${workflow_input.branch}"
           transitions:
             - trigger: succeeded
               to: open_pr
@@ -420,16 +359,10 @@ body:
         - id: open_pr
           on_entry:
             - id: open_pr
-              uses: mcp.call
+              uses: command.execute
               with:
-                endpoint: "{{mcp_endpoint}}"
-                tool: mcp.call
-                arguments:
-                  server_id: "{{command_server_id}}"
-                  tool: command.execute
-                  arguments:
-                    template_id: gh_pr_create
-                    cwd: "${prepare.worktree_path}"
+                template_id: gh_pr_create
+                cwd: "${prepare.worktree_path}"
           transitions:
             - trigger: succeeded
               to: assert_pr

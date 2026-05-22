@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"net/http"
 
+	platformmcp "agentawesome.dev/platform/mcptransport"
+
 	"github.com/rs/zerolog/log"
 
 	"memory/internal/memory/domain"
@@ -20,163 +22,81 @@ const maxJSONRPCRequestBytes int64 = 2 << 20
 // MCPServer serves a small MCP-compatible JSON-RPC tool surface.
 type MCPServer struct {
 	service *service.Service
+	mcp     platformmcp.Server
 }
 
 // NewMCPServer creates an MCP transport adapter.
 func NewMCPServer(memoryService *service.Service) *MCPServer {
-	return &MCPServer{service: memoryService}
+	server := &MCPServer{service: memoryService}
+	server.mcp = platformmcp.Server{
+		Info:            platformmcp.ServerInfo{Name: "agentawesome-memory", Version: "0.1.0"},
+		MaxRequestBytes: maxJSONRPCRequestBytes,
+		Tools:           toolDefinitions,
+		Call:            server.callTool,
+		Ready:           server.ready,
+		Validate:        validateToolCall,
+		FormatResult:    platformmcp.IndentedToolResult,
+		Hooks: platformmcp.Hooks{
+			OnToolCallStart:    func(name string) { log.Info().Str("tool", name).Msg("memory mcp tool call begin") },
+			OnToolCallError:    func(name string, err error) { log.Warn().Str("tool", name).Err(err).Msg("memory mcp tool call failed") },
+			OnToolCallComplete: func(name string) { log.Info().Str("tool", name).Msg("memory mcp tool call complete") },
+		},
+	}
+	return server
 }
 
 // ServeHTTP handles JSON-RPC MCP requests over HTTP.
 func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body := http.MaxBytesReader(w, r.Body, maxJSONRPCRequestBytes)
-	defer body.Close()
-	var req rpcRequest
-	if err := json.NewDecoder(body).Decode(&req); err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
-			http.Error(w, "payload too large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		writeRPCError(w, nil, -32700, "parse error", err.Error())
-		return
-	}
-	if len(req.ID) == 0 {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	result, rpcErr := s.handle(r.Context(), req)
-	if rpcErr != nil {
-		writeRPCError(w, req.ID, rpcErr.Code, rpcErr.Message, rpcErr.Data)
-		return
-	}
-	writeRPCResult(w, req.ID, result)
+	s.mcp.ServeHTTP(w, r)
 }
 
-// handle dispatches supported MCP methods.
-func (s *MCPServer) handle(ctx context.Context, req rpcRequest) (any, *rpcError) {
-	switch req.Method {
-	case "initialize":
-		return map[string]any{
-			"protocolVersion": "2025-06-18",
-			"capabilities": map[string]any{
-				"tools": map[string]any{"listChanged": false},
-			},
-			"serverInfo": map[string]any{
-				"name":    "agentawesome-memory",
-				"version": "0.1.0",
-			},
-		}, nil
-	case "tools/list":
-		return map[string]any{"tools": toolDefinitions()}, nil
-	case "tools/call":
-		return s.handleToolCall(ctx, req.Params)
-	default:
-		return nil, &rpcError{Code: -32601, Message: "method not found", Data: req.Method}
-	}
-}
-
-// handleToolCall invokes a named memory tool.
-func (s *MCPServer) handleToolCall(ctx context.Context, params json.RawMessage) (any, *rpcError) {
+// ready verifies the memory tool server can call through to a service.
+func (s *MCPServer) ready() *platformmcp.RPCError {
 	if s.service == nil {
-		return nil, &rpcError{Code: -32603, Message: errMissingService.Error()}
+		return &platformmcp.RPCError{Code: -32603, Message: errMissingService.Error()}
 	}
-	var call toolCallParams
-	if err := json.Unmarshal(params, &call); err != nil {
-		return nil, &rpcError{Code: -32602, Message: "invalid params", Data: err.Error()}
-	}
+	return nil
+}
+
+// validateToolCall rejects incomplete memory tool call parameters.
+func validateToolCall(call platformmcp.ToolCall) *platformmcp.RPCError {
 	if call.Name == "" {
-		return nil, &rpcError{Code: -32602, Message: "tool name is required"}
+		return &platformmcp.RPCError{Code: -32602, Message: "tool name is required"}
 	}
-	log.Info().Str("tool", call.Name).Msg("memory mcp tool call begin")
-	result, err := s.callTool(ctx, call.Name, call.Arguments)
-	if err != nil {
-		log.Warn().Str("tool", call.Name).Err(err).Msg("memory mcp tool call failed")
-		return toolResult(map[string]string{"error": err.Error()}, true), nil
-	}
-	log.Info().Str("tool", call.Name).Msg("memory mcp tool call complete")
-	return toolResult(result, false), nil
+	return nil
 }
 
 // callTool decodes tool arguments and calls the memory service.
 func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMessage) (any, error) {
 	switch name {
 	case "remember":
-		var req toolargs.RememberArgs
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.Capture(ctx, req.CaptureRequest())
+		return decodeAndCall(ctx, args, func(ctx context.Context, req toolargs.RememberArgs) (any, error) {
+			return s.service.Capture(ctx, req.CaptureRequest())
+		})
 	case "save_memory_candidate":
-		var req domain.CaptureRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.Capture(ctx, req)
+		return decodeAndCall(ctx, args, s.service.Capture)
 	case "search_memory":
-		var req domain.RetrievalQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.SearchMemory(ctx, req)
+		return decodeAndCall(ctx, args, s.service.SearchMemory)
 	case "search_sources":
-		var req domain.RetrievalQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.SearchSources(ctx, req)
+		return decodeAndCall(ctx, args, s.service.SearchSources)
 	case "load_entity_page":
-		var req loadEntityPageArgs
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.LoadEntityPageForActor(ctx, req.Actor, req.Firewall, req.EntityID, req.Title)
+		return decodeAndCall(ctx, args, func(ctx context.Context, req loadEntityPageArgs) (any, error) {
+			return s.service.LoadEntityPageForActor(ctx, req.Actor, req.Firewall, req.EntityID, req.Title)
+		})
 	case "load_timeline":
-		var req loadTimelineArgs
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.LoadTimelineForActor(ctx, req.Actor, req.Firewall, req.Topic, req.EntityID)
+		return decodeAndCall(ctx, args, func(ctx context.Context, req loadTimelineArgs) (any, error) {
+			return s.service.LoadTimelineForActor(ctx, req.Actor, req.Firewall, req.Topic, req.EntityID)
+		})
 	case "refresh_compiled_page":
-		var req domain.RefreshPageRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.RefreshCompiledPage(ctx, req)
+		return decodeAndCall(ctx, args, s.service.RefreshCompiledPage)
 	case "repair_memory_record":
-		var req domain.RepairRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.RepairMemoryRecord(ctx, req)
+		return decodeAndCall(ctx, args, s.service.RepairMemoryRecord)
 	case "submit_memory_correction":
-		var req domain.CorrectionRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.SubmitMemoryCorrection(ctx, req)
+		return decodeAndCall(ctx, args, s.service.SubmitMemoryCorrection)
 	case "query_context_graph":
-		var req domain.GraphQueryRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		if err := toolargs.EnsureReadOnlyGraphQuery(req); err != nil {
-			return nil, err
-		}
-		return s.service.QueryContextGraph(ctx, req)
+		return decodeValidateAndCall(ctx, args, toolargs.EnsureReadOnlyGraphQuery, s.service.QueryContextGraph)
 	case "mutate_context_graph":
-		var req domain.GraphQueryRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		if err := toolargs.EnsureMutatingGraphQuery(req); err != nil {
-			return nil, err
-		}
-		return s.service.QueryContextGraph(ctx, req)
+		return decodeValidateAndCall(ctx, args, toolargs.EnsureMutatingGraphQuery, s.service.QueryContextGraph)
 	case "create_task":
 		req, err := toolargs.DecodeCreateTaskRequest(args)
 		if err != nil {
@@ -184,53 +104,21 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		}
 		return s.service.CreateTask(ctx, req)
 	case "get_task":
-		var req domain.TaskIDRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.GetTask(ctx, req)
+		return decodeAndCall(ctx, args, s.service.GetTask)
 	case "list_tasks":
-		var req domain.TaskQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.ListTasks(ctx, req)
+		return decodeAndCall(ctx, args, s.service.ListTasks)
 	case "task_graph_projection":
-		var req domain.TaskGraphProjectionQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.TaskGraphProjection(ctx, req)
+		return decodeAndCall(ctx, args, s.service.TaskGraphProjection)
 	case "project_executive_summary":
-		var req domain.ExecutiveSummaryQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.ProjectExecutiveSummary(ctx, req)
+		return decodeAndCall(ctx, args, s.service.ProjectExecutiveSummary)
 	case "explain_executive_summary_item":
-		var req domain.ExplainExecutiveSummaryItemQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.ExplainExecutiveSummaryItem(ctx, req)
+		return decodeAndCall(ctx, args, s.service.ExplainExecutiveSummaryItem)
 	case "update_task":
-		var req domain.UpdateTaskRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.UpdateTask(ctx, req)
+		return decodeAndCall(ctx, args, s.service.UpdateTask)
 	case "complete_task":
-		var req domain.TaskIDRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.CompleteTask(ctx, req)
+		return decodeAndCall(ctx, args, s.service.CompleteTask)
 	case "cancel_task":
-		var req domain.TaskIDRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.CancelTask(ctx, req)
+		return decodeAndCall(ctx, args, s.service.CancelTask)
 	case "delete_task":
 		var req domain.TaskIDRequest
 		if err := decodeArgs(args, &req); err != nil {
@@ -241,29 +129,13 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		}
 		return map[string]string{"status": "deleted", "task_id": string(req.TaskID)}, nil
 	case "link_task_memory":
-		var req domain.LinkTaskMemoryRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.LinkTaskMemory(ctx, req)
+		return decodeAndCall(ctx, args, s.service.LinkTaskMemory)
 	case "list_task_relations":
-		var req domain.TaskRelationQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.ListTaskRelations(ctx, req)
+		return decodeAndCall(ctx, args, s.service.ListTaskRelations)
 	case "traverse_task_relations":
-		var req domain.TaskRelationTraversalQuery
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.TraverseTaskRelations(ctx, req)
+		return decodeAndCall(ctx, args, s.service.TraverseTaskRelations)
 	case "upsert_task_relation":
-		var req domain.UpsertTaskRelationRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.UpsertTaskRelation(ctx, req)
+		return decodeAndCall(ctx, args, s.service.UpsertTaskRelation)
 	case "delete_task_relation":
 		var req domain.DeleteTaskRelationRequest
 		if err := decodeArgs(args, &req); err != nil {
@@ -276,6 +148,27 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 	default:
 		return nil, fmt.Errorf("unknown tool %q", name)
 	}
+}
+
+// decodeAndCall decodes arguments before calling a typed service method.
+func decodeAndCall[T any, R any](ctx context.Context, args json.RawMessage, call func(context.Context, T) (R, error)) (any, error) {
+	var req T
+	if err := decodeArgs(args, &req); err != nil {
+		return nil, err
+	}
+	return call(ctx, req)
+}
+
+// decodeValidateAndCall decodes, validates, and then calls a typed service method.
+func decodeValidateAndCall[T any, R any](ctx context.Context, args json.RawMessage, validate func(T) error, call func(context.Context, T) (R, error)) (any, error) {
+	var req T
+	if err := decodeArgs(args, &req); err != nil {
+		return nil, err
+	}
+	if err := validate(req); err != nil {
+		return nil, err
+	}
+	return call(ctx, req)
 }
 
 // toolDefinitions returns the stable MCP tool schemas.
@@ -615,67 +508,6 @@ func decodeArgs(args json.RawMessage, dest any) error {
 		return fmt.Errorf("invalid arguments: %w", err)
 	}
 	return nil
-}
-
-// toolResult wraps structured data in an MCP tool result.
-func toolResult(value any, isError bool) map[string]any {
-	bytes, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		bytes = []byte(fmt.Sprintf(`{"error":%q}`, err.Error()))
-		isError = true
-	}
-	return map[string]any{
-		"content": []map[string]any{
-			{"type": "text", "text": string(bytes)},
-		},
-		"structuredContent": value,
-		"isError":           isError,
-	}
-}
-
-// writeRPCResult writes a JSON-RPC success response.
-func writeRPCResult(w http.ResponseWriter, id json.RawMessage, result any) {
-	writeJSON(w, http.StatusOK, map[string]any{"jsonrpc": "2.0", "id": json.RawMessage(id), "result": result})
-}
-
-// writeRPCError writes a JSON-RPC error response.
-func writeRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string, data any) {
-	body := map[string]any{"jsonrpc": "2.0", "error": map[string]any{"code": code, "message": message}}
-	if len(id) > 0 {
-		body["id"] = json.RawMessage(id)
-	}
-	if data != nil {
-		body["error"].(map[string]any)["data"] = data
-	}
-	writeJSON(w, http.StatusOK, body)
-}
-
-// writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
-}
-
-// rpcRequest represents a JSON-RPC request.
-type rpcRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      json.RawMessage `json:"id,omitempty"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-}
-
-// rpcError represents a JSON-RPC error body.
-type rpcError struct {
-	Code    int
-	Message string
-	Data    any
-}
-
-// toolCallParams represents MCP tools/call parameters.
-type toolCallParams struct {
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments"`
 }
 
 // loadEntityPageArgs contains load_entity_page arguments.

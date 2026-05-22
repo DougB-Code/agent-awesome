@@ -34,6 +34,24 @@ func RunSSEURL(baseURL string) string {
 
 // RunRequestBody builds the JSON body for one non-streaming text run.
 func RunRequestBody(appName string, userID string, sessionID string, text string) ([]byte, error) {
+	return runBody(appName, userID, sessionID, runPart{Text: text})
+}
+
+// RunConfirmationResponseBody builds the JSON body for a tool-confirmation reply.
+func RunConfirmationResponseBody(appName string, userID string, sessionID string, callID string, confirmed bool) ([]byte, error) {
+	return runBody(appName, userID, sessionID, runPart{
+		FunctionResponse: &runFunctionResponse{
+			ID:   callID,
+			Name: ConfirmationFunctionName,
+			Response: map[string]any{
+				"confirmed": confirmed,
+			},
+		},
+	})
+}
+
+// runBody builds the shared ADK run request envelope.
+func runBody(appName string, userID string, sessionID string, part runPart) ([]byte, error) {
 	return json.Marshal(runRequest{
 		AppName:   appName,
 		UserID:    userID,
@@ -41,29 +59,7 @@ func RunRequestBody(appName string, userID string, sessionID string, text string
 		Streaming: false,
 		NewMessage: runMessage{
 			Role:  "user",
-			Parts: []runPart{{Text: text}},
-		},
-	})
-}
-
-// RunConfirmationResponseBody builds the JSON body for a tool-confirmation reply.
-func RunConfirmationResponseBody(appName string, userID string, sessionID string, callID string, confirmed bool) ([]byte, error) {
-	return json.Marshal(runRequest{
-		AppName:   appName,
-		UserID:    userID,
-		SessionID: sessionID,
-		Streaming: false,
-		NewMessage: runMessage{
-			Role: "user",
-			Parts: []runPart{{
-				FunctionResponse: &runFunctionResponse{
-					ID:   callID,
-					Name: ConfirmationFunctionName,
-					Response: map[string]any{
-						"confirmed": confirmed,
-					},
-				},
-			}},
+			Parts: []runPart{part},
 		},
 	})
 }

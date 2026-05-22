@@ -17,8 +17,6 @@ import (
 	llmapi "google.golang.org/adk/model"
 )
 
-// This file owns provider adapter registration and model construction.
-
 var (
 	_ adapter.ProviderFactory = anthropic.NewFactory(nil, nil)
 	_ adapter.ProviderFactory = google.NewFactory(nil)

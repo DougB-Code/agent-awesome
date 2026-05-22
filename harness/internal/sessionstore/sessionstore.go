@@ -35,11 +35,6 @@ func DefaultDataDir() string {
 	return filepath.Join(configDir, schema.AppConfigDirName, "data")
 }
 
-// DefaultDatabasePath returns the default SQLite path for chat sessions.
-func DefaultDatabasePath() string {
-	return ResolveDatabasePath("")
-}
-
 // ResolveDatabasePath returns an explicit path or the configured default path.
 func ResolveDatabasePath(path string) string {
 	if resolved := strings.TrimSpace(path); resolved != "" {

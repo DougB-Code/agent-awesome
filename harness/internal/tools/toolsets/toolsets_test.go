@@ -58,20 +58,6 @@ func TestBuildReturnsMCPToolsetsOnly(t *testing.T) {
 	}
 }
 
-func TestModelVisibleToolPredicateFiltersMCPManagerTools(t *testing.T) {
-	server := schema.MCPServer{}
-	predicate := modelVisibleToolPredicate(server, &schema.Tools{})
-	if predicate == nil {
-		t.Fatalf("modelVisibleToolPredicate() = nil")
-	}
-	if predicate(nil, namedTool{name: "mcp.call"}) {
-		t.Fatalf("mcp.call exposed to model, want manager tools filtered")
-	}
-	if !predicate(nil, namedTool{name: "read_file"}) {
-		t.Fatalf("read_file filtered, want ordinary MCP tool exposed")
-	}
-}
-
 func TestModelVisibleToolPredicateFiltersRawMemoryToolsWhenMemoryEnabled(t *testing.T) {
 	cfg := &schema.Tools{
 		Memory: schema.Memory{

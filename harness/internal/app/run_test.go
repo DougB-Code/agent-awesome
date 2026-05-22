@@ -87,11 +87,16 @@ func TestCommandRuntimeEnabledIncludesJSONTemplates(t *testing.T) {
 }
 
 func TestCommandServiceToolsCreatesDirectADKTools(t *testing.T) {
-	tools, err := commandServiceTools(Options{
+	service, err := openCommandService(Options{
 		CommandDataDir:       t.TempDir(),
 		CommandParserDir:     t.TempDir(),
 		CommandTemplatesJSON: `[{"id":"status","description":"Show status.","executable":"git","args":["status"]}]`,
 	}, nil)
+	if err != nil {
+		t.Fatalf("openCommandService() error = %v", err)
+	}
+	defer service.Close()
+	tools, err := commandServiceTools(service)
 	if err != nil {
 		t.Fatalf("commandServiceTools() error = %v", err)
 	}

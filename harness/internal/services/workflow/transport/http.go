@@ -2,11 +2,12 @@
 package transport
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 	"strings"
+
+	platformjson "agentawesome.dev/platform/httpjson"
 
 	"agentawesome/internal/services/workflow/runtime"
 )
@@ -297,12 +298,8 @@ func writeResult(w http.ResponseWriter, body map[string]any, err error) {
 
 // decodeJSON reads one bounded JSON request body.
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
-	body := http.MaxBytesReader(w, r.Body, maxRequestBytes)
-	defer body.Close()
-	decoder := json.NewDecoder(body)
-	if err := decoder.Decode(target); err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
+	if err := platformjson.DecodeBounded(w, r, maxRequestBytes, target); err != nil {
+		if errors.Is(err, platformjson.ErrPayloadTooLarge) {
 			return errors.New("payload too large")
 		}
 		return err
@@ -312,11 +309,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 
 // writeJSON writes a JSON HTTP response.
 func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	_ = encoder.Encode(body)
+	platformjson.Write(w, status, body)
 }
 
 // startRequest is the REST payload for creating a workflow run.

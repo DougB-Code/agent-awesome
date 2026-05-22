@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	platformjson "agentawesome.dev/platform/httpjson"
 
 	"memory/internal/logging"
 	graphrepo "memory/internal/memory/graph/repository"
@@ -125,7 +126,7 @@ func main() {
 // healthHandler reports service process liveness and snapshot state.
 func healthHandler(snapshotRuntime *snapshotRuntimeStatus) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{
+		platformjson.WriteEscaped(w, http.StatusOK, map[string]any{
 			"status":   "ok",
 			"snapshot": snapshotRuntime.view(),
 		})
@@ -137,16 +138,9 @@ func metricsHandler(memoryService *service.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		metrics, err := memoryService.Metrics(r.Context())
 		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			platformjson.WriteEscaped(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, metrics)
+		platformjson.WriteEscaped(w, http.StatusOK, metrics)
 	}
-}
-
-// writeJSON writes a JSON HTTP response.
-func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(body)
 }

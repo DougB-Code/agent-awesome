@@ -29,8 +29,6 @@ func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, a
 		WorkflowAPIAddr:        os.Getenv("AGENTAWESOME_WORKFLOW_ADDR"),
 		WorkflowDefinitionsDir: os.Getenv("AGENTAWESOME_WORKFLOW_DEFINITIONS_DIR"),
 		WorkflowDatabasePath:   os.Getenv("AGENTAWESOME_WORKFLOW_DB"),
-		WorkflowContextBaseURL: os.Getenv("AGENTAWESOME_WORKFLOW_CONTEXT_BASE_URL"),
-		CommandMCPAddr:         os.Getenv("AGENTAWESOME_COMMAND_ADDR"),
 		CommandDataDir:         envString("AGENTAWESOME_COMMAND_DATA_DIR", config.DefaultCommandDataDir()),
 		CommandAllowedWorkdirs: envList("AGENTAWESOME_COMMAND_ALLOWED_WORKDIRS", []string{"."}),
 		CommandAllowedEnv:      envList("AGENTAWESOME_COMMAND_ALLOWED_ENV", []string{"PATH", "HOME", "USER", "TMPDIR"}),
@@ -38,9 +36,6 @@ func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, a
 		CommandParserDir:       envString("AGENTAWESOME_COMMAND_PARSER_DIR", config.DefaultCommandParserDir()),
 		CommandDefaultTimeout:  envDuration("AGENTAWESOME_COMMAND_TIMEOUT", 10*time.Minute),
 		CommandMaxOutputBytes:  envInt64("AGENTAWESOME_COMMAND_MAX_OUTPUT_BYTES", 64<<10),
-		MCPManagerAddr:         os.Getenv("AGENTAWESOME_MCP_ADDR"),
-		MCPServersJSON:         os.Getenv("AGENTAWESOME_MCP_SERVERS_JSON"),
-		MCPRequestTimeout:      envDuration("AGENTAWESOME_MCP_REQUEST_TIMEOUT", 10*time.Minute),
 	}
 
 	cmd := &cobra.Command{
@@ -77,8 +72,6 @@ AA runtime syntax:
 	cmd.Flags().StringVar(&opts.WorkflowAPIAddr, "workflow-api-addr", opts.WorkflowAPIAddr, "optional embedded workflow API listen address")
 	cmd.Flags().StringVar(&opts.WorkflowDefinitionsDir, "workflow-definitions", opts.WorkflowDefinitionsDir, "embedded workflow definition directory")
 	cmd.Flags().StringVar(&opts.WorkflowDatabasePath, "workflow-db", opts.WorkflowDatabasePath, "embedded workflow SQLite database path")
-	cmd.Flags().StringVar(&opts.WorkflowContextBaseURL, "workflow-context-base-url", opts.WorkflowContextBaseURL, "context API base URL used by embedded workflow tool.call actions")
-	cmd.Flags().StringVar(&opts.CommandMCPAddr, "command-mcp-addr", opts.CommandMCPAddr, "optional embedded command MCP listen address")
 	cmd.Flags().StringVar(&opts.CommandDataDir, "command-data-dir", opts.CommandDataDir, "command service data directory")
 	cmd.Flags().StringArrayVar(&opts.CommandAllowedWorkdirs, "command-allow-workdir", opts.CommandAllowedWorkdirs, "allowed command working directory root")
 	cmd.Flags().StringArrayVar(&opts.CommandAllowedEnv, "command-allow-env", opts.CommandAllowedEnv, "allowed process environment variable")
@@ -86,9 +79,6 @@ AA runtime syntax:
 	cmd.Flags().StringVar(&opts.CommandParserDir, "command-parser-dir", opts.CommandParserDir, "Starlark command parser directory")
 	cmd.Flags().DurationVar(&opts.CommandDefaultTimeout, "command-timeout", opts.CommandDefaultTimeout, "default command timeout")
 	cmd.Flags().Int64Var(&opts.CommandMaxOutputBytes, "command-max-output-bytes", opts.CommandMaxOutputBytes, "default command output tail byte limit")
-	cmd.Flags().StringVar(&opts.MCPManagerAddr, "mcp-manager-addr", opts.MCPManagerAddr, "optional embedded MCP manager listen address")
-	cmd.Flags().StringVar(&opts.MCPServersJSON, "mcp-servers-json", opts.MCPServersJSON, "JSON MCP server configuration list")
-	cmd.Flags().DurationVar(&opts.MCPRequestTimeout, "mcp-request-timeout", opts.MCPRequestTimeout, "upstream MCP manager request timeout")
 	cmd.Flags().SetInterspersed(false)
 	return cmd
 }

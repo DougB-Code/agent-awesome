@@ -112,18 +112,10 @@ func modelVisibleToolPredicate(server schema.MCPServer, cfg *schema.Tools) tool.
 	}
 }
 
-// blockedModelVisibleTools returns MCP tool names kept behind AA-owned service
-// or ADK memory boundaries instead of being exposed directly to the model.
+// blockedModelVisibleTools returns MCP tool names kept behind ADK memory
+// boundaries instead of being exposed directly to the model.
 func blockedModelVisibleTools(cfg *schema.Tools) map[string]struct{} {
-	blocked := stringSet([]string{
-		"mcp.server_list",
-		"mcp.tool_list",
-		"mcp.call",
-		"mcp.start",
-		"mcp.stop",
-		"mcp.restart",
-		"mcp.status",
-	})
+	blocked := map[string]struct{}{}
 	if memoryRuntimeEnabled(cfg) {
 		for name := range stringSet([]string{
 			"remember",

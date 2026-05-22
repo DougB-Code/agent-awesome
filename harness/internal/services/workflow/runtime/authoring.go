@@ -645,6 +645,13 @@ func actionTypeForName(name string) ActionType {
 		action.InputSchema = map[string]any{"type": "object", "required": []any{"endpoint", "tool"}, "properties": map[string]any{"endpoint": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}}}
 		action.InputContracts = []string{"aa.external_call_request.v1"}
 		action.OutputContracts = []string{"aa.external_call_result.v1"}
+	case "command.execute":
+		action.Label = "Run Command"
+		action.Description = "Run a configured command template."
+		action.Risk = "tool"
+		action.InputSchema = map[string]any{"type": "object", "required": []any{"template_id"}, "properties": map[string]any{"template_id": map[string]any{"type": "string"}, "parameters": map[string]any{"type": "object"}, "cwd": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}}}
+		action.InputContracts = []string{"aa.command_execute_request.v1"}
+		action.OutputContracts = []string{"aa.command_result.v1"}
 	case "data.assert":
 		action.Label = "Assert Data"
 		action.Description = "Gate workflow progression on deterministic input data checks."
@@ -800,22 +807,6 @@ func cloneMap(value map[string]any) map[string]any {
 	var cloned map[string]any
 	if err := json.Unmarshal(encoded, &cloned); err != nil {
 		return map[string]any{}
-	}
-	return cloned
-}
-
-// cloneMapList returns a JSON-deep-copy of a map list.
-func cloneMapList(value []map[string]any) []map[string]any {
-	if value == nil {
-		return []map[string]any{}
-	}
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return []map[string]any{}
-	}
-	var cloned []map[string]any
-	if err := json.Unmarshal(encoded, &cloned); err != nil {
-		return []map[string]any{}
 	}
 	return cloned
 }

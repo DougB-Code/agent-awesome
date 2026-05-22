@@ -8,8 +8,8 @@
 // High-level examples:
 //   - adapter.ResolveCredential(resolver, "OPENAI_API_KEY") reads a provider
 //     secret through the configured resolver.
-//   - adapter.NewProviderError(provider, model, code, status) formats a safe
-//     provider error.
+//   - adapter.NewProviderErrorWithDetail(provider, model, code, status, detail)
+//     formats a safe provider error.
 //
 // This package should contain provider-agnostic contracts only. Concrete API
 // serialization belongs in packages under internal/model/adapters.

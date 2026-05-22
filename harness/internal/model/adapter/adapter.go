@@ -61,11 +61,6 @@ func (e *ProviderError) Error() string {
 	return message
 }
 
-// NewProviderError builds a provider error and marks retryable status codes.
-func NewProviderError(provider, model string, statusCode int, status string) *ProviderError {
-	return NewProviderErrorWithDetail(provider, model, statusCode, status, "")
-}
-
 // NewProviderErrorWithDetail builds a provider error with safe diagnostic detail.
 func NewProviderErrorWithDetail(provider, model string, statusCode int, status string, detail string) *ProviderError {
 	return &ProviderError{

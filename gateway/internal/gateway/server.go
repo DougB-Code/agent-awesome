@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	platformjson "agentawesome.dev/platform/httpjson"
 	"agentgateway/internal/adk"
 	"agentgateway/internal/config"
 	"agentgateway/internal/policy"
@@ -1045,12 +1046,9 @@ func readLimitedBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byt
 	if r.Body == nil {
 		return nil, nil
 	}
-	reader := http.MaxBytesReader(w, r.Body, limit)
-	defer reader.Close()
-	body, err := io.ReadAll(reader)
+	body, err := platformjson.ReadBounded(w, r, limit)
 	if err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
+		if errors.Is(err, platformjson.ErrPayloadTooLarge) {
 			return nil, errGatewayBodyTooLarge
 		}
 		return nil, fmt.Errorf("read request body: %w", err)
@@ -1312,11 +1310,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 
 // writeJSON writes a JSON HTTP response.
 func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	_ = encoder.Encode(body)
+	platformjson.Write(w, status, body)
 }
 
 // sameToken compares bearer tokens without data-dependent early returns.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"agentawesome/internal/services/command/command"
 	"agentawesome/internal/services/workflow/actions"
 )
 
@@ -14,6 +15,11 @@ type ContextToolClient interface {
 	Call(context.Context, actions.ToolRequest) (map[string]any, error)
 }
 
+// CommandClient executes configured command templates for workflow actions.
+type CommandClient interface {
+	Execute(context.Context, command.ExecuteRequest) (command.StatusResult, error)
+}
+
 // Config stores service endpoints and durable paths for workflow execution.
 type Config struct {
 	DefinitionsDir        string
@@ -21,4 +27,5 @@ type Config struct {
 	HarnessContextBaseURL string
 	RequestTimeout        time.Duration
 	ToolClient            ContextToolClient
+	CommandClient         CommandClient
 }

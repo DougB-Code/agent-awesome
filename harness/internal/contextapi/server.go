@@ -5,13 +5,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	platformjson "agentawesome.dev/platform/httpjson"
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/tools/mcpclient"
@@ -33,11 +34,6 @@ type Server struct {
 type Config struct {
 	Addr      string
 	AuthToken string
-}
-
-// Start begins serving the context API on addr when addr is non-empty.
-func Start(ctx context.Context, addr string, tools *schema.Tools) (*Server, error) {
-	return StartWithConfig(ctx, Config{Addr: addr}, tools)
 }
 
 // StartWithConfig begins serving the context API after validating bind safety.
@@ -126,12 +122,9 @@ func (s *Server) callToolHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		return
 	}
-	body := http.MaxBytesReader(w, r.Body, maxContextAPIRequestBytes)
-	defer body.Close()
 	var req toolCallRequest
-	if err := json.NewDecoder(body).Decode(&req); err != nil {
-		var maxBytesErr *http.MaxBytesError
-		if errors.As(err, &maxBytesErr) {
+	if err := platformjson.DecodeBounded(w, r, maxContextAPIRequestBytes, &req); err != nil {
+		if errors.Is(err, platformjson.ErrPayloadTooLarge) {
 			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "payload too large"})
 			return
 		}
@@ -438,9 +431,5 @@ type toolCallRequest struct {
 
 // writeJSON writes a JSON HTTP response.
 func writeJSON(w http.ResponseWriter, status int, body any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	encoder := json.NewEncoder(w)
-	encoder.SetEscapeHTML(false)
-	_ = encoder.Encode(body)
+	platformjson.Write(w, status, body)
 }

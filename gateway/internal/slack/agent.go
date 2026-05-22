@@ -143,7 +143,9 @@ func (c *AgentClient) ensureSessionOnce(ctx context.Context, sessionID string) e
 
 // RunText sends one message to the agent and returns final assistant text.
 func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string) (string, error) {
-	reply, err := c.runTextWithRetry(ctx, sessionID, text)
+	reply, err := retryAgentDependencyValue(ctx, func() (string, error) {
+		return c.runTextOnce(ctx, sessionID, text)
+	})
 	deniedToolName := ""
 	for denials := 0; ; denials++ {
 		confirmation, ok := slackConfirmationError(err)
@@ -159,33 +161,13 @@ func (c *AgentClient) RunText(ctx context.Context, sessionID string, text string
 		if denials >= maxSlackConfirmationDenials {
 			return slackConfirmationUnavailableReply(deniedToolName), nil
 		}
-		reply, err = c.runDeniedConfirmationWithRetry(ctx, sessionID, confirmation.CallID)
+		reply, err = retryAgentDependencyValue(ctx, func() (string, error) {
+			return c.runConfirmationResponseOnce(ctx, sessionID, confirmation.CallID, false)
+		})
 		if err == nil && strings.TrimSpace(reply) == "" {
 			return slackConfirmationUnavailableReply(deniedToolName), nil
 		}
 	}
-}
-
-// runTextWithRetry sends one text turn while tolerating gateway cold starts.
-func (c *AgentClient) runTextWithRetry(ctx context.Context, sessionID string, text string) (string, error) {
-	var reply string
-	err := retryAgentDependency(ctx, func() error {
-		var err error
-		reply, err = c.runTextOnce(ctx, sessionID, text)
-		return err
-	})
-	return reply, err
-}
-
-// runDeniedConfirmationWithRetry resumes a paused run by safely denying approval.
-func (c *AgentClient) runDeniedConfirmationWithRetry(ctx context.Context, sessionID string, callID string) (string, error) {
-	var reply string
-	err := retryAgentDependency(ctx, func() error {
-		var err error
-		reply, err = c.runConfirmationResponseOnce(ctx, sessionID, callID, false)
-		return err
-	})
-	return reply, err
 }
 
 // runTextOnce sends one agent turn without retrying gateway readiness.
@@ -380,6 +362,17 @@ func retryAgentDependency(ctx context.Context, operation func() error) error {
 		case <-timer.C:
 		}
 	}
+}
+
+// retryAgentDependencyValue waits through transient dependency startup.
+func retryAgentDependencyValue[T any](ctx context.Context, operation func() (T, error)) (T, error) {
+	var result T
+	err := retryAgentDependency(ctx, func() error {
+		var err error
+		result, err = operation()
+		return err
+	})
+	return result, err
 }
 
 // decodeAgentEvent returns display text from one assistant event payload.

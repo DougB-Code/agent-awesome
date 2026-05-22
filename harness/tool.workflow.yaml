@@ -74,14 +74,6 @@ mcp:
           - workflow_draft_publish
           - workflow_template_list
           - workflow_template_instantiate
-    - name: command
-      transport: streamable-http
-      endpoint: http://127.0.0.1:8093/mcp
-      tools:
-        allow:
-          - command_execute
-          - command_template_list
-          - command_status
 memory:
   actor: agent:agent-awesome
   read-domains:

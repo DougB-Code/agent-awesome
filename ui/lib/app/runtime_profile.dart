@@ -53,8 +53,6 @@ List<String> harnessArgumentsForProfile(RuntimeProfile profile) {
     profile.workflow.definitionsDir,
     '--workflow-db',
     profile.workflow.dbPath,
-    '--workflow-context-base-url',
-    profile.gateway.contextBaseUrl,
     '--command-data-dir',
     defaultCommandDataDirectoryPath(),
     '--command-parser-dir',

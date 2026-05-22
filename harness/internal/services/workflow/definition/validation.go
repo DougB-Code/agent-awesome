@@ -19,10 +19,11 @@ const (
 var safeIDPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
 var taskActionTypes = map[string]struct{}{
-	"mcp.call":     {},
-	"tool.call":    {},
-	"data.assert":  {},
-	"workflow.run": {},
+	"mcp.call":        {},
+	"tool.call":       {},
+	"command.execute": {},
+	"data.assert":     {},
+	"workflow.run":    {},
 }
 
 // ActionCatalog reports whether a declarative action type is installed.

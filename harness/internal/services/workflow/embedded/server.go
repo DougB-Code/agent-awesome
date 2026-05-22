@@ -28,6 +28,7 @@ type Config struct {
 	HarnessContextBaseURL string
 	RequestTimeout        time.Duration
 	ToolClient            runtime.ContextToolClient
+	CommandClient         runtime.CommandClient
 	ReadHeaderTimeout     time.Duration
 	ShutdownTimeout       time.Duration
 }
@@ -36,7 +37,6 @@ type Config struct {
 type Server struct {
 	service   *runtime.Service
 	http      *http.Server
-	address   string
 	closeOnce sync.Once
 	closeErr  error
 }
@@ -52,6 +52,7 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		HarnessContextBaseURL: cfg.HarnessContextBaseURL,
 		RequestTimeout:        cfg.RequestTimeout,
 		ToolClient:            cfg.ToolClient,
+		CommandClient:         cfg.CommandClient,
 	})
 	if err != nil {
 		return nil, err
@@ -67,9 +68,8 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 	}
 	server := &Server{
 		service: service,
-		address: listener.Addr().String(),
 		http: &http.Server{
-			Addr:              strings.TrimSpace(cfg.ListenAddress),
+			Addr:              listener.Addr().String(),
 			Handler:           transport.NewHTTPServer(service).Routes(),
 			ReadHeaderTimeout: readHeaderTimeout,
 		},
@@ -82,14 +82,6 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		}
 	}()
 	return server, nil
-}
-
-// Address returns the bound workflow listener address.
-func (s *Server) Address() string {
-	if s == nil {
-		return ""
-	}
-	return s.address
 }
 
 // Close gracefully stops the embedded workflow listener and store.

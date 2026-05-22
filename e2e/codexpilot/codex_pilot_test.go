@@ -44,33 +44,25 @@ printf '{"url":"https://example.test/pull/1"}'
 	runCmd(t, repo, "git", "remote", "add", "origin", remote)
 	worktree := filepath.Join(tempRoot, "build", "sourcecontrol", "worktrees", "feature-codex-pilot")
 
-	commandAddr := freeAddr(t)
-	mcpAddr := freeAddr(t)
 	workflowAddr := freeAddr(t)
 	webAddr := freeAddr(t)
 	sourcecontrol := startSourceControlMCP(t)
 	defer sourcecontrol.Close()
 	sourcecontrolURL := sourcecontrol.URL + "/mcp"
-	commandURL := "http://" + commandAddr + "/mcp"
-	mcpURL := "http://" + mcpAddr + "/mcp"
 	workflowURL := "http://" + workflowAddr
 
 	definitionsDir := filepath.Join(tempRoot, "workflows")
 	if err := os.MkdirAll(definitionsDir, 0o700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	writeWorkflowDefinition(t, filepath.Join(definitionsDir, "codex-pilot.yaml"), mcpURL)
+	writeWorkflowDefinition(t, filepath.Join(definitionsDir, "codex-pilot.yaml"), sourcecontrolURL)
 
 	templatesJSON := commandTemplatesJSON(t, fakeCodex, fakeTest, fakeGH)
-	serversJSON := mcpServersJSON(t, sourcecontrolURL, commandURL)
 	harnessCmd := startHarness(ctx, t, filepath.Join(root, "harness"), tempRoot,
-		"--command-mcp-addr", commandAddr,
 		"--command-data-dir", filepath.Join(tempRoot, "command-data"),
 		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
 		"--command-allow-workdir", tempRoot,
 		"--command-templates-json", templatesJSON,
-		"--mcp-manager-addr", mcpAddr,
-		"--mcp-servers-json", serversJSON,
 		"--workflow-api-addr", workflowAddr,
 		"--workflow-definitions", definitionsDir,
 		"--workflow-db", filepath.Join(tempRoot, "workflow.db"),
@@ -78,8 +70,6 @@ printf '{"url":"https://example.test/pull/1"}'
 		"--", "web", "--port", portFromAddr(t, webAddr), "api", "--webui_address", webAddr,
 	)
 	defer stopDaemon(harnessCmd)
-	waitHealth(t, "http://"+commandAddr+"/healthz")
-	waitHealth(t, "http://"+mcpAddr+"/healthz")
 	waitHealth(t, workflowURL+"/healthz")
 
 	runID := startWorkflow(t, workflowURL, map[string]any{
@@ -114,33 +104,36 @@ func TestRealCodexCLICommandBoundarySmoke(t *testing.T) {
 	if codexExecutable == "" {
 		codexExecutable = "codex"
 	}
-	commandAddr := freeAddr(t)
+	workflowAddr := freeAddr(t)
 	webAddr := freeAddr(t)
-	commandURL := "http://" + commandAddr + "/mcp"
+	workflowURL := "http://" + workflowAddr
+	definitionsDir := filepath.Join(tempRoot, "workflows")
+	if err := os.MkdirAll(definitionsDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	writeCommandSmokeWorkflowDefinition(t, filepath.Join(definitionsDir, "codex-smoke.yaml"))
 	templatesJSON := realCodexSmokeTemplatesJSON(t, codexExecutable)
 	harnessCmd := startHarness(ctx, t, filepath.Join(root, "harness"), tempRoot,
-		"--command-mcp-addr", commandAddr,
 		"--command-data-dir", filepath.Join(tempRoot, "command-data"),
 		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
 		"--command-allow-workdir", tempRoot,
 		"--command-templates-json", templatesJSON,
+		"--workflow-api-addr", workflowAddr,
+		"--workflow-definitions", definitionsDir,
+		"--workflow-db", filepath.Join(tempRoot, "workflow.db"),
 		"--session-db", filepath.Join(tempRoot, "sessions.db"),
 		"--", "web", "--port", portFromAddr(t, webAddr), "api", "--webui_address", webAddr,
 	)
 	defer stopDaemon(harnessCmd)
-	waitHealth(t, "http://"+commandAddr+"/healthz")
-
-	status := callCommandExecute(t, commandURL, map[string]any{
-		"template_id": "codex_version",
-		"cwd":         tempRoot,
+	waitHealth(t, workflowURL+"/healthz")
+	runID := startWorkflow(t, workflowURL, map[string]any{
+		"definition_id": "codex_version_smoke",
+		"input":         map[string]any{"cwd": tempRoot},
 	})
-	if status["status"] != "succeeded" {
-		t.Fatalf("real Codex command status = %#v, want succeeded", status)
-	}
-	stdout, _ := status["stdout_tail"].(string)
-	stderr, _ := status["stderr_tail"].(string)
-	if strings.TrimSpace(stdout) == "" && strings.TrimSpace(stderr) == "" {
-		t.Fatalf("real Codex version command returned no visible output: %#v", status)
+	run := waitWorkflow(t, workflowURL, runID)
+	if run["status"] != "succeeded" {
+		history := getJSON(t, workflowURL+"/api/workflows/runs/"+runID+"/history")
+		t.Fatalf("real Codex workflow run = %#v, history = %#v", run, history)
 	}
 }
 
@@ -192,22 +185,8 @@ func commandTemplate(id string, executable string, args []string) map[string]any
 	}
 }
 
-// mcpServersJSON returns MCP manager configuration for command and source-control endpoints.
-func mcpServersJSON(t *testing.T, sourcecontrolURL string, commandURL string) string {
-	t.Helper()
-	servers := []map[string]any{
-		{"id": "sourcecontrol", "endpoint": sourcecontrolURL},
-		{"id": "command", "endpoint": commandURL},
-	}
-	data, err := json.Marshal(servers)
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
-	}
-	return string(data)
-}
-
 // writeWorkflowDefinition writes the Codex pilot workflow used by the integration test.
-func writeWorkflowDefinition(t *testing.T, path string, mcpURL string) {
+func writeWorkflowDefinition(t *testing.T, path string, sourcecontrolURL string) {
 	t.Helper()
 	body := fmt.Sprintf(`
 kind: state_machine
@@ -219,28 +198,19 @@ states:
     uses: mcp.call
     with:
       endpoint: %q
-      tool: mcp.call
+      tool: sourcecontrol.prepare_worktree
       arguments:
-        server_id: sourcecontrol
-        tool: sourcecontrol.prepare_worktree
-        arguments:
-          repository_path: ${repository_path}
-          worktree_path: ${worktree_path}
-          branch: ${branch}
-          base_ref: ${base_ref}
+        repository_path: ${repository_path}
+        worktree_path: ${worktree_path}
+        branch: ${branch}
+        base_ref: ${base_ref}
   - id: plan
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [prepare]
     with: &command_call
-      endpoint: %q
-      tool: mcp.call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: codex_plan
-          cwd: ${prepare.worktree_path}
+      template_id: codex_plan
+      cwd: ${prepare.worktree_path}
   - id: assert_plan
     type: task
     uses: data.assert
@@ -277,24 +247,17 @@ states:
     depends_on: [assert_plan, prepare]
     with:
       endpoint: %q
-      tool: mcp.call
+      tool: sourcecontrol.backup
       arguments:
-        server_id: sourcecontrol
-        tool: sourcecontrol.backup
-        arguments:
-          worktree_path: ${prepare.worktree_path}
+        worktree_path: ${prepare.worktree_path}
   - id: implement
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [backup, prepare]
     with:
       <<: *command_call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: codex_implement
-          cwd: ${prepare.worktree_path}
+      template_id: codex_implement
+      cwd: ${prepare.worktree_path}
   - id: assert_implement
     type: task
     uses: data.assert
@@ -309,16 +272,12 @@ states:
           value: true
   - id: test
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [assert_implement, prepare]
     with:
       <<: *command_call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: test
-          cwd: ${prepare.worktree_path}
+      template_id: test
+      cwd: ${prepare.worktree_path}
   - id: assert_tests
     type: task
     uses: data.assert
@@ -333,28 +292,20 @@ states:
           value: true
   - id: post_review
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [assert_tests, prepare]
     with:
       <<: *command_call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: codex_review
-          cwd: ${prepare.worktree_path}
+      template_id: codex_review
+      cwd: ${prepare.worktree_path}
   - id: cleanup
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [post_review, prepare]
     with:
       <<: *command_call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: codex_cleanup
-          cwd: ${prepare.worktree_path}
+      template_id: codex_cleanup
+      cwd: ${prepare.worktree_path}
   - id: assert_cleanup
     type: task
     uses: data.assert
@@ -369,16 +320,12 @@ states:
           value: true
   - id: retest
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [assert_cleanup, prepare]
     with:
       <<: *command_call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: test
-          cwd: ${prepare.worktree_path}
+      template_id: test
+      cwd: ${prepare.worktree_path}
   - id: assert_retest
     type: task
     uses: data.assert
@@ -393,16 +340,12 @@ states:
           value: true
   - id: final_review
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [assert_retest, prepare]
     with:
       <<: *command_call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: codex_review
-          cwd: ${prepare.worktree_path}
+      template_id: codex_review
+      cwd: ${prepare.worktree_path}
   - id: assert_review
     type: task
     uses: data.assert
@@ -418,39 +361,29 @@ states:
     depends_on: [assert_review, prepare]
     with:
       endpoint: %q
-      tool: mcp.call
+      tool: sourcecontrol.commit
       arguments:
-        server_id: sourcecontrol
-        tool: sourcecontrol.commit
-        arguments:
-          worktree_path: ${prepare.worktree_path}
-          message: ${workflow_input.commit_message}
+        worktree_path: ${prepare.worktree_path}
+        message: ${workflow_input.commit_message}
   - id: push
     type: task
     uses: mcp.call
     depends_on: [commit, prepare]
     with:
       endpoint: %q
-      tool: mcp.call
+      tool: sourcecontrol.push
       arguments:
-        server_id: sourcecontrol
-        tool: sourcecontrol.push
-        arguments:
-          worktree_path: ${prepare.worktree_path}
-          remote: ${workflow_input.remote}
-          branch: ${workflow_input.branch}
+        worktree_path: ${prepare.worktree_path}
+        remote: ${workflow_input.remote}
+        branch: ${workflow_input.branch}
   - id: open_pr
     type: task
-    uses: mcp.call
+    uses: command.execute
     depends_on: [push, prepare]
     with:
       <<: *command_call
-      arguments:
-        server_id: command
-        tool: command.execute
-        arguments:
-          template_id: gh_pr_create
-          cwd: ${prepare.worktree_path}
+      template_id: gh_pr_create
+      cwd: ${prepare.worktree_path}
   - id: assert_pr
     type: task
     uses: data.assert
@@ -459,7 +392,27 @@ states:
       checks:
         - path: open_pr.output.url
           mode: exists
-`, mcpURL, mcpURL, mcpURL, mcpURL, mcpURL)
+`, sourcecontrolURL, sourcecontrolURL, sourcecontrolURL, sourcecontrolURL)
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+}
+
+// writeCommandSmokeWorkflowDefinition writes a minimal command execution workflow.
+func writeCommandSmokeWorkflowDefinition(t *testing.T, path string) {
+	t.Helper()
+	body := `
+kind: state_machine
+id: codex_version_smoke
+name: Codex Version Smoke
+states:
+  - id: version
+    type: task
+    uses: command.execute
+    with:
+      template_id: codex_version
+      cwd: ${cwd}
+`
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
@@ -871,36 +824,6 @@ func postJSON(t *testing.T, url string, payload any, target any) {
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
 		t.Fatalf("Decode() error = %v", err)
 	}
-}
-
-// callCommandExecute invokes command.execute over the command boundary MCP transport.
-func callCommandExecute(t *testing.T, commandURL string, arguments map[string]any) map[string]any {
-	t.Helper()
-	var decoded map[string]any
-	postJSON(t, commandURL, map[string]any{
-		"jsonrpc": "2.0",
-		"id":      "codex-smoke",
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name":      "command.execute",
-			"arguments": arguments,
-		},
-	}, &decoded)
-	if rpcError, ok := decoded["error"].(map[string]any); ok {
-		t.Fatalf("command.execute JSON-RPC error = %#v", rpcError)
-	}
-	result, ok := decoded["result"].(map[string]any)
-	if !ok {
-		t.Fatalf("command.execute response = %#v, want result object", decoded)
-	}
-	if isError, _ := result["isError"].(bool); isError {
-		t.Fatalf("command.execute returned tool error = %#v", result)
-	}
-	structured, ok := result["structuredContent"].(map[string]any)
-	if !ok {
-		t.Fatalf("command.execute result = %#v, want structured content", result)
-	}
-	return structured
 }
 
 // startDaemon starts one Go daemon command in a module directory.

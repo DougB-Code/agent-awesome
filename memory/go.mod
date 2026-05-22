@@ -3,9 +3,12 @@ module memory
 go 1.26.0
 
 require (
+	agentawesome.dev/platform v0.0.0
 	github.com/rs/zerolog v1.35.1
 	modernc.org/sqlite v1.50.0
 )
+
+replace agentawesome.dev/platform => ../platform
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
