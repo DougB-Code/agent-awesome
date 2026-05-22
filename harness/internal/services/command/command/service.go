@@ -15,15 +15,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	commandparser "agentawesome/internal/services/command/parser"
 )
 
 const (
-	statusPending   = "pending"
-	statusApproved  = "approved"
 	statusRunning   = "running"
 	statusSucceeded = "succeeded"
 	statusFailed    = "failed"
@@ -41,9 +38,6 @@ type Config struct {
 	Templates        []Template
 	DefaultTimeout   time.Duration
 	DefaultMaxOutput int64
-	ApprovalTTL      time.Duration
-	RequireApproval  bool
-	AllowArbitrary   bool
 	ParserDir        string
 }
 
@@ -58,7 +52,6 @@ type Template struct {
 	Env                    map[string]string `json:"env,omitempty"`
 	Timeout                time.Duration     `json:"timeout,omitempty"`
 	MaxOutputBytes         int64             `json:"max_output_bytes,omitempty"`
-	RequireApproval        bool              `json:"require_approval,omitempty"`
 	ParameterSchema        map[string]any    `json:"parameter_schema,omitempty"`
 	OutputContract         OutputContract    `json:"output_contract,omitempty"`
 	ParserID               string            `json:"parser_id,omitempty"`
@@ -74,7 +67,6 @@ type TemplateSummary struct {
 	ID                     string         `json:"id"`
 	Description            string         `json:"description"`
 	Parameters             []string       `json:"parameters,omitempty"`
-	ApprovalRequired       bool           `json:"approval_required"`
 	Timeout                string         `json:"timeout,omitempty"`
 	MaxOutputBytes         int64          `json:"max_output_bytes,omitempty"`
 	ParameterSchema        map[string]any `json:"parameter_schema,omitempty"`
@@ -84,46 +76,6 @@ type TemplateSummary struct {
 	ArtifactGlobs          []string       `json:"artifact_globs,omitempty"`
 	EnvironmentPolicy      map[string]any `json:"environment_policy,omitempty"`
 	WorkingDirectoryPolicy string         `json:"working_directory_policy,omitempty"`
-}
-
-// Request stores one command proposal request.
-type Request struct {
-	TemplateID string            `json:"template_id,omitempty"`
-	Parameters map[string]any    `json:"parameters,omitempty"`
-	Executable string            `json:"executable,omitempty"`
-	Args       []string          `json:"args,omitempty"`
-	Stdin      string            `json:"stdin,omitempty"`
-	WorkingDir string            `json:"cwd,omitempty"`
-	Reason     string            `json:"reason,omitempty"`
-	Risk       string            `json:"risk,omitempty"`
-	Actor      string            `json:"actor,omitempty"`
-	SessionID  string            `json:"session_id,omitempty"`
-	Env        map[string]string `json:"env,omitempty"`
-}
-
-// RequestResult stores the frozen proposal returned for approval.
-type RequestResult struct {
-	ApprovalID       string   `json:"approval_id"`
-	ApprovalRequired bool     `json:"approval_required"`
-	Status           string   `json:"status"`
-	Summary          string   `json:"summary"`
-	Executable       string   `json:"executable"`
-	Args             []string `json:"args"`
-	WorkingDir       string   `json:"cwd"`
-	ExpiresAt        string   `json:"expires_at"`
-	EnvNames         []string `json:"env_names,omitempty"`
-	HasStdin         bool     `json:"has_stdin,omitempty"`
-}
-
-// RunRequest stores a command execution request.
-type RunRequest struct {
-	ApprovalID string `json:"approval_id"`
-}
-
-// RunResult stores the job id returned after command launch.
-type RunResult struct {
-	JobID  string `json:"job_id"`
-	Status string `json:"status"`
 }
 
 // StatusResult stores observable command job state.
@@ -154,14 +106,12 @@ type ExecuteRequest struct {
 	SessionID  string         `json:"session_id,omitempty"`
 }
 
-// Service validates command requests, records approvals, and tracks jobs.
+// Service validates configured command templates and records job results.
 type Service struct {
 	cfg       Config
 	roots     []string
 	templates map[string]Template
 	parsers   *commandparser.Catalog
-	mu        sync.Mutex
-	jobs      map[string]context.CancelFunc
 }
 
 // Open validates policy paths and creates a command service.
@@ -185,9 +135,6 @@ func Open(cfg Config) (*Service, error) {
 		}
 		templates[id] = template
 	}
-	if err := os.MkdirAll(filepath.Join(normalized.DataDir, "approvals"), 0o700); err != nil {
-		return nil, fmt.Errorf("create approvals directory: %w", err)
-	}
 	if err := os.MkdirAll(filepath.Join(normalized.DataDir, "jobs"), 0o700); err != nil {
 		return nil, fmt.Errorf("create jobs directory: %w", err)
 	}
@@ -195,24 +142,11 @@ func Open(cfg Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cfg: normalized, roots: roots, templates: templates, parsers: parserCatalog, jobs: map[string]context.CancelFunc{}}, nil
+	return &Service{cfg: normalized, roots: roots, templates: templates, parsers: parserCatalog}, nil
 }
 
-// Close cancels active jobs owned by this service instance.
+// Close releases command service resources.
 func (s *Service) Close() {
-	if s == nil {
-		return
-	}
-	s.mu.Lock()
-	cancels := make([]context.CancelFunc, 0, len(s.jobs))
-	for _, cancel := range s.jobs {
-		cancels = append(cancels, cancel)
-	}
-	s.jobs = map[string]context.CancelFunc{}
-	s.mu.Unlock()
-	for _, cancel := range cancels {
-		cancel()
-	}
 }
 
 // Templates returns sanitized configured command templates in stable order.
@@ -241,7 +175,6 @@ func (s *Service) templateSummary(template Template) TemplateSummary {
 		ID:                     template.ID,
 		Description:            template.Description,
 		Parameters:             templateParameters(template),
-		ApprovalRequired:       s.cfg.RequireApproval || template.RequireApproval,
 		Timeout:                timeout.String(),
 		MaxOutputBytes:         maxOutput,
 		ParameterSchema:        cloneMap(template.ParameterSchema),
@@ -254,102 +187,29 @@ func (s *Service) templateSummary(template Template) TemplateSummary {
 	}
 }
 
-// Request freezes one command proposal and returns its approval id.
-func (s *Service) Request(ctx context.Context, req Request) (RequestResult, error) {
-	proposal, err := s.resolveRequest(req)
+// Execute runs one configured command template and returns its completed result.
+func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (StatusResult, error) {
+	proposal, err := s.resolveTemplateRequest(req)
 	if err != nil {
-		return RequestResult{}, err
-	}
-	id, err := randomID("approval")
-	if err != nil {
-		return RequestResult{}, err
-	}
-	now := time.Now().UTC()
-	proposal.ApprovalID = id
-	proposal.Status = statusPending
-	proposal.CreatedAt = now.Format(time.RFC3339Nano)
-	proposal.ExpiresAt = now.Add(s.cfg.ApprovalTTL).Format(time.RFC3339Nano)
-	if !proposal.ApprovalRequired {
-		proposal.Status = statusApproved
-	}
-	if err := s.saveApproval(ctx, proposal); err != nil {
-		return RequestResult{}, err
-	}
-	return proposal.requestResult(), nil
-}
-
-// Run starts an approved command job asynchronously.
-func (s *Service) Run(ctx context.Context, req RunRequest) (RunResult, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	proposal, err := s.loadApproval(ctx, req.ApprovalID)
-	if err != nil {
-		return RunResult{}, err
-	}
-	if err := proposal.canRun(); err != nil {
-		return RunResult{}, err
+		return StatusResult{}, err
 	}
 	jobID, err := randomID("job")
 	if err != nil {
-		return RunResult{}, err
-	}
-	proposal.Status = statusRunning
-	if err := s.saveApproval(ctx, proposal); err != nil {
-		return RunResult{}, err
+		return StatusResult{}, err
 	}
 	record := jobRecord{
-		JobID:      jobID,
-		ApprovalID: proposal.ApprovalID,
-		Status:     statusRunning,
-		ExitCode:   -1,
-		StartedAt:  time.Now().UTC().Format(time.RFC3339Nano),
+		JobID:     jobID,
+		Status:    statusRunning,
+		ExitCode:  -1,
+		StartedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	if err := s.saveJob(ctx, record); err != nil {
-		return RunResult{}, err
-	}
-	runCtx, cancel := context.WithTimeout(context.Background(), proposal.Timeout)
-	s.jobs[jobID] = cancel
-	go s.execute(runCtx, jobID, proposal)
-	return RunResult{JobID: jobID, Status: statusRunning}, nil
-}
-
-// Execute requests, runs, polls, and returns one completed command result.
-func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (StatusResult, error) {
-	proposal, err := s.Request(ctx, Request{
-		TemplateID: req.TemplateID,
-		Parameters: req.Parameters,
-		WorkingDir: req.WorkingDir,
-		Reason:     req.Reason,
-		Actor:      req.Actor,
-		SessionID:  req.SessionID,
-	})
-	if err != nil {
 		return StatusResult{}, err
 	}
-	if proposal.ApprovalRequired {
-		return StatusResult{}, fmt.Errorf("command.execute cannot run approval-required command %q", req.TemplateID)
-	}
-	run, err := s.Run(ctx, RunRequest{ApprovalID: proposal.ApprovalID})
-	if err != nil {
-		return StatusResult{}, err
-	}
-	ticker := time.NewTicker(50 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		status, err := s.Status(ctx, run.JobID)
-		if err != nil {
-			return StatusResult{}, err
-		}
-		if status.Status != statusPending && status.Status != statusRunning {
-			return status, commandExecuteResultError(status)
-		}
-		select {
-		case <-ctx.Done():
-			_, _ = s.Cancel(context.Background(), run.JobID)
-			return StatusResult{}, ctx.Err()
-		case <-ticker.C:
-		}
-	}
+	runCtx, cancel := context.WithTimeout(ctx, proposal.Timeout)
+	defer cancel()
+	status := s.execute(runCtx, jobID, proposal)
+	return status, commandExecuteResultError(status)
 }
 
 // commandExecuteResultError converts unsuccessful workflow command results into errors.
@@ -380,22 +240,6 @@ func commandExecuteTerminalError(status StatusResult) error {
 	return fmt.Errorf("command.execute job %s %s: %s", status.JobID, status.Status, detail)
 }
 
-// Approve marks one exact command proposal as externally approved.
-func (s *Service) Approve(ctx context.Context, approvalID string) (RequestResult, error) {
-	proposal, err := s.loadApproval(ctx, approvalID)
-	if err != nil {
-		return RequestResult{}, err
-	}
-	if err := proposal.canApprove(); err != nil {
-		return RequestResult{}, err
-	}
-	proposal.Status = statusApproved
-	if err := s.saveApproval(ctx, proposal); err != nil {
-		return RequestResult{}, err
-	}
-	return proposal.requestResult(), nil
-}
-
 // Status loads one command job status.
 func (s *Service) Status(ctx context.Context, jobID string) (StatusResult, error) {
 	record, err := s.loadJob(ctx, jobID)
@@ -405,36 +249,8 @@ func (s *Service) Status(ctx context.Context, jobID string) (StatusResult, error
 	return record.statusResult(), nil
 }
 
-// Cancel requests termination of a running command job.
-func (s *Service) Cancel(ctx context.Context, jobID string) (StatusResult, error) {
-	id := strings.TrimSpace(jobID)
-	s.mu.Lock()
-	cancel := s.jobs[id]
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-	record, err := s.loadJob(ctx, id)
-	if err != nil {
-		return StatusResult{}, err
-	}
-	if record.Status == statusRunning {
-		record.Status = statusCanceled
-		record.EndedAt = time.Now().UTC().Format(time.RFC3339Nano)
-		if err := s.saveJob(ctx, record); err != nil {
-			return StatusResult{}, err
-		}
-	}
-	return record.statusResult(), nil
-}
-
 // execute runs one frozen command proposal and stores bounded output.
-func (s *Service) execute(ctx context.Context, jobID string, proposal approvalRecord) {
-	defer func() {
-		s.mu.Lock()
-		delete(s.jobs, jobID)
-		s.mu.Unlock()
-	}()
+func (s *Service) execute(ctx context.Context, jobID string, proposal commandRecord) StatusResult {
 	stdout := newLimitedBuffer(proposal.MaxOutputBytes)
 	stderr := newLimitedBuffer(proposal.MaxOutputBytes)
 	cmd := exec.CommandContext(ctx, proposal.Executable, proposal.Args...)
@@ -446,7 +262,7 @@ func (s *Service) execute(ctx context.Context, jobID string, proposal approvalRe
 	err := cmd.Run()
 	record, loadErr := s.loadJob(context.Background(), jobID)
 	if loadErr != nil {
-		return
+		return StatusResult{JobID: jobID, Status: statusFailed, ExitCode: -1, Error: loadErr.Error()}
 	}
 	record.StdoutTail = stdout.String()
 	record.StderrTail = stderr.String()
@@ -473,12 +289,11 @@ func (s *Service) execute(ctx context.Context, jobID string, proposal approvalRe
 	record.Artifacts = artifacts
 	record.Validation = validation
 	_ = s.saveJob(context.Background(), record)
-	proposal.Status = record.Status
-	_ = s.saveApproval(context.Background(), proposal)
+	return record.statusResult()
 }
 
 // completedOutput derives structured output, diagnostics, artifacts, and validation.
-func (s *Service) completedOutput(ctx context.Context, proposal approvalRecord, record jobRecord) (any, []Diagnostic, []Artifact, ValidationResult) {
+func (s *Service) completedOutput(ctx context.Context, proposal commandRecord, record jobRecord) (any, []Diagnostic, []Artifact, ValidationResult) {
 	var output any
 	var diagnostics []Diagnostic
 	if strings.TrimSpace(proposal.ParserID) != "" {
@@ -515,7 +330,7 @@ func (s *Service) completedOutput(ctx context.Context, proposal approvalRecord, 
 }
 
 // parseContractOutput parses raw output directly when no parser is configured.
-func parseContractOutput(proposal approvalRecord, record jobRecord) (any, error) {
+func parseContractOutput(proposal commandRecord, record jobRecord) (any, error) {
 	format := normalizeOutputFormat(proposal.OutputContract.Format)
 	source := outputText(record, normalizeOutputSource(proposal.OutputSource, proposal.OutputContract))
 	switch format {
@@ -571,31 +386,20 @@ func diagnosticsFromAny(value any) []Diagnostic {
 	return diagnostics
 }
 
-// resolveRequest normalizes a raw request into one exact command proposal.
-func (s *Service) resolveRequest(req Request) (approvalRecord, error) {
-	if strings.TrimSpace(req.TemplateID) != "" {
-		return s.resolveTemplateRequest(req)
-	}
-	if !s.cfg.AllowArbitrary {
-		return approvalRecord{}, fmt.Errorf("arbitrary commands are disabled")
-	}
-	return s.resolveArbitraryRequest(req)
-}
-
 // resolveTemplateRequest expands one named command template.
-func (s *Service) resolveTemplateRequest(req Request) (approvalRecord, error) {
+func (s *Service) resolveTemplateRequest(req ExecuteRequest) (commandRecord, error) {
 	template, ok := s.templates[strings.TrimSpace(req.TemplateID)]
 	if !ok {
-		return approvalRecord{}, fmt.Errorf("command template %q not found", req.TemplateID)
+		return commandRecord{}, fmt.Errorf("command template %q not found", req.TemplateID)
 	}
 	if err := validateTemplateParameters(req.Parameters, template.ParameterSchema); err != nil {
-		return approvalRecord{}, err
+		return commandRecord{}, err
 	}
 	args := renderStrings(template.Args, req.Parameters)
 	stdin := renderString(template.Stdin, req.Parameters)
 	cwd, err := s.safeWorkdir(firstNonEmpty(req.WorkingDir, template.WorkingDir))
 	if err != nil {
-		return approvalRecord{}, err
+		return commandRecord{}, err
 	}
 	timeout := template.Timeout
 	if timeout <= 0 {
@@ -605,9 +409,8 @@ func (s *Service) resolveTemplateRequest(req Request) (approvalRecord, error) {
 	if maxOutput <= 0 {
 		maxOutput = s.cfg.DefaultMaxOutput
 	}
-	return approvalRecord{
+	return commandRecord{
 		TemplateID:             template.ID,
-		ApprovalRequired:       s.cfg.RequireApproval || template.RequireApproval,
 		Executable:             template.Executable,
 		Args:                   args,
 		Stdin:                  stdin,
@@ -624,7 +427,6 @@ func (s *Service) resolveTemplateRequest(req Request) (approvalRecord, error) {
 		WorkingDirectoryPolicy: template.WorkingDirectoryPolicy,
 		ValidationSchema:       cloneMap(template.ValidationSchema),
 		Reason:                 req.Reason,
-		Risk:                   req.Risk,
 		Actor:                  req.Actor,
 		SessionID:              req.SessionID,
 	}, nil
@@ -643,31 +445,6 @@ func validateTemplateParameters(parameters map[string]any, schema map[string]any
 		return nil
 	}
 	return fmt.Errorf("template parameters invalid: %s", strings.Join(result.Errors, "; "))
-}
-
-// resolveArbitraryRequest normalizes one arbitrary command request.
-func (s *Service) resolveArbitraryRequest(req Request) (approvalRecord, error) {
-	if strings.TrimSpace(req.Executable) == "" {
-		return approvalRecord{}, fmt.Errorf("command executable is required")
-	}
-	cwd, err := s.safeWorkdir(req.WorkingDir)
-	if err != nil {
-		return approvalRecord{}, err
-	}
-	return approvalRecord{
-		ApprovalRequired: true,
-		Executable:       strings.TrimSpace(req.Executable),
-		Args:             append([]string(nil), req.Args...),
-		Stdin:            req.Stdin,
-		WorkingDir:       cwd,
-		Env:              req.Env,
-		Timeout:          s.cfg.DefaultTimeout,
-		MaxOutputBytes:   s.cfg.DefaultMaxOutput,
-		Reason:           req.Reason,
-		Risk:             req.Risk,
-		Actor:            req.Actor,
-		SessionID:        req.SessionID,
-	}, nil
 }
 
 // safeWorkdir resolves and validates a requested working directory.
@@ -719,28 +496,6 @@ func (s *Service) environment(extra map[string]string) []string {
 	return env
 }
 
-// saveApproval writes one proposal record to durable disk.
-func (s *Service) saveApproval(ctx context.Context, record approvalRecord) error {
-	path, err := s.approvalPath(record.ApprovalID)
-	if err != nil {
-		return err
-	}
-	return writeJSONFile(ctx, path, record)
-}
-
-// loadApproval reads one proposal record from durable disk.
-func (s *Service) loadApproval(ctx context.Context, approvalID string) (approvalRecord, error) {
-	var record approvalRecord
-	path, err := s.approvalPath(approvalID)
-	if err != nil {
-		return approvalRecord{}, err
-	}
-	if err := readJSONFile(ctx, path, &record); err != nil {
-		return approvalRecord{}, err
-	}
-	return record, nil
-}
-
 // saveJob writes one job record to durable disk.
 func (s *Service) saveJob(ctx context.Context, record jobRecord) error {
 	path, err := s.jobPath(record.JobID)
@@ -763,15 +518,6 @@ func (s *Service) loadJob(ctx context.Context, jobID string) (jobRecord, error) 
 	return record, nil
 }
 
-// approvalPath returns the private record path for one validated approval id.
-func (s *Service) approvalPath(approvalID string) (string, error) {
-	id, err := validateRecordID(approvalID, "approval id")
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(s.cfg.DataDir, "approvals", id+".json"), nil
-}
-
 // jobPath returns the private record path for one validated job id.
 func (s *Service) jobPath(jobID string) (string, error) {
 	id, err := validateRecordID(jobID, "job id")
@@ -781,12 +527,9 @@ func (s *Service) jobPath(jobID string) (string, error) {
 	return filepath.Join(s.cfg.DataDir, "jobs", id+".json"), nil
 }
 
-// approvalRecord stores one frozen command approval proposal.
-type approvalRecord struct {
-	ApprovalID             string            `json:"approval_id"`
+// commandRecord stores one resolved configured command execution.
+type commandRecord struct {
 	TemplateID             string            `json:"template_id,omitempty"`
-	Status                 string            `json:"status"`
-	ApprovalRequired       bool              `json:"approval_required"`
 	Executable             string            `json:"executable"`
 	Args                   []string          `json:"args"`
 	Stdin                  string            `json:"stdin,omitempty"`
@@ -796,11 +539,8 @@ type approvalRecord struct {
 	MaxOutputBytes         int64             `json:"max_output_bytes"`
 	ParameterSchema        map[string]any    `json:"parameter_schema,omitempty"`
 	Reason                 string            `json:"reason,omitempty"`
-	Risk                   string            `json:"risk,omitempty"`
 	Actor                  string            `json:"actor,omitempty"`
 	SessionID              string            `json:"session_id,omitempty"`
-	CreatedAt              string            `json:"created_at"`
-	ExpiresAt              string            `json:"expires_at"`
 	OutputContract         OutputContract    `json:"output_contract,omitempty"`
 	ParserID               string            `json:"parser_id,omitempty"`
 	OutputSource           string            `json:"output_source,omitempty"`
@@ -810,62 +550,9 @@ type approvalRecord struct {
 	ValidationSchema       map[string]any    `json:"validation_schema,omitempty"`
 }
 
-// requestResult returns the public approval proposal shape.
-func (r approvalRecord) requestResult() RequestResult {
-	return RequestResult{
-		ApprovalID:       r.ApprovalID,
-		ApprovalRequired: r.ApprovalRequired,
-		Status:           r.Status,
-		Summary:          commandSummary(r.Executable, r.Args),
-		Executable:       r.Executable,
-		Args:             append([]string(nil), r.Args...),
-		WorkingDir:       r.WorkingDir,
-		ExpiresAt:        r.ExpiresAt,
-		EnvNames:         sortedMapKeys(r.Env),
-		HasStdin:         strings.TrimSpace(r.Stdin) != "",
-	}
-}
-
-// canApprove validates whether an approval record can receive an external grant.
-func (r approvalRecord) canApprove() error {
-	expires, err := time.Parse(time.RFC3339Nano, r.ExpiresAt)
-	if err != nil {
-		return fmt.Errorf("approval expiry is invalid: %w", err)
-	}
-	if time.Now().UTC().After(expires) {
-		return fmt.Errorf("approval %s expired", r.ApprovalID)
-	}
-	if r.Status == statusApproved {
-		return nil
-	}
-	if r.Status != statusPending {
-		return fmt.Errorf("approval %s cannot be approved from status %q", r.ApprovalID, r.Status)
-	}
-	return nil
-}
-
-// canRun validates whether an approval record may start a job.
-func (r approvalRecord) canRun() error {
-	expires, err := time.Parse(time.RFC3339Nano, r.ExpiresAt)
-	if err != nil {
-		return fmt.Errorf("approval expiry is invalid: %w", err)
-	}
-	if time.Now().UTC().After(expires) {
-		return fmt.Errorf("approval %s expired", r.ApprovalID)
-	}
-	if r.Status != statusApproved {
-		if r.ApprovalRequired {
-			return fmt.Errorf("approval %s requires external approval", r.ApprovalID)
-		}
-		return fmt.Errorf("approval %s cannot run from status %q", r.ApprovalID, r.Status)
-	}
-	return nil
-}
-
 // jobRecord stores durable process execution status.
 type jobRecord struct {
 	JobID       string           `json:"job_id"`
-	ApprovalID  string           `json:"approval_id"`
 	Status      string           `json:"status"`
 	ExitCode    int              `json:"exit_code"`
 	StdoutTail  string           `json:"stdout_tail"`
@@ -946,9 +633,6 @@ func normalizeConfig(cfg Config) (Config, error) {
 	}
 	if cfg.DefaultMaxOutput <= 0 {
 		cfg.DefaultMaxOutput = 64 << 10
-	}
-	if cfg.ApprovalTTL <= 0 {
-		cfg.ApprovalTTL = 10 * time.Minute
 	}
 	if len(cfg.AllowedWorkdirs) == 0 {
 		cfg.AllowedWorkdirs = []string{"."}
@@ -1090,24 +774,6 @@ func templateParameters(template Template) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-// sortedMapKeys returns stable public key names without exposing map values.
-func sortedMapKeys(values map[string]string) []string {
-	names := make([]string, 0, len(values))
-	for name := range values {
-		if strings.TrimSpace(name) != "" {
-			names = append(names, name)
-		}
-	}
-	sort.Strings(names)
-	return names
-}
-
-// commandSummary returns a human-readable command summary.
-func commandSummary(executable string, args []string) string {
-	parts := append([]string{executable}, args...)
-	return strings.Join(parts, " ")
 }
 
 // firstNonEmpty returns the first non-empty string.

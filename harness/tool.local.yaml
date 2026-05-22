@@ -1,7 +1,6 @@
 # This file configures default local tools for Agent Awesome.
 local-exec:
   enabled: false
-  allow-persistent-approvals: false
   default-timeout: 10s
   default-max-output-bytes: 65536
   allowed-workdirs:
@@ -15,10 +14,6 @@ local-exec:
         - --short
       timeout: 5s
       max-output-bytes: 16384
-      approval:
-        always-allow-within-workspace: false
-        always-allow-command-starts-with: []
-        always-allow: false
 mcp:
   enabled: true
   servers:

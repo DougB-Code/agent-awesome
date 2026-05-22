@@ -1,4 +1,4 @@
-/// Tests model-backed screen-command planning.
+/// Tests ADK-backed screen-command planning.
 library;
 
 import 'dart:convert';
@@ -11,34 +11,17 @@ import 'package:http/testing.dart';
 
 /// Runs screen-command client tests.
 void main() {
-  test('plans backlog command from model config', () async {
+  test('plans backlog command through ADK with default model ref', () async {
+    late Map<String, dynamic> runBody;
     final client = ScreenCommandClient(
-      environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
-      httpClient: MockClient((request) async {
-        expect(
-          request.url.toString(),
-          'https://api.openai.com/v1/chat/completions',
-        );
-        expect(request.headers['Authorization'], 'Bearer test-key');
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'gpt-5-mini');
-        expect(body['max_completion_tokens'], 1600);
-        expect(body.containsKey('max_tokens'), isFalse);
-        expect(jsonEncode(body['messages']), contains('Draft schema'));
-        return http.Response(
-          jsonEncode(<String, dynamic>{
-            'choices': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'message': <String, dynamic>{
-                  'content':
-                      '{"intent":"change","confidence":0.9,"changes":[{"operation":"update_task","target":{"task_id":"task-1"},"summary":"Raise priority","confidence":0.95,"fields":{"priority":"high"}}]}',
-                },
-              },
-            ],
-          }),
-          200,
-        );
-      }),
+      baseUrl: _baseUrl,
+      appName: _appName,
+      userId: _userId,
+      httpClient: _mockAdkClient(
+        responseText:
+            '{"intent":"change","confidence":0.9,"changes":[{"operation":"update_task","target":{"task_id":"task-1"},"summary":"Raise priority","confidence":0.95,"fields":{"priority":"high"}}]}',
+        onRunBody: (body) => runBody = body,
+      ),
     );
 
     final run = await client.planBacklogCommand(
@@ -60,18 +43,67 @@ void main() {
     expect(run.command, 'make Draft schema high priority');
     expect(run.changes.single.operation, ScreenChangeOperation.updateTask);
     expect(run.changes.single.fields['priority'], 'high');
+    expect(runBody['stateDelta'], <String, dynamic>{
+      'agentawesome.model_ref': 'openai:gpt-mini',
+    });
+    expect(jsonEncode(runBody), contains('Draft schema'));
     client.close();
   });
 }
+
+MockClient _mockAdkClient({
+  required String responseText,
+  required void Function(Map<String, dynamic> body) onRunBody,
+}) {
+  return MockClient((request) async {
+    if (request.method == 'POST' &&
+        request.url.toString() ==
+            '$_baseUrl/apps/$_appName/users/$_userId/sessions') {
+      return http.Response(
+        jsonEncode(<String, dynamic>{'id': _sessionId}),
+        200,
+      );
+    }
+    if (request.method == 'POST' &&
+        request.url.toString() == '$_baseUrl/run_sse') {
+      onRunBody(jsonDecode(request.body) as Map<String, dynamic>);
+      return http.Response(_sseText(responseText), 200);
+    }
+    if (request.method == 'DELETE' &&
+        request.url.toString() ==
+            '$_baseUrl/apps/$_appName/users/$_userId/sessions/$_sessionId') {
+      return http.Response('', 204);
+    }
+    return http.Response(
+      'unexpected request ${request.method} ${request.url}',
+      500,
+    );
+  });
+}
+
+String _sseText(String text) {
+  return 'data: ${jsonEncode(<String, dynamic>{
+    'id': 'event-1',
+    'author': 'agent_awesome',
+    'content': <String, dynamic>{
+      'parts': <Map<String, dynamic>>[
+        <String, dynamic>{'text': text},
+      ],
+    },
+  })}\n\n';
+}
+
+const String _baseUrl = 'http://127.0.0.1:8070/api';
+const String _appName = 'agent_awesome';
+const String _userId = 'doug';
+const String _sessionId = 'utility-session';
 
 const String _modelConfig = '''
 default: openai:gpt-mini
 providers:
   openai:
     adapter: openai
-    api-key: OPENAI_API_KEY
     default: gpt-mini
-    url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
         model: gpt-5-mini

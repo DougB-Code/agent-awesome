@@ -99,30 +99,12 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		return s.service.Execute(ctx, req)
 	case "command_template_list":
 		return map[string]any{"templates": s.service.Templates()}, nil
-	case "command_request":
-		var req command.Request
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.Request(ctx, req)
-	case "command_run":
-		var req command.RunRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.Run(ctx, req)
 	case "command_status":
 		var req commandStatusRequest
 		if err := decodeArgs(args, &req); err != nil {
 			return nil, err
 		}
 		return s.service.Status(ctx, req.JobID)
-	case "command_cancel":
-		var req commandStatusRequest
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		return s.service.Cancel(ctx, req.JobID)
 	default:
 		return nil, errors.New("command tool is not supported")
 	}
@@ -134,10 +116,7 @@ func toolDefinitions() []map[string]any {
 		"command.execute",
 		"command_execute",
 		"command_template_list",
-		"command_request",
-		"command_run",
 		"command_status",
-		"command_cancel",
 	}
 	tools := make([]map[string]any, 0, len(names))
 	for _, name := range names {
@@ -157,14 +136,8 @@ func toolDescription(name string) string {
 		return "Create, run, poll, and return one structured configured command result."
 	case "command_template_list":
 		return "List configured command templates."
-	case "command_request":
-		return "Create an exact command proposal for approval."
-	case "command_run":
-		return "Start an approved command proposal as an async job."
 	case "command_status":
 		return "Read command job status and bounded output tails."
-	case "command_cancel":
-		return "Cancel a running command job."
 	default:
 		return "Command execution tool."
 	}

@@ -29,13 +29,6 @@ class _SettingsLocalExecCard extends StatelessWidget {
           value: config.enabled,
           onChanged: (enabled) => onChanged(config.copyWith(enabled: enabled)),
         ),
-        SettingsToggleField(
-          title: 'Persistent approvals',
-          subtitle: 'Allow saved command approvals',
-          value: config.allowPersistentApprovals,
-          onChanged: (value) =>
-              onChanged(config.copyWith(allowPersistentApprovals: value)),
-        ),
         _SettingsInlineField(
           label: 'Default timeout',
           value: config.defaultTimeout,
@@ -99,7 +92,6 @@ class _SettingsLocalExecCommandEditor extends StatelessWidget {
   /// Builds one editable local command alias.
   @override
   Widget build(BuildContext context) {
-    final approval = command.approval;
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 4),
       child: Column(
@@ -155,33 +147,6 @@ class _SettingsLocalExecCommandEditor extends StatelessWidget {
                 : command.maxOutputBytes.toString(),
             onChanged: (value) => onChanged(
               command.copyWith(maxOutputBytes: int.tryParse(value) ?? 0),
-            ),
-          ),
-          SettingsToggleField(
-            title: 'Always allow',
-            subtitle: 'Skip review for this alias',
-            value: approval.alwaysAllow,
-            onChanged: (value) => onChanged(
-              command.copyWith(approval: approval.copyWith(alwaysAllow: value)),
-            ),
-          ),
-          SettingsToggleField(
-            title: 'Always allow within workspace',
-            subtitle: 'Skip review when cwd stays in workspace',
-            value: approval.alwaysAllowWithinWorkspace,
-            onChanged: (value) => onChanged(
-              command.copyWith(
-                approval: approval.copyWith(alwaysAllowWithinWorkspace: value),
-              ),
-            ),
-          ),
-          _SettingsLineListField(
-            label: 'Always allow starts with',
-            values: approval.alwaysAllowCommandPrefixes,
-            onChanged: (values) => onChanged(
-              command.copyWith(
-                approval: approval.copyWith(alwaysAllowCommandPrefixes: values),
-              ),
             ),
           ),
         ],

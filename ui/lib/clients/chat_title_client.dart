@@ -1,15 +1,14 @@
-/// Generates compact chat titles from app-owned model configuration files.
+/// Generates compact chat titles through the ADK runtime.
 library;
-
-import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
 import '../domain/models.dart';
+import 'adk_utility_client.dart';
 import 'client_logger.dart';
-import 'model_invocation_config.dart';
+import 'model_ref_selection.dart';
 
-/// ChatTitleException reports title model configuration or request failures.
+/// ChatTitleException reports title model selection or request failures.
 class ChatTitleException implements Exception {
   /// Creates a title generation exception.
   const ChatTitleException(this.message);
@@ -22,21 +21,29 @@ class ChatTitleException implements Exception {
   String toString() => 'ChatTitleException: $message';
 }
 
-/// ChatTitleClient calls a small app-owned model to name conversations.
+/// ChatTitleClient asks ADK to name conversations with the selected model.
 class ChatTitleClient {
-  /// Creates a title client with explicitly supplied credential references.
+  /// Creates a title client for one ADK app and user.
   ChatTitleClient({
+    required String baseUrl,
+    required String appName,
+    required String userId,
     http.Client? httpClient,
-    Map<String, String> environment = const <String, String>{},
-    String localModelChatCompletionsUrl = '',
+    AdkUtilityClient? utilityClient,
+    Map<String, String> headers = const <String, String>{},
     this.logger,
-  }) : _http = httpClient ?? http.Client(),
-       _environment = environment,
-       _localModelChatCompletionsUrl = localModelChatCompletionsUrl.trim();
+  }) : _utility =
+           utilityClient ??
+           AdkUtilityClient(
+             baseUrl: baseUrl,
+             appName: appName,
+             userId: userId,
+             httpClient: httpClient,
+             headers: headers,
+             logger: logger,
+           );
 
-  final http.Client _http;
-  final Map<String, String> _environment;
-  final String _localModelChatCompletionsUrl;
+  final AdkUtilityClient _utility;
 
   /// Optional persistent logger.
   final ClientLogger? logger;
@@ -47,23 +54,15 @@ class ChatTitleClient {
     String modelRef = '',
     required List<ChatMessage> messages,
   }) async {
-    final selection = _loadSelection(modelConfigContent, modelRef);
+    final selectedModelRef = _selectedModelRef(modelConfigContent, modelRef);
     final transcript = _transcript(messages);
     if (transcript.isEmpty) {
       throw const ChatTitleException('Transcript is empty');
     }
     await _log(
-      'generate title adapter=${selection.adapter} model=${selection.model} transcriptLength=${transcript.length}',
+      'generate title modelRef=$selectedModelRef transcriptLength=${transcript.length}',
     );
-    final raw = switch (selection.adapter) {
-      'anthropic' => await _generateAnthropic(selection, transcript),
-      'litert' => await _generateOpenAi(selection, transcript),
-      'openai' ||
-      'openai_compatible' => await _generateOpenAi(selection, transcript),
-      _ => throw ChatTitleException(
-        'Unsupported title model adapter "${selection.adapter}"',
-      ),
-    };
+    final raw = await _runPrompt(selectedModelRef, transcript);
     final title = _sanitizeTitle(raw);
     if (title.isEmpty) {
       throw const ChatTitleException('Title model returned empty text');
@@ -71,123 +70,44 @@ class ChatTitleClient {
     return title;
   }
 
-  /// Closes the underlying HTTP client.
+  /// Closes the underlying utility client.
   void close() {
-    _http.close();
+    _utility.close();
   }
 
-  /// Loads the selected provider, endpoint, key, and model from config.
-  ModelInvocationConfig _loadSelection(
-    String modelConfigContent,
-    String modelRef,
-  ) {
+  String _selectedModelRef(String modelConfigContent, String modelRef) {
     try {
-      return resolveModelInvocationConfig(
+      return selectedModelRefFromConfig(
         modelConfigContent: modelConfigContent,
         modelRef: modelRef,
-        environment: _environment,
-        localModelChatCompletionsUrl: _localModelChatCompletionsUrl,
-        messages: const ModelInvocationConfigMessages(
-          missingSelection: 'Summary model config is not selected',
-          missingProviders: 'Summary model config has no providers',
-          missingDefaultModel: 'Summary model default model is missing',
-        ),
+        missingSelection: 'Summary model config is not selected',
+        missingProviders: 'Summary model config has no providers',
+        missingDefaultModel: 'Summary model default model is missing',
       );
-    } on ModelInvocationConfigException catch (error) {
+    } on ModelRefSelectionException catch (error) {
       throw ChatTitleException(error.message);
     }
   }
 
-  /// Calls an OpenAI-compatible chat completions endpoint for a title.
-  Future<String> _generateOpenAi(
-    ModelInvocationConfig selection,
-    String transcript,
-  ) async {
-    final response = await _http.post(
-      Uri.parse(selection.url),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        if (selection.apiKey.isNotEmpty)
-          'Authorization': 'Bearer ${selection.apiKey}',
-      },
-      body: jsonEncode(_openAiRequestBody(selection.model, transcript)),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ChatTitleException(
-        'Title model HTTP ${response.statusCode}: '
-        '${clipProviderBody(response.body)}',
+  Future<String> _runPrompt(String modelRef, String transcript) async {
+    try {
+      return await _utility.runText(
+        modelRef: modelRef,
+        logName: 'chat-title-client',
+        prompt:
+            'Create a concise title for this chat. Return only 2 to 6 words. '
+            'Do not use quotation marks, punctuation, emoji, or a prefix. '
+            'Never call tools.\n\n$transcript',
       );
+    } on AdkUtilityException catch (error) {
+      throw ChatTitleException(error.message);
     }
-    final decoded = jsonDecode(response.body);
-    final choices = decoded is Map<String, dynamic> ? decoded['choices'] : null;
-    if (choices is! List || choices.isEmpty) {
-      throw const ChatTitleException('Title model returned no choices');
-    }
-    final first = choices.first;
-    final message = first is Map<String, dynamic> ? first['message'] : null;
-    final content = message is Map<String, dynamic> ? message['content'] : null;
-    return modelInvocationString(content);
-  }
-
-  /// Calls an Anthropic messages endpoint for a title.
-  Future<String> _generateAnthropic(
-    ModelInvocationConfig selection,
-    String transcript,
-  ) async {
-    final response = await _http.post(
-      Uri.parse(selection.url),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        if (selection.apiKey.isNotEmpty) 'x-api-key': selection.apiKey,
-      },
-      body: jsonEncode(<String, dynamic>{
-        'model': selection.model,
-        'max_tokens': 24,
-        'temperature': 0.2,
-        'system': _titleSystemPrompt,
-        'messages': <Map<String, String>>[
-          <String, String>{'role': 'user', 'content': transcript},
-        ],
-      }),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ChatTitleException(
-        'Title model HTTP ${response.statusCode}: '
-        '${clipProviderBody(response.body)}',
-      );
-    }
-    final decoded = jsonDecode(response.body);
-    final content = decoded is Map<String, dynamic> ? decoded['content'] : null;
-    if (content is! List || content.isEmpty) {
-      throw const ChatTitleException('Title model returned no content');
-    }
-    return content
-        .whereType<Map<String, dynamic>>()
-        .map((part) => modelInvocationString(part['text']))
-        .where((text) => text.isNotEmpty)
-        .join(' ');
   }
 
   /// Writes a title-client diagnostic line when logging is configured.
   Future<void> _log(String message) async {
     await logger?.write('chat-title-client', message);
   }
-}
-
-/// Builds the OpenAI-compatible request body for title generation.
-Map<String, dynamic> _openAiRequestBody(String model, String transcript) {
-  final usesCompletionTokens = usesCompletionTokenLimit(model);
-  return <String, dynamic>{
-    'model': model,
-    'temperature': 0.2,
-    if (usesCompletionTokens) 'max_completion_tokens': 24 else 'max_tokens': 24,
-    'stream': false,
-    'messages': <Map<String, String>>[
-      <String, String>{'role': 'system', 'content': _titleSystemPrompt},
-      <String, String>{'role': 'user', 'content': transcript},
-    ],
-  };
 }
 
 /// Builds a compact transcript for title generation.
@@ -222,7 +142,3 @@ String _sanitizeTitle(String raw) {
   }
   return title;
 }
-
-const String _titleSystemPrompt =
-    'Create a concise title for this chat. Return only 2 to 6 words. '
-    'Do not use quotation marks, punctuation, emoji, or a prefix.';

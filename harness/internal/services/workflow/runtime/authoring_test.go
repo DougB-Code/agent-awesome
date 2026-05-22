@@ -251,7 +251,7 @@ func TestTemplateInstantiateCreatesDraft(t *testing.T) {
 
 // TestCodexCLIPilotTemplateAssertsPlanPolicy verifies the pilot plan gate matches policy.
 func TestCodexCLIPilotTemplateAssertsPlanPolicy(t *testing.T) {
-	template := codexCLIPilotTemplate()
+	template := mustBuiltInTemplate(t, "codex_cli_pilot")
 	states := flattenTemplateStates(template.Body["states"])
 	have := map[string]bool{}
 	for _, state := range states {
@@ -288,7 +288,7 @@ func TestCodexCLIPilotTemplateAssertsPlanPolicy(t *testing.T) {
 
 // TestCodexCLIPilotTemplateGatesFinalReviewAfterCleanup verifies cleanup can respond to review.
 func TestCodexCLIPilotTemplateGatesFinalReviewAfterCleanup(t *testing.T) {
-	template := codexCLIPilotTemplate()
+	template := mustBuiltInTemplate(t, "codex_cli_pilot")
 	states := flattenTemplateStates(template.Body["states"])
 	byID := map[string]map[string]any{}
 	for _, state := range states {
@@ -411,6 +411,22 @@ func hasTransition(state map[string]any, target string) bool {
 		}
 	}
 	return false
+}
+
+// mustBuiltInTemplate returns a built-in template for tests.
+func mustBuiltInTemplate(t *testing.T, id string) store.TemplateRecord {
+	t.Helper()
+	templates, err := builtInTemplates()
+	if err != nil {
+		t.Fatalf("builtInTemplates() error = %v", err)
+	}
+	for _, template := range templates {
+		if template.ID == id {
+			return template
+		}
+	}
+	t.Fatalf("builtInTemplates() missing %q", id)
+	return store.TemplateRecord{}
 }
 
 // TestPackageImportExportRoundTrip verifies package records can be installed and exported.

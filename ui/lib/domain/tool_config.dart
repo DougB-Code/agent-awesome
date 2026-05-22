@@ -160,8 +160,6 @@ class LocalExecToolConfig {
   /// Creates local execution tool settings.
   const LocalExecToolConfig({
     required this.enabled,
-    required this.requireConfirmation,
-    required this.allowPersistentApprovals,
     required this.defaultTimeout,
     required this.defaultMaxOutputBytes,
     required this.allowedWorkdirs,
@@ -171,12 +169,6 @@ class LocalExecToolConfig {
 
   /// Whether local command aliases are exposed through the command MCP service.
   final bool enabled;
-
-  /// Optional schema value; when present the harness only accepts true.
-  final bool? requireConfirmation;
-
-  /// Whether command proposals may save workspace/global approvals.
-  final bool allowPersistentApprovals;
 
   /// Default Go-style duration for command execution.
   final String defaultTimeout;
@@ -197,10 +189,6 @@ class LocalExecToolConfig {
   factory LocalExecToolConfig.fromMap(Map<String, dynamic> map) {
     final extra = Map<String, dynamic>.from(map)
       ..remove('enabled')
-      ..remove('require-confirmation')
-      ..remove('require_confirmation')
-      ..remove('allow-persistent-approvals')
-      ..remove('allow_persistent_approvals')
       ..remove('default-timeout')
       ..remove('default_timeout')
       ..remove('default-max-output-bytes')
@@ -210,12 +198,6 @@ class LocalExecToolConfig {
       ..remove('commands');
     return LocalExecToolConfig(
       enabled: boolValue(map['enabled']),
-      requireConfirmation: nullableBoolValue(
-        map['require-confirmation'] ?? map['require_confirmation'],
-      ),
-      allowPersistentApprovals: boolValue(
-        map['allow-persistent-approvals'] ?? map['allow_persistent_approvals'],
-      ),
       defaultTimeout: stringValue(
         map['default-timeout'] ?? map['default_timeout'],
         trim: true,
@@ -237,8 +219,6 @@ class LocalExecToolConfig {
   /// Returns a copy with selected values changed.
   LocalExecToolConfig copyWith({
     bool? enabled,
-    Object? requireConfirmation = _unset,
-    bool? allowPersistentApprovals,
     String? defaultTimeout,
     int? defaultMaxOutputBytes,
     List<String>? allowedWorkdirs,
@@ -247,11 +227,6 @@ class LocalExecToolConfig {
   }) {
     return LocalExecToolConfig(
       enabled: enabled ?? this.enabled,
-      requireConfirmation: identical(requireConfirmation, _unset)
-          ? this.requireConfirmation
-          : requireConfirmation as bool?,
-      allowPersistentApprovals:
-          allowPersistentApprovals ?? this.allowPersistentApprovals,
       defaultTimeout: defaultTimeout ?? this.defaultTimeout,
       defaultMaxOutputBytes:
           defaultMaxOutputBytes ?? this.defaultMaxOutputBytes,
@@ -266,10 +241,6 @@ class LocalExecToolConfig {
     return <String, dynamic>{
       ...extra,
       'enabled': enabled,
-      if (requireConfirmation != null)
-        'require-confirmation': requireConfirmation,
-      if (allowPersistentApprovals)
-        'allow-persistent-approvals': allowPersistentApprovals,
       if (defaultTimeout.isNotEmpty) 'default-timeout': defaultTimeout,
       if (defaultMaxOutputBytes != 0)
         'default-max-output-bytes': defaultMaxOutputBytes,
@@ -290,7 +261,6 @@ class LocalExecCommandConfig {
     required this.args,
     required this.timeout,
     required this.maxOutputBytes,
-    required this.approval,
     this.extra = const <String, dynamic>{},
   });
 
@@ -312,9 +282,6 @@ class LocalExecCommandConfig {
   /// Optional command-specific output limit.
   final int maxOutputBytes;
 
-  /// Approval shortcuts for this command.
-  final LocalExecApprovalConfig approval;
-
   /// Fields preserved outside the known schema.
   final Map<String, dynamic> extra;
 
@@ -327,8 +294,7 @@ class LocalExecCommandConfig {
       ..remove('args')
       ..remove('timeout')
       ..remove('max-output-bytes')
-      ..remove('max_output_bytes')
-      ..remove('approval');
+      ..remove('max_output_bytes');
     return LocalExecCommandConfig(
       name: stringValue(map['name'], trim: true),
       executable: stringValue(map['executable'], trim: true),
@@ -338,7 +304,6 @@ class LocalExecCommandConfig {
       maxOutputBytes: intValue(
         map['max-output-bytes'] ?? map['max_output_bytes'],
       ),
-      approval: LocalExecApprovalConfig.fromMap(jsonObject(map['approval'])),
       extra: extra,
     );
   }
@@ -351,7 +316,6 @@ class LocalExecCommandConfig {
     List<String>? args,
     String? timeout,
     int? maxOutputBytes,
-    LocalExecApprovalConfig? approval,
     Map<String, dynamic>? extra,
   }) {
     return LocalExecCommandConfig(
@@ -361,7 +325,6 @@ class LocalExecCommandConfig {
       args: args ?? this.args,
       timeout: timeout ?? this.timeout,
       maxOutputBytes: maxOutputBytes ?? this.maxOutputBytes,
-      approval: approval ?? this.approval,
       extra: extra ?? this.extra,
     );
   }
@@ -376,82 +339,6 @@ class LocalExecCommandConfig {
       if (args.isNotEmpty) 'args': args,
       if (timeout.isNotEmpty) 'timeout': timeout,
       if (maxOutputBytes != 0) 'max-output-bytes': maxOutputBytes,
-      'approval': approval.toJson(),
-    };
-  }
-}
-
-/// LocalExecApprovalConfig describes command approval shortcuts.
-class LocalExecApprovalConfig {
-  /// Creates approval shortcut settings.
-  const LocalExecApprovalConfig({
-    required this.alwaysAllowWithinWorkspace,
-    required this.alwaysAllowCommandPrefixes,
-    required this.alwaysAllow,
-    this.extra = const <String, dynamic>{},
-  });
-
-  /// Whether the command can run automatically inside the current workspace.
-  final bool alwaysAllowWithinWorkspace;
-
-  /// Command-line prefixes that bypass one-off confirmation.
-  final List<String> alwaysAllowCommandPrefixes;
-
-  /// Whether every invocation of this alias is approved automatically.
-  final bool alwaysAllow;
-
-  /// Fields preserved outside the known schema.
-  final Map<String, dynamic> extra;
-
-  /// Parses approval settings from decoded YAML.
-  factory LocalExecApprovalConfig.fromMap(Map<String, dynamic> map) {
-    final extra = Map<String, dynamic>.from(map)
-      ..remove('always-allow-within-workspace')
-      ..remove('always_allow_within_workspace')
-      ..remove('always-allow-command-starts-with')
-      ..remove('always_allow_command_starts_with')
-      ..remove('always-allow')
-      ..remove('always_allow');
-    return LocalExecApprovalConfig(
-      alwaysAllowWithinWorkspace: boolValue(
-        map['always-allow-within-workspace'] ??
-            map['always_allow_within_workspace'],
-      ),
-      alwaysAllowCommandPrefixes: stringList(
-        map['always-allow-command-starts-with'] ??
-            map['always_allow_command_starts_with'],
-        trim: true,
-      ),
-      alwaysAllow: boolValue(map['always-allow'] ?? map['always_allow']),
-      extra: extra,
-    );
-  }
-
-  /// Returns a copy with selected values changed.
-  LocalExecApprovalConfig copyWith({
-    bool? alwaysAllowWithinWorkspace,
-    List<String>? alwaysAllowCommandPrefixes,
-    bool? alwaysAllow,
-    Map<String, dynamic>? extra,
-  }) {
-    return LocalExecApprovalConfig(
-      alwaysAllowWithinWorkspace:
-          alwaysAllowWithinWorkspace ?? this.alwaysAllowWithinWorkspace,
-      alwaysAllowCommandPrefixes:
-          alwaysAllowCommandPrefixes ?? this.alwaysAllowCommandPrefixes,
-      alwaysAllow: alwaysAllow ?? this.alwaysAllow,
-      extra: extra ?? this.extra,
-    );
-  }
-
-  /// Encodes approval settings as JSON-compatible data.
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      ...extra,
-      'always-allow-within-workspace': alwaysAllowWithinWorkspace,
-      if (alwaysAllowCommandPrefixes.isNotEmpty)
-        'always-allow-command-starts-with': alwaysAllowCommandPrefixes,
-      'always-allow': alwaysAllow,
     };
   }
 }
@@ -707,8 +594,6 @@ ToolConfigDocument emptyToolConfigDocument() {
   return const ToolConfigDocument(
     localExec: LocalExecToolConfig(
       enabled: false,
-      requireConfirmation: null,
-      allowPersistentApprovals: false,
       defaultTimeout: '',
       defaultMaxOutputBytes: 0,
       allowedWorkdirs: <String>[],
@@ -731,11 +616,6 @@ LocalExecCommandConfig newLocalExecCommandConfig({
     args: const <String>[],
     timeout: '',
     maxOutputBytes: 0,
-    approval: const LocalExecApprovalConfig(
-      alwaysAllowWithinWorkspace: false,
-      alwaysAllowCommandPrefixes: <String>[],
-      alwaysAllow: false,
-    ),
   );
 }
 
@@ -878,9 +758,6 @@ String _localExecValidationError(LocalExecToolConfig config) {
   if (!config.enabled) {
     return '';
   }
-  if (config.requireConfirmation == false) {
-    return 'local-exec require-confirmation must be true';
-  }
   if (config.defaultTimeout.trim().isNotEmpty &&
       !_isGoDuration(config.defaultTimeout)) {
     return 'local-exec default-timeout must be a Go duration';
@@ -928,11 +805,6 @@ String _localExecCommandValidationError(LocalExecCommandConfig command) {
   }
   if (command.maxOutputBytes < 0) {
     return 'local-exec command "$name" max-output-bytes must not be negative';
-  }
-  if (command.approval.alwaysAllowCommandPrefixes.any(
-    (value) => value.trim().isEmpty,
-  )) {
-    return 'local-exec command "$name" approval prefixes must not be empty';
   }
   return '';
 }
@@ -1127,7 +999,6 @@ bool _looksAbsolutePath(String value) {
   return path.startsWith('/') || RegExp(r'^[A-Za-z]:[\\/]').hasMatch(path);
 }
 
-const Object _unset = Object();
 final RegExp _toolNamePattern = RegExp(r'^[A-Za-z_][A-Za-z0-9_-]*$');
 final RegExp _goDurationPattern = RegExp(
   r'^(\d+(\.\d+)?(ns|us|µs|ms|s|m|h))+$',

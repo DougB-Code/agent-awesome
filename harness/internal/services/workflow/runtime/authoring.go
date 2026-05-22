@@ -382,7 +382,11 @@ func (s *Service) ExportPackage(ctx context.Context, id string) (store.PackageRe
 
 // SeedAuthoringCatalog installs built-in templates and package metadata.
 func (s *Service) SeedAuthoringCatalog(ctx context.Context) error {
-	for _, template := range builtInTemplates() {
+	templates, err := builtInTemplates()
+	if err != nil {
+		return err
+	}
+	for _, template := range templates {
 		if err := s.store.UpsertTemplate(ctx, template); err != nil {
 			return err
 		}
@@ -688,69 +692,6 @@ func actionTypeForName(name string) ActionType {
 // unavailableActions returns registered actions that cannot be published yet.
 func unavailableActions(_ definition.Definition) []string {
 	return nil
-}
-
-// builtInTemplates returns starter templates backed by package-shaped bodies.
-func builtInTemplates() []store.TemplateRecord {
-	return []store.TemplateRecord{
-		codexCLIPilotTemplate(),
-		{
-			ID:          "approval_state_machine",
-			Name:        "Approval Workflow",
-			Description: "Start from a state machine that asks before moving to an approved state.",
-			Category:    "approval",
-			Tags:        []string{"human", "state-machine", "approval"},
-			Parameters:  []map[string]any{{"id": "prompt", "label": "Approval prompt", "type": "string", "default": "Review and approve this automation."}},
-			Requirements: map[string]any{
-				"actions": []any{"human.request"},
-			},
-			Body: map[string]any{
-				"kind":        definition.KindStateMachine,
-				"id":          "approval_workflow",
-				"name":        "Approval Workflow",
-				"description": "A human approval workflow.",
-				"initial":     "review",
-				"states": []any{
-					map[string]any{
-						"id": "review",
-						"on_entry": []any{map[string]any{
-							"id":   "request_approval",
-							"uses": "human.request",
-							"with": map[string]any{"prompt": "{{prompt}}"},
-						}},
-						"transitions": []any{map[string]any{"trigger": "approved", "to": "approved"}, map[string]any{"trigger": "rejected", "to": "rejected"}},
-					},
-					map[string]any{"id": "approved"},
-					map[string]any{"id": "rejected"},
-				},
-			},
-		},
-		{
-			ID:          "tool_task_graph",
-			Name:        "Tool Task Graph",
-			Description: "Start from a bounded task graph with one generic tool call.",
-			Category:    "task_graph",
-			Tags:        []string{"tool", "task-graph"},
-			Parameters:  []map[string]any{{"id": "tool_name", "label": "Tool name", "type": "string", "default": "example_tool"}},
-			Requirements: map[string]any{
-				"actions": []any{"tool.call"},
-			},
-			Body: map[string]any{
-				"kind":        draftKindTaskGraph,
-				"id":          "tool_task_graph",
-				"name":        "Tool Task Graph",
-				"description": "A bounded task graph with one generic tool call.",
-				"nodes": []any{map[string]any{
-					"id":   "tool_task",
-					"uses": "tool.call",
-					"with": map[string]any{
-						"name":      "{{tool_name}}",
-						"arguments": map[string]any{},
-					},
-				}},
-			},
-		},
-	}
 }
 
 // applyTemplateParameters replaces simple string placeholders in template bodies.

@@ -109,7 +109,8 @@ class _TranscriptAssistantClient extends AssistantClient {
 /// Fake title client records the selected model config and returns a title.
 class _FakeChatTitleClient extends ChatTitleClient {
   /// Creates a fake title client.
-  _FakeChatTitleClient({required this.title});
+  _FakeChatTitleClient({required this.title})
+    : super(baseUrl: 'http://127.0.0.1:1/api', appName: 'test', userId: 'user');
 
   /// Title returned to the controller.
   final String title;

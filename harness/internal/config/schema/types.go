@@ -107,31 +107,21 @@ type MemoryFlow struct {
 
 // LocalExec describes configured local command execution.
 type LocalExec struct {
-	Enabled                  bool               `koanf:"enabled"`
-	RequireConfirmation      *bool              `koanf:"require-confirmation"`
-	AllowPersistentApprovals bool               `koanf:"allow-persistent-approvals"`
-	DefaultTimeout           string             `koanf:"default-timeout"`
-	DefaultMaxOutputBytes    int                `koanf:"default-max-output-bytes"`
-	AllowedWorkdirs          []string           `koanf:"allowed-workdirs"`
-	Commands                 []LocalExecCommand `koanf:"commands"`
-}
-
-// LocalExecApproval describes approval shortcuts for a configured command.
-type LocalExecApproval struct {
-	AlwaysAllowWithinWorkspace bool     `koanf:"always-allow-within-workspace"`
-	AlwaysAllowCommandPrefixes []string `koanf:"always-allow-command-starts-with"`
-	AlwaysAllow                bool     `koanf:"always-allow"`
+	Enabled               bool               `koanf:"enabled"`
+	DefaultTimeout        string             `koanf:"default-timeout"`
+	DefaultMaxOutputBytes int                `koanf:"default-max-output-bytes"`
+	AllowedWorkdirs       []string           `koanf:"allowed-workdirs"`
+	Commands              []LocalExecCommand `koanf:"commands"`
 }
 
 // LocalExecCommand describes one allowlisted local command alias.
 type LocalExecCommand struct {
-	Name           string            `koanf:"name"`
-	Executable     string            `koanf:"executable"`
-	Description    string            `koanf:"description"`
-	Args           []string          `koanf:"args"`
-	Timeout        string            `koanf:"timeout"`
-	MaxOutputBytes int               `koanf:"max-output-bytes"`
-	Approval       LocalExecApproval `koanf:"approval"`
+	Name           string   `koanf:"name"`
+	Executable     string   `koanf:"executable"`
+	Description    string   `koanf:"description"`
+	Args           []string `koanf:"args"`
+	Timeout        string   `koanf:"timeout"`
+	MaxOutputBytes int      `koanf:"max-output-bytes"`
 }
 
 // Provider describes one model provider configuration.

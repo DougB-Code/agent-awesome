@@ -49,11 +49,6 @@ type Options struct {
 	CommandParserDir       string
 	CommandDefaultTimeout  time.Duration
 	CommandMaxOutputBytes  int64
-	CommandApprovalTTL     time.Duration
-	CommandRequireApproval bool
-	CommandAllowArbitrary  bool
-	CommandApprovalSet     bool
-	CommandArbitrarySet    bool
 	MCPManagerAddr         string
 	MCPServersJSON         string
 	MCPRequestTimeout      time.Duration
@@ -144,9 +139,6 @@ func startEmbeddedCommand(ctx context.Context, opts Options, toolsCfg *schema.To
 		ParserDir:         defaulted(opts.CommandParserDir, config.DefaultCommandParserDir()),
 		DefaultTimeout:    defaultedDuration(opts.CommandDefaultTimeout, 10*time.Minute),
 		DefaultMaxOutput:  defaultedInt64(opts.CommandMaxOutputBytes, 64<<10),
-		ApprovalTTL:       defaultedDuration(opts.CommandApprovalTTL, 10*time.Minute),
-		RequireApproval:   commandRequireApproval(opts, toolsCfg),
-		AllowArbitrary:    commandAllowArbitrary(opts),
 		ShutdownTimeout:   5 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
 	})
@@ -233,25 +225,6 @@ func defaultCommandAllowedEnv() []string {
 	return []string{"PATH", "HOME", "USER", "TMPDIR"}
 }
 
-// commandRequireApproval returns the command approval policy with a secure default.
-func commandRequireApproval(opts Options, toolsCfg *schema.Tools) bool {
-	if !opts.CommandApprovalSet {
-		if localExecRuntimeEnabled(toolsCfg) {
-			return false
-		}
-		return true
-	}
-	return opts.CommandRequireApproval
-}
-
-// commandAllowArbitrary returns the command proposal policy with daemon-compatible default.
-func commandAllowArbitrary(opts Options) bool {
-	if !opts.CommandArbitrarySet {
-		return true
-	}
-	return opts.CommandAllowArbitrary
-}
-
 // localExecRuntimeEnabled reports whether legacy local-exec aliases should be
 // served through the command MCP boundary.
 func localExecRuntimeEnabled(toolsCfg *schema.Tools) bool {
@@ -321,13 +294,12 @@ func toolsWithEmbeddedCommandEndpoint(toolsCfg *schema.Tools, endpoint string) *
 		Name:                     "command",
 		Transport:                "streamable-http",
 		Endpoint:                 strings.TrimSpace(endpoint),
-		RequireConfirmationTools: []string{"command_execute", "command_cancel"},
+		RequireConfirmationTools: []string{"command_execute"},
 		Tools: schema.MCPToolFilter{
 			Allow: []string{
 				"command_execute",
 				"command_template_list",
 				"command_status",
-				"command_cancel",
 			},
 		},
 	})

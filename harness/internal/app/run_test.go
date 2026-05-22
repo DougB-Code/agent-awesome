@@ -12,10 +12,9 @@ import (
 func TestLocalExecCommandTemplatesConvertsLegacyAliases(t *testing.T) {
 	templates, err := localExecCommandTemplates(&schema.Tools{
 		LocalExec: schema.LocalExec{
-			Enabled:                  true,
-			DefaultTimeout:           "11s",
-			DefaultMaxOutputBytes:    2048,
-			AllowPersistentApprovals: true,
+			Enabled:               true,
+			DefaultTimeout:        "11s",
+			DefaultMaxOutputBytes: 2048,
 			Commands: []schema.LocalExecCommand{
 				{
 					Name:           "git_status",
@@ -61,10 +60,10 @@ func TestToolsWithEmbeddedCommandEndpointAddsConfirmedCommandMCPServer(t *testin
 	if server.Name != "command" || server.Endpoint != "http://127.0.0.1:8093/mcp" {
 		t.Fatalf("command server = %#v, want named command endpoint", server)
 	}
-	if want := []string{"command_execute", "command_cancel"}; !reflect.DeepEqual(server.RequireConfirmationTools, want) {
+	if want := []string{"command_execute"}; !reflect.DeepEqual(server.RequireConfirmationTools, want) {
 		t.Fatalf("RequireConfirmationTools = %#v, want %#v", server.RequireConfirmationTools, want)
 	}
-	if want := []string{"command_execute", "command_template_list", "command_status", "command_cancel"}; !reflect.DeepEqual(server.Tools.Allow, want) {
+	if want := []string{"command_execute", "command_template_list", "command_status"}; !reflect.DeepEqual(server.Tools.Allow, want) {
 		t.Fatalf("Tools.Allow = %#v, want %#v", server.Tools.Allow, want)
 	}
 }
@@ -80,17 +79,5 @@ func TestToolsWithEmbeddedCommandEndpointDoesNotDuplicateConfiguredServer(t *tes
 	}, "http://127.0.0.1:8093/mcp")
 	if got, want := len(cfg.MCP.Servers), 1; got != want {
 		t.Fatalf("len(MCP.Servers) = %d, want %d", got, want)
-	}
-}
-
-func TestCommandRequireApprovalUsesADKConfirmationForLegacyLocalExec(t *testing.T) {
-	if commandRequireApproval(Options{}, &schema.Tools{LocalExec: schema.LocalExec{Enabled: true}}) {
-		t.Fatalf("commandRequireApproval() = true, want false for ADK-confirmed legacy aliases")
-	}
-	if !commandRequireApproval(Options{}, &schema.Tools{}) {
-		t.Fatalf("commandRequireApproval() = false, want secure default when no legacy alias is active")
-	}
-	if !commandRequireApproval(Options{CommandApprovalSet: true, CommandRequireApproval: true}, &schema.Tools{LocalExec: schema.LocalExec{Enabled: true}}) {
-		t.Fatalf("commandRequireApproval() ignored explicit approval requirement")
 	}
 }

@@ -33,7 +33,6 @@ func ParseTemplatesJSON(value string) ([]Template, error) {
 			Env:                    item.Env,
 			Timeout:                timeout,
 			MaxOutputBytes:         item.MaxOutputBytes,
-			RequireApproval:        item.RequireApproval,
 			ParameterSchema:        item.ParameterSchema,
 			OutputContract:         item.OutputContract,
 			ParserID:               item.ParserID,
@@ -66,7 +65,6 @@ type rawTemplate struct {
 	Env                    map[string]string `json:"env"`
 	Timeout                string            `json:"timeout"`
 	MaxOutputBytes         int64             `json:"max_output_bytes"`
-	RequireApproval        bool              `json:"require_approval"`
 	ParameterSchema        map[string]any    `json:"parameter_schema"`
 	OutputContract         OutputContract    `json:"output_contract"`
 	ParserID               string            `json:"parser_id"`

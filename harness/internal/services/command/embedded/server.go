@@ -31,9 +31,6 @@ type Config struct {
 	ParserDir         string
 	DefaultTimeout    time.Duration
 	DefaultMaxOutput  int64
-	ApprovalTTL       time.Duration
-	RequireApproval   bool
-	AllowArbitrary    bool
 	ReadHeaderTimeout time.Duration
 	ShutdownTimeout   time.Duration
 }
@@ -126,9 +123,6 @@ func openService(cfg Config) (*command.Service, error) {
 		Templates:        templates,
 		DefaultTimeout:   cfg.DefaultTimeout,
 		DefaultMaxOutput: cfg.DefaultMaxOutput,
-		ApprovalTTL:      cfg.ApprovalTTL,
-		RequireApproval:  cfg.RequireApproval,
-		AllowArbitrary:   cfg.AllowArbitrary,
 		ParserDir:        cfg.ParserDir,
 	})
 }

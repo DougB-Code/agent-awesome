@@ -187,14 +187,19 @@ class AgentAwesomeAppController extends ChangeNotifier {
       titleClient:
           titleClient ??
           ChatTitleClient(
-            environment: Platform.environment,
-            localModelChatCompletionsUrl: config.localModelChatCompletionsUrl,
+            baseUrl: config.agentGatewayBaseUrl,
+            appName: config.agentAppName,
+            userId: config.agentUserId,
+            headers: config.gatewayAuthHeaders,
             logger: effectiveLogger,
           ),
       screenCommandPlanner:
           screenCommandPlanner ??
           ScreenCommandClient(
-            environment: Platform.environment,
+            baseUrl: config.agentGatewayBaseUrl,
+            appName: config.agentAppName,
+            userId: config.agentUserId,
+            headers: config.gatewayAuthHeaders,
             logger: effectiveLogger,
           ),
       fileImporter: fileImporter ?? const FileSelectorAgentFileImporter(),

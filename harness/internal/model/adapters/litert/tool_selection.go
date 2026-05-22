@@ -42,7 +42,6 @@ var liteRTToolHints = map[string][]string{
 	"upsert_task_relation":           {"relate tasks", "add dependency", "link tasks"},
 	"delete_task_relation":           {"remove dependency", "delete relation", "unlink tasks"},
 	"command_execute":                {"run command", "execute command", "git status", "shell"},
-	"command_request":                {"request command", "run command", "shell command"},
 }
 
 var taskIntentPhrases = []string{

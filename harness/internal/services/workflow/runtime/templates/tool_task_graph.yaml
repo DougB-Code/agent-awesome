@@ -1,0 +1,26 @@
+id: tool_task_graph
+name: Tool Task Graph
+description: Start from a bounded task graph with one generic tool call.
+category: task_graph
+tags:
+  - tool
+  - task-graph
+parameters:
+  - id: tool_name
+    label: Tool name
+    type: string
+    default: example_tool
+requirements:
+  actions:
+    - tool.call
+body:
+  kind: task_graph
+  id: tool_task_graph
+  name: Tool Task Graph
+  description: A bounded task graph with one generic tool call.
+  nodes:
+    - id: tool_task
+      uses: tool.call
+      with:
+        name: "{{tool_name}}"
+        arguments: {}

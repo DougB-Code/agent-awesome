@@ -53,9 +53,6 @@ func validateLocalExec(c LocalExec) error {
 	if !c.Enabled {
 		return nil
 	}
-	if c.RequireConfirmation != nil && !*c.RequireConfirmation {
-		return fmt.Errorf("local-exec require-confirmation must be true")
-	}
 	if strings.TrimSpace(c.DefaultTimeout) != "" {
 		timeout, err := time.ParseDuration(strings.TrimSpace(c.DefaultTimeout))
 		if err != nil {
@@ -124,11 +121,6 @@ func validateLocalExecCommand(command LocalExecCommand, name string) error {
 	}
 	if command.MaxOutputBytes < 0 {
 		return fmt.Errorf("local-exec command %q max-output-bytes must not be negative", name)
-	}
-	for _, prefix := range command.Approval.AlwaysAllowCommandPrefixes {
-		if strings.TrimSpace(prefix) == "" {
-			return fmt.Errorf("local-exec command %q approval always-allow-command-starts-with must not contain empty prefixes", name)
-		}
 	}
 	return nil
 }

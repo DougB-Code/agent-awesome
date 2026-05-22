@@ -1,4 +1,4 @@
-// This file tests command proposal and execution behavior.
+// This file tests configured command template execution behavior.
 package command
 
 import (
@@ -12,15 +12,13 @@ import (
 	"time"
 )
 
-// TestTemplateCommandRunsAfterApproval verifies named templates use the generic path.
-func TestTemplateCommandRunsAfterApproval(t *testing.T) {
+// TestTemplateCommandExecutes verifies named templates use the generic path.
+func TestTemplateCommandExecutes(t *testing.T) {
 	service, err := Open(Config{
 		DataDir:          t.TempDir(),
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  true,
 		Templates: []Template{{
 			ID:         "echo",
 			Executable: shellPath(),
@@ -30,37 +28,16 @@ func TestTemplateCommandRunsAfterApproval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	ctx := context.Background()
-	request, err := service.Request(ctx, Request{
+
+	status, err := service.Execute(context.Background(), ExecuteRequest{
 		TemplateID: "echo",
 		Parameters: map[string]any{"name": "world"},
 	})
 	if err != nil {
-		t.Fatalf("Request() error = %v", err)
+		t.Fatalf("Execute() error = %v", err)
 	}
-	if !request.ApprovalRequired {
-		t.Fatalf("ApprovalRequired = false, want true")
-	}
-	if _, err := service.Run(ctx, RunRequest{ApprovalID: request.ApprovalID}); err == nil {
-		t.Fatalf("Run() error = nil, want explicit approval requirement")
-	}
-	approved, err := service.Approve(ctx, request.ApprovalID)
-	if err != nil {
-		t.Fatalf("Approve() error = %v", err)
-	}
-	if approved.Status != statusApproved {
-		t.Fatalf("Approve() status = %q, want approved", approved.Status)
-	}
-	run, err := service.Run(ctx, RunRequest{ApprovalID: request.ApprovalID})
-	if err != nil {
-		t.Fatalf("Run() after approval error = %v", err)
-	}
-	status := waitCommandJob(t, service, run.JobID)
 	if status.Status != statusSucceeded || status.StdoutTail != "hello-world" {
-		t.Fatalf("Status() = %#v, want succeeded hello-world", status)
-	}
-	if _, err := service.Run(ctx, RunRequest{ApprovalID: request.ApprovalID}); err == nil {
-		t.Fatalf("Run() reused approval without error")
+		t.Fatalf("Execute() = %#v, want succeeded hello-world", status)
 	}
 }
 
@@ -72,8 +49,6 @@ func TestExecuteReturnsStructuredJSONValidationAndArtifacts(t *testing.T) {
 		AllowedWorkdirs:  []string{workdir},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 4096,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  false,
 		Templates: []Template{{
 			ID:             "json",
 			Executable:     shellPath(),
@@ -115,8 +90,6 @@ func TestExecuteReturnsErrorForFailedCommand(t *testing.T) {
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  false,
 		Templates: []Template{{
 			ID:         "fail",
 			Executable: shellPath(),
@@ -143,8 +116,6 @@ func TestExecuteReturnsErrorForInvalidJSONContract(t *testing.T) {
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  false,
 		Templates: []Template{{
 			ID:             "bad-json",
 			Executable:     shellPath(),
@@ -172,8 +143,6 @@ func TestExecuteReturnsErrorForValidationFailure(t *testing.T) {
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  false,
 		Templates: []Template{{
 			ID:             "invalid-output",
 			Executable:     shellPath(),
@@ -200,15 +169,13 @@ func TestExecuteReturnsErrorForValidationFailure(t *testing.T) {
 	}
 }
 
-// TestTemplateRequestValidatesParameterSchema verifies template inputs use configured schemas.
-func TestTemplateRequestValidatesParameterSchema(t *testing.T) {
+// TestTemplateExecuteValidatesParameterSchema verifies template inputs use configured schemas.
+func TestTemplateExecuteValidatesParameterSchema(t *testing.T) {
 	service, err := Open(Config{
 		DataDir:          t.TempDir(),
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  false,
 		Templates: []Template{{
 			ID:              "typed",
 			Executable:      shellPath(),
@@ -220,9 +187,12 @@ func TestTemplateRequestValidatesParameterSchema(t *testing.T) {
 		t.Fatalf("Open() error = %v", err)
 	}
 
-	_, err = service.Request(context.Background(), Request{TemplateID: "typed", Parameters: map[string]any{}})
+	_, err = service.Execute(context.Background(), ExecuteRequest{
+		TemplateID: "typed",
+		Parameters: map[string]any{},
+	})
 	if err == nil || !strings.Contains(err.Error(), "template parameters invalid") {
-		t.Fatalf("Request() error = %v, want parameter validation", err)
+		t.Fatalf("Execute() error = %v, want parameter validation", err)
 	}
 }
 
@@ -233,8 +203,6 @@ func TestTemplateRenderingAllowsSpacedPlaceholders(t *testing.T) {
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  false,
 		Templates: []Template{{
 			ID:         "spaced",
 			Executable: shellPath(),
@@ -257,48 +225,6 @@ func TestTemplateRenderingAllowsSpacedPlaceholders(t *testing.T) {
 	}
 }
 
-// TestTemplateRequestPersistsContractMetadata verifies approvals keep the full template contract.
-func TestTemplateRequestPersistsContractMetadata(t *testing.T) {
-	service, err := Open(Config{
-		DataDir:          t.TempDir(),
-		AllowedWorkdirs:  []string{t.TempDir()},
-		DefaultTimeout:   time.Second,
-		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  true,
-		Templates: []Template{{
-			ID:                     "contracted",
-			Executable:             shellPath(),
-			Args:                   []string{shellFlag(), "printf {{name}}"},
-			ParameterSchema:        map[string]any{"type": "object", "required": []any{"name"}},
-			EnvironmentPolicy:      map[string]any{"network": "disabled"},
-			WorkingDirectoryPolicy: "template",
-			ValidationSchema:       map[string]any{"type": "object"},
-		}},
-	})
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-
-	request, err := service.Request(context.Background(), Request{
-		TemplateID: "contracted",
-		Parameters: map[string]any{"name": "record"},
-	})
-	if err != nil {
-		t.Fatalf("Request() error = %v", err)
-	}
-	record, err := service.loadApproval(context.Background(), request.ApprovalID)
-	if err != nil {
-		t.Fatalf("loadApproval() error = %v", err)
-	}
-	if record.ParameterSchema["type"] != "object" ||
-		record.EnvironmentPolicy["network"] != "disabled" ||
-		record.WorkingDirectoryPolicy != "template" ||
-		record.ValidationSchema["type"] != "object" {
-		t.Fatalf("approval record = %#v, want persisted contract metadata", record)
-	}
-}
-
 // TestExecuteRunsConfiguredStarlarkParser verifies parser output is stored on jobs.
 func TestExecuteRunsConfiguredStarlarkParser(t *testing.T) {
 	parserDir := t.TempDir()
@@ -316,8 +242,6 @@ def parse(stdout, stderr, exit_code, status):
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 4096,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  false,
 		ParserDir:        parserDir,
 		Templates: []Template{{
 			ID:         "parse",
@@ -340,31 +264,6 @@ def parse(stdout, stderr, exit_code, status):
 	}
 }
 
-// TestExecuteRejectsApprovalRequiredCommand verifies workflow calls cannot bypass review.
-func TestExecuteRejectsApprovalRequiredCommand(t *testing.T) {
-	service, err := Open(Config{
-		DataDir:          t.TempDir(),
-		AllowedWorkdirs:  []string{t.TempDir()},
-		DefaultTimeout:   time.Second,
-		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
-		RequireApproval:  true,
-		Templates: []Template{{
-			ID:         "reviewed",
-			Executable: shellPath(),
-			Args:       []string{shellFlag(), "true"},
-		}},
-	})
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-
-	_, err = service.Execute(context.Background(), ExecuteRequest{TemplateID: "reviewed"})
-	if err == nil || !strings.Contains(err.Error(), "approval-required") {
-		t.Fatalf("Execute() error = %v, want approval rejection", err)
-	}
-}
-
 // TestTemplateListDoesNotExposeCommandSecrets verifies template discovery is sanitized.
 func TestTemplateListDoesNotExposeCommandSecrets(t *testing.T) {
 	service, err := Open(Config{
@@ -372,7 +271,6 @@ func TestTemplateListDoesNotExposeCommandSecrets(t *testing.T) {
 		AllowedWorkdirs:  []string{t.TempDir()},
 		DefaultTimeout:   time.Second,
 		DefaultMaxOutput: 1024,
-		ApprovalTTL:      time.Minute,
 		AllowedEnv:       []string{"PATH", "SECRET_TOKEN"},
 		Templates: []Template{{
 			ID:                     "secret",
@@ -381,8 +279,10 @@ func TestTemplateListDoesNotExposeCommandSecrets(t *testing.T) {
 			Args:                   []string{shellFlag(), "printf {{name}}"},
 			Stdin:                  "hidden stdin",
 			Env:                    map[string]string{"SECRET_TOKEN": "raw-secret"},
+			ParameterSchema:        map[string]any{"type": "object"},
 			EnvironmentPolicy:      map[string]any{"network": "disabled"},
 			WorkingDirectoryPolicy: "template",
+			ValidationSchema:       map[string]any{"type": "object"},
 		}},
 	})
 	if err != nil {
@@ -396,6 +296,7 @@ func TestTemplateListDoesNotExposeCommandSecrets(t *testing.T) {
 	got := templates[0]
 	if got.ID != "secret" ||
 		!strings.Contains(strings.Join(got.Parameters, ","), "name") ||
+		got.ParameterSchema["type"] != "object" ||
 		got.EnvironmentPolicy["network"] != "disabled" ||
 		got.WorkingDirectoryPolicy != "template" {
 		t.Fatalf("template summary = %#v, want sanitized metadata", got)
@@ -407,48 +308,33 @@ func TestTemplateListDoesNotExposeCommandSecrets(t *testing.T) {
 		strings.Contains(serialized, "hidden stdin") {
 		t.Fatalf("template summary leaked command detail: %#v", got)
 	}
-
-	request, err := service.Request(context.Background(), Request{
-		TemplateID: "secret",
-		Parameters: map[string]any{"name": "review"},
-		WorkingDir: service.cfg.AllowedWorkdirs[0],
-		Executable: "",
-	})
-	if err != nil {
-		t.Fatalf("Request() error = %v", err)
-	}
-	if !request.HasStdin {
-		t.Fatalf("Request() HasStdin = false, want true")
-	}
-	if strings.Contains(fmt.Sprint(request), "hidden stdin") ||
-		strings.Contains(fmt.Sprint(request), "raw-secret") {
-		t.Fatalf("request result leaked secret-bearing fields: %#v", request)
-	}
 }
 
-// TestArbitraryCommandRequiresAllowedWorkdir verifies cwd policy is enforced.
-func TestArbitraryCommandRequiresAllowedWorkdir(t *testing.T) {
+// TestTemplateCommandRequiresAllowedWorkdir verifies cwd policy is enforced.
+func TestTemplateCommandRequiresAllowedWorkdir(t *testing.T) {
 	service, err := Open(Config{
 		DataDir:         t.TempDir(),
 		AllowedWorkdirs: []string{t.TempDir()},
-		AllowArbitrary:  true,
-		ApprovalTTL:     time.Minute,
+		Templates: []Template{{
+			ID:         "cwd",
+			Executable: shellPath(),
+			Args:       []string{shellFlag(), "true"},
+		}},
 	})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	_, err = service.Request(context.Background(), Request{
-		Executable: shellPath(),
-		Args:       []string{shellFlag(), "true"},
+	_, err = service.Execute(context.Background(), ExecuteRequest{
+		TemplateID: "cwd",
 		WorkingDir: "/",
 	})
 	if err == nil || !strings.Contains(err.Error(), "outside allowed roots") {
-		t.Fatalf("Request() error = %v, want workdir rejection", err)
+		t.Fatalf("Execute() error = %v, want workdir rejection", err)
 	}
 }
 
-// TestArbitraryCommandRejectsSymlinkEscapedWorkdir verifies cwd policy uses canonical paths.
-func TestArbitraryCommandRejectsSymlinkEscapedWorkdir(t *testing.T) {
+// TestTemplateCommandRejectsSymlinkEscapedWorkdir verifies cwd policy uses canonical paths.
+func TestTemplateCommandRejectsSymlinkEscapedWorkdir(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
 	link := filepath.Join(root, "outside")
@@ -458,20 +344,22 @@ func TestArbitraryCommandRejectsSymlinkEscapedWorkdir(t *testing.T) {
 	service, err := Open(Config{
 		DataDir:         t.TempDir(),
 		AllowedWorkdirs: []string{root},
-		AllowArbitrary:  true,
-		ApprovalTTL:     time.Minute,
+		Templates: []Template{{
+			ID:         "cwd",
+			Executable: shellPath(),
+			Args:       []string{shellFlag(), "true"},
+		}},
 	})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
 
-	_, err = service.Request(context.Background(), Request{
-		Executable: shellPath(),
-		Args:       []string{shellFlag(), "true"},
+	_, err = service.Execute(context.Background(), ExecuteRequest{
+		TemplateID: "cwd",
 		WorkingDir: link,
 	})
 	if err == nil || !strings.Contains(err.Error(), "outside allowed roots") {
-		t.Fatalf("Request() error = %v, want symlink workdir rejection", err)
+		t.Fatalf("Execute() error = %v, want symlink workdir rejection", err)
 	}
 }
 
@@ -480,36 +368,14 @@ func TestCommandRecordIDsRejectTraversal(t *testing.T) {
 	service, err := Open(Config{
 		DataDir:         t.TempDir(),
 		AllowedWorkdirs: []string{t.TempDir()},
-		ApprovalTTL:     time.Minute,
 	})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
 
-	if _, err := service.Run(context.Background(), RunRequest{ApprovalID: "../outside"}); err == nil || !strings.Contains(err.Error(), "approval id") {
-		t.Fatalf("Run() error = %v, want invalid approval id", err)
-	}
 	if _, err := service.Status(context.Background(), "../outside"); err == nil || !strings.Contains(err.Error(), "job id") {
 		t.Fatalf("Status() error = %v, want invalid job id", err)
 	}
-}
-
-// waitCommandJob waits for one command job to reach a terminal state.
-func waitCommandJob(t *testing.T, service *Service, jobID string) StatusResult {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		status, err := service.Status(context.Background(), jobID)
-		if err != nil {
-			t.Fatalf("Status() error = %v", err)
-		}
-		if status.Status != statusRunning {
-			return status
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatalf("command job %s did not finish", jobID)
-	return StatusResult{}
 }
 
 // shellPath returns a platform shell for command tests.

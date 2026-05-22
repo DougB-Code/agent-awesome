@@ -19,8 +19,6 @@ func TestStartServesHealthAndMCP(t *testing.T) {
 		DataDir:         t.TempDir(),
 		AllowedWorkdirs: []string{t.TempDir()},
 		DefaultTimeout:  time.Second,
-		ApprovalTTL:     time.Second,
-		AllowArbitrary:  true,
 	})
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)

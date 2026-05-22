@@ -1,0 +1,36 @@
+id: approval_state_machine
+name: Approval Workflow
+description: Start from a state machine that asks before moving to an approved state.
+category: approval
+tags:
+  - human
+  - state-machine
+  - approval
+parameters:
+  - id: prompt
+    label: Approval prompt
+    type: string
+    default: Review and approve this automation.
+requirements:
+  actions:
+    - human.request
+body:
+  kind: state_machine
+  id: approval_workflow
+  name: Approval Workflow
+  description: A human approval workflow.
+  initial: review
+  states:
+    - id: review
+      on_entry:
+        - id: request_approval
+          uses: human.request
+          with:
+            prompt: "{{prompt}}"
+      transitions:
+        - trigger: approved
+          to: approved
+        - trigger: rejected
+          to: rejected
+    - id: approved
+    - id: rejected

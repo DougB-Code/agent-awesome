@@ -1,7 +1,6 @@
 # This file configures workflow control tools for Agent Awesome.
 local-exec:
   enabled: false
-  allow-persistent-approvals: false
   default-timeout: 10s
   default-max-output-bytes: 65536
   allowed-workdirs:
@@ -80,11 +79,9 @@ mcp:
       endpoint: http://127.0.0.1:8093/mcp
       tools:
         allow:
+          - command_execute
           - command_template_list
-          - command_request
-          - command_run
           - command_status
-          - command_cancel
 memory:
   actor: agent:agent-awesome
   read-domains:

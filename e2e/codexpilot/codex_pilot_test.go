@@ -68,8 +68,6 @@ printf '{"url":"https://example.test/pull/1"}'
 		"--command-data-dir", filepath.Join(tempRoot, "command-data"),
 		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
 		"--command-allow-workdir", tempRoot,
-		"--command-require-approval=false",
-		"--command-allow-arbitrary=false",
 		"--command-templates-json", templatesJSON,
 		"--mcp-manager-addr", mcpAddr,
 		"--mcp-servers-json", serversJSON,
@@ -125,8 +123,6 @@ func TestRealCodexCLICommandBoundarySmoke(t *testing.T) {
 		"--command-data-dir", filepath.Join(tempRoot, "command-data"),
 		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
 		"--command-allow-workdir", tempRoot,
-		"--command-require-approval=false",
-		"--command-allow-arbitrary=false",
 		"--command-templates-json", templatesJSON,
 		"--session-db", filepath.Join(tempRoot, "sessions.db"),
 		"--", "web", "--port", portFromAddr(t, webAddr), "api", "--webui_address", webAddr,
@@ -171,13 +167,12 @@ func realCodexSmokeTemplatesJSON(t *testing.T, codexExecutable string) string {
 	t.Helper()
 	templates := []map[string]any{
 		{
-			"id":               "codex_version",
-			"description":      "Verify the configured Codex executable can launch.",
-			"executable":       codexExecutable,
-			"args":             []string{"--version"},
-			"timeout":          "15s",
-			"require_approval": false,
-			"output_contract":  map[string]any{"format": "text", "source": "stdout"},
+			"id":              "codex_version",
+			"description":     "Verify the configured Codex executable can launch.",
+			"executable":      codexExecutable,
+			"args":            []string{"--version"},
+			"timeout":         "15s",
+			"output_contract": map[string]any{"format": "text", "source": "stdout"},
 		},
 	}
 	data, err := json.Marshal(templates)
@@ -190,11 +185,10 @@ func realCodexSmokeTemplatesJSON(t *testing.T, codexExecutable string) string {
 // commandTemplate builds one JSON-output command template.
 func commandTemplate(id string, executable string, args []string) map[string]any {
 	return map[string]any{
-		"id":               id,
-		"executable":       executable,
-		"args":             args,
-		"require_approval": false,
-		"output_contract":  map[string]any{"format": "json", "source": "stdout"},
+		"id":              id,
+		"executable":      executable,
+		"args":            args,
+		"output_contract": map[string]any{"format": "json", "source": "stdout"},
 	}
 }
 

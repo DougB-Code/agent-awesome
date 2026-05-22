@@ -310,7 +310,6 @@ func TestLoadToolsConfig(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:
   enabled: true
-  allow-persistent-approvals: true
   default-timeout: 10s
   default-max-output-bytes: 1024
   allowed-workdirs:
@@ -324,11 +323,6 @@ local-exec:
         - --short
       timeout: 2s
       max-output-bytes: 2048
-      approval:
-        always-allow-within-workspace: true
-        always-allow-command-starts-with:
-          - git status
-        always-allow: false
 `)
 
 	cfg, err := LoadTools(path, true)
@@ -337,18 +331,6 @@ local-exec:
 	}
 	if !cfg.LocalExec.Enabled {
 		t.Fatalf("LocalExec.Enabled = false, want true")
-	}
-	if !cfg.LocalExec.AllowPersistentApprovals {
-		t.Fatalf("AllowPersistentApprovals = false, want true")
-	}
-	if !cfg.LocalExec.Commands[0].Approval.AlwaysAllowWithinWorkspace {
-		t.Fatalf("AlwaysAllowWithinWorkspace = false, want true")
-	}
-	if got, want := cfg.LocalExec.Commands[0].Approval.AlwaysAllowCommandPrefixes, []string{"git status"}; !reflect.DeepEqual(got, want) {
-		t.Fatalf("AlwaysAllowCommandPrefixes = %#v, want %#v", got, want)
-	}
-	if cfg.LocalExec.Commands[0].Approval.AlwaysAllow {
-		t.Fatalf("AlwaysAllow = true, want false")
 	}
 	if got, want := cfg.LocalExec.DefaultTimeoutDuration().String(), "10s"; got != want {
 		t.Fatalf("DefaultTimeoutDuration() = %q, want %q", got, want)
@@ -474,9 +456,6 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 			if cfg.LocalExec.Enabled {
 				t.Fatalf("LocalExec.Enabled = true, want shipped configs disabled by default")
 			}
-			if cfg.LocalExec.AllowPersistentApprovals {
-				t.Fatalf("AllowPersistentApprovals = true, want shipped configs disabled by default")
-			}
 			server, ok := memoryMCPServer(cfg.MCP.Servers)
 			if !ok {
 				t.Fatalf("memory MCP server not configured")
@@ -507,9 +486,6 @@ func TestBrowserPilotToolConfigConstrainsAgentBrowser(t *testing.T) {
 	if !cfg.LocalExec.Enabled {
 		t.Fatalf("LocalExec.Enabled = false, want browser pilot enabled")
 	}
-	if cfg.LocalExec.AllowPersistentApprovals {
-		t.Fatalf("AllowPersistentApprovals = true, want browser pilot approvals session-only")
-	}
 
 	var browserCommand schema.LocalExecCommand
 	for _, command := range cfg.LocalExec.Commands {
@@ -539,9 +515,6 @@ func TestBrowserPilotToolConfigConstrainsAgentBrowser(t *testing.T) {
 	if !reflect.DeepEqual(browserCommand.Args, expectedArgs) {
 		t.Fatalf("Args = %#v, want %#v", browserCommand.Args, expectedArgs)
 	}
-	if browserCommand.Approval.AlwaysAllow {
-		t.Fatalf("AlwaysAllow = true, want browser pilot to require confirmation")
-	}
 
 	var techCrunchCommand schema.LocalExecCommand
 	for _, command := range cfg.LocalExec.Commands {
@@ -567,9 +540,6 @@ func TestBrowserPilotToolConfigConstrainsAgentBrowser(t *testing.T) {
 	}
 	if !reflect.DeepEqual(techCrunchCommand.Args, expectedTechCrunchArgs) {
 		t.Fatalf("TechCrunch Args = %#v, want %#v", techCrunchCommand.Args, expectedTechCrunchArgs)
-	}
-	if techCrunchCommand.Approval.AlwaysAllow {
-		t.Fatalf("TechCrunch AlwaysAllow = true, want browser pilot to require confirmation")
 	}
 }
 
@@ -714,24 +684,6 @@ mcp:
 	}
 }
 
-func TestLoadToolsRejectsEmptyApprovalPrefix(t *testing.T) {
-	path := writeTempFile(t, "tool.yaml", `
-local-exec:
-  enabled: true
-  commands:
-    - name: git_status
-      executable: git
-      description: Show status.
-      approval:
-        always-allow-command-starts-with:
-          - ""
-`)
-
-	if _, err := LoadTools(path, true); err == nil {
-		t.Fatalf("LoadTools() error = nil, want empty approval prefix error")
-	}
-}
-
 func TestLoadToolsRejectsDuplicateCommands(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:
@@ -795,22 +747,6 @@ local-exec:
 
 	if _, err := LoadTools(path, true); err == nil {
 		t.Fatalf("LoadTools() error = nil, want invalid command max-output-bytes error")
-	}
-}
-
-func TestLoadToolsRejectsDisabledConfirmation(t *testing.T) {
-	path := writeTempFile(t, "tool.yaml", `
-local-exec:
-  enabled: true
-  require-confirmation: false
-  commands:
-    - name: git_status
-      executable: git
-      description: Show status.
-`)
-
-	if _, err := LoadTools(path, true); err == nil {
-		t.Fatalf("LoadTools() error = nil, want confirmation error")
 	}
 }
 

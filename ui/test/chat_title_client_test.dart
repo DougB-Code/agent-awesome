@@ -1,4 +1,4 @@
-/// Tests model-backed chat title generation.
+/// Tests ADK-backed chat title generation.
 library;
 
 import 'dart:convert';
@@ -11,35 +11,20 @@ import 'package:http/testing.dart';
 
 /// Runs chat title client tests.
 void main() {
-  test('generates openai compatible chat title from model config', () async {
+  test('generates chat title through ADK with default model ref', () async {
+    late Map<String, dynamic> runBody;
     final client = ChatTitleClient(
-      environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
-      httpClient: MockClient((request) async {
-        expect(
-          request.url.toString(),
-          'https://api.openai.com/v1/chat/completions',
-        );
-        expect(request.headers['Authorization'], 'Bearer test-key');
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'gpt-5-mini');
-        expect(body['max_completion_tokens'], 24);
-        expect(body.containsKey('max_tokens'), isFalse);
-        expect(jsonEncode(body['messages']), contains('Need to buy coffee'));
-        return http.Response(
-          jsonEncode(<String, dynamic>{
-            'choices': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'message': <String, dynamic>{'content': '"Buy Coffee"'},
-              },
-            ],
-          }),
-          200,
-        );
-      }),
+      baseUrl: _baseUrl,
+      appName: _appName,
+      userId: _userId,
+      httpClient: _mockAdkClient(
+        responseText: '"Buy Coffee"',
+        onRunBody: (body) => runBody = body,
+      ),
     );
 
     final title = await client.generateTitle(
-      modelConfigContent: _openAiModelConfig,
+      modelConfigContent: _modelConfig,
       messages: <ChatMessage>[
         ChatMessage(
           id: '1',
@@ -52,32 +37,29 @@ void main() {
     );
 
     expect(title, 'Buy Coffee');
+    expect(runBody['appName'], _appName);
+    expect(runBody['userId'], _userId);
+    expect(runBody['stateDelta'], <String, dynamic>{
+      'agentawesome.model_ref': 'openai:gpt-mini',
+    });
+    expect(jsonEncode(runBody), contains('Need to buy coffee'));
     client.close();
   });
 
-  test('generates chat title from selected provider model ref', () async {
+  test('generates chat title from selected model ref', () async {
+    late Map<String, dynamic> runBody;
     final client = ChatTitleClient(
-      environment: const <String, String>{'OPENAI_API_KEY': 'test-key'},
-      httpClient: MockClient((request) async {
-        final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['model'], 'gpt-5-nano');
-        expect(body['max_completion_tokens'], 24);
-        expect(body.containsKey('max_tokens'), isFalse);
-        return http.Response(
-          jsonEncode(<String, dynamic>{
-            'choices': <Map<String, dynamic>>[
-              <String, dynamic>{
-                'message': <String, dynamic>{'content': 'Coffee Errand'},
-              },
-            ],
-          }),
-          200,
-        );
-      }),
+      baseUrl: _baseUrl,
+      appName: _appName,
+      userId: _userId,
+      httpClient: _mockAdkClient(
+        responseText: 'Coffee Errand',
+        onRunBody: (body) => runBody = body,
+      ),
     );
 
     final title = await client.generateTitle(
-      modelConfigContent: _openAiModelConfig,
+      modelConfigContent: _modelConfig,
       modelRef: 'openai:gpt-nano',
       messages: <ChatMessage>[
         ChatMessage(
@@ -91,75 +73,57 @@ void main() {
     );
 
     expect(title, 'Coffee Errand');
+    expect(runBody['stateDelta'], <String, dynamic>{
+      'agentawesome.model_ref': 'openai:gpt-nano',
+    });
     client.close();
   });
 
-  test(
-    'uses local OpenAI-compatible endpoint for litert title model',
-    () async {
-      const content = '''
-default: local:gemma
-providers:
-  local:
-    adapter: litert
-    default: gemma
-    models:
-      - id: gemma
-        model: gemma-4-E2B-it
-''';
-      final client = ChatTitleClient(
-        localModelChatCompletionsUrl:
-            'http://127.0.0.1:4321/v1/chat/completions',
-        httpClient: MockClient((request) async {
-          expect(
-            request.url.toString(),
-            'http://127.0.0.1:4321/v1/chat/completions',
-          );
-          expect(request.headers.containsKey('Authorization'), isFalse);
-          final body = jsonDecode(request.body) as Map<String, dynamic>;
-          expect(body['model'], 'gemma-4-E2B-it');
-          expect(body['max_tokens'], 24);
-          expect(jsonEncode(body['messages']), contains('Plan the migration'));
-          return http.Response(
-            jsonEncode(<String, dynamic>{
-              'choices': <Map<String, dynamic>>[
-                <String, dynamic>{
-                  'message': <String, dynamic>{'content': 'Migration Plan'},
-                },
-              ],
-            }),
-            200,
-          );
-        }),
-      );
-
-      final title = await client.generateTitle(
-        modelConfigContent: content,
-        messages: <ChatMessage>[
-          ChatMessage(
-            id: '1',
-            role: ChatRole.user,
-            author: 'You',
-            text: 'Plan the migration for the UI process supervisor.',
-            createdAt: _testTime,
-          ),
-        ],
-      );
-
-      expect(title, 'Migration Plan');
-      client.close();
-    },
-  );
-
-  test('reports missing environment variable for configured api key', () async {
+  test('routes local model refs through ADK instead of local HTTP', () async {
+    late Map<String, dynamic> runBody;
     final client = ChatTitleClient(
-      environment: const <String, String>{},
-      httpClient: MockClient((request) async => http.Response('{}', 200)),
+      baseUrl: _baseUrl,
+      appName: _appName,
+      userId: _userId,
+      httpClient: _mockAdkClient(
+        responseText: 'Migration Plan',
+        onRunBody: (body) => runBody = body,
+      ),
+    );
+
+    final title = await client.generateTitle(
+      modelConfigContent: _localModelConfig,
+      messages: <ChatMessage>[
+        ChatMessage(
+          id: '1',
+          role: ChatRole.user,
+          author: 'You',
+          text: 'Plan the migration for the UI process supervisor.',
+          createdAt: _testTime,
+        ),
+      ],
+    );
+
+    expect(title, 'Migration Plan');
+    expect(runBody['stateDelta'], <String, dynamic>{
+      'agentawesome.model_ref': 'local:gemma',
+    });
+    client.close();
+  });
+
+  test('reports missing model config before calling ADK', () async {
+    final client = ChatTitleClient(
+      baseUrl: _baseUrl,
+      appName: _appName,
+      userId: _userId,
+      httpClient: MockClient((request) async {
+        fail('ADK should not be called for a missing model config');
+      }),
     );
 
     await expectLater(
       client.generateTitle(
-        modelConfigContent: _openAiModelConfig,
+        modelConfigContent: '',
         messages: <ChatMessage>[
           ChatMessage(
             id: '1',
@@ -176,19 +140,75 @@ providers:
   });
 }
 
-const String _openAiModelConfig = '''
+MockClient _mockAdkClient({
+  required String responseText,
+  required void Function(Map<String, dynamic> body) onRunBody,
+}) {
+  return MockClient((request) async {
+    if (request.method == 'POST' &&
+        request.url.toString() ==
+            '$_baseUrl/apps/$_appName/users/$_userId/sessions') {
+      return http.Response(
+        jsonEncode(<String, dynamic>{'id': _sessionId}),
+        200,
+      );
+    }
+    if (request.method == 'POST' &&
+        request.url.toString() == '$_baseUrl/run_sse') {
+      onRunBody(jsonDecode(request.body) as Map<String, dynamic>);
+      return http.Response(_sseText(responseText), 200);
+    }
+    if (request.method == 'DELETE' &&
+        request.url.toString() ==
+            '$_baseUrl/apps/$_appName/users/$_userId/sessions/$_sessionId') {
+      return http.Response('', 204);
+    }
+    return http.Response(
+      'unexpected request ${request.method} ${request.url}',
+      500,
+    );
+  });
+}
+
+String _sseText(String text) {
+  return 'data: ${jsonEncode(<String, dynamic>{
+    'id': 'event-1',
+    'author': 'agent_awesome',
+    'content': <String, dynamic>{
+      'parts': <Map<String, dynamic>>[
+        <String, dynamic>{'text': text},
+      ],
+    },
+  })}\n\n';
+}
+
+const String _baseUrl = 'http://127.0.0.1:8070/api';
+const String _appName = 'agent_awesome';
+const String _userId = 'doug';
+const String _sessionId = 'utility-session';
+
+const String _modelConfig = '''
 default: openai:gpt-mini
 providers:
   openai:
     adapter: openai
-    api-key: OPENAI_API_KEY
     default: gpt-mini
-    url: https://api.openai.com/v1/chat/completions
     models:
       - id: gpt-mini
         model: gpt-5-mini
       - id: gpt-nano
         model: gpt-5-nano
+''';
+
+const String _localModelConfig = '''
+default: local:gemma
+providers:
+  local:
+    adapter: litert
+    default: gemma
+    models:
+      - id: gemma
+        model: gemma-4-E2B-it
 ''';
 
 final DateTime _testTime = DateTime(2026, 4, 30, 12);

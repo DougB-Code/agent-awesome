@@ -11,7 +11,6 @@ void main() {
     final document = ToolConfigDocument.parse('''
 local-exec:
   enabled: true
-  allow-persistent-approvals: true
   default-timeout: 10s
   default-max-output-bytes: 65536
   allowed-workdirs:
@@ -23,11 +22,6 @@ local-exec:
       args:
         - status
         - --short
-      approval:
-        always-allow-within-workspace: false
-        always-allow-command-starts-with:
-          - git status
-        always-allow: false
 mcp:
   enabled: true
   servers:
@@ -45,17 +39,12 @@ mcp:
 ''');
 
     expect(document.localExec.enabled, isTrue);
-    expect(document.localExec.allowPersistentApprovals, isTrue);
     expect(document.localExec.defaultTimeout, '10s');
     expect(document.localExec.commands.single.name, 'git_status');
     expect(document.localExec.commands.single.args, <String>[
       'status',
       '--short',
     ]);
-    expect(
-      document.localExec.commands.single.approval.alwaysAllowCommandPrefixes,
-      <String>['git status'],
-    );
     expect(document.mcp.enabled, isTrue);
     expect(document.mcp.servers.single.name, 'memory');
     expect(document.mcp.servers.single.headersFromEnv, <String, String>{

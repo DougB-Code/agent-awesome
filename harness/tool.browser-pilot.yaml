@@ -1,7 +1,6 @@
 # This file configures an opt-in browser research pilot for Agent Awesome.
 local-exec:
   enabled: true
-  allow-persistent-approvals: false
   default-timeout: 10s
   default-max-output-bytes: 65536
   allowed-workdirs:
@@ -15,10 +14,6 @@ local-exec:
         - --short
       timeout: 5s
       max-output-bytes: 16384
-      approval:
-        always-allow-within-workspace: false
-        always-allow-command-starts-with: []
-        always-allow: false
     - name: agent_browser_example_research
       executable: /usr/bin/env
       description: Run agent-browser against example.com only; pass a JSON batch command array in stdin to open pages, wait, snapshot, and extract text.
@@ -35,10 +30,6 @@ local-exec:
         - --bail
       timeout: 30s
       max-output-bytes: 40000
-      approval:
-        always-allow-within-workspace: false
-        always-allow-command-starts-with: []
-        always-allow: false
     - name: agent_browser_techcrunch_research
       executable: /usr/bin/env
       description: Run agent-browser against TechCrunch only; pass a JSON batch command array in stdin to open pages, wait, snapshot, and extract text.
@@ -55,10 +46,6 @@ local-exec:
         - --bail
       timeout: 45s
       max-output-bytes: 60000
-      approval:
-        always-allow-within-workspace: false
-        always-allow-command-starts-with: []
-        always-allow: false
 mcp:
   enabled: true
   servers:

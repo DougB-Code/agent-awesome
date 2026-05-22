@@ -1,4 +1,4 @@
-/// Calls an app-owned model for structured screen-command plans.
+/// Plans structured screen commands through the ADK runtime.
 library;
 
 import 'dart:convert';
@@ -6,8 +6,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../domain/screen_command.dart';
+import 'adk_utility_client.dart';
 import 'client_logger.dart';
-import 'model_invocation_config.dart';
+import 'model_ref_selection.dart';
 
 /// ScreenCommandPlanner describes a structured AI planner dependency.
 abstract class ScreenCommandPlanner {
@@ -32,18 +33,29 @@ class ScreenCommandException implements Exception {
   String toString() => 'ScreenCommandException: $message';
 }
 
-/// ScreenCommandClient asks the configured model for strict JSON plans.
+/// ScreenCommandClient asks ADK for strict JSON screen-command plans.
 class ScreenCommandClient implements ScreenCommandPlanner {
-  /// Creates a screen-command client with explicitly supplied credentials.
+  /// Creates a screen-command client for one ADK app and user.
   ScreenCommandClient({
+    required String baseUrl,
+    required String appName,
+    required String userId,
     http.Client? httpClient,
-    Map<String, String> environment = const <String, String>{},
+    AdkUtilityClient? utilityClient,
+    Map<String, String> headers = const <String, String>{},
     this.logger,
-  }) : _http = httpClient ?? http.Client(),
-       _environment = environment;
+  }) : _utility =
+           utilityClient ??
+           AdkUtilityClient(
+             baseUrl: baseUrl,
+             appName: appName,
+             userId: userId,
+             httpClient: httpClient,
+             headers: headers,
+             logger: logger,
+           );
 
-  final http.Client _http;
-  final Map<String, String> _environment;
+  final AdkUtilityClient _utility;
 
   /// Optional persistent logger.
   final ClientLogger? logger;
@@ -56,151 +68,50 @@ class ScreenCommandClient implements ScreenCommandPlanner {
     required String command,
     required BacklogScreenSnapshot snapshot,
   }) async {
-    final selection = _loadSelection(modelConfigContent, modelRef);
+    final selectedModelRef = _selectedModelRef(modelConfigContent, modelRef);
     final prompt = _backlogPlannerPrompt(command: command, snapshot: snapshot);
     await _log(
-      'plan backlog command adapter=${selection.adapter} model=${selection.model} promptLength=${prompt.length}',
+      'plan backlog command modelRef=$selectedModelRef promptLength=${prompt.length}',
     );
-    final raw = switch (selection.adapter) {
-      'anthropic' => await _callAnthropic(selection, prompt),
-      'openai' || 'openai_compatible' => await _callOpenAi(selection, prompt),
-      _ => throw ScreenCommandException(
-        'Unsupported screen planner adapter "${selection.adapter}"',
-      ),
-    };
+    final raw = await _runPrompt(selectedModelRef, prompt);
     return parseScreenCommandRun(raw, command: command);
   }
 
-  /// Closes the underlying HTTP client.
+  /// Closes the underlying utility client.
   void close() {
-    _http.close();
+    _utility.close();
   }
 
-  /// Resolves the configured provider, model, endpoint, and credential.
-  ModelInvocationConfig _loadSelection(
-    String modelConfigContent,
-    String modelRef,
-  ) {
+  String _selectedModelRef(String modelConfigContent, String modelRef) {
     try {
-      return resolveModelInvocationConfig(
+      return selectedModelRefFromConfig(
         modelConfigContent: modelConfigContent,
         modelRef: modelRef,
-        environment: _environment,
-        messages: const ModelInvocationConfigMessages(
-          missingSelection: 'Screen planner model is not selected',
-          missingProviders: 'Screen planner model config has no providers',
-          missingDefaultModel: 'Screen planner default model is missing',
-        ),
+        missingSelection: 'Screen planner model is not selected',
+        missingProviders: 'Screen planner model config has no providers',
+        missingDefaultModel: 'Screen planner default model is missing',
       );
-    } on ModelInvocationConfigException catch (error) {
+    } on ModelRefSelectionException catch (error) {
       throw ScreenCommandException(error.message);
     }
   }
 
-  /// Calls an OpenAI-compatible chat-completions endpoint for a JSON plan.
-  Future<String> _callOpenAi(
-    ModelInvocationConfig selection,
-    String prompt,
-  ) async {
-    final response = await _http.post(
-      Uri.parse(selection.url),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        if (selection.apiKey.isNotEmpty)
-          'Authorization': 'Bearer ${selection.apiKey}',
-      },
-      body: jsonEncode(_openAiRequestBody(selection.model, prompt)),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ScreenCommandException(
-        'Screen planner HTTP ${response.statusCode}: '
-        '${clipProviderBody(response.body)}',
+  Future<String> _runPrompt(String modelRef, String prompt) async {
+    try {
+      return await _utility.runText(
+        modelRef: modelRef,
+        logName: 'screen-command-client',
+        prompt: '$_plannerSystemPrompt\n\n$prompt',
       );
+    } on AdkUtilityException catch (error) {
+      throw ScreenCommandException(error.message);
     }
-    final decoded = jsonDecode(response.body);
-    final choices = decoded is Map<String, dynamic> ? decoded['choices'] : null;
-    if (choices is! List || choices.isEmpty) {
-      throw const ScreenCommandException('Screen planner returned no choices');
-    }
-    final first = choices.first;
-    final message = first is Map<String, dynamic> ? first['message'] : null;
-    final content = message is Map<String, dynamic> ? message['content'] : null;
-    final text = modelInvocationString(content);
-    if (text.isEmpty) {
-      throw const ScreenCommandException(
-        'Screen planner returned empty content',
-      );
-    }
-    return text;
-  }
-
-  /// Calls an Anthropic messages endpoint for a JSON plan.
-  Future<String> _callAnthropic(
-    ModelInvocationConfig selection,
-    String prompt,
-  ) async {
-    final response = await _http.post(
-      Uri.parse(selection.url),
-      headers: <String, String>{
-        'Content-Type': 'application/json',
-        'anthropic-version': '2023-06-01',
-        if (selection.apiKey.isNotEmpty) 'x-api-key': selection.apiKey,
-      },
-      body: jsonEncode(<String, dynamic>{
-        'model': selection.model,
-        'max_tokens': 1600,
-        'temperature': 0.1,
-        'system': _plannerSystemPrompt,
-        'messages': <Map<String, String>>[
-          <String, String>{'role': 'user', 'content': prompt},
-        ],
-      }),
-    );
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw ScreenCommandException(
-        'Screen planner HTTP ${response.statusCode}: '
-        '${clipProviderBody(response.body)}',
-      );
-    }
-    final decoded = jsonDecode(response.body);
-    final content = decoded is Map<String, dynamic> ? decoded['content'] : null;
-    if (content is! List || content.isEmpty) {
-      throw const ScreenCommandException('Screen planner returned no content');
-    }
-    final text = content
-        .whereType<Map<String, dynamic>>()
-        .map((part) => modelInvocationString(part['text']))
-        .where((part) => part.isNotEmpty)
-        .join(' ')
-        .trim();
-    if (text.isEmpty) {
-      throw const ScreenCommandException('Screen planner returned empty text');
-    }
-    return text;
   }
 
   /// Writes a planner-client diagnostic when logging is configured.
   Future<void> _log(String message) async {
     await logger?.write('screen-command-client', message);
   }
-}
-
-/// Builds an OpenAI-compatible request body for one planner call.
-Map<String, dynamic> _openAiRequestBody(String model, String prompt) {
-  final usesCompletionTokens = usesCompletionTokenLimit(model);
-  return <String, dynamic>{
-    'model': model,
-    'temperature': 0.1,
-    if (usesCompletionTokens)
-      'max_completion_tokens': 1600
-    else
-      'max_tokens': 1600,
-    'stream': false,
-    'messages': <Map<String, String>>[
-      <String, String>{'role': 'system', 'content': _plannerSystemPrompt},
-      <String, String>{'role': 'user', 'content': prompt},
-    ],
-  };
 }
 
 /// Builds the user prompt carrying command text and a Backlog snapshot.

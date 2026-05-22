@@ -41,9 +41,6 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--command-parser-dir", "/tmp/parsers",
 		"--command-timeout", "7s",
 		"--command-max-output-bytes", "2048",
-		"--command-approval-ttl", "9s",
-		"--command-require-approval=false",
-		"--command-allow-arbitrary=false",
 		"--mcp-manager-addr", "127.0.0.1:8094",
 		"--mcp-servers-json", `[{"id":"tools","endpoint":"http://127.0.0.1:9999/mcp"}]`,
 		"--mcp-request-timeout", "11s",
@@ -119,15 +116,6 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	}
 	if got, want := captured.CommandMaxOutputBytes, int64(2048); got != want {
 		t.Fatalf("CommandMaxOutputBytes = %d, want %d", got, want)
-	}
-	if got, want := captured.CommandApprovalTTL, 9*time.Second; got != want {
-		t.Fatalf("CommandApprovalTTL = %s, want %s", got, want)
-	}
-	if captured.CommandRequireApproval {
-		t.Fatalf("CommandRequireApproval = true, want false")
-	}
-	if captured.CommandAllowArbitrary {
-		t.Fatalf("CommandAllowArbitrary = true, want false")
 	}
 	if got, want := captured.MCPManagerAddr, "127.0.0.1:8094"; got != want {
 		t.Fatalf("MCPManagerAddr = %q, want %q", got, want)
