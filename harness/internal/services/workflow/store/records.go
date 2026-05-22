@@ -1,6 +1,30 @@
 // This file defines durable workflow store records.
 package store
 
+const (
+	// StatusRunning records an actively executing workflow or node.
+	StatusRunning = "running"
+	// StatusWaiting records a workflow paused on external input.
+	StatusWaiting = "waiting"
+	// StatusSucceeded records successful workflow or node completion.
+	StatusSucceeded = "succeeded"
+	// StatusFailed records failed workflow or node completion.
+	StatusFailed = "failed"
+	// StatusCanceled records a canceled workflow.
+	StatusCanceled = "canceled"
+	// StatusPending records an unstarted in-memory node state.
+	StatusPending = "pending"
+	// StatusSkipped records a conditionally inactive workflow node.
+	StatusSkipped = "skipped"
+)
+
+const (
+	// PendingStatusOpen records a pending item awaiting response.
+	PendingStatusOpen = "open"
+	// PendingStatusCompleted records a pending item with a response.
+	PendingStatusCompleted = "completed"
+)
+
 // DefinitionRecord stores one installed workflow definition snapshot.
 type DefinitionRecord struct {
 	ID        string         `json:"id"`
@@ -34,8 +58,8 @@ type EventRecord struct {
 	CreatedAt string         `json:"created_at"`
 }
 
-// TaskStateRecord stores durable execution status for one task state.
-type TaskStateRecord struct {
+// NodeStateRecord stores durable execution status for one workflow node.
+type NodeStateRecord struct {
 	RunID       string         `json:"run_id"`
 	StateID     string         `json:"state_id"`
 	Status      string         `json:"status"`
@@ -98,6 +122,28 @@ type PackageRecord struct {
 	UpdatedAt   string         `json:"updated_at"`
 }
 
+// DesignArtifactRecord stores a deterministic artifact proposed at design time.
+type DesignArtifactRecord struct {
+	ID        string         `json:"id"`
+	Kind      string         `json:"kind"`
+	Name      string         `json:"name"`
+	Body      map[string]any `json:"body"`
+	CreatedAt string         `json:"created_at"`
+}
+
+// ObservedContractRecord stores one runtime-observed output contract shape.
+type ObservedContractRecord struct {
+	DefinitionID   string           `json:"definition_id"`
+	NodeID         string           `json:"node_id"`
+	ToolID         string           `json:"tool_id"`
+	ShapeHash      string           `json:"shape_hash"`
+	Occurrences    int              `json:"occurrences"`
+	Contract       map[string]any   `json:"contract"`
+	ObservedFields []map[string]any `json:"observed_fields"`
+	FirstSeenAt    string           `json:"first_seen_at"`
+	LastSeenAt     string           `json:"last_seen_at"`
+}
+
 // PublishedDefinitionRecord links published definitions back to authoring drafts.
 type PublishedDefinitionRecord struct {
 	DefinitionID string `json:"definition_id"`
@@ -111,5 +157,13 @@ type PublishedDefinitionRecord struct {
 type RunFilter struct {
 	Status       string
 	DefinitionID string
+	Limit        int
+}
+
+// ObservedContractFilter selects runtime-observed output shapes.
+type ObservedContractFilter struct {
+	DefinitionID string
+	NodeID       string
+	ToolID       string
 	Limit        int
 }

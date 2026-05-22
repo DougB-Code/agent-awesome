@@ -30,12 +30,10 @@
 
 - Add UI plugins backed by Starlark script processing to allow for user plugins and custom UIs. 
 
-
 - Add button to include new files in chat. 
-
 
 - Add basic/advanced UI views. Users should be able to create additional, local or cloud memory stores with just a few mouse clicks. 
 
-## Priority 4
-
 - Add a batch job to organize memory and ask follow-up questions when an item needs more detail.
+
+- Can the workflow engine itself be used to provide training to employees on how to do processes? For example, can it be used to show people how to use AI to perform a role? 

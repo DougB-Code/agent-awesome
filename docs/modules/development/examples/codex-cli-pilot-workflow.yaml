@@ -1,0 +1,141 @@
+id: codex_cli_pilot
+name: Codex CLI Pilot
+description: Plan, implement, test, review, clean up, commit, push, and open a PR through generic pipe nodes.
+category: source_control
+tags:
+  - codex
+  - command
+  - sourcecontrol
+  - workflow
+parameters:
+  - id: sourcecontrol_mcp_endpoint
+    label: Source-control MCP endpoint
+    type: string
+requirements:
+  actions:
+    - mcp.call
+    - command.execute
+    - data.assert
+  input:
+    - repository_path
+    - worktree_path
+    - branch
+    - base_ref
+    - remote
+    - commit_message
+body:
+  apiVersion: aa.workflow/v1
+  kind: workflow
+  id: codex_cli_pilot
+  name: Codex CLI Pilot
+  description: Generic Codex CLI pilot workflow.
+  nodes:
+    - id: assert_request
+      type: assert
+      with:
+        checks:
+          - path: body.value.repository_path
+            mode: exists
+          - path: body.value.worktree_path
+            mode: exists
+          - path: body.value.branch
+            mode: exists
+          - path: body.value.base_ref
+            mode: exists
+          - path: body.value.commit_message
+            mode: exists
+    - id: prepare
+      type: mcp
+      tool: sourcecontrol.prepare_worktree
+      with:
+        endpoint: "{{sourcecontrol_mcp_endpoint}}"
+        arguments:
+          repository_path: "${body.value.repository_path}"
+          worktree_path: "${body.value.worktree_path}"
+          branch: "${body.value.branch}"
+          base_ref: "${body.value.base_ref}"
+    - id: plan
+      type: command
+      tool: codex_plan
+      with:
+        cwd: "${body.value.worktree_path}"
+    - id: assert_plan
+      type: assert
+      with:
+        checks:
+          - path: body.value.output.plan.compliant
+            mode: equals
+            value: true
+          - path: body.value.output.plan.project_conventions
+            mode: equals
+            value: true
+          - path: body.value.output.plan.solid
+            mode: equals
+            value: true
+          - path: body.value.output.plan.agents
+            mode: equals
+            value: true
+          - path: body.value.output.plan.relevant_skills
+            mode: equals
+            value: true
+          - path: body.value.output.plan.no_unnecessary_backwards_compatibility
+            mode: equals
+            value: true
+          - path: body.value.output.plan.no_duplicate_implementations
+            mode: equals
+            value: true
+          - path: body.value.output.plan.no_hardcoded_values
+            mode: equals
+            value: true
+    - id: implement
+      type: command
+      tool: codex_implement
+      with:
+        cwd: "${body.value.worktree_path}"
+    - id: test
+      type: command
+      tool: test
+      with:
+        cwd: "${body.value.worktree_path}"
+    - id: review
+      type: command
+      tool: codex_review
+      with:
+        cwd: "${body.value.worktree_path}"
+  edges:
+    - from:
+        node: assert_request
+      to:
+        node: prepare
+      adapter:
+        kind: direct
+    - from:
+        node: prepare
+      to:
+        node: plan
+      adapter:
+        kind: direct
+    - from:
+        node: plan
+      to:
+        node: assert_plan
+      adapter:
+        kind: direct
+    - from:
+        node: assert_plan
+      to:
+        node: implement
+      adapter:
+        kind: direct
+    - from:
+        node: implement
+      to:
+        node: test
+      adapter:
+        kind: direct
+    - from:
+        node: test
+      to:
+        node: review
+      adapter:
+        kind: direct

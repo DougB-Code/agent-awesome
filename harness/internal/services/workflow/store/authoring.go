@@ -186,6 +186,50 @@ func (s *Store) GetPackage(ctx context.Context, id string) (PackageRecord, error
 	return scanPackage(row)
 }
 
+// UpsertDesignArtifact stores or replaces one deterministic design artifact.
+func (s *Store) UpsertDesignArtifact(ctx context.Context, record DesignArtifactRecord) error {
+	body, err := marshalMap(record.Body)
+	if err != nil {
+		return fmt.Errorf("encode workflow design artifact body: %w", err)
+	}
+	createdAt := record.CreatedAt
+	if createdAt == "" {
+		createdAt = nowString()
+	}
+	name := record.Name
+	if name == "" {
+		name = record.ID
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO workflow_design_artifacts
+		(id, kind, name, body_json, created_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, name=excluded.name,
+			body_json=excluded.body_json, created_at=excluded.created_at`,
+		record.ID, record.Kind, name, string(body), createdAt)
+	if err != nil {
+		return fmt.Errorf("upsert workflow design artifact %q: %w", record.ID, err)
+	}
+	return nil
+}
+
+// ListDesignArtifacts returns persisted deterministic design artifacts.
+func (s *Store) ListDesignArtifacts(ctx context.Context) ([]DesignArtifactRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, kind, name, body_json, created_at FROM workflow_design_artifacts ORDER BY created_at DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("list workflow design artifacts: %w", err)
+	}
+	defer rows.Close()
+	var records []DesignArtifactRecord
+	for rows.Next() {
+		record, err := scanDesignArtifact(rows)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
 // UpsertPublishedDefinition stores publication metadata for one definition.
 func (s *Store) UpsertPublishedDefinition(ctx context.Context, record PublishedDefinitionRecord) error {
 	publishedAt := record.PublishedAt
@@ -299,6 +343,19 @@ func scanPackage(row interface{ Scan(...any) error }) (PackageRecord, error) {
 	}
 	if err := json.Unmarshal([]byte(body), &record.Body); err != nil {
 		return PackageRecord{}, fmt.Errorf("decode workflow package body: %w", err)
+	}
+	return record, nil
+}
+
+// scanDesignArtifact decodes one design artifact row.
+func scanDesignArtifact(row interface{ Scan(...any) error }) (DesignArtifactRecord, error) {
+	var record DesignArtifactRecord
+	var body string
+	if err := row.Scan(&record.ID, &record.Kind, &record.Name, &body, &record.CreatedAt); err != nil {
+		return DesignArtifactRecord{}, err
+	}
+	if err := json.Unmarshal([]byte(body), &record.Body); err != nil {
+		return DesignArtifactRecord{}, fmt.Errorf("decode workflow design artifact body: %w", err)
 	}
 	return record, nil
 }

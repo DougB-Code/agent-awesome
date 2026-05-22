@@ -8,7 +8,13 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"agentawesome/internal/services/workflow/decision"
+	"agentawesome/internal/services/workflow/envelope"
 )
+
+// decisionEnvelopeAttempt marks action-local output before the runtime normalizes attempts.
+const decisionEnvelopeAttempt = 0
 
 // ErrPending reports that a workflow is waiting for a user or external signal.
 var ErrPending = errors.New("workflow action pending")
@@ -30,6 +36,7 @@ type Host interface {
 	CallTool(context.Context, ToolRequest) (map[string]any, error)
 	CallMCP(context.Context, MCPRequest) (map[string]any, error)
 	ExecuteCommand(context.Context, CommandRequest) (map[string]any, error)
+	GenerateLLM(context.Context, LLMRequest) (map[string]any, error)
 	SignalWorkflow(context.Context, WorkflowSignal) error
 	StartNestedWorkflow(context.Context, NestedWorkflowRequest) (map[string]any, error)
 }
@@ -66,6 +73,14 @@ type CommandRequest struct {
 	SessionID  string
 }
 
+// LLMRequest describes one schema-constrained model invocation.
+type LLMRequest struct {
+	Model        string
+	Prompt       string
+	Input        map[string]any
+	OutputSchema map[string]any
+}
+
 // WorkflowSignal describes an internal workflow signal action.
 type WorkflowSignal struct {
 	RunID   string
@@ -91,6 +106,8 @@ func NewRegistry() *Registry {
 	r.Register("mcp.call", mcpCall)
 	r.Register("command.execute", commandExecute)
 	r.Register("data.assert", dataAssert)
+	r.Register("decision.route", decisionRoute)
+	r.Register("llm.generate", llmGenerate)
 	r.Register("workflow.run", workflowRun)
 	r.Register("workflow.signal", workflowSignal)
 	r.Register("human.request", humanRequest)
@@ -137,6 +154,20 @@ func (r *Registry) Execute(ctx context.Context, action string, execCtx Context, 
 	return executor(ctx, execCtx, args)
 }
 
+// decisionRoute evaluates ordered route rules over the node input envelope.
+func decisionRoute(_ context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
+	def, err := decision.FromMap(args)
+	if err != nil {
+		return nil, err
+	}
+	result, err := decision.Evaluate(def, envelope.FromMap(execCtx.Input))
+	if err != nil {
+		return nil, err
+	}
+	output := decision.OutputEnvelope(execCtx.RunID, execCtx.StepID, decisionEnvelopeAttempt, result)
+	return output.ToMap(), nil
+}
+
 // toolCall delegates a generic tool call to the harness context API.
 func toolCall(ctx context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
 	if execCtx.Host == nil {
@@ -145,7 +176,7 @@ func toolCall(ctx context.Context, execCtx Context, args map[string]any) (map[st
 	return execCtx.Host.CallTool(ctx, ToolRequest{
 		Name:      resolvedStringArg(args, "name", execCtx.Input),
 		DomainID:  resolvedStringArg(args, "domain_id", execCtx.Input),
-		Arguments: resolvedMapArg(args, "arguments", execCtx.Input, execCtx.Input),
+		Arguments: resolvedMapArg(args, "arguments", nil, execCtx.Input),
 	})
 }
 
@@ -173,6 +204,23 @@ func commandExecute(ctx context.Context, execCtx Context, args map[string]any) (
 		Reason:     resolvedStringArg(args, "reason", execCtx.Input),
 		Actor:      resolvedStringArg(args, "actor", execCtx.Input),
 		SessionID:  resolvedStringArg(args, "session_id", execCtx.Input),
+	})
+}
+
+// llmGenerate calls the configured model boundary and requires structured output.
+func llmGenerate(ctx context.Context, execCtx Context, args map[string]any) (map[string]any, error) {
+	if execCtx.Host == nil {
+		return nil, fmt.Errorf("llm.generate host is not configured")
+	}
+	prompt := resolvedStringArg(args, "prompt", execCtx.Input)
+	if prompt == "" {
+		return nil, fmt.Errorf("llm.generate prompt is required")
+	}
+	return execCtx.Host.GenerateLLM(ctx, LLMRequest{
+		Model:        resolvedStringArg(args, "model", execCtx.Input),
+		Prompt:       prompt,
+		Input:        execCtx.Input,
+		OutputSchema: resolvedMapArg(args, "output_schema", nil, execCtx.Input),
 	})
 }
 

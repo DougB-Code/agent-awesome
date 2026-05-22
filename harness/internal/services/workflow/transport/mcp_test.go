@@ -20,15 +20,14 @@ func TestMCPWorkflowStartReturnsRun(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	writeTransportDefinition(t, definitionsDir, "daily.yaml", `
-kind: state_machine
+kind: workflow
 id: daily_email_triage
 name: Daily Email Triage
-states:
+nodes:
   - id: triage
-    type: task
-    uses: tool.call
+    type: tool
+    tool: mock_tool
     with:
-      name: mock_tool
       arguments: {}
 `)
 	service, err := runtime.Open(ctx, runtime.Config{
@@ -73,6 +72,20 @@ func TestMCPWorkflowAuthoringToolsCreateDraft(t *testing.T) {
 		DefinitionsDir: t.TempDir(),
 		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
 		RequestTimeout: time.Second,
+		DesignAssistant: transportDesignAssistant{artifacts: []runtime.DesignArtifact{{
+			Kind: "mapping",
+			Body: map[string]any{
+				"apiVersion": "aa.mapping/v1",
+				"kind":       "Mapping",
+				"name":       "mcp-suggested",
+				"steps": []any{
+					map[string]any{"set": map[string]any{
+						"target": "approval.title",
+						"value":  map[string]any{"expr": `"Approve " + input.body.value.subject`},
+					}},
+				},
+			},
+		}}},
 	})
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
@@ -94,23 +107,88 @@ func TestMCPWorkflowAuthoringToolsCreateDraft(t *testing.T) {
 	if structured["action_types"] == nil {
 		t.Fatalf("workflow_action_types structuredContent = %#v, want action_types", structured)
 	}
+	manifests := postJSONRPC(t, server.URL+"/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "workflow_manifests",
+			"arguments": map[string]any{},
+		},
+	})
+	manifestContent := manifests["result"].(map[string]any)["structuredContent"].(map[string]any)
+	if manifestContent["manifests"] == nil {
+		t.Fatalf("workflow_manifests structuredContent = %#v, want manifests", manifestContent)
+	}
+	preview := postJSONRPC(t, server.URL+"/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      3,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "workflow_mapping_preview",
+			"arguments": map[string]any{
+				"input": map[string]any{"subject": "Invoice"},
+				"mapping": map[string]any{
+					"steps": []any{
+						map[string]any{"set": map[string]any{
+							"target": "approval.title",
+							"value":  map[string]any{"expr": `"Approve " + input.body.value.subject`},
+						}},
+					},
+				},
+			},
+		},
+	})
+	previewContent := preview["result"].(map[string]any)["structuredContent"].(map[string]any)
+	if previewContent["preview"] == nil {
+		t.Fatalf("workflow_mapping_preview structuredContent = %#v, want preview", previewContent)
+	}
+	suggested := postJSONRPC(t, server.URL+"/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      4,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "workflow_design_suggest",
+			"arguments": map[string]any{"prompt": "suggest mapping"},
+		},
+	})
+	suggestedContent := suggested["result"].(map[string]any)["structuredContent"].(map[string]any)
+	if suggestedContent["suggestion"] == nil {
+		t.Fatalf("workflow_design_suggest structuredContent = %#v, want suggestion", suggestedContent)
+	}
 
 	created := postJSONRPC(t, server.URL+"/mcp", map[string]any{
 		"jsonrpc": "2.0",
-		"id":      2,
+		"id":      5,
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name": "workflow_draft_create",
 			"arguments": map[string]any{
 				"id":   "draft_mcp",
-				"kind": "task_graph",
+				"kind": "workflow",
 				"name": "MCP Draft",
 				"body": map[string]any{
-					"kind": "task_graph",
+					"kind": "workflow",
 					"id":   "mcp_draft",
 					"name": "MCP Draft",
 					"nodes": []any{
-						map[string]any{"id": "tool", "uses": "tool.call", "with": map[string]any{"name": "mock_tool", "arguments": map[string]any{}}},
+						map[string]any{
+							"id":   "source",
+							"uses": "tool.call",
+							"with": map[string]any{"name": "mock_tool", "arguments": map[string]any{}},
+							"output": map[string]any{
+								"produces": []any{map[string]any{"kind": "object"}},
+								"facets":   []any{"document.text"},
+							},
+						},
+						map[string]any{
+							"id":   "target",
+							"uses": "tool.call",
+							"input": map[string]any{
+								"accepts":         []any{map[string]any{"kind": "object"}},
+								"required_facets": []any{"document.text"},
+							},
+						},
 					},
 				},
 			},
@@ -120,7 +198,54 @@ func TestMCPWorkflowAuthoringToolsCreateDraft(t *testing.T) {
 	if createdResult["isError"] == true {
 		t.Fatalf("workflow_draft_create result = %#v, want success", createdResult)
 	}
-
+	compatibility := postJSONRPC(t, server.URL+"/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      6,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "workflow_edge_compatibility",
+			"arguments": map[string]any{
+				"draft_id":       "draft_mcp",
+				"source_node_id": "source",
+				"target_node_id": "target",
+			},
+		},
+	})
+	compatibilityResult := compatibility["result"].(map[string]any)
+	if compatibilityResult["isError"] == true {
+		t.Fatalf("workflow_edge_compatibility result = %#v, want success", compatibilityResult)
+	}
+	adapterChoice := postJSONRPC(t, server.URL+"/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      7,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "workflow_adapter_choice",
+			"arguments": map[string]any{
+				"draft_id":       "draft_mcp",
+				"source_node_id": "source",
+				"target_node_id": "target",
+				"adapter":        map[string]any{"kind": "direct"},
+			},
+		},
+	})
+	adapterChoiceResult := adapterChoice["result"].(map[string]any)
+	if adapterChoiceResult["isError"] == true {
+		t.Fatalf("workflow_adapter_choice result = %#v, want success", adapterChoiceResult)
+	}
+	observed := postJSONRPC(t, server.URL+"/mcp", map[string]any{
+		"jsonrpc": "2.0",
+		"id":      8,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "workflow_observed_contracts",
+			"arguments": map[string]any{"definition_id": "mcp_draft"},
+		},
+	})
+	observedContent := observed["result"].(map[string]any)["structuredContent"].(map[string]any)
+	if observedContent["observed_contracts"] == nil {
+		t.Fatalf("workflow_observed_contracts structuredContent = %#v, want observed_contracts", observedContent)
+	}
 }
 
 // postJSONRPC posts one JSON-RPC body and returns the decoded response.
@@ -151,4 +276,14 @@ func writeTransportDefinition(t *testing.T, dir string, name string, body string
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
+}
+
+// transportDesignAssistant returns fixed artifacts for MCP transport tests.
+type transportDesignAssistant struct {
+	artifacts []runtime.DesignArtifact
+}
+
+// SuggestDesignArtifacts returns configured test artifacts.
+func (a transportDesignAssistant) SuggestDesignArtifacts(context.Context, runtime.DesignSuggestionRequest) ([]runtime.DesignArtifact, error) {
+	return a.artifacts, nil
 }

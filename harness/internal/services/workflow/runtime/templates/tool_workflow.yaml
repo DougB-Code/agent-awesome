@@ -1,0 +1,27 @@
+id: tool_workflow
+name: Tool Workflow
+description: Start from a bounded pipe graph with one generic tool call.
+category: workflow
+tags:
+  - tool
+  - workflow
+parameters:
+  - id: tool_name
+    label: Tool name
+    type: string
+    default: example_tool
+requirements:
+  actions:
+    - tool.call
+body:
+  apiVersion: aa.workflow/v1
+  kind: workflow
+  id: tool_workflow
+  name: Tool Workflow
+  description: A bounded pipe graph with one generic tool call.
+  nodes:
+    - id: tool_task
+      type: tool
+      tool: "{{tool_name}}"
+      with:
+        arguments: {}

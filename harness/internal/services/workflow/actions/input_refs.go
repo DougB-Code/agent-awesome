@@ -4,6 +4,8 @@ package actions
 import (
 	"fmt"
 	"strings"
+
+	"agentawesome/internal/services/workflow/jsondata"
 )
 
 // resolveInputRefs recursively replaces ${path.to.value} references from input.
@@ -59,7 +61,7 @@ func resolveInputRefString(value string, input map[string]any) any {
 
 // resolveReferencePath looks up a dotted path in action input.
 func resolveReferencePath(input map[string]any, path string) (any, bool) {
-	return resolveDottedPath(input, strings.TrimSpace(path))
+	return jsondata.Dotted(input, strings.TrimSpace(path))
 }
 
 // resolvedStringArg returns a string action argument after reference resolution.
@@ -75,9 +77,9 @@ func resolvedStringArg(args map[string]any, key string, input map[string]any) st
 
 // resolvedMapArg returns a map action argument after reference resolution.
 func resolvedMapArg(args map[string]any, key string, fallback map[string]any, input map[string]any) map[string]any {
-	value := mapArg(args, key, fallback)
-	if len(value) == 0 && len(fallback) > 0 {
-		value = fallback
+	value, ok := args[key]
+	if !ok {
+		return fallback
 	}
 	resolved := resolveInputRefs(value, input)
 	if resolvedMap, ok := resolved.(map[string]any); ok {

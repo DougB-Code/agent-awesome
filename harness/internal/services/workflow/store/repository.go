@@ -216,31 +216,31 @@ func (s *Store) StepOutputs(ctx context.Context, runID string) (map[string]map[s
 	return outputs, rows.Err()
 }
 
-// GetTaskState loads one durable task-state record.
-func (s *Store) GetTaskState(ctx context.Context, runID string, stateID string) (TaskStateRecord, bool, error) {
+// GetNodeState loads one durable workflow node state record.
+func (s *Store) GetNodeState(ctx context.Context, runID string, stateID string) (NodeStateRecord, bool, error) {
 	row := s.db.QueryRowContext(ctx, `SELECT run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at
-		FROM workflow_task_states WHERE run_id = ? AND state_id = ?`, runID, stateID)
-	record, err := scanTaskState(row)
+		FROM workflow_node_states WHERE run_id = ? AND state_id = ?`, runID, stateID)
+	record, err := scanNodeState(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return TaskStateRecord{}, false, nil
+			return NodeStateRecord{}, false, nil
 		}
-		return TaskStateRecord{}, false, err
+		return NodeStateRecord{}, false, err
 	}
 	return record, true, nil
 }
 
-// ListTaskStates loads every durable task-state record for one run.
-func (s *Store) ListTaskStates(ctx context.Context, runID string) ([]TaskStateRecord, error) {
+// ListNodeStates loads every durable workflow node state record for one run.
+func (s *Store) ListNodeStates(ctx context.Context, runID string) ([]NodeStateRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at
-		FROM workflow_task_states WHERE run_id = ? ORDER BY state_id`, runID)
+		FROM workflow_node_states WHERE run_id = ? ORDER BY state_id`, runID)
 	if err != nil {
-		return nil, fmt.Errorf("list workflow task states for run %q: %w", runID, err)
+		return nil, fmt.Errorf("list workflow node states for run %q: %w", runID, err)
 	}
 	defer rows.Close()
-	var records []TaskStateRecord
+	var records []NodeStateRecord
 	for rows.Next() {
-		record, err := scanTaskState(rows)
+		record, err := scanNodeState(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -249,48 +249,66 @@ func (s *Store) ListTaskStates(ctx context.Context, runID string) ([]TaskStateRe
 	return records, rows.Err()
 }
 
-// MarkTaskStateRunning records that one task-state attempt has started.
-func (s *Store) MarkTaskStateRunning(ctx context.Context, runID string, stateID string, attempts int) error {
+// MarkNodeStateRunning records that one node attempt has started.
+func (s *Store) MarkNodeStateRunning(ctx context.Context, runID string, stateID string, attempts int) error {
 	now := nowString()
-	_, err := s.db.ExecContext(ctx, `INSERT INTO workflow_task_states
+	_, err := s.db.ExecContext(ctx, `INSERT INTO workflow_node_states
 		(run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at)
-		VALUES (?, ?, 'running', ?, '{}', '', ?, '', ?)
-		ON CONFLICT(run_id, state_id) DO UPDATE SET status='running', attempts=excluded.attempts, error='', started_at=excluded.started_at, updated_at=excluded.updated_at`,
-		runID, stateID, attempts, now, now)
+		VALUES (?, ?, ?, ?, '{}', '', ?, '', ?)
+		ON CONFLICT(run_id, state_id) DO UPDATE SET status=?, attempts=excluded.attempts, error='', started_at=excluded.started_at, updated_at=excluded.updated_at`,
+		runID, stateID, StatusRunning, attempts, now, now, StatusRunning)
 	if err != nil {
-		return fmt.Errorf("mark workflow task state running %s/%s: %w", runID, stateID, err)
+		return fmt.Errorf("mark workflow node state running %s/%s: %w", runID, stateID, err)
 	}
 	return nil
 }
 
-// MarkTaskStateSucceeded records a completed task-state output.
-func (s *Store) MarkTaskStateSucceeded(ctx context.Context, runID string, stateID string, attempts int, output map[string]any) error {
+// MarkNodeStateSucceeded records a completed node output.
+func (s *Store) MarkNodeStateSucceeded(ctx context.Context, runID string, stateID string, attempts int, output map[string]any) error {
 	encoded, err := json.Marshal(nilMap(output))
 	if err != nil {
-		return fmt.Errorf("encode task state output: %w", err)
+		return fmt.Errorf("encode workflow node output: %w", err)
 	}
 	now := nowString()
-	_, err = s.db.ExecContext(ctx, `INSERT INTO workflow_task_states
+	_, err = s.db.ExecContext(ctx, `INSERT INTO workflow_node_states
 		(run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at)
-		VALUES (?, ?, 'succeeded', ?, ?, '', ?, ?, ?)
-		ON CONFLICT(run_id, state_id) DO UPDATE SET status='succeeded', attempts=excluded.attempts, output_json=excluded.output_json, error='', completed_at=excluded.completed_at, updated_at=excluded.updated_at`,
-		runID, stateID, attempts, string(encoded), now, now, now)
+		VALUES (?, ?, ?, ?, ?, '', ?, ?, ?)
+		ON CONFLICT(run_id, state_id) DO UPDATE SET status=?, attempts=excluded.attempts, output_json=excluded.output_json, error='', completed_at=excluded.completed_at, updated_at=excluded.updated_at`,
+		runID, stateID, StatusSucceeded, attempts, string(encoded), now, now, now, StatusSucceeded)
 	if err != nil {
-		return fmt.Errorf("mark workflow task state succeeded %s/%s: %w", runID, stateID, err)
+		return fmt.Errorf("mark workflow node state succeeded %s/%s: %w", runID, stateID, err)
 	}
 	return nil
 }
 
-// MarkTaskStateFailed records the final error for one task state.
-func (s *Store) MarkTaskStateFailed(ctx context.Context, runID string, stateID string, attempts int, message string) error {
-	now := nowString()
-	_, err := s.db.ExecContext(ctx, `INSERT INTO workflow_task_states
-		(run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at)
-		VALUES (?, ?, 'failed', ?, '{}', ?, ?, ?, ?)
-		ON CONFLICT(run_id, state_id) DO UPDATE SET status='failed', attempts=excluded.attempts, error=excluded.error, completed_at=excluded.completed_at, updated_at=excluded.updated_at`,
-		runID, stateID, attempts, message, now, now, now)
+// MarkNodeStateSkipped records a conditionally inactive node output.
+func (s *Store) MarkNodeStateSkipped(ctx context.Context, runID string, stateID string, attempts int, output map[string]any) error {
+	encoded, err := json.Marshal(nilMap(output))
 	if err != nil {
-		return fmt.Errorf("mark workflow task state failed %s/%s: %w", runID, stateID, err)
+		return fmt.Errorf("encode workflow skipped node output: %w", err)
+	}
+	now := nowString()
+	_, err = s.db.ExecContext(ctx, `INSERT INTO workflow_node_states
+		(run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, '', '', ?, ?)
+		ON CONFLICT(run_id, state_id) DO UPDATE SET status=?, attempts=excluded.attempts, output_json=excluded.output_json, error='', completed_at=excluded.completed_at, updated_at=excluded.updated_at`,
+		runID, stateID, StatusSkipped, attempts, string(encoded), now, now, StatusSkipped)
+	if err != nil {
+		return fmt.Errorf("mark workflow node state skipped %s/%s: %w", runID, stateID, err)
+	}
+	return nil
+}
+
+// MarkNodeStateFailed records the final error for one node.
+func (s *Store) MarkNodeStateFailed(ctx context.Context, runID string, stateID string, attempts int, message string) error {
+	now := nowString()
+	_, err := s.db.ExecContext(ctx, `INSERT INTO workflow_node_states
+		(run_id, state_id, status, attempts, output_json, error, started_at, completed_at, updated_at)
+		VALUES (?, ?, ?, ?, '{}', ?, ?, ?, ?)
+		ON CONFLICT(run_id, state_id) DO UPDATE SET status=?, attempts=excluded.attempts, error=excluded.error, completed_at=excluded.completed_at, updated_at=excluded.updated_at`,
+		runID, stateID, StatusFailed, attempts, message, now, now, now, StatusFailed)
+	if err != nil {
+		return fmt.Errorf("mark workflow node state failed %s/%s: %w", runID, stateID, err)
 	}
 	return nil
 }
@@ -321,7 +339,7 @@ func (s *Store) CompletePendingItems(ctx context.Context, runID string, response
 	if err != nil {
 		return fmt.Errorf("encode pending response: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx, `UPDATE workflow_pending_items SET status = 'completed', response_json = ?, updated_at = ? WHERE run_id = ? AND status = 'open'`, string(encoded), nowString(), runID)
+	_, err = s.db.ExecContext(ctx, `UPDATE workflow_pending_items SET status = ?, response_json = ?, updated_at = ? WHERE run_id = ? AND status = ?`, PendingStatusCompleted, string(encoded), nowString(), runID, PendingStatusOpen)
 	if err != nil {
 		return fmt.Errorf("complete pending workflow items for run %q: %w", runID, err)
 	}
@@ -330,7 +348,7 @@ func (s *Store) CompletePendingItems(ctx context.Context, runID string, response
 
 // ListOpenPendingItems returns open user-visible workflow items.
 func (s *Store) ListOpenPendingItems(ctx context.Context) ([]PendingItem, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, run_id, step_id, status, prompt, payload_json, response_json, created_at, updated_at FROM workflow_pending_items WHERE status = 'open' ORDER BY created_at`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, run_id, step_id, status, prompt, payload_json, response_json, created_at, updated_at FROM workflow_pending_items WHERE status = ? ORDER BY created_at`, PendingStatusOpen)
 	if err != nil {
 		return nil, fmt.Errorf("list workflow inbox: %w", err)
 	}
@@ -391,15 +409,15 @@ func scanEvent(row interface{ Scan(...any) error }) (EventRecord, error) {
 	return record, nil
 }
 
-// scanTaskState decodes one durable task-state row.
-func scanTaskState(row interface{ Scan(...any) error }) (TaskStateRecord, error) {
-	var record TaskStateRecord
+// scanNodeState decodes one durable node-state row.
+func scanNodeState(row interface{ Scan(...any) error }) (NodeStateRecord, error) {
+	var record NodeStateRecord
 	var output string
 	if err := row.Scan(&record.RunID, &record.StateID, &record.Status, &record.Attempts, &output, &record.Error, &record.StartedAt, &record.CompletedAt, &record.UpdatedAt); err != nil {
-		return TaskStateRecord{}, err
+		return NodeStateRecord{}, err
 	}
 	if err := json.Unmarshal([]byte(output), &record.Output); err != nil {
-		return TaskStateRecord{}, fmt.Errorf("decode workflow task state output: %w", err)
+		return NodeStateRecord{}, fmt.Errorf("decode workflow node state output: %w", err)
 	}
 	return record, nil
 }

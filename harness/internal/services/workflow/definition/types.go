@@ -1,45 +1,61 @@
 // This file defines the declarative workflow definition model.
 package definition
 
-// Definition is one user-authored executable state-machine workflow.
+import (
+	"agentawesome/internal/services/workflow/adapters"
+	"agentawesome/internal/services/workflow/contracts"
+	"agentawesome/internal/services/workflow/decision"
+	"agentawesome/internal/services/workflow/mapping"
+)
+
+// Definition is one user-authored executable workflow graph.
 type Definition struct {
-	Kind        string            `json:"kind" yaml:"kind"`
-	ID          string            `json:"id" yaml:"id"`
-	Name        string            `json:"name,omitempty" yaml:"name,omitempty"`
-	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
-	Schedule    string            `json:"schedule,omitempty" yaml:"schedule,omitempty"`
-	Initial     string            `json:"initial,omitempty" yaml:"initial,omitempty"`
-	States      []StateDefinition `json:"states,omitempty" yaml:"states,omitempty"`
-	Authoring   map[string]any    `json:"authoring,omitempty" yaml:"authoring,omitempty"`
+	APIVersion  string             `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
+	Kind        string             `json:"kind" yaml:"kind"`
+	ID          string             `json:"id" yaml:"id"`
+	Metadata    MetadataDefinition `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	Name        string             `json:"name,omitempty" yaml:"name,omitempty"`
+	Description string             `json:"description,omitempty" yaml:"description,omitempty"`
+	Schedule    string             `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+	Nodes       []NodeDefinition   `json:"nodes,omitempty" yaml:"nodes,omitempty"`
+	Edges       []EdgeDefinition   `json:"edges,omitempty" yaml:"edges,omitempty"`
+	Mappings    []mapping.Spec     `json:"mappings,omitempty" yaml:"mappings,omitempty"`
+	Authoring   map[string]any     `json:"authoring,omitempty" yaml:"authoring,omitempty"`
 }
 
-// StateDefinition describes one process state or one durable task state.
-type StateDefinition struct {
-	ID          string                 `json:"id" yaml:"id"`
-	Type        string                 `json:"type,omitempty" yaml:"type,omitempty"`
-	Parent      string                 `json:"parent,omitempty" yaml:"parent,omitempty"`
-	Initial     string                 `json:"initial,omitempty" yaml:"initial,omitempty"`
-	Uses        string                 `json:"uses,omitempty" yaml:"uses,omitempty"`
-	DependsOn   []string               `json:"depends_on,omitempty" yaml:"depends_on,omitempty"`
-	With        map[string]any         `json:"with,omitempty" yaml:"with,omitempty"`
-	Timeout     string                 `json:"timeout,omitempty" yaml:"timeout,omitempty"`
-	Retry       int                    `json:"retry,omitempty" yaml:"retry,omitempty"`
-	RetryDelay  string                 `json:"retry_delay,omitempty" yaml:"retry_delay,omitempty"`
-	OnEntry     []ActionDefinition     `json:"on_entry,omitempty" yaml:"on_entry,omitempty"`
-	Transitions []TransitionDefinition `json:"transitions,omitempty" yaml:"transitions,omitempty"`
-	States      []StateDefinition      `json:"states,omitempty" yaml:"states,omitempty"`
+// MetadataDefinition stores workflow identity metadata for the target graph format.
+type MetadataDefinition struct {
+	ID      string `json:"id,omitempty" yaml:"id,omitempty"`
+	Name    string `json:"name,omitempty" yaml:"name,omitempty"`
+	Version int    `json:"version,omitempty" yaml:"version,omitempty"`
 }
 
-// TransitionDefinition describes one trigger-driven state transition.
-type TransitionDefinition struct {
-	Trigger string `json:"trigger" yaml:"trigger"`
-	To      string `json:"to" yaml:"to"`
-	Guard   string `json:"guard,omitempty" yaml:"guard,omitempty"`
+// NodeDefinition describes one executable pipe graph node.
+type NodeDefinition struct {
+	ID         string             `json:"id" yaml:"id"`
+	Type       string             `json:"type,omitempty" yaml:"type,omitempty"`
+	Uses       string             `json:"uses,omitempty" yaml:"uses,omitempty"`
+	Tool       string             `json:"tool,omitempty" yaml:"tool,omitempty"`
+	With       map[string]any     `json:"with,omitempty" yaml:"with,omitempty"`
+	Input      contracts.Contract `json:"input,omitempty" yaml:"input,omitempty"`
+	Output     contracts.Contract `json:"output,omitempty" yaml:"output,omitempty"`
+	Effects    contracts.Effects  `json:"effects,omitempty" yaml:"effects,omitempty"`
+	Runtime    contracts.Runtime  `json:"runtime,omitempty" yaml:"runtime,omitempty"`
+	Timeout    string             `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	Retry      int                `json:"retry,omitempty" yaml:"retry,omitempty"`
+	RetryDelay string             `json:"retry_delay,omitempty" yaml:"retry_delay,omitempty"`
 }
 
-// ActionDefinition describes one registered action invocation.
-type ActionDefinition struct {
-	ID   string         `json:"id,omitempty" yaml:"id,omitempty"`
-	Uses string         `json:"uses" yaml:"uses"`
-	With map[string]any `json:"with,omitempty" yaml:"with,omitempty"`
+// EdgeDefinition describes one data edge between node ports.
+type EdgeDefinition struct {
+	From    PortRef             `json:"from" yaml:"from"`
+	To      PortRef             `json:"to" yaml:"to"`
+	Adapter adapters.Definition `json:"adapter,omitempty" yaml:"adapter,omitempty"`
+	When    decision.When       `json:"when,omitempty" yaml:"when,omitempty"`
+}
+
+// PortRef identifies one node output or input port.
+type PortRef struct {
+	Node string `json:"node" yaml:"node"`
+	Port string `json:"port,omitempty" yaml:"port,omitempty"`
 }

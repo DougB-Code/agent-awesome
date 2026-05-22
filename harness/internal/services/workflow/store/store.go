@@ -95,7 +95,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			created_at TEXT NOT NULL,
 			PRIMARY KEY (run_id, step_id)
 		)`,
-		`CREATE TABLE IF NOT EXISTS workflow_task_states (
+		`CREATE TABLE IF NOT EXISTS workflow_node_states (
 			run_id TEXT NOT NULL,
 			state_id TEXT NOT NULL,
 			status TEXT NOT NULL,
@@ -149,6 +149,25 @@ func (s *Store) migrate(ctx context.Context) error {
 			body_json TEXT NOT NULL,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS workflow_design_artifacts (
+			id TEXT PRIMARY KEY,
+			kind TEXT NOT NULL,
+			name TEXT NOT NULL,
+			body_json TEXT NOT NULL,
+			created_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE IF NOT EXISTS workflow_observed_contracts (
+			definition_id TEXT NOT NULL,
+			node_id TEXT NOT NULL,
+			tool_id TEXT NOT NULL,
+			shape_hash TEXT NOT NULL,
+			occurrences INTEGER NOT NULL,
+			contract_json TEXT NOT NULL,
+			observed_fields_json TEXT NOT NULL,
+			first_seen_at TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			PRIMARY KEY (definition_id, node_id, tool_id, shape_hash)
 		)`,
 		`CREATE TABLE IF NOT EXISTS workflow_published_definitions (
 			definition_id TEXT PRIMARY KEY,

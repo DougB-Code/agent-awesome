@@ -12,6 +12,8 @@ import (
 	"agentawesome/internal/services/workflow/runtime"
 )
 
+const workflowMCPVersion = "0.1.0"
+
 // MCPServer serves the workflow MCP tool surface.
 type MCPServer struct {
 	service *runtime.Service
@@ -22,7 +24,7 @@ type MCPServer struct {
 func NewMCPServer(service *runtime.Service) *MCPServer {
 	server := &MCPServer{service: service}
 	server.mcp = platformmcp.Server{
-		Info:            platformmcp.ServerInfo{Name: "agentawesome-workflow", Version: "0.1.0"},
+		Info:            platformmcp.ServerInfo{Name: "agentawesome-workflow", Version: workflowMCPVersion},
 		MaxRequestBytes: maxRequestBytes,
 		Tools:           workflowToolDefinitions,
 		Call:            server.callTool,
@@ -51,6 +53,14 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 			}
 			return map[string]any{"definition": def}, nil
 		})
+	case "workflow_graph_dot":
+		return decodeWorkflowArgs(args, func(req definitionRequest) (any, error) {
+			dot, ok := s.service.DefinitionDOT(req.DefinitionID)
+			if !ok {
+				return nil, errors.New("workflow definition not found")
+			}
+			return map[string]any{"dot": dot}, nil
+		})
 	case "workflow_start":
 		return decodeKeyedResult(args, "run", func(req startRequest) (any, error) {
 			return s.service.StartWorkflow(ctx, req.DefinitionID, req.Input)
@@ -73,6 +83,28 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		})
 	case "workflow_action_types":
 		return map[string]any{"action_types": s.service.ActionTypes()}, nil
+	case "workflow_manifests":
+		return map[string]any{"manifests": s.service.ActionManifests()}, nil
+	case "workflow_mapping_preview":
+		return decodeKeyedResult(args, "preview", func(req runtime.MappingPreviewRequest) (any, error) {
+			return s.service.PreviewMapping(ctx, req)
+		})
+	case "workflow_design_artifacts":
+		return keyedResult("artifacts", func() (any, error) {
+			return s.service.ListDesignArtifacts(ctx)
+		})
+	case "workflow_design_suggest":
+		return decodeKeyedResult(args, "suggestion", func(req runtime.DesignSuggestionRequest) (any, error) {
+			return s.service.SuggestDesignArtifacts(ctx, req)
+		})
+	case "workflow_adapter_choice":
+		return decodeKeyedResult(args, "adapter_choice", func(req runtime.AdapterChoiceRequest) (any, error) {
+			return s.service.SaveAdapterChoice(ctx, req)
+		})
+	case "workflow_observed_contracts":
+		return decodeKeyedResult(args, "observed_contracts", func(req runtime.ObservedContractQuery) (any, error) {
+			return s.service.ListObservedContracts(ctx, req)
+		})
 	case "workflow_draft_create":
 		return decodeKeyedResult(args, "draft", func(req runtime.DraftRequest) (any, error) {
 			return s.service.CreateDraft(ctx, req)
@@ -89,6 +121,10 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 	case "workflow_draft_validate":
 		return decodeKeyedResult(args, "validation", func(req workflowDraftRequest) (any, error) {
 			return s.service.ValidateDraft(ctx, req.DraftID)
+		})
+	case "workflow_edge_compatibility":
+		return decodeKeyedResult(args, "compatibility", func(req workflowEdgeCompatibilityRequest) (any, error) {
+			return s.service.CheckDraftEdgeCompatibility(ctx, req.DraftID, req.EdgeCompatibilityRequest)
 		})
 	case "workflow_draft_publish":
 		return decodeKeyedResult(args, "definition", func(req workflowDraftRequest) (any, error) {
@@ -138,15 +174,23 @@ func workflowToolDefinitions() []map[string]any {
 	names := []string{
 		"workflow_list",
 		"workflow_describe",
+		"workflow_graph_dot",
 		"workflow_start",
 		"workflow_status",
 		"workflow_signal",
 		"workflow_cancel",
 		"workflow_history",
 		"workflow_action_types",
+		"workflow_manifests",
+		"workflow_mapping_preview",
+		"workflow_design_artifacts",
+		"workflow_design_suggest",
+		"workflow_adapter_choice",
+		"workflow_observed_contracts",
 		"workflow_draft_create",
 		"workflow_draft_update",
 		"workflow_draft_validate",
+		"workflow_edge_compatibility",
 		"workflow_draft_publish",
 		"workflow_template_list",
 		"workflow_template_instantiate",
@@ -169,6 +213,8 @@ func workflowToolDescription(name string) string {
 		return "List installed workflow definitions."
 	case "workflow_describe":
 		return "Describe one installed workflow definition."
+	case "workflow_graph_dot":
+		return "Return a Graphviz DOT graph for one workflow definition."
 	case "workflow_start":
 		return "Start a durable workflow run from a definition id."
 	case "workflow_status":
@@ -181,12 +227,26 @@ func workflowToolDescription(name string) string {
 		return "List durable events for one workflow run."
 	case "workflow_action_types":
 		return "List workflow action types available for authoring."
+	case "workflow_manifests":
+		return "List AA-owned manifests for workflow action boundaries."
+	case "workflow_mapping_preview":
+		return "Preview a deterministic AA Mapping Spec against sample input."
+	case "workflow_design_artifacts":
+		return "List persisted deterministic design-time workflow artifacts."
+	case "workflow_design_suggest":
+		return "Ask the configured design assistant to propose deterministic workflow artifacts."
+	case "workflow_adapter_choice":
+		return "Persist a user-confirmed adapter choice for a draft workflow edge."
+	case "workflow_observed_contracts":
+		return "List runtime-observed output contracts that can strengthen workflow node contracts."
 	case "workflow_draft_create":
 		return "Create an editable workflow draft."
 	case "workflow_draft_update":
 		return "Update an editable workflow draft."
 	case "workflow_draft_validate":
 		return "Validate a workflow draft before publishing."
+	case "workflow_edge_compatibility":
+		return "Check whether two draft workflow nodes can be connected."
 	case "workflow_draft_publish":
 		return "Publish a workflow draft as an installed definition."
 	case "workflow_template_list":
@@ -235,6 +295,12 @@ type workflowDraftUpdateRequest struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	Body        map[string]any `json:"body"`
+}
+
+// workflowEdgeCompatibilityRequest stores one draft edge compatibility request.
+type workflowEdgeCompatibilityRequest struct {
+	DraftID string `json:"draft_id"`
+	runtime.EdgeCompatibilityRequest
 }
 
 // workflowTemplateInstantiateRequest stores template instantiation arguments.

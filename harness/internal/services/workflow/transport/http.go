@@ -31,7 +31,14 @@ func (s *HTTPServer) Routes() http.Handler {
 	mux.HandleFunc("/healthz", s.healthHandler)
 	mux.Handle("/mcp", s.mcp)
 	mux.HandleFunc("/api/workflows/action-types", s.actionTypesHandler)
+	mux.HandleFunc("/api/workflows/manifests", s.manifestsHandler)
+	mux.HandleFunc("/api/workflows/mappings/preview", s.mappingPreviewHandler)
+	mux.HandleFunc("/api/workflows/design/artifacts", s.designArtifactsHandler)
+	mux.HandleFunc("/api/workflows/design/suggest", s.designSuggestHandler)
+	mux.HandleFunc("/api/workflows/adapters/choices", s.adapterChoicesHandler)
+	mux.HandleFunc("/api/workflows/observed-contracts", s.observedContractsHandler)
 	mux.HandleFunc("/api/workflows/definitions", s.definitionsHandler)
+	mux.HandleFunc("/api/workflows/definitions/", s.definitionHandler)
 	mux.HandleFunc("/api/workflows/drafts", s.draftsHandler)
 	mux.HandleFunc("/api/workflows/drafts/", s.draftHandler)
 	mux.HandleFunc("/api/workflows/templates", s.templatesHandler)
@@ -49,6 +56,61 @@ func (s *HTTPServer) healthHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// designArtifactsHandler lists deterministic design-time artifacts.
+func (s *HTTPServer) designArtifactsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	artifacts, err := s.service.ListDesignArtifacts(r.Context())
+	writeResult(w, map[string]any{"artifacts": artifacts}, err)
+}
+
+// designSuggestHandler requests design-time artifact suggestions.
+func (s *HTTPServer) designSuggestHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req runtime.DesignSuggestionRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := s.service.SuggestDesignArtifacts(r.Context(), req)
+	writeResult(w, map[string]any{"suggestion": result}, err)
+}
+
+// adapterChoicesHandler stores a user-confirmed edge adapter decision.
+func (s *HTTPServer) adapterChoicesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req runtime.AdapterChoiceRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := s.service.SaveAdapterChoice(r.Context(), req)
+	writeResult(w, map[string]any{"adapter_choice": result}, err)
+}
+
+// observedContractsHandler lists runtime-observed contract shapes for review.
+func (s *HTTPServer) observedContractsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	contracts, err := s.service.ListObservedContracts(r.Context(), runtime.ObservedContractQuery{
+		DefinitionID: r.URL.Query().Get("definition_id"),
+		NodeID:       r.URL.Query().Get("node_id"),
+		ToolID:       r.URL.Query().Get("tool_id"),
+		Limit:        intQuery(r, "limit", 100),
+	})
+	writeResult(w, map[string]any{"observed_contracts": contracts}, err)
+}
+
 // definitionsHandler lists installed workflow definitions.
 func (s *HTTPServer) definitionsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -61,6 +123,51 @@ func (s *HTTPServer) definitionsHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"definitions": defs})
+}
+
+// definitionHandler routes definition-specific visualization requests.
+func (s *HTTPServer) definitionHandler(w http.ResponseWriter, r *http.Request) {
+	definitionID, action := splitTail(r.URL.Path, "/api/workflows/definitions/")
+	if definitionID == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "definition id is required"})
+		return
+	}
+	if r.Method == http.MethodGet && action == "dot" {
+		dot, ok := s.service.DefinitionDOT(definitionID)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow definition not found"})
+			return
+		}
+		w.Header().Set("Content-Type", "text/vnd.graphviz; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(dot))
+		return
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow definition route not found"})
+}
+
+// mappingPreviewHandler previews one deterministic mapping against sample input.
+func (s *HTTPServer) mappingPreviewHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	var req runtime.MappingPreviewRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	result, err := s.service.PreviewMapping(r.Context(), req)
+	writeResult(w, map[string]any{"preview": result}, err)
+}
+
+// manifestsHandler lists AA-owned workflow action manifests.
+func (s *HTTPServer) manifestsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"manifests": s.service.ActionManifests()})
 }
 
 // actionTypesHandler lists authoring actions that can be placed in drafts.
@@ -122,6 +229,14 @@ func (s *HTTPServer) draftHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && action == "compile":
 		result, err := s.service.CompileDraft(r.Context(), draftID)
 		writeResult(w, map[string]any{"compiled": result}, err)
+	case r.Method == http.MethodPost && action == "compatibility":
+		var req runtime.EdgeCompatibilityRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		result, err := s.service.CheckDraftEdgeCompatibility(r.Context(), draftID, req)
+		writeResult(w, map[string]any{"compatibility": result}, err)
 	case r.Method == http.MethodPost && action == "publish":
 		definition, err := s.service.PublishDraft(r.Context(), draftID)
 		writeResult(w, map[string]any{"definition": definition}, err)

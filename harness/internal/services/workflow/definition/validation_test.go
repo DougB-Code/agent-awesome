@@ -1,4 +1,4 @@
-// This file tests declarative workflow validation rules.
+// This file tests target workflow graph validation rules.
 package definition
 
 import (
@@ -6,6 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"agentawesome/internal/services/workflow/adapters"
+	"agentawesome/internal/services/workflow/contracts"
+	"agentawesome/internal/services/workflow/decision"
 )
 
 // testCatalog is a minimal action catalog for validation tests.
@@ -16,46 +20,46 @@ func (c testCatalog) Has(name string) bool {
 	return c[strings.TrimSpace(name)]
 }
 
-// TestValidateRejectsLegacyGraphKind verifies executable definitions are state machines only.
-func TestValidateRejectsLegacyGraphKind(t *testing.T) {
+// TestValidateRejectsLegacyKind verifies executable definitions use target workflow graphs.
+func TestValidateRejectsLegacyKind(t *testing.T) {
 	err := Validate(Definition{
-		Kind: "dag",
-		ID:   "old_graph",
-	}, testCatalog{})
+		Kind: "state_machine",
+		ID:   "old_flow",
+		Nodes: []NodeDefinition{
+			{ID: "tool", Uses: "tool.call"},
+		},
+	}, testCatalog{"tool.call": true})
 
-	if err == nil || !strings.Contains(err.Error(), `must be "state_machine"`) {
-		t.Fatalf("Validate() error = %v, want state_machine-only kind error", err)
+	if err == nil || !strings.Contains(err.Error(), `must be "workflow"`) {
+		t.Fatalf("Validate() error = %v, want workflow-only kind error", err)
 	}
 }
 
-// TestLoadFileRejectsRootTaskGraphNodes verifies executable YAML uses states only.
-func TestLoadFileRejectsRootTaskGraphNodes(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "leaky.yaml")
+// TestLoadFileRejectsStateMachineShape verifies legacy state fields are outside the schema.
+func TestLoadFileRejectsStateMachineShape(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state_machine.yaml")
 	if err := os.WriteFile(path, []byte(`
 kind: state_machine
 id: leaky
 initial: start
 states:
   - id: start
-nodes:
-  - id: tool
-    uses: tool.call
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	if _, err := LoadFile(path, testCatalog{"tool.call": true}); err == nil || !strings.Contains(err.Error(), "field nodes not found") {
-		t.Fatalf("LoadFile() error = %v, want root nodes rejected", err)
+	if _, err := LoadFile(path, testCatalog{}); err == nil {
+		t.Fatalf("LoadFile() error = nil, want legacy fields rejected")
 	}
 }
 
-// TestValidateRejectsUnknownTaskAction verifies task states cannot call unregistered actions.
-func TestValidateRejectsUnknownTaskAction(t *testing.T) {
+// TestValidateRejectsUnknownNodeAction verifies nodes cannot call unregistered actions.
+func TestValidateRejectsUnknownNodeAction(t *testing.T) {
 	err := Validate(Definition{
-		Kind: KindStateMachine,
+		Kind: KindWorkflow,
 		ID:   "email_triage",
-		States: []StateDefinition{
-			{ID: "fetch", Type: StateTypeTask, Uses: "email.fetch"},
+		Nodes: []NodeDefinition{
+			{ID: "fetch", Uses: "email.fetch"},
 		},
 	}, testCatalog{"tool.call": true})
 
@@ -64,14 +68,18 @@ func TestValidateRejectsUnknownTaskAction(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsTaskStateCycle verifies cycles are rejected before execution.
-func TestValidateRejectsTaskStateCycle(t *testing.T) {
+// TestValidateRejectsNodeCycle verifies cycles are rejected before execution.
+func TestValidateRejectsNodeCycle(t *testing.T) {
 	err := Validate(Definition{
-		Kind: KindStateMachine,
+		Kind: KindWorkflow,
 		ID:   "cycle",
-		States: []StateDefinition{
-			{ID: "a", Type: StateTypeTask, Uses: "tool.call", DependsOn: []string{"b"}},
-			{ID: "b", Type: StateTypeTask, Uses: "tool.call", DependsOn: []string{"a"}},
+		Nodes: []NodeDefinition{
+			{ID: "a", Uses: "tool.call"},
+			{ID: "b", Uses: "tool.call"},
+		},
+		Edges: []EdgeDefinition{
+			{From: PortRef{Node: "a"}, To: PortRef{Node: "b"}},
+			{From: PortRef{Node: "b"}, To: PortRef{Node: "a"}},
 		},
 	}, testCatalog{"tool.call": true})
 
@@ -83,11 +91,11 @@ func TestValidateRejectsTaskStateCycle(t *testing.T) {
 // TestValidateRejectsUnsupportedSchedule verifies scheduler limits are explicit.
 func TestValidateRejectsUnsupportedSchedule(t *testing.T) {
 	err := Validate(Definition{
-		Kind:     KindStateMachine,
+		Kind:     KindWorkflow,
 		ID:       "frequent",
 		Schedule: "*/5 * * * *",
-		States: []StateDefinition{
-			{ID: "tool", Type: StateTypeTask, Uses: "tool.call"},
+		Nodes: []NodeDefinition{
+			{ID: "tool", Uses: "tool.call"},
 		},
 	}, testCatalog{"tool.call": true})
 
@@ -96,31 +104,21 @@ func TestValidateRejectsUnsupportedSchedule(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsControlActionsInTaskStates verifies task states stay tool-only.
-func TestValidateRejectsControlActionsInTaskStates(t *testing.T) {
+// TestValidateAcceptsWorkflowGraph verifies the bounded action surface can be composed.
+func TestValidateAcceptsWorkflowGraph(t *testing.T) {
 	err := Validate(Definition{
-		Kind: KindStateMachine,
-		ID:   "bad_wait",
-		States: []StateDefinition{
-			{ID: "wait", Type: StateTypeTask, Uses: "delay.until"},
-		},
-	}, testCatalog{"delay.until": true})
-
-	if err == nil || !strings.Contains(err.Error(), "not supported in task states") {
-		t.Fatalf("Validate() error = %v, want task action surface error", err)
-	}
-}
-
-// TestValidateAcceptsTaskStateSafeActions verifies the bounded task action surface.
-func TestValidateAcceptsTaskStateSafeActions(t *testing.T) {
-	err := Validate(Definition{
-		Kind: KindStateMachine,
+		Kind: KindWorkflow,
 		ID:   "safe",
-		States: []StateDefinition{
-			{ID: "mcp", Type: StateTypeTask, Uses: "mcp.call", Retry: 1, RetryDelay: "10ms"},
-			{ID: "assert", Type: StateTypeTask, Uses: "data.assert", DependsOn: []string{"mcp"}},
-			{ID: "tool", Type: StateTypeTask, Uses: "tool.call", DependsOn: []string{"assert"}},
-			{ID: "child", Type: StateTypeTask, Uses: "workflow.run", DependsOn: []string{"tool"}},
+		Nodes: []NodeDefinition{
+			{ID: "mcp", Uses: "mcp.call", Retry: 1, RetryDelay: "10ms"},
+			{ID: "assert", Uses: "data.assert"},
+			{ID: "tool", Uses: "tool.call"},
+			{ID: "child", Uses: "workflow.run"},
+		},
+		Edges: []EdgeDefinition{
+			{From: PortRef{Node: "mcp"}, To: PortRef{Node: "assert"}},
+			{From: PortRef{Node: "assert"}, To: PortRef{Node: "tool"}},
+			{From: PortRef{Node: "tool"}, To: PortRef{Node: "child"}},
 		},
 	}, testCatalog{"mcp.call": true, "data.assert": true, "tool.call": true, "workflow.run": true})
 
@@ -129,29 +127,13 @@ func TestValidateAcceptsTaskStateSafeActions(t *testing.T) {
 	}
 }
 
-// TestValidateRejectsRemovedActions verifies old workflow actions are unavailable.
-func TestValidateRejectsRemovedActions(t *testing.T) {
-	for _, action := range []string{"cli.command", "agent.run", "dag.run"} {
-		err := Validate(Definition{
-			Kind: KindStateMachine,
-			ID:   "removed_" + strings.ReplaceAll(action, ".", "_"),
-			States: []StateDefinition{
-				{ID: "task", Type: StateTypeTask, Uses: action},
-			},
-		}, testCatalog{action: true})
-		if err == nil || !strings.Contains(err.Error(), "not supported in task states") {
-			t.Fatalf("Validate(%q) error = %v, want removed action rejected", action, err)
-		}
-	}
-}
-
-// TestValidateRejectsInvalidTaskTimeout verifies bad runtime policy is caught early.
-func TestValidateRejectsInvalidTaskTimeout(t *testing.T) {
+// TestValidateRejectsInvalidNodeTimeout verifies bad runtime policy is caught early.
+func TestValidateRejectsInvalidNodeTimeout(t *testing.T) {
 	err := Validate(Definition{
-		Kind: KindStateMachine,
+		Kind: KindWorkflow,
 		ID:   "bad_timeout",
-		States: []StateDefinition{
-			{ID: "tool", Type: StateTypeTask, Uses: "tool.call", Timeout: "soon"},
+		Nodes: []NodeDefinition{
+			{ID: "tool", Uses: "tool.call", Timeout: "soon"},
 		},
 	}, testCatalog{"tool.call": true})
 
@@ -160,194 +142,122 @@ func TestValidateRejectsInvalidTaskTimeout(t *testing.T) {
 	}
 }
 
-// TestValidateAcceptsStateMachine verifies valid process-state definitions pass.
-func TestValidateAcceptsStateMachine(t *testing.T) {
+// TestValidateRejectsMissingMappingRef verifies adapter references are deterministic.
+func TestValidateRejectsMissingMappingRef(t *testing.T) {
 	err := Validate(Definition{
-		Kind:    KindStateMachine,
-		ID:      "course_download",
-		Initial: "login",
-		States: []StateDefinition{
-			{
-				ID: "login",
-				OnEntry: []ActionDefinition{
-					{ID: "ask_user", Uses: "human.request"},
-				},
-				Transitions: []TransitionDefinition{
-					{Trigger: "submitted", To: "download"},
-				},
-			},
-			{ID: "download"},
+		Kind: KindWorkflow,
+		ID:   "missing_mapping",
+		Nodes: []NodeDefinition{
+			{ID: "source", Uses: "tool.call"},
+			{ID: "target", Uses: "tool.call"},
 		},
-	}, testCatalog{"human.request": true})
+		Edges: []EdgeDefinition{
+			{From: PortRef{Node: "source"}, To: PortRef{Node: "target"}, Adapter: adaptersWithMappingRef("not_defined")},
+		},
+	}, testCatalog{"tool.call": true})
+
+	if err == nil || !strings.Contains(err.Error(), "mappingRef") {
+		t.Fatalf("Validate() error = %v, want missing mapping reference", err)
+	}
+}
+
+// TestValidateRejectsAmbiguousEdgeCondition verifies conditional edges declare one predicate source.
+func TestValidateRejectsAmbiguousEdgeCondition(t *testing.T) {
+	err := Validate(Definition{
+		Kind: KindWorkflow,
+		ID:   "ambiguous_edge",
+		Nodes: []NodeDefinition{
+			{ID: "source", Uses: "tool.call"},
+			{ID: "target", Uses: "tool.call"},
+		},
+		Edges: []EdgeDefinition{
+			{
+				From: PortRef{Node: "source"},
+				To:   PortRef{Node: "target"},
+				When: decisionWhen("input.body.value.ready", "input.body.value.approved"),
+			},
+		},
+	}, testCatalog{"tool.call": true})
+
+	if err == nil || !strings.Contains(err.Error(), "expr or path, not both") {
+		t.Fatalf("Validate() error = %v, want ambiguous condition error", err)
+	}
+}
+
+// TestValidateRejectsIncompatibleDirectEdge verifies declared contracts guard edges.
+func TestValidateRejectsIncompatibleDirectEdge(t *testing.T) {
+	err := Validate(Definition{
+		Kind: KindWorkflow,
+		ID:   "contract_block",
+		Nodes: []NodeDefinition{
+			{ID: "source", Uses: "tool.call", Output: contracts.Contract{Produces: []contracts.Carrier{{Kind: "text"}}}},
+			{ID: "target", Uses: "tool.call", Input: contracts.Contract{Accepts: []contracts.Carrier{{Kind: "file", MediaTypes: []string{"application/pdf"}}}}},
+		},
+		Edges: []EdgeDefinition{
+			{From: PortRef{Node: "source"}, To: PortRef{Node: "target"}},
+		},
+	}, testCatalog{"tool.call": true})
+
+	if err == nil || !strings.Contains(err.Error(), "not contract compatible") {
+		t.Fatalf("Validate() error = %v, want contract compatibility error", err)
+	}
+}
+
+// TestValidateAllowsExplicitAdapterForIncompatibleEdge verifies adapters make adaptation explicit.
+func TestValidateAllowsExplicitAdapterForIncompatibleEdge(t *testing.T) {
+	err := Validate(Definition{
+		Kind: KindWorkflow,
+		ID:   "contract_adapt",
+		Nodes: []NodeDefinition{
+			{ID: "source", Uses: "tool.call", Output: contracts.Contract{Produces: []contracts.Carrier{{Kind: "text"}}}},
+			{ID: "target", Uses: "tool.call", Input: contracts.Contract{Accepts: []contracts.Carrier{{Kind: "object"}}}},
+		},
+		Edges: []EdgeDefinition{
+			{From: PortRef{Node: "source"}, To: PortRef{Node: "target"}, Adapter: adaptersWithKind("mapping")},
+		},
+	}, testCatalog{"tool.call": true})
 
 	if err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
-// TestLoadFileAcceptsNestedStateMachine verifies YAML can author composite phases.
-func TestLoadFileAcceptsNestedStateMachine(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "nested.yaml")
+// TestLoadFileAcceptsWorkflowGraph verifies YAML authors target graph definitions.
+func TestLoadFileAcceptsWorkflowGraph(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "workflow.yaml")
 	if err := os.WriteFile(path, []byte(`
-kind: state_machine
-id: nested_flow
-initial: intake
-states:
-  - id: intake
-    initial: collect
-    on_entry:
-      - id: validate_input
-        uses: data.assert
-    transitions:
-      - trigger: failed
-        to: blocked
-    states:
-      - id: collect
-        transitions:
-          - trigger: succeeded
-            to: done
-  - id: blocked
-  - id: done
+kind: workflow
+id: loaded_flow
+nodes:
+  - id: source
+    type: tool
+    tool: mock_tool
+    with:
+      arguments: {}
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	loaded, err := LoadFile(path, testCatalog{"data.assert": true})
+	loaded, err := LoadFile(path, testCatalog{"tool.call": true})
 	if err != nil {
 		t.Fatalf("LoadFile() error = %v", err)
 	}
-	if loaded.Definition.States[0].Initial != "collect" {
-		t.Fatalf("composite initial = %q, want collect", loaded.Definition.States[0].Initial)
-	}
-	if len(loaded.Definition.States[0].States) != 1 {
-		t.Fatalf("nested states = %#v, want one child", loaded.Definition.States[0].States)
+	if loaded.Definition.Kind != KindWorkflow || len(loaded.Definition.Nodes) != 1 {
+		t.Fatalf("definition = %#v, want workflow graph", loaded.Definition)
 	}
 }
 
-// TestValidateRejectsCompositeWithoutInitial verifies phases declare entry children.
-func TestValidateRejectsCompositeWithoutInitial(t *testing.T) {
-	err := Validate(Definition{
-		Kind:    KindStateMachine,
-		ID:      "missing_child_initial",
-		Initial: "phase",
-		States: []StateDefinition{
-			{ID: "phase", States: []StateDefinition{{ID: "child"}}},
-		},
-	}, testCatalog{})
-
-	if err == nil || !strings.Contains(err.Error(), "must define an initial substate") {
-		t.Fatalf("Validate() error = %v, want missing initial substate", err)
-	}
+// adaptersWithMappingRef builds a small adapter reference for validation tests.
+func adaptersWithMappingRef(name string) adapters.Definition {
+	return adapters.Definition{MappingRef: name}
 }
 
-// TestValidateRejectsDuplicateNestedStateID verifies nested ids stay globally unique.
-func TestValidateRejectsDuplicateNestedStateID(t *testing.T) {
-	err := Validate(Definition{
-		Kind:    KindStateMachine,
-		ID:      "duplicate_nested",
-		Initial: "phase",
-		States: []StateDefinition{
-			{
-				ID:      "phase",
-				Initial: "child",
-				States:  []StateDefinition{{ID: "child"}},
-			},
-			{ID: "child"},
-		},
-	}, testCatalog{})
-
-	if err == nil || !strings.Contains(err.Error(), `duplicate state "child"`) {
-		t.Fatalf("Validate() error = %v, want duplicate nested state", err)
-	}
+// adaptersWithKind builds a small adapter declaration for validation tests.
+func adaptersWithKind(kind string) adapters.Definition {
+	return adapters.Definition{Kind: kind}
 }
 
-// TestValidateRejectsInvalidTransitionTarget verifies transitions target real states.
-func TestValidateRejectsInvalidTransitionTarget(t *testing.T) {
-	err := Validate(Definition{
-		Kind:    KindStateMachine,
-		ID:      "bad_transition",
-		Initial: "start",
-		States: []StateDefinition{
-			{ID: "start", Transitions: []TransitionDefinition{{Trigger: "go", To: "missing"}}},
-		},
-	}, testCatalog{})
-
-	if err == nil || !strings.Contains(err.Error(), `target "missing" is not defined`) {
-		t.Fatalf("Validate() error = %v, want invalid transition target", err)
-	}
-}
-
-// TestValidateRejectsInvalidHierarchyParent verifies flat parent references are checked.
-func TestValidateRejectsInvalidHierarchyParent(t *testing.T) {
-	err := Validate(Definition{
-		Kind:    KindStateMachine,
-		ID:      "bad_parent",
-		Initial: "child",
-		States: []StateDefinition{
-			{ID: "child", Parent: "missing"},
-		},
-	}, testCatalog{})
-
-	if err == nil || !strings.Contains(err.Error(), `parent "missing" is not defined`) {
-		t.Fatalf("Validate() error = %v, want invalid parent reference", err)
-	}
-}
-
-// TestValidateRejectsNestedParentConflict verifies nested YAML cannot contradict parent fields.
-func TestValidateRejectsNestedParentConflict(t *testing.T) {
-	err := Validate(Definition{
-		Kind:    KindStateMachine,
-		ID:      "conflicting_parent",
-		Initial: "phase_a",
-		States: []StateDefinition{
-			{
-				ID:      "phase_a",
-				Initial: "child",
-				States:  []StateDefinition{{ID: "child", Parent: "phase_b"}},
-			},
-			{ID: "phase_b", Initial: "child"},
-		},
-	}, testCatalog{})
-
-	if err == nil || !strings.Contains(err.Error(), `conflicts with containing state "phase_a"`) {
-		t.Fatalf("Validate() error = %v, want nested parent conflict", err)
-	}
-}
-
-// TestValidateRejectsHierarchyCycles verifies parent cycles cannot reach runtime.
-func TestValidateRejectsHierarchyCycles(t *testing.T) {
-	err := Validate(Definition{
-		Kind:    KindStateMachine,
-		ID:      "parent_cycle",
-		Initial: "a",
-		States: []StateDefinition{
-			{ID: "a", Parent: "b"},
-			{ID: "b", Parent: "a"},
-		},
-	}, testCatalog{})
-
-	if err == nil || !strings.Contains(err.Error(), "cycle") {
-		t.Fatalf("Validate() error = %v, want hierarchy cycle", err)
-	}
-}
-
-// TestValidateRejectsHierarchicalTaskStates verifies task graphs remain flat.
-func TestValidateRejectsHierarchicalTaskStates(t *testing.T) {
-	err := Validate(Definition{
-		Kind: KindStateMachine,
-		ID:   "hierarchical_tasks",
-		States: []StateDefinition{
-			{
-				ID:      "phase",
-				Initial: "task",
-				States: []StateDefinition{
-					{ID: "task", Type: StateTypeTask, Uses: "tool.call"},
-				},
-			},
-		},
-	}, testCatalog{"tool.call": true})
-
-	if err == nil || !strings.Contains(err.Error(), "cannot mix process states with task states") {
-		t.Fatalf("Validate() error = %v, want mixed task/process hierarchy", err)
-	}
+// decisionWhen builds an edge predicate for validation tests.
+func decisionWhen(expr string, path string) decision.When {
+	return decision.When{Expr: expr, Path: path}
 }
