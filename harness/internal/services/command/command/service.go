@@ -395,8 +395,13 @@ func (s *Service) resolveTemplateRequest(req ExecuteRequest) (commandRecord, err
 	if err := validateTemplateParameters(req.Parameters, template.ParameterSchema); err != nil {
 		return commandRecord{}, err
 	}
+	executable := strings.TrimSpace(renderString(template.Executable, req.Parameters))
+	if executable == "" {
+		return commandRecord{}, fmt.Errorf("command template %q executable resolved empty", template.ID)
+	}
 	args := renderStrings(template.Args, req.Parameters)
 	stdin := renderString(template.Stdin, req.Parameters)
+	env := renderStringMap(template.Env, req.Parameters)
 	cwd, err := s.safeWorkdir(firstNonEmpty(req.WorkingDir, template.WorkingDir))
 	if err != nil {
 		return commandRecord{}, err
@@ -411,11 +416,11 @@ func (s *Service) resolveTemplateRequest(req ExecuteRequest) (commandRecord, err
 	}
 	return commandRecord{
 		TemplateID:             template.ID,
-		Executable:             template.Executable,
+		Executable:             executable,
 		Args:                   args,
 		Stdin:                  stdin,
 		WorkingDir:             cwd,
-		Env:                    template.Env,
+		Env:                    env,
 		Timeout:                timeout,
 		MaxOutputBytes:         maxOutput,
 		ParameterSchema:        cloneMap(template.ParameterSchema),
@@ -688,6 +693,18 @@ func renderStrings(values []string, params map[string]any) []string {
 	return next
 }
 
+// renderStringMap expands simple {{name}} placeholders in a string map.
+func renderStringMap(values map[string]string, params map[string]any) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	next := make(map[string]string, len(values))
+	for key, value := range values {
+		next[key] = renderString(value, params)
+	}
+	return next
+}
+
 // renderString expands simple {{name}} placeholders in one value.
 func renderString(value string, params map[string]any) string {
 	return templateParameterPattern.ReplaceAllStringFunc(value, func(match string) string {
@@ -761,8 +778,12 @@ func validateRecordID(value string, label string) (string, error) {
 // templateParameters returns placeholder names used by editable template fields.
 func templateParameters(template Template) []string {
 	seen := map[string]struct{}{}
-	values := append([]string{}, template.Args...)
+	values := []string{template.Executable}
+	values = append(values, template.Args...)
 	values = append(values, template.Stdin, template.WorkingDir)
+	for _, value := range template.Env {
+		values = append(values, value)
+	}
 	for _, value := range values {
 		for _, match := range templateParameterPattern.FindAllStringSubmatch(value, -1) {
 			seen[match[1]] = struct{}{}

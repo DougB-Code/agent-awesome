@@ -642,6 +642,51 @@ void main() {
     );
   });
 
+  testWidgets('shows state-machine definitions as workflow files', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(const <AutomationDraft>[
+      AutomationDraft(
+        id: 'draft_professional_coding_change',
+        kind: 'state_machine',
+        name: 'Professional Coding Change',
+        status: 'published',
+        body: <String, dynamic>{
+          'kind': 'state_machine',
+          'id': 'professional_coding_change',
+          'initial': 'intake',
+          'states': <Object>[
+            <String, Object>{'id': 'intake'},
+            <String, Object>{'id': 'source_control_prep'},
+          ],
+        },
+      ),
+    ]);
+    controller.automationDrafts = harness.client.drafts;
+    controller.selectedAutomationDraftId = 'draft_professional_coding_change';
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-intake')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byTooltip('Files'));
+    await tester.pumpAndSettle();
+    expect(find.text('Professional Coding Change'), findsWidgets);
+    expect(find.text('workflow'), findsWidgets);
+  });
+
   test('creates workflow drafts with the workflow API kind', () async {
     final harness = _readyCapturingController();
     harness.client.seedDrafts(const <AutomationDraft>[]);
@@ -723,9 +768,9 @@ void main() {
       find.byKey(const ValueKey<String>('state-machine-node-plan')),
       findsOneWidget,
     );
-    expect(find.text('plan'), findsWidgets);
-    expect(find.text('succeeded -> done'), findsOneWidget);
-    expect(find.text('failed -> blocked'), findsWidgets);
+    expect(find.text('Plan'), findsWidgets);
+    expect(find.text('Succeeded -> Done'), findsOneWidget);
+    expect(find.text('Failed -> Blocked'), findsWidgets);
     expect(
       find.byKey(
         const ValueKey<String>('state-machine-exit-badge-plan-failed-blocked'),
@@ -845,7 +890,7 @@ void main() {
     );
     await tester.pump();
     expect(failedBadge, findsNothing);
-    expect(find.text('rejected -> blocked'), findsWidgets);
+    expect(find.text('Rejected -> Blocked'), findsWidgets);
   });
 
   testWidgets('lays out workflow nodes in compact semantic ranks and lanes', (
@@ -1244,7 +1289,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Workflow'), findsOneWidget);
-    expect(find.text('intake'), findsWidgets);
+    expect(find.text('Intake'), findsWidgets);
     expect(
       find.byKey(const ValueKey<String>('state-machine-node-collect')),
       findsOneWidget,
@@ -1260,6 +1305,36 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('state-machine-node-done')),
       findsNothing,
+    );
+    expect(find.byTooltip('Back to workflow'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back to workflow'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-intake')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-done')),
+      findsOneWidget,
+    );
+
+    await _tapStateMachineNode(tester, 'intake');
+    await tester.tap(find.byTooltip('Focus phase'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-collect')),
+      findsOneWidget,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('state-machine-node-intake')),
+      findsOneWidget,
     );
 
     await tester.tap(
@@ -1307,7 +1382,7 @@ void main() {
       find.byKey(const ValueKey<String>('state-machine-node-call_mcp_tool')),
       findsOneWidget,
     );
-    expect(find.text('call_mcp_tool'), findsWidgets);
+    expect(find.text('Call MCP Tool'), findsWidgets);
   });
 
   testWidgets('focused phase initials update the phase not root', (
@@ -1393,8 +1468,8 @@ void main() {
     await tester.tap(find.byTooltip('Focus phase'));
     await tester.pumpAndSettle();
 
-    expect(find.text('quality'), findsWidgets);
-    expect(find.text('review_phase'), findsWidgets);
+    expect(find.text('Quality'), findsWidgets);
+    expect(find.text('Review Phase'), findsWidgets);
     expect(
       find.byKey(const ValueKey<String>('state-machine-node-review')),
       findsOneWidget,
@@ -1483,7 +1558,7 @@ void main() {
       const ValueKey<String>('state-machine-exit-badge-collect-succeeded-done'),
     );
     expect(badge, findsOneWidget);
-    expect(find.text('succeeded -> done'), findsWidgets);
+    expect(find.text('Succeeded -> Done'), findsWidgets);
 
     await tester.tap(badge);
     await tester.pumpAndSettle();
@@ -2226,6 +2301,8 @@ void main() {
     expect(find.text('Memory MCP'), findsOneWidget);
     expect(find.text('FILES'), findsWidgets);
     expect(find.byTooltip('Servers'), findsOneWidget);
+    expect(find.byTooltip('Presets'), findsOneWidget);
+    expect(find.byTooltip('Scenarios'), findsOneWidget);
     expect(find.byTooltip('Source'), findsOneWidget);
     expect(find.byTooltip('Add MCP config'), findsOneWidget);
     expect(find.byTooltip('Duplicate MCP config'), findsOneWidget);
@@ -2239,6 +2316,8 @@ void main() {
     expect(find.text('Personal Tools'), findsOneWidget);
     expect(find.text('FILES'), findsWidgets);
     expect(find.byTooltip('Commands'), findsOneWidget);
+    expect(find.byTooltip('Presets'), findsOneWidget);
+    expect(find.byTooltip('Scenarios'), findsOneWidget);
     expect(find.byTooltip('Source'), findsOneWidget);
   });
 

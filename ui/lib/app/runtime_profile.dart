@@ -294,7 +294,7 @@ class RuntimeProfileLoader {
     if (decoded is! Map<String, dynamic>) {
       throw const FormatException('Runtime profile must be a JSON object');
     }
-    return RuntimeProfile.fromJson(_withRequiredRuntimeSections(decoded));
+    return RuntimeProfile.fromJson(decoded);
   }
 
   /// Resolves and creates the selected profile file when using defaults.
@@ -352,6 +352,7 @@ class RuntimeProfileLoader {
     final memoryMcp = Uri.parse(config.memoryMcpUrl);
     final gatewayApi = Uri.parse(config.agentGatewayBaseUrl);
     final contextApi = Uri.parse(config.agentContextApiBaseUrl);
+    final sourceControlMcp = Uri.parse(config.sourceControlMcpUrl);
     return <String, String>{
       'AGENTAWESOME_WORKSPACE_ROOT': config.workspaceRoot,
       'AGENTAWESOME_CONFIG_DIR': agentAwesomeConfigDirectoryPath(),
@@ -379,71 +380,11 @@ class RuntimeProfileLoader {
       'MEMORY_DATA_DIR': defaultMemoryDataDirectoryPath(),
       'MEMORY_FIREWALL_POLICY_PATH': memoryFirewallPolicyPath(),
       'MEMORY_HEALTH_URL': _healthUrl(config.memoryMcpUrl),
+      'SOURCECONTROL_MCP_URL': config.sourceControlMcpUrl,
+      'SOURCECONTROL_MCP_ADDR': sourceControlMcp.authority,
+      'SOURCECONTROL_HEALTH_URL': _healthUrl(config.sourceControlMcpUrl),
       'AUTO_START_LOCAL_SERVICES': config.autoStartLocalServices.toString(),
     };
-  }
-
-  /// Adds runtime sections that were introduced after a profile was created.
-  Map<String, dynamic> _withRequiredRuntimeSections(
-    Map<String, dynamic> profile,
-  ) {
-    if (profile['workflow'] is Map<String, dynamic>) {
-      return profile;
-    }
-    if (profile.containsKey('workflow') && profile['workflow'] != null) {
-      return profile;
-    }
-    return <String, dynamic>{
-      ...profile,
-      'workflow': _defaultWorkflowRuntimeJson(profile),
-    };
-  }
-
-  /// Builds the workflow runtime expected by current app-managed profiles.
-  Map<String, dynamic> _defaultWorkflowRuntimeJson(
-    Map<String, dynamic> profile,
-  ) {
-    final managed =
-        _profileServiceAutoStart(profile, 'harness') ||
-        _profileServiceAutoStart(profile, 'gateway');
-    final profileId = _profileString(profile, 'id', fallback: 'agent-awesome');
-    return <String, dynamic>{
-      'id': '$profileId-workflow',
-      'label': 'Agent Awesome Workflow',
-      'api_base_url': _workflowApiBaseUrl(),
-      'health_url': _healthUrl(_workflowApiBaseUrl()),
-      'hosted_by_harness': true,
-      'working_directory': '',
-      'package_path': '',
-      'definitions_dir': defaultWorkflowDefinitionsDirectoryPath(),
-      'db_path': defaultWorkflowDatabasePath(),
-      'port': 8092,
-      'auto_start': false,
-      'enabled': managed,
-    };
-  }
-
-  /// Reports whether a nested profile service is app-managed.
-  bool _profileServiceAutoStart(Map<String, dynamic> profile, String key) {
-    final service = profile[key];
-    if (service is! Map<String, dynamic>) {
-      return false;
-    }
-    return service['auto_start'] == true;
-  }
-
-  /// Reads one string field from a decoded profile map.
-  String _profileString(
-    Map<String, dynamic> profile,
-    String key, {
-    required String fallback,
-  }) {
-    final value = profile[key];
-    if (value == null) {
-      return fallback;
-    }
-    final text = value.toString().trim();
-    return text.isEmpty ? fallback : text;
   }
 }
 

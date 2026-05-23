@@ -20,23 +20,20 @@ func (c testCatalog) Has(name string) bool {
 	return c[strings.TrimSpace(name)]
 }
 
-// TestValidateRejectsLegacyKind verifies executable definitions use target workflow graphs.
-func TestValidateRejectsLegacyKind(t *testing.T) {
+// TestValidateRejectsIncompleteStateMachine verifies hierarchical states are required.
+func TestValidateRejectsIncompleteStateMachine(t *testing.T) {
 	err := Validate(Definition{
-		Kind: "state_machine",
+		Kind: KindStateMachine,
 		ID:   "old_flow",
-		Nodes: []NodeDefinition{
-			{ID: "tool", Uses: "tool.call"},
-		},
 	}, testCatalog{"tool.call": true})
 
-	if err == nil || !strings.Contains(err.Error(), `must be "workflow"`) {
-		t.Fatalf("Validate() error = %v, want workflow-only kind error", err)
+	if err == nil || !strings.Contains(err.Error(), "must define states") {
+		t.Fatalf("Validate() error = %v, want missing states error", err)
 	}
 }
 
-// TestLoadFileRejectsStateMachineShape verifies legacy state fields are outside the schema.
-func TestLoadFileRejectsStateMachineShape(t *testing.T) {
+// TestLoadFileAcceptsStateMachineShape verifies hierarchical state machines are deployable.
+func TestLoadFileAcceptsStateMachineShape(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state_machine.yaml")
 	if err := os.WriteFile(path, []byte(`
 kind: state_machine
@@ -48,8 +45,26 @@ states:
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	if _, err := LoadFile(path, testCatalog{}); err == nil {
-		t.Fatalf("LoadFile() error = nil, want legacy fields rejected")
+	if _, err := LoadFile(path, testCatalog{}); err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+}
+
+// TestLoadFileAcceptsProfessionalCodingWorkflow verifies the shipped pilot workflow is deployable.
+func TestLoadFileAcceptsProfessionalCodingWorkflow(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "..", "workflows", "professional_coding_change.yaml")
+	loaded, err := LoadFile(path, testCatalog{
+		"command.execute": true,
+		"data.assert":     true,
+		"data.defaults":   true,
+		"human.request":   true,
+		"mcp.call":        true,
+	})
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	if loaded.Definition.Kind != KindStateMachine {
+		t.Fatalf("Kind = %q, want %q", loaded.Definition.Kind, KindStateMachine)
 	}
 }
 

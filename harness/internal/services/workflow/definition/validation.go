@@ -16,6 +16,8 @@ import (
 const (
 	// KindWorkflow identifies a pipe-composable workflow graph.
 	KindWorkflow = "workflow"
+	// KindStateMachine identifies a hierarchical durable state machine.
+	KindStateMachine = "state_machine"
 )
 
 var safeIDPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
@@ -30,13 +32,17 @@ func Validate(def Definition, actions ActionCatalog) error {
 	if err := validateSafeID(def.ID, "workflow id"); err != nil {
 		return err
 	}
-	if strings.TrimSpace(def.Kind) != KindWorkflow {
-		return fmt.Errorf("workflow %q kind must be %q", def.ID, KindWorkflow)
-	}
 	if err := validateSchedule(def.Schedule); err != nil {
 		return err
 	}
-	return validateWorkflowGraph(def, actions)
+	switch strings.TrimSpace(def.Kind) {
+	case KindWorkflow:
+		return validateWorkflowGraph(def, actions)
+	case KindStateMachine:
+		return validateStateMachine(def, actions)
+	default:
+		return fmt.Errorf("workflow %q kind must be %q or %q", def.ID, KindWorkflow, KindStateMachine)
+	}
 }
 
 // validateWorkflowGraph checks pipe graph nodes, edges, mappings, and runtime policy.
@@ -146,6 +152,82 @@ func validateNodeAcyclic(def Definition) error {
 	return nil
 }
 
+// validateStateMachine checks hierarchical states, entry actions, and transitions.
+func validateStateMachine(def Definition, actions ActionCatalog) error {
+	if len(def.States) == 0 {
+		return fmt.Errorf("state machine %q must define states", def.ID)
+	}
+	states := map[string]StateDefinition{}
+	if err := collectStateDefinitions(def.States, states, actions); err != nil {
+		return err
+	}
+	initial := strings.TrimSpace(def.Initial)
+	if initial == "" {
+		initial = strings.TrimSpace(def.States[0].ID)
+	}
+	if _, ok := states[initial]; !ok {
+		return fmt.Errorf("state machine %q initial state %q is not defined", def.ID, initial)
+	}
+	for _, state := range states {
+		if len(state.States) > 0 {
+			childInitial := strings.TrimSpace(state.Initial)
+			if childInitial == "" {
+				childInitial = strings.TrimSpace(state.States[0].ID)
+			}
+			if _, ok := states[childInitial]; !ok {
+				return fmt.Errorf("state %q initial state %q is not defined", state.ID, childInitial)
+			}
+		}
+		for _, transition := range state.Transitions {
+			trigger := strings.TrimSpace(transition.Trigger)
+			if trigger == "" {
+				return fmt.Errorf("state %q transition trigger is required", state.ID)
+			}
+			if target := strings.TrimSpace(transition.To); target != "" {
+				if _, ok := states[target]; !ok {
+					return fmt.Errorf("state %q transition target %q is not defined", state.ID, target)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// collectStateDefinitions indexes states and validates their entry actions.
+func collectStateDefinitions(items []StateDefinition, states map[string]StateDefinition, actions ActionCatalog) error {
+	for _, state := range items {
+		if err := validateSafeID(state.ID, "state id"); err != nil {
+			return err
+		}
+		if _, ok := states[state.ID]; ok {
+			return fmt.Errorf("state machine has duplicate state %q", state.ID)
+		}
+		states[state.ID] = state
+		for _, actionNode := range state.OnEntry {
+			if err := validateSafeID(actionNode.ID, "state action id"); err != nil {
+				return err
+			}
+			action := NodeAction(actionNode)
+			if err := validateAction(action, actions); err != nil {
+				return fmt.Errorf("state %s action %s: %w", state.ID, actionNode.ID, err)
+			}
+			if actionNode.Retry < 0 {
+				return fmt.Errorf("state action %q retry must not be negative", actionNode.ID)
+			}
+			if err := validateDuration(actionNode.Timeout, "timeout", actionNode.ID); err != nil {
+				return err
+			}
+			if err := validateDuration(actionNode.RetryDelay, "retry_delay", actionNode.ID); err != nil {
+				return err
+			}
+		}
+		if err := collectStateDefinitions(state.States, states, actions); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // validateAction ensures the action is supplied by the installed registry.
 func validateAction(name string, actions ActionCatalog) error {
 	trimmed := strings.TrimSpace(name)
@@ -208,6 +290,11 @@ func validateSafeID(value string, label string) error {
 // HasPipeGraph reports whether a definition uses the target node-edge graph model.
 func HasPipeGraph(def Definition) bool {
 	return strings.TrimSpace(def.Kind) == KindWorkflow && len(def.Nodes) > 0
+}
+
+// HasStateMachine reports whether a definition uses hierarchical states.
+func HasStateMachine(def Definition) bool {
+	return strings.TrimSpace(def.Kind) == KindStateMachine && len(def.States) > 0
 }
 
 // NodeAction resolves the registered action used by a pipe graph node.

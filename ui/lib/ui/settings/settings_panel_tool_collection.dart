@@ -150,6 +150,16 @@ class _SettingsToolSurfaceCommandPanelState
         icon: widget.icon,
       ),
       const CommandPanelDetailMode(
+        id: _toolSurfaceNodePresetsMode,
+        label: 'Presets',
+        icon: Icons.account_tree_outlined,
+      ),
+      const CommandPanelDetailMode(
+        id: _toolSurfaceNodeScenariosMode,
+        label: 'Scenarios',
+        icon: Icons.fact_check_outlined,
+      ),
+      const CommandPanelDetailMode(
         id: _toolSurfaceSourceMode,
         label: 'Source',
         icon: Icons.code,
@@ -218,6 +228,7 @@ class _SettingsToolSurfaceCommandPanelState
       controller: widget.controller,
       entry: entry,
       surface: widget.surface,
+      modeId: modeId,
       query: '',
     );
   }
@@ -434,6 +445,8 @@ enum _ToolSettingsSurface {
 }
 
 const String _toolSurfaceEditMode = 'edit';
+const String _toolSurfaceNodePresetsMode = 'node-presets';
+const String _toolSurfaceNodeScenariosMode = 'node-scenarios';
 const String _toolSurfaceSourceMode = 'source';
 
 class _SettingsMissingToolConfig extends StatelessWidget {

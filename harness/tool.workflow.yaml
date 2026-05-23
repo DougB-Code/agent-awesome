@@ -72,6 +72,23 @@ mcp:
           - workflow_draft_update
           - workflow_draft_validate
           - workflow_draft_publish
+    - name: sourcecontrol
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8095/mcp
+      require-confirmation-tools:
+        - sourcecontrol.commit
+        - sourcecontrol.push
+        - sourcecontrol.restore
+        - sourcecontrol.cleanup_worktree
+      tools:
+        allow:
+          - sourcecontrol.prepare_worktree
+          - sourcecontrol.status
+          - sourcecontrol.commit
+          - sourcecontrol.push
+          - sourcecontrol.backup
+          - sourcecontrol.restore
+          - sourcecontrol.cleanup_worktree
 memory:
   actor: agent:agent-awesome
   read-domains:
@@ -85,3 +102,45 @@ memory:
     - public
     - internal
     - private
+node-presets:
+  - id: sourcecontrol_prepare_worktree
+    label: Prepare worktree
+    surface: mcp
+    action: mcp.call
+    description: Prepare a source-control-managed Git worktree.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_commit
+    label: Commit worktree
+    surface: mcp
+    action: mcp.call
+    description: Commit changes in a prepared source-control worktree.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.commit
+  - id: sourcecontrol_push
+    label: Push branch
+    surface: mcp
+    action: mcp.call
+    description: Push the prepared worktree branch to a configured remote.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.push
+node-scenarios:
+  - id: sourcecontrol_prepare_success
+    label: Prepare success
+    preset-id: sourcecontrol_prepare_worktree
+    description: Source-control boundary returns prepared branch metadata.
+    input:
+      repository_path: /tmp/repository
+      branch_summary: example change
+    mocked-boundary-responses:
+      mcp.call:
+        status: succeeded
+        body:
+          value:
+            branch: aa-example-change
+            worktree_path: /tmp/worktree
+    expected:
+      status: succeeded

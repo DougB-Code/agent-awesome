@@ -517,6 +517,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       memoryDomains: graphServers,
       agentMemory: profile.agentMemory,
       workflow: profile.workflow,
+      mcpServers: profile.serviceMcpServers,
       localExec: document.localExec,
       extra: document.extra,
     );

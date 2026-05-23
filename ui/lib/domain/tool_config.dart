@@ -88,12 +88,25 @@ const List<String> workflowMcpToolNames = <String>[
   'workflow_draft_publish',
 ];
 
+/// Source-control MCP tools exposed by the sourcecontrol service.
+const List<String> sourceControlMcpToolNames = <String>[
+  'sourcecontrol.prepare_worktree',
+  'sourcecontrol.status',
+  'sourcecontrol.commit',
+  'sourcecontrol.push',
+  'sourcecontrol.backup',
+  'sourcecontrol.restore',
+  'sourcecontrol.cleanup_worktree',
+];
+
 /// ToolConfigDocument represents one harness tool config YAML file.
 class ToolConfigDocument {
   /// Creates a tool config document.
   const ToolConfigDocument({
     required this.localExec,
     required this.mcp,
+    this.nodePresets = const <NodePresetConfig>[],
+    this.nodeScenarios = const <NodeScenarioConfig>[],
     this.extra = const <String, dynamic>{},
   });
 
@@ -102,6 +115,12 @@ class ToolConfigDocument {
 
   /// MCP toolset settings.
   final McpToolConfig mcp;
+
+  /// Installed workflow node presets backed by generic tool boundaries.
+  final List<NodePresetConfig> nodePresets;
+
+  /// Node preset test scenarios for the node workbench.
+  final List<NodeScenarioConfig> nodeScenarios;
 
   /// Top-level fields preserved outside the known schema.
   final Map<String, dynamic> extra;
@@ -115,12 +134,20 @@ class ToolConfigDocument {
     final extra = Map<String, dynamic>.from(decoded)
       ..remove('local-exec')
       ..remove('local_exec')
-      ..remove('mcp');
+      ..remove('mcp')
+      ..remove('node-presets')
+      ..remove('node-scenarios');
     return ToolConfigDocument(
       localExec: LocalExecToolConfig.fromMap(
         jsonObject(decoded['local-exec'] ?? decoded['local_exec']),
       ),
       mcp: McpToolConfig.fromMap(jsonObject(decoded['mcp'])),
+      nodePresets: jsonObjectList(
+        decoded['node-presets'],
+      ).map(NodePresetConfig.fromMap).toList(),
+      nodeScenarios: jsonObjectList(
+        decoded['node-scenarios'],
+      ).map(NodeScenarioConfig.fromMap).toList(),
       extra: extra,
     );
   }
@@ -129,11 +156,15 @@ class ToolConfigDocument {
   ToolConfigDocument copyWith({
     LocalExecToolConfig? localExec,
     McpToolConfig? mcp,
+    List<NodePresetConfig>? nodePresets,
+    List<NodeScenarioConfig>? nodeScenarios,
     Map<String, dynamic>? extra,
   }) {
     return ToolConfigDocument(
       localExec: localExec ?? this.localExec,
       mcp: mcp ?? this.mcp,
+      nodePresets: nodePresets ?? this.nodePresets,
+      nodeScenarios: nodeScenarios ?? this.nodeScenarios,
       extra: extra ?? this.extra,
     );
   }
@@ -144,6 +175,12 @@ class ToolConfigDocument {
       ...extra,
       'local-exec': localExec.toJson(),
       'mcp': mcp.toJson(),
+      if (nodePresets.isNotEmpty)
+        'node-presets': nodePresets.map((preset) => preset.toJson()).toList(),
+      if (nodeScenarios.isNotEmpty)
+        'node-scenarios': nodeScenarios
+            .map((scenario) => scenario.toJson())
+            .toList(),
     };
   }
 
@@ -587,6 +624,164 @@ class McpToolFilterConfig {
   }
 }
 
+/// NodePresetConfig describes one reusable workflow node palette preset.
+class NodePresetConfig {
+  /// Creates node preset metadata.
+  const NodePresetConfig({
+    required this.id,
+    required this.label,
+    required this.surface,
+    required this.action,
+    required this.description,
+    required this.arguments,
+    required this.inputSchema,
+    this.extra = const <String, dynamic>{},
+  });
+
+  /// Stable preset id used by workflow authoring palettes.
+  final String id;
+
+  /// Human-readable preset label.
+  final String label;
+
+  /// Owning workbench surface, such as command or mcp.
+  final String surface;
+
+  /// Generic workflow action this preset compiles to.
+  final String action;
+
+  /// Short explanation shown beside the preset.
+  final String description;
+
+  /// Default action arguments emitted when the preset is inserted.
+  final Map<String, dynamic> arguments;
+
+  /// Optional JSON-schema-like input envelope expected by the preset.
+  final Map<String, dynamic> inputSchema;
+
+  /// Fields preserved outside the known schema.
+  final Map<String, dynamic> extra;
+
+  /// Parses node preset metadata from decoded YAML.
+  factory NodePresetConfig.fromMap(Map<String, dynamic> map) {
+    final extra = Map<String, dynamic>.from(map)
+      ..remove('id')
+      ..remove('label')
+      ..remove('surface')
+      ..remove('action')
+      ..remove('description')
+      ..remove('arguments')
+      ..remove('input-schema');
+    return NodePresetConfig(
+      id: stringValue(map['id'], trim: true),
+      label: stringValue(map['label'], trim: true),
+      surface: stringValue(map['surface'], trim: true),
+      action: stringValue(map['action'], trim: true),
+      description: stringValue(map['description'], trim: true),
+      arguments: jsonObject(map['arguments']),
+      inputSchema: jsonObject(map['input-schema']),
+      extra: extra,
+    );
+  }
+
+  /// Encodes this preset as JSON-compatible data.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      ...extra,
+      'id': id,
+      'label': label,
+      if (surface.isNotEmpty) 'surface': surface,
+      'action': action,
+      if (description.isNotEmpty) 'description': description,
+      if (arguments.isNotEmpty) 'arguments': arguments,
+      if (inputSchema.isNotEmpty) 'input-schema': inputSchema,
+    };
+  }
+}
+
+/// NodeScenarioConfig describes one preset test scenario envelope.
+class NodeScenarioConfig {
+  /// Creates node scenario metadata.
+  const NodeScenarioConfig({
+    required this.id,
+    required this.label,
+    required this.presetId,
+    required this.description,
+    required this.live,
+    required this.input,
+    required this.mockedBoundaryResponses,
+    required this.expected,
+    this.extra = const <String, dynamic>{},
+  });
+
+  /// Stable scenario id used by the node workbench.
+  final String id;
+
+  /// Human-readable scenario label.
+  final String label;
+
+  /// Preset id under test.
+  final String presetId;
+
+  /// Short scenario purpose.
+  final String description;
+
+  /// Whether this scenario may call real external boundaries.
+  final bool live;
+
+  /// Input envelope supplied to the selected preset.
+  final Map<String, dynamic> input;
+
+  /// Fake command or MCP responses keyed by boundary call.
+  final Map<String, dynamic> mockedBoundaryResponses;
+
+  /// Expected output, status, and diagnostics.
+  final Map<String, dynamic> expected;
+
+  /// Fields preserved outside the known schema.
+  final Map<String, dynamic> extra;
+
+  /// Parses node scenario metadata from decoded YAML.
+  factory NodeScenarioConfig.fromMap(Map<String, dynamic> map) {
+    final extra = Map<String, dynamic>.from(map)
+      ..remove('id')
+      ..remove('label')
+      ..remove('preset-id')
+      ..remove('description')
+      ..remove('live')
+      ..remove('input')
+      ..remove('mocked-boundary-responses')
+      ..remove('expected');
+    return NodeScenarioConfig(
+      id: stringValue(map['id'], trim: true),
+      label: stringValue(map['label'], trim: true),
+      presetId: stringValue(map['preset-id'], trim: true),
+      description: stringValue(map['description'], trim: true),
+      live: boolValue(map['live']),
+      input: jsonObject(map['input']),
+      mockedBoundaryResponses: jsonObject(map['mocked-boundary-responses']),
+      expected: jsonObject(map['expected']),
+      extra: extra,
+    );
+  }
+
+  /// Encodes this scenario as JSON-compatible data.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      ...extra,
+      'id': id,
+      'label': label,
+      'preset-id': presetId,
+      if (description.isNotEmpty) 'description': description,
+      if (live) 'live': live,
+      if (input.isNotEmpty) 'input': input,
+      if (mockedBoundaryResponses.isNotEmpty)
+        'mocked-boundary-responses': mockedBoundaryResponses,
+      if (expected.isNotEmpty) 'expected': expected,
+    };
+  }
+}
+
 /// Returns an empty tool config document.
 ToolConfigDocument emptyToolConfigDocument() {
   return const ToolConfigDocument(
@@ -643,6 +838,7 @@ ToolConfigDocument graphBackedMemoryToolConfigForDomains({
   required List<McpServerRuntime> memoryDomains,
   required AgentMemoryRuntime agentMemory,
   WorkflowRuntime? workflow,
+  List<McpServerRuntime> mcpServers = const <McpServerRuntime>[],
   required LocalExecToolConfig localExec,
   Map<String, dynamic> extra = const <String, dynamic>{},
 }) {
@@ -679,6 +875,16 @@ ToolConfigDocument graphBackedMemoryToolConfigForDomains({
           ).copyWith(
             tools: const McpToolFilterConfig(allow: workflowMcpToolNames),
           ),
+        for (final server in mcpServers)
+          if (server.enabled)
+            newHttpMcpServerToolConfig(
+              name: _serviceMcpToolServerName(server),
+              endpoint: server.endpoint,
+            ).copyWith(
+              tools: McpToolFilterConfig(
+                allow: _serviceMcpToolAllowlist(server),
+              ),
+            ),
       ],
     ),
     extra: <String, dynamic>{
@@ -700,6 +906,20 @@ ToolConfigDocument graphBackedMemoryToolConfigForDomains({
       },
     },
   );
+}
+
+/// Returns an allowlist for profile-owned generic MCP service kinds.
+List<String> _serviceMcpToolAllowlist(McpServerRuntime server) {
+  return switch (server.kind) {
+    'sourcecontrol' => sourceControlMcpToolNames,
+    _ => const <String>[],
+  };
+}
+
+/// Returns a stable harness MCP server name for a profile-owned service.
+String _serviceMcpToolServerName(McpServerRuntime server) {
+  final source = server.kind.trim().isEmpty ? server.id : server.kind;
+  return source.replaceAll('-', '_');
 }
 
 /// Returns the workflow MCP endpoint beside the workflow REST API.
@@ -748,7 +968,11 @@ String toolConfigValidationError(ToolConfigDocument document) {
   if (localError.isNotEmpty) {
     return localError;
   }
-  return _mcpValidationError(document.mcp);
+  final mcpError = _mcpValidationError(document.mcp);
+  if (mcpError.isNotEmpty) {
+    return mcpError;
+  }
+  return _nodeMetadataValidationError(document);
 }
 
 /// Returns a validation error for local-exec settings.
@@ -891,6 +1115,43 @@ String _mcpServerValidationError(McpServerToolConfig server) {
   }
   if (server.headersFromEnv.keys.any((key) => key.trim().isEmpty)) {
     return 'mcp server "$name" headers-from-env must not contain empty header names';
+  }
+  return '';
+}
+
+/// Returns a validation error for node preset and scenario metadata.
+String _nodeMetadataValidationError(ToolConfigDocument document) {
+  final presetIds = <String>{};
+  for (final preset in document.nodePresets) {
+    final id = preset.id.trim();
+    if (id.isEmpty) {
+      return 'node preset id must not be empty';
+    }
+    if (!_toolNamePattern.hasMatch(id)) {
+      return 'node preset "$id" uses an invalid id';
+    }
+    if (!presetIds.add(id)) {
+      return 'node preset duplicate "$id"';
+    }
+    if (preset.action != 'command.execute' && preset.action != 'mcp.call') {
+      return 'node preset "$id" action must be command.execute or mcp.call';
+    }
+  }
+  final scenarioIds = <String>{};
+  for (final scenario in document.nodeScenarios) {
+    final id = scenario.id.trim();
+    if (id.isEmpty) {
+      return 'node scenario id must not be empty';
+    }
+    if (!_toolNamePattern.hasMatch(id)) {
+      return 'node scenario "$id" uses an invalid id';
+    }
+    if (!scenarioIds.add(id)) {
+      return 'node scenario duplicate "$id"';
+    }
+    if (!presetIds.contains(scenario.presetId)) {
+      return 'node scenario "$id" references unknown preset "${scenario.presetId}"';
+    }
   }
   return '';
 }

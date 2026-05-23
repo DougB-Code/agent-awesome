@@ -64,6 +64,23 @@ mcp:
           - traverse_task_relations
           - upsert_task_relation
           - delete_task_relation
+    - name: sourcecontrol
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8095/mcp
+      require-confirmation-tools:
+        - sourcecontrol.commit
+        - sourcecontrol.push
+        - sourcecontrol.restore
+        - sourcecontrol.cleanup_worktree
+      tools:
+        allow:
+          - sourcecontrol.prepare_worktree
+          - sourcecontrol.status
+          - sourcecontrol.commit
+          - sourcecontrol.push
+          - sourcecontrol.backup
+          - sourcecontrol.restore
+          - sourcecontrol.cleanup_worktree
 memory:
   actor: agent:agent-awesome
   read-domains:

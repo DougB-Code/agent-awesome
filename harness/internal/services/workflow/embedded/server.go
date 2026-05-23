@@ -29,6 +29,7 @@ type Config struct {
 	RequestTimeout        time.Duration
 	ToolClient            runtime.ContextToolClient
 	CommandClient         runtime.CommandClient
+	MCPServerEndpoints    map[string]string
 	ReadHeaderTimeout     time.Duration
 	ShutdownTimeout       time.Duration
 }
@@ -53,6 +54,7 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		RequestTimeout:         cfg.RequestTimeout,
 		ToolClient:             cfg.ToolClient,
 		CommandClient:          cfg.CommandClient,
+		MCPServerEndpoints:     cfg.MCPServerEndpoints,
 		SkipInvalidDefinitions: true,
 	})
 	if err != nil {

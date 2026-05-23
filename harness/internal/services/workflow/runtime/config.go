@@ -39,6 +39,7 @@ type Config struct {
 	RequestTimeout                  time.Duration
 	ToolClient                      ContextToolClient
 	CommandClient                   CommandClient
+	MCPServerEndpoints              map[string]string
 	LLMClient                       LLMClient
 	DesignAssistant                 DesignAssistant
 	TrustedSigners                  []contracts.TrustedSigner

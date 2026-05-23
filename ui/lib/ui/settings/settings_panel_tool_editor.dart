@@ -6,12 +6,14 @@ class _SettingsToolConfigEditor extends StatefulWidget {
     required this.controller,
     required this.entry,
     required this.surface,
+    required this.modeId,
     required this.query,
   });
 
   final AgentAwesomeAppController controller;
   final ConfigFileEntry entry;
   final _ToolSettingsSurface surface;
+  final String modeId;
   final String query;
 
   /// Creates state for editing structured tool config content.
@@ -64,6 +66,30 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
             children: <Widget>[
               _SettingsReadOnlyField(label: 'Path', value: widget.entry.path),
             ],
+          ),
+        ],
+      );
+    }
+    if (widget.modeId == _toolSurfaceNodePresetsMode) {
+      return FormPanel(
+        children: <Widget>[
+          _SettingsNodePresetCard(
+            title: widget.surface == _ToolSettingsSurface.osTools
+                ? 'Command node presets'
+                : 'MCP node presets',
+            presets: _surfacePresets(document),
+          ),
+        ],
+      );
+    }
+    if (widget.modeId == _toolSurfaceNodeScenariosMode) {
+      return FormPanel(
+        children: <Widget>[
+          _SettingsNodeScenarioCard(
+            title: widget.surface == _ToolSettingsSurface.osTools
+                ? 'Command node scenarios'
+                : 'MCP node scenarios',
+            scenarios: _surfaceScenarios(document),
           ),
         ],
       );
@@ -141,6 +167,18 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
           command.description,
           command.args.join(' '),
         ],
+        for (final preset in document.nodePresets) ...<String>[
+          preset.id,
+          preset.label,
+          preset.description,
+          preset.action,
+        ],
+        for (final scenario in document.nodeScenarios) ...<String>[
+          scenario.id,
+          scenario.label,
+          scenario.presetId,
+          scenario.description,
+        ],
       ],
       _ToolSettingsSurface.mcpServer => <String>[
         ...base,
@@ -152,8 +190,40 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
           mcpServerEndpoint(server),
           server.tools.allow.join(' '),
         ],
+        for (final preset in document.nodePresets) ...<String>[
+          preset.id,
+          preset.label,
+          preset.description,
+          preset.action,
+        ],
+        for (final scenario in document.nodeScenarios) ...<String>[
+          scenario.id,
+          scenario.label,
+          scenario.presetId,
+          scenario.description,
+        ],
       ],
     };
+  }
+
+  /// Returns node presets that belong to the active settings surface.
+  List<NodePresetConfig> _surfacePresets(ToolConfigDocument document) {
+    final action = widget.surface == _ToolSettingsSurface.osTools
+        ? 'command.execute'
+        : 'mcp.call';
+    return document.nodePresets
+        .where((preset) => preset.action == action)
+        .toList();
+  }
+
+  /// Returns node scenarios whose presets belong to the active surface.
+  List<NodeScenarioConfig> _surfaceScenarios(ToolConfigDocument document) {
+    final presetIds = _surfacePresets(
+      document,
+    ).map((preset) => preset.id).toSet();
+    return document.nodeScenarios
+        .where((scenario) => presetIds.contains(scenario.presetId))
+        .toList();
   }
 
   /// Loads and parses the selected tool config.
@@ -304,4 +374,153 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
     }
     return null;
   }
+}
+
+class _SettingsNodePresetCard extends StatelessWidget {
+  const _SettingsNodePresetCard({required this.title, required this.presets});
+
+  final String title;
+  final List<NodePresetConfig> presets;
+
+  /// Builds installed node presets for the selected tool config.
+  @override
+  Widget build(BuildContext context) {
+    return FormSectionCard(
+      title: title,
+      children: <Widget>[
+        if (presets.isEmpty)
+          const PanelEmptyBlock(label: 'No node presets configured')
+        else
+          for (var index = 0; index < presets.length; index++) ...<Widget>[
+            if (index > 0)
+              const SizedBox(height: SettingsFormMetrics.compactGap),
+            _SettingsNodePresetRow(preset: presets[index]),
+          ],
+      ],
+    );
+  }
+}
+
+class _SettingsNodePresetRow extends StatelessWidget {
+  const _SettingsNodePresetRow({required this.preset});
+
+  final NodePresetConfig preset;
+
+  /// Builds one node preset summary row.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final template = _nodeMetadataString(preset.arguments['template_id']);
+    final tool = _nodeMetadataString(preset.arguments['tool']);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                preset.label.isEmpty ? preset.id : preset.label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            PanelBadge(label: preset.action),
+          ],
+        ),
+        if (preset.description.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 4),
+          Text(preset.description, style: TextStyle(color: colors.muted)),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            PanelBadge(label: preset.id),
+            if (template.isNotEmpty) PanelBadge(label: template),
+            if (tool.isNotEmpty) PanelBadge(label: tool),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsNodeScenarioCard extends StatelessWidget {
+  const _SettingsNodeScenarioCard({
+    required this.title,
+    required this.scenarios,
+  });
+
+  final String title;
+  final List<NodeScenarioConfig> scenarios;
+
+  /// Builds installed node scenario metadata for the selected tool config.
+  @override
+  Widget build(BuildContext context) {
+    return FormSectionCard(
+      title: title,
+      children: <Widget>[
+        if (scenarios.isEmpty)
+          const PanelEmptyBlock(label: 'No node scenarios configured')
+        else
+          for (var index = 0; index < scenarios.length; index++) ...<Widget>[
+            if (index > 0)
+              const SizedBox(height: SettingsFormMetrics.compactGap),
+            _SettingsNodeScenarioRow(scenario: scenarios[index]),
+          ],
+      ],
+    );
+  }
+}
+
+class _SettingsNodeScenarioRow extends StatelessWidget {
+  const _SettingsNodeScenarioRow({required this.scenario});
+
+  final NodeScenarioConfig scenario;
+
+  /// Builds one node scenario summary row.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final expectedStatus = _nodeMetadataString(scenario.expected['status']);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                scenario.label.isEmpty ? scenario.id : scenario.label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            PanelBadge(label: scenario.live ? 'Live' : 'Mocked'),
+          ],
+        ),
+        if (scenario.description.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 4),
+          Text(scenario.description, style: TextStyle(color: colors.muted)),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            PanelBadge(label: scenario.presetId),
+            if (expectedStatus.isNotEmpty) PanelBadge(label: expectedStatus),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Converts node metadata values to concise display strings.
+String _nodeMetadataString(dynamic value) {
+  if (value == null) {
+    return '';
+  }
+  return value.toString().trim();
 }

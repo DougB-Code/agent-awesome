@@ -26,6 +26,7 @@ class RuntimeProfile {
       enabled: false,
     ),
     required this.memoryDomains,
+    this.serviceMcpServers = const <McpServerRuntime>[],
     required this.agentMemory,
   });
 
@@ -47,12 +48,15 @@ class RuntimeProfile {
   /// Configured memory domains available to this runtime profile.
   final List<McpServerRuntime> memoryDomains;
 
+  /// Generic managed MCP servers available outside the memory domain boundary.
+  final List<McpServerRuntime> serviceMcpServers;
+
   /// Memory access grants applied to the active agent profile.
   final AgentMemoryRuntime agentMemory;
 
   /// MCP servers available to the harness and UI.
   List<McpServerRuntime> get mcpServers {
-    return memoryDomains;
+    return <McpServerRuntime>[...memoryDomains, ...serviceMcpServers];
   }
 
   /// Returns enabled memory MCP servers.
@@ -70,6 +74,7 @@ class RuntimeProfile {
     GatewayRuntime? gateway,
     WorkflowRuntime? workflow,
     List<McpServerRuntime>? memoryDomains,
+    List<McpServerRuntime>? serviceMcpServers,
     AgentMemoryRuntime? agentMemory,
   }) {
     return RuntimeProfile(
@@ -79,6 +84,7 @@ class RuntimeProfile {
       gateway: gateway ?? this.gateway,
       workflow: workflow ?? this.workflow,
       memoryDomains: memoryDomains ?? this.memoryDomains,
+      serviceMcpServers: serviceMcpServers ?? this.serviceMcpServers,
       agentMemory: agentMemory ?? this.agentMemory,
     );
   }
@@ -92,6 +98,10 @@ class RuntimeProfile {
       'gateway': gateway.toJson(),
       'workflow': workflow.toJson(),
       'memory_domains': memoryDomains.map((domain) => domain.toJson()).toList(),
+      if (serviceMcpServers.isNotEmpty)
+        'mcp_servers': serviceMcpServers
+            .map((server) => server.toJson())
+            .toList(),
       'agent_memory': agentMemory.toJson(),
     };
   }
@@ -102,6 +112,10 @@ class RuntimeProfile {
       json['memory_domains'],
     ).map(McpServerRuntime.fromJson).toList();
     _validateMemoryDomains(domains);
+    final serviceMcpServers = jsonObjectList(
+      json['mcp_servers'],
+    ).map(McpServerRuntime.fromJson).toList();
+    _validateServiceMcpServers(serviceMcpServers, domains);
     final agentMemory = AgentMemoryRuntime.fromJson(
       _requiredMap(json, 'agent_memory'),
     );
@@ -115,6 +129,7 @@ class RuntimeProfile {
       gateway: _requiredGateway(_requiredMap(json, 'gateway')),
       workflow: workflow,
       memoryDomains: domains,
+      serviceMcpServers: serviceMcpServers,
       agentMemory: agentMemory,
     );
   }
@@ -774,6 +789,58 @@ void _validateMemoryDomains(List<McpServerRuntime> domains) {
         domain.dataDir,
         domain.id,
         'Managed memory domain data directories',
+      );
+    }
+  }
+}
+
+/// Validates generic managed MCP servers as profile-owned service data.
+void _validateServiceMcpServers(
+  List<McpServerRuntime> servers,
+  List<McpServerRuntime> memoryDomains,
+) {
+  final ids = <String>{for (final domain in memoryDomains) domain.id};
+  final managedEndpoints = <String, String>{
+    for (final domain in memoryDomains)
+      if (domain.autoStart) _endpointKey(domain.endpoint): domain.id,
+    for (final domain in memoryDomains)
+      if (domain.autoStart) _endpointKey(domain.healthUrl): domain.id,
+  };
+  for (final server in servers) {
+    _validateSafeId(server.id, 'MCP server id');
+    if (!ids.add(server.id)) {
+      throw FormatException('Duplicate MCP server id "${server.id}"');
+    }
+    if (server.kind == 'memory') {
+      throw FormatException(
+        'MCP server "${server.id}" must use memory_domains for kind "memory"',
+      );
+    }
+    if (server.enabled &&
+        (server.endpoint.trim().isEmpty || server.healthUrl.trim().isEmpty)) {
+      throw FormatException(
+        'Enabled MCP server "${server.id}" requires endpoint and health_url',
+      );
+    }
+    if (server.autoStart &&
+        (server.workingDirectory.trim().isEmpty ||
+            server.packagePath.trim().isEmpty)) {
+      throw FormatException(
+        'Managed MCP server "${server.id}" requires working_directory and package_path',
+      );
+    }
+    if (server.autoStart) {
+      _rememberUnique(
+        managedEndpoints,
+        _endpointKey(server.endpoint),
+        server.id,
+        'Managed MCP server endpoints',
+      );
+      _rememberUnique(
+        managedEndpoints,
+        _endpointKey(server.healthUrl),
+        server.id,
+        'Managed MCP server health URLs',
       );
     }
   }

@@ -49,9 +49,11 @@ type Agent struct {
 
 // Tools describes all configured external tool integrations.
 type Tools struct {
-	LocalExec LocalExec `koanf:"local-exec"`
-	MCP       MCP       `koanf:"mcp"`
-	Memory    Memory    `koanf:"memory"`
+	LocalExec     LocalExec      `koanf:"local-exec"`
+	MCP           MCP            `koanf:"mcp"`
+	Memory        Memory         `koanf:"memory"`
+	NodePresets   []NodePreset   `koanf:"node-presets"`
+	NodeScenarios []NodeScenario `koanf:"node-scenarios"`
 }
 
 // MCP describes configured Model Context Protocol servers.
@@ -116,12 +118,36 @@ type LocalExec struct {
 
 // LocalExecCommand describes one allowlisted local command alias.
 type LocalExecCommand struct {
-	Name           string   `koanf:"name"`
-	Executable     string   `koanf:"executable"`
-	Description    string   `koanf:"description"`
-	Args           []string `koanf:"args"`
-	Timeout        string   `koanf:"timeout"`
-	MaxOutputBytes int      `koanf:"max-output-bytes"`
+	Name           string            `koanf:"name"`
+	Executable     string            `koanf:"executable"`
+	Description    string            `koanf:"description"`
+	Args           []string          `koanf:"args"`
+	Env            map[string]string `koanf:"env"`
+	Timeout        string            `koanf:"timeout"`
+	MaxOutputBytes int               `koanf:"max-output-bytes"`
+}
+
+// NodePreset describes reusable workflow-node metadata for authoring tools.
+type NodePreset struct {
+	ID          string         `koanf:"id"`
+	Label       string         `koanf:"label"`
+	Surface     string         `koanf:"surface"`
+	Action      string         `koanf:"action"`
+	Description string         `koanf:"description"`
+	Arguments   map[string]any `koanf:"arguments"`
+	InputSchema map[string]any `koanf:"input-schema"`
+}
+
+// NodeScenario describes one node preset test scenario for authoring tools.
+type NodeScenario struct {
+	ID                      string         `koanf:"id"`
+	Label                   string         `koanf:"label"`
+	PresetID                string         `koanf:"preset-id"`
+	Description             string         `koanf:"description"`
+	Live                    bool           `koanf:"live"`
+	Input                   map[string]any `koanf:"input"`
+	MockedBoundaryResponses map[string]any `koanf:"mocked-boundary-responses"`
+	Expected                map[string]any `koanf:"expected"`
 }
 
 // Provider describes one model provider configuration.

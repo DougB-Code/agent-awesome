@@ -41,6 +41,7 @@ const Set<String> _taskGraphActionNames = <String>{
   'tool.call',
   'command.execute',
   'data.assert',
+  'data.defaults',
   'workflow.run',
 };
 
@@ -208,7 +209,7 @@ class _AutomationFocusedCommandPanelState
             widget.controller.automationRuns.isNotEmpty ||
             widget.controller.automationInbox.isNotEmpty,
       _automationPanelWorkflows => widget.controller.automationDrafts.any(
-        (draft) => draft.kind == automationWorkflowKind,
+        (draft) => _isWorkflowFileKind(draft.kind),
       ),
       _automationPanelTasks => widget.controller.automationDrafts.any(
         (draft) => draft.kind == automationTaskGraphKind,
@@ -854,7 +855,9 @@ class _AutomationDraftsContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final drafts = _filterDrafts(
-      controller.automationDrafts.where((draft) => draft.kind == kind).toList(),
+      controller.automationDrafts
+          .where((draft) => _draftMatchesSectionKind(draft, kind))
+          .toList(),
       query,
     );
     return ListView(
@@ -1167,7 +1170,7 @@ class _DraftOverview extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
         PanelSectionBlock(
-          title: draft.kind == automationWorkflowKind ? 'Workflow' : 'Draft',
+          title: _isWorkflowFileKind(draft.kind) ? 'Workflow' : 'Draft',
           child: _DetailRows(
             rows: <String>[
               draft.name,
@@ -1248,6 +1251,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   late final TextEditingController _retryDelayController;
   late final TextEditingController _instructionsController;
   late final TextEditingController _agentInputController;
+  late final TextEditingController _serverIdController;
   late final TextEditingController _endpointController;
   late final TextEditingController _toolController;
   late final TextEditingController _domainIdController;
@@ -1298,6 +1302,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     _retryDelayController = TextEditingController();
     _instructionsController = TextEditingController();
     _agentInputController = TextEditingController();
+    _serverIdController = TextEditingController();
     _endpointController = TextEditingController();
     _toolController = TextEditingController();
     _domainIdController = TextEditingController();
@@ -1371,6 +1376,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     _retryDelayController,
     _instructionsController,
     _agentInputController,
+    _serverIdController,
     _endpointController,
     _toolController,
     _domainIdController,
@@ -1609,6 +1615,11 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             _AutomationTextField(
+              controller: _serverIdController,
+              label: 'MCP server id',
+            ),
+            const SizedBox(height: 10),
+            _AutomationTextField(
               controller: _endpointController,
               label: 'MCP endpoint',
             ),
@@ -1666,6 +1677,13 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
         return _AutomationTextField(
           controller: _argumentsController,
           label: 'Assertion JSON',
+          maxLines: 5,
+          monospace: true,
+        );
+      case 'data.defaults':
+        return _AutomationTextField(
+          controller: _argumentsController,
+          label: 'Defaults JSON',
           maxLines: 5,
           monospace: true,
         );
@@ -1736,11 +1754,13 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   void _loadArgs(Map<String, dynamic> args) {
     _instructionsController.text = '${args['instructions'] ?? ''}';
     _agentInputController.text = _jsonText(_map(args['input']));
+    _serverIdController.text = '${args['server_id'] ?? ''}';
     _endpointController.text = '${args['endpoint'] ?? ''}';
     _toolController.text =
         '${args['name'] ?? args['tool'] ?? args['template_id'] ?? ''}';
     _domainIdController.text = '${args['domain_id'] ?? args['cwd'] ?? ''}';
-    _argumentsController.text = _selectedAction == 'data.assert'
+    _argumentsController.text =
+        _selectedAction == 'data.assert' || _selectedAction == 'data.defaults'
         ? _jsonText(args)
         : _selectedAction == 'command.execute'
         ? _jsonText(_map(args['parameters']))
@@ -2185,7 +2205,10 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
           return null;
         }
         return <String, dynamic>{
-          'endpoint': _endpointController.text.trim(),
+          if (_serverIdController.text.trim().isNotEmpty)
+            'server_id': _serverIdController.text.trim(),
+          if (_endpointController.text.trim().isNotEmpty)
+            'endpoint': _endpointController.text.trim(),
           'tool': _toolController.text.trim(),
           'arguments': args,
         };
@@ -2214,6 +2237,8 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
         };
       case 'data.assert':
         return _parseJsonObject(_argumentsController.text, 'Assertion JSON');
+      case 'data.defaults':
+        return _parseJsonObject(_argumentsController.text, 'Defaults JSON');
       default:
         return _map(_selectedNode()?['with']);
     }
@@ -2371,6 +2396,7 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
           'mcp.call',
           'command.execute',
           'data.assert',
+          'data.defaults',
           'human.request',
           'delay.until',
           'workflow.run',
@@ -4539,14 +4565,12 @@ String _draftTileSubtitle(AutomationDraft draft) {
 
 /// Returns the product-facing name field label for a draft kind.
 String _draftNameLabel(AutomationDraft draft) {
-  return draft.kind == automationWorkflowKind
-      ? 'Workflow name'
-      : 'Task graph name';
+  return _isWorkflowFileKind(draft.kind) ? 'Workflow name' : 'Task graph name';
 }
 
 /// Returns the tooltip for a draft file rename action.
 String _renameDraftTooltip(AutomationDraft draft) {
-  return draft.kind == automationWorkflowKind
+  return _isWorkflowFileKind(draft.kind)
       ? 'Rename workflow file'
       : 'Rename task graph file';
 }
@@ -4554,7 +4578,7 @@ String _renameDraftTooltip(AutomationDraft draft) {
 /// Returns a copy of a draft with its display name updated.
 AutomationDraft _renamedDraft(AutomationDraft draft, String name) {
   final body = Map<String, dynamic>.from(_map(draft.body));
-  if (draft.kind == automationWorkflowKind ||
+  if (_isWorkflowFileKind(draft.kind) ||
       draft.kind == automationTaskGraphKind ||
       body.containsKey('name')) {
     body['name'] = name;
@@ -4576,6 +4600,7 @@ AutomationDraft _renamedDraft(AutomationDraft draft, String name) {
 String _draftKindLabel(String kind) {
   return switch (kind) {
     automationWorkflowKind => 'workflow',
+    _stateMachineBodyKind => 'workflow',
     automationTaskGraphKind => 'task graph',
     _ => kind.trim().replaceAll('_', ' '),
   };
@@ -4755,13 +4780,28 @@ String? _automationDraftKindForArea(String areaId) {
   return null;
 }
 
+/// Reports whether a draft belongs in the requested authoring section.
+bool _draftMatchesSectionKind(AutomationDraft draft, String kind) {
+  if (kind == automationWorkflowKind) {
+    return _isWorkflowFileKind(draft.kind);
+  }
+  return draft.kind == kind;
+}
+
+/// Reports whether a draft kind is a workflow file in the Automations UI.
+bool _isWorkflowFileKind(String kind) {
+  final normalized = kind.trim();
+  return normalized == automationWorkflowKind ||
+      normalized == _stateMachineBodyKind;
+}
+
 /// Returns the selected draft for one builder kind.
 AutomationDraft? _selectedAutomationDraftForKind(
   AgentAwesomeAppController controller,
   String kind,
 ) {
   final drafts = controller.automationDrafts
-      .where((draft) => draft.kind == kind)
+      .where((draft) => _draftMatchesSectionKind(draft, kind))
       .toList();
   if (drafts.isEmpty) {
     return null;
@@ -5049,6 +5089,7 @@ IconData _actionIcon(String actionName) {
     'mcp.call' => Icons.extension_outlined,
     'command.execute' => Icons.terminal_outlined,
     'data.assert' => Icons.rule_outlined,
+    'data.defaults' => Icons.tune_outlined,
     'human.request' => Icons.how_to_reg_outlined,
     'delay.until' => Icons.schedule_outlined,
     'workflow.run' => Icons.account_tree_outlined,
@@ -5064,6 +5105,7 @@ String _fallbackActionLabel(String actionName) {
     'mcp.call' => 'Call MCP Tool',
     'command.execute' => 'Run Command',
     'data.assert' => 'Assert Data',
+    'data.defaults' => 'Apply Defaults',
     'human.request' => 'Prompt',
     'delay.until' => 'Delay',
     'workflow.run' => 'Run Workflow',
@@ -5079,6 +5121,7 @@ String _fallbackActionDescription(String actionName) {
     'mcp.call' => 'External MCP tool call',
     'command.execute' => 'Configured command template',
     'data.assert' => 'Deterministic data check',
+    'data.defaults' => 'Declarative input defaults',
     'human.request' => 'Human approval or input',
     'delay.until' => 'Timed wait',
     'workflow.run' => 'Nested workflow run',
@@ -5095,6 +5138,7 @@ Color _actionColor(BuildContext context, String actionName) {
     'mcp.call' => colors.cardIcon,
     'command.execute' => colors.cardIcon,
     'data.assert' => colors.green,
+    'data.defaults' => colors.green,
     'human.request' => colors.green,
     'delay.until' => colors.muted,
     'workflow.run' => colors.orbit,
@@ -5230,6 +5274,7 @@ Map<String, dynamic> _defaultTaskGraphActionArgs(String actionName) {
       'arguments': <String, dynamic>{},
     },
     'mcp.call' => <String, dynamic>{
+      'server_id': '',
       'endpoint': '',
       'tool': '',
       'arguments': <String, dynamic>{},
@@ -5240,6 +5285,10 @@ Map<String, dynamic> _defaultTaskGraphActionArgs(String actionName) {
       'parameters': <String, dynamic>{},
     },
     'data.assert' => <String, dynamic>{'checks': <dynamic>[]},
+    'data.defaults' => <String, dynamic>{
+      'input': <String, dynamic>{},
+      'defaults': <String, dynamic>{},
+    },
     'workflow.run' => <String, dynamic>{
       'workflow': '',
       'input': <String, dynamic>{},

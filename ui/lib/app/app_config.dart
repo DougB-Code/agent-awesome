@@ -11,6 +11,7 @@ class AppConfig {
     required this.agentGatewayBaseUrl,
     required this.agentContextApiBaseUrl,
     required this.memoryMcpUrl,
+    this.sourceControlMcpUrl = 'http://127.0.0.1:8095/mcp',
     required this.agentAppName,
     required this.agentUserId,
     required this.workspaceRoot,
@@ -65,6 +66,14 @@ class AppConfig {
         ),
         runtimeName: 'MEMORY_MCP_URL',
         fallback: 'http://127.0.0.1:8090/mcp',
+      ),
+      sourceControlMcpUrl: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'SOURCECONTROL_MCP_URL',
+          defaultValue: '',
+        ),
+        runtimeName: 'SOURCECONTROL_MCP_URL',
+        fallback: 'http://127.0.0.1:8095/mcp',
       ),
       agentAppName: _environmentValue(
         compiled: const String.fromEnvironment(
@@ -158,6 +167,9 @@ class AppConfig {
 
   /// Direct memory MCP JSON-RPC endpoint used as the gateway upstream.
   final String memoryMcpUrl;
+
+  /// Direct source-control MCP JSON-RPC endpoint used by workflows.
+  final String sourceControlMcpUrl;
 
   /// Assistant app name that hosts the configured agent.
   final String agentAppName;

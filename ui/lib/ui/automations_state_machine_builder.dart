@@ -224,6 +224,18 @@ class _StateMachineDraftEditController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Moves focus one phase outward toward the root workflow canvas.
+  bool exitFocusedPhase() {
+    final currentPhaseId = _focusedPhaseId;
+    if (currentPhaseId.isEmpty) {
+      return false;
+    }
+    final parentPhaseId = _stateMachineParentOf(_states, currentPhaseId);
+    focusPhase(parentPhaseId);
+    selectState(currentPhaseId);
+    return true;
+  }
+
   /// Focuses the canvas scope that contains a state and selects it.
   void focusStateScope(String stateId) {
     final parentId = _stateMachineParentOf(_states, stateId);
@@ -928,6 +940,17 @@ class _StateMachineBuilderWorkspace extends StatelessWidget {
       onDetailModeRequested(_automationDetailBuilder);
       return KeyEventResult.handled;
     }
+    if (event.logicalKey == LogicalKeyboardKey.escape &&
+        modeId == _automationDetailBuilder) {
+      if (editor.connectionSourceId.isNotEmpty) {
+        editor.cancelConnection();
+        return KeyEventResult.handled;
+      }
+      if (editor.exitFocusedPhase()) {
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
     if ((event.logicalKey == LogicalKeyboardKey.enter ||
             event.logicalKey == LogicalKeyboardKey.numpadEnter) &&
         modeId == _automationDetailBuilder &&
@@ -1105,8 +1128,14 @@ class _StateMachineBuilderDetailState
       return KeyEventResult.handled;
     }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
-      widget.editor.cancelConnection();
-      return KeyEventResult.handled;
+      if (widget.editor.connectionSourceId.isNotEmpty) {
+        widget.editor.cancelConnection();
+        return KeyEventResult.handled;
+      }
+      if (widget.editor.exitFocusedPhase()) {
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
     }
     return KeyEventResult.ignored;
   }
@@ -1448,11 +1477,15 @@ class _StateMachineCanvasViewportState
     extends State<_StateMachineCanvasViewport> {
   final Map<String, Offset> _dragPreviewOffsets = <String, Offset>{};
   _StateMachineEdgeViewMode _edgeViewMode = _StateMachineEdgeViewMode.success;
+  _StateMachineCanvasLayout? _lastLayout;
+  Size _lastViewportSize = Size.zero;
+  bool _clampingScroll = false;
 
   /// Restores the last known x/y canvas position after the viewport attaches.
   @override
   void initState() {
     super.initState();
+    _attachScrollClampListeners();
     _restoreCanvasOffset();
   }
 
@@ -1460,6 +1493,12 @@ class _StateMachineCanvasViewportState
   @override
   void didUpdateWidget(covariant _StateMachineCanvasViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.horizontalScrollController !=
+            widget.horizontalScrollController ||
+        oldWidget.verticalScrollController != widget.verticalScrollController) {
+      _detachScrollClampListeners(oldWidget);
+      _attachScrollClampListeners();
+    }
     if (oldWidget.horizontalScrollController !=
             widget.horizontalScrollController ||
         oldWidget.verticalScrollController != widget.verticalScrollController ||
@@ -1473,6 +1512,7 @@ class _StateMachineCanvasViewportState
   @override
   void dispose() {
     _captureCanvasOffset();
+    _detachScrollClampListeners(widget);
     super.dispose();
   }
 
@@ -1480,6 +1520,7 @@ class _StateMachineCanvasViewportState
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final stateLabelsById = _stateMachineLabelsById(widget.states);
     final layout = _StateMachineCanvasLayout.fromStates(
       widget.states,
       initialStateId: widget.focusedPhaseId.isEmpty
@@ -1499,12 +1540,29 @@ class _StateMachineCanvasViewportState
         final viewportHeight = constraints.hasBoundedHeight
             ? constraints.maxHeight
             : layout.size.height;
+        final horizontalWorkspace =
+            _stateMachineCanvasScrollMargin(viewportWidth) / widget.zoom;
+        final verticalWorkspace =
+            _stateMachineCanvasScrollMargin(viewportHeight) / widget.zoom;
         final contentSize = Size(
-          layout.size.width > viewportWidth ? layout.size.width : viewportWidth,
-          layout.size.height > viewportHeight
-              ? layout.size.height
-              : viewportHeight,
+          math.max(
+            viewportWidth,
+            math.max(
+              layout.size.width,
+              layout.graphBounds.right + horizontalWorkspace,
+            ),
+          ),
+          math.max(
+            viewportHeight,
+            math.max(
+              layout.size.height,
+              layout.graphBounds.bottom + verticalWorkspace,
+            ),
+          ),
         );
+        _lastLayout = layout;
+        _lastViewportSize = Size(viewportWidth, viewportHeight);
+        _scheduleScrollClamp();
         return Stack(
           children: <Widget>[
             Positioned.fill(
@@ -1595,6 +1653,7 @@ class _StateMachineCanvasViewportState
                                                 'state-machine-node-${_stateId(placement.state)}',
                                               ),
                                               state: placement.state,
+                                              stateLabelsById: stateLabelsById,
                                               childCount: placement.childCount,
                                               collapsed: widget
                                                   .collapsedPhaseIds
@@ -1692,6 +1751,7 @@ class _StateMachineCanvasViewportState
                 zoom: widget.zoom,
                 edgeViewMode: _edgeViewMode,
                 focusPath: widget.focusPath,
+                stateLabelsById: stateLabelsById,
                 onZoomChanged: widget.onZoomChanged,
                 onEdgeViewModeChanged: (mode) {
                   setState(() => _edgeViewMode = mode);
@@ -1709,6 +1769,78 @@ class _StateMachineCanvasViewportState
         );
       },
     );
+  }
+
+  /// Attaches graph-aware scroll bounds to both canvas axes.
+  void _attachScrollClampListeners() {
+    widget.horizontalScrollController.addListener(_clampAttachedScrollOffsets);
+    widget.verticalScrollController.addListener(_clampAttachedScrollOffsets);
+  }
+
+  /// Detaches graph-aware scroll bounds from the previous canvas axes.
+  void _detachScrollClampListeners(_StateMachineCanvasViewport owner) {
+    owner.horizontalScrollController.removeListener(
+      _clampAttachedScrollOffsets,
+    );
+    owner.verticalScrollController.removeListener(_clampAttachedScrollOffsets);
+  }
+
+  /// Schedules scroll clamping after layout dimensions and extents are attached.
+  void _scheduleScrollClamp() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _clampAttachedScrollOffsets();
+      }
+    });
+  }
+
+  /// Keeps scroll offsets near the rendered graph while preserving workspace slack.
+  void _clampAttachedScrollOffsets() {
+    if (_clampingScroll ||
+        _lastLayout == null ||
+        _lastViewportSize == Size.zero) {
+      return;
+    }
+    _clampingScroll = true;
+    try {
+      _clampScrollController(
+        widget.horizontalScrollController,
+        _stateMachineCanvasScrollRange(
+          graphStart: _lastLayout!.graphBounds.left * widget.zoom,
+          graphEnd: _lastLayout!.graphBounds.right * widget.zoom,
+          viewportExtent: _lastViewportSize.width,
+        ),
+      );
+      _clampScrollController(
+        widget.verticalScrollController,
+        _stateMachineCanvasScrollRange(
+          graphStart: _lastLayout!.graphBounds.top * widget.zoom,
+          graphEnd: _lastLayout!.graphBounds.bottom * widget.zoom,
+          viewportExtent: _lastViewportSize.height,
+        ),
+      );
+    } finally {
+      _clampingScroll = false;
+    }
+  }
+
+  /// Clamps one attached scroll controller to a bounded graph-adjacent range.
+  void _clampScrollController(
+    ScrollController controller,
+    _StateMachineScrollRange range,
+  ) {
+    if (!controller.hasClients) {
+      return;
+    }
+    final position = controller.position;
+    final min = math.max(position.minScrollExtent, range.min);
+    final max = math.min(position.maxScrollExtent, range.max);
+    final boundedMax = math.max(min, max);
+    final bounded = position.pixels.clamp(min, boundedMax).toDouble();
+    if ((position.pixels - bounded).abs() < 0.5) {
+      return;
+    }
+    controller.jumpTo(bounded);
   }
 
   /// Schedules a post-layout scroll restoration.
@@ -1916,6 +2048,7 @@ class _StateMachineCanvasControls extends StatelessWidget {
     required this.zoom,
     required this.edgeViewMode,
     required this.focusPath,
+    required this.stateLabelsById,
     required this.onZoomChanged,
     required this.onEdgeViewModeChanged,
     required this.onFocusPhase,
@@ -1930,6 +2063,9 @@ class _StateMachineCanvasControls extends StatelessWidget {
   /// Focus breadcrumb state ids from root to current phase.
   final List<String> focusPath;
 
+  /// Readable state labels keyed by state id.
+  final Map<String, String> stateLabelsById;
+
   /// Handles zoom changes.
   final ValueChanged<double> onZoomChanged;
 
@@ -1943,13 +2079,27 @@ class _StateMachineCanvasControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final parentPhaseId = focusPath.length <= 1
+        ? ''
+        : focusPath[focusPath.length - 2];
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         _TaskGraphGraphMenu(zoom: zoom, onZoomChanged: onZoomChanged),
         const SizedBox(width: 8),
+        if (focusPath.isNotEmpty) ...<Widget>[
+          PanelInlineIconButton(
+            icon: Icons.arrow_back,
+            tooltip: parentPhaseId.isEmpty
+                ? 'Back to workflow'
+                : 'Back to parent phase',
+            onPressed: () => onFocusPhase(parentPhaseId),
+          ),
+          const SizedBox(width: 8),
+        ],
         _StateMachineFocusBreadcrumbs(
           focusPath: focusPath,
+          stateLabelsById: stateLabelsById,
           onFocusPhase: onFocusPhase,
         ),
         const SizedBox(width: 8),
@@ -1981,11 +2131,15 @@ class _StateMachineFocusBreadcrumbs extends StatelessWidget {
   /// Creates breadcrumb controls for the active hierarchy focus.
   const _StateMachineFocusBreadcrumbs({
     required this.focusPath,
+    required this.stateLabelsById,
     required this.onFocusPhase,
   });
 
   /// Focus breadcrumb state ids from root to current phase.
   final List<String> focusPath;
+
+  /// Readable state labels keyed by state id.
+  final Map<String, String> stateLabelsById;
 
   /// Changes the active focused phase.
   final ValueChanged<String> onFocusPhase;
@@ -1996,7 +2150,11 @@ class _StateMachineFocusBreadcrumbs extends StatelessWidget {
     final colors = context.agentAwesomeColors;
     final crumbs = <_StateMachineFocusCrumb>[
       const _StateMachineFocusCrumb(id: '', label: 'Workflow'),
-      for (final id in focusPath) _StateMachineFocusCrumb(id: id, label: id),
+      for (final id in focusPath)
+        _StateMachineFocusCrumb(
+          id: id,
+          label: stateLabelsById[id] ?? _stateMachineDisplayName(id),
+        ),
     ];
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -2180,6 +2338,7 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
   const _StateMachineCanvasNodeCard({
     super.key,
     required this.state,
+    required this.stateLabelsById,
     required this.childCount,
     required this.collapsed,
     required this.initial,
@@ -2202,6 +2361,7 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
   });
 
   final Map<String, dynamic> state;
+  final Map<String, String> stateLabelsById;
   final int childCount;
   final bool collapsed;
   final bool initial;
@@ -2228,6 +2388,7 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     final stateId = _stateId(state);
+    final stateLabel = _stateMachineStateLabel(state);
     final actions = _stateEntryActions(state);
     final transitions = _stateTransitions(state);
     final primaryAction = actions.isEmpty
@@ -2249,7 +2410,13 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
         final active = candidateData.isNotEmpty;
         return _StateMachineNodeDragTracker(
           stateId: stateId,
-          onPointerDown: () {
+          onPointerDown: (position) {
+            if (_stateMachinePointerHitsPhaseControls(
+              position,
+              childCount: childCount,
+            )) {
+              return;
+            }
             controlPressedOnTapDown = isOpenInspectorModifierPressed();
             if (controlPressedOnTapDown) {
               onOpenInspector(stateId);
@@ -2309,7 +2476,7 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                stateId,
+                                stateLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -2320,13 +2487,22 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
                             ),
                             if (initial)
                               Icon(Icons.flag, size: 15, color: colors.green),
+                            if (childCount > 0) ...<Widget>[
+                              const SizedBox(width: 4),
+                              PanelInlineIconButton(
+                                icon: Icons.open_in_full,
+                                tooltip: 'Open phase',
+                                onPressed: onFocusPhase,
+                              ),
+                              const SizedBox(width: 32),
+                            ],
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
                           actions.isEmpty
                               ? 'terminal'
-                              : '${_map(actions.first)['id'] ?? 'entry'} · ${_map(actions.first)['uses'] ?? ''}',
+                              : _stateMachineActionSummary(_map(actions.first)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(color: colors.muted, fontSize: 12),
@@ -2360,8 +2536,10 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
                                 )) ...<Widget>[
                                   const SizedBox(width: 6),
                                   PanelBadge(
-                                    label:
-                                        '${_transitionTrigger(_map(transition))} -> ${_transitionTarget(_map(transition))}',
+                                    label: _stateMachineTransitionSummary(
+                                      _map(transition),
+                                      stateLabelsById,
+                                    ),
                                   ),
                                 ],
                               ],
@@ -2441,6 +2619,16 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
   }
 }
 
+/// Reports whether a pointer down landed on phase header controls.
+bool _stateMachinePointerHitsPhaseControls(
+  Offset position, {
+  required int childCount,
+}) {
+  return childCount > 0 &&
+      position.dy <= 48 &&
+      position.dx >= _stateMachineNodeWidth - 86;
+}
+
 class _StateMachineNodeDragTracker extends StatefulWidget {
   const _StateMachineNodeDragTracker({
     required this.stateId,
@@ -2452,7 +2640,7 @@ class _StateMachineNodeDragTracker extends StatefulWidget {
   });
 
   final String stateId;
-  final VoidCallback onPointerDown;
+  final ValueChanged<Offset> onPointerDown;
   final void Function(String stateId, Offset delta) onPreviewMoveBy;
   final void Function(String stateId, Offset delta) onMoveStateBy;
   final ValueChanged<String> onCancelMove;
@@ -2491,7 +2679,7 @@ class _StateMachineNodeDragTrackerState
     _activePointer = event.pointer;
     _delta = Offset.zero;
     _emitted = false;
-    widget.onPointerDown();
+    widget.onPointerDown(event.localPosition);
   }
 
   /// Updates the local transform immediately without persisting each pixel.
@@ -2719,6 +2907,7 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
       );
     }
     final stateId = _stateId(selected);
+    final stateLabel = _stateMachineStateLabel(selected);
     final actions = _stateEntryActions(selected);
     final transitions = _stateTransitions(selected);
     final childCount =
@@ -2748,7 +2937,7 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  stateId,
+                  stateLabel,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -4506,10 +4695,17 @@ class _StateMachinePhasePlacement {
   /// Creates a composite phase canvas placement.
   const _StateMachinePhasePlacement({
     required this.stateId,
+    required this.label,
     required this.rect,
   });
 
+  /// Stable authored state id for this phase.
   final String stateId;
+
+  /// Readable phase label painted on the canvas.
+  final String label;
+
+  /// Phase container geometry.
   final Rect rect;
 }
 
@@ -4518,6 +4714,7 @@ class _StateMachineCanvasLayout {
   /// Creates an immutable state-machine canvas layout.
   const _StateMachineCanvasLayout({
     required this.size,
+    required this.graphBounds,
     required this.placements,
     required this.edges,
     required this.exitBadges,
@@ -4525,6 +4722,7 @@ class _StateMachineCanvasLayout {
   });
 
   final Size size;
+  final Rect graphBounds;
   final List<_StateMachineNodePlacement> placements;
   final List<_StateMachineEdgePlacement> edges;
   final List<_StateMachineExitBadgePlacement> exitBadges;
@@ -4554,7 +4752,7 @@ class _StateMachineCanvasLayout {
       collapsedPhaseIds: collapsedPhaseIds,
     );
     final visibleStates = scoped.states;
-    const padding = 84.0;
+    const padding = _stateMachineLayoutPadding;
     const nodeWidth = _stateMachineNodeWidth;
     const nodeHeight = _stateMachineNodeHeight;
     final autoPositions = _stateMachineSugiyamaPositions(
@@ -4572,7 +4770,7 @@ class _StateMachineCanvasLayout {
       final stateId = _stateId(state);
       final fallback = Offset(
         padding + index * (_stateMachineLayoutNodeWidth + 72),
-        padding,
+        _stateMachineLayoutTopPadding,
       );
       final position =
           resolvedPositions[stateId] ?? autoPositions[stateId] ?? fallback;
@@ -4592,6 +4790,11 @@ class _StateMachineCanvasLayout {
     }
     final layout = _StateMachineCanvasLayout(
       size: Size(maxRight, maxBottom),
+      graphBounds: _stateMachineCanvasGraphBounds(
+        placements: placements,
+        phases: const <_StateMachinePhasePlacement>[],
+        exitBadges: const <_StateMachineExitBadgePlacement>[],
+      ),
       placements: placements,
       edges: const <_StateMachineEdgePlacement>[],
       exitBadges: const <_StateMachineExitBadgePlacement>[],
@@ -4717,12 +4920,67 @@ class _StateMachineCanvasLayout {
     }
     return _StateMachineCanvasLayout(
       size: Size(maxRight, maxBottom),
+      graphBounds: _stateMachineCanvasGraphBounds(
+        placements: placements,
+        phases: phases,
+        exitBadges: exitBadges,
+      ),
       placements: placements,
       edges: edges,
       exitBadges: exitBadges,
       phases: phases,
     );
   }
+}
+
+/// _StateMachineScrollRange stores one bounded canvas scroll interval.
+class _StateMachineScrollRange {
+  /// Creates a scroll interval for one axis.
+  const _StateMachineScrollRange({required this.min, required this.max});
+
+  final double min;
+  final double max;
+}
+
+/// Returns the rendered graph bounds used to constrain canvas scrolling.
+Rect _stateMachineCanvasGraphBounds({
+  required List<_StateMachineNodePlacement> placements,
+  required List<_StateMachinePhasePlacement> phases,
+  required List<_StateMachineExitBadgePlacement> exitBadges,
+}) {
+  Rect? bounds;
+  void include(Rect rect) {
+    bounds = bounds == null ? rect : bounds!.expandToInclude(rect);
+  }
+
+  for (final placement in placements) {
+    include(placement.rect);
+  }
+  for (final phase in phases) {
+    include(phase.rect);
+  }
+  for (final badge in exitBadges) {
+    include(badge.rect);
+  }
+  return bounds ?? Rect.zero;
+}
+
+/// Returns a scroll range with enough slack for paste work but no endless void.
+_StateMachineScrollRange _stateMachineCanvasScrollRange({
+  required double graphStart,
+  required double graphEnd,
+  required double viewportExtent,
+}) {
+  final margin = _stateMachineCanvasScrollMargin(viewportExtent);
+  return _StateMachineScrollRange(
+    min: math.max(0, graphStart - margin),
+    max: math.max(0, graphEnd + margin - viewportExtent),
+  );
+}
+
+/// Returns the extra scroll space allowed beyond the rendered graph.
+double _stateMachineCanvasScrollMargin(double viewportExtent) {
+  return (viewportExtent * 1.25).clamp(960.0, 1800.0).toDouble();
 }
 
 /// _StateMachineCanvasPainter paints process-state graph edges and grid.
@@ -4783,7 +5041,7 @@ class _StateMachineCanvasPainter extends CustomPainter {
   void _paintPhaseLabel(Canvas canvas, _StateMachinePhasePlacement phase) {
     final textPainter = TextPainter(
       text: TextSpan(
-        text: phase.stateId,
+        text: phase.label,
         style: TextStyle(
           color: colors.ink,
           fontSize: 11,
@@ -5002,6 +5260,10 @@ const double _stateMachineMinimumNodeGap = 96;
 const double _stateMachineMinimumBadgeGap = 56;
 const double _stateMachineNodeClearance = 18;
 const double _stateMachineBadgeClearance = 8;
+const double _stateMachineLayoutPadding = 84;
+const double _stateMachineCanvasControlBottomGap = 44;
+const double _stateMachineLayoutTopPadding =
+    _stateMachineLayoutPadding + _stateMachineCanvasControlBottomGap;
 
 /// _StateMachineEdgeViewMode selects which transition family the canvas emphasizes.
 enum _StateMachineEdgeViewMode {
@@ -5070,6 +5332,77 @@ bool _isControlKey(LogicalKeyboardKey key) {
 /// Returns a process-state id.
 String _stateId(Map<String, dynamic> state) {
   return '${state['id'] ?? ''}'.trim();
+}
+
+/// Returns the readable label for one process-state definition.
+String _stateMachineStateLabel(Map<String, dynamic> state) {
+  final explicit = '${state['name'] ?? state['label'] ?? ''}'.trim();
+  if (explicit.isNotEmpty) {
+    return explicit;
+  }
+  return _stateMachineDisplayName(_stateId(state));
+}
+
+/// Returns readable state labels keyed by authored state id.
+Map<String, String> _stateMachineLabelsById(List<Map<String, dynamic>> states) {
+  return <String, String>{
+    for (final state in states)
+      if (_stateId(state).isNotEmpty)
+        _stateId(state): _stateMachineStateLabel(state),
+  };
+}
+
+/// Converts an authored identifier into a compact human-facing label.
+String _stateMachineDisplayName(String value) {
+  final words = value
+      .trim()
+      .replaceAll(RegExp(r'[-_]+'), ' ')
+      .split(RegExp(r'\s+'))
+      .where((word) => word.isNotEmpty)
+      .map(_stateMachineDisplayWord)
+      .toList();
+  return words.isEmpty ? 'State' : words.join(' ');
+}
+
+/// Formats one identifier word while preserving common technical acronyms.
+String _stateMachineDisplayWord(String word) {
+  final lower = word.toLowerCase();
+  const acronyms = <String>{
+    'aa',
+    'api',
+    'cli',
+    'http',
+    'id',
+    'json',
+    'mcp',
+    'ui',
+    'yaml',
+  };
+  if (acronyms.contains(lower)) {
+    return lower.toUpperCase();
+  }
+  return lower.substring(0, 1).toUpperCase() + lower.substring(1);
+}
+
+/// Returns a concise visible label for one entry action.
+String _stateMachineActionSummary(Map<String, dynamic> action) {
+  final uses = '${action['uses'] ?? ''}'.trim();
+  if (uses.isEmpty) {
+    return 'Entry action';
+  }
+  return _fallbackActionLabel(uses);
+}
+
+/// Returns a readable summary for one transition badge.
+String _stateMachineTransitionSummary(
+  Map<String, dynamic> transition,
+  Map<String, String> stateLabelsById,
+) {
+  final trigger = _stateMachineDisplayName(_transitionTrigger(transition));
+  final target = _transitionTarget(transition);
+  final targetLabel =
+      stateLabelsById[target] ?? _stateMachineDisplayName(target);
+  return '$trigger -> $targetLabel';
 }
 
 /// Returns the parent id for one flattened process-state definition.
@@ -5370,7 +5703,11 @@ List<_StateMachinePhasePlacement> _stateMachinePhasePlacements({
       bounds = bounds.expandToInclude(rect);
     }
     phases.add(
-      _StateMachinePhasePlacement(stateId: stateId, rect: bounds.inflate(28)),
+      _StateMachinePhasePlacement(
+        stateId: stateId,
+        label: _stateMachineStateLabel(state),
+        rect: bounds.inflate(28),
+      ),
     );
   }
   phases.sort(
@@ -6236,7 +6573,7 @@ Offset _stateMachineLayeredCoordinate(
   Map<String, _StateMachineLayoutLane> lanes,
   Map<String, int> layerOrders,
 ) {
-  const padding = 84.0;
+  const padding = _stateMachineLayoutPadding;
   final lane = lanes[id] ?? _StateMachineLayoutLane.primary;
   final rank = ranks[id] ?? 0;
   final order = layerOrders[id] ?? 0;
@@ -6248,7 +6585,7 @@ Offset _stateMachineLayeredCoordinate(
   }).length;
   return Offset(
     padding + rank * _stateMachineLayoutNodeWidth,
-    padding +
+    _stateMachineLayoutTopPadding +
         _stateMachineLaneIndex(lane) * _stateMachineLaneGap +
         laneSlot * _stateMachineLayoutNodeHeight,
   );
@@ -6393,6 +6730,7 @@ Map<String, dynamic> _defaultStateMachineActionArgs(String actionName) {
       'arguments': <String, dynamic>{},
     },
     'mcp.call' => <String, dynamic>{
+      'server_id': '',
       'endpoint': '',
       'tool': '',
       'arguments': <String, dynamic>{},
@@ -6403,6 +6741,10 @@ Map<String, dynamic> _defaultStateMachineActionArgs(String actionName) {
       'parameters': <String, dynamic>{},
     },
     'data.assert' => <String, dynamic>{'checks': <dynamic>[]},
+    'data.defaults' => <String, dynamic>{
+      'input': <String, dynamic>{},
+      'defaults': <String, dynamic>{},
+    },
     'human.request' => <String, dynamic>{
       'prompt': '',
       'payload': <String, dynamic>{},
@@ -6548,22 +6890,26 @@ Offset _stateMachinePositionForState(
     positions: positions,
   );
   final placement = layout.byId[stateId];
-  return placement?.rect.topLeft ?? const Offset(84, 84);
+  return placement?.rect.topLeft ??
+      const Offset(_stateMachineLayoutPadding, _stateMachineLayoutTopPadding);
 }
 
 /// Returns a reasonable canvas position for a newly added state.
 Offset _nextStateMachinePosition(Map<String, Offset> positions) {
   if (positions.isEmpty) {
-    return const Offset(84, 84);
+    return const Offset(
+      _stateMachineLayoutPadding,
+      _stateMachineLayoutTopPadding,
+    );
   }
   final maxX = positions.values.fold<double>(
-    84,
+    _stateMachineLayoutPadding,
     (value, offset) => offset.dx > value ? offset.dx : value,
   );
   final countAtRight = positions.values
       .where((offset) => offset.dx == maxX)
       .length;
-  return Offset(maxX + 160, 84 + countAtRight * 112);
+  return Offset(maxX + 160, _stateMachineLayoutTopPadding + countAtRight * 112);
 }
 
 /// Returns saved positions for direct children of one focus scope.
@@ -6635,6 +6981,7 @@ String _stateBaseNameForAction(String actionName) {
     'mcp.call' => 'call_mcp_tool',
     'command.execute' => 'run_command',
     'data.assert' => 'assert_data',
+    'data.defaults' => 'apply_defaults',
     'human.request' => 'operator_decision',
     'delay.until' => 'wait',
     'workflow.run' => 'run_workflow',

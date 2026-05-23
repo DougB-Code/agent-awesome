@@ -75,7 +75,12 @@ func LoadTools(path string, explicit bool) (*schema.Tools, error) {
 // loadYAML decodes a YAML file into the target and rejects unknown fields.
 func loadYAML(path string, target any) error {
 	k := koanf.New(".")
-	if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
+			return fmt.Errorf("load %s: %w", path, err)
+		}
+	} else if err := k.Load(bytesProvider{data: []byte(os.ExpandEnv(string(data)))}, yaml.Parser()); err != nil {
 		return fmt.Errorf("load %s: %w", path, err)
 	}
 	if err := k.UnmarshalWithConf("", target, koanf.UnmarshalConf{
@@ -87,6 +92,21 @@ func loadYAML(path string, target any) error {
 		return err
 	}
 	return nil
+}
+
+// bytesProvider gives koanf already-expanded configuration bytes.
+type bytesProvider struct {
+	data []byte
+}
+
+// ReadBytes returns raw configuration bytes.
+func (p bytesProvider) ReadBytes() ([]byte, error) {
+	return p.data, nil
+}
+
+// Read is unused when a parser is supplied.
+func (p bytesProvider) Read() (map[string]any, error) {
+	return nil, nil
 }
 
 // isNotExist reports whether an error chain contains an os-not-exist error.

@@ -20,7 +20,11 @@ void main() {
     expect(profile.agentMemory.actor, 'agent:agent-awesome');
     expect(profile.agentMemory.readDomains, <String>['memory']);
     expect(profile.agentMemory.writeDomains, <String>['memory']);
-    expect(profile.toJson(), isNot(contains('mcp_servers')));
+    expect(profile.serviceMcpServers.single.id, 'sourcecontrol');
+    expect(profile.mcpServers.map((server) => server.id), <String>[
+      'memory',
+      'sourcecontrol',
+    ]);
     final harnessArguments = harnessArgumentsForProfile(profile);
     expect(
       harnessArguments,
@@ -154,44 +158,6 @@ void main() {
       expect(profile.agentMemory.defaultWriteDomain, 'memory');
     },
   );
-
-  test('loads app-managed profiles that predate workflow runtime', () async {
-    final root = await Directory.systemTemp.createTemp(
-      'agentawesome-old-profile-',
-    );
-    addTearDown(() => root.delete(recursive: true));
-    final file = File('${root.path}/profile.json');
-    await file.writeAsString(
-      jsonEncode(<String, dynamic>{
-        'id': 'agent-awesome',
-        'label': 'Agent Awesome',
-        'harness': <String, dynamic>{..._harnessJson(), 'auto_start': true},
-        'gateway': <String, dynamic>{..._gatewayJson(), 'auto_start': true},
-        'memory_domains': <Map<String, dynamic>>[_memoryDomainJson('memory')],
-        'agent_memory': <String, dynamic>{
-          'actor': 'agent:test',
-          'read_domains': <String>['memory'],
-          'write_domains': <String>['memory'],
-          'default_write_domain': 'memory',
-          'allowed_sensitivities': <String>['public', 'internal', 'private'],
-        },
-      }),
-    );
-
-    final profile = await RuntimeProfileLoader(
-      _testConfig(workspaceRoot: root.path, runtimeProfilePath: file.path),
-    ).load();
-
-    expect(profile.workflow.enabled, isTrue);
-    expect(profile.workflow.hostedByHarness, isTrue);
-    expect(profile.workflow.autoStart, isFalse);
-    expect(profile.workflow.workingDirectory, isEmpty);
-    expect(profile.workflow.packagePath, isEmpty);
-    expect(
-      profile.workflow.definitionsDir,
-      defaultWorkflowDefinitionsDirectoryPath(),
-    );
-  });
 
   test('loads external gateway topology', () async {
     final root = await Directory.systemTemp.createTemp(

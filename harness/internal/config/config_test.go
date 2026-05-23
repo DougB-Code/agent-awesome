@@ -617,6 +617,54 @@ func TestWorkflowToolConfigExposesWorkflowMCP(t *testing.T) {
 	}
 }
 
+func TestGoToolPackageConfigProvidesVerificationPresets(t *testing.T) {
+	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.go.yaml"), true)
+	if err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+	if !cfg.LocalExec.Enabled {
+		t.Fatalf("LocalExec.Enabled = false, want Go package commands enabled")
+	}
+	if got, want := len(cfg.LocalExec.Commands), 4; got != want {
+		t.Fatalf("LocalExec.Commands length = %d, want %d", got, want)
+	}
+	expectedCommands := []string{"go_build_all", "go_test_all", "go_build_binary", "binary_execute_two_args"}
+	for index, name := range expectedCommands {
+		if cfg.LocalExec.Commands[index].Name != name {
+			t.Fatalf("Go command preset %d = %q, want %q", index, cfg.LocalExec.Commands[index].Name, name)
+		}
+	}
+	if got, want := len(cfg.NodePresets), 4; got != want {
+		t.Fatalf("NodePresets length = %d, want %d", got, want)
+	}
+	if cfg.NodePresets[0].Action != "command.execute" {
+		t.Fatalf("NodePresets[0].Action = %q, want command.execute", cfg.NodePresets[0].Action)
+	}
+}
+
+func TestProfessionalCodingToolPackageConfigProvidesPilotBoundary(t *testing.T) {
+	t.Setenv("SOURCECONTROL_MCP_URL", "http://127.0.0.1:8095/mcp")
+	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.professional-coding.yaml"), true)
+	if err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+	commands := map[string]schema.LocalExecCommand{}
+	for _, command := range cfg.LocalExec.Commands {
+		commands[command.Name] = command
+	}
+	for _, name := range []string{"codex_implement", "go_build_all", "go_test_all", "go_build_binary", "binary_execute_two_args"} {
+		if _, ok := commands[name]; !ok {
+			t.Fatalf("command %q is not configured", name)
+		}
+	}
+	if got, want := cfg.MCP.Servers[0].Name, "sourcecontrol"; got != want {
+		t.Fatalf("MCP server = %q, want %q", got, want)
+	}
+	if got, want := len(cfg.NodePresets), 8; got != want {
+		t.Fatalf("NodePresets length = %d, want %d", got, want)
+	}
+}
+
 func TestLoadToolsRejectsUnknownFields(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:

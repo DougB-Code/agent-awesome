@@ -36,6 +36,19 @@ mcp:
         allow:
           - search_memory
           - save_memory_candidate
+node-presets:
+  - id: go_build_all
+    label: Go build all
+    surface: command
+    action: command.execute
+    arguments:
+      template_id: go_build_all
+node-scenarios:
+  - id: go_build_all_success
+    label: Go build success
+    preset-id: go_build_all
+    expected:
+      status: succeeded
 ''');
 
     expect(document.localExec.enabled, isTrue);
@@ -54,6 +67,12 @@ mcp:
       'search_memory',
       'save_memory_candidate',
     ]);
+    expect(document.nodePresets.single.action, 'command.execute');
+    expect(
+      document.nodePresets.single.arguments['template_id'],
+      'go_build_all',
+    );
+    expect(document.nodeScenarios.single.presetId, 'go_build_all');
   });
 
   test('serializes tool settings without dropping configured fields', () {
@@ -207,6 +226,57 @@ mcp:
     );
     expect(workflowServer.endpoint, 'http://127.0.0.1:8092/mcp');
     expect(workflowServer.tools.allow, workflowMcpToolNames);
+  });
+
+  test('adds generic source-control MCP server from runtime profile', () {
+    final document = graphBackedMemoryToolConfigForDomains(
+      memoryDomains: const <McpServerRuntime>[
+        McpServerRuntime(
+          id: 'memory',
+          label: 'Memory',
+          kind: 'memory',
+          endpoint: 'http://127.0.0.1:8090/mcp',
+          healthUrl: 'http://127.0.0.1:8090/healthz',
+          workingDirectory: '/tmp/memory',
+          packagePath: './cmd/memoryd',
+          dbPath: '/tmp/memory.db',
+          dataDir: '/tmp/memory-files',
+          arguments: <String>[],
+          autoStart: false,
+          enabled: true,
+        ),
+      ],
+      mcpServers: const <McpServerRuntime>[
+        McpServerRuntime(
+          id: 'sourcecontrol',
+          label: 'Source Control',
+          kind: 'sourcecontrol',
+          endpoint: 'http://127.0.0.1:8095/mcp',
+          healthUrl: 'http://127.0.0.1:8095/healthz',
+          workingDirectory: '/tmp/sourcecontrol',
+          packagePath: './cmd/sourcecontrold',
+          dbPath: '',
+          dataDir: '',
+          arguments: <String>[],
+          autoStart: false,
+          enabled: true,
+        ),
+      ],
+      agentMemory: const AgentMemoryRuntime(
+        actor: 'agent:test',
+        readDomains: <String>['memory'],
+        writeDomains: <String>['memory'],
+        defaultWriteDomain: 'memory',
+        allowedSensitivities: <String>['public'],
+      ),
+      localExec: emptyToolConfigDocument().localExec,
+    );
+
+    final sourceControl = document.mcp.servers.firstWhere(
+      (server) => server.name == 'sourcecontrol',
+    );
+    expect(sourceControl.endpoint, 'http://127.0.0.1:8095/mcp');
+    expect(sourceControl.tools.allow, sourceControlMcpToolNames);
   });
 
   test('limits model-exposed tools when profile reads multiple domains', () {

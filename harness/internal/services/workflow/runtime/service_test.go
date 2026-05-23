@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"agentawesome/internal/services/workflow/actions"
+	"agentawesome/internal/services/workflow/definition"
 	"agentawesome/internal/services/workflow/policy"
 	"agentawesome/internal/services/workflow/store"
 )
@@ -88,7 +89,7 @@ func TestOpenSkipsInvalidDefinitionsWhenConfigured(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "old.yaml", `
-kind: state_machine
+kind: legacy_state_machine
 id: old_flow
 initial: start
 states:
@@ -165,6 +166,121 @@ nodes:
 	if len(drafts) != 1 || drafts[0].ID != "draft_copied_workflow" {
 		t.Fatalf("ListDrafts() = %#v, want draft_copied_workflow", drafts)
 	}
+	if err := service.DeleteDraft(ctx, "draft_copied_workflow"); err != nil {
+		t.Fatalf("DeleteDraft() error = %v", err)
+	}
+	drafts, err = service.ListDrafts(ctx)
+	if err != nil {
+		t.Fatalf("ListDrafts() after delete error = %v", err)
+	}
+	if len(drafts) != 1 || drafts[0].ID != "draft_copied_workflow" {
+		t.Fatalf("ListDrafts() after delete = %#v, want mirrored draft restored", drafts)
+	}
+}
+
+// TestListDraftsRemovesStalePublishedDefinitionDrafts verifies deployed files drive the file picker.
+func TestListDraftsRemovesStalePublishedDefinitionDrafts(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	writeTestDefinition(t, definitionsDir, "old.yaml", `
+kind: workflow
+id: old_workflow
+name: Old Workflow
+nodes:
+  - id: review
+    type: human
+    with:
+      prompt: Review old workflow
+`)
+	if _, err := service.ListDrafts(ctx); err != nil {
+		t.Fatalf("ListDrafts() error = %v", err)
+	}
+	if err := os.Remove(filepath.Join(definitionsDir, "old.yaml")); err != nil {
+		t.Fatalf("Remove() error = %v", err)
+	}
+	writeTestDefinition(t, definitionsDir, "new.yaml", `
+kind: state_machine
+id: new_workflow
+name: New Workflow
+initial: intake
+states:
+  - id: intake
+    on_entry:
+      - id: assert_input
+        uses: data.assert
+        with:
+          path: workflow_input.ready
+          mode: exists
+`)
+	drafts, err := service.ListDrafts(ctx)
+	if err != nil {
+		t.Fatalf("ListDrafts() error = %v", err)
+	}
+	if len(drafts) != 1 || drafts[0].ID != "draft_new_workflow" {
+		t.Fatalf("ListDrafts() = %#v, want only draft_new_workflow", drafts)
+	}
+	if drafts[0].Kind != definition.KindWorkflow {
+		t.Fatalf("draft kind = %q, want workflow", drafts[0].Kind)
+	}
+	if got := strings.TrimSpace(stringFromMap(drafts[0].Body, "kind", "")); got != definition.KindStateMachine {
+		t.Fatalf("draft body kind = %q, want state_machine", got)
+	}
+}
+
+// TestUpdateWorkflowDraftPreservesStateMachineBodyKind verifies authoring kind does not rewrite runtime kind.
+func TestUpdateWorkflowDraftPreservesStateMachineBodyKind(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	draft, err := service.CreateDraft(ctx, DraftRequest{
+		Kind: draftKindWorkflow,
+		Name: "State Machine Workflow",
+		Body: map[string]any{
+			"kind":    definition.KindStateMachine,
+			"id":      "state_machine_workflow",
+			"initial": "start",
+			"states": []any{
+				map[string]any{"id": "start"},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft() error = %v", err)
+	}
+	updated, err := service.UpdateDraft(ctx, draft.ID, DraftRequest{
+		Kind:        draftKindWorkflow,
+		Name:        "Renamed State Machine Workflow",
+		Description: draft.Description,
+		Body:        draft.Body,
+	})
+	if err != nil {
+		t.Fatalf("UpdateDraft() error = %v", err)
+	}
+	if updated.Kind != draftKindWorkflow {
+		t.Fatalf("draft kind = %q, want workflow", updated.Kind)
+	}
+	if got := strings.TrimSpace(stringFromMap(updated.Body, "kind", "")); got != definition.KindStateMachine {
+		t.Fatalf("draft body kind = %q, want state_machine", got)
+	}
 }
 
 // TestStartWorkflowReloadsCopiedDefinition verifies copied workflows can run before the UI refreshes.
@@ -203,6 +319,193 @@ nodes:
 		run, err := service.Status(ctx, started.ID)
 		return err == nil && run.Status == statusWaiting
 	})
+}
+
+// TestStateMachineRunsNestedEntryActions verifies hierarchical states execute parent and child actions.
+func TestStateMachineRunsNestedEntryActions(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "hierarchical.yaml", `
+kind: state_machine
+id: hierarchical_flow
+name: Hierarchical Flow
+initial: parent
+states:
+  - id: parent
+    initial: child
+    on_entry:
+      - id: parent_assert
+        uses: data.assert
+        with:
+          path: workflow_input.ready
+          mode: equals
+          value: true
+    states:
+      - id: child
+        on_entry:
+          - id: child_assert
+            uses: data.assert
+            with:
+              path: parent_assert.passed
+              mode: equals
+              value: true
+`)
+	service := openTestService(t, ctx, definitionsDir, "")
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "hierarchical_flow", map[string]any{"ready": true})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
+	states, err := service.store.ListNodeStates(ctx, started.ID)
+	if err != nil {
+		t.Fatalf("ListNodeStates() error = %v", err)
+	}
+	statuses := nodeStatusByID(states)
+	if statuses["parent_assert"].Status != statusSucceeded || statuses["child_assert"].Status != statusSucceeded {
+		t.Fatalf("node statuses = %#v, want parent and child succeeded", statuses)
+	}
+}
+
+// TestStateMachineFollowsSucceededTransitions verifies authored state triggers use public status names.
+func TestStateMachineFollowsSucceededTransitions(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "transition.yaml", `
+kind: state_machine
+id: transition_flow
+name: Transition Flow
+initial: first
+states:
+  - id: first
+    on_entry:
+      - id: first_assert
+        uses: data.assert
+        with:
+          path: workflow_input.ready
+          mode: equals
+          value: true
+    transitions:
+      - trigger: succeeded
+        to: second
+  - id: second
+    on_entry:
+      - id: second_assert
+        uses: data.assert
+        with:
+          path: first_assert.passed
+          mode: equals
+          value: true
+`)
+	service := openTestService(t, ctx, definitionsDir, "")
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "transition_flow", map[string]any{"ready": true})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
+	run, err := service.Status(ctx, started.ID)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if run.State != "second" {
+		t.Fatalf("run state = %q, want second", run.State)
+	}
+	if _, ok, err := service.store.GetNodeState(ctx, started.ID, "second_assert"); err != nil {
+		t.Fatalf("GetNodeState() error = %v", err)
+	} else if !ok {
+		t.Fatalf("second_assert did not execute")
+	}
+}
+
+// TestStateMachineResumesWaitingEntryAction verifies pending hierarchical actions resume by signal.
+func TestStateMachineResumesWaitingEntryAction(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "waiting.yaml", `
+kind: state_machine
+id: waiting_flow
+name: Waiting Flow
+initial: review
+states:
+  - id: review
+    on_entry:
+      - id: request_review
+        uses: human.request
+        with:
+          prompt: Continue?
+`)
+	service := openTestService(t, ctx, definitionsDir, "")
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "waiting_flow", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusWaiting
+	})
+	if _, err := service.Signal(ctx, started.ID, "approve", map[string]any{"approved": true}); err != nil {
+		t.Fatalf("Signal() error = %v", err)
+	}
+	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
+}
+
+// TestStateMachineFailureBlocksPublish verifies failed verification states do not execute publish states.
+func TestStateMachineFailureBlocksPublish(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "blocked_publish.yaml", `
+kind: state_machine
+id: blocked_publish
+name: Blocked Publish
+initial: verify
+states:
+  - id: verify
+    on_entry:
+      - id: verify_change
+        uses: data.assert
+        with:
+          path: workflow_input.ready
+          mode: equals
+          value: true
+    transitions:
+      - trigger: succeeded
+        to: publish
+      - trigger: failed
+        to: blocked
+  - id: publish
+    on_entry:
+      - id: publish_change
+        uses: data.assert
+        with:
+          path: workflow_input.publish_allowed
+          mode: equals
+          value: true
+  - id: blocked
+    on_entry:
+      - id: blocked_gate
+        uses: data.assert
+        with:
+          path: workflow_input.manual_repair
+          mode: exists
+`)
+	service := openTestService(t, ctx, definitionsDir, "")
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "blocked_publish", map[string]any{"ready": false, "publish_allowed": true})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	waitForRunStatus(t, ctx, service, started.ID, statusFailed)
+	if _, ok, err := service.store.GetNodeState(ctx, started.ID, "publish_change"); err != nil {
+		t.Fatalf("GetNodeState() error = %v", err)
+	} else if ok {
+		t.Fatalf("publish_change executed, want publish blocked")
+	}
 }
 
 // TestWorkflowEventsRedactSignalPayload verifies audit events do not expose credentials.

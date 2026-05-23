@@ -41,6 +41,50 @@ func TestTemplateCommandExecutes(t *testing.T) {
 	}
 }
 
+// TestTemplateExecutableCanUseParameters verifies executable paths remain generic template data.
+func TestTemplateExecutableCanUseParameters(t *testing.T) {
+	workdir := t.TempDir()
+	script := filepath.Join(workdir, "tool.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\nprintf executable:%s \"$1\"\n"), 0o700); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	service, err := Open(Config{
+		DataDir:          t.TempDir(),
+		AllowedWorkdirs:  []string{workdir},
+		DefaultTimeout:   time.Second,
+		DefaultMaxOutput: 1024,
+		AllowedEnv:       []string{"PATH"},
+		Templates: []Template{{
+			ID:          "dynamic_exec",
+			Description: "Run a configured executable path.",
+			Executable:  "{{executable_path}}",
+			Args:        []string{"{{value}}"},
+			Env:         map[string]string{"DYNAMIC_HOME": "{{home_path}}"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	status, err := service.Execute(context.Background(), ExecuteRequest{
+		TemplateID: "dynamic_exec",
+		WorkingDir: workdir,
+		Parameters: map[string]any{"executable_path": script, "home_path": workdir, "value": "ok"},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if strings.TrimSpace(status.StdoutTail) != "executable:ok" {
+		t.Fatalf("StdoutTail = %q, want executable:ok", status.StdoutTail)
+	}
+	if !containsString(service.Templates()[0].Parameters, "executable_path") {
+		t.Fatalf("template parameters = %#v, want executable_path", service.Templates()[0].Parameters)
+	}
+	if !containsString(service.Templates()[0].Parameters, "home_path") {
+		t.Fatalf("template parameters = %#v, want home_path", service.Templates()[0].Parameters)
+	}
+}
+
 // TestExecuteReturnsStructuredJSONValidationAndArtifacts verifies workflow-friendly execution contracts.
 func TestExecuteReturnsStructuredJSONValidationAndArtifacts(t *testing.T) {
 	workdir := t.TempDir()

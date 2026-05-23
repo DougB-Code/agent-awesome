@@ -44,6 +44,7 @@ type Service struct {
 	actions            *actions.Registry
 	tools              ContextToolClient
 	commands           CommandClient
+	mcpEndpoints       map[string]string
 	llm                LLMClient
 	mcp                *MCPClient
 	mu                 sync.RWMutex
@@ -74,6 +75,9 @@ func Open(ctx context.Context, cfg Config) (*Service, error) {
 		actions:  registry,
 		tools:    toolClient,
 		commands: cfg.CommandClient,
+		mcpEndpoints: cloneStringMap(
+			cfg.MCPServerEndpoints,
+		),
 		llm:      cfg.LLMClient,
 		mcp:      NewMCPClient(cfg.RequestTimeout),
 		defs:     map[string]definition.Definition{},
@@ -99,6 +103,18 @@ func (s *Service) Close() error {
 		return nil
 	}
 	return s.store.Close()
+}
+
+// cloneStringMap copies service configuration maps before storing them.
+func cloneStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return map[string]string{}
+	}
+	next := make(map[string]string, len(values))
+	for key, value := range values {
+		next[key] = value
+	}
+	return next
 }
 
 // ReloadDefinitions loads definitions from disk and stores snapshots.
@@ -183,7 +199,7 @@ func (s *Service) syncDefinitionsFromDisk(ctx context.Context) error {
 	unchanged := snapshot == s.definitionSnapshot
 	s.mu.RUnlock()
 	if unchanged {
-		return nil
+		return s.ensureDraftsForStoredDefinitions(ctx)
 	}
 	return s.reloadDefinitions(ctx)
 }
@@ -340,8 +356,8 @@ func (s *Service) Signal(ctx context.Context, runID string, signal string, paylo
 	if err := s.appendEvent(ctx, run.ID, "signal_received", "workflow signal received", map[string]any{"signal": signal, "payload": payload}); err != nil {
 		return store.RunRecord{}, err
 	}
-	if !definition.HasPipeGraph(def) {
-		return store.RunRecord{}, fmt.Errorf("workflow definition %q is not an executable graph", def.ID)
+	if !definition.HasPipeGraph(def) && !definition.HasStateMachine(def) {
+		return store.RunRecord{}, fmt.Errorf("workflow definition %q is not executable", def.ID)
 	}
 	if err := s.completePipePendingSignals(ctx, run, openItems, payload); err != nil {
 		return store.RunRecord{}, err

@@ -126,8 +126,8 @@ nodes:
 	t.Fatalf("ListDrafts() = %#v, want draft_loaded_tool", drafts)
 }
 
-// TestDraftRejectsStateMachineKind verifies authoring accepts target workflow drafts only.
-func TestDraftRejectsStateMachineKind(t *testing.T) {
+// TestDraftAcceptsStateMachineKind verifies authoring accepts hierarchical workflow drafts.
+func TestDraftAcceptsStateMachineKind(t *testing.T) {
 	ctx := context.Background()
 	service, err := Open(ctx, Config{
 		DefinitionsDir: t.TempDir(),
@@ -139,23 +139,23 @@ func TestDraftRejectsStateMachineKind(t *testing.T) {
 	}
 	defer service.Close()
 
-	_, err = service.CreateDraft(ctx, DraftRequest{
-		ID:   "draft_leaky_nodes",
-		Kind: "state_machine",
+	draft, err := service.CreateDraft(ctx, DraftRequest{
+		ID:   "draft_state_machine",
+		Kind: definition.KindStateMachine,
 		Body: map[string]any{
-			"kind":    "state_machine",
-			"id":      "leaky_nodes",
+			"kind":    definition.KindStateMachine,
+			"id":      "state_machine",
 			"initial": "start",
 			"states": []any{
 				map[string]any{"id": "start"},
 			},
-			"nodes": []any{
-				map[string]any{"id": "tool", "uses": "tool.call"},
-			},
 		},
 	})
-	if err == nil {
-		t.Fatalf("CreateDraft() error = nil, want state_machine rejected")
+	if err != nil {
+		t.Fatalf("CreateDraft() error = %v", err)
+	}
+	if draft.Kind != definition.KindStateMachine {
+		t.Fatalf("draft kind = %q, want state_machine", draft.Kind)
 	}
 }
 

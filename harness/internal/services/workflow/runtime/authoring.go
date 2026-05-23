@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	draftStatusDraft     = "draft"
-	draftStatusPublished = "published"
-	draftKindWorkflow    = definition.KindWorkflow
+	draftStatusDraft      = "draft"
+	draftStatusPublished  = "published"
+	draftKindWorkflow     = definition.KindWorkflow
+	draftKindStateMachine = definition.KindStateMachine
 )
 
 var authoringIDPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
@@ -55,10 +56,25 @@ func (s *Service) ensureDraftsForDefinitions(ctx context.Context, sources []load
 	}
 	draftIDs := map[string]struct{}{}
 	definitionIDs := map[string]struct{}{}
+	sourceDefinitionIDs := map[string]struct{}{}
+	for _, source := range sources {
+		if definitionID := strings.TrimSpace(source.definition.ID); definitionID != "" {
+			sourceDefinitionIDs[definitionID] = struct{}{}
+		}
+	}
 	for _, draft := range drafts {
 		draftIDs[draft.ID] = struct{}{}
 		if definitionID := strings.TrimSpace(stringFromMap(draft.Body, "id", "")); definitionID != "" {
 			definitionIDs[definitionID] = struct{}{}
+			if _, ok := sourceDefinitionIDs[definitionID]; !ok &&
+				strings.TrimSpace(draft.Status) == draftStatusPublished &&
+				draft.ID == draftIDForDefinition(definitionID) {
+				if err := s.store.DeleteDraft(ctx, draft.ID); err != nil {
+					return err
+				}
+				delete(draftIDs, draft.ID)
+				delete(definitionIDs, definitionID)
+			}
 		}
 	}
 	for _, source := range sources {
@@ -85,7 +101,7 @@ func (s *Service) ensureDraftsForDefinitions(ctx context.Context, sources []load
 		}
 		record := store.DraftRecord{
 			ID:          draftID,
-			Kind:        source.definition.Kind,
+			Kind:        draftKindForDefinitionKind(source.definition.Kind),
 			Name:        name,
 			Description: strings.TrimSpace(source.definition.Description),
 			Status:      draftStatusPublished,
@@ -99,6 +115,27 @@ func (s *Service) ensureDraftsForDefinitions(ctx context.Context, sources []load
 		definitionIDs[definitionID] = struct{}{}
 	}
 	return nil
+}
+
+// ensureDraftsForStoredDefinitions remirrors installed definitions when drafts were removed.
+func (s *Service) ensureDraftsForStoredDefinitions(ctx context.Context) error {
+	records, err := s.store.ListDefinitions(ctx)
+	if err != nil {
+		return err
+	}
+	sources := make([]loadedDefinitionDraftSource, 0, len(records))
+	for _, record := range records {
+		sources = append(sources, loadedDefinitionDraftSource{
+			definition: definition.Definition{
+				ID:          record.ID,
+				Kind:        record.Kind,
+				Name:        record.Name,
+				Description: strings.TrimSpace(stringFromMap(record.Body, "description", "")),
+			},
+			body: cloneMap(record.Body),
+		})
+	}
+	return s.ensureDraftsForDefinitions(ctx, sources)
 }
 
 // GetDraft returns one editable workflow draft.
@@ -252,18 +289,25 @@ func (s *Service) draftRecordFromRequest(req DraftRequest, create bool) (store.D
 	if kind == "" {
 		kind = stringFromMap(req.Body, "kind", draftKindWorkflow)
 	}
-	if kind != draftKindWorkflow {
-		return store.DraftRecord{}, fmt.Errorf("draft kind must be %q", draftKindWorkflow)
+	if kind != draftKindWorkflow && kind != draftKindStateMachine {
+		return store.DraftRecord{}, fmt.Errorf("draft kind must be %q or %q", draftKindWorkflow, draftKindStateMachine)
 	}
 	body := cloneMap(req.Body)
 	if len(body) == 0 {
 		body = blankDefinitionBody(id, kind, req.Name, req.Description)
 	}
+	bodyKind := strings.TrimSpace(stringFromMap(body, "kind", ""))
+	if bodyKind == "" {
+		bodyKind = kind
+	}
+	if bodyKind != draftKindWorkflow && bodyKind != draftKindStateMachine {
+		return store.DraftRecord{}, fmt.Errorf("draft body kind must be %q or %q", draftKindWorkflow, draftKindStateMachine)
+	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		name = stringFromMap(body, "name", id)
 	}
-	body["kind"] = kind
+	body["kind"] = bodyKind
 	if strings.TrimSpace(stringFromMap(body, "id", "")) == "" {
 		body["id"] = definitionIDFromDraftID(id)
 	}
@@ -342,7 +386,7 @@ func definitionFromDraft(draft store.DraftRecord) (definition.Definition, error)
 		def.Name = draft.Name
 	}
 	def.Authoring = map[string]any{
-		"mode":     draftKindWorkflow,
+		"mode":     def.Kind,
 		"workflow": cloneMap(body),
 	}
 	return def, nil
@@ -361,6 +405,13 @@ func blankDefinitionBody(id string, kind string, name string, description string
 		"description": strings.TrimSpace(description),
 	}
 	body["apiVersion"] = "aa.workflow/v1"
+	if kind == draftKindStateMachine {
+		body["initial"] = "start"
+		body["states"] = []any{
+			map[string]any{"id": "start"},
+		}
+		return body
+	}
 	body["nodes"] = []any{
 		map[string]any{
 			"id":   "tool_task",
@@ -372,4 +423,13 @@ func blankDefinitionBody(id string, kind string, name string, description string
 		},
 	}
 	return body
+}
+
+// draftKindForDefinitionKind maps runtime definitions into authoring sections.
+func draftKindForDefinitionKind(kind string) string {
+	trimmed := strings.TrimSpace(kind)
+	if trimmed == draftKindStateMachine {
+		return draftKindWorkflow
+	}
+	return trimmed
 }

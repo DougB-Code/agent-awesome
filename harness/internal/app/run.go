@@ -83,7 +83,7 @@ func Run(ctx context.Context, opts Options) error {
 	} else if commandService != nil {
 		defer commandService.Close()
 	}
-	if workflowServer, err := startEmbeddedWorkflow(ctx, opts, contextServer, commandService); err != nil {
+	if workflowServer, err := startEmbeddedWorkflow(ctx, opts, toolsCfg, contextServer, commandService); err != nil {
 		return err
 	} else if workflowServer != nil {
 		defer func() {
@@ -102,7 +102,7 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 // startEmbeddedWorkflow serves workflow routes from the harness process when enabled.
-func startEmbeddedWorkflow(ctx context.Context, opts Options, contextServer *contextapi.Server, commandService *commandservice.Service) (*workflowembedded.Server, error) {
+func startEmbeddedWorkflow(ctx context.Context, opts Options, toolsCfg *schema.Tools, contextServer *contextapi.Server, commandService *commandservice.Service) (*workflowembedded.Server, error) {
 	if strings.TrimSpace(opts.WorkflowAPIAddr) == "" {
 		return nil, nil
 	}
@@ -113,7 +113,29 @@ func startEmbeddedWorkflow(ctx context.Context, opts Options, contextServer *con
 		RequestTimeout: 10 * time.Minute,
 		ToolClient:     embeddedWorkflowToolClient(contextServer),
 		CommandClient:  commandService,
+		MCPServerEndpoints: workflowMCPServerEndpoints(
+			toolsCfg,
+		),
 	})
+}
+
+// workflowMCPServerEndpoints indexes configured MCP endpoints for workflow actions.
+func workflowMCPServerEndpoints(toolsCfg *schema.Tools) map[string]string {
+	endpoints := map[string]string{}
+	if toolsCfg == nil {
+		return endpoints
+	}
+	for _, server := range toolsCfg.MCP.Servers {
+		name := strings.TrimSpace(server.Name)
+		endpoint := strings.TrimSpace(server.Endpoint)
+		if endpoint == "" {
+			endpoint = strings.TrimSpace(server.URL)
+		}
+		if name != "" && endpoint != "" {
+			endpoints[name] = endpoint
+		}
+	}
+	return endpoints
 }
 
 // embeddedWorkflowToolClient returns a direct tool client when workflow shares this process.
@@ -270,11 +292,24 @@ func localExecCommandTemplates(toolsCfg *schema.Tools) ([]commandservice.Templat
 			Description:    strings.TrimSpace(item.Description),
 			Executable:     strings.TrimSpace(item.Executable),
 			Args:           append([]string(nil), item.Args...),
+			Env:            copyStringMap(item.Env),
 			Timeout:        timeout,
 			MaxOutputBytes: localExecCommandOutputLimit(localExec, item),
 		})
 	}
 	return templates, nil
+}
+
+// copyStringMap returns a detached copy of string metadata.
+func copyStringMap(values map[string]string) map[string]string {
+	if len(values) == 0 {
+		return nil
+	}
+	next := make(map[string]string, len(values))
+	for key, value := range values {
+		next[key] = value
+	}
+	return next
 }
 
 // localExecCommandTimeout returns the command-specific or local-exec default timeout.

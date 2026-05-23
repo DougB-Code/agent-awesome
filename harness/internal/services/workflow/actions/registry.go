@@ -51,6 +51,7 @@ type HumanRequest struct {
 
 // MCPRequest describes one MCP tool call action.
 type MCPRequest struct {
+	ServerID  string
 	Endpoint  string
 	Tool      string
 	Arguments map[string]any
@@ -106,6 +107,7 @@ func NewRegistry() *Registry {
 	r.Register("mcp.call", mcpCall)
 	r.Register("command.execute", commandExecute)
 	r.Register("data.assert", dataAssert)
+	r.Register("data.defaults", dataDefaults)
 	r.Register("decision.route", decisionRoute)
 	r.Register("llm.generate", llmGenerate)
 	r.Register("workflow.run", workflowRun)
@@ -186,6 +188,7 @@ func mcpCall(ctx context.Context, execCtx Context, args map[string]any) (map[str
 		return nil, fmt.Errorf("mcp.call host is not configured")
 	}
 	return execCtx.Host.CallMCP(ctx, MCPRequest{
+		ServerID:  resolvedStringArg(args, "server_id", execCtx.Input),
 		Endpoint:  resolvedStringArg(args, "endpoint", execCtx.Input),
 		Tool:      resolvedStringArg(args, "tool", execCtx.Input),
 		Arguments: resolvedMapArg(args, "arguments", nil, execCtx.Input),

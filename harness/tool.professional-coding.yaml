@@ -1,0 +1,204 @@
+# This file configures the professional coding workflow pilot tool package.
+local-exec:
+  enabled: true
+  default-timeout: 20m
+  default-max-output-bytes: 1048576
+  allowed-workdirs:
+    - .
+    - ..
+  commands:
+    - name: codex_implement
+      executable: codex
+      description: Run the configured Codex CLI as a generic coding command.
+      args:
+        - exec
+        - --ignore-user-config
+        - --sandbox
+        - workspace-write
+        - --add-dir
+        - "{{codex_home}}"
+        - "{{change_request}}"
+      env:
+        CODEX_HOME: "{{codex_home}}"
+        HOME: "{{codex_home}}"
+      timeout: 30m
+      max-output-bytes: 1048576
+    - name: go_build_all
+      executable: go
+      description: Compile every Go package in the selected repository.
+      args:
+        - build
+        - ./...
+      timeout: 10m
+      max-output-bytes: 1048576
+    - name: go_test_all
+      executable: go
+      description: Run every Go test in the selected repository.
+      args:
+        - test
+        - ./...
+      timeout: 20m
+      max-output-bytes: 1048576
+    - name: go_build_binary
+      executable: go
+      description: Build one Go command package to a configured binary path.
+      args:
+        - build
+        - -o
+        - "{{binary_path}}"
+        - "{{package}}"
+      timeout: 10m
+      max-output-bytes: 1048576
+    - name: binary_execute_two_args
+      executable: "{{binary_path}}"
+      description: Invoke a configured binary with two positional arguments.
+      args:
+        - "{{arg_1}}"
+        - "{{arg_2}}"
+      timeout: 2m
+      max-output-bytes: 1048576
+mcp:
+  enabled: true
+  servers:
+    - name: sourcecontrol
+      transport: streamable-http
+      endpoint: ${SOURCECONTROL_MCP_URL}
+      require-confirmation-tools:
+        - sourcecontrol.commit
+        - sourcecontrol.push
+        - sourcecontrol.restore
+        - sourcecontrol.cleanup_worktree
+      tools:
+        allow:
+          - sourcecontrol.prepare_worktree
+          - sourcecontrol.status
+          - sourcecontrol.commit
+          - sourcecontrol.push
+          - sourcecontrol.backup
+          - sourcecontrol.restore
+          - sourcecontrol.cleanup_worktree
+node-presets:
+  - id: codex_implement
+    label: Codex implement
+    surface: command
+    action: command.execute
+    description: Run Codex CLI through the generic command boundary.
+    arguments:
+      template_id: codex_implement
+  - id: go_build_all
+    label: Go build all
+    surface: command
+    action: command.execute
+    description: Compile every Go package from the node working directory.
+    arguments:
+      template_id: go_build_all
+  - id: go_test_all
+    label: Go test all
+    surface: command
+    action: command.execute
+    description: Run every Go test from the node working directory.
+    arguments:
+      template_id: go_test_all
+  - id: go_build_binary
+    label: Go build binary
+    surface: command
+    action: command.execute
+    description: Build one Go command package into a configured binary.
+    arguments:
+      template_id: go_build_binary
+  - id: binary_execute_two_args
+    label: Invoke binary
+    surface: command
+    action: command.execute
+    description: Invoke a configured binary with two positional arguments.
+    arguments:
+      template_id: binary_execute_two_args
+  - id: sourcecontrol_prepare_worktree
+    label: Prepare worktree
+    surface: mcp
+    action: mcp.call
+    description: Prepare a source-control-managed Git worktree.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_commit
+    label: Commit worktree
+    surface: mcp
+    action: mcp.call
+    description: Commit changes in a prepared source-control worktree.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.commit
+  - id: sourcecontrol_push
+    label: Push branch
+    surface: mcp
+    action: mcp.call
+    description: Push the prepared worktree branch to a configured remote.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.push
+node-scenarios:
+  - id: codex_implement_success
+    label: Codex implement success
+    preset-id: codex_implement
+    description: Command boundary returns a successful Codex implementation result.
+    input:
+      change_request: Fix one bug.
+      worktree_path: /tmp/worktree
+    mocked-boundary-responses:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+    expected:
+      status: succeeded
+  - id: go_build_all_success
+    label: Go build success
+    preset-id: go_build_all
+    description: Command boundary returns a successful Go build result.
+    input:
+      cwd: /tmp/repository
+    mocked-boundary-responses:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+    expected:
+      status: succeeded
+  - id: go_test_all_failure
+    label: Go test failure
+    preset-id: go_test_all
+    description: Command boundary returns a failed Go test result.
+    input:
+      cwd: /tmp/repository
+    mocked-boundary-responses:
+      command.execute:
+        status: failed
+        exit_code: 1
+    expected:
+      status: failed
+  - id: go_build_binary_success
+    label: Go binary build success
+    preset-id: go_build_binary
+    description: Command boundary returns a successful binary build result.
+    input:
+      binary_path: build/app
+      package: .
+    mocked-boundary-responses:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+    expected:
+      status: succeeded
+  - id: binary_execute_success
+    label: Binary invoke success
+    preset-id: binary_execute_two_args
+    description: Command boundary returns a successful binary invocation result.
+    input:
+      binary_path: build/app
+      arg_1: "12"
+      arg_2: "3"
+    mocked-boundary-responses:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+    expected:
+      status: succeeded

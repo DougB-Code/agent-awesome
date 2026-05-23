@@ -44,6 +44,13 @@ func (s *Service) CallTool(ctx context.Context, req actions.ToolRequest) (map[st
 
 // CallMCP invokes one MCP tool endpoint.
 func (s *Service) CallMCP(ctx context.Context, req actions.MCPRequest) (map[string]any, error) {
+	if strings.TrimSpace(req.Endpoint) == "" {
+		endpoint, ok := s.mcpEndpoints[strings.TrimSpace(req.ServerID)]
+		if !ok || strings.TrimSpace(endpoint) == "" {
+			return nil, fmt.Errorf("mcp.call server %q is not configured", req.ServerID)
+		}
+		req.Endpoint = endpoint
+	}
 	return s.mcp.Call(ctx, req)
 }
 

@@ -23,7 +23,10 @@ func (c *Tools) Validate() error {
 	if err := validateMCP(c.MCP); err != nil {
 		return err
 	}
-	return validateMemory(c.Memory)
+	if err := validateMemory(c.Memory); err != nil {
+		return err
+	}
+	return validateNodeMetadata(c.NodePresets, c.NodeScenarios)
 }
 
 // DefaultTimeoutDuration returns the configured local exec timeout or the
@@ -116,6 +119,11 @@ func validateLocalExecCommand(command LocalExecCommand, name string) error {
 	if strings.TrimSpace(command.Description) == "" {
 		return fmt.Errorf("local-exec command %q description must not be empty", name)
 	}
+	for key := range command.Env {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("local-exec command %q env must not contain empty variable names", name)
+		}
+	}
 	if err := validateLocalExecCommandTimeout(name, command.Timeout); err != nil {
 		return err
 	}
@@ -136,6 +144,42 @@ func validateLocalExecCommandTimeout(name, value string) error {
 	}
 	if timeout <= 0 {
 		return fmt.Errorf("local-exec command %q timeout must be positive", name)
+	}
+	return nil
+}
+
+// validateNodeMetadata checks authoring-only node preset and scenario metadata.
+func validateNodeMetadata(presets []NodePreset, scenarios []NodeScenario) error {
+	presetIDs := make(map[string]struct{}, len(presets))
+	for _, preset := range presets {
+		id, err := validateLocalExecCommandName(preset.ID)
+		if err != nil {
+			return fmt.Errorf("node preset: %w", err)
+		}
+		if _, ok := presetIDs[id]; ok {
+			return fmt.Errorf("node preset duplicate %q", id)
+		}
+		presetIDs[id] = struct{}{}
+		switch strings.TrimSpace(preset.Action) {
+		case "command.execute", "mcp.call":
+		default:
+			return fmt.Errorf("node preset %q action must be command.execute or mcp.call", id)
+		}
+	}
+	scenarioIDs := make(map[string]struct{}, len(scenarios))
+	for _, scenario := range scenarios {
+		id, err := validateLocalExecCommandName(scenario.ID)
+		if err != nil {
+			return fmt.Errorf("node scenario: %w", err)
+		}
+		if _, ok := scenarioIDs[id]; ok {
+			return fmt.Errorf("node scenario duplicate %q", id)
+		}
+		scenarioIDs[id] = struct{}{}
+		presetID := strings.TrimSpace(scenario.PresetID)
+		if _, ok := presetIDs[presetID]; !ok {
+			return fmt.Errorf("node scenario %q references unknown preset %q", id, presetID)
+		}
 	}
 	return nil
 }

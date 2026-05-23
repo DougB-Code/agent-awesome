@@ -74,6 +74,27 @@
       "enabled": true
     }
   ],
+  "mcp_servers": [
+    {
+      "id": "sourcecontrol",
+      "label": "Source Control",
+      "kind": "sourcecontrol",
+      "endpoint": "${SOURCECONTROL_MCP_URL}",
+      "health_url": "${SOURCECONTROL_HEALTH_URL}",
+      "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/../tools/agent-awesome.com/sourcecontrol",
+      "package_path": "./cmd/sourcecontrold",
+      "db_path": "",
+      "data_dir": "",
+      "arguments": [
+        "--addr",
+        "${SOURCECONTROL_MCP_ADDR}",
+        "--build-dir",
+        "${AGENTAWESOME_WORKSPACE_ROOT}/build/sourcecontrol"
+      ],
+      "auto_start": ${AUTO_START_LOCAL_SERVICES},
+      "enabled": true
+    }
+  ],
   "agent_memory": {
     "actor": "agent:local-dev",
     "read_domains": ["memory"],

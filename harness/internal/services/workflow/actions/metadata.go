@@ -52,7 +52,7 @@ func MetadataFor(name string) Metadata {
 		action.Label = "Call MCP Tool"
 		action.Description = "Call an installed MCP tool endpoint."
 		action.Risk = "tool"
-		action.InputSchema = map[string]any{"type": "object", "required": []any{"endpoint", "tool"}, "properties": map[string]any{"endpoint": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}}}
+		action.InputSchema = map[string]any{"type": "object", "required": []any{"tool"}, "properties": map[string]any{"server_id": map[string]any{"type": "string"}, "endpoint": map[string]any{"type": "string"}, "tool": map[string]any{"type": "string"}, "arguments": map[string]any{"type": "object"}}}
 		action.InputContracts = []string{"aa.external_call_request.v1"}
 		action.OutputContracts = []string{"aa.external_call_result.v1"}
 	case "command.execute":
@@ -70,6 +70,14 @@ func MetadataFor(name string) Metadata {
 		action.OutputSchema = map[string]any{"type": "object", "properties": map[string]any{"passed": map[string]any{"type": "boolean"}, "checks": map[string]any{"type": "array"}}}
 		action.InputContracts = []string{"aa.validation_request.v1"}
 		action.OutputContracts = []string{"aa.validation_result.v1"}
+	case "data.defaults":
+		action.Label = "Apply Defaults"
+		action.Description = "Merge an input object with declarative default values."
+		action.Risk = "validation"
+		action.InputSchema = map[string]any{"type": "object", "properties": map[string]any{"input": map[string]any{"type": "object"}, "defaults": map[string]any{"type": "object"}}}
+		action.OutputSchema = map[string]any{"type": "object"}
+		action.InputContracts = []string{"aa.workflow.action_input.v1"}
+		action.OutputContracts = []string{"aa.workflow.action_output.v1"}
 	case "decision.route":
 		action.Label = "Choose Route"
 		action.Description = "Select one deterministic downstream route from ordered rules."

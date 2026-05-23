@@ -28,7 +28,11 @@ func (s *Service) executeRun(ctx context.Context, runID string) {
 		s.failRun(ctx, run, fmt.Errorf("workflow definition %q not loaded", run.DefinitionID))
 		return
 	}
-	err = s.executePipeGraph(ctx, def, run)
+	if definition.HasStateMachine(def) {
+		err = s.executeStateMachine(ctx, def, run)
+	} else {
+		err = s.executePipeGraph(ctx, def, run)
+	}
 	if err == nil {
 		return
 	}
