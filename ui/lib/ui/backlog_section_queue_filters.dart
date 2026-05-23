@@ -16,8 +16,7 @@ class _BacklogQueueHeaderActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        PanelIconButton(
-          icon: Icons.add_task_outlined,
+        PanelCreateButton(
           tooltip: 'New backlog item',
           selected: active,
           onPressed: onCapture,

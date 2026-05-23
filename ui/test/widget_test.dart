@@ -1,6 +1,8 @@
 /// Tests the primary Agent Awesome workspace widgets.
 library;
 
+import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:agentawesome_ui/app/app_config.dart';
@@ -9,7 +11,12 @@ import 'package:agentawesome_ui/app/file_import.dart';
 import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
+import 'package:agentawesome_ui/app/process_supervisor.dart';
 import 'package:agentawesome_ui/clients/automations_client.dart';
+import 'package:agentawesome_ui/clients/assistant_client.dart';
+import 'package:agentawesome_ui/clients/executive_summary_client.dart';
+import 'package:agentawesome_ui/clients/mcp_client.dart';
+import 'package:agentawesome_ui/domain/automation_contracts.dart';
 import 'package:agentawesome_ui/ui/theme.dart';
 import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
@@ -289,7 +296,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'daily_email',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Daily Email',
           hash: 'abc',
         ),
@@ -297,7 +304,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_review',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Review Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -326,11 +333,11 @@ void main() {
         ),
         AutomationDraft(
           id: 'draft_task',
-          kind: 'task_graph',
+          kind: automationTaskGraphKind,
           name: 'Task Flow',
           status: 'draft',
           body: <String, dynamic>{
-            'kind': 'task_graph',
+            'kind': automationTaskGraphKind,
             'id': 'task_flow',
             'nodes': <Object>[
               <String, Object>{
@@ -368,7 +375,7 @@ void main() {
         AutomationRun(
           id: 'run_1',
           definitionId: 'daily_email',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           status: 'waiting',
           state: 'running',
         ),
@@ -388,7 +395,7 @@ void main() {
           name: 'Approval Workflow',
           description: 'Human approval flow.',
           category: 'approval',
-          body: <String, dynamic>{'kind': 'state_machine'},
+          body: <String, dynamic>{'kind': automationWorkflowKind},
         ),
       ];
 
@@ -497,7 +504,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'ready',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Ready',
           hash: 'sha256:ready',
         ),
@@ -513,6 +520,67 @@ void main() {
     expect(find.text('Automations refreshed'), findsNothing);
   });
 
+  testWidgets('shows enabled right-aligned workflow create action', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+    controller.selectedAutomationDraftId = harness.client.drafts.first.id;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+    for (
+      var attempt = 0;
+      attempt < 20 && controller.automationsBusy;
+      attempt++
+    ) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(controller.automationsBusy, isFalse);
+
+    final createButton = find.byTooltip('New workflow draft');
+    expect(createButton, findsOneWidget);
+    final createTapTarget = find.descendant(
+      of: createButton,
+      matching: find.byType(InkWell),
+    );
+    expect(createTapTarget, findsOneWidget);
+    expect(tester.widget<InkWell>(createTapTarget).onTap, isNotNull);
+    final paneRight = tester
+        .getTopRight(
+          find.byKey(const ValueKey<String>('main-content-left-pane')),
+        )
+        .dx;
+    final buttonRight = tester.getTopRight(createTapTarget).dx;
+    expect(paneRight - buttonRight, lessThanOrEqualTo(28));
+  });
+
+  test('creates workflow drafts with the workflow API kind', () async {
+    final harness = _readyCapturingController();
+    harness.client.seedDrafts(const <AutomationDraft>[]);
+
+    await harness.controller.createAutomationDraftFromUi(
+      kind: automationWorkflowKind,
+      name: 'New Workflow',
+    );
+
+    expect(
+      harness.client.createdKind,
+      automationWorkflowKind,
+      reason: harness.controller.automationsMessage,
+    );
+    expect(harness.controller.selectedAutomationDraftId, 'draft_1');
+  });
+
   testWidgets('shows process-state workflow lifecycle in Builder', (
     tester,
   ) async {
@@ -520,7 +588,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_lifecycle',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Lifecycle Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -603,7 +671,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_lifecycle',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Lifecycle Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -726,7 +794,7 @@ void main() {
       ..automationDrafts = <AutomationDraft>[
         AutomationDraft(
           id: 'draft_semantic_layout',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Semantic Layout',
           status: 'draft',
           body: <String, dynamic>{
@@ -833,7 +901,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_hierarchy',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Hierarchical Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -900,7 +968,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_hierarchy',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Hierarchical Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -1367,7 +1435,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_structured_action',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Structured Action',
           status: 'draft',
           body: <String, dynamic>{
@@ -1450,7 +1518,7 @@ void main() {
         ..automationDrafts = const <AutomationDraft>[
           AutomationDraft(
             id: 'draft_incoming_sources',
-            kind: 'state_machine',
+            kind: automationWorkflowKind,
             name: 'Incoming Sources',
             status: 'draft',
             body: <String, dynamic>{
@@ -1542,7 +1610,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_list_input',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'List Input',
           status: 'draft',
           body: <String, dynamic>{
@@ -1598,7 +1666,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_quality',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Quality Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -1665,7 +1733,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_lifecycle',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Lifecycle Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -1838,7 +1906,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'daily_email',
-          kind: 'state_machine',
+          kind: automationWorkflowKind,
           name: 'Daily Email',
           hash: 'abc',
         ),
@@ -3275,15 +3343,38 @@ AgentAwesomeAppController _readyController({AgentFileImporter? fileImporter}) {
 
 /// Creates a ready app controller with an injectable automation client.
 _CapturingAutomationHarness _readyCapturingController() {
+  final profile = _managedTestProfile();
+  final profileDirectory = Directory('/tmp/agentawesome-test');
+  profileDirectory.createSync(recursive: true);
+  final profileFile = File('${profileDirectory.path}/runtime-profile-test.json')
+    ..writeAsStringSync(jsonEncode(profile.toJson()));
+  final config = _testConfig(runtimeProfilePath: profileFile.path);
+  final processSupervisor = ProcessSupervisor(
+    logDirectory: config.serviceLogDirectory,
+    workspaceRoot: config.workspaceRoot,
+  );
   final client = _CapturingAutomationsClient();
+  final settingsStore = _MemoryAppSettingsStore()
+    ..saved = const AgentAwesomeAppSettings(gettingStartedCompleted: true);
+  final toolRpc = _EmptyToolRpcClient();
   final controller = AgentAwesomeAppController(
-    config: _testConfig(),
+    config: config,
+    processSupervisor: processSupervisor,
+    assistantClient: _EmptyAssistantClient(),
+    memoryClient: MemoryClient(rpc: toolRpc),
+    tasksClient: TasksClient(rpc: toolRpc),
+    executiveSummaryClient: ExecutiveSummaryClient(rpc: toolRpc),
     automationsClient: client,
+    appSettingsStore: settingsStore,
+    localServices: _ReadyLocalServiceSupervisor(
+      config: config,
+      processSupervisor: processSupervisor,
+    ),
   );
   controller.appSettings = const AgentAwesomeAppSettings(
     gettingStartedCompleted: true,
   );
-  controller.runtimeProfile = _settingsProfile();
+  controller.runtimeProfile = profile;
   controller.runtimeProfilePath = '/tmp/personal.json';
   controller.availableModelConfigs = const <ConfigFileEntry>[
     ConfigFileEntry(
@@ -3320,6 +3411,75 @@ class _CapturingAutomationHarness {
   final _CapturingAutomationsClient client;
 }
 
+/// _ReadyLocalServiceSupervisor avoids subprocess startup in UI tests.
+class _ReadyLocalServiceSupervisor extends LocalServiceSupervisor {
+  /// Creates a supervisor that reports all required services as ready.
+  _ReadyLocalServiceSupervisor({
+    required super.config,
+    required super.processSupervisor,
+  });
+
+  /// Reports readiness without launching or probing local services.
+  @override
+  Future<List<ServiceProcessStatus>> startRequiredServices(
+    RuntimeProfile profile, {
+    bool restartAutoStarted = false,
+  }) async {
+    return const <ServiceProcessStatus>[];
+  }
+}
+
+/// _EmptyAssistantClient keeps controller initialization offline.
+class _EmptyAssistantClient extends AssistantClient {
+  /// Creates an assistant client that returns no remote sessions.
+  _EmptyAssistantClient()
+    : super(baseUrl: 'http://127.0.0.1:1/api', appName: 'test', userId: 'user');
+
+  /// Returns no chat sessions.
+  @override
+  Future<List<ChatSession>> listSessions() async {
+    return const <ChatSession>[];
+  }
+}
+
+/// _EmptyToolRpcClient returns empty projections for initialization tests.
+class _EmptyToolRpcClient implements ToolRpcClient {
+  /// Creates an offline tool RPC client.
+  const _EmptyToolRpcClient();
+
+  /// Synthetic endpoint shown in client metadata.
+  @override
+  String get endpoint => 'memory://empty';
+
+  /// Returns empty structured content for read-only startup tools.
+  @override
+  Future<dynamic> callTool(
+    String name, [
+    Map<String, dynamic>? arguments,
+  ]) async {
+    return switch (name) {
+      'list_tasks' => const <Object>[],
+      'list_task_relations' => const <Object>[],
+      'query_context_graph' => const <String, Object>{'rows': <Object>[]},
+      'task_graph_projection' => const <String, Object>{},
+      'search_memory' => const <String, Object>{'primary_memory': <Object>[]},
+      'search_sources' => const <String, Object>{'primary_memory': <Object>[]},
+      'project_executive_summary' => const <String, Object>{},
+      _ => const <String, Object>{},
+    };
+  }
+
+  /// Lists enough tool names for projection checks to pass.
+  @override
+  Future<List<String>> listToolNames() async {
+    return const <String>['task_graph_projection'];
+  }
+
+  /// Closes no resources.
+  @override
+  void close() {}
+}
+
 /// _CapturingAutomationsClient stores workflow drafts in memory for UI tests.
 class _CapturingAutomationsClient extends AutomationsClient {
   /// Creates a fake workflow client.
@@ -3331,15 +3491,80 @@ class _CapturingAutomationsClient extends AutomationsClient {
   /// Last draft passed to [updateDraft].
   AutomationDraft? savedDraft;
 
+  /// Last kind passed to [createDraft].
+  String createdKind = '';
+
   /// Replaces the in-memory draft list.
   void seedDrafts(List<AutomationDraft> value) {
     drafts = List<AutomationDraft>.of(value);
     savedDraft = null;
+    createdKind = '';
   }
 
   @override
   Future<List<AutomationDraft>> listDrafts() async {
     return drafts;
+  }
+
+  @override
+  Future<List<AutomationActionType>> listActionTypes() async {
+    return const <AutomationActionType>[];
+  }
+
+  @override
+  Future<List<AutomationDefinition>> listDefinitions() async {
+    return const <AutomationDefinition>[];
+  }
+
+  @override
+  Future<List<AutomationTemplate>> listTemplates() async {
+    return const <AutomationTemplate>[];
+  }
+
+  @override
+  Future<List<AutomationPackage>> listPackages() async {
+    return const <AutomationPackage>[];
+  }
+
+  @override
+  Future<List<AutomationRun>> listRuns({
+    String status = '',
+    String definitionId = '',
+    int limit = 100,
+  }) async {
+    return const <AutomationRun>[];
+  }
+
+  @override
+  Future<List<AutomationPendingItem>> inbox() async {
+    return const <AutomationPendingItem>[];
+  }
+
+  @override
+  Future<AutomationDraft> createDraft({
+    required String kind,
+    required String name,
+    String description = '',
+    Map<String, dynamic> body = const <String, dynamic>{},
+  }) async {
+    createdKind = kind;
+    final draft = AutomationDraft(
+      id: 'draft_${drafts.length + 1}',
+      kind: kind,
+      name: name,
+      description: description,
+      status: 'draft',
+      body: body.isEmpty
+          ? <String, dynamic>{
+              'apiVersion': automationWorkflowApiVersion,
+              'kind': kind,
+              'id': 'workflow_${drafts.length + 1}',
+              'nodes': const <Object>[],
+            }
+          : body,
+    );
+    drafts = <AutomationDraft>[draft, ...drafts];
+    return draft;
   }
 
   @override
@@ -3359,7 +3584,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
 AutomationDraft _hierarchyEditDraft() {
   return const AutomationDraft(
     id: 'draft_hierarchy_edit',
-    kind: 'state_machine',
+    kind: automationWorkflowKind,
     name: 'Hierarchy Edit',
     status: 'draft',
     body: <String, dynamic>{
@@ -3395,7 +3620,7 @@ AutomationDraft _hierarchyEditDraft() {
 AutomationDraft _nestedPhaseFocusDraft() {
   return const AutomationDraft(
     id: 'draft_nested_focus',
-    kind: 'state_machine',
+    kind: automationWorkflowKind,
     name: 'Nested Focus',
     status: 'draft',
     body: <String, dynamic>{
@@ -3438,7 +3663,7 @@ AutomationDraft _nestedPhaseFocusDraft() {
 AutomationDraft _focusedExitDraft() {
   return const AutomationDraft(
     id: 'draft_focused_exit',
-    kind: 'state_machine',
+    kind: automationWorkflowKind,
     name: 'Focused Exit',
     status: 'draft',
     body: <String, dynamic>{
@@ -3827,6 +4052,18 @@ RuntimeProfile _settingsProfile() {
   );
 }
 
+/// Returns a test profile whose config paths pass managed-path validation.
+RuntimeProfile _managedTestProfile() {
+  final profile = _settingsProfile();
+  return profile.copyWith(
+    harness: profile.harness.copyWith(
+      modelConfigPath: defaultModelConfigPath(),
+      agentConfigPath: '${agentConfigsDirectoryPath()}/agent.yaml',
+      toolConfigPath: toolPackageConfigPath('test-tools'),
+    ),
+  );
+}
+
 RuntimeProfile _chatRuntimeProfile() {
   return _settingsProfile().copyWith(
     memoryDomains: const <McpServerRuntime>[
@@ -3869,8 +4106,8 @@ RuntimeProfile _chatRuntimeProfile() {
   );
 }
 
-AppConfig _testConfig() {
-  return const AppConfig(
+AppConfig _testConfig({String runtimeProfilePath = ''}) {
+  return AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
@@ -3879,6 +4116,6 @@ AppConfig _testConfig() {
     agentUserId: 'user',
     workspaceRoot: '/tmp/agentawesome-test',
     autoStartLocalServices: false,
-    runtimeProfilePath: '',
+    runtimeProfilePath: runtimeProfilePath,
   );
 }

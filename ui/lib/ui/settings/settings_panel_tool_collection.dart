@@ -161,8 +161,7 @@ class _SettingsToolSurfaceCommandPanelState
 
   /// Builds collection-level controls for the config-file list.
   Widget _buildAreaActions() {
-    return PanelIconButton(
-      icon: Icons.add,
+    return PanelCreateButton(
       tooltip: widget.surface == _ToolSettingsSurface.osTools
           ? 'Add tool config'
           : 'Add MCP config',

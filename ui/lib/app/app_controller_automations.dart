@@ -277,10 +277,11 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         return;
       }
       final body = _jsonMapCopy(draft.body);
-      if (draft.kind == 'state_machine') {
-        _appendStateMachineAction(body, actionName);
+      if (draft.kind == automationWorkflowKind ||
+          draft.kind == automationTaskGraphKind) {
+        _appendWorkflowGraphNode(body, actionName);
       } else {
-        _appendTaskGraphNode(body, actionName);
+        _appendStateMachineAction(body, actionName);
       }
       final updated = AutomationDraft(
         id: draft.id,
@@ -555,8 +556,8 @@ Map<String, dynamic> _jsonMapCopy(Map<String, dynamic> value) {
   return jsonDecode(jsonEncode(value)) as Map<String, dynamic>;
 }
 
-/// Appends one executable action node to a task-graph draft body.
-void _appendTaskGraphNode(
+/// Appends one executable action node to a workflow graph draft body.
+void _appendWorkflowGraphNode(
   Map<String, dynamic> body,
   String actionName, [
   Map<String, dynamic>? args,

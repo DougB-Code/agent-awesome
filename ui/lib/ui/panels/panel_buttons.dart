@@ -58,6 +58,37 @@ class PanelIconButton extends StatelessWidget {
   }
 }
 
+/// PanelCreateButton renders the shared collection-level create button.
+class PanelCreateButton extends StatelessWidget {
+  /// Creates a right-header create button with the shared add icon.
+  const PanelCreateButton({
+    super.key,
+    required this.tooltip,
+    required this.onPressed,
+    this.selected = false,
+  });
+
+  /// Tooltip text that names the creation action.
+  final String tooltip;
+
+  /// Activation callback, or null when disabled.
+  final VoidCallback? onPressed;
+
+  /// Whether this button represents the active creation mode.
+  final bool selected;
+
+  /// Builds the shared create affordance.
+  @override
+  Widget build(BuildContext context) {
+    return PanelIconButton(
+      icon: Icons.add,
+      tooltip: tooltip,
+      selected: selected,
+      onPressed: onPressed,
+    );
+  }
+}
+
 /// PanelInlineIconButton renders compact icon actions inside content blocks.
 class PanelInlineIconButton extends StatelessWidget {
   /// Creates a compact inline icon action.

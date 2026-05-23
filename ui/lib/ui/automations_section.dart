@@ -9,9 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../app/app_controller.dart';
-import 'theme.dart';
+import '../domain/automation_contracts.dart';
 import '../domain/models_automation.dart';
 import 'panels/panels.dart';
+import 'theme.dart';
 
 part 'automations_state_machine_builder.dart';
 
@@ -35,6 +36,7 @@ const String _automationDetailSteps = 'steps';
 const String _automationDetailMap = 'map';
 const String _automationDetailHistory = 'history';
 const String _automationDetailSafety = 'safety';
+const String _stateMachineBodyKind = 'state_machine';
 
 const Set<String> _taskGraphActionNames = <String>{
   'mcp.call',
@@ -207,10 +209,10 @@ class _AutomationFocusedCommandPanelState
             widget.controller.automationRuns.isNotEmpty ||
             widget.controller.automationInbox.isNotEmpty,
       _automationPanelWorkflows => widget.controller.automationDrafts.any(
-        (draft) => draft.kind == 'state_machine',
+        (draft) => draft.kind == automationWorkflowKind,
       ),
       _automationPanelTasks => widget.controller.automationDrafts.any(
-        (draft) => draft.kind == 'task_graph',
+        (draft) => draft.kind == automationTaskGraphKind,
       ),
       _ => true,
     };
@@ -257,13 +259,13 @@ class _AutomationFocusedCommandPanelState
           ),
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: (context, area) {
-        if (area.id == _automationTaskAreaNodes) {
+        if (widget.panelId != _automationPanelWorkflows &&
+            widget.panelId != _automationPanelTasks) {
           return null;
         }
         return _AutomationPanelActions(
           controller: widget.controller,
           panelId: widget.panelId,
-          areaId: area.id,
         );
       },
       detailModesBuilder: _detailModesForArea,
@@ -352,7 +354,7 @@ class _AutomationFocusedCommandPanelState
           builder: (query) => _AutomationDraftsContent(
             controller: widget.controller,
             query: query,
-            kind: 'state_machine',
+            kind: automationWorkflowKind,
             emptyLabel: 'No workflow drafts',
           ),
         ),
@@ -363,13 +365,13 @@ class _AutomationFocusedCommandPanelState
           builder: (query) => _AutomationTemplatesContent(
             controller: widget.controller,
             query: query,
-            kind: 'state_machine',
+            kind: automationWorkflowKind,
           ),
         ),
         SwitcherPanelArea(
           id: _automationWorkflowAreaActions,
           title: 'Actions',
-          icon: Icons.add_circle_outline,
+          icon: Icons.extension_outlined,
           builder: (query) => _AutomationWorkflowStatePaletteContent(
             controller: widget.controller,
             query: query,
@@ -386,7 +388,7 @@ class _AutomationFocusedCommandPanelState
           builder: (query) => _AutomationDraftsContent(
             controller: widget.controller,
             query: query,
-            kind: 'task_graph',
+            kind: automationTaskGraphKind,
             emptyLabel: 'No task graph drafts',
           ),
         ),
@@ -397,7 +399,7 @@ class _AutomationFocusedCommandPanelState
           builder: (query) => _AutomationTemplatesContent(
             controller: widget.controller,
             query: query,
-            kind: 'task_graph',
+            kind: automationTaskGraphKind,
           ),
         ),
         SwitcherPanelArea(
@@ -499,49 +501,41 @@ class _AutomationPanelActions extends StatelessWidget {
   const _AutomationPanelActions({
     required this.controller,
     required this.panelId,
-    required this.areaId,
   });
 
   final AgentAwesomeAppController controller;
   final String panelId;
-  final String areaId;
 
   /// Builds common and section-specific Automations header actions.
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        if (panelId == _automationPanelWorkflows &&
-            areaId == _automationWorkflowAreaDrafts)
-          PanelIconButton(
-            icon: Icons.add,
-            tooltip: 'New workflow draft',
-            onPressed: controller.automationsBusy
-                ? null
-                : () => unawaited(
-                    controller.createAutomationDraftFromUi(
-                      kind: 'state_machine',
-                      name: 'New Workflow',
-                    ),
-                  ),
-          ),
-        if (panelId == _automationPanelTasks &&
-            areaId == _automationTaskAreaDrafts)
-          PanelIconButton(
-            icon: Icons.add,
-            tooltip: 'New task graph',
-            onPressed: controller.automationsBusy
-                ? null
-                : () => unawaited(
-                    controller.createAutomationDraftFromUi(
-                      kind: 'task_graph',
-                      name: 'New Task Graph',
-                    ),
-                  ),
-          ),
-      ],
-    );
+    if (panelId == _automationPanelWorkflows) {
+      return PanelCreateButton(
+        tooltip: 'New workflow draft',
+        onPressed: controller.automationsBusy
+            ? null
+            : () => unawaited(
+                controller.createAutomationDraftFromUi(
+                  kind: automationWorkflowKind,
+                  name: 'New Workflow',
+                ),
+              ),
+      );
+    }
+    if (panelId == _automationPanelTasks) {
+      return PanelCreateButton(
+        tooltip: 'New task graph',
+        onPressed: controller.automationsBusy
+            ? null
+            : () => unawaited(
+                controller.createAutomationDraftFromUi(
+                  kind: automationTaskGraphKind,
+                  name: 'New Task Graph',
+                ),
+              ),
+      );
+    }
+    return const SizedBox.shrink();
   }
 }
 
@@ -581,7 +575,9 @@ class _AutomationDetailActions extends StatelessWidget {
         panelId == _automationPanelTasks) {
       final effectiveKind =
           kind ??
-          (panelId == _automationPanelTasks ? 'task_graph' : 'state_machine');
+          (panelId == _automationPanelTasks
+              ? automationTaskGraphKind
+              : automationWorkflowKind);
       final draft = _selectedAutomationDraftForKind(controller, effectiveKind);
       if (draft == null) {
         return const SizedBox.shrink();
@@ -905,11 +901,12 @@ class _AutomationWorkflowStatePaletteContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final selectedDraft = _selectedAutomationDraftForKind(
       controller,
-      'state_machine',
+      automationWorkflowKind,
     );
     final actionIntents = _TaskGraphActionIntentScope.maybeOf(context);
     final selectedBody = _map(selectedDraft?.body);
-    if (_stateMachineHasTaskStates(selectedBody)) {
+    if (_isWorkflowGraphDraft(selectedDraft, selectedBody) ||
+        _stateMachineHasTaskStates(selectedBody)) {
       return _TaskGraphActionPalette(
         actionTypes: _resolvedTaskGraphActionTypes(controller),
         query: query,
@@ -952,7 +949,7 @@ class _AutomationTaskNodePaletteContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final selectedDraft = _selectedAutomationDraftForKind(
       controller,
-      'task_graph',
+      automationTaskGraphKind,
     );
     if (selectedDraft == null) {
       return Center(
@@ -1032,8 +1029,8 @@ class _AutomationDetailContent extends StatelessWidget {
     if (areaId == _automationPanelWorkflows ||
         areaId == _automationPanelTasks) {
       final kind = areaId == _automationPanelTasks
-          ? 'task_graph'
-          : 'state_machine';
+          ? automationTaskGraphKind
+          : automationWorkflowKind;
       return _DraftDetail(
         controller: controller,
         stateMachineEditor: stateMachineEditor,
@@ -1140,7 +1137,7 @@ class _DraftDetail extends StatelessWidget {
     if (selectedDraft == null) {
       return const PanelEmptyBlock(label: 'No draft selected');
     }
-    if (selectedDraft.kind == 'task_graph') {
+    if (selectedDraft.kind == automationTaskGraphKind) {
       return _TaskGraphDraftDetail(
         controller: controller,
         modeId: modeId,
@@ -1149,9 +1146,17 @@ class _DraftDetail extends StatelessWidget {
     }
     final body = _map(selectedDraft.body);
     final hasTaskStates = _stateMachineHasTaskStates(body);
+    final isWorkflowGraph = _isWorkflowGraphDraft(selectedDraft, body);
     if (modeId == _automationDetailBuilder ||
         modeId == _automationDetailInspect ||
         modeId == _automationDetailOverview) {
+      if (isWorkflowGraph) {
+        return _TaskGraphDraftDetail(
+          controller: controller,
+          modeId: modeId,
+          draft: selectedDraft,
+        );
+      }
       if (!hasTaskStates && modeId == _automationDetailBuilder) {
         return _StateMachineBuilderWorkspace(
           key: ValueKey<String>('${selectedDraft.id}:state-machine-workspace'),
@@ -1317,21 +1322,20 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   _TaskGraphActionIntentController? _taskGraphActionIntents;
   int _lastTaskGraphActionIntentRevision = 0;
 
-  bool get _isStateMachineDraft => widget.draft.kind == 'state_machine';
+  bool get _isWorkflowDraft => widget.draft.kind == automationWorkflowKind;
 
-  String get _builderTitle => _isStateMachineDraft ? 'Workflow' : 'Task Graph';
+  String get _builderTitle => _isWorkflowDraft ? 'Workflow' : 'Task Graph';
 
-  String get _builderIdLabel =>
-      _isStateMachineDraft ? 'Workflow id' : 'Graph id';
+  String get _builderIdLabel => _isWorkflowDraft ? 'Workflow id' : 'Graph id';
 
   String get _stepNodeTooltip =>
-      _isStateMachineDraft ? 'Add workflow step' : 'Add task node';
+      _isWorkflowDraft ? 'Add workflow step' : 'Add task node';
 
   String get _deleteNodeTooltip =>
-      _isStateMachineDraft ? 'Delete workflow step' : 'Delete task node';
+      _isWorkflowDraft ? 'Delete workflow step' : 'Delete task node';
 
   String get _unsupportedSurface =>
-      _isStateMachineDraft ? 'workflow task states' : 'task graphs';
+      _isWorkflowDraft ? 'workflows' : 'task graphs';
 
   /// Initializes task-graph editor controllers from the selected draft.
   @override
@@ -1809,7 +1813,6 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
       final id = _nextTaskGraphNodeId(_nodes, actionName);
       _nodes.add(<String, dynamic>{
         'id': id,
-        if (_isStateMachineDraft) 'type': 'task',
         'uses': actionName,
         if (dependencies.isNotEmpty) 'depends_on': dependencies,
         'with': _defaultTaskGraphActionArgs(actionName),
@@ -1826,7 +1829,6 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
       final id = _nextTaskGraphNodeId(_nodes, actionName);
       _nodes.add(<String, dynamic>{
         'id': id,
-        if (_isStateMachineDraft) 'type': 'task',
         'uses': actionName,
         'depends_on': <String>[dependencyId],
         'with': _defaultTaskGraphActionArgs(actionName),
@@ -2193,7 +2195,6 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     }
     return <String, dynamic>{
       'id': id,
-      if (_isStateMachineDraft) 'type': 'task',
       'uses': _selectedAction,
       if (_dependsOn.isNotEmpty) 'depends_on': _dependsOn.toList()..sort(),
       if (_timeoutController.text.trim().isNotEmpty)
@@ -2266,9 +2267,21 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   }
 
   Map<String, dynamic> _currentDraftBody(String taskGraphId) {
-    if (!_isStateMachineDraft) {
+    if (_isWorkflowDraft) {
+      final original = Map<String, dynamic>.from(_map(widget.draft.body));
+      return _workflowBodyFromBuilderNodes(
+        original: original,
+        id: taskGraphId,
+        name: _nameController.text.trim().isEmpty
+            ? widget.draft.id
+            : _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        nodes: _nodes,
+      );
+    }
+    if (widget.draft.kind == automationTaskGraphKind) {
       return <String, dynamic>{
-        'kind': 'task_graph',
+        'kind': automationTaskGraphKind,
         'id': taskGraphId,
         'nodes': _nodes,
       };
@@ -2278,7 +2291,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     if (_nodes.isEmpty && !originalHadTaskStates) {
       return <String, dynamic>{
         ...original,
-        'kind': 'state_machine',
+        'kind': _stateMachineBodyKind,
         'id': taskGraphId,
         'name': _nameController.text.trim().isEmpty
             ? widget.draft.id
@@ -2292,7 +2305,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     final stateIds = states.map(_nodeId).where((id) => id.isNotEmpty).toSet();
     final body = <String, dynamic>{
       ...original,
-      'kind': 'state_machine',
+      'kind': _stateMachineBodyKind,
       'id': taskGraphId,
       'name': _nameController.text.trim().isEmpty
           ? widget.draft.id
@@ -4030,7 +4043,9 @@ class _DraftSteps extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final body = _map(draft.body);
-    final items = draft.kind == 'task_graph'
+    final items = _isWorkflowGraphDraft(draft, body)
+        ? _workflowDefinitionNodes(body)
+        : draft.kind == automationTaskGraphKind
         ? _taskGraphNodes(body)
         : _stateMachineHasTaskStates(body)
         ? _stateMachineTaskNodes(body)
@@ -4506,12 +4521,12 @@ bool _templateMatchesKind(AutomationTemplate template, String kind) {
     return bodyKind == kind;
   }
   final category = template.category.toLowerCase();
-  if (kind == 'state_machine') {
+  if (kind == automationWorkflowKind) {
     return category.contains('workflow') ||
         category.contains('approval') ||
         category.contains('state');
   }
-  return category.contains('task_graph') ||
+  return category.contains(automationTaskGraphKind) ||
       category.contains('task-graph') ||
       category.contains('task graph') ||
       category.contains('task') ||
@@ -4522,11 +4537,11 @@ bool _templateMatchesKind(AutomationTemplate template, String kind) {
 String? _automationDraftKindForArea(String areaId) {
   if (areaId == _automationWorkflowAreaDrafts ||
       areaId == _automationWorkflowAreaActions) {
-    return 'state_machine';
+    return automationWorkflowKind;
   }
   if (areaId == _automationTaskAreaDrafts ||
       areaId == _automationTaskAreaNodes) {
-    return 'task_graph';
+    return automationTaskGraphKind;
   }
   return null;
 }
@@ -4534,10 +4549,10 @@ String? _automationDraftKindForArea(String areaId) {
 /// Returns the template kind represented by a template command area.
 String? _automationTemplateKindForArea(String areaId) {
   if (areaId == _automationWorkflowAreaTemplates) {
-    return 'state_machine';
+    return automationWorkflowKind;
   }
   if (areaId == _automationTaskAreaTemplates) {
-    return 'task_graph';
+    return automationTaskGraphKind;
   }
   return null;
 }
@@ -4588,7 +4603,7 @@ AutomationDraft? _selectedAutomationDraftForKind(
 Map<String, dynamic> _normalizedTaskGraphBody(AutomationDraft draft) {
   final body = _map(draft.body);
   return <String, dynamic>{
-    'kind': 'task_graph',
+    'kind': automationTaskGraphKind,
     'id': '${body['id'] ?? draft.id}',
     'nodes': _taskGraphNodes(body),
   };
@@ -4596,12 +4611,21 @@ Map<String, dynamic> _normalizedTaskGraphBody(AutomationDraft draft) {
 
 /// Returns the builder-editable body shape for workflow and task drafts.
 Map<String, dynamic> _normalizedWorkflowBuilderBody(AutomationDraft draft) {
-  if (draft.kind != 'state_machine') {
+  final body = _map(draft.body);
+  final bodyKind = '${body['kind'] ?? ''}'.trim();
+  if (draft.kind == automationWorkflowKind &&
+      bodyKind == automationWorkflowKind) {
+    return <String, dynamic>{
+      'kind': automationWorkflowKind,
+      'id': '${body['id'] ?? draft.id}',
+      'nodes': _workflowDefinitionNodes(body),
+    };
+  }
+  if (draft.kind == automationTaskGraphKind) {
     return _normalizedTaskGraphBody(draft);
   }
-  final body = _map(draft.body);
   return <String, dynamic>{
-    'kind': 'state_machine',
+    'kind': _stateMachineBodyKind,
     'id': '${body['id'] ?? draft.id}',
     'states': _stateMachineTaskNodes(body),
   };
@@ -4609,10 +4633,100 @@ Map<String, dynamic> _normalizedWorkflowBuilderBody(AutomationDraft draft) {
 
 /// Returns graph-builder nodes from the current authoring body.
 List<Map<String, dynamic>> _workflowBuilderNodes(Map<String, dynamic> body) {
-  if ('${body['kind'] ?? ''}'.trim() == 'state_machine') {
+  final kind = '${body['kind'] ?? ''}'.trim();
+  if (kind == automationWorkflowKind) {
+    return _workflowDefinitionNodes(body);
+  }
+  if (kind == _stateMachineBodyKind) {
     return _stateMachineTaskNodes(body);
   }
   return _taskGraphNodes(body);
+}
+
+/// Reports whether a draft body uses the current workflow graph contract.
+bool _isWorkflowGraphDraft(AutomationDraft? draft, Map<String, dynamic> body) {
+  return draft?.kind == automationWorkflowKind &&
+      '${body['kind'] ?? ''}'.trim() == automationWorkflowKind;
+}
+
+/// Returns graph-builder nodes decorated with dependencies from workflow edges.
+List<Map<String, dynamic>> _workflowDefinitionNodes(Map<String, dynamic> body) {
+  final dependenciesByNode = <String, Set<String>>{};
+  for (final edge in _list(body['edges']).map(_map)) {
+    final from = '${_map(edge['from'])['node'] ?? ''}'.trim();
+    final to = '${_map(edge['to'])['node'] ?? ''}'.trim();
+    if (from.isEmpty || to.isEmpty) {
+      continue;
+    }
+    dependenciesByNode.putIfAbsent(to, () => <String>{}).add(from);
+  }
+  return _taskGraphNodes(body).map((node) {
+    final next = Map<String, dynamic>.from(node)..remove('depends_on');
+    final dependencies = List<String>.of(
+      dependenciesByNode[_nodeId(node)] ?? const <String>{},
+    )..sort();
+    if (dependencies.isNotEmpty) {
+      next['depends_on'] = dependencies;
+    }
+    return next;
+  }).toList();
+}
+
+/// Builds a canonical workflow definition body from graph-builder nodes.
+Map<String, dynamic> _workflowBodyFromBuilderNodes({
+  required Map<String, dynamic> original,
+  required String id,
+  required String name,
+  required String description,
+  required List<Map<String, dynamic>> nodes,
+}) {
+  final body = <String, dynamic>{
+    ...original,
+    'apiVersion': '${original['apiVersion'] ?? automationWorkflowApiVersion}',
+    'kind': automationWorkflowKind,
+    'id': id,
+    'name': name,
+    'description': description,
+    'nodes': _workflowNodesForSave(nodes),
+    'edges': _workflowEdgesForSave(nodes),
+  };
+  body
+    ..remove('states')
+    ..remove('initial');
+  return body;
+}
+
+/// Returns workflow-schema nodes by removing UI-only dependency data.
+List<Map<String, dynamic>> _workflowNodesForSave(
+  List<Map<String, dynamic>> nodes,
+) {
+  return <Map<String, dynamic>>[
+    for (final node in nodes)
+      Map<String, dynamic>.from(node)
+        ..remove('depends_on')
+        ..remove('transitions')
+        ..remove('on_entry'),
+  ];
+}
+
+/// Converts UI dependency lists into workflow-schema edge records.
+List<Map<String, dynamic>> _workflowEdgesForSave(
+  List<Map<String, dynamic>> nodes,
+) {
+  final edges = <Map<String, dynamic>>[];
+  for (final node in nodes) {
+    final target = _nodeId(node);
+    if (target.isEmpty) {
+      continue;
+    }
+    for (final dependency in _nodeDependsOn(node)) {
+      edges.add(<String, dynamic>{
+        'from': <String, dynamic>{'node': dependency},
+        'to': <String, dynamic>{'node': target},
+      });
+    }
+  }
+  return edges;
 }
 
 /// Returns detached task nodes from a draft body.
