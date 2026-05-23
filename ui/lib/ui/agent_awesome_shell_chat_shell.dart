@@ -79,7 +79,7 @@ class _ChatCommandSubShellState extends State<_ChatCommandSubShell> {
         CommandPanelDetailMode(
           id: _chatFilesDetailId,
           label: 'Files',
-          icon: Icons.folder_copy_outlined,
+          icon: Icons.folder_outlined,
         ),
         CommandPanelDetailMode(
           id: _chatPeopleDetailId,

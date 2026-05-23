@@ -19,7 +19,7 @@ class _SidebarItem {
   const _SidebarItem({
     required this.label,
     required this.section,
-    required this.iconGlyph,
+    required this.icon,
   });
 
   /// Display text.
@@ -28,6 +28,6 @@ class _SidebarItem {
   /// App section emitted when the item is selected.
   final String section;
 
-  /// Leading glyph copied from the documentation nav.
-  final String iconGlyph;
+  /// Material icon that matches the destination's command-panel purpose.
+  final IconData icon;
 }

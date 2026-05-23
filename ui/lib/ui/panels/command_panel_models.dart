@@ -111,6 +111,10 @@ typedef CommandPanelSelectedAreaFilterBuilder =
 typedef CommandPanelAreaFilterChanged =
     void Function(SwitcherPanelArea area, String filterId);
 
+/// CommandPanelAreaFilterHintBuilder resolves one command-area filter hint.
+typedef CommandPanelAreaFilterHintBuilder =
+    String Function(SwitcherPanelArea area);
+
 /// CommandPanelDetailActionsBuilder builds trailing controls for detail modes.
 typedef CommandPanelDetailActionsBuilder =
     Widget? Function(

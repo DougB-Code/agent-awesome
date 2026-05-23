@@ -605,8 +605,6 @@ func TestWorkflowToolConfigExposesWorkflowMCP(t *testing.T) {
 		"workflow_draft_update",
 		"workflow_draft_validate",
 		"workflow_draft_publish",
-		"workflow_template_list",
-		"workflow_template_instantiate",
 	}
 	if !reflect.DeepEqual(server.Tools.Allow, expectedTools) {
 		t.Fatalf("workflow Tools.Allow = %#v, want %#v", server.Tools.Allow, expectedTools)

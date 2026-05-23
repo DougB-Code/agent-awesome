@@ -19,6 +19,7 @@ class CommandPanelSubShell extends StatefulWidget {
     this.areaFiltersBuilder,
     this.selectedAreaFilterIdBuilder,
     this.onAreaFilterSelected,
+    this.areaFilterHintBuilder,
     this.detailActionsBuilder,
     this.detailModesBuilder,
     this.selectedDetailModeIdBuilder,
@@ -32,6 +33,7 @@ class CommandPanelSubShell extends StatefulWidget {
     this.detailItemActionsBuilder,
     this.itemDetailBuilder,
     this.companionAreaIdBuilder,
+    this.selectedAreaId = '',
     this.split = const PanelSplit(left: 0.72, min: 0.46, max: 0.86),
     this.gutterWidth = 0,
     this.padding = EdgeInsets.zero,
@@ -83,6 +85,9 @@ class CommandPanelSubShell extends StatefulWidget {
   /// Handles shell-owned quick filter selection.
   final CommandPanelAreaFilterChanged? onAreaFilterSelected;
 
+  /// Resolves the text hint for the active command-area filter.
+  final CommandPanelAreaFilterHintBuilder? areaFilterHintBuilder;
+
   /// Builds trailing controls for the active detail mode.
   final CommandPanelDetailActionsBuilder? detailActionsBuilder;
 
@@ -121,6 +126,9 @@ class CommandPanelSubShell extends StatefulWidget {
 
   /// Optional right-mode to left-area companion selector.
   final CommandPanelCompanionAreaBuilder? companionAreaIdBuilder;
+
+  /// Optional area id requested by the owning screen.
+  final String selectedAreaId;
 
   /// Split ratio configuration.
   final PanelSplit split;
@@ -161,7 +169,9 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
   final TextEditingController _detailFilterController = TextEditingController();
   final Map<String, String> _selectedTabIds = <String, String>{};
   int _selectedAreaIndex = 0;
+  int? _areaIndexBeforeCompanion;
   String _reportedAreaKey = '';
+  String _activeCompanionAreaId = '';
   String _query = '';
   String _detailQuery = '';
 
@@ -169,6 +179,7 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
   @override
   void initState() {
     super.initState();
+    _selectedAreaIndex = _areaIndexForId(widget.selectedAreaId);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
@@ -184,6 +195,9 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     super.didUpdateWidget(oldWidget);
     if (_selectedAreaIndex >= widget.areas.length) {
       _selectedAreaIndex = 0;
+    }
+    if (oldWidget.selectedAreaId != widget.selectedAreaId) {
+      _selectAreaById(widget.selectedAreaId);
     }
     if (_activeAreaKey(oldWidget.areas) != _activeAreaKey(widget.areas)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -232,7 +246,7 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
       areas: widget.areas,
       selectedIndex: boundedIndex,
       filterController: _filterController,
-      filterHint: widget.filterHint,
+      filterHint: widget.areaFilterHintBuilder?.call(area) ?? widget.filterHint,
       onAreaSelected: _selectArea,
       onTitleTap: widget.areas.length > 1 ? _selectNextArea : null,
       onFilterChanged: (value) => setState(() => _query = value),
@@ -316,6 +330,7 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     if (_selectedAreaIndex == index) {
       return;
     }
+    _clearCompanionSelection();
     setState(() {
       _selectedAreaIndex = index;
       _query = '';
@@ -530,14 +545,29 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
 
   /// Selects a right-mode companion left area when one is declared.
   void _selectCompanionArea(String modeId) {
+    if (widget.selectedAreaId.trim().isNotEmpty) {
+      return;
+    }
     final companionAreaId = widget.companionAreaIdBuilder?.call(modeId) ?? '';
     if (companionAreaId.trim().isEmpty) {
+      _restoreAreaBeforeCompanion();
       return;
     }
     final companionIndex = widget.areas.indexWhere(
       (area) => area.id == companionAreaId,
     );
-    if (companionIndex < 0 || companionIndex == _selectedAreaIndex) {
+    if (companionIndex < 0) {
+      _restoreAreaBeforeCompanion();
+      return;
+    }
+    if (_activeCompanionAreaId != companionAreaId) {
+      if (_activeCompanionAreaId.isEmpty &&
+          companionIndex != _selectedAreaIndex) {
+        _areaIndexBeforeCompanion = _selectedAreaIndex;
+      }
+      _activeCompanionAreaId = companionAreaId;
+    }
+    if (companionIndex == _selectedAreaIndex) {
       return;
     }
     setState(() {
@@ -547,7 +577,75 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
       _filterController.clear();
       _detailFilterController.clear();
     });
-    _notifyAreaChanged();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _notifyAreaChanged();
+      }
+    });
+  }
+
+  /// Restores the left pane that was active before an automatic companion area.
+  void _restoreAreaBeforeCompanion() {
+    if (_activeCompanionAreaId.isEmpty) {
+      return;
+    }
+    final previousIndex = _areaIndexBeforeCompanion;
+    _clearCompanionSelection();
+    if (previousIndex == null ||
+        previousIndex < 0 ||
+        previousIndex >= widget.areas.length ||
+        previousIndex == _selectedAreaIndex) {
+      return;
+    }
+    setState(() {
+      _selectedAreaIndex = previousIndex;
+      _query = '';
+      _detailQuery = '';
+      _filterController.clear();
+      _detailFilterController.clear();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _notifyAreaChanged();
+      }
+    });
+  }
+
+  /// Selects an owning-screen-requested area when it exists.
+  void _selectAreaById(String areaId) {
+    final index = _areaIndexForId(areaId);
+    if (index == _selectedAreaIndex) {
+      return;
+    }
+    _clearCompanionSelection();
+    setState(() {
+      _selectedAreaIndex = index;
+      _query = '';
+      _detailQuery = '';
+      _filterController.clear();
+      _detailFilterController.clear();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _notifyAreaChanged();
+      }
+    });
+  }
+
+  /// Resolves an area id to a safe local index.
+  int _areaIndexForId(String areaId) {
+    final normalized = areaId.trim();
+    if (normalized.isEmpty) {
+      return _selectedAreaIndex;
+    }
+    final index = widget.areas.indexWhere((area) => area.id == normalized);
+    return index < 0 ? _selectedAreaIndex : index;
+  }
+
+  /// Clears automatic companion-pane restoration state.
+  void _clearCompanionSelection() {
+    _areaIndexBeforeCompanion = null;
+    _activeCompanionAreaId = '';
   }
 
   /// Clears detail-pane search when the selected item or mode changes.

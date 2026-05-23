@@ -235,45 +235,6 @@ class AutomationPendingItem {
   final String updatedAt;
 }
 
-/// AutomationTemplate stores one workflow template.
-class AutomationTemplate {
-  /// Creates an immutable workflow template.
-  const AutomationTemplate({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.category,
-    this.tags = const <String>[],
-    this.parameters = const <Map<String, dynamic>>[],
-    this.requirements = const <String, dynamic>{},
-    this.body = const <String, dynamic>{},
-  });
-
-  /// Template id.
-  final String id;
-
-  /// User-facing template name.
-  final String name;
-
-  /// Template description.
-  final String description;
-
-  /// Template category.
-  final String category;
-
-  /// Search tags.
-  final List<String> tags;
-
-  /// Parameter descriptors.
-  final List<Map<String, dynamic>> parameters;
-
-  /// Required tools, credentials, or permissions.
-  final Map<String, dynamic> requirements;
-
-  /// Draft body used when instantiated.
-  final Map<String, dynamic> body;
-}
-
 /// AutomationPackage stores one importable automation package.
 class AutomationPackage {
   /// Creates an immutable automation package.
@@ -433,21 +394,6 @@ AutomationPendingItem parseAutomationPendingItem(dynamic value) {
   );
 }
 
-/// Parses one automation template from JSON.
-AutomationTemplate parseAutomationTemplate(dynamic value) {
-  final map = _map(value);
-  return AutomationTemplate(
-    id: _string(map['id']),
-    name: _string(map['name']),
-    description: _string(map['description']),
-    category: _string(map['category']),
-    tags: _stringList(map['tags']),
-    parameters: _mapList(map['parameters']),
-    requirements: _map(map['requirements']),
-    body: _map(map['body']),
-  );
-}
-
 /// Parses one automation package from JSON.
 AutomationPackage parseAutomationPackage(dynamic value) {
   final map = _map(value);
@@ -504,10 +450,6 @@ List<dynamic> _list(dynamic value) {
 
 List<String> _stringList(dynamic value) {
   return _list(value).map((item) => '$item').toList();
-}
-
-List<Map<String, dynamic>> _mapList(dynamic value) {
-  return _list(value).map(_map).toList();
 }
 
 String _string(dynamic value) {

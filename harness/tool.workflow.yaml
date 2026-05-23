@@ -72,8 +72,6 @@ mcp:
           - workflow_draft_update
           - workflow_draft_validate
           - workflow_draft_publish
-          - workflow_template_list
-          - workflow_template_instantiate
 memory:
   actor: agent:agent-awesome
   read-domains:

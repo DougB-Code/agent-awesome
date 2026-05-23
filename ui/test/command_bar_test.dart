@@ -293,6 +293,8 @@ void main() {
     expect(find.text('RECENT CHATS'), findsOneWidget);
     expect(find.text('WORKSPACES'), findsNothing);
     expect(find.text('SETTINGS'), findsOneWidget);
+    expect(find.text('Memory'), findsOneWidget);
+    expect(find.text('Tools'), findsNothing);
     expect(find.text('Manage'), findsOneWidget);
     expect(find.text('All Chats'), findsOneWidget);
     expect(

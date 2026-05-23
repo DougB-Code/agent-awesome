@@ -78,67 +78,6 @@ func (s *Store) DeleteDraft(ctx context.Context, id string) error {
 	return nil
 }
 
-// UpsertTemplate stores or replaces one workflow template record.
-func (s *Store) UpsertTemplate(ctx context.Context, record TemplateRecord) error {
-	now := nowString()
-	tags, err := json.Marshal(record.Tags)
-	if err != nil {
-		return fmt.Errorf("encode workflow template tags: %w", err)
-	}
-	parameters, err := json.Marshal(record.Parameters)
-	if err != nil {
-		return fmt.Errorf("encode workflow template parameters: %w", err)
-	}
-	requirements, err := marshalMap(record.Requirements)
-	if err != nil {
-		return fmt.Errorf("encode workflow template requirements: %w", err)
-	}
-	body, err := marshalMap(record.Body)
-	if err != nil {
-		return fmt.Errorf("encode workflow template body: %w", err)
-	}
-	createdAt := record.CreatedAt
-	if createdAt == "" {
-		createdAt = now
-	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO workflow_templates
-		(id, name, description, category, tags_json, parameters_json, requirements_json, body_json, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description,
-			category=excluded.category, tags_json=excluded.tags_json,
-			parameters_json=excluded.parameters_json, requirements_json=excluded.requirements_json,
-			body_json=excluded.body_json, updated_at=excluded.updated_at`,
-		record.ID, record.Name, record.Description, record.Category, string(tags), string(parameters), string(requirements), string(body), createdAt, now)
-	if err != nil {
-		return fmt.Errorf("upsert workflow template %q: %w", record.ID, err)
-	}
-	return nil
-}
-
-// ListTemplates returns available workflow templates.
-func (s *Store) ListTemplates(ctx context.Context) ([]TemplateRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, description, category, tags_json, parameters_json, requirements_json, body_json, created_at, updated_at FROM workflow_templates ORDER BY category, name`)
-	if err != nil {
-		return nil, fmt.Errorf("list workflow templates: %w", err)
-	}
-	defer rows.Close()
-	var records []TemplateRecord
-	for rows.Next() {
-		record, err := scanTemplate(rows)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, record)
-	}
-	return records, rows.Err()
-}
-
-// GetTemplate returns one workflow template.
-func (s *Store) GetTemplate(ctx context.Context, id string) (TemplateRecord, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, name, description, category, tags_json, parameters_json, requirements_json, body_json, created_at, updated_at FROM workflow_templates WHERE id = ?`, id)
-	return scanTemplate(row)
-}
-
 // UpsertPackage stores or replaces one automation package.
 func (s *Store) UpsertPackage(ctx context.Context, record PackageRecord) error {
 	now := nowString()
@@ -302,31 +241,6 @@ func scanDraft(row interface{ Scan(...any) error }) (DraftRecord, error) {
 	}
 	if err := json.Unmarshal([]byte(validation), &record.Validation); err != nil {
 		return DraftRecord{}, fmt.Errorf("decode workflow draft validation: %w", err)
-	}
-	return record, nil
-}
-
-// scanTemplate decodes one workflow template row.
-func scanTemplate(row interface{ Scan(...any) error }) (TemplateRecord, error) {
-	var record TemplateRecord
-	var tags, parameters, requirements, body string
-	if err := row.Scan(&record.ID, &record.Name, &record.Description, &record.Category, &tags, &parameters, &requirements, &body, &record.CreatedAt, &record.UpdatedAt); err != nil {
-		if err == sql.ErrNoRows {
-			return TemplateRecord{}, fmt.Errorf("workflow template not found")
-		}
-		return TemplateRecord{}, err
-	}
-	if err := json.Unmarshal([]byte(tags), &record.Tags); err != nil {
-		return TemplateRecord{}, fmt.Errorf("decode workflow template tags: %w", err)
-	}
-	if err := json.Unmarshal([]byte(parameters), &record.Parameters); err != nil {
-		return TemplateRecord{}, fmt.Errorf("decode workflow template parameters: %w", err)
-	}
-	if err := json.Unmarshal([]byte(requirements), &record.Requirements); err != nil {
-		return TemplateRecord{}, fmt.Errorf("decode workflow template requirements: %w", err)
-	}
-	if err := json.Unmarshal([]byte(body), &record.Body); err != nil {
-		return TemplateRecord{}, fmt.Errorf("decode workflow template body: %w", err)
 	}
 	return record, nil
 }

@@ -42,16 +42,6 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationDefinitions.isEmpty ? null : automationDefinitions.first;
   }
 
-  /// Returns the currently selected automation template.
-  AutomationTemplate? get selectedAutomationTemplate {
-    for (final template in automationTemplates) {
-      if (template.id == selectedAutomationTemplateId) {
-        return template;
-      }
-    }
-    return automationTemplates.isEmpty ? null : automationTemplates.first;
-  }
-
   /// Refreshes all Automations data from the workflow service through the gateway.
   Future<void> refreshAutomationsFromUi() async {
     if (automationsBusy) {
@@ -100,12 +90,6 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
-  /// Selects one automation template for header actions.
-  void selectAutomationTemplate(String templateId) {
-    selectedAutomationTemplateId = templateId;
-    _notifyControllerListeners();
-  }
-
   /// Loads the selected automation run timeline.
   Future<void> loadSelectedAutomationRunHistory() async {
     final run = selectedAutomationRun;
@@ -142,33 +126,6 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     } catch (error) {
       automationsMessage = error.toString();
       await _log('automation draft create failed: $error');
-    } finally {
-      automationsBusy = false;
-      _notifyControllerListeners();
-    }
-  }
-
-  /// Instantiates one template as an editable draft.
-  Future<void> instantiateAutomationTemplateFromUi(
-    AutomationTemplate template,
-  ) async {
-    automationsBusy = true;
-    automationsMessage = 'Creating draft from template';
-    _notifyControllerListeners();
-    try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
-      final draft = await automationsClient.instantiateTemplate(
-        template.id,
-        name: template.name,
-      );
-      selectedAutomationDraftId = draft.id;
-      await _loadAutomationDrafts();
-      automationsMessage = '';
-    } catch (error) {
-      automationsMessage = error.toString();
-      await _log('template instantiate failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
@@ -385,27 +342,21 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     ]);
   }
 
-  /// Loads action types, definitions, templates, and packages.
+  /// Loads action types, definitions, and packages.
   Future<void> _loadAutomationCatalog() async {
     try {
       final results = await Future.wait<dynamic>(<Future<dynamic>>[
         automationsClient.listActionTypes(),
         automationsClient.listDefinitions(),
-        automationsClient.listTemplates(),
         automationsClient.listPackages(),
       ]);
       automationActionTypes = results[0] as List<AutomationActionType>;
       automationDefinitions = results[1] as List<AutomationDefinition>;
-      automationTemplates = results[2] as List<AutomationTemplate>;
-      automationPackages = results[3] as List<AutomationPackage>;
+      automationPackages = results[2] as List<AutomationPackage>;
       await _loadAutomationToolNames();
       if (selectedAutomationDefinitionId.isEmpty &&
           automationDefinitions.isNotEmpty) {
         selectedAutomationDefinitionId = automationDefinitions.first.id;
-      }
-      if (selectedAutomationTemplateId.isEmpty &&
-          automationTemplates.isNotEmpty) {
-        selectedAutomationTemplateId = automationTemplates.first.id;
       }
     } catch (error) {
       automationsMessage = error.toString();

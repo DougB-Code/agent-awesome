@@ -31,25 +31,30 @@ class PanelIconButton extends StatelessWidget {
     final enabled = onPressed != null;
     return Tooltip(
       message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
-        onTap: onPressed,
-        child: Opacity(
-          opacity: enabled ? 1 : 0.45,
-          child: Container(
-            height: PanelStyleTokens.iconButtonSize,
-            width: PanelStyleTokens.iconButtonSize,
-            decoration: BoxDecoration(
-              color: selected ? colors.greenSoft : colors.panel,
-              border: Border.all(
-                color: selected ? colors.borderStrong : colors.border,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: tooltip,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: Opacity(
+            opacity: enabled ? 1 : 0.45,
+            child: Container(
+              height: PanelStyleTokens.iconButtonSize,
+              width: PanelStyleTokens.iconButtonSize,
+              decoration: BoxDecoration(
+                color: selected ? colors.greenSoft : colors.panel,
+                border: Border.all(
+                  color: selected ? colors.borderStrong : colors.border,
+                ),
+                borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
               ),
-              borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
-            ),
-            child: Icon(
-              icon,
-              size: PanelStyleTokens.iconButtonIconSize,
-              color: selected ? colors.green : colors.muted,
+              child: Icon(
+                icon,
+                size: PanelStyleTokens.iconButtonIconSize,
+                color: selected ? colors.green : colors.muted,
+              ),
             ),
           ),
         ),
@@ -123,35 +128,40 @@ class PanelInlineIconButton extends StatelessWidget {
     final enabled = onPressed != null;
     return Tooltip(
       message: tooltip,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
-        onTap: onPressed,
-        child: Opacity(
-          opacity: enabled ? 1 : 0.45,
-          child: Container(
-            height: 32,
-            width: 32,
-            decoration: BoxDecoration(
-              color: selected ? colors.greenSoft : colors.panel,
-              border: Border.all(
-                color: selected ? colors.borderStrong : colors.border,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: tooltip,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onPressed,
+          child: Opacity(
+            opacity: enabled ? 1 : 0.45,
+            child: Container(
+              height: 32,
+              width: 32,
+              decoration: BoxDecoration(
+                color: selected ? colors.greenSoft : colors.panel,
+                border: Border.all(
+                  color: selected ? colors.borderStrong : colors.border,
+                ),
+                borderRadius: BorderRadius.circular(
+                  PanelStyleTokens.compactRadius,
+                ),
               ),
-              borderRadius: BorderRadius.circular(
-                PanelStyleTokens.compactRadius,
-              ),
-            ),
-            child: loading
-                ? const Center(
-                    child: SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+              child: loading
+                  ? const Center(
+                      child: SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : Icon(
+                      icon,
+                      size: 17,
+                      color: selected ? colors.green : colors.muted,
                     ),
-                  )
-                : Icon(
-                    icon,
-                    size: 17,
-                    color: selected ? colors.green : colors.muted,
-                  ),
+            ),
           ),
         ),
       ),

@@ -142,12 +142,6 @@ type WorkflowExplanationArtifact struct {
 	Risks      []string `json:"risks,omitempty"`
 }
 
-// TemplateInstantiateRequest carries template parameter values.
-type TemplateInstantiateRequest struct {
-	Parameters map[string]any `json:"parameters"`
-	Name       string         `json:"name"`
-}
-
 // PackageImportRequest carries one package record to install.
 type PackageImportRequest struct {
 	Package store.PackageRecord `json:"package"`

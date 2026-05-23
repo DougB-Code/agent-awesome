@@ -388,15 +388,6 @@ void main() {
           status: 'open',
           prompt: 'Approve archive?',
         ),
-      ]
-      ..automationTemplates = const <AutomationTemplate>[
-        AutomationTemplate(
-          id: 'approval_state_machine',
-          name: 'Approval Workflow',
-          description: 'Human approval flow.',
-          category: 'approval',
-          body: <String, dynamic>{'kind': automationWorkflowKind},
-        ),
       ];
 
     await tester.pumpWidget(
@@ -439,7 +430,8 @@ void main() {
     expect(find.text('Daily Email'), findsWidgets);
     await tester.tap(find.byTooltip('Runs'));
     await tester.pumpAndSettle();
-    expect(find.text('run_1 / running'), findsOneWidget);
+    expect(find.text('run_1 / running'), findsNothing);
+    expect(find.text('running'), findsWidgets);
 
     expect(find.byKey(const ValueKey<String>('sidebar-Agents')), findsNothing);
     expect(
@@ -463,10 +455,11 @@ void main() {
     );
     expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
 
-    await tester.tap(find.byTooltip('Drafts'));
+    await tester.tap(find.byTooltip('Files'));
     await tester.pumpAndSettle();
 
-    expect(find.text('DRAFTS'), findsWidgets);
+    expect(find.text('FILES'), findsWidgets);
+    expect(find.text('Filter files...'), findsOneWidget);
     expect(find.text('Review Flow'), findsWidgets);
 
     await tester.tap(find.byTooltip('Actions'));
@@ -484,16 +477,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
 
-    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.text('FILES'), findsWidgets);
     expect(find.text('SERVERS'), findsWidgets);
-    expect(find.text('No MCP server tool configs configured'), findsWidgets);
+    expect(find.text('No MCP server files configured'), findsWidgets);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tools')));
     await tester.pumpAndSettle();
 
-    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.text('FILES'), findsWidgets);
     expect(find.text('COMMANDS'), findsWidgets);
-    expect(find.text('No tool configs configured'), findsWidgets);
+    expect(find.text('No tool files configured'), findsWidgets);
   });
 
   testWidgets('does not render passive Automations status blocks', (
@@ -529,7 +522,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final harness = _readyCapturingController();
     final controller = harness.controller;
-    harness.client.seedDrafts(<AutomationDraft>[_hierarchyEditDraft()]);
+    harness.client.seedDrafts(<AutomationDraft>[_workflowGraphDraft()]);
     controller.automationDrafts = harness.client.drafts;
     controller.selectedAutomationDraftId = harness.client.drafts.first.id;
 
@@ -538,23 +531,27 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Files'));
+    await tester.pumpAndSettle();
     for (
       var attempt = 0;
-      attempt < 20 && controller.automationsBusy;
+      attempt < 100 && controller.automationsBusy;
       attempt++
     ) {
       await tester.pump(const Duration(milliseconds: 50));
     }
     expect(controller.automationsBusy, isFalse);
 
-    final createButton = find.byTooltip('New workflow draft');
+    final createButton = find.byKey(
+      const ValueKey<String>('automation-new-workflow-draft-button'),
+    );
     expect(createButton, findsOneWidget);
     final createTapTarget = find.descendant(
       of: createButton,
-      matching: find.byType(InkWell),
+      matching: find.byType(GestureDetector),
     );
     expect(createTapTarget, findsOneWidget);
-    expect(tester.widget<InkWell>(createTapTarget).onTap, isNotNull);
+    expect(tester.widget<GestureDetector>(createTapTarget).onTap, isNotNull);
     final paneRight = tester
         .getTopRight(
           find.byKey(const ValueKey<String>('main-content-left-pane')),
@@ -562,6 +559,87 @@ void main() {
         .dx;
     final buttonRight = tester.getTopRight(createTapTarget).dx;
     expect(paneRight - buttonRight, lessThanOrEqualTo(28));
+    expect(find.text('Workflow name'), findsNothing);
+
+    await tester.tap(createTapTarget);
+    await tester.pumpAndSettle();
+    expect(find.text('FILES'), findsWidgets);
+    expect(find.text('Filter files...'), findsOneWidget);
+    expect(find.text('draft_workflow_graph'), findsNothing);
+  });
+
+  testWidgets('renames workflow drafts from the catalog title', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_workflowGraphDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+    controller.selectedAutomationDraftId = harness.client.drafts.first.id;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Files'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Workflow Graph'));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('automation-draft-title-editor')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byTooltip('Rename workflow file'));
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('automation-draft-title-editor')),
+      'Renamed Workflow',
+    );
+    await tester.tap(find.text('FILES'));
+    await tester.pump();
+
+    expect(controller.automationsMessage, 'Saving Renamed Workflow');
+    expect(find.text('draft_workflow_graph'), findsNothing);
+  });
+
+  testWidgets('shows workflow graph fields in Inspect mode', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDrafts(<AutomationDraft>[_workflowGraphDraft()]);
+    controller.automationDrafts = harness.client.drafts;
+    controller.selectedAutomationDraftId = harness.client.drafts.first.id;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('task-graph-canvas')),
+      findsOneWidget,
+    );
+    expect(find.text('ACTIONS'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Inspect'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('INSPECT'), findsOneWidget);
+    expect(find.text('FILES'), findsWidgets);
+    expect(find.text('Workflow name'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('task-graph-canvas')),
+      findsNothing,
+    );
   });
 
   test('creates workflow drafts with the workflow API kind', () async {
@@ -2146,7 +2224,7 @@ void main() {
 
     expect(find.text('SERVERS'), findsWidgets);
     expect(find.text('Memory MCP'), findsOneWidget);
-    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.text('FILES'), findsWidgets);
     expect(find.byTooltip('Servers'), findsOneWidget);
     expect(find.byTooltip('Source'), findsOneWidget);
     expect(find.byTooltip('Add MCP config'), findsOneWidget);
@@ -2159,7 +2237,7 @@ void main() {
 
     expect(find.text('COMMANDS'), findsWidgets);
     expect(find.text('Personal Tools'), findsOneWidget);
-    expect(find.text('CONFIGS'), findsWidgets);
+    expect(find.text('FILES'), findsWidgets);
     expect(find.byTooltip('Commands'), findsOneWidget);
     expect(find.byTooltip('Source'), findsOneWidget);
   });
@@ -3517,11 +3595,6 @@ class _CapturingAutomationsClient extends AutomationsClient {
   }
 
   @override
-  Future<List<AutomationTemplate>> listTemplates() async {
-    return const <AutomationTemplate>[];
-  }
-
-  @override
   Future<List<AutomationPackage>> listPackages() async {
     return const <AutomationPackage>[];
   }
@@ -3578,6 +3651,22 @@ class _CapturingAutomationsClient extends AutomationsClient {
     }
     return draft;
   }
+}
+
+/// Creates a workflow graph draft for Builder shell tests.
+AutomationDraft _workflowGraphDraft() {
+  return const AutomationDraft(
+    id: 'draft_workflow_graph',
+    kind: automationWorkflowKind,
+    name: 'Workflow Graph',
+    status: 'draft',
+    body: <String, dynamic>{
+      'apiVersion': automationWorkflowApiVersion,
+      'kind': automationWorkflowKind,
+      'id': 'workflow_graph',
+      'nodes': <Object>[],
+    },
+  );
 }
 
 /// Creates a nested state-machine draft for hierarchy editing tests.

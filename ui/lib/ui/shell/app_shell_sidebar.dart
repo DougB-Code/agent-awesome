@@ -84,17 +84,17 @@ class _AppSidebar extends StatelessWidget {
         _SidebarItem(
           label: AppSections.today,
           section: AppSections.today,
-          iconGlyph: '⌂',
+          icon: Icons.today_outlined,
         ),
         _SidebarItem(
           label: AppSections.chat,
           section: AppSections.chat,
-          iconGlyph: '↗',
+          icon: Icons.chat_bubble_outline,
         ),
         _SidebarItem(
           label: AppSections.backlog,
           section: AppSections.backlog,
-          iconGlyph: '▤',
+          icon: Icons.task_alt_outlined,
         ),
       ],
     ),
@@ -104,22 +104,22 @@ class _AppSidebar extends StatelessWidget {
         _SidebarItem(
           label: AppSections.automationOperations,
           section: AppSections.automationOperations,
-          iconGlyph: '◇',
+          icon: Icons.monitor_heart_outlined,
         ),
         _SidebarItem(
           label: AppSections.automationWorkflows,
           section: AppSections.automationWorkflows,
-          iconGlyph: '⌁',
+          icon: Icons.route_outlined,
         ),
         _SidebarItem(
           label: AppSections.automationMcpServers,
           section: AppSections.automationMcpServers,
-          iconGlyph: '⌬',
+          icon: Icons.hub_outlined,
         ),
         _SidebarItem(
           label: AppSections.automationTools,
           section: AppSections.automationTools,
-          iconGlyph: '⚒',
+          icon: Icons.terminal,
         ),
       ],
     ),
@@ -129,17 +129,17 @@ class _AppSidebar extends StatelessWidget {
         _SidebarItem(
           label: AppSections.memory,
           section: AppSections.memory,
-          iconGlyph: '◌',
+          icon: Icons.account_tree_outlined,
         ),
         _SidebarItem(
           label: AppSections.files,
           section: AppSections.files,
-          iconGlyph: '▷',
+          icon: Icons.folder_outlined,
         ),
         _SidebarItem(
           label: AppSections.people,
           section: AppSections.people,
-          iconGlyph: '□',
+          icon: Icons.people_alt_outlined,
         ),
       ],
     ),
@@ -149,7 +149,7 @@ class _AppSidebar extends StatelessWidget {
         _SidebarItem(
           label: AppSections.settings,
           section: AppSections.settings,
-          iconGlyph: '↯',
+          icon: Icons.tune,
         ),
       ],
     ),

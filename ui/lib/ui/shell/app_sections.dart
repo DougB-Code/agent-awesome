@@ -27,7 +27,7 @@ abstract final class AppSections {
   /// Memory workspace section.
   static const String memory = 'Memory';
 
-  /// File/source workspace section.
+  /// Files workspace section.
   static const String files = 'Files';
 
   /// People workspace section.

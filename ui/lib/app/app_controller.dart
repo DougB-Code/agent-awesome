@@ -477,9 +477,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Pending workflow inbox items.
   List<AutomationPendingItem> automationInbox = const <AutomationPendingItem>[];
 
-  /// Workflow templates available for draft creation.
-  List<AutomationTemplate> automationTemplates = const <AutomationTemplate>[];
-
   /// Installed automation packages.
   List<AutomationPackage> automationPackages = const <AutomationPackage>[];
 
@@ -497,9 +494,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// Selected published automation definition id.
   String selectedAutomationDefinitionId = '';
-
-  /// Selected automation template id.
-  String selectedAutomationTemplateId = '';
 
   /// Task id requested by the review panel for queue focus.
   String focusedBacklogTaskId = '';

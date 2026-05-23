@@ -1,4 +1,4 @@
-/// Renders file-only management surfaces for source documents.
+/// Renders file-only management surfaces for indexed files.
 library;
 
 import 'package:flutter/material.dart';
@@ -15,5 +15,5 @@ part 'files_section_models.dart';
 part 'files_section_helpers.dart';
 
 const String _fileDetailsModeId = 'details';
-const String _fileSourceModeId = 'source';
+const String _fileProvenanceModeId = 'provenance';
 const String _fileAccessModeId = 'access';

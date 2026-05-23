@@ -532,7 +532,7 @@ class _CommandBarState extends State<CommandBar> {
       _settingsAction('App', Icons.app_settings_alt_outlined),
       _settingsAction('Profiles', Icons.manage_accounts_outlined),
       _settingsAction('Models', Icons.memory_outlined),
-      _settingsAction('Tools', Icons.extension_outlined),
+      _settingsAction('Memory', Icons.account_tree_outlined),
     ];
   }
 

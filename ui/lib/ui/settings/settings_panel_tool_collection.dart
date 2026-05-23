@@ -20,7 +20,7 @@ class ToolsCommandPanel extends StatelessWidget {
       controller: controller,
       title: 'Tools',
       icon: Icons.terminal,
-      emptyLabel: 'No tool configs configured',
+      emptyLabel: 'No tool files configured',
       surface: _ToolSettingsSurface.osTools,
       onAreaChanged: onAreaChanged,
     );
@@ -46,7 +46,7 @@ class McpServersCommandPanel extends StatelessWidget {
       controller: controller,
       title: 'MCP Servers',
       icon: Icons.hub_outlined,
-      emptyLabel: 'No MCP server tool configs configured',
+      emptyLabel: 'No MCP server files configured',
       surface: _ToolSettingsSurface.mcpServer,
       onAreaChanged: onAreaChanged,
     );
@@ -112,8 +112,8 @@ class _SettingsToolSurfaceCommandPanelState
       areas: <SwitcherPanelArea>[
         SwitcherPanelArea(
           id: widget.surface.id,
-          title: 'Configs',
-          icon: widget.icon,
+          title: 'Files',
+          icon: Icons.folder_outlined,
           builder: (query) => _SettingsToolConfigFileList(
             query: query,
             entries: _entries(),
@@ -134,9 +134,7 @@ class _SettingsToolSurfaceCommandPanelState
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: (context, area) => _buildAreaActions(),
       detailActionsBuilder: (context, area, mode) => _buildDetailActions(),
-      filterHint: widget.surface == _ToolSettingsSurface.osTools
-          ? 'Filter tool configs...'
-          : 'Filter MCP configs...',
+      filterHint: 'Filter files...',
       split: const PanelSplit(left: 0.25, min: 0.16, max: 0.5),
     );
   }

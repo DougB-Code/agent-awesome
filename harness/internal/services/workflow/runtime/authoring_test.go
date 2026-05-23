@@ -562,41 +562,6 @@ func TestDesignAssistantVerifiesExternalManifestArtifacts(t *testing.T) {
 	}
 }
 
-// TestTemplateInstantiateCreatesDraft verifies templates produce editable drafts.
-func TestTemplateInstantiateCreatesDraft(t *testing.T) {
-	ctx := context.Background()
-	service, err := Open(ctx, Config{
-		DefinitionsDir: t.TempDir(),
-		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
-		RequestTimeout: time.Second,
-	})
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	defer service.Close()
-
-	templates, err := service.ListTemplates(ctx)
-	if err != nil {
-		t.Fatalf("ListTemplates() error = %v", err)
-	}
-	if len(templates) == 0 {
-		t.Fatalf("ListTemplates() = empty, want built-in templates")
-	}
-	draft, err := service.InstantiateTemplate(ctx, "approval_workflow", TemplateInstantiateRequest{
-		Name:       "Course Approval",
-		Parameters: map[string]any{"prompt": "Approve course download?"},
-	})
-	if err != nil {
-		t.Fatalf("InstantiateTemplate() error = %v", err)
-	}
-	if draft.Status != draftStatusDraft {
-		t.Fatalf("draft status = %q, want draft", draft.Status)
-	}
-	if draft.Name != "Course Approval" {
-		t.Fatalf("draft name = %q, want Course Approval", draft.Name)
-	}
-}
-
 // TestWorkflowDraftPublishPreservesEdges verifies pipe edges are published.
 func TestWorkflowDraftPublishPreservesEdges(t *testing.T) {
 	ctx := context.Background()
@@ -641,22 +606,6 @@ func TestWorkflowDraftPublishPreservesEdges(t *testing.T) {
 	}
 }
 
-// mustBuiltInTemplate returns a built-in template for tests.
-func mustBuiltInTemplate(t *testing.T, id string) store.TemplateRecord {
-	t.Helper()
-	templates, err := builtInTemplates()
-	if err != nil {
-		t.Fatalf("builtInTemplates() error = %v", err)
-	}
-	for _, template := range templates {
-		if template.ID == id {
-			return template
-		}
-	}
-	t.Fatalf("builtInTemplates() missing %q", id)
-	return store.TemplateRecord{}
-}
-
 // TestPackageImportExportRoundTrip verifies package records can be installed and exported.
 func TestPackageImportExportRoundTrip(t *testing.T) {
 	ctx := context.Background()
@@ -689,7 +638,7 @@ func storePackage(id string) store.PackageRecord {
 		ID:      id,
 		Name:    "Email Triage",
 		Version: "0.1.0",
-		Body:    map[string]any{"templates": []any{}},
+		Body:    map[string]any{"workflows": []any{}},
 	}
 }
 

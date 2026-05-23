@@ -110,6 +110,10 @@ App sections MUST instantiate the shared main content sub-shell instead of reimp
 
 Command-panel UI MUST use the shared panel style system. Use shared panel components for surfaces, icon buttons, inline icon actions, badges, chips, empty states, selectable cards, section labels, form fields, and canvas controls whenever they exist. Do not create local visual dialects for the same interaction pattern.
 
+File-selection UI MUST use the label `Files` and a folder icon consistently. This applies to every file-selection or file-catalog pane, including workflow/task file catalogs and any draft/config collection that is presented to the user as selectable files. Do not relabel file selection as sources, references, documents, assets, attachments, drafts, configs, or evidence in navigation, tabs, tooltips, filters, empty states, or selectable controls unless the user explicitly asks for a distinct non-file concept.
+
+Do not expose implementation ids, generated prefixes, storage keys, or transport details in ordinary user-facing labels, subtitles, cards, badges, or empty states. Internal ids such as `draft_*` may be used as selection keys, API parameters, logs, and explicit technical inspector values only when the user needs to copy or diagnose them.
+
 Keep command-panel visuals quiet. Prefer flat bordered surfaces for repeated cards, inspector sections, event rows, source previews, and canvas frames. Reserve gradients for top-level shell chrome, selected states, or brand moments. Do not add routine content gradients to make ordinary cards feel special.
 
 Use consistent panel archetypes. Collection panels show selectable objects. Inspector panels summarize or edit the selected object. Form editors use shared form sections and fields. Dense editors use compact shared editor sections. Canvas panels use shared graph/map/timeline controls. Dashboard routes may use a separate dashboard style when they are outside the command-panel model.

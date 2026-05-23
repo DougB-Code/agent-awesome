@@ -7,14 +7,14 @@ class _NavButton extends StatelessWidget {
   const _NavButton({
     super.key,
     required this.label,
-    required this.iconGlyph,
+    required this.icon,
     required this.selected,
     required this.onTap,
     required this.compact,
   });
 
   final String label;
-  final String iconGlyph;
+  final IconData icon;
   final bool selected;
   final VoidCallback onTap;
   final bool compact;
@@ -56,16 +56,7 @@ class _NavButton extends StatelessWidget {
             children: <Widget>[
               SizedBox(
                 width: 22,
-                child: Text(
-                  iconGlyph,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    height: 1,
-                  ),
-                ),
+                child: Icon(icon, color: foreground, size: 19),
               ),
               if (!compact) ...<Widget>[
                 const SizedBox(width: 8),

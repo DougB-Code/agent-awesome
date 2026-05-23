@@ -34,7 +34,7 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
       areas: <SwitcherPanelArea>[
         SwitcherPanelArea(
           title: 'Files',
-          icon: Icons.folder_open_outlined,
+          icon: Icons.folder_outlined,
           builder: (query) => _FilesLibraryContent(
             files: files,
             query: query,
@@ -52,9 +52,9 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
           icon: Icons.info_outline,
         ),
         CommandPanelDetailMode(
-          id: _fileSourceModeId,
-          label: 'Source',
-          icon: Icons.link_outlined,
+          id: _fileProvenanceModeId,
+          label: 'Provenance',
+          icon: Icons.fingerprint,
         ),
         CommandPanelDetailMode(
           id: _fileAccessModeId,

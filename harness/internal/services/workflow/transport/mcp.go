@@ -130,17 +130,6 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		return decodeKeyedResult(args, "definition", func(req workflowDraftRequest) (any, error) {
 			return s.service.PublishDraft(ctx, req.DraftID)
 		})
-	case "workflow_template_list":
-		return keyedResult("templates", func() (any, error) {
-			return s.service.ListTemplates(ctx)
-		})
-	case "workflow_template_instantiate":
-		return decodeKeyedResult(args, "draft", func(req workflowTemplateInstantiateRequest) (any, error) {
-			return s.service.InstantiateTemplate(ctx, req.TemplateID, runtime.TemplateInstantiateRequest{
-				Parameters: req.Parameters,
-				Name:       req.Name,
-			})
-		})
 	default:
 		return nil, errors.New("workflow tool is not supported")
 	}
@@ -192,8 +181,6 @@ func workflowToolDefinitions() []map[string]any {
 		"workflow_draft_validate",
 		"workflow_edge_compatibility",
 		"workflow_draft_publish",
-		"workflow_template_list",
-		"workflow_template_instantiate",
 	}
 	tools := make([]map[string]any, 0, len(names))
 	for _, name := range names {
@@ -249,10 +236,6 @@ func workflowToolDescription(name string) string {
 		return "Check whether two draft workflow nodes can be connected."
 	case "workflow_draft_publish":
 		return "Publish a workflow draft as an installed definition."
-	case "workflow_template_list":
-		return "List available workflow templates."
-	case "workflow_template_instantiate":
-		return "Create an editable draft from a workflow template."
 	default:
 		return "Workflow control tool."
 	}
@@ -301,11 +284,4 @@ type workflowDraftUpdateRequest struct {
 type workflowEdgeCompatibilityRequest struct {
 	DraftID string `json:"draft_id"`
 	runtime.EdgeCompatibilityRequest
-}
-
-// workflowTemplateInstantiateRequest stores template instantiation arguments.
-type workflowTemplateInstantiateRequest struct {
-	TemplateID string         `json:"template_id"`
-	Name       string         `json:"name"`
-	Parameters map[string]any `json:"parameters"`
 }

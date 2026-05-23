@@ -30,13 +30,13 @@ class _FileInspectorContent extends StatelessWidget {
     if (selected == null) {
       return const PanelEmptyBlock(
         label:
-            'No files indexed yet. Files are PDFs, spreadsheets, images, and source documents, not chat messages.',
+            'No files indexed yet. Files are PDFs, spreadsheets, images, and other files, not chat messages.',
       );
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
       child: switch (modeId) {
-        _fileSourceModeId => _FileSourceDetails(file: selected),
+        _fileProvenanceModeId => _FileSourceDetails(file: selected),
         _fileAccessModeId => _FileAccessDetails(
           controller: controller,
           file: selected,
@@ -129,7 +129,7 @@ class _FileSourceDetails extends StatelessWidget {
         _InspectorHeader(file: file),
         const SizedBox(height: 18),
         _InspectorBlock(
-          label: 'Source',
+          label: 'Provenance',
           child: Column(
             children: <Widget>[
               _InspectorRow(label: 'System', value: file.sourceSystem),

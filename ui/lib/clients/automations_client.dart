@@ -107,25 +107,6 @@ class AutomationsClient {
     return parseAutomationDefinition(decoded['definition']);
   }
 
-  /// Lists workflow templates.
-  Future<List<AutomationTemplate>> listTemplates() async {
-    final decoded = await _get('/templates');
-    return _list(decoded['templates']).map(parseAutomationTemplate).toList();
-  }
-
-  /// Instantiates one template as an editable draft.
-  Future<AutomationDraft> instantiateTemplate(
-    String templateId, {
-    String name = '',
-    Map<String, dynamic> parameters = const <String, dynamic>{},
-  }) async {
-    final decoded = await _post(
-      '/templates/$templateId/instantiate',
-      <String, dynamic>{'name': name, 'parameters': parameters},
-    );
-    return parseAutomationDraft(decoded['draft']);
-  }
-
   /// Lists installed automation packages.
   Future<List<AutomationPackage>> listPackages() async {
     final decoded = await _get('/packages');

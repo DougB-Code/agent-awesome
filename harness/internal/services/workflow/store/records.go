@@ -97,20 +97,6 @@ type DraftRecord struct {
 	UpdatedAt   string         `json:"updated_at"`
 }
 
-// TemplateRecord stores one parameterized workflow template.
-type TemplateRecord struct {
-	ID           string           `json:"id"`
-	Name         string           `json:"name"`
-	Description  string           `json:"description"`
-	Category     string           `json:"category"`
-	Tags         []string         `json:"tags"`
-	Parameters   []map[string]any `json:"parameters"`
-	Requirements map[string]any   `json:"requirements"`
-	Body         map[string]any   `json:"body"`
-	CreatedAt    string           `json:"created_at"`
-	UpdatedAt    string           `json:"updated_at"`
-}
-
 // PackageRecord stores an importable or exportable automation package.
 type PackageRecord struct {
 	ID          string         `json:"id"`

@@ -129,18 +129,6 @@ func (s *Store) migrate(ctx context.Context) error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
-		`CREATE TABLE IF NOT EXISTS workflow_templates (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL,
-			description TEXT NOT NULL,
-			category TEXT NOT NULL,
-			tags_json TEXT NOT NULL,
-			parameters_json TEXT NOT NULL,
-			requirements_json TEXT NOT NULL,
-			body_json TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		)`,
 		`CREATE TABLE IF NOT EXISTS workflow_packages (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,

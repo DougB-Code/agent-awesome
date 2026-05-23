@@ -23,10 +23,8 @@ const String _automationOperationsAreaInbox = 'operations_inbox';
 const String _automationOperationsAreaPublished = 'operations_published';
 const String _automationOperationsAreaRuns = 'operations_runs';
 const String _automationWorkflowAreaDrafts = 'workflow_drafts';
-const String _automationWorkflowAreaTemplates = 'workflow_templates';
 const String _automationWorkflowAreaActions = 'workflow_actions';
 const String _automationTaskAreaDrafts = 'task_drafts';
-const String _automationTaskAreaTemplates = 'task_templates';
 const String _automationTaskAreaNodes = 'task_nodes';
 
 const String _automationDetailOverview = 'overview';
@@ -173,6 +171,7 @@ class _AutomationFocusedCommandPanelState
   late final _TaskGraphActionIntentController _taskGraphActionIntents;
   late final _StateMachineDraftEditController _stateMachineEditor;
   String _detailModeId = _automationDetailOverview;
+  String _requestedAreaId = '';
 
   /// Triggers the first data load after the focused panel is attached.
   @override
@@ -257,7 +256,7 @@ class _AutomationFocusedCommandPanelState
             tabId: tabId,
             onDetailModeRequested: _selectDetailMode,
           ),
-      onAreaChanged: widget.onAreaChanged,
+      onAreaChanged: _handleAreaChanged,
       areaActionsBuilder: (context, area) {
         if (widget.panelId != _automationPanelWorkflows &&
             widget.panelId != _automationPanelTasks) {
@@ -266,6 +265,9 @@ class _AutomationFocusedCommandPanelState
         return _AutomationPanelActions(
           controller: widget.controller,
           panelId: widget.panelId,
+          areaId: area.id,
+          onCreateWorkflow: _createWorkflowDraft,
+          onCreateTaskGraph: _createTaskGraphDraft,
         );
       },
       detailModesBuilder: _detailModesForArea,
@@ -278,6 +280,8 @@ class _AutomationFocusedCommandPanelState
         );
       },
       filterHint: widget.filterHint,
+      areaFilterHintBuilder: _filterHintForArea,
+      selectedAreaId: _requestedAreaId,
       split: _splitForArea(areas),
     );
     if (widget.panelId != _automationPanelWorkflows &&
@@ -288,6 +292,40 @@ class _AutomationFocusedCommandPanelState
       notifier: _taskGraphActionIntents,
       child: shell,
     );
+  }
+
+  /// Creates a workflow draft and reveals it in the Files collection.
+  Future<void> _createWorkflowDraft() async {
+    setState(() => _requestedAreaId = _automationWorkflowAreaDrafts);
+    await widget.controller.createAutomationDraftFromUi(
+      kind: automationWorkflowKind,
+      name: 'New Workflow',
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _requestedAreaId = _automationWorkflowAreaDrafts);
+  }
+
+  /// Creates a task graph draft and reveals it in the task draft collection.
+  Future<void> _createTaskGraphDraft() async {
+    setState(() => _requestedAreaId = _automationTaskAreaDrafts);
+    await widget.controller.createAutomationDraftFromUi(
+      kind: automationTaskGraphKind,
+      name: 'New Task Graph',
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _requestedAreaId = _automationTaskAreaDrafts);
+  }
+
+  /// Reports area changes and clears one-shot area requests after manual moves.
+  void _handleAreaChanged(SwitcherPanelArea area) {
+    if (_requestedAreaId.isNotEmpty && area.id != _requestedAreaId) {
+      setState(() => _requestedAreaId = '');
+    }
+    widget.onAreaChanged?.call(area);
   }
 
   /// Selects a right-side Automations detail mode.
@@ -349,23 +387,13 @@ class _AutomationFocusedCommandPanelState
       return <SwitcherPanelArea>[
         SwitcherPanelArea(
           id: _automationWorkflowAreaDrafts,
-          title: 'Drafts',
-          icon: Icons.edit_note_outlined,
+          title: 'Files',
+          icon: Icons.folder_outlined,
           builder: (query) => _AutomationDraftsContent(
             controller: widget.controller,
             query: query,
             kind: automationWorkflowKind,
-            emptyLabel: 'No workflow drafts',
-          ),
-        ),
-        SwitcherPanelArea(
-          id: _automationWorkflowAreaTemplates,
-          title: 'Templates',
-          icon: Icons.library_books_outlined,
-          builder: (query) => _AutomationTemplatesContent(
-            controller: widget.controller,
-            query: query,
-            kind: automationWorkflowKind,
+            emptyLabel: 'No workflow files',
           ),
         ),
         SwitcherPanelArea(
@@ -383,23 +411,13 @@ class _AutomationFocusedCommandPanelState
       return <SwitcherPanelArea>[
         SwitcherPanelArea(
           id: _automationTaskAreaDrafts,
-          title: widget.title,
-          icon: widget.icon,
+          title: 'Files',
+          icon: Icons.folder_outlined,
           builder: (query) => _AutomationDraftsContent(
             controller: widget.controller,
             query: query,
             kind: automationTaskGraphKind,
-            emptyLabel: 'No task graph drafts',
-          ),
-        ),
-        SwitcherPanelArea(
-          id: _automationTaskAreaTemplates,
-          title: 'Templates',
-          icon: Icons.library_books_outlined,
-          builder: (query) => _AutomationTemplatesContent(
-            controller: widget.controller,
-            query: query,
-            kind: automationTaskGraphKind,
+            emptyLabel: 'No task graph files',
           ),
         ),
         SwitcherPanelArea(
@@ -428,17 +446,18 @@ class _AutomationFocusedCommandPanelState
 
   /// Returns area-specific right work modes where supporting areas need less UI.
   List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
-    if (area.id == _automationWorkflowAreaTemplates ||
-        area.id == _automationTaskAreaTemplates) {
-      return const <CommandPanelDetailMode>[
-        CommandPanelDetailMode(
-          id: _automationDetailOverview,
-          label: 'Overview',
-          icon: Icons.info_outline,
-        ),
-      ];
-    }
     return widget.detailModes;
+  }
+
+  /// Returns area-specific filter copy for the active command catalog.
+  String _filterHintForArea(SwitcherPanelArea area) {
+    return switch (area.id) {
+      _automationWorkflowAreaDrafts ||
+      _automationTaskAreaDrafts => 'Filter files...',
+      _automationWorkflowAreaActions => 'Filter actions...',
+      _automationTaskAreaNodes => 'Filter nodes...',
+      _ => widget.filterHint,
+    };
   }
 
   /// Returns the left-pane companion area for right-side builder modes.
@@ -501,38 +520,42 @@ class _AutomationPanelActions extends StatelessWidget {
   const _AutomationPanelActions({
     required this.controller,
     required this.panelId,
+    required this.areaId,
+    required this.onCreateWorkflow,
+    required this.onCreateTaskGraph,
   });
 
   final AgentAwesomeAppController controller;
   final String panelId;
+  final String areaId;
+  final Future<void> Function() onCreateWorkflow;
+  final Future<void> Function() onCreateTaskGraph;
 
   /// Builds common and section-specific Automations header actions.
   @override
   Widget build(BuildContext context) {
-    if (panelId == _automationPanelWorkflows) {
+    if (areaId == _automationWorkflowAreaActions ||
+        areaId == _automationTaskAreaNodes) {
+      return const SizedBox.shrink();
+    }
+    if (panelId == _automationPanelWorkflows ||
+        areaId == _automationWorkflowAreaDrafts) {
       return PanelCreateButton(
+        key: const ValueKey<String>('automation-new-workflow-draft-button'),
         tooltip: 'New workflow draft',
         onPressed: controller.automationsBusy
             ? null
-            : () => unawaited(
-                controller.createAutomationDraftFromUi(
-                  kind: automationWorkflowKind,
-                  name: 'New Workflow',
-                ),
-              ),
+            : () => unawaited(onCreateWorkflow()),
       );
     }
-    if (panelId == _automationPanelTasks) {
+    if (panelId == _automationPanelTasks ||
+        areaId == _automationTaskAreaDrafts) {
       return PanelCreateButton(
+        key: const ValueKey<String>('automation-new-task-graph-button'),
         tooltip: 'New task graph',
         onPressed: controller.automationsBusy
             ? null
-            : () => unawaited(
-                controller.createAutomationDraftFromUi(
-                  kind: automationTaskGraphKind,
-                  name: 'New Task Graph',
-                ),
-              ),
+            : () => unawaited(onCreateTaskGraph()),
       );
     }
     return const SizedBox.shrink();
@@ -555,19 +578,6 @@ class _AutomationDetailActions extends StatelessWidget {
   Widget build(BuildContext context) {
     if (panelId == _automationPanelOperations) {
       return _OperationsSelectedActions(controller: controller, areaId: areaId);
-    }
-    if (areaId == _automationWorkflowAreaTemplates ||
-        areaId == _automationTaskAreaTemplates) {
-      final template = _selectedAutomationTemplateForArea(controller, areaId);
-      return PanelIconButton(
-        icon: Icons.add,
-        tooltip: 'Use selected template',
-        onPressed: controller.automationsBusy || template == null
-            ? null
-            : () => unawaited(
-                controller.instantiateAutomationTemplateFromUi(template),
-              ),
-      );
     }
     final kind = _automationDraftKindForArea(areaId);
     if (kind != null ||
@@ -810,7 +820,11 @@ class _AutomationRunsContent extends StatelessWidget {
   /// Builds selectable automation run history.
   @override
   Widget build(BuildContext context) {
-    final runs = _filterRuns(controller.automationRuns, query);
+    final runs = _filterRuns(
+      controller.automationRuns,
+      query,
+      definitions: controller.automationDefinitions,
+    );
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
@@ -850,38 +864,6 @@ class _AutomationDraftsContent extends StatelessWidget {
           : <Widget>[
               for (final draft in drafts)
                 _DraftTile(controller: controller, draft: draft),
-            ],
-    );
-  }
-}
-
-class _AutomationTemplatesContent extends StatelessWidget {
-  const _AutomationTemplatesContent({
-    required this.controller,
-    required this.query,
-    required this.kind,
-  });
-
-  final AgentAwesomeAppController controller;
-  final String query;
-  final String kind;
-
-  /// Builds template source rows for one authoring section.
-  @override
-  Widget build(BuildContext context) {
-    final templates = _filterTemplates(
-      controller.automationTemplates.where((template) {
-        return _templateMatchesKind(template, kind);
-      }).toList(),
-      query,
-    );
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: templates.isEmpty
-          ? const <Widget>[PanelEmptyBlock(label: 'No matching templates')]
-          : <Widget>[
-              for (final template in templates)
-                _TemplateTile(controller: controller, template: template),
             ],
     );
   }
@@ -1010,12 +992,6 @@ class _AutomationDetailContent extends StatelessWidget {
         modeId: modeId,
       );
     }
-    if (areaId == _automationWorkflowAreaTemplates ||
-        areaId == _automationTaskAreaTemplates) {
-      return _TemplateDetail(
-        template: _selectedAutomationTemplateForArea(controller, areaId),
-      );
-    }
     final draftKind = _automationDraftKindForArea(areaId);
     if (draftKind != null) {
       return _DraftDetail(
@@ -1040,37 +1016,6 @@ class _AutomationDetailContent extends StatelessWidget {
       );
     }
     return _OperationsDetail(controller: controller, modeId: modeId);
-  }
-}
-
-class _TemplateDetail extends StatelessWidget {
-  const _TemplateDetail({required this.template});
-
-  final AutomationTemplate? template;
-
-  /// Builds details for the selected automation template.
-  @override
-  Widget build(BuildContext context) {
-    final selectedTemplate = template;
-    if (selectedTemplate == null) {
-      return const PanelEmptyBlock(label: 'No template selected');
-    }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        PanelSectionBlock(
-          title: 'Template',
-          child: _DetailRows(
-            rows: <String>[
-              selectedTemplate.name,
-              selectedTemplate.id,
-              selectedTemplate.category,
-              selectedTemplate.description,
-            ],
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -1103,6 +1048,7 @@ class _OperationsDetail extends StatelessWidget {
         selectedDefinition: controller.selectedAutomationDefinition,
       ),
       _ => _OperationsRunOverview(
+        definitions: controller.automationDefinitions,
         run: controller.selectedAutomationRun,
         runCount: controller.automationRuns.length,
       ),
@@ -1221,13 +1167,12 @@ class _DraftOverview extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
         PanelSectionBlock(
-          title: 'Draft',
+          title: draft.kind == automationWorkflowKind ? 'Workflow' : 'Draft',
           child: _DetailRows(
             rows: <String>[
               draft.name,
-              draft.id,
-              draft.kind,
-              draft.status,
+              _draftKindLabel(draft.kind),
+              _draftStatusLabel(draft.status),
               if (draft.description.isNotEmpty) draft.description,
             ],
           ),
@@ -1258,7 +1203,9 @@ class _TaskGraphDraftDetail extends StatelessWidget {
       key: ValueKey<String>('${draft.id}:$modeId'),
       controller: controller,
       draft: draft,
-      view: modeId == _automationDetailOverview
+      view:
+          modeId == _automationDetailOverview ||
+              modeId == _automationDetailInspect
           ? _TaskGraphDraftEditorView.overview
           : _TaskGraphDraftEditorView.builder,
     );
@@ -1321,6 +1268,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   String _lastSavedFingerprint = '';
   _TaskGraphActionIntentController? _taskGraphActionIntents;
   int _lastTaskGraphActionIntentRevision = 0;
+  bool _loadingDraft = false;
 
   bool get _isWorkflowDraft => widget.draft.kind == automationWorkflowKind;
 
@@ -1449,37 +1397,32 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   Widget _buildGraphBuilder() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final availableHeight = constraints.hasBoundedHeight
-            ? constraints.maxHeight - 46
-            : 720.0;
-        final designerHeight = availableHeight < 520 ? 520.0 : availableHeight;
+        final designer = _TaskGraphDesignerSurface(
+          nodes: _nodes,
+          actionTypes: _resolvedActionTypes(),
+          selectedNodeId: _selectedNodeId,
+          onSelect: _selectNode,
+          onMoveToStage: _moveNodeToStage,
+          onDropOnNode: _dropNodeOnNode,
+          onAddActionToStage: _addNode,
+          onAddActionAfterNode: _addNodeAfter,
+          onChangeNodeAction: _changeNodeAction,
+          onNudgeNode: _nudgeNodeByDrag,
+          onToggleConnection: _toggleConnection,
+          onDeleteConnection: (dependencyId, targetNodeId) => _removeDependency(
+            dependencyId,
+            targetNodeId,
+            selectedNodeId: targetNodeId,
+          ),
+          onDeleteNode: _deleteSpecificNode,
+          onMoveNodeInStage: _reorderNodeWithinStage,
+          onMoveNodeStageBy: _moveNodeStageBy,
+        );
         return Padding(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-          child: SizedBox(
-            height: designerHeight,
-            child: _TaskGraphDesignerSurface(
-              nodes: _nodes,
-              actionTypes: _resolvedActionTypes(),
-              selectedNodeId: _selectedNodeId,
-              onSelect: _selectNode,
-              onMoveToStage: _moveNodeToStage,
-              onDropOnNode: _dropNodeOnNode,
-              onAddActionToStage: _addNode,
-              onAddActionAfterNode: _addNodeAfter,
-              onChangeNodeAction: _changeNodeAction,
-              onNudgeNode: _nudgeNodeByDrag,
-              onToggleConnection: _toggleConnection,
-              onDeleteConnection: (dependencyId, targetNodeId) =>
-                  _removeDependency(
-                    dependencyId,
-                    targetNodeId,
-                    selectedNodeId: targetNodeId,
-                  ),
-              onDeleteNode: _deleteSpecificNode,
-              onMoveNodeInStage: _reorderNodeWithinStage,
-              onMoveNodeStageBy: _moveNodeStageBy,
-            ),
-          ),
+          child: constraints.hasBoundedHeight
+              ? designer
+              : SizedBox(height: 720, child: designer),
         );
       },
     );
@@ -1496,7 +1439,10 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              _AutomationTextField(controller: _nameController, label: 'Name'),
+              _AutomationTextField(
+                controller: _nameController,
+                label: _draftNameLabel(widget.draft),
+              ),
               const SizedBox(height: 10),
               _AutomationTextField(
                 controller: _descriptionController,
@@ -1732,19 +1678,26 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   }
 
   void _loadDraft(AutomationDraft draft) {
-    _nameController.text = draft.name;
-    _descriptionController.text = draft.description;
-    final body = _normalizedWorkflowBuilderBody(draft);
-    _taskGraphIdController.text = '${body['id'] ?? draft.id}';
-    _nodes = _workflowBuilderNodes(body);
-    _selectedNodeId = _nodes.isEmpty ? '' : _nodeId(_nodes.first);
-    _loadSelectedNode();
-    _lastSavedFingerprint = _draftFingerprint(
-      name: draft.name,
-      description: draft.description,
-      body: body,
-    );
-    _message = '';
+    _loadingDraft = true;
+    try {
+      _nameController.text = draft.name;
+      _descriptionController.text = draft.description;
+      final body = _normalizedWorkflowBuilderBody(draft);
+      _taskGraphIdController.text = '${body['id'] ?? draft.id}';
+      _nodes = _workflowBuilderNodes(body);
+      _selectedNodeId = _nodes.isEmpty ? '' : _nodeId(_nodes.first);
+      _loadSelectedNode();
+      _lastSavedFingerprint = _draftFingerprint(
+        name: draft.name,
+        description: draft.description,
+        body: body,
+      );
+      _message = '';
+    } finally {
+      _loadingDraft = false;
+      _saveTimer?.cancel();
+      _saveTimer = null;
+    }
   }
 
   void _selectNode(String nodeId) {
@@ -2343,6 +2296,9 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   }
 
   void _scheduleSave() {
+    if (_loadingDraft) {
+      return;
+    }
     _saveTimer?.cancel();
     _saveTimer = Timer(_saveDelay, () => unawaited(_save()));
   }
@@ -4156,9 +4112,9 @@ class _OperationsInboxOverview extends StatelessWidget {
         'Pending items: ${items.length}',
         'Open approvals: $openItems',
         if (item != null) 'Selected: ${item.prompt}',
-        if (item != null) 'Run: ${item.runId}',
-        if (item != null) 'Step: ${item.stepId}',
-        if (item != null) 'Status: ${item.status}',
+        if (item != null) 'Status: ${_draftStatusLabel(item.status)}',
+        if (item != null && item.updatedAt.isNotEmpty)
+          'Updated: ${item.updatedAt}',
       ],
     );
   }
@@ -4182,18 +4138,24 @@ class _OperationsPublishedOverview extends StatelessWidget {
       title: 'Published',
       rows: <String>[
         'Published automations: ${definitions.length}',
-        if (kinds.isNotEmpty) 'Kinds: ${kinds.join(', ')}',
+        if (kinds.isNotEmpty) 'Kinds: ${kinds.map(_draftKindLabel).join(', ')}',
         if (definition != null) 'Selected: ${definition.name}',
-        if (definition != null) 'Definition id: ${definition.id}',
-        if (definition != null) 'Hash: ${definition.hash}',
+        if (definition != null) 'Type: ${_draftKindLabel(definition.kind)}',
+        if (definition != null && definition.updatedAt.isNotEmpty)
+          'Updated: ${definition.updatedAt}',
       ],
     );
   }
 }
 
 class _OperationsRunOverview extends StatelessWidget {
-  const _OperationsRunOverview({required this.run, required this.runCount});
+  const _OperationsRunOverview({
+    required this.definitions,
+    required this.run,
+    required this.runCount,
+  });
 
+  final List<AutomationDefinition> definitions;
   final AutomationRun? run;
   final int runCount;
 
@@ -4205,10 +4167,13 @@ class _OperationsRunOverview extends StatelessWidget {
       title: 'Runs',
       rows: <String>[
         'Recent runs: $runCount',
-        if (selectedRun != null) 'Selected run: ${selectedRun.id}',
-        if (selectedRun != null) 'Definition: ${selectedRun.definitionId}',
-        if (selectedRun != null) 'Status: ${selectedRun.status}',
+        if (selectedRun != null)
+          'Workflow: ${_runDefinitionLabel(definitions, selectedRun)}',
+        if (selectedRun != null)
+          'Status: ${_draftStatusLabel(selectedRun.status)}',
         if (selectedRun != null) 'State: ${selectedRun.state}',
+        if (selectedRun != null && selectedRun.updatedAt.isNotEmpty)
+          'Updated: ${selectedRun.updatedAt}',
       ],
     );
   }
@@ -4292,9 +4257,9 @@ class _PendingItemTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AutomationTile(
       title: item.prompt,
-      subtitle: '${item.runId} / ${item.stepId}',
+      subtitle: 'Waiting for response',
       selected: controller.selectedAutomationPendingItem?.id == item.id,
-      badges: <String>[item.status],
+      badges: <String>[_draftStatusLabel(item.status)],
       onTap: () => controller.selectAutomationPendingItem(item.id),
     );
   }
@@ -4310,9 +4275,9 @@ class _DefinitionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AutomationTile(
       title: definition.name,
-      subtitle: definition.id,
+      subtitle: 'Published ${_draftKindLabel(definition.kind)}',
       selected: controller.selectedAutomationDefinition?.id == definition.id,
-      badges: <String>[definition.kind],
+      badges: <String>[_draftKindLabel(definition.kind)],
       onTap: () => controller.selectAutomationDefinition(definition.id),
     );
   }
@@ -4327,10 +4292,13 @@ class _RunTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AutomationTile(
-      title: run.definitionId,
-      subtitle: '${run.id} / ${run.state}',
+      title: _runDefinitionLabel(controller.automationDefinitions, run),
+      subtitle: _runSubtitle(run),
       selected: controller.selectedAutomationRun?.id == run.id,
-      badges: <String>[run.status, run.kind],
+      badges: <String>[
+        _draftStatusLabel(run.status),
+        _draftKindLabel(run.kind),
+      ],
       onTap: () => unawaited(controller.selectAutomationRun(run.id)),
     );
   }
@@ -4351,11 +4319,16 @@ class _DraftTile extends StatelessWidget {
     );
     return _AutomationTile(
       title: draft.name,
-      subtitle: draft.id,
+      titleWidget: _EditableDraftTitle(
+        key: ValueKey<String>('automation-draft-title-${draft.id}'),
+        controller: controller,
+        draft: draft,
+      ),
+      subtitle: _draftTileSubtitle(draft),
       selected: selectedDraft?.id == draft.id,
       badges: <String>[
-        draft.kind,
-        draft.status,
+        _draftKindLabel(draft.kind),
+        _draftStatusLabel(draft.status),
         if (validation.valid) 'valid',
         if (validation.valid && !validation.publishable) 'blocked',
       ],
@@ -4364,34 +4337,290 @@ class _DraftTile extends StatelessWidget {
   }
 }
 
-class _TemplateTile extends StatelessWidget {
-  const _TemplateTile({required this.controller, required this.template});
+/// _EditableDraftTitle edits one workflow draft title from its card action.
+class _EditableDraftTitle extends StatefulWidget {
+  /// Creates an editable draft title with an explicit edit affordance.
+  const _EditableDraftTitle({
+    super.key,
+    required this.controller,
+    required this.draft,
+  });
 
+  /// App controller that owns draft selection and persistence.
   final AgentAwesomeAppController controller;
-  final AutomationTemplate template;
+
+  /// Draft represented by this catalog title.
+  final AutomationDraft draft;
 
   @override
+  State<_EditableDraftTitle> createState() => _EditableDraftTitleState();
+}
+
+class _EditableDraftTitleState extends State<_EditableDraftTitle> {
+  late final TextEditingController _textController;
+  late final FocusNode _focusNode;
+  bool _editing = false;
+  bool _committing = false;
+
+  /// Initializes the inline text controller.
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.draft.name);
+    _focusNode = FocusNode()..addListener(_handleFocusChanged);
+  }
+
+  /// Keeps the title synced when the backing draft refreshes.
+  @override
+  void didUpdateWidget(covariant _EditableDraftTitle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_editing && oldWidget.draft.name != widget.draft.name) {
+      _textController.text = widget.draft.name;
+    }
+  }
+
+  /// Releases inline editing resources.
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChanged);
+    _focusNode.dispose();
+    _textController.dispose();
+    super.dispose();
+  }
+
+  /// Builds either the static title row or its inline editor.
+  @override
   Widget build(BuildContext context) {
-    return _AutomationTile(
-      title: template.name,
-      subtitle: template.description,
-      badges: <String>[template.category, ...template.tags.take(2)],
-      selected: controller.selectedAutomationTemplate?.id == template.id,
-      onTap: () => controller.selectAutomationTemplate(template.id),
+    final colors = context.agentAwesomeColors;
+    final style = TextStyle(color: colors.ink, fontWeight: FontWeight.w800);
+    if (!_editing) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              widget.draft.name,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+          const SizedBox(width: 8),
+          PanelInlineIconButton(
+            key: ValueKey<String>('automation-draft-rename-${widget.draft.id}'),
+            icon: Icons.edit_outlined,
+            tooltip: _renameDraftTooltip(widget.draft),
+            onPressed: _startEditing,
+          ),
+        ],
+      );
+    }
+    return Focus(
+      onKeyEvent: _handleKey,
+      child: TextField(
+        key: const ValueKey<String>('automation-draft-title-editor'),
+        controller: _textController,
+        focusNode: _focusNode,
+        autofocus: true,
+        maxLines: 1,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _commit(),
+        onTapOutside: (_) => _focusNode.unfocus(),
+        style: style,
+        decoration: InputDecoration(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 6,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: colors.borderStrong),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: colors.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: colors.green),
+          ),
+        ),
+      ),
     );
   }
+
+  /// Starts editing and selects the whole title.
+  void _startEditing() {
+    widget.controller.selectAutomationDraft(widget.draft.id);
+    setState(() {
+      _editing = true;
+      _textController.text = widget.draft.name;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _focusNode.requestFocus();
+      _textController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _textController.text.length,
+      );
+    });
+  }
+
+  /// Commits the title when focus leaves the inline editor.
+  void _handleFocusChanged() {
+    if (_editing && !_focusNode.hasFocus) {
+      _commit();
+    }
+  }
+
+  /// Handles keyboard commit and cancel behavior for inline editing.
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      _cancel();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  /// Saves a changed draft title and exits edit mode.
+  void _commit() {
+    if (!_editing || _committing) {
+      return;
+    }
+    final nextName = _textController.text.trim();
+    if (nextName.isEmpty || nextName == widget.draft.name) {
+      _cancel();
+      return;
+    }
+    _committing = true;
+    setState(() => _editing = false);
+    unawaited(
+      widget.controller
+          .saveAutomationDraftFromUi(_renamedDraft(widget.draft, nextName))
+          .whenComplete(() {
+            if (mounted) {
+              _committing = false;
+            }
+          }),
+    );
+  }
+
+  /// Restores the previous title without saving.
+  void _cancel() {
+    if (!_editing) {
+      return;
+    }
+    setState(() {
+      _editing = false;
+      _textController.text = widget.draft.name;
+    });
+    _focusNode.unfocus();
+  }
+}
+
+/// Returns product-facing supporting text for a workflow draft card.
+String _draftTileSubtitle(AutomationDraft draft) {
+  final description = draft.description.trim();
+  if (description.isNotEmpty) {
+    return description;
+  }
+  final body = _map(draft.body);
+  final definitionName = '${body['name'] ?? ''}'.trim();
+  if (definitionName.isNotEmpty && definitionName != draft.name) {
+    return definitionName;
+  }
+  return '${_draftStatusLabel(draft.status)} ${_draftKindLabel(draft.kind)}';
+}
+
+/// Returns the product-facing name field label for a draft kind.
+String _draftNameLabel(AutomationDraft draft) {
+  return draft.kind == automationWorkflowKind
+      ? 'Workflow name'
+      : 'Task graph name';
+}
+
+/// Returns the tooltip for a draft file rename action.
+String _renameDraftTooltip(AutomationDraft draft) {
+  return draft.kind == automationWorkflowKind
+      ? 'Rename workflow file'
+      : 'Rename task graph file';
+}
+
+/// Returns a copy of a draft with its display name updated.
+AutomationDraft _renamedDraft(AutomationDraft draft, String name) {
+  final body = Map<String, dynamic>.from(_map(draft.body));
+  if (draft.kind == automationWorkflowKind ||
+      draft.kind == automationTaskGraphKind ||
+      body.containsKey('name')) {
+    body['name'] = name;
+  }
+  return AutomationDraft(
+    id: draft.id,
+    kind: draft.kind,
+    name: name,
+    description: draft.description,
+    status: draft.status,
+    body: body,
+    validation: draft.validation,
+    createdAt: draft.createdAt,
+    updatedAt: draft.updatedAt,
+  );
+}
+
+/// Returns the user-facing label for one automation draft kind.
+String _draftKindLabel(String kind) {
+  return switch (kind) {
+    automationWorkflowKind => 'workflow',
+    automationTaskGraphKind => 'task graph',
+    _ => kind.trim().replaceAll('_', ' '),
+  };
+}
+
+/// Returns the user-facing label for one automation draft status.
+String _draftStatusLabel(String status) {
+  final normalized = status.trim().replaceAll('_', ' ');
+  return normalized.isEmpty ? 'draft' : normalized;
+}
+
+/// Returns the workflow name associated with one run when it is available.
+String _runDefinitionLabel(
+  List<AutomationDefinition> definitions,
+  AutomationRun run,
+) {
+  for (final definition in definitions) {
+    if (definition.id == run.definitionId) {
+      return definition.name;
+    }
+  }
+  return 'Workflow run';
+}
+
+/// Returns concise product-facing status for a workflow run.
+String _runSubtitle(AutomationRun run) {
+  final state = run.state.trim();
+  if (state.isEmpty) {
+    return _draftStatusLabel(run.status);
+  }
+  return state;
 }
 
 class _AutomationTile extends StatelessWidget {
   const _AutomationTile({
     required this.title,
     required this.subtitle,
+    this.titleWidget,
     this.badges = const <String>[],
     this.selected = false,
     this.onTap,
   });
 
   final String title;
+  final Widget? titleWidget;
   final String subtitle;
   final List<String> badges;
   final bool selected;
@@ -4417,14 +4646,15 @@ class _AutomationTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(
-                      title,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.ink,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                    titleWidget ??
+                        Text(
+                          title,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.ink,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                     if (subtitle.trim().isNotEmpty) ...<Widget>[
                       const SizedBox(height: 4),
                       Text(
@@ -4465,7 +4695,7 @@ List<AutomationDefinition> _filterDefinitions(
   final needle = query.toLowerCase();
   return definitions.where((definition) {
     return definition.name.toLowerCase().contains(needle) ||
-        definition.id.toLowerCase().contains(needle);
+        _draftKindLabel(definition.kind).toLowerCase().contains(needle);
   }).toList();
 }
 
@@ -4475,16 +4705,29 @@ List<AutomationDraft> _filterDrafts(
 ) {
   final needle = query.toLowerCase();
   return drafts.where((draft) {
+    final body = _map(draft.body);
     return draft.name.toLowerCase().contains(needle) ||
-        draft.id.toLowerCase().contains(needle);
+        draft.description.toLowerCase().contains(needle) ||
+        '${body['name'] ?? ''}'.toLowerCase().contains(needle) ||
+        _draftKindLabel(draft.kind).toLowerCase().contains(needle) ||
+        _draftStatusLabel(draft.status).toLowerCase().contains(needle);
   }).toList();
 }
 
-List<AutomationRun> _filterRuns(List<AutomationRun> runs, String query) {
+List<AutomationRun> _filterRuns(
+  List<AutomationRun> runs,
+  String query, {
+  List<AutomationDefinition> definitions = const <AutomationDefinition>[],
+}) {
   final needle = query.toLowerCase();
   return runs.where((run) {
-    return run.id.toLowerCase().contains(needle) ||
-        run.definitionId.toLowerCase().contains(needle);
+    return _runDefinitionLabel(
+          definitions,
+          run,
+        ).toLowerCase().contains(needle) ||
+        _draftKindLabel(run.kind).toLowerCase().contains(needle) ||
+        _draftStatusLabel(run.status).toLowerCase().contains(needle) ||
+        run.state.toLowerCase().contains(needle);
   }).toList();
 }
 
@@ -4495,42 +4738,8 @@ List<AutomationPendingItem> _filterPendingItems(
   final needle = query.toLowerCase();
   return items.where((item) {
     return item.prompt.toLowerCase().contains(needle) ||
-        item.id.toLowerCase().contains(needle) ||
-        item.runId.toLowerCase().contains(needle) ||
-        item.stepId.toLowerCase().contains(needle) ||
-        item.status.toLowerCase().contains(needle);
+        _draftStatusLabel(item.status).toLowerCase().contains(needle);
   }).toList();
-}
-
-List<AutomationTemplate> _filterTemplates(
-  List<AutomationTemplate> templates,
-  String query,
-) {
-  final needle = query.toLowerCase();
-  return templates.where((template) {
-    return template.name.toLowerCase().contains(needle) ||
-        template.category.toLowerCase().contains(needle) ||
-        template.tags.any((tag) => tag.toLowerCase().contains(needle));
-  }).toList();
-}
-
-/// Reports whether a template belongs in a workflow or task authoring panel.
-bool _templateMatchesKind(AutomationTemplate template, String kind) {
-  final bodyKind = '${template.body['kind'] ?? ''}'.trim();
-  if (bodyKind.isNotEmpty) {
-    return bodyKind == kind;
-  }
-  final category = template.category.toLowerCase();
-  if (kind == automationWorkflowKind) {
-    return category.contains('workflow') ||
-        category.contains('approval') ||
-        category.contains('state');
-  }
-  return category.contains(automationTaskGraphKind) ||
-      category.contains('task-graph') ||
-      category.contains('task graph') ||
-      category.contains('task') ||
-      category.contains('agent');
 }
 
 /// Returns the automation draft kind edited by a left command area.
@@ -4544,40 +4753,6 @@ String? _automationDraftKindForArea(String areaId) {
     return automationTaskGraphKind;
   }
   return null;
-}
-
-/// Returns the template kind represented by a template command area.
-String? _automationTemplateKindForArea(String areaId) {
-  if (areaId == _automationWorkflowAreaTemplates) {
-    return automationWorkflowKind;
-  }
-  if (areaId == _automationTaskAreaTemplates) {
-    return automationTaskGraphKind;
-  }
-  return null;
-}
-
-/// Returns the selected template filtered to one template command area.
-AutomationTemplate? _selectedAutomationTemplateForArea(
-  AgentAwesomeAppController controller,
-  String areaId,
-) {
-  final kind = _automationTemplateKindForArea(areaId);
-  if (kind == null) {
-    return controller.selectedAutomationTemplate;
-  }
-  final templates = controller.automationTemplates
-      .where((template) => _templateMatchesKind(template, kind))
-      .toList();
-  if (templates.isEmpty) {
-    return null;
-  }
-  for (final template in templates) {
-    if (template.id == controller.selectedAutomationTemplateId) {
-      return template;
-    }
-  }
-  return templates.first;
 }
 
 /// Returns the selected draft for one builder kind.

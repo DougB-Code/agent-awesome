@@ -41,8 +41,6 @@ func (s *HTTPServer) Routes() http.Handler {
 	mux.HandleFunc("/api/workflows/definitions/", s.definitionHandler)
 	mux.HandleFunc("/api/workflows/drafts", s.draftsHandler)
 	mux.HandleFunc("/api/workflows/drafts/", s.draftHandler)
-	mux.HandleFunc("/api/workflows/templates", s.templatesHandler)
-	mux.HandleFunc("/api/workflows/templates/", s.templateHandler)
 	mux.HandleFunc("/api/workflows/packages", s.packagesHandler)
 	mux.HandleFunc("/api/workflows/packages/", s.packageHandler)
 	mux.HandleFunc("/api/workflows/runs", s.runsHandler)
@@ -242,40 +240,6 @@ func (s *HTTPServer) draftHandler(w http.ResponseWriter, r *http.Request) {
 		writeResult(w, map[string]any{"definition": definition}, err)
 	default:
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow draft route not found"})
-	}
-}
-
-// templatesHandler lists workflow templates.
-func (s *HTTPServer) templatesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-	templates, err := s.service.ListTemplates(r.Context())
-	writeResult(w, map[string]any{"templates": templates}, err)
-}
-
-// templateHandler routes template describe and instantiate operations.
-func (s *HTTPServer) templateHandler(w http.ResponseWriter, r *http.Request) {
-	templateID, action := splitTail(r.URL.Path, "/api/workflows/templates/")
-	if templateID == "" {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "template id is required"})
-		return
-	}
-	switch {
-	case r.Method == http.MethodGet && action == "":
-		template, err := s.service.GetTemplate(r.Context(), templateID)
-		writeResult(w, map[string]any{"template": template}, err)
-	case r.Method == http.MethodPost && action == "instantiate":
-		var req runtime.TemplateInstantiateRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		draft, err := s.service.InstantiateTemplate(r.Context(), templateID, req)
-		writeResult(w, map[string]any{"draft": draft}, err)
-	default:
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow template route not found"})
 	}
 }
 

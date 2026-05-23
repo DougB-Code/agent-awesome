@@ -291,9 +291,9 @@ class _FilesEmptyState extends StatelessWidget {
     final title = hasAnyFile ? 'No matching files' : 'No files indexed yet';
     final message = hasAnyFile
         ? 'Try a different file type or search.'
-        : 'Files for your agent. Add PDFs, spreadsheets, images, and other source documents here. Chat messages belong in Memory, not Files.';
+        : 'Files for your agent. Add PDFs, spreadsheets, images, and other files here. Chat messages belong in Memory, not Files.';
     return PanelGuidedEmptyBlock(
-      icon: Icons.folder_open_outlined,
+      icon: Icons.folder_outlined,
       title: title,
       message: message,
     );

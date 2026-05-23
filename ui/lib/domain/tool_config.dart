@@ -86,8 +86,6 @@ const List<String> workflowMcpToolNames = <String>[
   'workflow_draft_update',
   'workflow_draft_validate',
   'workflow_draft_publish',
-  'workflow_template_list',
-  'workflow_template_instantiate',
 ];
 
 /// ToolConfigDocument represents one harness tool config YAML file.

@@ -113,7 +113,7 @@ enum _AgentFileKind {
 /// _FileKindFilter describes the file type filters shown in the library.
 enum _FileKindFilter {
   /// All indexed files.
-  all('All files', Icons.folder_open_outlined),
+  all('All files', Icons.folder_outlined),
 
   /// Documents and PDFs.
   documents('Documents', Icons.description_outlined),

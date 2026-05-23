@@ -15,7 +15,10 @@ class PanelStyleTokens {
   /// Prevents construction because this type only exposes constants.
   const PanelStyleTokens._();
 
-  /// Standard radius used by command panels, cards, controls, and sections.
+  /// Square radius used by command-panel frames.
+  static const double panelRadius = 0;
+
+  /// Standard radius used by cards, controls, and sections.
   static const double radius = 8;
 
   /// Compact radius for low-emphasis badges and toolbar pills.
@@ -81,11 +84,20 @@ class PanelSurface extends StatelessWidget {
         border: showBorder
             ? Border.all(color: selected ? colors.borderStrong : colors.border)
             : null,
-        borderRadius:
-            borderRadius ?? BorderRadius.circular(PanelStyleTokens.radius),
+        borderRadius: borderRadius ?? _defaultBorderRadius(),
       ),
       child: child,
     );
+  }
+
+  /// Returns the default radius for the surface role.
+  BorderRadiusGeometry _defaultBorderRadius() {
+    return switch (style) {
+      PanelSurfaceStyle.primary => BorderRadius.circular(
+        PanelStyleTokens.panelRadius,
+      ),
+      PanelSurfaceStyle.card => BorderRadius.circular(PanelStyleTokens.radius),
+    };
   }
 
   /// Returns the flat fill color for the panel role.

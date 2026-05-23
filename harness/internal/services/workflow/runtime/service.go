@@ -79,10 +79,6 @@ func Open(ctx context.Context, cfg Config) (*Service, error) {
 		_ = workflowStore.Close()
 		return nil, err
 	}
-	if err := service.SeedAuthoringCatalog(ctx); err != nil {
-		_ = workflowStore.Close()
-		return nil, err
-	}
 	if err := service.ResumeActiveRuns(ctx); err != nil {
 		_ = workflowStore.Close()
 		return nil, err

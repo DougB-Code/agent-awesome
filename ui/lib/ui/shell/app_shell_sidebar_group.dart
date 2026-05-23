@@ -52,7 +52,7 @@ class _SidebarGroupView extends StatelessWidget {
               child: _NavButton(
                 key: ValueKey<String>('sidebar-${item.section}'),
                 label: item.label,
-                iconGlyph: item.iconGlyph,
+                icon: item.icon,
                 selected: selected == item.section,
                 onTap: () => onSelected(item.section),
                 compact: compact,
