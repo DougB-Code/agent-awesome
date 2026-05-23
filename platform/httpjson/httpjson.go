@@ -15,7 +15,23 @@ var ErrPayloadTooLarge = errors.New("payload too large")
 func DecodeBounded(w http.ResponseWriter, r *http.Request, limit int64, target any) error {
 	body := http.MaxBytesReader(w, r.Body, limit)
 	defer body.Close()
-	if err := json.NewDecoder(body).Decode(target); err != nil {
+	decoder := json.NewDecoder(body)
+	if err := decodeJSONValue(decoder, target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decodeJSONValue(decoder, &extra); !errors.Is(err, io.EOF) {
+		if err != nil {
+			return err
+		}
+		return errors.New("request body must contain only one JSON value")
+	}
+	return nil
+}
+
+// decodeJSONValue decodes one JSON value and normalizes bounded-body errors.
+func decodeJSONValue(decoder *json.Decoder, target any) error {
+	if err := decoder.Decode(target); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			return ErrPayloadTooLarge
