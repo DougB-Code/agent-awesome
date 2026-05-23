@@ -2145,6 +2145,18 @@ class AgentAwesomeAppController extends ChangeNotifier {
       );
     }
     if (event.toolActivity != null) {
+      final toolActivity = event.toolActivity!;
+      if (toolActivity.status == 'completed' &&
+          _taskWriteToolNames.contains(toolActivity.name)) {
+        return ChatMessage(
+          id: event.id,
+          role: ChatRole.tool,
+          author: 'Runtime',
+          text: toolActivity.summary,
+          createdAt: DateTime.now(),
+          toolActivity: toolActivity,
+        );
+      }
       return null;
     }
     if (event.text.trim().isEmpty) {

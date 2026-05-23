@@ -23,18 +23,41 @@ type LoadedDefinition struct {
 	Body       []byte     `json:"-"`
 }
 
+// LoadWarning records one definition file skipped during tolerant loading.
+type LoadWarning struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
+}
+
 // LoadDirectory reads and validates every YAML workflow definition in a directory.
 func LoadDirectory(dir string, actions ActionCatalog) ([]LoadedDefinition, error) {
+	loaded, warnings, err := loadDirectory(dir, actions, false)
+	if err != nil {
+		return nil, err
+	}
+	if len(warnings) > 0 {
+		return nil, fmt.Errorf("%s: %s", warnings[0].Path, warnings[0].Message)
+	}
+	return loaded, nil
+}
+
+// LoadDirectorySkippingInvalid reads valid workflow definitions and reports skipped files.
+func LoadDirectorySkippingInvalid(dir string, actions ActionCatalog) ([]LoadedDefinition, []LoadWarning, error) {
+	return loadDirectory(dir, actions, true)
+}
+
+// loadDirectory implements strict and tolerant directory loading.
+func loadDirectory(dir string, actions ActionCatalog, skipInvalid bool) ([]LoadedDefinition, []LoadWarning, error) {
 	trimmed := strings.TrimSpace(dir)
 	if trimmed == "" {
-		return nil, fmt.Errorf("definitions directory is required")
+		return nil, nil, fmt.Errorf("definitions directory is required")
 	}
 	entries, err := os.ReadDir(trimmed)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []LoadedDefinition{}, nil
+			return []LoadedDefinition{}, nil, nil
 		}
-		return nil, fmt.Errorf("read workflow definitions directory %q: %w", trimmed, err)
+		return nil, nil, fmt.Errorf("read workflow definitions directory %q: %w", trimmed, err)
 	}
 	paths := make([]string, 0, len(entries))
 	for _, entry := range entries {
@@ -49,19 +72,24 @@ func LoadDirectory(dir string, actions ActionCatalog) ([]LoadedDefinition, error
 	sort.Strings(paths)
 
 	loaded := make([]LoadedDefinition, 0, len(paths))
+	warnings := []LoadWarning{}
 	seen := map[string]struct{}{}
 	for _, path := range paths {
 		def, err := LoadFile(path, actions)
 		if err != nil {
-			return nil, err
+			if skipInvalid {
+				warnings = append(warnings, LoadWarning{Path: path, Message: err.Error()})
+				continue
+			}
+			return nil, nil, err
 		}
 		if _, ok := seen[def.Definition.ID]; ok {
-			return nil, fmt.Errorf("duplicate workflow definition %q", def.Definition.ID)
+			return nil, warnings, fmt.Errorf("duplicate workflow definition %q", def.Definition.ID)
 		}
 		seen[def.Definition.ID] = struct{}{}
 		loaded = append(loaded, def)
 	}
-	return loaded, nil
+	return loaded, warnings, nil
 }
 
 // LoadFile reads and validates one YAML workflow definition file.

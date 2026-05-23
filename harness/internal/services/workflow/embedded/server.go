@@ -47,12 +47,13 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		return nil, err
 	}
 	service, err := runtime.Open(ctx, runtime.Config{
-		DefinitionsDir:        cfg.DefinitionsDir,
-		DatabasePath:          cfg.DatabasePath,
-		HarnessContextBaseURL: cfg.HarnessContextBaseURL,
-		RequestTimeout:        cfg.RequestTimeout,
-		ToolClient:            cfg.ToolClient,
-		CommandClient:         cfg.CommandClient,
+		DefinitionsDir:         cfg.DefinitionsDir,
+		DatabasePath:           cfg.DatabasePath,
+		HarnessContextBaseURL:  cfg.HarnessContextBaseURL,
+		RequestTimeout:         cfg.RequestTimeout,
+		ToolClient:             cfg.ToolClient,
+		CommandClient:          cfg.CommandClient,
+		SkipInvalidDefinitions: true,
 	})
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,7 @@ type Service struct {
 	mu       sync.RWMutex
 	defs     map[string]definition.Definition
 	defHash  map[string]string
+	defWarns []definition.LoadWarning
 	runMu    map[string]*sync.Mutex
 	rateMu   sync.Mutex
 	rateHits map[string][]time.Time
@@ -69,6 +71,7 @@ func Open(ctx context.Context, cfg Config) (*Service, error) {
 		mcp:      NewMCPClient(cfg.RequestTimeout),
 		defs:     map[string]definition.Definition{},
 		defHash:  map[string]string{},
+		defWarns: []definition.LoadWarning{},
 		runMu:    map[string]*sync.Mutex{},
 		rateHits: map[string][]time.Time{},
 	}
@@ -97,9 +100,12 @@ func (s *Service) Close() error {
 
 // ReloadDefinitions loads definitions from disk and stores snapshots.
 func (s *Service) ReloadDefinitions(ctx context.Context) error {
-	loaded, err := definition.LoadDirectory(s.cfg.DefinitionsDir, s.actions)
+	loaded, warnings, err := s.loadDefinitions()
 	if err != nil {
 		return err
+	}
+	for _, warning := range warnings {
+		log.Printf("workflow definition skipped: %s: %s", warning.Path, warning.Message)
 	}
 	nextDefs := map[string]definition.Definition{}
 	nextHash := map[string]string{}
@@ -136,13 +142,30 @@ func (s *Service) ReloadDefinitions(ctx context.Context) error {
 	s.mu.Lock()
 	s.defs = nextDefs
 	s.defHash = nextHash
+	s.defWarns = append([]definition.LoadWarning(nil), warnings...)
 	s.mu.Unlock()
 	return nil
+}
+
+// loadDefinitions loads workflow definition files using configured strictness.
+func (s *Service) loadDefinitions() ([]definition.LoadedDefinition, []definition.LoadWarning, error) {
+	if s.cfg.SkipInvalidDefinitions {
+		return definition.LoadDirectorySkippingInvalid(s.cfg.DefinitionsDir, s.actions)
+	}
+	loaded, err := definition.LoadDirectory(s.cfg.DefinitionsDir, s.actions)
+	return loaded, nil, err
 }
 
 // ListDefinitions returns installed definitions from durable storage.
 func (s *Service) ListDefinitions(ctx context.Context) ([]store.DefinitionRecord, error) {
 	return s.store.ListDefinitions(ctx)
+}
+
+// DefinitionWarnings returns skipped definition diagnostics from the last reload.
+func (s *Service) DefinitionWarnings() []definition.LoadWarning {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]definition.LoadWarning(nil), s.defWarns...)
 }
 
 // DescribeDefinition returns one loaded definition.

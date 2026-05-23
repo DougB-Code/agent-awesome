@@ -181,6 +181,42 @@ providers:
 	}
 }
 
+// TestLoadModelConfigAcceptsLocalRuntimeMetadata verifies UI-owned local model metadata is ignored by harness adapters.
+func TestLoadModelConfigAcceptsLocalRuntimeMetadata(t *testing.T) {
+	path := writeTempFile(t, "model.yaml", `
+default: litert-lm:gemma-4-e2b-it
+providers:
+  litert-lm:
+    name: LiteRT-LM
+    adapter: openai
+    auth: optional
+    runtime: litert-lm
+    url: http://127.0.0.1:11666/v1/chat/completions
+    default: gemma-4-e2b-it
+    executable: /tmp/litert-lm
+    hf-repo: google/gemma
+    models:
+      - id: gemma-4-e2b-it
+        model: gemma-4-E2B-it
+        path: /tmp/gemma-4-E2B-it.litertlm
+`)
+
+	cfg, err := LoadModel(path)
+	if err != nil {
+		t.Fatalf("LoadModel() error = %v", err)
+	}
+	selection, err := cfg.ResolveProvider("", "")
+	if err != nil {
+		t.Fatalf("ResolveProvider() error = %v", err)
+	}
+	if got, want := selection.Provider.Runtime, "litert-lm"; got != want {
+		t.Fatalf("Runtime = %q, want %q", got, want)
+	}
+	if got, want := selection.Provider.HFRepo, "google/gemma"; got != want {
+		t.Fatalf("HFRepo = %q, want %q", got, want)
+	}
+}
+
 // TestLoadModelRejectsInvalidProviderAuth verifies invalid auth policy fails.
 func TestLoadModelRejectsInvalidProviderAuth(t *testing.T) {
 	path := writeTempFile(t, "model.yaml", `

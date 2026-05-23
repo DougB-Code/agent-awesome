@@ -14,6 +14,7 @@ import '../domain/config_yaml.dart';
 import '../domain/local_models.dart';
 import '../domain/models.dart';
 import 'app_config.dart';
+import 'local_model_prompt.dart';
 import 'local_services.dart';
 import 'process_supervisor.dart';
 import 'runtime_profile.dart';
@@ -1104,6 +1105,8 @@ class _LiteRtOpenAiServer {
   final LocalModelInstall install;
   final String dataDirectory;
   final ProcessSupervisor processSupervisor;
+  final LocalModelOpenAiPromptBuilder _promptBuilder =
+      const LocalModelOpenAiPromptBuilder();
   HttpServer? _server;
   Future<void> _inferenceQueue = Future<void>.value();
   bool _closed = false;
@@ -1152,7 +1155,7 @@ class _LiteRtOpenAiServer {
 
   Future<void> _handleChatCompletion(HttpRequest request) async {
     final decoded = await _decodeRequest(request);
-    final prompt = _promptFromOpenAiRequest(decoded);
+    final prompt = _promptBuilder.build(decoded);
     final text = await _queuedInference(prompt);
     final toolCall = _toolCallFromLocalModelText(text, decoded);
     final message = toolCall == null
@@ -1262,87 +1265,14 @@ class _LiteRtOpenAiServer {
     return decoded;
   }
 
-  String _promptFromOpenAiRequest(Map<String, dynamic> request) {
-    final messages = request['messages'];
-    if (messages is! List || messages.isEmpty) {
-      throw const FormatException('OpenAI request must include messages');
-    }
-    final buffer = StringBuffer();
-    final toolSection = _toolPromptSection(request['tools']);
-    if (toolSection.isNotEmpty) {
-      buffer.writeln(toolSection);
-      buffer.writeln();
-    }
-    for (final item in messages) {
-      if (item is! Map<String, dynamic>) {
-        continue;
-      }
-      final role = item['role']?.toString().trim();
-      final content = _messageContentText(item['content']);
-      if (content.trim().isEmpty) {
-        continue;
-      }
-      if (role == null || role.isEmpty) {
-        buffer.writeln(content.trim());
-      } else {
-        buffer.writeln('${role.toUpperCase()}: ${content.trim()}');
-      }
-    }
-    final prompt = buffer.toString().trim();
-    if (prompt.isEmpty) {
-      throw const FormatException('OpenAI request has no text content');
-    }
-    return prompt;
-  }
-
-  /// Builds compact local-model tool instructions from OpenAI tool schemas.
-  String _toolPromptSection(Object? tools) {
-    if (tools is! List || tools.isEmpty) {
-      return '';
-    }
-    final lines = <String>[
-      'AVAILABLE TOOLS:',
-      'Use exact tool names only. To call a tool, reply with only '
-          '<|tool_call>call:tool_name{json_arguments}<tool_call|>.',
-    ];
-    for (final tool in tools.whereType<Map<String, dynamic>>()) {
-      final function = tool['function'];
-      if (function is! Map<String, dynamic>) {
-        continue;
-      }
-      final name = function['name']?.toString().trim() ?? '';
-      if (name.isEmpty) {
-        continue;
-      }
-      final description = function['description']?.toString().trim() ?? '';
-      final params = _parameterNames(function['parameters']);
-      final signature = params.isEmpty
-          ? '$name({})'
-          : '$name({${params.join(', ')}})';
-      lines.add(
-        description.isEmpty ? '- $signature' : '- $signature: $description',
-      );
-    }
-    return lines.length == 2 ? '' : lines.join('\n');
-  }
-
-  /// Extracts parameter names from an OpenAI-compatible tool schema.
-  List<String> _parameterNames(Object? parameters) {
-    if (parameters is! Map<String, dynamic>) {
-      return const <String>[];
-    }
-    final properties = parameters['properties'];
-    if (properties is! Map) {
-      return const <String>[];
-    }
-    return properties.keys.map((key) => key.toString()).toList()..sort();
-  }
-
   /// Converts local-model textual tool markup into an OpenAI tool call.
   _LocalModelToolCall? _toolCallFromLocalModelText(
     String text,
     Map<String, dynamic> request,
   ) {
+    if (!_promptBuilder.toolCallsAllowed(request)) {
+      return null;
+    }
     final payload = _toolCallPayload(text);
     if (payload == null) {
       return null;
@@ -1518,22 +1448,6 @@ class _LiteRtOpenAiServer {
       if (text.isNotEmpty) {
         return text;
       }
-    }
-    return '';
-  }
-
-  String _messageContentText(Object? content) {
-    if (content is String) {
-      return content;
-    }
-    if (content is List) {
-      final parts = <String>[];
-      for (final part in content) {
-        if (part is Map<String, dynamic> && part['type'] == 'text') {
-          parts.add(part['text']?.toString() ?? '');
-        }
-      }
-      return parts.where((part) => part.trim().isNotEmpty).join('\n');
     }
     return '';
   }

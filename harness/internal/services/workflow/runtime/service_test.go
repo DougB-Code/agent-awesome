@@ -83,6 +83,49 @@ nodes:
 	}
 }
 
+// TestOpenSkipsInvalidDefinitionsWhenConfigured verifies embedded hosts can start while invalid workflow files are quarantined.
+func TestOpenSkipsInvalidDefinitionsWhenConfigured(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "old.yaml", `
+kind: state_machine
+id: old_flow
+initial: start
+states:
+  - id: start
+`)
+	writeTestDefinition(t, definitionsDir, "valid.yaml", `
+kind: workflow
+id: valid_flow
+name: Valid Flow
+nodes:
+  - id: assert_input
+    type: assert
+    with:
+      path: body.value.ready
+      mode: exists
+`)
+	service, err := Open(ctx, Config{
+		DefinitionsDir:         definitionsDir,
+		DatabasePath:           filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout:         time.Second,
+		SkipInvalidDefinitions: true,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+	if _, ok := service.DescribeDefinition("valid_flow"); !ok {
+		t.Fatalf("valid_flow was not loaded")
+	}
+	if _, ok := service.DescribeDefinition("old_flow"); ok {
+		t.Fatalf("old_flow loaded, want invalid state_machine definition skipped")
+	}
+	if warnings := service.DefinitionWarnings(); len(warnings) != 1 {
+		t.Fatalf("DefinitionWarnings() = %#v, want one skipped definition", warnings)
+	}
+}
+
 // TestWorkflowEventsRedactSignalPayload verifies audit events do not expose credentials.
 func TestWorkflowEventsRedactSignalPayload(t *testing.T) {
 	ctx := context.Background()

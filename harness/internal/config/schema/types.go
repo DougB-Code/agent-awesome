@@ -126,14 +126,18 @@ type LocalExecCommand struct {
 
 // Provider describes one model provider configuration.
 type Provider struct {
-	Name       string  `koanf:"name"`
-	Adapter    string  `koanf:"adapter"`
-	Auth       string  `koanf:"auth"`
-	APIKeyEnv  string  `koanf:"api-key"`
-	Default    string  `koanf:"default"`
-	URL        string  `koanf:"url"`
-	Executable string  `koanf:"executable"`
-	Models     []Model `koanf:"models"`
+	Name    string `koanf:"name"`
+	Adapter string `koanf:"adapter"`
+	Auth    string `koanf:"auth"`
+	// Runtime stores UI-owned local model runtime metadata ignored by adapters.
+	Runtime    string `koanf:"runtime"`
+	APIKeyEnv  string `koanf:"api-key"`
+	Default    string `koanf:"default"`
+	URL        string `koanf:"url"`
+	Executable string `koanf:"executable"`
+	// HFRepo stores UI-owned local model source metadata ignored by adapters.
+	HFRepo string  `koanf:"hf-repo"`
+	Models []Model `koanf:"models"`
 }
 
 // Model describes one selectable model for a provider.

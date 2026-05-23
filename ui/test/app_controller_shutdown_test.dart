@@ -222,6 +222,34 @@ void main() {
     expect(controller.activeChatModelRef, 'openai:gpt-5-pro');
     expect(controller.messages.last.modelRef, 'openai:gpt-5-pro');
   });
+
+  test('selectSession renders completed task write events', () async {
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      assistantClient: _SessionEventsAssistantClient(
+        events: <AssistantEvent>[
+          const AssistantEvent(
+            id: 'tool-1',
+            author: 'agent_awesome',
+            text: '',
+            partial: false,
+            toolActivity: ToolActivity(
+              name: 'create_task',
+              status: 'completed',
+              summary: 'Tool create_task completed: Buy an apple (open)',
+            ),
+          ),
+        ],
+      ),
+    );
+    controller.runtimeProfile = _testProfile();
+    controller.runtimeProfilePath = '/tmp/personal.json';
+
+    await controller.selectSession('session-live');
+
+    expect(controller.messages.single.role, ChatRole.tool);
+    expect(controller.messages.single.text, contains('Buy an apple'));
+  });
 }
 
 /// Tracking supervisor records whether service shutdown was requested.

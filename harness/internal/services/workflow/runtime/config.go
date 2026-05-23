@@ -43,4 +43,5 @@ type Config struct {
 	DesignAssistant                 DesignAssistant
 	TrustedSigners                  []contracts.TrustedSigner
 	ObservedContractReviewThreshold int
+	SkipInvalidDefinitions          bool
 }

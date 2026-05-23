@@ -477,6 +477,291 @@ echo '<|tool_call>call:tool_call{create_task{description:<|"|>Buy milk<|"|>,titl
     expect(nestedArguments['title'], 'Buy Milk');
     expect(nestedArguments['description'], 'Buy milk');
   });
+
+  test('does not start another tool call after a tool result', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-tool-result-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final port = await _freePort();
+    final executable = File('${root.path}/litert_lm');
+    await executable.writeAsString('''
+#!/bin/sh
+if [ "\$1" = "--help" ]; then
+  exit 0
+fi
+echo '<|tool_call>call:create_task{title:<|"|>Buy Milk<|"|>}<tool_call|>'
+''');
+    await _makeExecutable(executable.path);
+    final bytes = utf8.encode('installed local model');
+    final descriptor = _testDescriptor(bytes);
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(
+        litertLmExecutable: executable.path,
+        localModelBaseUrl: 'http://127.0.0.1:$port',
+      ),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(bytes, 200);
+      }),
+    );
+    addTearDown(runtime.close);
+    await runtime.ensureInstalled(descriptor);
+    final status = await runtime.start(descriptor);
+    expect(status.state, ConnectionStateKind.connected);
+
+    final response = await http.post(
+      Uri.parse('http://127.0.0.1:$port/v1/chat/completions'),
+      headers: const <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'model': descriptor.modelName,
+        'messages': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'role': 'user',
+            'content': 'Create a task to buy milk',
+          },
+          <String, dynamic>{
+            'role': 'assistant',
+            'tool_calls': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'id': 'call-1',
+                'type': 'function',
+                'function': <String, dynamic>{
+                  'name': 'create_task',
+                  'arguments': '{"title":"Buy Milk"}',
+                },
+              },
+            ],
+          },
+          <String, dynamic>{
+            'role': 'tool',
+            'tool_call_id': 'call-1',
+            'content': '{"output":{"title":"Buy Milk","status":"open"}}',
+          },
+        ],
+        'tools': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'type': 'function',
+            'function': <String, dynamic>{
+              'name': 'create_task',
+              'description': 'Create a graph-backed task.',
+              'parameters': <String, dynamic>{
+                'type': 'object',
+                'properties': <String, dynamic>{
+                  'title': <String, dynamic>{'type': 'string'},
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(response.statusCode, HttpStatus.ok);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final choice = (decoded['choices'] as List).single as Map<String, dynamic>;
+    expect(choice['finish_reason'], 'stop');
+    final message = choice['message'] as Map<String, dynamic>;
+    expect(message['tool_calls'], isNull);
+  });
+
+  test('bounds prompt history before invoking LiteRT-LM', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-prompt-budget-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final port = await _freePort();
+    final promptCapture = File('${root.path}/captured-prompt.txt');
+    final executable = File('${root.path}/litert_lm');
+    await executable.writeAsString('''
+#!/bin/sh
+if [ "\$1" = "--help" ]; then
+  exit 0
+fi
+while [ "\$#" -gt 0 ]; do
+  if [ "\$1" = "--input_prompt_file" ]; then
+    shift
+    cp "\$1" ${_shellSingleQuote(promptCapture.path)}
+    break
+  fi
+  shift
+done
+echo 'Honeycrisp is a good choice.'
+''');
+    await _makeExecutable(executable.path);
+    final bytes = utf8.encode('installed local model');
+    final descriptor = _testDescriptor(bytes);
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(
+        litertLmExecutable: executable.path,
+        localModelBaseUrl: 'http://127.0.0.1:$port',
+      ),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(bytes, 200);
+      }),
+    );
+    addTearDown(runtime.close);
+    await runtime.ensureInstalled(descriptor);
+    final status = await runtime.start(descriptor);
+    expect(status.state, ConnectionStateKind.connected);
+    final messages = <Map<String, dynamic>>[
+      <String, dynamic>{'role': 'system', 'content': 'Be concise.'},
+      for (var i = 0; i < 30; i++)
+        <String, dynamic>{
+          'role': 'user',
+          'content': 'old-history-sentinel-$i ${'x' * 400}',
+        },
+      <String, dynamic>{
+        'role': 'tool',
+        'tool_call_id': 'call-memory',
+        'content': jsonEncode(<String, dynamic>{
+          'memories': <Map<String, dynamic>>[
+            for (var i = 0; i < 40; i++)
+              <String, dynamic>{
+                'content': 'raw-memory-sentinel-$i ${'y' * 200}',
+              },
+          ],
+        }),
+      },
+      <String, dynamic>{
+        'role': 'assistant',
+        'content': 'You are planning to buy an apple.',
+      },
+      <String, dynamic>{
+        'role': 'user',
+        'content': 'What kind of apple do you recommend I buy?',
+      },
+    ];
+
+    final response = await http.post(
+      Uri.parse('http://127.0.0.1:$port/v1/chat/completions'),
+      headers: const <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'model': descriptor.modelName,
+        'messages': messages,
+      }),
+    );
+
+    expect(response.statusCode, HttpStatus.ok);
+    final prompt = await promptCapture.readAsString();
+    expect(prompt.length, lessThanOrEqualTo(6000));
+    expect(prompt, contains('What kind of apple do you recommend I buy?'));
+    expect(prompt, contains('You are planning to buy an apple.'));
+    expect(prompt, isNot(contains('old-history-sentinel-0')));
+    expect(prompt, isNot(contains('raw-memory-sentinel-39')));
+  });
+
+  test('does not start a tool call after an ADK function response', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-litert-adk-function-response-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final port = await _freePort();
+    final executable = File('${root.path}/litert_lm');
+    await executable.writeAsString('''
+#!/bin/sh
+if [ "\$1" = "--help" ]; then
+  exit 0
+fi
+echo '<|tool_call>call:create_task{title:<|"|>Buy Milk<|"|>}<tool_call|>'
+''');
+    await _makeExecutable(executable.path);
+    final bytes = utf8.encode('installed local model');
+    final descriptor = _testDescriptor(bytes);
+    final runtime = LiteRtLocalModelRuntime(
+      config: _testConfig(
+        litertLmExecutable: executable.path,
+        localModelBaseUrl: 'http://127.0.0.1:$port',
+      ),
+      processSupervisor: _testProcessSupervisor(root),
+      dataDirectory: root.path,
+      httpClient: MockClient((request) async {
+        return http.Response.bytes(bytes, 200);
+      }),
+    );
+    addTearDown(runtime.close);
+    await runtime.ensureInstalled(descriptor);
+    final status = await runtime.start(descriptor);
+    expect(status.state, ConnectionStateKind.connected);
+
+    final response = await http.post(
+      Uri.parse('http://127.0.0.1:$port/v1/chat/completions'),
+      headers: const <String, String>{'content-type': 'application/json'},
+      body: jsonEncode(<String, dynamic>{
+        'model': descriptor.modelName,
+        'messages': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'role': 'user',
+            'content': 'Create a task to buy milk',
+          },
+          <String, dynamic>{
+            'role': 'assistant',
+            'tool_calls': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'id': 'call-1',
+                'type': 'function',
+                'function': <String, dynamic>{
+                  'name': 'create_task',
+                  'arguments': '{"title":"Buy Milk"}',
+                },
+              },
+            ],
+          },
+          <String, dynamic>{
+            'role': 'user',
+            'content': jsonEncode(<String, dynamic>{
+              'parts': <Map<String, dynamic>>[
+                <String, dynamic>{
+                  'functionResponse': <String, dynamic>{
+                    'id': 'adk-confirmation',
+                    'name': 'adk_request_confirmation',
+                    'response': <String, dynamic>{'confirmed': true},
+                  },
+                },
+              ],
+            }),
+          },
+        ],
+        'tools': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'type': 'function',
+            'function': <String, dynamic>{
+              'name': 'create_task',
+              'description': 'Create a graph-backed task.',
+              'parameters': <String, dynamic>{
+                'type': 'object',
+                'properties': <String, dynamic>{
+                  'title': <String, dynamic>{'type': 'string'},
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(response.statusCode, HttpStatus.ok);
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final choice = (decoded['choices'] as List).single as Map<String, dynamic>;
+    expect(choice['finish_reason'], 'stop');
+    final message = choice['message'] as Map<String, dynamic>;
+    expect(message['tool_calls'], isNull);
+  });
 }
 
 LocalModelDescriptor _testDescriptor(
@@ -531,6 +816,11 @@ Future<int> _freePort() async {
   final port = socket.port;
   await socket.close();
   return port;
+}
+
+/// Returns a shell-safe single-quoted value for generated test scripts.
+String _shellSingleQuote(String value) {
+  return "'${value.replaceAll("'", "'\"'\"'")}'";
 }
 
 ProcessSupervisor _testProcessSupervisor(Directory root) {

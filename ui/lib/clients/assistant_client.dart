@@ -376,7 +376,7 @@ AssistantEvent parseAssistantEvent(Map<String, dynamic> event) {
           name: name,
           status: error.isEmpty ? 'completed' : 'failed',
           summary: error.isEmpty
-              ? 'Tool response received'
+              ? _toolCompletionSummary(displayName, responseMap)
               : 'Tool $displayName failed: $error',
         );
       }
@@ -464,6 +464,30 @@ String _displayToolName(String name) {
     _runtimeConfirmationFunctionName => 'confirmation request',
     _ => name,
   };
+}
+
+/// Builds a concise completion summary from a structured tool response.
+String _toolCompletionSummary(
+  String displayName,
+  Map<String, dynamic> response,
+) {
+  final output = response['output'];
+  final outputMap = output is Map<String, dynamic>
+      ? output
+      : const <String, dynamic>{};
+  final title = stringFrom(outputMap['title']);
+  final status = stringFrom(outputMap['status']);
+  final id = stringFrom(outputMap['id']);
+  if (title.isNotEmpty && status.isNotEmpty) {
+    return 'Tool $displayName completed: $title ($status)';
+  }
+  if (title.isNotEmpty) {
+    return 'Tool $displayName completed: $title';
+  }
+  if (id.isNotEmpty) {
+    return 'Tool $displayName completed: $id';
+  }
+  return 'Tool $displayName completed';
 }
 
 /// Prefix used to strip persisted runtime policy text from older transcripts.

@@ -303,6 +303,35 @@ void main() {
       expect(event.errorMessage, contains('requires confirmation'));
     });
 
+    test('summarizes completed task tool responses', () {
+      final event = parseAssistantEvent(<String, dynamic>{
+        'id': 'event-tool-success',
+        'author': 'assistant',
+        'content': <String, dynamic>{
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{
+              'functionResponse': <String, dynamic>{
+                'id': 'call-1',
+                'name': 'create_task',
+                'response': <String, dynamic>{
+                  'output': <String, dynamic>{
+                    'id': 'task-1',
+                    'title': 'Buy an apple',
+                    'status': 'open',
+                  },
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      expect(event.toolActivity?.name, 'create_task');
+      expect(event.toolActivity?.status, 'completed');
+      expect(event.toolActivity?.summary, contains('Buy an apple'));
+      expect(event.toolActivity?.summary, contains('open'));
+    });
+
     test('parses confirmation events', () {
       final event = parseAssistantEvent(<String, dynamic>{
         'id': 'event-3',
