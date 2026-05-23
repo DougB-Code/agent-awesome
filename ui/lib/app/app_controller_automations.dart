@@ -42,6 +42,18 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationDefinitions.isEmpty ? null : automationDefinitions.first;
   }
 
+  /// Starts quiet polling for user-deployable workflow files.
+  void startAutomationFileRefreshFromUi() {
+    if (_automationFileRefreshTimer != null || _isClosing) {
+      return;
+    }
+    unawaited(_refreshAutomationFilesFromUi());
+    _automationFileRefreshTimer = Timer.periodic(
+      _automationFileRefreshInterval,
+      (_) => unawaited(_refreshAutomationFilesFromUi()),
+    );
+  }
+
   /// Refreshes all Automations data from the workflow service through the gateway.
   Future<void> refreshAutomationsFromUi() async {
     if (automationsBusy) {
@@ -55,6 +67,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         return;
       }
       await _loadAutomations();
+      startAutomationFileRefreshFromUi();
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
@@ -63,6 +76,33 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsBusy = false;
       _notifyControllerListeners();
     }
+  }
+
+  /// Refreshes Automations without surfacing routine polling state in the UI.
+  Future<void> _refreshAutomationFilesFromUi() {
+    if (_automationFileRefresh != null) {
+      return _automationFileRefresh!;
+    }
+    _automationFileRefresh = () async {
+      try {
+        if (!_initialized || _isClosing || automationsBusy) {
+          return;
+        }
+        await Future.wait(<Future<void>>[
+          _loadAutomationCatalog(),
+          _loadAutomationDrafts(),
+        ]);
+        if (automationsMessage == 'Refreshing automations') {
+          automationsMessage = '';
+        }
+        _notifyControllerListeners();
+      } catch (error) {
+        await _log('automation file refresh failed: $error');
+      } finally {
+        _automationFileRefresh = null;
+      }
+    }();
+    return _automationFileRefresh!;
   }
 
   /// Selects one automation draft for builder screens.

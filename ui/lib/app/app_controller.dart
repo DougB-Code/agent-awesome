@@ -62,6 +62,9 @@ const Set<String> _managedLocalModelProviderIds = <String>{
   'llama-cpp',
 };
 
+/// Interval for quietly refreshing user-deployable workflow files.
+const Duration _automationFileRefreshInterval = Duration(seconds: 5);
+
 /// Reports whether a provider id belongs to an app-managed local runtime.
 bool _isManagedLocalModelProviderId(String providerId) {
   return _managedLocalModelProviderIds.contains(providerId.trim());
@@ -350,6 +353,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
   Future<void>? _localModelsCloseFuture;
   Future<void>? _runtimeStartup;
   Future<void>? _closeFuture;
+  Future<void>? _automationFileRefresh;
+  Timer? _automationFileRefreshTimer;
   Map<String, String> _runtimeGatewayHeaders = const <String, String>{};
   bool _closing = false;
 
@@ -734,6 +739,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       _loadTasks(),
       _loadAutomations(),
     ]);
+    startAutomationFileRefreshFromUi();
   }
 
   /// Reports whether a required non-model service failed before data loading.
@@ -1643,6 +1649,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
     return _closeFuture ??= () async {
       _closing = true;
       processSupervisor.beginClosing();
+      _automationFileRefreshTimer?.cancel();
+      _automationFileRefreshTimer = null;
 
       onStatus?.call('Closing service clients');
       closeClients();

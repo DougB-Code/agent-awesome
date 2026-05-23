@@ -3,9 +3,14 @@ package runtime
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -34,20 +39,22 @@ const (
 
 // Service owns workflow definitions, persistence, and execution.
 type Service struct {
-	cfg      Config
-	store    *store.Store
-	actions  *actions.Registry
-	tools    ContextToolClient
-	commands CommandClient
-	llm      LLMClient
-	mcp      *MCPClient
-	mu       sync.RWMutex
-	defs     map[string]definition.Definition
-	defHash  map[string]string
-	defWarns []definition.LoadWarning
-	runMu    map[string]*sync.Mutex
-	rateMu   sync.Mutex
-	rateHits map[string][]time.Time
+	cfg                Config
+	store              *store.Store
+	actions            *actions.Registry
+	tools              ContextToolClient
+	commands           CommandClient
+	llm                LLMClient
+	mcp                *MCPClient
+	mu                 sync.RWMutex
+	defs               map[string]definition.Definition
+	defHash            map[string]string
+	defWarns           []definition.LoadWarning
+	defReloadMu        sync.Mutex
+	definitionSnapshot string
+	runMu              map[string]*sync.Mutex
+	rateMu             sync.Mutex
+	rateHits           map[string][]time.Time
 }
 
 // Open creates a workflow service and loads declarative definitions.
@@ -96,6 +103,17 @@ func (s *Service) Close() error {
 
 // ReloadDefinitions loads definitions from disk and stores snapshots.
 func (s *Service) ReloadDefinitions(ctx context.Context) error {
+	s.defReloadMu.Lock()
+	defer s.defReloadMu.Unlock()
+	return s.reloadDefinitions(ctx)
+}
+
+// reloadDefinitions loads definition files while the definition reload lock is held.
+func (s *Service) reloadDefinitions(ctx context.Context) error {
+	snapshot, err := s.definitionFileSnapshot()
+	if err != nil {
+		return err
+	}
 	loaded, warnings, err := s.loadDefinitions()
 	if err != nil {
 		return err
@@ -139,6 +157,7 @@ func (s *Service) ReloadDefinitions(ctx context.Context) error {
 	s.defs = nextDefs
 	s.defHash = nextHash
 	s.defWarns = append([]definition.LoadWarning(nil), warnings...)
+	s.definitionSnapshot = snapshot
 	s.mu.Unlock()
 	return nil
 }
@@ -152,8 +171,66 @@ func (s *Service) loadDefinitions() ([]definition.LoadedDefinition, []definition
 	return loaded, nil, err
 }
 
+// syncDefinitionsFromDisk reloads definitions when user-deployable YAML files changed.
+func (s *Service) syncDefinitionsFromDisk(ctx context.Context) error {
+	s.defReloadMu.Lock()
+	defer s.defReloadMu.Unlock()
+	snapshot, err := s.definitionFileSnapshot()
+	if err != nil {
+		return err
+	}
+	s.mu.RLock()
+	unchanged := snapshot == s.definitionSnapshot
+	s.mu.RUnlock()
+	if unchanged {
+		return nil
+	}
+	return s.reloadDefinitions(ctx)
+}
+
+// definitionFileSnapshot hashes deployable workflow definition files in stable order.
+func (s *Service) definitionFileSnapshot() (string, error) {
+	trimmed := strings.TrimSpace(s.cfg.DefinitionsDir)
+	if trimmed == "" {
+		return "", fmt.Errorf("definitions directory is required")
+	}
+	entries, err := os.ReadDir(trimmed)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("read workflow definitions directory %q: %w", trimmed, err)
+	}
+	paths := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if strings.HasSuffix(name, ".yaml") || strings.HasSuffix(name, ".yml") {
+			paths = append(paths, filepath.Join(trimmed, name))
+		}
+	}
+	sort.Strings(paths)
+	digest := sha256.New()
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("read workflow definition %q: %w", path, err)
+		}
+		digest.Write([]byte(filepath.Base(path)))
+		digest.Write([]byte{0})
+		digest.Write(body)
+		digest.Write([]byte{0})
+	}
+	return hex.EncodeToString(digest.Sum(nil)), nil
+}
+
 // ListDefinitions returns installed definitions from durable storage.
 func (s *Service) ListDefinitions(ctx context.Context) ([]store.DefinitionRecord, error) {
+	if err := s.syncDefinitionsFromDisk(ctx); err != nil {
+		return nil, err
+	}
 	return s.store.ListDefinitions(ctx)
 }
 
@@ -174,6 +251,9 @@ func (s *Service) DescribeDefinition(id string) (definition.Definition, bool) {
 
 // StartWorkflow creates a run and begins execution in the background.
 func (s *Service) StartWorkflow(ctx context.Context, definitionID string, input map[string]any) (store.RunRecord, error) {
+	if err := s.syncDefinitionsFromDisk(ctx); err != nil {
+		return store.RunRecord{}, err
+	}
 	def, ok := s.DescribeDefinition(definitionID)
 	if !ok {
 		return store.RunRecord{}, fmt.Errorf("workflow definition %q not found", definitionID)

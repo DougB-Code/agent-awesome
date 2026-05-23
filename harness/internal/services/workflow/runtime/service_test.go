@@ -126,6 +126,85 @@ nodes:
 	}
 }
 
+// TestListDefinitionsReloadsCopiedDefinition verifies user-installed YAML files are visible without service restart.
+func TestListDefinitionsReloadsCopiedDefinition(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	writeTestDefinition(t, definitionsDir, "copied.yaml", `
+kind: workflow
+id: copied_workflow
+name: Copied Workflow
+nodes:
+  - id: review
+    type: human
+    with:
+      prompt: Review copied workflow
+`)
+
+	defs, err := service.ListDefinitions(ctx)
+	if err != nil {
+		t.Fatalf("ListDefinitions() error = %v", err)
+	}
+	if len(defs) != 1 || defs[0].ID != "copied_workflow" {
+		t.Fatalf("ListDefinitions() = %#v, want copied_workflow", defs)
+	}
+	drafts, err := service.ListDrafts(ctx)
+	if err != nil {
+		t.Fatalf("ListDrafts() error = %v", err)
+	}
+	if len(drafts) != 1 || drafts[0].ID != "draft_copied_workflow" {
+		t.Fatalf("ListDrafts() = %#v, want draft_copied_workflow", drafts)
+	}
+}
+
+// TestStartWorkflowReloadsCopiedDefinition verifies copied workflows can run before the UI refreshes.
+func TestStartWorkflowReloadsCopiedDefinition(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	service, err := Open(ctx, Config{
+		DefinitionsDir: definitionsDir,
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	writeTestDefinition(t, definitionsDir, "runnable.yaml", `
+kind: workflow
+id: runnable_copy
+name: Runnable Copy
+nodes:
+  - id: review
+    type: human
+    with:
+      prompt: Review runnable copy
+`)
+
+	started, err := service.StartWorkflow(ctx, "runnable_copy", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	if started.DefinitionID != "runnable_copy" {
+		t.Fatalf("StartWorkflow() definition = %q, want runnable_copy", started.DefinitionID)
+	}
+	eventually(t, func() bool {
+		run, err := service.Status(ctx, started.ID)
+		return err == nil && run.Status == statusWaiting
+	})
+}
+
 // TestWorkflowEventsRedactSignalPayload verifies audit events do not expose credentials.
 func TestWorkflowEventsRedactSignalPayload(t *testing.T) {
 	ctx := context.Background()

@@ -38,6 +38,9 @@ func (s *Service) ListRuns(ctx context.Context, query RunQuery) ([]store.RunReco
 
 // ListDrafts returns editable workflow drafts.
 func (s *Service) ListDrafts(ctx context.Context) ([]store.DraftRecord, error) {
+	if err := s.syncDefinitionsFromDisk(ctx); err != nil {
+		return nil, err
+	}
 	return s.store.ListDrafts(ctx)
 }
 
