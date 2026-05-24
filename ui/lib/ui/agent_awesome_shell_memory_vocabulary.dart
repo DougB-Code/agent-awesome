@@ -34,7 +34,7 @@ const List<String> _memoryStatuses = <String>[
   'archived',
 ];
 
-const String _memoryOverviewDetailId = 'overview';
+const String _memoryDetailsDetailId = 'details';
 const String _memorySourceDetailId = 'source';
 const String _memoryRelationsDetailId = 'relations';
 const String _memoryMetadataDetailId = 'metadata';
@@ -70,8 +70,8 @@ List<SwitcherPanelArea> _memoryCommandAreas(
 List<CommandPanelDetailMode> _memoryDetailModes() {
   return const <CommandPanelDetailMode>[
     CommandPanelDetailMode(
-      id: _memoryOverviewDetailId,
-      label: 'Overview',
+      id: _memoryDetailsDetailId,
+      label: 'Details',
       icon: Icons.info_outline,
     ),
     CommandPanelDetailMode(

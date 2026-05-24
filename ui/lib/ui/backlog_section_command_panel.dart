@@ -22,7 +22,7 @@ class BacklogCommandPanel extends StatefulWidget {
 
 /// _BacklogCommandPanelState stores the selected backlog detail mode.
 class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
-  _BacklogDetailMode _detailMode = _BacklogDetailMode.inspector;
+  _BacklogDetailMode _detailMode = _BacklogDetailMode.details;
 
   /// Builds backlog areas and details inside the reusable command subshell.
   @override
@@ -68,7 +68,7 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
     }
     final detailMode = _backlogDetailModeForId(mode.id);
     return switch (detailMode) {
-      _BacklogDetailMode.inspector => _BacklogSelectedTaskActions(
+      _BacklogDetailMode.details => _BacklogSelectedTaskActions(
         controller: widget.controller,
         task: task,
       ),
@@ -103,12 +103,12 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
       widget.controller,
     ).map((mode) => mode.id).toSet();
     final selected = _detailMode == _BacklogDetailMode.aiReview
-        ? _BacklogDetailMode.inspector
+        ? _BacklogDetailMode.details
         : _detailMode;
     if (visibleModes.contains(_backlogDetailModeId(selected))) {
       return selected;
     }
-    return _BacklogDetailMode.inspector;
+    return _BacklogDetailMode.details;
   }
 
   /// Builds the content for the current detail mode id.
@@ -144,7 +144,7 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
         controller: widget.controller,
         query: '',
       ),
-      _BacklogDetailMode.inspector =>
+      _BacklogDetailMode.details =>
         edge != null
             ? _TaskConstellationEdgeInspector(
                 controller: widget.controller,

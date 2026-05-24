@@ -12,9 +12,9 @@ class _MemoryCommandSubShell extends StatefulWidget {
 }
 
 class _MemoryCommandSubShellState extends State<_MemoryCommandSubShell> {
-  String _detailModeId = _memoryOverviewDetailId;
+  String _detailModeId = _memoryDetailsDetailId;
 
-  /// Builds memory discovery and inspection inside the shared subshell.
+  /// Builds memory discovery and details inside the shared subshell.
   @override
   Widget build(BuildContext context) {
     return CommandPanelSubShell(

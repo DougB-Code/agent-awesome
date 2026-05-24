@@ -3,8 +3,8 @@ part of 'backlog_section.dart';
 
 /// _BacklogDetailMode identifies the right-side backlog details view.
 enum _BacklogDetailMode {
-  /// Task and relation inspector.
-  inspector,
+  /// Task and relation details.
+  details,
 
   /// Selected task memory linking tools.
   memoryLinks,
@@ -51,7 +51,7 @@ List<CommandPanelDetailMode> _visibleBacklogDetailModes(
   AgentAwesomeAppController controller,
 ) {
   return <CommandPanelDetailMode>[
-    _backlogDetailMode(_BacklogDetailMode.inspector),
+    _backlogDetailMode(_BacklogDetailMode.details),
     _backlogDetailMode(_BacklogDetailMode.memoryLinks),
     if (_backlogReviewAvailable(controller))
       _backlogDetailMode(_BacklogDetailMode.aiReview),
@@ -70,7 +70,7 @@ bool _backlogReviewAvailable(AgentAwesomeAppController controller) {
 /// Returns the stable id for a backlog detail mode.
 String _backlogDetailModeId(_BacklogDetailMode mode) {
   return switch (mode) {
-    _BacklogDetailMode.inspector => 'inspector',
+    _BacklogDetailMode.details => 'details',
     _BacklogDetailMode.memoryLinks => 'memory_links',
     _BacklogDetailMode.aiReview => 'ai_review',
     _BacklogDetailMode.stream => 'stream',
@@ -100,7 +100,7 @@ _BacklogDetailMode _backlogDetailModeForId(String id) {
   if (id == _backlogDetailModeId(_BacklogDetailMode.capture)) {
     return _BacklogDetailMode.capture;
   }
-  return _BacklogDetailMode.inspector;
+  return _BacklogDetailMode.details;
 }
 
 /// Creates a reusable command-panel detail mode for one backlog mode.
@@ -115,7 +115,7 @@ CommandPanelDetailMode _backlogDetailMode(_BacklogDetailMode mode) {
 /// Returns the visible label for a backlog detail mode.
 String _backlogDetailLabel(_BacklogDetailMode mode) {
   return switch (mode) {
-    _BacklogDetailMode.inspector => 'Inspector',
+    _BacklogDetailMode.details => 'Details',
     _BacklogDetailMode.memoryLinks => 'Memory',
     _BacklogDetailMode.aiReview => 'Review',
     _BacklogDetailMode.stream => 'Stream',
@@ -128,7 +128,7 @@ String _backlogDetailLabel(_BacklogDetailMode mode) {
 /// Returns the icon for a backlog detail mode.
 IconData _backlogDetailIcon(_BacklogDetailMode mode) {
   return switch (mode) {
-    _BacklogDetailMode.inspector => Icons.edit_note_outlined,
+    _BacklogDetailMode.details => Icons.info_outline,
     _BacklogDetailMode.memoryLinks => Icons.link_outlined,
     _BacklogDetailMode.aiReview => Icons.auto_awesome_outlined,
     _BacklogDetailMode.stream => Icons.waves_outlined,

@@ -33,7 +33,7 @@ const String _automationWorkflowAreaCapabilities = 'workflow_capabilities';
 const String _automationTaskAreaDrafts = 'task_drafts';
 const String _automationTaskAreaNodes = 'task_nodes';
 
-const String _automationDetailOverview = 'overview';
+const String _automationDetailDetails = 'details';
 const String _automationDetailSetup = 'setup';
 const String _automationDetailInputs = 'inputs';
 const String _automationDetailTargets = 'targets';
@@ -45,6 +45,7 @@ const String _automationDetailMap = 'map';
 const String _automationDetailHistory = 'history';
 const String _automationDetailSafety = 'safety';
 const String _automationDetailTest = 'test';
+const String _automationTargetDetailOverview = 'target_overview';
 const String _automationTargetDetailCapabilities = 'target_capabilities';
 const String _automationTargetDetailSecrets = 'target_secrets';
 const String _automationTargetDetailOperations = 'target_operations';
@@ -202,7 +203,7 @@ class _AutomationFocusedCommandPanelState
     extends State<_AutomationFocusedCommandPanel> {
   late final _TaskGraphActionIntentController _taskGraphActionIntents;
   late final _StateMachineDraftEditController _stateMachineEditor;
-  String _detailModeId = _automationDetailOverview;
+  String _detailModeId = _automationDetailDetails;
   String _requestedAreaId = '';
 
   /// Triggers the first data load after the focused panel is attached.
@@ -540,8 +541,8 @@ class _AutomationFocusedCommandPanelState
     if (area.id == _automationWorkflowAreaCapabilities) {
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
-          id: _automationDetailOverview,
-          label: 'Overview',
+          id: _automationDetailDetails,
+          label: 'Details',
           icon: Icons.info_outline,
         ),
         CommandPanelDetailMode(
@@ -559,7 +560,12 @@ class _AutomationFocusedCommandPanelState
     if (area.id == _automationOperationsAreaTargets) {
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
-          id: _automationDetailOverview,
+          id: _automationTargetDetailSettings,
+          label: 'Details',
+          icon: Icons.info_outline,
+        ),
+        CommandPanelDetailMode(
+          id: _automationTargetDetailOverview,
           label: 'Overview',
           icon: Icons.info_outline,
         ),
@@ -582,11 +588,6 @@ class _AutomationFocusedCommandPanelState
           id: _automationTargetDetailLogs,
           label: 'Logs',
           icon: Icons.article_outlined,
-        ),
-        CommandPanelDetailMode(
-          id: _automationTargetDetailSettings,
-          label: 'Settings',
-          icon: Icons.tune_outlined,
         ),
         CommandPanelDetailMode(
           id: _automationTargetDetailUpdates,
@@ -1895,8 +1896,8 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
     case _automationPanelOperations:
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
-          id: _automationDetailOverview,
-          label: 'Overview',
+          id: _automationDetailDetails,
+          label: 'Details',
           icon: Icons.info_outline,
         ),
         CommandPanelDetailMode(
@@ -1938,19 +1939,19 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
     case _automationPanelWorkflows:
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
+          id: _automationDetailDetails,
+          label: 'Details',
+          icon: Icons.info_outline,
+        ),
+        CommandPanelDetailMode(
           id: _automationDetailBuilder,
           label: 'Builder',
           icon: Icons.account_tree_outlined,
         ),
         CommandPanelDetailMode(
           id: _automationDetailInspect,
-          label: 'Inspect',
+          label: 'Step',
           icon: Icons.tune_outlined,
-        ),
-        CommandPanelDetailMode(
-          id: _automationDetailOverview,
-          label: 'Overview',
-          icon: Icons.info_outline,
         ),
         CommandPanelDetailMode(
           id: _automationDetailSteps,
@@ -1971,14 +1972,14 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
     case _automationPanelTasks:
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
+          id: _automationDetailDetails,
+          label: 'Details',
+          icon: Icons.info_outline,
+        ),
+        CommandPanelDetailMode(
           id: _automationDetailBuilder,
           label: 'Builder',
           icon: Icons.account_tree_outlined,
-        ),
-        CommandPanelDetailMode(
-          id: _automationDetailOverview,
-          label: 'Overview',
-          icon: Icons.info_outline,
         ),
         CommandPanelDetailMode(
           id: _automationDetailSafety,
@@ -2648,7 +2649,7 @@ class _DraftDetail extends StatelessWidget {
     final isWorkflowGraph = _isWorkflowGraphDraft(selectedDraft, body);
     if (modeId == _automationDetailBuilder ||
         modeId == _automationDetailInspect ||
-        modeId == _automationDetailOverview) {
+        modeId == _automationDetailDetails) {
       if (isWorkflowGraph) {
         return _TaskGraphDraftDetail(
           controller: controller,
@@ -2683,11 +2684,11 @@ class _DraftDetail extends StatelessWidget {
         key: ValueKey<String>('${selectedDraft.id}:$modeId'),
         controller: controller,
         draft: selectedDraft,
-        view:
-            modeId == _automationDetailOverview ||
-                modeId == _automationDetailInspect
-            ? _TaskGraphDraftEditorView.overview
-            : _TaskGraphDraftEditorView.builder,
+        view: switch (modeId) {
+          _automationDetailDetails => _TaskGraphDraftEditorView.details,
+          _automationDetailInspect => _TaskGraphDraftEditorView.step,
+          _ => _TaskGraphDraftEditorView.builder,
+        },
       );
     }
     if (modeId == _automationDetailSteps) {
@@ -2756,11 +2757,11 @@ class _TaskGraphDraftDetail extends StatelessWidget {
       key: ValueKey<String>('${draft.id}:$modeId'),
       controller: controller,
       draft: draft,
-      view:
-          modeId == _automationDetailOverview ||
-              modeId == _automationDetailInspect
-          ? _TaskGraphDraftEditorView.overview
-          : _TaskGraphDraftEditorView.builder,
+      view: switch (modeId) {
+        _automationDetailDetails => _TaskGraphDraftEditorView.details,
+        _automationDetailInspect => _TaskGraphDraftEditorView.step,
+        _ => _TaskGraphDraftEditorView.builder,
+      },
     );
   }
 }
@@ -2769,8 +2770,11 @@ enum _TaskGraphDraftEditorView {
   /// Dedicated visual graph authoring surface.
   builder,
 
-  /// Metadata and selected-step form surface.
-  overview,
+  /// High-level draft metadata form surface.
+  details,
+
+  /// Selected-step form surface.
+  step,
 }
 
 class _TaskGraphDraftEditor extends StatefulWidget {
@@ -2946,7 +2950,10 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     if (widget.view == _TaskGraphDraftEditorView.builder) {
       return _buildGraphBuilder();
     }
-    return _buildOverviewEditor(context);
+    if (widget.view == _TaskGraphDraftEditorView.details) {
+      return _buildDetailsEditor();
+    }
+    return _buildStepEditor(context);
   }
 
   /// Builds the dedicated visual task-graph builder.
@@ -2984,9 +2991,8 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
     );
   }
 
-  /// Builds metadata and selected-step fields outside the graph surface.
-  Widget _buildOverviewEditor(BuildContext context) {
-    final selectedNode = _selectedNode();
+  /// Builds high-level metadata fields outside the graph surface.
+  Widget _buildDetailsEditor() {
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
@@ -3013,6 +3019,16 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
             ],
           ),
         ),
+      ],
+    );
+  }
+
+  /// Builds selected-step fields outside the graph surface.
+  Widget _buildStepEditor(BuildContext context) {
+    final selectedNode = _selectedNode();
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
         const SizedBox(height: 12),
         _buildSelectedStepPicker(),
         const SizedBox(height: 12),

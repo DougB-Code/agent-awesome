@@ -67,8 +67,8 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
       detailModes: const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
           id: 'settings',
-          label: 'Settings',
-          icon: Icons.tune,
+          label: 'Details',
+          icon: Icons.info_outline,
         ),
       ],
       detailModesBuilder: _detailModesForArea,
@@ -118,7 +118,11 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
   /// Returns the single right-side settings mode for one left area.
   List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
     return <CommandPanelDetailMode>[
-      CommandPanelDetailMode(id: area.id, label: area.title, icon: area.icon),
+      CommandPanelDetailMode(
+        id: area.id,
+        label: 'Details',
+        icon: Icons.info_outline,
+      ),
     ];
   }
 

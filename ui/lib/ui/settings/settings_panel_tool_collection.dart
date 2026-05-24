@@ -78,7 +78,7 @@ class _SettingsToolSurfaceCommandPanel extends StatefulWidget {
 
 class _SettingsToolSurfaceCommandPanelState
     extends State<_SettingsToolSurfaceCommandPanel> {
-  String _detailModeId = _toolSurfaceEditMode;
+  String _detailModeId = _toolSurfaceDetailsMode;
   String? _selectedPath;
 
   /// Initializes the selected tool config path.
@@ -112,7 +112,7 @@ class _SettingsToolSurfaceCommandPanelState
       areas: <SwitcherPanelArea>[
         SwitcherPanelArea(
           id: widget.surface.id,
-          title: 'Files',
+          title: widget.title,
           icon: Icons.folder_outlined,
           builder: (query) => _SettingsToolConfigFileList(
             query: query,
@@ -134,7 +134,9 @@ class _SettingsToolSurfaceCommandPanelState
       onAreaChanged: widget.onAreaChanged,
       areaActionsBuilder: (context, area) => _buildAreaActions(),
       detailActionsBuilder: (context, area, mode) => _buildDetailActions(),
-      filterHint: 'Filter files...',
+      filterHint: widget.surface == _ToolSettingsSurface.osTools
+          ? 'Filter tools...'
+          : 'Filter MCP servers...',
       split: const PanelSplit(left: 0.30, min: 0.16, max: 0.5),
     );
   }
@@ -142,6 +144,11 @@ class _SettingsToolSurfaceCommandPanelState
   /// Builds the right-pane modes for the selected tool config.
   List<CommandPanelDetailMode> _detailModes() {
     return <CommandPanelDetailMode>[
+      const CommandPanelDetailMode(
+        id: _toolSurfaceDetailsMode,
+        label: 'Details',
+        icon: Icons.info_outline,
+      ),
       CommandPanelDetailMode(
         id: _toolSurfaceEditMode,
         label: widget.surface == _ToolSettingsSurface.osTools
@@ -445,6 +452,7 @@ enum _ToolSettingsSurface {
 }
 
 const String _toolSurfaceEditMode = 'edit';
+const String _toolSurfaceDetailsMode = 'details';
 const String _toolSurfaceNodePresetsMode = 'node-presets';
 const String _toolSurfaceNodeScenariosMode = 'node-scenarios';
 const String _toolSurfaceSourceMode = 'source';

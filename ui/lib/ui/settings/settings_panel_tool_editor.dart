@@ -94,6 +94,15 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
         ],
       );
     }
+    if (widget.modeId == _toolSurfaceDetailsMode) {
+      return _SettingsToolConfigDetailsEditor(
+        controller: widget.controller,
+        entry: widget.entry,
+        document: document,
+        surface: widget.surface,
+        onDocumentChanged: _save,
+      );
+    }
     return FormPanel(
       children: <Widget>[
         if (widget.surface == _ToolSettingsSurface.osTools)
@@ -373,6 +382,126 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
       }
     }
     return null;
+  }
+}
+
+class _SettingsToolConfigDetailsEditor extends StatefulWidget {
+  const _SettingsToolConfigDetailsEditor({
+    required this.controller,
+    required this.entry,
+    required this.document,
+    required this.surface,
+    required this.onDocumentChanged,
+  });
+
+  final AgentAwesomeAppController controller;
+  final ConfigFileEntry entry;
+  final ToolConfigDocument document;
+  final _ToolSettingsSurface surface;
+  final Future<void> Function(ToolConfigDocument document) onDocumentChanged;
+
+  /// Creates state for high-level tool package details editing.
+  @override
+  State<_SettingsToolConfigDetailsEditor> createState() =>
+      _SettingsToolConfigDetailsEditorState();
+}
+
+class _SettingsToolConfigDetailsEditorState
+    extends State<_SettingsToolConfigDetailsEditor> {
+  late final TextEditingController _name = TextEditingController(
+    text: _displayName(),
+  );
+  late String _savedName = _displayName();
+
+  /// Cleans up details field controllers.
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  /// Rehydrates high-level fields when the selected package changes.
+  @override
+  void didUpdateWidget(covariant _SettingsToolConfigDetailsEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextName = _displayName();
+    if (oldWidget.entry.path != widget.entry.path ||
+        oldWidget.document.extra['name'] != widget.document.extra['name']) {
+      _name.text = nextName;
+      _savedName = nextName;
+    }
+  }
+
+  /// Builds the selected package details.
+  @override
+  Widget build(BuildContext context) {
+    return FormPanel(
+      children: <Widget>[
+        FormSectionCard(
+          title: widget.surface == _ToolSettingsSurface.osTools
+              ? 'Tool'
+              : 'MCP Server',
+          children: <Widget>[
+            _SettingsAutoSaveTextField(
+              label: 'Name',
+              controller: _name,
+              initialSavedValue: _savedName,
+              onSave: _rename,
+            ),
+            _SettingsReadOnlyField(label: 'Path', value: widget.entry.path),
+            if (widget.surface == _ToolSettingsSurface.osTools)
+              _SettingsActionRow(
+                children: <Widget>[
+                  FilledButton.icon(
+                    onPressed: widget.entry.assigned
+                        ? null
+                        : () => unawaited(_assign()),
+                    icon: const Icon(Icons.check_circle_outline),
+                    label: Text(
+                      widget.entry.assigned ? 'Assigned' : 'Use for profile',
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Returns the visible package display name.
+  String _displayName() {
+    final name = '${widget.document.extra['name'] ?? ''}'.trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    return widget.entry.label;
+  }
+
+  /// Assigns the selected tool package to the active runtime profile.
+  Future<void> _assign() async {
+    try {
+      await widget.controller.assignConfigFile(widget.entry);
+      if (!mounted) {
+        return;
+      }
+      setState(() {});
+    } catch (_) {}
+  }
+
+  /// Saves the user-facing package name into typed config metadata.
+  Future<void> _rename(String value) async {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final extra = Map<String, dynamic>.from(widget.document.extra);
+    extra['name'] = trimmed;
+    await widget.onDocumentChanged(widget.document.copyWith(extra: extra));
+    if (!mounted) {
+      return;
+    }
+    setState(() => _savedName = trimmed);
   }
 }
 
