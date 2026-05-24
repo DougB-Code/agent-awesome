@@ -66,14 +66,18 @@ mcp:
       require-confirmation-tools:
         - sourcecontrol.commit
         - sourcecontrol.push
+        - sourcecontrol.open_pull_request
         - sourcecontrol.restore
         - sourcecontrol.cleanup_worktree
       tools:
         allow:
+          - sourcecontrol.inspect_repository
+          - sourcecontrol.validate_repository
           - sourcecontrol.prepare_worktree
           - sourcecontrol.status
           - sourcecontrol.commit
           - sourcecontrol.push
+          - sourcecontrol.open_pull_request
           - sourcecontrol.backup
           - sourcecontrol.restore
           - sourcecontrol.cleanup_worktree
@@ -137,6 +141,14 @@ node-presets:
     arguments:
       server_id: sourcecontrol
       tool: sourcecontrol.push
+  - id: sourcecontrol_open_pull_request
+    label: Open pull request
+    surface: mcp
+    action: mcp.call
+    description: Open a pull request for a prepared source-control branch.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.open_pull_request
 node-scenarios:
   - id: codex_implement_success
     label: Codex implement success

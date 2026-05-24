@@ -261,7 +261,7 @@ class _FileMetadataBadge extends StatelessWidget {
           Icon(icon, size: 14, color: colors.muted),
           const SizedBox(width: 6),
           ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 280),
+            constraints: const BoxConstraints(maxWidth: 240),
             child: Text(
               label,
               overflow: TextOverflow.ellipsis,

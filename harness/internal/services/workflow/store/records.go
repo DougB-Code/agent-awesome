@@ -48,6 +48,17 @@ type RunRecord struct {
 	UpdatedAt    string         `json:"updated_at"`
 }
 
+// RunSetupRecord stores reusable input for starting workflow runs.
+type RunSetupRecord struct {
+	ID           string         `json:"id"`
+	DefinitionID string         `json:"definition_id"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	Input        map[string]any `json:"input"`
+	CreatedAt    string         `json:"created_at"`
+	UpdatedAt    string         `json:"updated_at"`
+}
+
 // EventRecord stores one workflow run event.
 type EventRecord struct {
 	ID        int64          `json:"id"`
@@ -144,6 +155,11 @@ type RunFilter struct {
 	Status       string
 	DefinitionID string
 	Limit        int
+}
+
+// RunSetupFilter selects reusable workflow run setups for operator views.
+type RunSetupFilter struct {
+	DefinitionID string
 }
 
 // ObservedContractFilter selects runtime-observed output shapes.

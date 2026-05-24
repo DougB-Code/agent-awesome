@@ -37,3 +37,10 @@
 - Add a batch job to organize memory and ask follow-up questions when an item needs more detail.
 
 - Can the workflow engine itself be used to provide training to employees on how to do processes? For example, can it be used to show people how to use AI to perform a role? 
+
+- Update Flutter version
+
+- Add Go linting
+- Audit with Opus 4.7
+
+- Review and improve terms (ex: Operations) and make sure they're user friendly. 

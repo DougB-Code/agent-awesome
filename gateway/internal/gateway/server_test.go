@@ -325,7 +325,7 @@ func TestWorkflowProxyRoutesThroughGateway(t *testing.T) {
 		cfg.WorkflowBaseURL = workflowService.URL + "/api/workflows"
 	})
 
-	paths := []string{"/api/workflows/inbox", "/api/workflows/drafts", "/api/workflows/action-types"}
+	paths := []string{"/api/workflows/inbox", "/api/workflows/drafts", "/api/workflows/action-types", "/api/capabilities", "/api/runtime-targets"}
 	for _, path := range paths {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		recorder := httptest.NewRecorder()

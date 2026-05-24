@@ -105,7 +105,7 @@ class _ChatCommandSubShellState extends State<_ChatCommandSubShell> {
       ),
       filterHint: 'Filter chats...',
       detailFilterHint: 'Filter selected chat...',
-      split: const PanelSplit(left: 0.28, min: 0.18, max: 0.48),
+      split: const PanelSplit(left: 0.30, min: 0.18, max: 0.48),
     );
   }
 

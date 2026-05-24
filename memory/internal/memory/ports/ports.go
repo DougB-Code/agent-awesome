@@ -48,6 +48,15 @@ type GraphQueryRepository interface {
 	QueryContextGraph(context.Context, domain.GraphQueryRequest) (domain.GraphQueryResult, error)
 }
 
+// CodebaseRepository stores graph-backed repository catalog entries.
+type CodebaseRepository interface {
+	UpsertCodebase(context.Context, domain.UpsertCodebaseRequest) (domain.Codebase, error)
+	GetCodebase(context.Context, domain.CodebaseIDRequest) (domain.Codebase, error)
+	ListCodebases(context.Context, domain.CodebaseQuery) ([]domain.Codebase, error)
+	ResolveCodebase(context.Context, domain.ResolveCodebaseRequest) (domain.CodebaseResolution, error)
+	DeleteCodebase(context.Context, domain.CodebaseIDRequest) error
+}
+
 // Steward performs optional model-assisted memory enrichment and maintenance.
 type Steward interface {
 	Classify(ctx context.Context, record domain.MemoryRecord, content string) (domain.RepairRequest, error)

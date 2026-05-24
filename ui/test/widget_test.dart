@@ -380,6 +380,78 @@ void main() {
           state: 'running',
         ),
       ]
+      ..automationRunSetups = const <AutomationRunSetup>[
+        AutomationRunSetup(
+          id: 'setup_1',
+          definitionId: 'daily_email',
+          name: 'Daily Email Setup',
+        ),
+      ]
+      ..automationCodebases = const <AutomationCodebase>[
+        AutomationCodebase(
+          id: 'agent_awesome',
+          name: 'Agent Awesome',
+          repositoryPath: '/tmp/agentawesome-test',
+          defaultRemote: 'origin',
+          defaultBranch: 'main',
+        ),
+      ]
+      ..automationRuntimeTargets = const <AutomationRuntimeTarget>[
+        AutomationRuntimeTarget(
+          id: 'local',
+          name: 'This computer',
+          kind: 'local',
+          status: 'healthy',
+          version: 'dev',
+          capabilities: <String>['command:go_test_all'],
+          allowedCodebaseIds: <String>['agent_awesome'],
+          secretRefCount: 1,
+          currentRunCount: 0,
+          os: 'linux',
+          hostname: 'workstation',
+        ),
+      ]
+      ..selectedAutomationRuntimeTargetId = 'local'
+      ..selectedAutomationTargetHealth = const AutomationTargetHealth(
+        targetId: 'local',
+        status: 'healthy',
+        version: 'dev',
+        os: 'linux',
+        hostname: 'workstation',
+      )
+      ..selectedAutomationTargetLogs = const <AutomationTargetLogEntry>[
+        AutomationTargetLogEntry(
+          id: 1,
+          targetId: 'local',
+          level: 'info',
+          message: 'Local target registered',
+        ),
+      ]
+      ..selectedAutomationTargetSecrets = const AutomationTargetSecretMetadata(
+        targetId: 'local',
+        count: 1,
+      )
+      ..automationCapabilities = const <AutomationCapability>[
+        AutomationCapability(
+          id: 'command:go_test_all',
+          kind: 'command',
+          name: 'go_test_all',
+          label: 'Go test all',
+          description: 'Run Go tests.',
+          usableInChat: true,
+          usableInWorkflows: true,
+          invocation: <String, Object>{
+            'direct_tool_name': 'command_execute',
+            'workflow_action': 'command.execute',
+            'command_template': 'go_test_all',
+          },
+          risk: <String, Object>{'level': 'tool'},
+          availability: AutomationCapabilityAvailability(status: 'available'),
+          testResults: <AutomationCapabilityTestResult>[
+            AutomationCapabilityTestResult(type: 'schema', status: 'available'),
+          ],
+        ),
+      ]
       ..automationInbox = const <AutomationPendingItem>[
         AutomationPendingItem(
           id: 'pending_1',
@@ -420,15 +492,36 @@ void main() {
     );
     expect(find.text('INBOX'), findsWidgets);
     expect(find.byTooltip('Inbox'), findsOneWidget);
-    expect(find.byTooltip('Published'), findsOneWidget);
-    expect(find.byTooltip('Runs'), findsOneWidget);
+    expect(find.byTooltip('Files'), findsOneWidget);
+    expect(find.byTooltip('Operations'), findsWidgets);
+    expect(find.byTooltip('Codebases'), findsOneWidget);
+    expect(find.byTooltip('Computers'), findsOneWidget);
+    expect(find.byTooltip('Schedules'), findsOneWidget);
+    expect(find.byTooltip('Artifacts'), findsOneWidget);
+    expect(find.byTooltip('Runs'), findsWidgets);
     expect(find.byTooltip('Refresh automations'), findsNothing);
     expect(find.text('Approve archive?'), findsOneWidget);
     expect(find.text('Daily Email'), findsNothing);
-    await tester.tap(find.byTooltip('Published'));
+    await tester.tap(find.byTooltip('Files'));
     await tester.pumpAndSettle();
     expect(find.text('Daily Email'), findsWidgets);
-    await tester.tap(find.byTooltip('Runs'));
+    await tester.tap(find.byTooltip('Operations').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Daily Email Setup'), findsOneWidget);
+    await tester.tap(find.byTooltip('Codebases'));
+    await tester.pumpAndSettle();
+    expect(find.text('Agent Awesome'), findsWidgets);
+    await tester.tap(find.byTooltip('Computers'));
+    await tester.pumpAndSettle();
+    expect(find.text('This computer'), findsWidgets);
+    expect(find.text('Status: healthy'), findsOneWidget);
+    await tester.tap(find.byTooltip('Schedules'));
+    await tester.pumpAndSettle();
+    expect(find.text('No scheduled operations'), findsOneWidget);
+    await tester.tap(find.byTooltip('Artifacts'));
+    await tester.pumpAndSettle();
+    expect(find.text('No artifacts'), findsOneWidget);
+    await tester.tap(find.byTooltip('Runs').first);
     await tester.pumpAndSettle();
     expect(find.text('run_1 / running'), findsNothing);
     expect(find.text('running'), findsWidgets);
@@ -454,6 +547,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
+    expect(find.byTooltip('Capabilities'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Files'));
     await tester.pumpAndSettle();
@@ -473,6 +567,13 @@ void main() {
       find.byKey(const ValueKey<String>('task-graph-canvas')),
       findsOneWidget,
     );
+
+    await tester.tap(find.byTooltip('Capabilities'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CAPABILITIES'), findsWidgets);
+    expect(find.text('Go test all'), findsWidgets);
+    expect(find.text('Workflow action: command.execute'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
@@ -511,6 +612,147 @@ void main() {
 
     expect(find.text('Status'), findsNothing);
     expect(find.text('Automations refreshed'), findsNothing);
+  });
+
+  testWidgets('opens Operations workflow run input dialog', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDefinitions(<AutomationDefinition>[
+      _professionalCodingDefinitionForRunTest(),
+    ]);
+    controller.automationDefinitions = harness.client.definitions;
+    controller.selectedAutomationDefinitionId = 'professional_coding_change';
+    controller.automationCodebases = const <AutomationCodebase>[
+      AutomationCodebase(
+        id: 'agent_awesome',
+        name: 'Agent Awesome',
+        repositoryPath: '/repo/agent',
+        defaultRemote: 'origin',
+        defaultBranch: 'main',
+      ),
+    ];
+    controller.selectedAutomationCodebaseId = 'agent_awesome';
+    controller.automationRuntimeTargets = const <AutomationRuntimeTarget>[
+      AutomationRuntimeTarget(
+        id: 'local',
+        name: 'This computer',
+        kind: 'local',
+        status: 'healthy',
+        allowedCodebaseIds: <String>['agent_awesome'],
+      ),
+    ];
+    controller.selectedAutomationRuntimeTargetId = 'local';
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Files'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('automation-start-run-button')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Run Professional Coding Change'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-input-json')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('automation-run-input-repository_path'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-input-change_request')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-input-remote')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('creates reusable Operations from typed fields', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDefinitions(<AutomationDefinition>[
+      _professionalCodingDefinitionForRunTest(),
+    ]);
+    controller.automationDefinitions = harness.client.definitions;
+    controller.selectedAutomationDefinitionId = 'professional_coding_change';
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Files'));
+    await tester.pumpAndSettle();
+    controller.automationCodebases = const <AutomationCodebase>[
+      AutomationCodebase(
+        id: 'agent_awesome',
+        name: 'Agent Awesome',
+        repositoryPath: '/repo/agent',
+        defaultRemote: 'origin',
+        defaultBranch: 'main',
+      ),
+    ];
+    controller.selectedAutomationCodebaseId = 'agent_awesome';
+    controller.automationRuntimeTargets = const <AutomationRuntimeTarget>[
+      AutomationRuntimeTarget(
+        id: 'local',
+        name: 'This computer',
+        kind: 'local',
+        status: 'healthy',
+        allowedCodebaseIds: <String>['agent_awesome'],
+      ),
+    ];
+    controller.selectedAutomationRuntimeTargetId = 'local';
+    await tester.tap(
+      find.byKey(const ValueKey<String>('automation-create-run-setup-button')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Create Operation'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-setup-name')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-setup-codebase')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-setup-target')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-setup-safety')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+        const ValueKey<String>('automation-run-input-repository_path'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-input-change_request')),
+      findsNothing,
+    );
+
+    expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
   });
 
   testWidgets('shows enabled right-aligned workflow create action', (
@@ -702,6 +944,314 @@ void main() {
       reason: harness.controller.automationsMessage,
     );
     expect(harness.controller.selectedAutomationDraftId, 'draft_1');
+  });
+
+  test('starts workflow definitions with input payloads', () async {
+    final harness = _readyCapturingController();
+    const definition = AutomationDefinition(
+      id: 'professional_coding_change',
+      kind: automationWorkflowKind,
+      name: 'Professional Coding Change',
+      hash: 'sha256:professional',
+    );
+
+    await harness.controller.startAutomationDefinitionFromUi(
+      definition,
+      input: const <String, dynamic>{
+        'repository_path': '/repo',
+        'change_request': 'Fix it',
+      },
+    );
+
+    expect(harness.client.startedDefinitionId, 'professional_coding_change');
+    expect(harness.client.startedInput['repository_path'], '/repo');
+    expect(harness.client.startedInput['change_request'], 'Fix it');
+    expect(harness.controller.selectedAutomationRunId, 'run_1');
+  });
+
+  test('creates and starts reusable Operations', () async {
+    final harness = _readyCapturingController();
+    const definition = AutomationDefinition(
+      id: 'professional_coding_change',
+      kind: automationWorkflowKind,
+      name: 'Professional Coding Change',
+      hash: 'sha256:professional',
+    );
+
+    await harness.controller.createAutomationRunSetupFromUi(
+      definition: definition,
+      name: 'Agent Awesome Repo',
+      codebaseId: 'agent_awesome',
+      runtimeTargetId: 'local',
+      input: const <String, dynamic>{'repository_path': '/repo'},
+      policy: const <String, dynamic>{'source_control': 'open_pr_only'},
+    );
+    final setup = harness.client.createdRunSetup;
+    expect(setup?.name, 'Agent Awesome Repo');
+    expect(setup?.codebaseId, 'agent_awesome');
+    expect(setup?.runtimeTargetId, 'local');
+    expect(setup?.policy['source_control'], 'open_pr_only');
+    expect(harness.controller.selectedAutomationRunSetupId, setup?.id);
+
+    await harness.controller.startAutomationRunSetupFromUi(
+      setup!,
+      input: const <String, dynamic>{'change_request': 'Fix it'},
+    );
+
+    expect(harness.client.startedRunSetupId, setup.id);
+    expect(harness.client.startedInput['change_request'], 'Fix it');
+    expect(harness.controller.selectedAutomationRunId, 'run_1');
+  });
+
+  test('previews reusable Operations without starting runs', () async {
+    final harness = _readyCapturingController();
+    const definition = AutomationDefinition(
+      id: 'professional_coding_change',
+      kind: automationWorkflowKind,
+      name: 'Professional Coding Change',
+      hash: 'sha256:professional',
+    );
+
+    await harness.controller.createAutomationRunSetupFromUi(
+      definition: definition,
+      name: 'Agent Awesome Repo',
+      codebaseId: 'agent_awesome',
+      runtimeTargetId: 'local',
+      input: const <String, dynamic>{'repository_path': '/repo'},
+    );
+    final setup = harness.client.createdRunSetup!;
+
+    await harness.controller.previewAutomationRunSetupFromUi(setup);
+
+    expect(harness.client.previewedRunSetupId, setup.id);
+    expect(
+      harness.controller.selectedAutomationOperationPreview?.missingSetup,
+      <String>['change_request'],
+    );
+    expect(harness.controller.selectedAutomationRunId, isEmpty);
+  });
+
+  test('updates reusable Operations from typed setup fields', () async {
+    final harness = _readyCapturingController();
+    const setup = AutomationRunSetup(
+      id: 'setup_1',
+      definitionId: 'professional_coding_change',
+      name: 'Agent Awesome Repo',
+      codebaseId: 'agent_awesome',
+      runtimeTargetId: 'local',
+    );
+    harness.client.seedRunSetups(const <AutomationRunSetup>[setup]);
+
+    await harness.controller.updateAutomationRunSetupFromUi(
+      setup.copyWith(
+        name: 'Agent Awesome PRs',
+        policy: const <String, dynamic>{
+          'source_control': 'open_pr_only',
+          'allowed_targets': <String>['local'],
+        },
+      ),
+    );
+
+    expect(harness.client.updatedRunSetup?.name, 'Agent Awesome PRs');
+    expect(
+      harness.client.updatedRunSetup?.policy['source_control'],
+      'open_pr_only',
+    );
+    expect(harness.controller.selectedAutomationRunSetupId, setup.id);
+  });
+
+  test('loads Operation run snapshots for selected runs', () async {
+    final harness = _readyCapturingController();
+    const run = AutomationRun(
+      id: 'run_1',
+      definitionId: 'professional_coding_change',
+      kind: automationWorkflowKind,
+      status: 'completed',
+      state: 'done',
+    );
+    harness.controller.automationRuns = const <AutomationRun>[run];
+    harness.client.runs = const <AutomationRun>[run];
+    harness.client.snapshotsByRunId =
+        const <String, AutomationOperationRunSnapshot>{
+          'run_1': AutomationOperationRunSnapshot(
+            runId: 'run_1',
+            operationId: 'setup_1',
+            resolvedInput: <String, dynamic>{'change_request': 'Fix it'},
+          ),
+        };
+
+    await harness.controller.selectAutomationRun('run_1');
+
+    expect(
+      harness.controller.selectedAutomationOperationRunSnapshot?.operationId,
+      'setup_1',
+    );
+    expect(
+      harness
+          .controller
+          .selectedAutomationOperationRunSnapshot
+          ?.resolvedInput['change_request'],
+      'Fix it',
+    );
+  });
+
+  testWidgets('shows Operation preview details in Test mode', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final setup = const AutomationRunSetup(
+      id: 'setup_1',
+      definitionId: 'professional_coding_change',
+      name: 'Agent Awesome Repo',
+      codebaseId: 'agent_awesome',
+      input: <String, dynamic>{'repository_path': '/repo/agent'},
+    );
+    final controller = _readyController()
+      ..automationRunSetups = <AutomationRunSetup>[setup]
+      ..selectedAutomationRunSetupId = setup.id
+      ..selectedAutomationOperationPreview = AutomationOperationPreview(
+        operation: setup,
+        status: 'needs_input',
+        resolvedInput: const <String, dynamic>{
+          'repository_path': '/repo/agent',
+          'remote': 'origin',
+        },
+        missingSetup: const <String>['change_request'],
+        policyDecision: const AutomationOperationPolicyDecision(
+          status: 'allowed',
+        ),
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Operations').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Test'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('TEST RUN'), findsOneWidget);
+    expect(find.text('Status: Needs Setup'), findsOneWidget);
+    expect(find.text('Needs Setup: Change Request'), findsOneWidget);
+    expect(find.text('Repository Path: /repo/agent'), findsOneWidget);
+    expect(find.text('Remote: origin'), findsOneWidget);
+  });
+
+  testWidgets('shows distinct saved Operation detail modes', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const setup = AutomationRunSetup(
+      id: 'setup_1',
+      definitionId: 'professional_coding_change',
+      name: 'Agent Awesome Repo',
+      codebaseId: 'agent_awesome',
+      runtimeTargetId: 'local',
+      input: <String, dynamic>{'repository_path': '/repo/agent'},
+      policy: <String, dynamic>{
+        'source_control': 'open_pr_only',
+        'destructive_action': 'deny',
+        'allowed_codebases': <String>['agent_awesome'],
+        'allowed_targets': <String>['local'],
+      },
+      schedule: <String, dynamic>{'enabled': true, 'cron': '0 9 * * *'},
+    );
+    final controller = _readyController()
+      ..automationDefinitions = const <AutomationDefinition>[
+        AutomationDefinition(
+          id: 'professional_coding_change',
+          kind: automationWorkflowKind,
+          name: 'Professional Coding Change',
+          hash: 'sha256:professional',
+        ),
+      ]
+      ..automationRunSetups = const <AutomationRunSetup>[setup]
+      ..selectedAutomationRunSetupId = setup.id
+      ..automationCodebases = const <AutomationCodebase>[
+        AutomationCodebase(
+          id: 'agent_awesome',
+          name: 'Agent Awesome',
+          repositoryPath: '/repo/agent',
+        ),
+      ]
+      ..automationRuntimeTargets = const <AutomationRuntimeTarget>[
+        AutomationRuntimeTarget(
+          id: 'local',
+          name: 'This computer',
+          kind: 'local',
+          status: 'healthy',
+        ),
+      ]
+      ..automationRuns = const <AutomationRun>[
+        AutomationRun(
+          id: 'run_1',
+          definitionId: 'professional_coding_change',
+          kind: automationWorkflowKind,
+          status: 'completed',
+          state: 'done',
+          output: <String, dynamic>{
+            'pull_request_url': 'https://github.com/acme/agent/pull/7',
+          },
+        ),
+      ]
+      ..selectedAutomationRunId = 'run_1'
+      ..selectedAutomationOperationRunSnapshot =
+          const AutomationOperationRunSnapshot(
+            runId: 'run_1',
+            operationId: 'setup_1',
+            operationVersion: 3,
+            workflowId: 'professional_coding_change',
+            resolvedInput: <String, dynamic>{'repository_path': '/repo/agent'},
+            target: <String, dynamic>{'runtime_target_id': 'local'},
+            policy: <String, dynamic>{'source_control': 'open_pr_only'},
+            secretRefs: <Map<String, dynamic>>[
+              <String, dynamic>{
+                'name': 'github_token',
+                'ref': 'secret://github',
+              },
+            ],
+          );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Operations').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Setup'));
+    await tester.pumpAndSettle();
+    expect(find.text('Run on: This computer'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Inputs'));
+    await tester.pumpAndSettle();
+    expect(find.text('Repository Path: /repo/agent'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Targets'));
+    await tester.pumpAndSettle();
+    expect(find.text('Allowed targets: This computer'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Schedule'));
+    await tester.pumpAndSettle();
+    expect(find.text('Schedule: Daily at 09:00'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Safety'));
+    await tester.pumpAndSettle();
+    expect(find.text('Source control: Open PR only'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Runs').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Runs: 1'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Artifacts'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pull request'), findsOneWidget);
+    expect(find.text('https://github.com/acme/agent/pull/7'), findsOneWidget);
   });
 
   testWidgets('shows process-state workflow lifecycle in Builder', (
@@ -2161,7 +2711,7 @@ void main() {
     expect(find.text('System check'), findsOneWidget);
     expect(find.textContaining('gemma-4-E2B-it.litertlm'), findsOneWidget);
     expect(find.textContaining('Apache-2.0'), findsOneWidget);
-    expect(find.text('View source'), findsOneWidget);
+    expect(find.text('View source'), findsWidgets);
     expect(find.text('Learn more'), findsNothing);
     expect(find.text('Download and continue'), findsOneWidget);
     expect(controller.gettingStartedCompleted, isFalse);
@@ -3498,6 +4048,72 @@ AgentAwesomeAppController _readyController({AgentFileImporter? fileImporter}) {
   return controller;
 }
 
+/// Returns a workflow definition with schema-backed run inputs for UI tests.
+AutomationDefinition _professionalCodingDefinitionForRunTest() {
+  return const AutomationDefinition(
+    id: 'professional_coding_change',
+    kind: automationWorkflowKind,
+    name: 'Professional Coding Change',
+    hash: 'sha256:professional',
+    body: <String, dynamic>{
+      'authoring': <String, Object>{
+        'input_defaults': <String, Object>{
+          'repository_path': r'${app.workspace_root}',
+        },
+        'run_setup': <String, Object>{
+          'setup_fields': <Object>[
+            'repository_path',
+            'go_module_path',
+            'binary_package',
+          ],
+          'run_fields': <Object>['change_request'],
+        },
+      },
+      'states': <Object>[
+        <String, Object>{
+          'id': 'intake',
+          'on_entry': <Object>[
+            <String, Object>{
+              'id': 'normalized_input',
+              'uses': 'data.defaults',
+              'with': <String, Object>{
+                'input': r'${workflow_input}',
+                'defaults': <String, Object>{
+                  'remote': 'origin',
+                  'branch_summary': r'${workflow_input.change_request}',
+                  'pull_request_draft': false,
+                },
+              },
+            },
+            <String, Object>{
+              'id': 'assert_input',
+              'uses': 'data.assert',
+              'with': <String, Object>{
+                'mode': 'schema',
+                'schema': <String, Object>{
+                  'type': 'object',
+                  'required': <Object>[
+                    'repository_path',
+                    'change_request',
+                    'remote',
+                    'pull_request_draft',
+                  ],
+                  'properties': <String, Object>{
+                    'repository_path': <String, Object>{'type': 'string'},
+                    'change_request': <String, Object>{'type': 'string'},
+                    'remote': <String, Object>{'type': 'string'},
+                    'pull_request_draft': <String, Object>{'type': 'boolean'},
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    },
+  );
+}
+
 /// Creates a ready app controller with an injectable automation client.
 _CapturingAutomationHarness _readyCapturingController() {
   final profile = _managedTestProfile();
@@ -3645,17 +4261,83 @@ class _CapturingAutomationsClient extends AutomationsClient {
   /// Editable draft list returned by [listDrafts].
   List<AutomationDraft> drafts = const <AutomationDraft>[];
 
+  /// Published definition list returned by [listDefinitions].
+  List<AutomationDefinition> definitions = const <AutomationDefinition>[];
+
+  /// Run list returned by [listRuns].
+  List<AutomationRun> runs = const <AutomationRun>[];
+
+  /// Saved Operation list returned by [listRunSetups].
+  List<AutomationRunSetup> runSetups = const <AutomationRunSetup>[];
+
+  /// Capability list returned by [listCapabilities].
+  List<AutomationCapability> capabilities = const <AutomationCapability>[];
+
+  /// Computer or Server targets returned by [listRuntimeTargets].
+  List<AutomationRuntimeTarget> runtimeTargets =
+      const <AutomationRuntimeTarget>[];
+
+  /// Health metadata keyed by target id.
+  Map<String, AutomationTargetHealth> targetHealthById =
+      const <String, AutomationTargetHealth>{};
+
+  /// Log rows keyed by target id.
+  Map<String, List<AutomationTargetLogEntry>> targetLogsById =
+      const <String, List<AutomationTargetLogEntry>>{};
+
+  /// Secret metadata keyed by target id.
+  Map<String, AutomationTargetSecretMetadata> targetSecretsById =
+      const <String, AutomationTargetSecretMetadata>{};
+
   /// Last draft passed to [updateDraft].
   AutomationDraft? savedDraft;
 
+  /// Last setup passed to [createRunSetup].
+  AutomationRunSetup? createdRunSetup;
+
+  /// Last setup passed to [updateRunSetup].
+  AutomationRunSetup? updatedRunSetup;
+
   /// Last kind passed to [createDraft].
   String createdKind = '';
+
+  /// Last definition id passed to [startRun].
+  String startedDefinitionId = '';
+
+  /// Last input payload passed to [startRun].
+  Map<String, dynamic> startedInput = const <String, dynamic>{};
+
+  /// Last reusable setup id passed to [startRunSetup].
+  String startedRunSetupId = '';
+
+  /// Last reusable setup id passed to [previewRunSetup].
+  String previewedRunSetupId = '';
+
+  /// Operation run snapshots keyed by run id.
+  Map<String, AutomationOperationRunSnapshot> snapshotsByRunId =
+      const <String, AutomationOperationRunSnapshot>{};
 
   /// Replaces the in-memory draft list.
   void seedDrafts(List<AutomationDraft> value) {
     drafts = List<AutomationDraft>.of(value);
     savedDraft = null;
     createdKind = '';
+  }
+
+  /// Replaces the in-memory published definition list.
+  void seedDefinitions(List<AutomationDefinition> value) {
+    definitions = List<AutomationDefinition>.of(value);
+    startedDefinitionId = '';
+    startedInput = const <String, dynamic>{};
+  }
+
+  /// Replaces the in-memory Operation list.
+  void seedRunSetups(List<AutomationRunSetup> value) {
+    runSetups = List<AutomationRunSetup>.of(value);
+    createdRunSetup = null;
+    updatedRunSetup = null;
+    startedRunSetupId = '';
+    startedInput = const <String, dynamic>{};
   }
 
   @override
@@ -3670,7 +4352,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
 
   @override
   Future<List<AutomationDefinition>> listDefinitions() async {
-    return const <AutomationDefinition>[];
+    return definitions;
   }
 
   @override
@@ -3679,17 +4361,101 @@ class _CapturingAutomationsClient extends AutomationsClient {
   }
 
   @override
+  Future<List<AutomationCapability>> listCapabilities({
+    String kind = '',
+    bool? usableInChat,
+    bool? usableInWorkflows,
+  }) async {
+    return capabilities.where((capability) {
+      if (kind.trim().isNotEmpty && capability.kind != kind.trim()) {
+        return false;
+      }
+      if (usableInChat != null && capability.usableInChat != usableInChat) {
+        return false;
+      }
+      if (usableInWorkflows != null &&
+          capability.usableInWorkflows != usableInWorkflows) {
+        return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  @override
+  Future<List<AutomationRuntimeTarget>> listRuntimeTargets() async {
+    return runtimeTargets;
+  }
+
+  @override
+  Future<AutomationTargetHealth> targetHealth(String targetId) async {
+    final recorded = targetHealthById[targetId];
+    if (recorded != null) {
+      return recorded;
+    }
+    AutomationRuntimeTarget? target;
+    for (final candidate in runtimeTargets) {
+      if (candidate.id == targetId) {
+        target = candidate;
+        break;
+      }
+    }
+    return AutomationTargetHealth(
+      targetId: targetId,
+      status: target?.status ?? 'unknown',
+      version: target?.version ?? '',
+      os: target?.os ?? '',
+      hostname: target?.hostname ?? '',
+      currentRunCount: target?.currentRunCount ?? 0,
+    );
+  }
+
+  @override
+  Future<List<AutomationTargetLogEntry>> targetLogs(String targetId) async {
+    return targetLogsById[targetId] ?? const <AutomationTargetLogEntry>[];
+  }
+
+  @override
+  Future<AutomationTargetSecretMetadata> targetSecrets(String targetId) async {
+    var count = 0;
+    for (final target in runtimeTargets) {
+      if (target.id == targetId) {
+        count = target.secretRefCount;
+        break;
+      }
+    }
+    return targetSecretsById[targetId] ??
+        AutomationTargetSecretMetadata(targetId: targetId, count: count);
+  }
+
+  @override
   Future<List<AutomationRun>> listRuns({
     String status = '',
     String definitionId = '',
     int limit = 100,
   }) async {
-    return const <AutomationRun>[];
+    return runs;
+  }
+
+  @override
+  Future<List<AutomationRunSetup>> listRunSetups({
+    String definitionId = '',
+  }) async {
+    if (definitionId.trim().isEmpty) {
+      return runSetups;
+    }
+    return runSetups
+        .where((setup) => setup.definitionId == definitionId)
+        .toList();
   }
 
   @override
   Future<List<AutomationPendingItem>> inbox() async {
     return const <AutomationPendingItem>[];
+  }
+
+  @override
+  Future<List<AutomationEvent>> history(String runId) async {
+    return const <AutomationEvent>[];
   }
 
   @override
@@ -3729,6 +4495,133 @@ class _CapturingAutomationsClient extends AutomationsClient {
       drafts = <AutomationDraft>[...drafts, draft];
     }
     return draft;
+  }
+
+  @override
+  Future<AutomationRun> startRun(
+    String definitionId, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
+    startedDefinitionId = definitionId;
+    startedInput = Map<String, dynamic>.from(input);
+    final run = AutomationRun(
+      id: 'run_${runs.length + 1}',
+      definitionId: definitionId,
+      kind: automationWorkflowKind,
+      status: 'running',
+      state: 'running',
+    );
+    runs = <AutomationRun>[run, ...runs];
+    return run;
+  }
+
+  @override
+  Future<AutomationRunSetup> createRunSetup({
+    required String definitionId,
+    required String name,
+    String description = '',
+    String codebaseId = '',
+    String runtimeTargetId = '',
+    String agentProfileId = '',
+    Map<String, dynamic> input = const <String, dynamic>{},
+    Map<String, dynamic> policy = const <String, dynamic>{},
+    Map<String, dynamic> schedule = const <String, dynamic>{},
+  }) async {
+    final setup = AutomationRunSetup(
+      id: 'setup_${runSetups.length + 1}',
+      definitionId: definitionId,
+      name: name,
+      description: description,
+      codebaseId: codebaseId,
+      runtimeTargetId: runtimeTargetId,
+      agentProfileId: agentProfileId,
+      input: Map<String, dynamic>.from(input),
+      policy: Map<String, dynamic>.from(policy),
+      schedule: Map<String, dynamic>.from(schedule),
+    );
+    createdRunSetup = setup;
+    runSetups = <AutomationRunSetup>[setup, ...runSetups];
+    return setup;
+  }
+
+  @override
+  Future<AutomationRunSetup> updateRunSetup(AutomationRunSetup setup) async {
+    updatedRunSetup = setup;
+    runSetups = <AutomationRunSetup>[
+      for (final existing in runSetups)
+        if (existing.id == setup.id) setup else existing,
+    ];
+    if (!runSetups.any((existing) => existing.id == setup.id)) {
+      runSetups = <AutomationRunSetup>[setup, ...runSetups];
+    }
+    return setup;
+  }
+
+  @override
+  Future<AutomationOperationPreview> previewRunSetup(
+    String setupId, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
+    previewedRunSetupId = setupId;
+    final setup = runSetups.firstWhere(
+      (candidate) => candidate.id == setupId,
+      orElse: () => AutomationRunSetup(
+        id: setupId,
+        definitionId: 'unknown',
+        name: 'Unknown',
+      ),
+    );
+    final resolved = <String, dynamic>{...setup.input, ...input};
+    final missing = <String>[
+      if ('${resolved['change_request'] ?? ''}'.trim().isEmpty)
+        'change_request',
+    ];
+    return AutomationOperationPreview(
+      operation: setup,
+      status: missing.isEmpty ? 'ready' : 'needs_input',
+      resolvedInput: resolved,
+      missingSetup: missing,
+      policyDecision: const AutomationOperationPolicyDecision(
+        status: 'allowed',
+      ),
+    );
+  }
+
+  @override
+  Future<AutomationRun> startRunSetup(
+    String setupId, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
+    startedRunSetupId = setupId;
+    startedInput = Map<String, dynamic>.from(input);
+    final setup = runSetups.firstWhere(
+      (candidate) => candidate.id == setupId,
+      orElse: () => AutomationRunSetup(
+        id: setupId,
+        definitionId: 'unknown',
+        name: 'Unknown',
+      ),
+    );
+    final run = AutomationRun(
+      id: 'run_${runs.length + 1}',
+      definitionId: setup.definitionId,
+      kind: automationWorkflowKind,
+      status: 'running',
+      state: 'running',
+    );
+    runs = <AutomationRun>[run, ...runs];
+    return run;
+  }
+
+  @override
+  Future<AutomationOperationRunSnapshot> operationRunSnapshot(
+    String runId,
+  ) async {
+    final snapshot = snapshotsByRunId[runId];
+    if (snapshot == null) {
+      throw StateError('snapshot not found');
+    }
+    return snapshot;
   }
 }
 

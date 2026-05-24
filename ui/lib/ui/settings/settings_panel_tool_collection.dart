@@ -135,7 +135,7 @@ class _SettingsToolSurfaceCommandPanelState
       areaActionsBuilder: (context, area) => _buildAreaActions(),
       detailActionsBuilder: (context, area, mode) => _buildDetailActions(),
       filterHint: 'Filter files...',
-      split: const PanelSplit(left: 0.25, min: 0.16, max: 0.5),
+      split: const PanelSplit(left: 0.30, min: 0.16, max: 0.5),
     );
   }
 

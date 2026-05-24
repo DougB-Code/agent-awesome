@@ -80,6 +80,15 @@ func (s *Store) migrate(ctx context.Context) error {
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
+		`CREATE TABLE IF NOT EXISTS workflow_run_setups (
+			id TEXT PRIMARY KEY,
+			definition_id TEXT NOT NULL,
+			name TEXT NOT NULL,
+			description TEXT NOT NULL,
+			input_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
 		`CREATE TABLE IF NOT EXISTS workflow_events (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			run_id TEXT NOT NULL,

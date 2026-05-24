@@ -21,20 +21,50 @@ const String _automationPanelWorkflows = 'workflows';
 const String _automationPanelTasks = 'tasks';
 const String _automationOperationsAreaInbox = 'operations_inbox';
 const String _automationOperationsAreaPublished = 'operations_published';
+const String _automationOperationsAreaSetups = 'operations_saved';
 const String _automationOperationsAreaRuns = 'operations_runs';
+const String _automationOperationsAreaCodebases = 'operations_codebases';
+const String _automationOperationsAreaTargets = 'operations_targets';
+const String _automationOperationsAreaSchedules = 'operations_schedules';
+const String _automationOperationsAreaArtifacts = 'operations_artifacts';
 const String _automationWorkflowAreaDrafts = 'workflow_drafts';
 const String _automationWorkflowAreaActions = 'workflow_actions';
+const String _automationWorkflowAreaCapabilities = 'workflow_capabilities';
 const String _automationTaskAreaDrafts = 'task_drafts';
 const String _automationTaskAreaNodes = 'task_nodes';
 
 const String _automationDetailOverview = 'overview';
+const String _automationDetailSetup = 'setup';
+const String _automationDetailInputs = 'inputs';
+const String _automationDetailTargets = 'targets';
+const String _automationDetailSchedule = 'schedule';
 const String _automationDetailBuilder = 'builder';
 const String _automationDetailInspect = 'inspect';
 const String _automationDetailSteps = 'steps';
 const String _automationDetailMap = 'map';
 const String _automationDetailHistory = 'history';
 const String _automationDetailSafety = 'safety';
+const String _automationDetailTest = 'test';
+const String _automationTargetDetailCapabilities = 'target_capabilities';
+const String _automationTargetDetailSecrets = 'target_secrets';
+const String _automationTargetDetailOperations = 'target_operations';
+const String _automationTargetDetailLogs = 'target_logs';
+const String _automationTargetDetailSettings = 'target_settings';
+const String _automationTargetDetailUpdates = 'target_updates';
 const String _stateMachineBodyKind = 'state_machine';
+const String _operationSafetyOpenPROnly = 'open_pr_only';
+
+const List<String> _operationSourceControlTools = <String>[
+  'sourcecontrol.prepare_worktree',
+  'sourcecontrol.status',
+  'sourcecontrol.commit',
+  'sourcecontrol.push',
+  'sourcecontrol.open_pull_request',
+];
+
+const Map<String, String> _operationSafetyLabels = <String, String>{
+  _operationSafetyOpenPROnly: 'Open PR only',
+};
 
 const Set<String> _taskGraphActionNames = <String>{
   'mcp.call',
@@ -69,8 +99,9 @@ class AutomationOperationsCommandPanel extends StatelessWidget {
       title: 'Operations',
       detailTitle: 'Operations',
       icon: Icons.monitor_heart_outlined,
-      filterHint: 'Filter runs and definitions...',
+      filterHint: 'Filter operations and runs...',
       detailModes: _detailModesForPanel(_automationPanelOperations),
+      split: const PanelSplit(left: 0.30, min: 0.22, max: 0.56),
       onAreaChanged: onAreaChanged,
     );
   }
@@ -206,11 +237,16 @@ class _AutomationFocusedCommandPanelState
     return switch (widget.panelId) {
       _automationPanelOperations =>
         widget.controller.automationDefinitions.isNotEmpty ||
+            widget.controller.automationRunSetups.isNotEmpty ||
             widget.controller.automationRuns.isNotEmpty ||
+            widget.controller.automationCodebases.isNotEmpty ||
+            widget.controller.automationRuntimeTargets.isNotEmpty ||
             widget.controller.automationInbox.isNotEmpty,
-      _automationPanelWorkflows => widget.controller.automationDrafts.any(
-        (draft) => _isWorkflowFileKind(draft.kind),
-      ),
+      _automationPanelWorkflows =>
+        widget.controller.automationDrafts.any(
+              (draft) => _isWorkflowFileKind(draft.kind),
+            ) ||
+            widget.controller.automationCapabilities.isNotEmpty,
       _automationPanelTasks => widget.controller.automationDrafts.any(
         (draft) => draft.kind == automationTaskGraphKind,
       ),
@@ -366,9 +402,54 @@ class _AutomationFocusedCommandPanelState
         ),
         SwitcherPanelArea(
           id: _automationOperationsAreaPublished,
-          title: 'Published',
-          icon: Icons.inventory_2_outlined,
+          title: 'Files',
+          icon: Icons.folder_outlined,
           builder: (query) => _AutomationPublishedContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationOperationsAreaSetups,
+          title: 'Operations',
+          icon: Icons.playlist_play_outlined,
+          builder: (query) => _AutomationRunSetupsContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationOperationsAreaCodebases,
+          title: 'Codebases',
+          icon: Icons.account_tree_outlined,
+          builder: (query) => _AutomationCodebasesContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationOperationsAreaTargets,
+          title: 'Computers',
+          icon: Icons.devices_other_outlined,
+          builder: (query) => _AutomationRuntimeTargetsContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationOperationsAreaSchedules,
+          title: 'Schedules',
+          icon: Icons.event_outlined,
+          builder: (query) => _AutomationSchedulesContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationOperationsAreaArtifacts,
+          title: 'Artifacts',
+          icon: Icons.inventory_2_outlined,
+          builder: (query) => _AutomationArtifactsContent(
             controller: widget.controller,
             query: query,
           ),
@@ -402,6 +483,15 @@ class _AutomationFocusedCommandPanelState
           title: 'Actions',
           icon: Icons.extension_outlined,
           builder: (query) => _AutomationWorkflowStatePaletteContent(
+            controller: widget.controller,
+            query: query,
+          ),
+        ),
+        SwitcherPanelArea(
+          id: _automationWorkflowAreaCapabilities,
+          title: 'Capabilities',
+          icon: Icons.science_outlined,
+          builder: (query) => _AutomationCapabilitiesContent(
             controller: widget.controller,
             query: query,
           ),
@@ -447,6 +537,69 @@ class _AutomationFocusedCommandPanelState
 
   /// Returns area-specific right work modes where supporting areas need less UI.
   List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
+    if (area.id == _automationWorkflowAreaCapabilities) {
+      return const <CommandPanelDetailMode>[
+        CommandPanelDetailMode(
+          id: _automationDetailOverview,
+          label: 'Overview',
+          icon: Icons.info_outline,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailSafety,
+          label: 'Safety',
+          icon: Icons.verified_user_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailTest,
+          label: 'Test',
+          icon: Icons.play_circle_outline,
+        ),
+      ];
+    }
+    if (area.id == _automationOperationsAreaTargets) {
+      return const <CommandPanelDetailMode>[
+        CommandPanelDetailMode(
+          id: _automationDetailOverview,
+          label: 'Overview',
+          icon: Icons.info_outline,
+        ),
+        CommandPanelDetailMode(
+          id: _automationTargetDetailCapabilities,
+          label: 'Capabilities',
+          icon: Icons.hub_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationTargetDetailSecrets,
+          label: 'Secrets',
+          icon: Icons.key_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationTargetDetailOperations,
+          label: 'Operations',
+          icon: Icons.playlist_play_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationTargetDetailLogs,
+          label: 'Logs',
+          icon: Icons.article_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationTargetDetailSettings,
+          label: 'Settings',
+          icon: Icons.tune_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationTargetDetailUpdates,
+          label: 'Updates',
+          icon: Icons.system_update_alt_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailTest,
+          label: 'Test',
+          icon: Icons.play_circle_outline,
+        ),
+      ];
+    }
     return widget.detailModes;
   }
 
@@ -456,6 +609,10 @@ class _AutomationFocusedCommandPanelState
       _automationWorkflowAreaDrafts ||
       _automationTaskAreaDrafts => 'Filter files...',
       _automationWorkflowAreaActions => 'Filter actions...',
+      _automationWorkflowAreaCapabilities => 'Filter capabilities...',
+      _automationOperationsAreaTargets => 'Filter computers...',
+      _automationOperationsAreaSchedules => 'Filter schedules...',
+      _automationOperationsAreaArtifacts => 'Filter artifacts...',
       _automationTaskAreaNodes => 'Filter nodes...',
       _ => widget.filterHint,
     };
@@ -475,8 +632,10 @@ class _AutomationFocusedCommandPanelState
 
   /// Returns an area-aware split so builder palettes do not crowd the canvas.
   PanelSplit _splitForArea(List<SwitcherPanelArea> areas) {
-    if (widget.panelId == _automationPanelWorkflows ||
-        widget.panelId == _automationPanelTasks) {
+    if (widget.panelId == _automationPanelWorkflows) {
+      return const PanelSplit(left: 0.30, min: 0.16, max: 0.42);
+    }
+    if (widget.panelId == _automationPanelTasks) {
       return const PanelSplit(left: 0.24, min: 0.16, max: 0.42);
     }
     return widget.split;
@@ -536,6 +695,7 @@ class _AutomationPanelActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (areaId == _automationWorkflowAreaActions ||
+        areaId == _automationWorkflowAreaCapabilities ||
         areaId == _automationTaskAreaNodes) {
       return const SizedBox.shrink();
     }
@@ -579,6 +739,9 @@ class _AutomationDetailActions extends StatelessWidget {
   Widget build(BuildContext context) {
     if (panelId == _automationPanelOperations) {
       return _OperationsSelectedActions(controller: controller, areaId: areaId);
+    }
+    if (areaId == _automationWorkflowAreaCapabilities) {
+      return const SizedBox.shrink();
     }
     final kind = _automationDraftKindForArea(areaId);
     if (kind != null ||
@@ -662,18 +825,1069 @@ class _OperationsSelectedActions extends StatelessWidget {
     }
     if (areaId == _automationOperationsAreaPublished) {
       final definition = controller.selectedAutomationDefinition;
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          PanelIconButton(
+            key: const ValueKey<String>('automation-create-run-setup-button'),
+            icon: Icons.tune_outlined,
+            tooltip: 'Create Operation',
+            onPressed: controller.automationsBusy || definition == null
+                ? null
+                : () => unawaited(
+                    _showCreateRunSetupDialog(context, controller, definition),
+                  ),
+          ),
+          const SizedBox(width: 8),
+          PanelIconButton(
+            key: const ValueKey<String>('automation-start-run-button'),
+            icon: Icons.play_arrow,
+            tooltip: 'Start selected automation',
+            onPressed: controller.automationsBusy || definition == null
+                ? null
+                : () => unawaited(
+                    _showStartAutomationRunDialog(
+                      context,
+                      controller,
+                      definition,
+                    ),
+                  ),
+          ),
+        ],
+      );
+    }
+    if (areaId == _automationOperationsAreaSetups) {
+      final setup = controller.selectedAutomationRunSetup;
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          PanelIconButton(
+            key: const ValueKey<String>('automation-preview-run-setup-button'),
+            icon: Icons.science_outlined,
+            tooltip: 'Test Run',
+            onPressed: controller.automationsBusy || setup == null
+                ? null
+                : () => unawaited(
+                    controller.previewAutomationRunSetupFromUi(setup),
+                  ),
+          ),
+          const SizedBox(width: 8),
+          PanelIconButton(
+            key: const ValueKey<String>('automation-start-run-setup-button'),
+            icon: Icons.play_arrow,
+            tooltip: 'Run selected Operation',
+            onPressed: controller.automationsBusy || setup == null
+                ? null
+                : () => unawaited(
+                    _showStartAutomationRunSetupDialog(
+                      context,
+                      controller,
+                      setup,
+                    ),
+                  ),
+          ),
+        ],
+      );
+    }
+    if (areaId == _automationOperationsAreaCodebases) {
       return PanelIconButton(
-        icon: Icons.play_arrow,
-        tooltip: 'Start selected automation',
-        onPressed: controller.automationsBusy || definition == null
+        key: const ValueKey<String>('automation-create-codebase-button'),
+        icon: Icons.add,
+        tooltip: 'Create Codebase',
+        onPressed: controller.automationsBusy
             ? null
-            : () => unawaited(
-                controller.startAutomationDefinitionFromUi(definition),
-              ),
+            : () => unawaited(_showCreateCodebaseDialog(context, controller)),
       );
     }
     return const SizedBox.shrink();
   }
+}
+
+/// _showCreateCodebaseDialog collects typed fields for a new codebase.
+Future<void> _showCreateCodebaseDialog(
+  BuildContext context,
+  AgentAwesomeAppController controller,
+) async {
+  final codebase = await showDialog<AutomationCodebase>(
+    context: context,
+    builder: (context) => const _CreateCodebaseDialog(),
+  );
+  if (codebase == null) {
+    return;
+  }
+  await controller.upsertAutomationCodebaseFromUi(codebase);
+}
+
+class _CreateCodebaseDialog extends StatefulWidget {
+  /// Creates a typed codebase creation dialog.
+  const _CreateCodebaseDialog();
+
+  @override
+  State<_CreateCodebaseDialog> createState() => _CreateCodebaseDialogState();
+}
+
+class _CreateCodebaseDialogState extends State<_CreateCodebaseDialog> {
+  final TextEditingController _name = TextEditingController();
+  final TextEditingController _files = TextEditingController();
+  final TextEditingController _aliases = TextEditingController();
+  final TextEditingController _defaultRemote = TextEditingController(
+    text: 'origin',
+  );
+  final TextEditingController _defaultBranch = TextEditingController(
+    text: 'main',
+  );
+  final TextEditingController _provider = TextEditingController(text: 'local');
+  final TextEditingController _providerRepository = TextEditingController();
+  String _error = '';
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _files.dispose();
+    _aliases.dispose();
+    _defaultRemote.dispose();
+    _defaultBranch.dispose();
+    _provider.dispose();
+    _providerRepository.dispose();
+    super.dispose();
+  }
+
+  /// Builds the codebase creation dialog.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return AlertDialog(
+      title: const Text('Create Codebase'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _AutomationTextField(
+                key: const ValueKey<String>('automation-codebase-name'),
+                controller: _name,
+                label: 'Name *',
+              ),
+              const SizedBox(height: 12),
+              _AutomationTextField(
+                key: const ValueKey<String>('automation-codebase-files'),
+                controller: _files,
+                label: 'Files *',
+              ),
+              const SizedBox(height: 12),
+              _AutomationTextField(controller: _aliases, label: 'Aliases'),
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _AutomationTextField(
+                      controller: _defaultRemote,
+                      label: 'Default Remote',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _AutomationTextField(
+                      controller: _defaultBranch,
+                      label: 'Default Branch',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: _AutomationTextField(
+                      controller: _provider,
+                      label: 'Provider',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _AutomationTextField(
+                      controller: _providerRepository,
+                      label: 'Repository',
+                    ),
+                  ),
+                ],
+              ),
+              if (_error.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _error,
+                    style: TextStyle(color: colors.coral, fontSize: 12),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey<String>('automation-codebase-create-button'),
+          onPressed: _submit,
+          child: const Text('Create'),
+        ),
+      ],
+    );
+  }
+
+  /// Validates typed input and returns a codebase payload.
+  void _submit() {
+    final name = _name.text.trim();
+    final files = _files.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Name is required.');
+      return;
+    }
+    if (files.isEmpty) {
+      setState(() => _error = 'Files is required.');
+      return;
+    }
+    Navigator.of(context).pop(
+      AutomationCodebase(
+        id: _stableCodebaseId(name),
+        name: name,
+        aliases: _splitCodebaseAliases(_aliases.text),
+        repositoryPath: files,
+        defaultRemote: _defaultRemote.text.trim(),
+        defaultBranch: _defaultBranch.text.trim(),
+        provider: _provider.text.trim(),
+        providerRepository: _providerRepository.text.trim(),
+      ),
+    );
+  }
+}
+
+/// _showStartAutomationRunDialog collects typed workflow inputs before a run starts.
+Future<void> _showStartAutomationRunDialog(
+  BuildContext context,
+  AgentAwesomeAppController controller,
+  AutomationDefinition definition,
+) async {
+  final seedInput = _workflowRunAuthoringDefaults(controller, definition);
+  final input = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) => _StartAutomationRunDialog(
+      title: 'Run ${definition.name}',
+      definition: definition,
+      seedInput: seedInput,
+      includeSeedInput: true,
+      onlyMissingRequired: true,
+    ),
+  );
+  if (input == null) {
+    return;
+  }
+  await controller.startAutomationDefinitionFromUi(definition, input: input);
+}
+
+/// _showStartAutomationRunSetupDialog collects run-specific Operation input.
+Future<void> _showStartAutomationRunSetupDialog(
+  BuildContext context,
+  AgentAwesomeAppController controller,
+  AutomationRunSetup setup,
+) async {
+  final definition = _definitionForId(
+    controller.automationDefinitions,
+    setup.definitionId,
+  );
+  if (definition == null) {
+    return;
+  }
+  final seedInput = <String, dynamic>{
+    ..._workflowRunAuthoringDefaults(controller, definition),
+    ...setup.input,
+  };
+  final runFields = setup.definitionId == 'professional_coding_change'
+      ? <String>{'change_request'}
+      : _workflowRunSetupRunFields(definition.body);
+  final input = await showDialog<Map<String, dynamic>>(
+    context: context,
+    builder: (context) => _StartAutomationRunDialog(
+      title: 'Run ${setup.name}',
+      definition: definition,
+      seedInput: seedInput,
+      includeSeedInput: false,
+      onlyMissingRequired: true,
+      includedNames: runFields.isEmpty ? null : runFields,
+    ),
+  );
+  if (input == null) {
+    return;
+  }
+  await controller.startAutomationRunSetupFromUi(setup, input: input);
+}
+
+/// _showCreateRunSetupDialog stores a saved Operation for later runs.
+Future<void> _showCreateRunSetupDialog(
+  BuildContext context,
+  AgentAwesomeAppController controller,
+  AutomationDefinition definition,
+) async {
+  final result = await showDialog<_RunSetupDialogResult>(
+    context: context,
+    builder: (context) => _CreateRunSetupDialog(
+      definition: definition,
+      seedInput: _workflowRunAuthoringDefaults(controller, definition),
+      codebases: controller.automationCodebases,
+      targets: controller.automationRuntimeTargets,
+      selectedCodebaseId: controller.selectedAutomationCodebase?.id ?? '',
+      selectedTargetId: controller.selectedAutomationRuntimeTarget?.id ?? '',
+    ),
+  );
+  if (result == null) {
+    return;
+  }
+  await controller.createAutomationRunSetupFromUi(
+    definition: definition,
+    name: result.name,
+    description: result.description,
+    codebaseId: result.codebaseId,
+    runtimeTargetId: result.runtimeTargetId,
+    input: result.input,
+    policy: _operationPolicyFromDialogResult(result),
+  );
+}
+
+/// _StartAutomationRunDialog renders generated workflow-run input controls.
+class _StartAutomationRunDialog extends StatefulWidget {
+  const _StartAutomationRunDialog({
+    required this.title,
+    required this.definition,
+    required this.seedInput,
+    required this.includeSeedInput,
+    this.onlyMissingRequired = false,
+    this.includedNames,
+  });
+
+  final String title;
+  final AutomationDefinition definition;
+  final Map<String, dynamic> seedInput;
+  final bool includeSeedInput;
+  final bool onlyMissingRequired;
+  final Set<String>? includedNames;
+
+  @override
+  State<_StartAutomationRunDialog> createState() =>
+      _StartAutomationRunDialogState();
+}
+
+/// _StartAutomationRunDialogState owns generated workflow-run field state.
+class _StartAutomationRunDialogState extends State<_StartAutomationRunDialog> {
+  late final List<_WorkflowRunInputField> _fields;
+  final Map<String, TextEditingController> _textControllers =
+      <String, TextEditingController>{};
+  final Map<String, bool> _booleanValues = <String, bool>{};
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _fields = _workflowRunInputFields(
+      widget.definition,
+      seedInput: widget.seedInput,
+      onlyMissingRequired: widget.onlyMissingRequired,
+      includedNames: widget.includedNames,
+    );
+    for (final field in _fields) {
+      if (field.type == 'boolean') {
+        _booleanValues[field.name] = _initialBooleanValue(field.defaultValue);
+      } else {
+        _textControllers[field.name] = TextEditingController(
+          text: _initialFieldText(field.defaultValue),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _textControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Builds the run input dialog.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 560,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 520),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (final field in _fields) ...<Widget>[
+                  _WorkflowRunInputFieldControl(
+                    field: field,
+                    textController: _textControllers[field.name],
+                    booleanValue: _booleanValues[field.name] ?? false,
+                    onBooleanChanged: (value) =>
+                        setState(() => _booleanValues[field.name] = value),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (_error.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _error,
+                      style: TextStyle(color: colors.coral, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey<String>('automation-run-submit-button'),
+          onPressed: _submit,
+          child: const Text('Run'),
+        ),
+      ],
+    );
+  }
+
+  /// Validates typed fields and returns a workflow input object to the caller.
+  void _submit() {
+    final input = widget.includeSeedInput
+        ? _workflowRunSeedInput(widget.seedInput)
+        : <String, dynamic>{};
+    final error = _populateWorkflowInputFromFields(
+      fields: _fields,
+      textControllers: _textControllers,
+      booleanValues: _booleanValues,
+      input: input,
+    );
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+    Navigator.of(context).pop(input);
+  }
+}
+
+/// _RunSetupDialogResult carries one saved Operation created from the UI.
+class _RunSetupDialogResult {
+  const _RunSetupDialogResult({
+    required this.name,
+    required this.description,
+    required this.codebaseId,
+    required this.runtimeTargetId,
+    required this.sourceControlPolicy,
+    required this.input,
+  });
+
+  final String name;
+  final String description;
+  final String codebaseId;
+  final String runtimeTargetId;
+  final String sourceControlPolicy;
+  final Map<String, dynamic> input;
+}
+
+/// _CreateRunSetupDialog renders a typed Operation form for one workflow file.
+class _CreateRunSetupDialog extends StatefulWidget {
+  const _CreateRunSetupDialog({
+    required this.definition,
+    required this.seedInput,
+    required this.codebases,
+    required this.targets,
+    required this.selectedCodebaseId,
+    required this.selectedTargetId,
+  });
+
+  final AutomationDefinition definition;
+  final Map<String, dynamic> seedInput;
+  final List<AutomationCodebase> codebases;
+  final List<AutomationRuntimeTarget> targets;
+  final String selectedCodebaseId;
+  final String selectedTargetId;
+
+  @override
+  State<_CreateRunSetupDialog> createState() => _CreateRunSetupDialogState();
+}
+
+/// _CreateRunSetupDialogState owns Operation field controllers.
+class _CreateRunSetupDialogState extends State<_CreateRunSetupDialog> {
+  late final TextEditingController _nameController;
+  late final List<_WorkflowRunInputField> _fields;
+  final Map<String, TextEditingController> _textControllers =
+      <String, TextEditingController>{};
+  final Map<String, bool> _booleanValues = <String, bool>{};
+  String _codebaseId = '';
+  String _targetId = '';
+  String _sourceControlPolicy = _operationSafetyOpenPROnly;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(
+      text: '${widget.definition.name} Operation',
+    );
+    _codebaseId = _initialCodebaseId(
+      widget.codebases,
+      widget.selectedCodebaseId,
+    );
+    _targetId = _initialTargetId(
+      codebases: widget.codebases,
+      targets: widget.targets,
+      codebaseId: _codebaseId,
+      selectedTargetId: widget.selectedTargetId,
+    );
+    final setupFields = _workflowRunSetupSetupFields(
+      widget.definition.body,
+    ).where((name) => !_isCodebaseBackedInputName(name)).toSet();
+    _fields = _workflowRunInputFields(
+      widget.definition,
+      seedInput: widget.seedInput,
+      includedNames: setupFields,
+      excludedNames: _workflowRunSetupRunFields(widget.definition.body),
+    );
+    for (final field in _fields) {
+      if (field.type == 'boolean') {
+        _booleanValues[field.name] = _initialBooleanValue(field.defaultValue);
+      } else {
+        _textControllers[field.name] = TextEditingController(
+          text: _initialFieldText(field.defaultValue),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    for (final controller in _textControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Builds the saved Operation creation dialog.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final targetOptions = _targetOptionsForCodebase(
+      widget.targets,
+      _codebaseId,
+    );
+    return AlertDialog(
+      title: Text('Create Operation'),
+      content: SizedBox(
+        width: 560,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 560),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _AutomationTextField(
+                  key: const ValueKey<String>('automation-run-setup-name'),
+                  controller: _nameController,
+                  label: 'Operation Name *',
+                ),
+                const SizedBox(height: 12),
+                _AutomationDropdown(
+                  key: const ValueKey<String>('automation-run-setup-codebase'),
+                  label: 'Codebase *',
+                  value: _codebaseId,
+                  values: <String>[
+                    for (final codebase in widget.codebases) codebase.id,
+                  ],
+                  labels: <String, String>{
+                    for (final codebase in widget.codebases)
+                      codebase.id: codebase.name,
+                  },
+                  onChanged: (value) => setState(() {
+                    _codebaseId = value;
+                    _targetId = _initialTargetId(
+                      codebases: widget.codebases,
+                      targets: widget.targets,
+                      codebaseId: _codebaseId,
+                      selectedTargetId: _targetId,
+                    );
+                  }),
+                ),
+                const SizedBox(height: 12),
+                _AutomationDropdown(
+                  key: const ValueKey<String>('automation-run-setup-target'),
+                  label: 'Run on *',
+                  value: _targetId,
+                  values: <String>[
+                    for (final target in targetOptions) target.id,
+                  ],
+                  labels: <String, String>{
+                    for (final target in targetOptions) target.id: target.name,
+                  },
+                  onChanged: (value) => setState(() => _targetId = value),
+                ),
+                const SizedBox(height: 12),
+                _AutomationDropdown(
+                  key: const ValueKey<String>('automation-run-setup-safety'),
+                  label: 'Safety',
+                  value: _sourceControlPolicy,
+                  values: const <String>[_operationSafetyOpenPROnly],
+                  labels: _operationSafetyLabels,
+                  onChanged: (value) =>
+                      setState(() => _sourceControlPolicy = value),
+                ),
+                const SizedBox(height: 12),
+                for (final field in _fields) ...<Widget>[
+                  _WorkflowRunInputFieldControl(
+                    field: field,
+                    textController: _textControllers[field.name],
+                    booleanValue: _booleanValues[field.name] ?? false,
+                    onBooleanChanged: (value) =>
+                        setState(() => _booleanValues[field.name] = value),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (_error.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _error,
+                      style: TextStyle(color: colors.coral, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey<String>('automation-run-setup-submit-button'),
+          onPressed: _submit,
+          child: const Text('Create'),
+        ),
+      ],
+    );
+  }
+
+  /// Validates and returns the saved Operation payload.
+  void _submit() {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Operation Name is required.');
+      return;
+    }
+    if (_operationNeedsCodebase(widget.definition) && _codebaseId.isEmpty) {
+      setState(() => _error = 'Codebase is required.');
+      return;
+    }
+    if (_operationNeedsTarget(widget.definition) && _targetId.isEmpty) {
+      setState(() => _error = 'Run on is required.');
+      return;
+    }
+    final input = <String, dynamic>{};
+    final error = _populateWorkflowInputFromFields(
+      fields: _fields,
+      textControllers: _textControllers,
+      booleanValues: _booleanValues,
+      input: input,
+    );
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+    Navigator.of(context).pop(
+      _RunSetupDialogResult(
+        name: name,
+        description: widget.definition.name,
+        codebaseId: _codebaseId,
+        runtimeTargetId: _targetId,
+        sourceControlPolicy: _sourceControlPolicy,
+        input: input,
+      ),
+    );
+  }
+}
+
+/// _WorkflowRunInputFieldControl renders one workflow-run form field.
+class _WorkflowRunInputFieldControl extends StatelessWidget {
+  const _WorkflowRunInputFieldControl({
+    required this.field,
+    required this.textController,
+    required this.booleanValue,
+    required this.onBooleanChanged,
+  });
+
+  final _WorkflowRunInputField field;
+  final TextEditingController? textController;
+  final bool booleanValue;
+  final ValueChanged<bool> onBooleanChanged;
+
+  /// Builds one typed workflow-run input control.
+  @override
+  Widget build(BuildContext context) {
+    if (field.type == 'boolean') {
+      final colors = context.agentAwesomeColors;
+      return CheckboxListTile(
+        key: ValueKey<String>('automation-run-input-${field.name}'),
+        value: booleanValue,
+        onChanged: (value) => onBooleanChanged(value ?? false),
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
+        title: Text(field.label, style: TextStyle(color: colors.ink)),
+      );
+    }
+    final controller = textController;
+    if (controller == null) {
+      return const SizedBox.shrink();
+    }
+    return _AutomationTextField(
+      key: ValueKey<String>('automation-run-input-${field.name}'),
+      controller: controller,
+      label: field.requiredFromUser ? '${field.label} *' : field.label,
+      minLines: field.maxLines > 1 ? 2 : null,
+      maxLines: field.maxLines,
+      keyboardType: _keyboardTypeForWorkflowRunField(field),
+    );
+  }
+}
+
+/// _WorkflowRunInputField describes one typed workflow-run input.
+class _WorkflowRunInputField {
+  const _WorkflowRunInputField({
+    required this.name,
+    required this.label,
+    required this.type,
+    required this.requiredFromUser,
+    required this.defaultValue,
+  });
+
+  final String name;
+  final String label;
+  final String type;
+  final bool requiredFromUser;
+  final Object? defaultValue;
+
+  /// Maximum visible editor lines for text-backed fields.
+  int get maxLines {
+    final lower = name.toLowerCase();
+    if (lower.contains('request') ||
+        lower.contains('body') ||
+        lower.contains('message') ||
+        lower.contains('description')) {
+      return 4;
+    }
+    return 1;
+  }
+}
+
+/// Returns workflow run fields declared by the definition body.
+List<_WorkflowRunInputField> _workflowRunInputFields(
+  AutomationDefinition definition, {
+  Map<String, dynamic> seedInput = const <String, dynamic>{},
+  bool onlyMissingRequired = false,
+  Set<String>? includedNames,
+  Set<String> excludedNames = const <String>{},
+}) {
+  final schema = _workflowRunInputSchema(definition.body);
+  final properties = _map(schema['properties']);
+  if (properties.isEmpty) {
+    return const <_WorkflowRunInputField>[];
+  }
+  final defaults = _workflowRunDefaults(definition.body);
+  final required = _list(schema['required']).map((item) => '$item').toSet();
+  final orderedNames = <String>[
+    for (final name in _list(schema['required']).map((item) => '$item'))
+      if (properties.containsKey(name)) name,
+    for (final name in properties.keys)
+      if (!required.contains(name)) name,
+  ];
+  return <_WorkflowRunInputField>[
+    for (final name in orderedNames)
+      if (_includeWorkflowRunField(
+        name,
+        defaults: defaults,
+        seedInput: seedInput,
+        required: required,
+        onlyMissingRequired: onlyMissingRequired,
+        includedNames: includedNames,
+        excludedNames: excludedNames,
+      ))
+        _WorkflowRunInputField(
+          name: name,
+          label: _stateMachineDisplayName(name),
+          type: _workflowRunInputType(_map(properties[name])),
+          requiredFromUser: _workflowRunFieldRequiredFromUser(
+            name,
+            defaults: defaults,
+            seedInput: seedInput,
+            required: required,
+          ),
+          defaultValue: seedInput.containsKey(name)
+              ? seedInput[name]
+              : defaults[name],
+        ),
+  ];
+}
+
+/// Reports whether one input field belongs in the generated run form.
+bool _includeWorkflowRunField(
+  String name, {
+  required Map<String, dynamic> defaults,
+  required Map<String, dynamic> seedInput,
+  required Set<String> required,
+  required bool onlyMissingRequired,
+  required Set<String>? includedNames,
+  required Set<String> excludedNames,
+}) {
+  if (excludedNames.contains(name)) {
+    return false;
+  }
+  if (includedNames != null && !includedNames.contains(name)) {
+    return false;
+  }
+  if (!onlyMissingRequired) {
+    return true;
+  }
+  return _workflowRunFieldRequiredFromUser(
+    name,
+    defaults: defaults,
+    seedInput: seedInput,
+    required: required,
+  );
+}
+
+/// Reports whether one workflow input field needs a user-provided value.
+bool _workflowRunFieldRequiredFromUser(
+  String name, {
+  required Map<String, dynamic> defaults,
+  required Map<String, dynamic> seedInput,
+  required Set<String> required,
+}) {
+  if (!required.contains(name)) {
+    return false;
+  }
+  if (defaults.containsKey(name)) {
+    return false;
+  }
+  if (seedInput.containsKey(name) &&
+      _isProvidedWorkflowRunValue(seedInput[name])) {
+    return false;
+  }
+  return true;
+}
+
+/// Finds the first object schema intended to validate workflow input.
+Map<String, dynamic> _workflowRunInputSchema(Map<String, dynamic> body) {
+  final direct = _map(body['input_schema']);
+  if (direct.isNotEmpty) {
+    return direct;
+  }
+  final authoring = _map(body['authoring']);
+  final authoringSchema = _map(authoring['input_schema']);
+  if (authoringSchema.isNotEmpty) {
+    return authoringSchema;
+  }
+  for (final action in _workflowStateActions(_list(body['states']))) {
+    final actionMap = _map(action);
+    if ('${actionMap['uses'] ?? ''}' != 'data.assert') {
+      continue;
+    }
+    final args = _map(actionMap['with']);
+    if ('${args['mode'] ?? ''}' != 'schema') {
+      continue;
+    }
+    final schema = _map(args['schema']);
+    if ('${schema['type'] ?? ''}'.trim().toLowerCase() == 'object') {
+      return schema;
+    }
+  }
+  return const <String, dynamic>{};
+}
+
+/// Finds declarative input defaults used before workflow input validation.
+Map<String, dynamic> _workflowRunDefaults(Map<String, dynamic> body) {
+  for (final action in _workflowStateActions(_list(body['states']))) {
+    final actionMap = _map(action);
+    if ('${actionMap['uses'] ?? ''}' != 'data.defaults') {
+      continue;
+    }
+    final args = _map(actionMap['with']);
+    if (!'${args['input'] ?? ''}'.contains('workflow_input')) {
+      continue;
+    }
+    return _map(args['defaults']);
+  }
+  return const <String, dynamic>{};
+}
+
+/// Returns UI-resolved workflow defaults that come from authoring metadata.
+Map<String, dynamic> _workflowRunAuthoringDefaults(
+  AgentAwesomeAppController controller,
+  AutomationDefinition definition,
+) {
+  final authoring = _map(definition.body['authoring']);
+  final defaults = _map(authoring['input_defaults']);
+  return <String, dynamic>{
+    for (final entry in defaults.entries)
+      entry.key: _resolveWorkflowRunAuthoringDefault(controller, entry.value),
+  };
+}
+
+/// Resolves app-context tokens allowed in workflow authoring defaults.
+Object _resolveWorkflowRunAuthoringDefault(
+  AgentAwesomeAppController controller,
+  Object? value,
+) {
+  final text = '$value'.trim();
+  return switch (text) {
+    r'${app.workspace_root}' => controller.config.workspaceRoot,
+    _ => value ?? '',
+  };
+}
+
+/// Returns setup fields intended to be configured once for a workflow.
+Set<String> _workflowRunSetupSetupFields(Map<String, dynamic> body) {
+  final runSetup = _map(_map(body['authoring'])['run_setup']);
+  return _list(runSetup['setup_fields']).map((item) => '$item').toSet();
+}
+
+/// Returns fields intended to be supplied each time a setup runs.
+Set<String> _workflowRunSetupRunFields(Map<String, dynamic> body) {
+  final runSetup = _map(_map(body['authoring'])['run_setup']);
+  return _list(runSetup['run_fields']).map((item) => '$item').toSet();
+}
+
+/// Returns state entry actions from nested state-machine definitions.
+List<dynamic> _workflowStateActions(List<dynamic> states) {
+  final actions = <dynamic>[];
+  for (final state in states.map(_map)) {
+    actions.addAll(_list(state['on_entry']));
+    actions.addAll(_workflowStateActions(_list(state['states'])));
+  }
+  return actions;
+}
+
+/// Converts a JSON-schema type into the supported form-control type.
+String _workflowRunInputType(Map<String, dynamic> property) {
+  final type = '${property['type'] ?? 'string'}'.trim().toLowerCase();
+  return switch (type) {
+    'boolean' => 'boolean',
+    'integer' => 'integer',
+    'number' => 'number',
+    _ => 'string',
+  };
+}
+
+/// Converts a user-entered field value to the payload type expected by runtime.
+Object? _parsedWorkflowRunValue(_WorkflowRunInputField field, String raw) {
+  return switch (field.type) {
+    'integer' => int.tryParse(raw),
+    'number' => double.tryParse(raw),
+    _ => raw,
+  };
+}
+
+/// Adds form-provided field values to a workflow input object.
+String? _populateWorkflowInputFromFields({
+  required List<_WorkflowRunInputField> fields,
+  required Map<String, TextEditingController> textControllers,
+  required Map<String, bool> booleanValues,
+  required Map<String, dynamic> input,
+}) {
+  for (final field in fields) {
+    if (field.type == 'boolean') {
+      input[field.name] = booleanValues[field.name] ?? false;
+      continue;
+    }
+    final raw = textControllers[field.name]?.text.trim() ?? '';
+    if (raw.isEmpty) {
+      if (field.requiredFromUser) {
+        return '${field.label} is required.';
+      }
+      continue;
+    }
+    final parsed = _parsedWorkflowRunValue(field, raw);
+    if (parsed == null) {
+      return '${field.label} must be ${field.type}.';
+    }
+    input[field.name] = parsed;
+  }
+  return null;
+}
+
+/// Returns seed input that can safely be sent with a workflow run request.
+Map<String, dynamic> _workflowRunSeedInput(Map<String, dynamic> seedInput) {
+  return <String, dynamic>{
+    for (final entry in seedInput.entries)
+      if (_isProvidedWorkflowRunValue(entry.value)) entry.key: entry.value,
+  };
+}
+
+/// Reports whether a value is meaningful form input rather than a blank token.
+bool _isProvidedWorkflowRunValue(Object? value) {
+  if (value == null) {
+    return false;
+  }
+  if (value is bool || value is num) {
+    return true;
+  }
+  final text = '$value'.trim();
+  if (text.isEmpty) {
+    return false;
+  }
+  return !(text.startsWith(r'${') && text.endsWith('}'));
+}
+
+/// Returns a keyboard suited to one workflow field type.
+TextInputType _keyboardTypeForWorkflowRunField(_WorkflowRunInputField field) {
+  return switch (field.type) {
+    'integer' => TextInputType.number,
+    'number' => const TextInputType.numberWithOptions(decimal: true),
+    _ => field.maxLines > 1 ? TextInputType.multiline : TextInputType.text,
+  };
+}
+
+/// Returns a form-safe default string without showing expression syntax.
+String _initialFieldText(Object? value) {
+  if (value == null) {
+    return '';
+  }
+  final text = '$value'.trim();
+  if (text.startsWith(r'${') && text.endsWith('}')) {
+    return '';
+  }
+  return text;
+}
+
+/// Returns a boolean default value for workflow run fields.
+bool _initialBooleanValue(Object? value) {
+  if (value is bool) {
+    return value;
+  }
+  return '${value ?? ''}'.trim().toLowerCase() == 'true';
 }
 
 List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
@@ -686,14 +1900,39 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
           icon: Icons.info_outline,
         ),
         CommandPanelDetailMode(
-          id: _automationDetailHistory,
-          label: 'History',
-          icon: Icons.history,
+          id: _automationDetailSetup,
+          label: 'Setup',
+          icon: Icons.tune_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailInputs,
+          label: 'Inputs',
+          icon: Icons.input,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailTargets,
+          label: 'Targets',
+          icon: Icons.devices_other_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailSchedule,
+          label: 'Schedule',
+          icon: Icons.event_outlined,
         ),
         CommandPanelDetailMode(
           id: _automationDetailSafety,
           label: 'Safety',
           icon: Icons.verified_user_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailHistory,
+          label: 'Runs',
+          icon: Icons.history,
+        ),
+        CommandPanelDetailMode(
+          id: _automationDetailTest,
+          label: 'Test',
+          icon: Icons.play_circle_outline,
         ),
       ];
     case _automationPanelWorkflows:
@@ -792,7 +2031,7 @@ class _AutomationPublishedContent extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
-  /// Builds published automation definitions.
+  /// Builds installed workflow files for Operations.
   @override
   Widget build(BuildContext context) {
     final definitions = _filterDefinitions(
@@ -803,10 +2042,157 @@ class _AutomationPublishedContent extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
       children: <Widget>[
         if (definitions.isEmpty)
-          const PanelEmptyBlock(label: 'No published automations')
+          const PanelEmptyBlock(label: 'No workflow files')
         else
           for (final definition in definitions)
             _DefinitionTile(controller: controller, definition: definition),
+      ],
+    );
+  }
+}
+
+class _AutomationRunSetupsContent extends StatelessWidget {
+  const _AutomationRunSetupsContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds saved Operations.
+  @override
+  Widget build(BuildContext context) {
+    final setups = _filterRunSetups(
+      controller.automationRunSetups,
+      query,
+      definitions: controller.automationDefinitions,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (setups.isEmpty)
+          const PanelEmptyBlock(label: 'No operations')
+        else
+          for (final setup in setups)
+            _RunSetupTile(controller: controller, setup: setup),
+      ],
+    );
+  }
+}
+
+class _AutomationCodebasesContent extends StatelessWidget {
+  const _AutomationCodebasesContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds selectable codebase records for Operations.
+  @override
+  Widget build(BuildContext context) {
+    final codebases = _filterCodebases(controller.automationCodebases, query);
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (codebases.isEmpty)
+          const PanelEmptyBlock(label: 'No codebases')
+        else
+          for (final codebase in codebases)
+            _CodebaseTile(controller: controller, codebase: codebase),
+      ],
+    );
+  }
+}
+
+class _AutomationRuntimeTargetsContent extends StatelessWidget {
+  const _AutomationRuntimeTargetsContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds selectable Computer or Server targets for Operations.
+  @override
+  Widget build(BuildContext context) {
+    final targets = _filterRuntimeTargets(
+      controller.automationRuntimeTargets,
+      query,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (targets.isEmpty)
+          const PanelEmptyBlock(label: 'No computers')
+        else
+          for (final target in targets)
+            _RuntimeTargetTile(controller: controller, target: target),
+      ],
+    );
+  }
+}
+
+class _AutomationSchedulesContent extends StatelessWidget {
+  const _AutomationSchedulesContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds selectable Operation schedules.
+  @override
+  Widget build(BuildContext context) {
+    final setups = _filterScheduledOperations(
+      controller.automationRunSetups,
+      query,
+      definitions: controller.automationDefinitions,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (setups.isEmpty)
+          const PanelEmptyBlock(label: 'No scheduled operations')
+        else
+          for (final setup in setups)
+            _ScheduleTile(controller: controller, setup: setup),
+      ],
+    );
+  }
+}
+
+class _AutomationArtifactsContent extends StatelessWidget {
+  const _AutomationArtifactsContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds selectable run artifacts from workflow output.
+  @override
+  Widget build(BuildContext context) {
+    final artifacts = _filterOperationArtifacts(
+      _operationArtifactsForRuns(
+        controller.automationRuns,
+        definitions: controller.automationDefinitions,
+      ),
+      query,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (artifacts.isEmpty)
+          const PanelEmptyBlock(label: 'No artifacts')
+        else
+          for (final artifact in artifacts)
+            _ArtifactTile(controller: controller, artifact: artifact),
       ],
     );
   }
@@ -920,6 +2306,35 @@ class _AutomationWorkflowStatePaletteContent extends StatelessWidget {
   }
 }
 
+class _AutomationCapabilitiesContent extends StatelessWidget {
+  const _AutomationCapabilitiesContent({
+    required this.controller,
+    required this.query,
+  });
+
+  final AgentAwesomeAppController controller;
+  final String query;
+
+  /// Builds selectable Capability Lab registry records.
+  @override
+  Widget build(BuildContext context) {
+    final capabilities = _filterCapabilities(
+      controller.automationCapabilities,
+      query,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        if (capabilities.isEmpty)
+          const PanelEmptyBlock(label: 'No capabilities')
+        else
+          for (final capability in capabilities)
+            _CapabilityTile(controller: controller, capability: capability),
+      ],
+    );
+  }
+}
+
 class _AutomationTaskNodePaletteContent extends StatelessWidget {
   const _AutomationTaskNodePaletteContent({
     required this.controller,
@@ -995,6 +2410,12 @@ class _AutomationDetailContent extends StatelessWidget {
         modeId: modeId,
       );
     }
+    if (areaId == _automationWorkflowAreaCapabilities) {
+      return _CapabilityLabDetail(
+        capability: controller.selectedAutomationCapability,
+        modeId: modeId,
+      );
+    }
     final draftKind = _automationDraftKindForArea(areaId);
     if (draftKind != null) {
       return _DraftDetail(
@@ -1035,6 +2456,32 @@ class _OperationsDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (areaId == _automationOperationsAreaTargets) {
+      return _OperationsRuntimeTargetDetail(
+        target: controller.selectedAutomationRuntimeTarget,
+        health: controller.selectedAutomationTargetHealth,
+        logs: controller.selectedAutomationTargetLogs,
+        secrets: controller.selectedAutomationTargetSecrets,
+        codebases: controller.automationCodebases,
+        capabilities: controller.automationCapabilities,
+        operations: controller.automationRunSetups,
+        modeId: modeId,
+      );
+    }
+    if (areaId == _automationOperationsAreaSetups) {
+      return _OperationsRunSetupDetail(
+        definitions: controller.automationDefinitions,
+        codebases: controller.automationCodebases,
+        targets: controller.automationRuntimeTargets,
+        runs: controller.automationRuns,
+        setups: controller.automationRunSetups,
+        selectedSetup: controller.selectedAutomationRunSetup,
+        preview: controller.selectedAutomationOperationPreview,
+        modeId: modeId,
+        onChanged: (setup) =>
+            unawaited(controller.updateAutomationRunSetupFromUi(setup)),
+      );
+    }
     if (modeId == _automationDetailHistory) {
       return _EventList(events: controller.selectedAutomationEvents);
     }
@@ -1050,18 +2497,121 @@ class _OperationsDetail extends StatelessWidget {
         definitions: controller.automationDefinitions,
         selectedDefinition: controller.selectedAutomationDefinition,
       ),
+      _automationOperationsAreaSetups => _OperationsRunSetupsOverview(
+        definitions: controller.automationDefinitions,
+        codebases: controller.automationCodebases,
+        targets: controller.automationRuntimeTargets,
+        setups: controller.automationRunSetups,
+        selectedSetup: controller.selectedAutomationRunSetup,
+      ),
+      _automationOperationsAreaCodebases => _OperationsCodebaseEditor(
+        codebase: controller.selectedAutomationCodebase,
+        onChanged: (codebase) =>
+            unawaited(controller.upsertAutomationCodebaseFromUi(codebase)),
+      ),
+      _automationOperationsAreaSchedules => _OperationsSchedulesOverview(
+        definitions: controller.automationDefinitions,
+        setups: controller.automationRunSetups,
+        selectedSetup: controller.selectedAutomationRunSetup,
+      ),
+      _automationOperationsAreaArtifacts => _OperationsArtifactsOverview(
+        artifacts: _operationArtifactsForRuns(
+          controller.automationRuns,
+          definitions: controller.automationDefinitions,
+        ),
+        selectedRun: controller.selectedAutomationRun,
+      ),
       _ => _OperationsRunOverview(
         definitions: controller.automationDefinitions,
+        operations: controller.automationRunSetups,
+        targets: controller.automationRuntimeTargets,
         run: controller.selectedAutomationRun,
+        snapshot: controller.selectedAutomationOperationRunSnapshot,
         runCount: controller.automationRuns.length,
       ),
     };
   }
 }
 
+class _CapabilityLabDetail extends StatelessWidget {
+  const _CapabilityLabDetail({required this.capability, required this.modeId});
+
+  final AutomationCapability? capability;
+  final String modeId;
+
+  /// Builds the selected capability inspector.
+  @override
+  Widget build(BuildContext context) {
+    final selected = capability;
+    if (selected == null) {
+      return const Padding(
+        padding: EdgeInsets.all(18),
+        child: PanelEmptyBlock(label: 'No capability selected'),
+      );
+    }
+    final rows = <String>[
+      selected.label,
+      _capabilityKindLabel(selected.kind),
+      'Availability: ${_capabilityAvailabilityLabel(selected.availability.status)}',
+      if (selected.usableInChat) 'Usable in chat',
+      if (selected.usableInWorkflows) 'Usable in workflows',
+      if (selected.description.isNotEmpty) selected.description,
+      ...selected.availability.reasons.map((reason) => 'Reason: $reason'),
+    ];
+    final sections = switch (modeId) {
+      _automationDetailSafety => <Widget>[
+        PanelSectionBlock(
+          title: 'Safety',
+          child: _DetailRows(rows: _capabilitySafetyRows(selected)),
+        ),
+      ],
+      _automationDetailTest => <Widget>[
+        PanelSectionBlock(
+          title: 'Checks',
+          child: selected.testResults.isEmpty
+              ? const PanelEmptyBlock(label: 'No checks recorded')
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    for (final result in selected.testResults)
+                      _DetailRows(
+                        rows: <String>[
+                          '${_stateMachineDisplayName(result.type)}: ${_capabilityAvailabilityLabel(result.status)}',
+                          if (result.message.isNotEmpty) result.message,
+                          if (result.checkedAt.isNotEmpty) result.checkedAt,
+                        ],
+                      ),
+                  ],
+                ),
+        ),
+      ],
+      _ => <Widget>[
+        PanelSectionBlock(
+          title: 'Capability',
+          child: _DetailRows(rows: rows),
+        ),
+        const SizedBox(height: 12),
+        PanelSectionBlock(
+          title: 'Invocation',
+          child: _DetailRows(rows: _capabilityInvocationRows(selected)),
+        ),
+      ],
+    };
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: sections,
+    );
+  }
+}
+
 const Set<String> _automationOperationsAreaIds = <String>{
   _automationOperationsAreaInbox,
   _automationOperationsAreaPublished,
+  _automationOperationsAreaSetups,
+  _automationOperationsAreaCodebases,
+  _automationOperationsAreaTargets,
+  _automationOperationsAreaSchedules,
+  _automationOperationsAreaArtifacts,
   _automationOperationsAreaRuns,
 };
 
@@ -2352,7 +3902,7 @@ class _TaskGraphDraftEditorState extends State<_TaskGraphDraftEditor> {
   List<String> _actionNames() {
     final names = _resolvedTaskGraphActionTypes(
       widget.controller,
-    ).map((action) => action.name).toList();
+    ).where((action) => action.available).map((action) => action.name).toList();
     final selected = _selectedAction.trim();
     if (selected.isNotEmpty && !names.contains(selected)) {
       return <String>[...names, selected];
@@ -2390,6 +3940,11 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
     for (final action in controller.automationActionTypes)
       if (action.name.trim().isNotEmpty) action.name: action,
   };
+  final capabilityByAction = <String, AutomationCapability>{
+    for (final capability in controller.automationCapabilities)
+      if (capability.kind == 'workflow_action' && capability.name.isNotEmpty)
+        capability.name: capability,
+  };
   final names = known.keys.isEmpty
       ? const <String>[
           'tool.call',
@@ -2405,15 +3960,43 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
       : known.keys.toList();
   return <AutomationActionType>[
     for (final name in names)
-      known[name] ??
-          AutomationActionType(
-            name: name,
-            label: _fallbackActionLabel(name),
-            description: _fallbackActionDescription(name),
-            risk: 'workflow',
-            available: true,
-          ),
+      _resolvedActionType(name, known, capabilityByAction),
   ];
+}
+
+/// Applies capability availability to one authoring action type.
+AutomationActionType _resolvedActionType(
+  String name,
+  Map<String, AutomationActionType> known,
+  Map<String, AutomationCapability> capabilityByAction,
+) {
+  final base =
+      known[name] ??
+      AutomationActionType(
+        name: name,
+        label: _fallbackActionLabel(name),
+        description: _fallbackActionDescription(name),
+        risk: 'workflow',
+        available: true,
+      );
+  final capability = capabilityByAction[name];
+  if (capability == null) {
+    return base;
+  }
+  return AutomationActionType(
+    name: base.name,
+    label: base.label,
+    description: base.description,
+    risk: base.risk,
+    available:
+        base.available &&
+        capability.usableInWorkflows &&
+        capability.availability.status == 'available',
+    inputSchema: base.inputSchema,
+    outputSchema: base.outputSchema,
+    inputContracts: base.inputContracts,
+    outputContracts: base.outputContracts,
+  );
 }
 
 /// Returns action types that may be newly created as task-state steps.
@@ -2442,6 +4025,7 @@ class _AutomationTextField extends PanelTextFormField {
     super.key,
     required super.controller,
     required super.label,
+    super.minLines,
     super.maxLines = 1,
     super.keyboardType,
     super.monospace = false,
@@ -2451,6 +4035,7 @@ class _AutomationTextField extends PanelTextFormField {
 
 class _AutomationDropdown extends StatelessWidget {
   const _AutomationDropdown({
+    super.key,
     required this.label,
     required this.value,
     required this.values,
@@ -2715,40 +4300,50 @@ class _TaskGraphActionPaletteTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    final tile = PanelSurface(
-      fillWidth: true,
-      padding: const EdgeInsets.all(10),
-      style: PanelSurfaceStyle.card,
-      child: Row(
-        children: <Widget>[
-          _TaskGraphNodeIcon(actionName: action.name, size: 32),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  action.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.ink,
-                    fontWeight: FontWeight.w800,
+    final tile = Opacity(
+      opacity: action.available ? 1 : 0.58,
+      child: PanelSurface(
+        fillWidth: true,
+        padding: const EdgeInsets.all(10),
+        style: PanelSurfaceStyle.card,
+        child: Row(
+          children: <Widget>[
+            _TaskGraphNodeIcon(actionName: action.name, size: 32),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    action.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.ink,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  action.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: colors.muted, fontSize: 12),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    action.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colors.muted, fontSize: 12),
+                  ),
+                  if (!action.available) ...<Widget>[
+                    const SizedBox(height: 8),
+                    const PanelBadge(label: 'Needs Setup'),
+                  ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+    if (!action.available) {
+      return tile;
+    }
     return Draggable<_TaskGraphActionDragData>(
       data: _TaskGraphActionDragData(action.name),
       feedback: SizedBox(
@@ -4155,16 +5750,17 @@ class _OperationsPublishedOverview extends StatelessWidget {
   final List<AutomationDefinition> definitions;
   final AutomationDefinition? selectedDefinition;
 
-  /// Builds detail context for published automations.
+  /// Builds detail context for installed workflow files.
   @override
   Widget build(BuildContext context) {
     final kinds = definitions.map((definition) => definition.kind).toSet();
     final definition = selectedDefinition;
     return _DetailList(
-      title: 'Published',
+      title: 'Files',
       rows: <String>[
-        'Published automations: ${definitions.length}',
-        if (kinds.isNotEmpty) 'Kinds: ${kinds.map(_draftKindLabel).join(', ')}',
+        'Workflow files: ${definitions.length}',
+        if (kinds.isNotEmpty)
+          'File types: ${kinds.map(_draftKindLabel).join(', ')}',
         if (definition != null) 'Selected: ${definition.name}',
         if (definition != null) 'Type: ${_draftKindLabel(definition.kind)}',
         if (definition != null && definition.updatedAt.isNotEmpty)
@@ -4174,21 +5770,738 @@ class _OperationsPublishedOverview extends StatelessWidget {
   }
 }
 
+class _OperationsRunSetupDetail extends StatelessWidget {
+  const _OperationsRunSetupDetail({
+    required this.definitions,
+    required this.codebases,
+    required this.targets,
+    required this.runs,
+    required this.setups,
+    required this.selectedSetup,
+    required this.preview,
+    required this.modeId,
+    required this.onChanged,
+  });
+
+  final List<AutomationDefinition> definitions;
+  final List<AutomationCodebase> codebases;
+  final List<AutomationRuntimeTarget> targets;
+  final List<AutomationRun> runs;
+  final List<AutomationRunSetup> setups;
+  final AutomationRunSetup? selectedSetup;
+  final AutomationOperationPreview? preview;
+  final String modeId;
+  final ValueChanged<AutomationRunSetup> onChanged;
+
+  /// Builds one saved Operation detail mode.
+  @override
+  Widget build(BuildContext context) {
+    final setup = selectedSetup;
+    if (modeId == _automationDetailTest) {
+      return _OperationsRunSetupPreview(setup: setup, preview: preview);
+    }
+    if (setup == null) {
+      return const Padding(
+        padding: EdgeInsets.all(18),
+        child: PanelEmptyBlock(label: 'No Operation selected'),
+      );
+    }
+    return switch (modeId) {
+      _automationDetailSetup => _OperationsRunSetupEditor(
+        setup: setup,
+        definitions: definitions,
+        codebases: codebases,
+        targets: targets,
+        onChanged: onChanged,
+      ),
+      _automationDetailInputs => _DetailList(
+        title: 'Inputs',
+        rows: _operationInputRows(setup),
+      ),
+      _automationDetailTargets => _DetailList(
+        title: 'Targets',
+        rows: _operationTargetRows(
+          setup,
+          codebases: codebases,
+          targets: targets,
+        ),
+      ),
+      _automationDetailSchedule => _DetailList(
+        title: 'Schedule',
+        rows: _operationScheduleRows(setup),
+      ),
+      _automationDetailSafety => _DetailList(
+        title: 'Safety',
+        rows: _operationSafetyRows(
+          setup,
+          codebases: codebases,
+          targets: targets,
+        ),
+      ),
+      _automationDetailHistory => _DetailList(
+        title: 'Runs',
+        rows: _operationRunRows(setup, runs, definitions: definitions),
+      ),
+      _ => _OperationsRunSetupsOverview(
+        definitions: definitions,
+        codebases: codebases,
+        targets: targets,
+        setups: setups,
+        selectedSetup: setup,
+      ),
+    };
+  }
+}
+
+class _OperationsRunSetupEditor extends StatefulWidget {
+  const _OperationsRunSetupEditor({
+    required this.setup,
+    required this.definitions,
+    required this.codebases,
+    required this.targets,
+    required this.onChanged,
+  });
+
+  final AutomationRunSetup setup;
+  final List<AutomationDefinition> definitions;
+  final List<AutomationCodebase> codebases;
+  final List<AutomationRuntimeTarget> targets;
+  final ValueChanged<AutomationRunSetup> onChanged;
+
+  @override
+  State<_OperationsRunSetupEditor> createState() =>
+      _OperationsRunSetupEditorState();
+}
+
+class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
+  final TextEditingController _name = TextEditingController();
+  Timer? _debounce;
+  String _activeId = '';
+  String _codebaseId = '';
+  String _targetId = '';
+  String _sourceControlPolicy = _operationSafetyOpenPROnly;
+  bool _hydrating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrate(widget.setup);
+    _name.addListener(_scheduleSave);
+  }
+
+  @override
+  void didUpdateWidget(covariant _OperationsRunSetupEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.setup.id != widget.setup.id) {
+      _hydrate(widget.setup);
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _name.dispose();
+    super.dispose();
+  }
+
+  /// Builds the selected Operation typed setup editor.
+  @override
+  Widget build(BuildContext context) {
+    final targetOptions = _targetOptionsForCodebase(
+      widget.targets,
+      _codebaseId,
+    );
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        _AutomationTextField(controller: _name, label: 'Operation Name'),
+        const SizedBox(height: 12),
+        _AutomationDropdown(
+          key: const ValueKey<String>('automation-operation-edit-codebase'),
+          label: 'Codebase',
+          value: _codebaseId,
+          values: <String>[
+            for (final codebase in widget.codebases) codebase.id,
+          ],
+          labels: <String, String>{
+            for (final codebase in widget.codebases) codebase.id: codebase.name,
+          },
+          onChanged: (value) => setState(() {
+            _codebaseId = value;
+            _targetId = _initialTargetId(
+              codebases: widget.codebases,
+              targets: widget.targets,
+              codebaseId: _codebaseId,
+              selectedTargetId: _targetId,
+            );
+            _scheduleSave();
+          }),
+        ),
+        const SizedBox(height: 12),
+        _AutomationDropdown(
+          key: const ValueKey<String>('automation-operation-edit-target'),
+          label: 'Run on',
+          value: _targetId,
+          values: <String>[for (final target in targetOptions) target.id],
+          labels: <String, String>{
+            for (final target in targetOptions) target.id: target.name,
+          },
+          onChanged: (value) => setState(() {
+            _targetId = value;
+            _scheduleSave();
+          }),
+        ),
+        const SizedBox(height: 12),
+        _AutomationDropdown(
+          key: const ValueKey<String>('automation-operation-edit-safety'),
+          label: 'Safety',
+          value: _sourceControlPolicy,
+          values: const <String>[_operationSafetyOpenPROnly],
+          labels: _operationSafetyLabels,
+          onChanged: (value) => setState(() {
+            _sourceControlPolicy = value;
+            _scheduleSave();
+          }),
+        ),
+        const SizedBox(height: 16),
+        PanelSectionBlock(
+          title: 'Setup',
+          child: _DetailRows(
+            rows: _operationSetupRows(
+              widget.setup,
+              definitions: widget.definitions,
+              codebases: widget.codebases,
+              targets: widget.targets,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Replaces editor state when the selected Operation changes.
+  void _hydrate(AutomationRunSetup setup) {
+    _debounce?.cancel();
+    _hydrating = true;
+    _activeId = setup.id;
+    _name.text = setup.name;
+    _codebaseId = setup.codebaseId;
+    _targetId = setup.runtimeTargetId;
+    _sourceControlPolicy =
+        _stringFromMap(setup.policy, 'source_control').isEmpty
+        ? _operationSafetyOpenPROnly
+        : _stringFromMap(setup.policy, 'source_control');
+    _hydrating = false;
+  }
+
+  /// Schedules bounded autosave after field edits.
+  void _scheduleSave() {
+    if (_hydrating || _activeId.isEmpty) {
+      return;
+    }
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 650), () {
+      final name = _name.text.trim();
+      if (name.isEmpty) {
+        return;
+      }
+      widget.onChanged(
+        widget.setup.copyWith(
+          name: name,
+          codebaseId: _codebaseId,
+          runtimeTargetId: _targetId,
+          policy: _operationPolicyFromSelections(
+            codebaseId: _codebaseId,
+            runtimeTargetId: _targetId,
+            sourceControlPolicy: _sourceControlPolicy,
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _OperationsRunSetupsOverview extends StatelessWidget {
+  const _OperationsRunSetupsOverview({
+    required this.definitions,
+    required this.codebases,
+    required this.targets,
+    required this.setups,
+    required this.selectedSetup,
+  });
+
+  final List<AutomationDefinition> definitions;
+  final List<AutomationCodebase> codebases;
+  final List<AutomationRuntimeTarget> targets;
+  final List<AutomationRunSetup> setups;
+  final AutomationRunSetup? selectedSetup;
+
+  /// Builds detail context for saved Operations.
+  @override
+  Widget build(BuildContext context) {
+    final setup = selectedSetup;
+    return _DetailList(
+      title: 'Operations',
+      rows: <String>[
+        'Operations: ${setups.length}',
+        if (setup != null) 'Selected: ${setup.name}',
+        if (setup != null)
+          'Workflow file: ${_definitionLabel(definitions, setup.definitionId)}',
+        if (setup != null && setup.codebaseId.isNotEmpty)
+          'Codebase: ${_codebaseLabel(codebases, setup.codebaseId)}',
+        if (setup != null && setup.runtimeTargetId.isNotEmpty)
+          'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
+        if (setup != null && setup.policy['source_control'] != null)
+          'Safety: ${_operationSourceControlPolicyLabel('${setup.policy['source_control']}')}',
+        if (setup != null && setup.updatedAt.isNotEmpty)
+          'Updated: ${setup.updatedAt}',
+      ],
+    );
+  }
+}
+
+class _OperationsRunSetupPreview extends StatelessWidget {
+  const _OperationsRunSetupPreview({
+    required this.setup,
+    required this.preview,
+  });
+
+  final AutomationRunSetup? setup;
+  final AutomationOperationPreview? preview;
+
+  /// Builds dry-run resolution details for a saved Operation.
+  @override
+  Widget build(BuildContext context) {
+    final selected = setup;
+    if (selected == null) {
+      return const Padding(
+        padding: EdgeInsets.all(18),
+        child: PanelEmptyBlock(label: 'No Operation selected'),
+      );
+    }
+    final current = preview;
+    if (current == null || current.operation.id != selected.id) {
+      return _DetailList(
+        title: 'Test Run',
+        rows: <String>['Operation: ${selected.name}', 'Test Run: not started'],
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        PanelSectionBlock(
+          title: 'Test Run',
+          child: _DetailRows(
+            rows: <String>[
+              'Operation: ${current.operation.name}',
+              'Status: ${_operationPreviewStatusLabel(current.status)}',
+              'Policy: ${_operationPolicyStatusLabel(current.policyDecision.status)}',
+              for (final reason in current.policyDecision.reasons)
+                'Policy reason: $reason',
+              for (final field in current.missingSetup)
+                'Needs Setup: ${_stateMachineDisplayName(field)}',
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        PanelSectionBlock(
+          title: 'Resolved Input',
+          child: _DetailRows(rows: _operationPreviewInputRows(current)),
+        ),
+      ],
+    );
+  }
+}
+
+class _OperationsSchedulesOverview extends StatelessWidget {
+  const _OperationsSchedulesOverview({
+    required this.definitions,
+    required this.setups,
+    required this.selectedSetup,
+  });
+
+  final List<AutomationDefinition> definitions;
+  final List<AutomationRunSetup> setups;
+  final AutomationRunSetup? selectedSetup;
+
+  /// Builds detail context for scheduled Operations.
+  @override
+  Widget build(BuildContext context) {
+    final scheduled = setups.where(_operationHasSchedule).toList();
+    final selected =
+        selectedSetup != null && _operationHasSchedule(selectedSetup!)
+        ? selectedSetup
+        : scheduled.isEmpty
+        ? null
+        : scheduled.first;
+    return _DetailList(
+      title: 'Schedules',
+      rows: <String>[
+        'Scheduled operations: ${scheduled.length}',
+        if (selected != null) 'Operation: ${selected.name}',
+        if (selected != null)
+          'Workflow file: ${_definitionLabel(definitions, selected.definitionId)}',
+        if (selected != null)
+          'Schedule: ${_operationScheduleLabel(selected.schedule)}',
+        if (selected != null) ..._operationScheduleRows(selected).skip(1),
+      ],
+    );
+  }
+}
+
+class _OperationsArtifactsOverview extends StatelessWidget {
+  const _OperationsArtifactsOverview({
+    required this.artifacts,
+    required this.selectedRun,
+  });
+
+  final List<_OperationArtifactItem> artifacts;
+  final AutomationRun? selectedRun;
+
+  /// Builds detail context for Operation run artifacts.
+  @override
+  Widget build(BuildContext context) {
+    final selectedArtifacts = selectedRun == null
+        ? artifacts
+        : artifacts
+              .where((artifact) => artifact.run.id == selectedRun!.id)
+              .toList();
+    final visible = selectedArtifacts.isEmpty ? artifacts : selectedArtifacts;
+    return _DetailList(
+      title: 'Artifacts',
+      rows: <String>[
+        'Artifacts: ${artifacts.length}',
+        for (final artifact in visible.take(8))
+          '${artifact.title}: ${artifact.subtitle}',
+      ],
+    );
+  }
+}
+
+class _OperationsCodebaseEditor extends StatefulWidget {
+  const _OperationsCodebaseEditor({
+    required this.codebase,
+    required this.onChanged,
+  });
+
+  final AutomationCodebase? codebase;
+  final ValueChanged<AutomationCodebase> onChanged;
+
+  @override
+  State<_OperationsCodebaseEditor> createState() =>
+      _OperationsCodebaseEditorState();
+}
+
+class _OperationsCodebaseEditorState extends State<_OperationsCodebaseEditor> {
+  final TextEditingController _name = TextEditingController();
+  final TextEditingController _files = TextEditingController();
+  final TextEditingController _aliases = TextEditingController();
+  final TextEditingController _defaultRemote = TextEditingController();
+  final TextEditingController _defaultBranch = TextEditingController();
+  final TextEditingController _provider = TextEditingController();
+  final TextEditingController _providerRepository = TextEditingController();
+  final TextEditingController _goModule = TextEditingController();
+  final TextEditingController _runtimeTarget = TextEditingController();
+  final TextEditingController _agentProfile = TextEditingController();
+  Timer? _debounce;
+  String _activeId = '';
+  bool _hydrating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrate(widget.codebase);
+    for (final controller in _controllers) {
+      controller.addListener(_scheduleSave);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _OperationsCodebaseEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.codebase?.id != widget.codebase?.id) {
+      _hydrate(widget.codebase);
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    for (final controller in _controllers) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  List<TextEditingController> get _controllers => <TextEditingController>[
+    _name,
+    _files,
+    _aliases,
+    _defaultRemote,
+    _defaultBranch,
+    _provider,
+    _providerRepository,
+    _goModule,
+    _runtimeTarget,
+    _agentProfile,
+  ];
+
+  /// Builds the selected codebase typed editor.
+  @override
+  Widget build(BuildContext context) {
+    if (widget.codebase == null) {
+      return const PanelEmptyBlock(label: 'No codebase selected');
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        _AutomationTextField(controller: _name, label: 'Name'),
+        const SizedBox(height: 12),
+        _AutomationTextField(controller: _files, label: 'Files'),
+        const SizedBox(height: 12),
+        _AutomationTextField(controller: _aliases, label: 'Aliases'),
+        const SizedBox(height: 12),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _AutomationTextField(
+                controller: _defaultRemote,
+                label: 'Default Remote',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _AutomationTextField(
+                controller: _defaultBranch,
+                label: 'Default Branch',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _AutomationTextField(
+                controller: _provider,
+                label: 'Provider',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _AutomationTextField(
+                controller: _providerRepository,
+                label: 'Repository',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _AutomationTextField(controller: _goModule, label: 'Go Module'),
+        const SizedBox(height: 12),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _AutomationTextField(
+                controller: _runtimeTarget,
+                label: 'Runtime Target',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _AutomationTextField(
+                controller: _agentProfile,
+                label: 'Agent Profile',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Replaces editor controllers when selection changes.
+  void _hydrate(AutomationCodebase? codebase) {
+    _debounce?.cancel();
+    _hydrating = true;
+    _activeId = codebase?.id ?? '';
+    _name.text = codebase?.name ?? '';
+    _files.text = codebase?.repositoryPath ?? '';
+    _aliases.text = (codebase?.aliases ?? const <String>[]).join(', ');
+    _defaultRemote.text = codebase?.defaultRemote ?? '';
+    _defaultBranch.text = codebase?.defaultBranch ?? '';
+    _provider.text = codebase?.provider ?? '';
+    _providerRepository.text = codebase?.providerRepository ?? '';
+    _goModule.text = codebase?.goModulePath ?? '';
+    _runtimeTarget.text = codebase?.runtimeTargetId ?? '';
+    _agentProfile.text = codebase?.agentProfileId ?? '';
+    _hydrating = false;
+  }
+
+  /// Schedules bounded autosave after field edits.
+  void _scheduleSave() {
+    if (_hydrating || _activeId.isEmpty) {
+      return;
+    }
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 650), () {
+      final name = _name.text.trim();
+      final files = _files.text.trim();
+      if (name.isEmpty || files.isEmpty) {
+        return;
+      }
+      widget.onChanged(
+        AutomationCodebase(
+          id: _activeId,
+          name: name,
+          aliases: _splitCodebaseAliases(_aliases.text),
+          repositoryPath: files,
+          defaultRemote: _defaultRemote.text.trim(),
+          defaultBranch: _defaultBranch.text.trim(),
+          provider: _provider.text.trim(),
+          providerRepository: _providerRepository.text.trim(),
+          goModulePath: _goModule.text.trim(),
+          runtimeTargetId: _runtimeTarget.text.trim(),
+          agentProfileId: _agentProfile.text.trim(),
+        ),
+      );
+    });
+  }
+}
+
+class _OperationsRuntimeTargetDetail extends StatelessWidget {
+  const _OperationsRuntimeTargetDetail({
+    required this.target,
+    required this.health,
+    required this.logs,
+    required this.secrets,
+    required this.codebases,
+    required this.capabilities,
+    required this.operations,
+    required this.modeId,
+  });
+
+  final AutomationRuntimeTarget? target;
+  final AutomationTargetHealth? health;
+  final List<AutomationTargetLogEntry> logs;
+  final AutomationTargetSecretMetadata? secrets;
+  final List<AutomationCodebase> codebases;
+  final List<AutomationCapability> capabilities;
+  final List<AutomationRunSetup> operations;
+  final String modeId;
+
+  /// Builds the selected Computer or Server inspector.
+  @override
+  Widget build(BuildContext context) {
+    final selected = target;
+    if (selected == null) {
+      return const Padding(
+        padding: EdgeInsets.all(18),
+        child: PanelEmptyBlock(label: 'No computer selected'),
+      );
+    }
+    return switch (modeId) {
+      _automationTargetDetailCapabilities => _targetDetailList(
+        title: 'Capabilities',
+        rows: _targetCapabilityRows(selected, capabilities),
+      ),
+      _automationTargetDetailSecrets => _targetDetailList(
+        title: 'Secrets',
+        rows: _targetSecretRows(selected, secrets),
+      ),
+      _automationTargetDetailOperations => _targetDetailList(
+        title: 'Operations',
+        rows: _targetOperationRows(selected, operations),
+      ),
+      _automationTargetDetailLogs => _TargetLogList(logs: logs),
+      _automationTargetDetailSettings => _targetDetailList(
+        title: 'Settings',
+        rows: _targetSettingsRows(selected, codebases),
+      ),
+      _automationTargetDetailUpdates => _targetDetailList(
+        title: 'Updates',
+        rows: _targetUpdateRows(selected, health),
+      ),
+      _automationDetailTest => _targetDetailList(
+        title: 'Health',
+        rows: _targetHealthRows(selected, health),
+      ),
+      _ => _targetDetailList(
+        title: 'Computer or Server',
+        rows: _targetOverviewRows(selected, health, secrets),
+      ),
+    };
+  }
+
+  /// Builds a target detail section from display rows.
+  Widget _targetDetailList({
+    required String title,
+    required List<String> rows,
+  }) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        PanelSectionBlock(
+          title: title,
+          child: _DetailRows(rows: rows),
+        ),
+      ],
+    );
+  }
+}
+
+class _TargetLogList extends StatelessWidget {
+  const _TargetLogList({required this.logs});
+
+  final List<AutomationTargetLogEntry> logs;
+
+  /// Builds display-safe target logs.
+  @override
+  Widget build(BuildContext context) {
+    if (logs.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(18),
+        child: PanelEmptyBlock(label: 'No logs recorded'),
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
+      children: <Widget>[
+        for (final log in logs)
+          _AutomationTile(
+            title: _targetStatusLabel(log.level),
+            subtitle: log.message,
+            badges: <String>[if (log.createdAt.isNotEmpty) log.createdAt],
+          ),
+      ],
+    );
+  }
+}
+
 class _OperationsRunOverview extends StatelessWidget {
   const _OperationsRunOverview({
     required this.definitions,
+    required this.operations,
+    required this.targets,
     required this.run,
+    required this.snapshot,
     required this.runCount,
   });
 
   final List<AutomationDefinition> definitions;
+  final List<AutomationRunSetup> operations;
+  final List<AutomationRuntimeTarget> targets;
   final AutomationRun? run;
+  final AutomationOperationRunSnapshot? snapshot;
   final int runCount;
 
   /// Builds detail context for selected automation runs.
   @override
   Widget build(BuildContext context) {
     final selectedRun = run;
+    final selectedSnapshot = snapshot?.runId == selectedRun?.id
+        ? snapshot
+        : null;
     return _DetailList(
       title: 'Runs',
       rows: <String>[
@@ -4200,6 +6513,18 @@ class _OperationsRunOverview extends StatelessWidget {
         if (selectedRun != null) 'State: ${selectedRun.state}',
         if (selectedRun != null && selectedRun.updatedAt.isNotEmpty)
           'Updated: ${selectedRun.updatedAt}',
+        if (selectedSnapshot != null)
+          'Operation: ${_operationLabel(operations, selectedSnapshot.operationId)}',
+        if (selectedSnapshot != null)
+          'Run on: ${_targetLabel(targets, _stringFromMap(selectedSnapshot.target, 'runtime_target_id'))}',
+        if (selectedSnapshot != null && selectedSnapshot.operationVersion > 0)
+          'Operation version: ${selectedSnapshot.operationVersion}',
+        if (selectedSnapshot != null)
+          'Policy: ${_operationSourceControlPolicyLabel(_stringFromMap(selectedSnapshot.policy, 'source_control'))}',
+        if (selectedSnapshot != null)
+          'Resolved inputs: ${selectedSnapshot.resolvedInput.length}',
+        if (selectedSnapshot != null)
+          'Secret references: ${selectedSnapshot.secretRefs.length}',
       ],
     );
   }
@@ -4273,6 +6598,27 @@ class _DetailRows extends StatelessWidget {
   }
 }
 
+class _OperationArtifactItem {
+  const _OperationArtifactItem({
+    required this.run,
+    required this.title,
+    required this.subtitle,
+    required this.workflowLabel,
+  });
+
+  /// Workflow run that produced the artifact.
+  final AutomationRun run;
+
+  /// User-facing artifact title.
+  final String title;
+
+  /// Display-safe artifact summary.
+  final String subtitle;
+
+  /// Workflow label used as compact metadata.
+  final String workflowLabel;
+}
+
 class _PendingItemTile extends StatelessWidget {
   const _PendingItemTile({required this.controller, required this.item});
 
@@ -4301,10 +6647,156 @@ class _DefinitionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AutomationTile(
       title: definition.name,
-      subtitle: 'Published ${_draftKindLabel(definition.kind)}',
+      subtitle: '${_draftKindLabel(definition.kind)} file',
       selected: controller.selectedAutomationDefinition?.id == definition.id,
       badges: <String>[_draftKindLabel(definition.kind)],
       onTap: () => controller.selectAutomationDefinition(definition.id),
+    );
+  }
+}
+
+class _RunSetupTile extends StatelessWidget {
+  const _RunSetupTile({required this.controller, required this.setup});
+
+  final AgentAwesomeAppController controller;
+  final AutomationRunSetup setup;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTile(
+      title: setup.name,
+      subtitle: setup.codebaseId.isEmpty
+          ? _definitionLabel(
+              controller.automationDefinitions,
+              setup.definitionId,
+            )
+          : _codebaseLabel(controller.automationCodebases, setup.codebaseId),
+      selected: controller.selectedAutomationRunSetup?.id == setup.id,
+      badges: <String>[
+        'operation',
+        if (setup.runtimeTargetId.isNotEmpty)
+          _targetLabel(
+            controller.automationRuntimeTargets,
+            setup.runtimeTargetId,
+          ),
+      ],
+      onTap: () => controller.selectAutomationRunSetup(setup.id),
+    );
+  }
+}
+
+class _ScheduleTile extends StatelessWidget {
+  const _ScheduleTile({required this.controller, required this.setup});
+
+  final AgentAwesomeAppController controller;
+  final AutomationRunSetup setup;
+
+  /// Builds one selectable Operation schedule row.
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTile(
+      title: setup.name,
+      subtitle: _operationScheduleLabel(setup.schedule),
+      selected: controller.selectedAutomationRunSetup?.id == setup.id,
+      badges: <String>[
+        if (_operationScheduleEnabled(setup.schedule)) 'enabled' else 'paused',
+      ],
+      onTap: () => controller.selectAutomationRunSetup(setup.id),
+    );
+  }
+}
+
+class _ArtifactTile extends StatelessWidget {
+  const _ArtifactTile({required this.controller, required this.artifact});
+
+  final AgentAwesomeAppController controller;
+  final _OperationArtifactItem artifact;
+
+  /// Builds one selectable run artifact row.
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTile(
+      title: artifact.title,
+      subtitle: artifact.subtitle,
+      selected: controller.selectedAutomationRun?.id == artifact.run.id,
+      badges: <String>[artifact.workflowLabel],
+      onTap: () => unawaited(controller.selectAutomationRun(artifact.run.id)),
+    );
+  }
+}
+
+class _CodebaseTile extends StatelessWidget {
+  const _CodebaseTile({required this.controller, required this.codebase});
+
+  final AgentAwesomeAppController controller;
+  final AutomationCodebase codebase;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTile(
+      title: codebase.name,
+      subtitle: codebase.repositoryPath.isEmpty
+          ? codebase.providerRepository
+          : codebase.repositoryPath,
+      selected: controller.selectedAutomationCodebase?.id == codebase.id,
+      badges: <String>[
+        if (codebase.provider.isNotEmpty) codebase.provider else 'codebase',
+      ],
+      onTap: () => controller.selectAutomationCodebase(codebase.id),
+    );
+  }
+}
+
+class _RuntimeTargetTile extends StatelessWidget {
+  const _RuntimeTargetTile({required this.controller, required this.target});
+
+  final AgentAwesomeAppController controller;
+  final AutomationRuntimeTarget target;
+
+  /// Builds one selectable Computer or Server target card.
+  @override
+  Widget build(BuildContext context) {
+    final subtitle = <String>[
+      if (target.hostname.isNotEmpty) target.hostname,
+      if (target.os.isNotEmpty) target.os,
+      if (target.lastSeenAt.isNotEmpty) 'Seen ${target.lastSeenAt}',
+    ].join(' · ');
+    return _AutomationTile(
+      title: target.name,
+      subtitle: subtitle.isEmpty ? _targetKindLabel(target.kind) : subtitle,
+      selected: controller.selectedAutomationRuntimeTarget?.id == target.id,
+      badges: <String>[
+        _targetKindLabel(target.kind),
+        _targetStatusLabel(target.status),
+        if (target.currentRunCount > 0) 'Runs: ${target.currentRunCount}',
+      ],
+      onTap: () =>
+          unawaited(controller.selectAutomationRuntimeTarget(target.id)),
+    );
+  }
+}
+
+class _CapabilityTile extends StatelessWidget {
+  const _CapabilityTile({required this.controller, required this.capability});
+
+  final AgentAwesomeAppController controller;
+  final AutomationCapability capability;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTile(
+      title: capability.label.isEmpty ? capability.name : capability.label,
+      subtitle: capability.description.isEmpty
+          ? _capabilityKindLabel(capability.kind)
+          : capability.description,
+      selected: controller.selectedAutomationCapability?.id == capability.id,
+      badges: <String>[
+        _capabilityKindLabel(capability.kind),
+        _capabilityAvailabilityLabel(capability.availability.status),
+        if (capability.usableInChat) 'chat',
+        if (capability.usableInWorkflows) 'workflow',
+      ],
+      onTap: () => controller.selectAutomationCapability(capability.id),
     );
   }
 }
@@ -4617,12 +7109,205 @@ String _runDefinitionLabel(
   List<AutomationDefinition> definitions,
   AutomationRun run,
 ) {
-  for (final definition in definitions) {
-    if (definition.id == run.definitionId) {
-      return definition.name;
+  return _definitionLabel(
+    definitions,
+    run.definitionId,
+    fallback: 'Workflow run',
+  );
+}
+
+/// Returns the workflow file name for one definition id.
+String _definitionLabel(
+  List<AutomationDefinition> definitions,
+  String definitionId, {
+  String fallback = 'Workflow file',
+}) {
+  final definition = _definitionForId(definitions, definitionId);
+  return definition?.name ?? fallback;
+}
+
+/// Returns the codebase name for one catalog id.
+String _codebaseLabel(
+  List<AutomationCodebase> codebases,
+  String codebaseId, {
+  String fallback = 'Codebase',
+}) {
+  for (final codebase in codebases) {
+    if (codebase.id == codebaseId) {
+      return codebase.name;
     }
   }
-  return 'Workflow run';
+  return fallback;
+}
+
+/// Returns the Operation name for one Operation id.
+String _operationLabel(
+  List<AutomationRunSetup> operations,
+  String operationId, {
+  String fallback = 'Operation',
+}) {
+  for (final operation in operations) {
+    if (operation.id == operationId) {
+      return operation.name;
+    }
+  }
+  return fallback;
+}
+
+/// Returns the target name for one Computer or Server id.
+String _targetLabel(
+  List<AutomationRuntimeTarget> targets,
+  String targetId, {
+  String fallback = 'Computer or Server',
+}) {
+  for (final target in targets) {
+    if (target.id == targetId) {
+      return target.name;
+    }
+  }
+  return fallback;
+}
+
+/// Returns the first usable codebase id for an Operation dialog.
+String _initialCodebaseId(
+  List<AutomationCodebase> codebases,
+  String selectedCodebaseId,
+) {
+  for (final codebase in codebases) {
+    if (codebase.id == selectedCodebaseId) {
+      return codebase.id;
+    }
+  }
+  return codebases.isEmpty ? '' : codebases.first.id;
+}
+
+/// Returns the first usable target id for an Operation dialog.
+String _initialTargetId({
+  required List<AutomationCodebase> codebases,
+  required List<AutomationRuntimeTarget> targets,
+  required String codebaseId,
+  required String selectedTargetId,
+}) {
+  final options = _targetOptionsForCodebase(targets, codebaseId);
+  final codebase = _codebaseForId(codebases, codebaseId);
+  if (codebase != null &&
+      options.any((target) => target.id == codebase.runtimeTargetId)) {
+    return codebase.runtimeTargetId;
+  }
+  if (options.any((target) => target.id == selectedTargetId)) {
+    return selectedTargetId;
+  }
+  return options.isEmpty ? '' : options.first.id;
+}
+
+/// Returns targets eligible for the selected codebase.
+List<AutomationRuntimeTarget> _targetOptionsForCodebase(
+  List<AutomationRuntimeTarget> targets,
+  String codebaseId,
+) {
+  if (codebaseId.trim().isEmpty) {
+    return targets;
+  }
+  return <AutomationRuntimeTarget>[
+    for (final target in targets)
+      if (target.allowedCodebaseIds.isEmpty ||
+          target.allowedCodebaseIds.contains(codebaseId))
+        target,
+  ];
+}
+
+/// Finds one codebase by catalog id.
+AutomationCodebase? _codebaseForId(
+  List<AutomationCodebase> codebases,
+  String codebaseId,
+) {
+  for (final codebase in codebases) {
+    if (codebase.id == codebaseId) {
+      return codebase;
+    }
+  }
+  return null;
+}
+
+/// Builds the source-control safety policy chosen in the Operation dialog.
+Map<String, dynamic> _operationPolicyFromDialogResult(
+  _RunSetupDialogResult result,
+) {
+  return _operationPolicyFromSelections(
+    codebaseId: result.codebaseId,
+    runtimeTargetId: result.runtimeTargetId,
+    sourceControlPolicy: result.sourceControlPolicy,
+  );
+}
+
+/// Builds a structured Operation safety policy from typed selections.
+Map<String, dynamic> _operationPolicyFromSelections({
+  required String codebaseId,
+  required String runtimeTargetId,
+  required String sourceControlPolicy,
+}) {
+  if (sourceControlPolicy != _operationSafetyOpenPROnly) {
+    return const <String, dynamic>{};
+  }
+  return <String, dynamic>{
+    'source_control': _operationSafetyOpenPROnly,
+    'destructive_action': 'deny',
+    'allowed_tools': _operationSourceControlTools,
+    'allowed_mcp_servers': const <String>['sourcecontrol'],
+    if (codebaseId.isNotEmpty) 'allowed_codebases': <String>[codebaseId],
+    if (runtimeTargetId.isNotEmpty)
+      'allowed_targets': <String>[runtimeTargetId],
+  };
+}
+
+/// Reports whether one Operation should bind a codebase.
+bool _operationNeedsCodebase(AutomationDefinition definition) {
+  final setupFields = _workflowRunSetupSetupFields(definition.body);
+  if (setupFields.any(_isCodebaseBackedInputName)) {
+    return true;
+  }
+  final identity = '${definition.id} ${definition.name}'.toLowerCase();
+  return identity.contains('coding') || identity.contains('codex');
+}
+
+/// Reports whether one Operation should bind a Computer or Server.
+bool _operationNeedsTarget(AutomationDefinition definition) {
+  return _operationNeedsCodebase(definition);
+}
+
+/// Reports whether a workflow input should come from a codebase record.
+bool _isCodebaseBackedInputName(String name) {
+  return const <String>{
+    'repository_path',
+    'repo_path',
+    'default_remote',
+    'remote',
+    'default_branch',
+    'base_branch',
+    'provider_repository',
+    'go_module_path',
+  }.contains(name.trim());
+}
+
+/// Returns the user-facing source-control policy label.
+String _operationSourceControlPolicyLabel(String policy) {
+  return _operationSafetyLabels[policy.trim()] ??
+      (policy.trim().isEmpty
+          ? 'Open PR only'
+          : _stateMachineDisplayName(policy));
+}
+
+/// Finds one workflow file by id.
+AutomationDefinition? _definitionForId(
+  List<AutomationDefinition> definitions,
+  String definitionId,
+) {
+  for (final definition in definitions) {
+    if (definition.id == definitionId) {
+      return definition;
+    }
+  }
+  return null;
 }
 
 /// Returns concise product-facing status for a workflow run.
@@ -4632,6 +7317,379 @@ String _runSubtitle(AutomationRun run) {
     return _draftStatusLabel(run.status);
   }
   return state;
+}
+
+/// Returns the user-facing label for one target kind.
+String _targetKindLabel(String kind) {
+  return switch (kind.trim()) {
+    'local' => 'This computer',
+    'lan' => 'Nearby computer',
+    'cloud' => 'Cloud server',
+    'managed' => 'Managed server',
+    _ =>
+      kind.trim().isEmpty
+          ? 'Computer or Server'
+          : _stateMachineDisplayName(kind),
+  };
+}
+
+/// Returns the user-facing label for one target status.
+String _targetStatusLabel(String status) {
+  return switch (status.trim()) {
+    'healthy' => 'healthy',
+    'offline' => 'offline',
+    'needs_setup' => 'Needs Setup',
+    'needs_review' => 'Needs Review',
+    _ => status.trim().isEmpty ? 'unknown' : _stateMachineDisplayName(status),
+  };
+}
+
+/// Returns the user-facing label for one Operation preview status.
+String _operationPreviewStatusLabel(String status) {
+  return switch (status.trim()) {
+    'ready' => 'ready',
+    'needs_input' => 'Needs Setup',
+    'blocked' => 'blocked',
+    _ => status.trim().isEmpty ? 'unknown' : _stateMachineDisplayName(status),
+  };
+}
+
+/// Returns the user-facing label for one Operation policy status.
+String _operationPolicyStatusLabel(String status) {
+  return switch (status.trim()) {
+    'allowed' => 'allowed',
+    'blocked' => 'blocked',
+    _ => status.trim().isEmpty ? 'unknown' : _stateMachineDisplayName(status),
+  };
+}
+
+/// Builds display-safe resolved input rows for an Operation preview.
+List<String> _operationPreviewInputRows(AutomationOperationPreview preview) {
+  final keys = preview.resolvedInput.keys.toList()..sort();
+  if (keys.isEmpty) {
+    return const <String>['No resolved inputs'];
+  }
+  return <String>[
+    for (final key in keys)
+      '${_stateMachineDisplayName(key)}: ${_displayPreviewValue(preview.resolvedInput[key])}',
+  ];
+}
+
+/// Converts preview values to compact display-safe text.
+String _displayPreviewValue(Object? value) {
+  if (value == null) {
+    return '';
+  }
+  if (value is bool || value is num) {
+    return '$value';
+  }
+  if (value is String) {
+    return value;
+  }
+  return jsonEncode(value);
+}
+
+/// Builds setup rows for one saved Operation.
+List<String> _operationSetupRows(
+  AutomationRunSetup setup, {
+  required List<AutomationDefinition> definitions,
+  required List<AutomationCodebase> codebases,
+  required List<AutomationRuntimeTarget> targets,
+}) {
+  return <String>[
+    'Operation: ${setup.name}',
+    'Workflow file: ${_definitionLabel(definitions, setup.definitionId)}',
+    if (setup.codebaseId.isNotEmpty)
+      'Codebase: ${_codebaseLabel(codebases, setup.codebaseId)}',
+    if (setup.runtimeTargetId.isNotEmpty)
+      'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
+    if (setup.policy['source_control'] != null)
+      'Safety: ${_operationSourceControlPolicyLabel('${setup.policy['source_control']}')}',
+    if (setup.updatedAt.isNotEmpty) 'Updated: ${setup.updatedAt}',
+  ];
+}
+
+/// Builds saved input rows for one Operation.
+List<String> _operationInputRows(AutomationRunSetup setup) {
+  final keys = setup.input.keys.toList()..sort();
+  if (keys.isEmpty) {
+    return const <String>['No saved default inputs'];
+  }
+  return <String>[
+    for (final key in keys)
+      '${_stateMachineDisplayName(key)}: ${_displayPreviewValue(setup.input[key])}',
+  ];
+}
+
+/// Builds target binding rows for one Operation.
+List<String> _operationTargetRows(
+  AutomationRunSetup setup, {
+  required List<AutomationCodebase> codebases,
+  required List<AutomationRuntimeTarget> targets,
+}) {
+  return <String>[
+    if (setup.runtimeTargetId.isEmpty) 'Run on: not selected',
+    if (setup.runtimeTargetId.isNotEmpty)
+      'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
+    if (setup.codebaseId.isNotEmpty)
+      'Allowed codebase: ${_codebaseLabel(codebases, setup.codebaseId)}',
+    if (_stringListFromMap(setup.policy, 'allowed_targets').isNotEmpty)
+      'Allowed targets: ${_stringListFromMap(setup.policy, 'allowed_targets').map((targetId) => _targetLabel(targets, targetId)).join(', ')}',
+  ];
+}
+
+/// Builds schedule rows for one Operation.
+List<String> _operationScheduleRows(AutomationRunSetup setup) {
+  final schedule = setup.schedule;
+  if (!_operationHasSchedule(setup)) {
+    return const <String>['Schedule: manual only'];
+  }
+  return <String>[
+    'Schedule: ${_operationScheduleLabel(schedule)}',
+    'Status: ${_operationScheduleEnabled(schedule) ? 'enabled' : 'paused'}',
+    if (_stringFromMap(schedule, 'quiet_hours_start').isNotEmpty ||
+        _stringFromMap(schedule, 'quiet_hours_end').isNotEmpty)
+      'Quiet hours: ${_stringFromMap(schedule, 'quiet_hours_start')} - ${_stringFromMap(schedule, 'quiet_hours_end')}',
+    if (_stringFromMap(schedule, 'stop_at').isNotEmpty)
+      'Stop at: ${_stringFromMap(schedule, 'stop_at')}',
+    if (_intFromMap(schedule, 'max_runs') > 0)
+      'Max runs: ${_intFromMap(schedule, 'max_runs')}',
+  ];
+}
+
+/// Builds policy rows for one Operation.
+List<String> _operationSafetyRows(
+  AutomationRunSetup setup, {
+  required List<AutomationCodebase> codebases,
+  required List<AutomationRuntimeTarget> targets,
+}) {
+  final policy = setup.policy;
+  if (policy.isEmpty) {
+    return const <String>['Safety: default Operation policy'];
+  }
+  return <String>[
+    if (_stringFromMap(policy, 'source_control').isNotEmpty)
+      'Source control: ${_operationSourceControlPolicyLabel(_stringFromMap(policy, 'source_control'))}',
+    if (_stringFromMap(policy, 'destructive_action').isNotEmpty)
+      'Destructive actions: ${_operationDestructiveActionLabel(_stringFromMap(policy, 'destructive_action'))}',
+    if (_stringListFromMap(policy, 'allowed_codebases').isNotEmpty)
+      'Allowed codebases: ${_stringListFromMap(policy, 'allowed_codebases').map((codebaseId) => _codebaseLabel(codebases, codebaseId)).join(', ')}',
+    if (_stringListFromMap(policy, 'allowed_targets').isNotEmpty)
+      'Allowed targets: ${_stringListFromMap(policy, 'allowed_targets').map((targetId) => _targetLabel(targets, targetId)).join(', ')}',
+    if (_intFromMap(policy, 'max_parallelism') > 0)
+      'Max parallel runs: ${_intFromMap(policy, 'max_parallelism')}',
+    if (_intFromMap(policy, 'retry_limit') > 0)
+      'Retries: ${_intFromMap(policy, 'retry_limit')}',
+  ];
+}
+
+/// Builds run rows for one Operation.
+List<String> _operationRunRows(
+  AutomationRunSetup setup,
+  List<AutomationRun> runs, {
+  required List<AutomationDefinition> definitions,
+}) {
+  final matching = runs
+      .where((run) => run.definitionId == setup.definitionId)
+      .toList();
+  if (matching.isEmpty) {
+    return const <String>['No runs for this Operation'];
+  }
+  return <String>[
+    'Runs: ${matching.length}',
+    for (final run in matching.take(8))
+      '${_runDefinitionLabel(definitions, run)}: ${_draftStatusLabel(run.status)}${run.state.isEmpty ? '' : ' / ${run.state}'}',
+  ];
+}
+
+/// Reports whether one Operation has a saved schedule.
+bool _operationHasSchedule(AutomationRunSetup setup) {
+  final schedule = setup.schedule;
+  if (schedule.isEmpty) {
+    return false;
+  }
+  return _operationScheduleEnabled(schedule) ||
+      _stringFromMap(schedule, 'cron').isNotEmpty ||
+      _stringFromMap(schedule, 'stop_at').isNotEmpty;
+}
+
+/// Reports whether one saved schedule is enabled.
+bool _operationScheduleEnabled(Map<String, dynamic> schedule) {
+  return schedule['enabled'] == true ||
+      '${schedule['enabled'] ?? ''}'.trim().toLowerCase() == 'true';
+}
+
+/// Returns a product-facing schedule label.
+String _operationScheduleLabel(Map<String, dynamic> schedule) {
+  final cron = _stringFromMap(schedule, 'cron');
+  if (cron.isEmpty) {
+    return _operationScheduleEnabled(schedule) ? 'Enabled' : 'Manual only';
+  }
+  final parts = cron.split(RegExp(r'\s+'));
+  if (parts.length == 5) {
+    final minute = int.tryParse(parts[0]);
+    final hour = int.tryParse(parts[1]);
+    if (minute != null && hour != null) {
+      final time =
+          '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+      if (parts[2] == '*' && parts[3] == '*' && parts[4] == '*') {
+        return 'Daily at $time';
+      }
+      if (parts[2] == '*' && parts[3] == '*' && parts[4] != '*') {
+        return 'Weekly at $time';
+      }
+    }
+  }
+  return 'Custom schedule';
+}
+
+/// Returns a product-facing destructive-action policy label.
+String _operationDestructiveActionLabel(String value) {
+  return switch (value.trim()) {
+    'deny' => 'denied',
+    'review' => 'Needs Review',
+    'allow' => 'allowed',
+    _ =>
+      value.trim().isEmpty ? 'not configured' : _stateMachineDisplayName(value),
+  };
+}
+
+/// Builds overview rows for one Computer or Server target.
+List<String> _targetOverviewRows(
+  AutomationRuntimeTarget target,
+  AutomationTargetHealth? health,
+  AutomationTargetSecretMetadata? secrets,
+) {
+  return <String>[
+    'Selected: ${target.name}',
+    'Kind: ${_targetKindLabel(target.kind)}',
+    'Status: ${_targetStatusLabel(health?.status ?? target.status)}',
+    'Capabilities: ${target.capabilities.length}',
+    'Secret references: ${secrets?.count ?? target.secretRefCount}',
+    'Active runs: ${health?.currentRunCount ?? target.currentRunCount}',
+    if ((health?.hostname ?? target.hostname).isNotEmpty)
+      'Computer: ${health?.hostname ?? target.hostname}',
+    if ((health?.os ?? target.os).isNotEmpty)
+      'System: ${health?.os ?? target.os}',
+    if ((health?.version ?? target.version).isNotEmpty)
+      'Version: ${health?.version ?? target.version}',
+    if (target.lastSeenAt.isNotEmpty) 'Last seen: ${target.lastSeenAt}',
+  ];
+}
+
+/// Builds health rows for one Computer or Server target.
+List<String> _targetHealthRows(
+  AutomationRuntimeTarget target,
+  AutomationTargetHealth? health,
+) {
+  return <String>[
+    'Status: ${_targetStatusLabel(health?.status ?? target.status)}',
+    if ((health?.message ?? '').isNotEmpty) health!.message,
+    'Active runs: ${health?.currentRunCount ?? target.currentRunCount}',
+    if ((health?.hostname ?? target.hostname).isNotEmpty)
+      'Computer: ${health?.hostname ?? target.hostname}',
+    if ((health?.os ?? target.os).isNotEmpty)
+      'System: ${health?.os ?? target.os}',
+    if ((health?.version ?? target.version).isNotEmpty)
+      'Version: ${health?.version ?? target.version}',
+    if ((health?.checkedAt ?? '').isNotEmpty) 'Checked: ${health!.checkedAt}',
+    if (target.lastSeenAt.isNotEmpty) 'Last seen: ${target.lastSeenAt}',
+  ];
+}
+
+/// Builds capability rows for one Computer or Server target.
+List<String> _targetCapabilityRows(
+  AutomationRuntimeTarget target,
+  List<AutomationCapability> capabilities,
+) {
+  final rows = <String>['Capabilities: ${target.capabilities.length}'];
+  for (final capabilityId in target.capabilities.take(14)) {
+    rows.add(_targetCapabilityLabel(capabilityId, capabilities));
+  }
+  if (target.capabilities.length > 14) {
+    rows.add('More capabilities: ${target.capabilities.length - 14}');
+  }
+  return rows;
+}
+
+/// Builds secret reference rows for one Computer or Server target.
+List<String> _targetSecretRows(
+  AutomationRuntimeTarget target,
+  AutomationTargetSecretMetadata? secrets,
+) {
+  return <String>[
+    'Secret references: ${secrets?.count ?? target.secretRefCount}',
+  ];
+}
+
+/// Builds operation routing rows for one Computer or Server target.
+List<String> _targetOperationRows(
+  AutomationRuntimeTarget target,
+  List<AutomationRunSetup> operations,
+) {
+  return <String>[
+    'Saved Operations: ${operations.length}',
+    'Active runs: ${target.currentRunCount}',
+    if (target.allowedCodebaseIds.isNotEmpty)
+      'Allowed codebases: ${target.allowedCodebaseIds.length}',
+  ];
+}
+
+/// Builds editable-setting summary rows for one Computer or Server target.
+List<String> _targetSettingsRows(
+  AutomationRuntimeTarget target,
+  List<AutomationCodebase> codebases,
+) {
+  return <String>[
+    'Name: ${target.name}',
+    'Kind: ${_targetKindLabel(target.kind)}',
+    'Allowed codebases: ${_targetAllowedCodebaseLabels(target, codebases)}',
+    'Secret references: ${target.secretRefCount}',
+    if (target.updatedAt.isNotEmpty) 'Updated: ${target.updatedAt}',
+  ];
+}
+
+/// Builds update metadata rows for one Computer or Server target.
+List<String> _targetUpdateRows(
+  AutomationRuntimeTarget target,
+  AutomationTargetHealth? health,
+) {
+  return <String>[
+    if ((health?.version ?? target.version).isNotEmpty)
+      'Version: ${health?.version ?? target.version}',
+    if ((health?.checkedAt ?? '').isNotEmpty) 'Checked: ${health!.checkedAt}',
+    if (target.lastSeenAt.isNotEmpty) 'Last seen: ${target.lastSeenAt}',
+    if (target.updatedAt.isNotEmpty) 'Updated: ${target.updatedAt}',
+  ];
+}
+
+/// Returns display labels for codebases allowed on a target.
+String _targetAllowedCodebaseLabels(
+  AutomationRuntimeTarget target,
+  List<AutomationCodebase> codebases,
+) {
+  if (target.allowedCodebaseIds.isEmpty) {
+    return 'All configured codebases';
+  }
+  return target.allowedCodebaseIds
+      .map((id) => _codebaseLabel(codebases, id))
+      .join(', ');
+}
+
+/// Returns a display-safe capability label for a target inventory entry.
+String _targetCapabilityLabel(
+  String capabilityId,
+  List<AutomationCapability> capabilities,
+) {
+  for (final capability in capabilities) {
+    if (capability.id == capabilityId) {
+      return capability.label.isEmpty ? capability.name : capability.label;
+    }
+  }
+  final display = capabilityId.split(':').last.trim();
+  return display.isEmpty
+      ? 'Configured capability'
+      : _stateMachineDisplayName(display);
 }
 
 class _AutomationTile extends StatelessWidget {
@@ -4739,6 +7797,197 @@ List<AutomationDraft> _filterDrafts(
   }).toList();
 }
 
+List<AutomationRunSetup> _filterRunSetups(
+  List<AutomationRunSetup> setups,
+  String query, {
+  List<AutomationDefinition> definitions = const <AutomationDefinition>[],
+}) {
+  final needle = query.toLowerCase();
+  return setups.where((setup) {
+    return setup.name.toLowerCase().contains(needle) ||
+        setup.description.toLowerCase().contains(needle) ||
+        _definitionLabel(
+          definitions,
+          setup.definitionId,
+        ).toLowerCase().contains(needle);
+  }).toList();
+}
+
+/// Filters Operations that have a saved schedule.
+List<AutomationRunSetup> _filterScheduledOperations(
+  List<AutomationRunSetup> setups,
+  String query, {
+  List<AutomationDefinition> definitions = const <AutomationDefinition>[],
+}) {
+  return _filterRunSetups(
+    setups.where(_operationHasSchedule).toList(),
+    query,
+    definitions: definitions,
+  );
+}
+
+List<AutomationCodebase> _filterCodebases(
+  List<AutomationCodebase> codebases,
+  String query,
+) {
+  final needle = query.toLowerCase();
+  return codebases.where((codebase) {
+    return codebase.name.toLowerCase().contains(needle) ||
+        codebase.repositoryPath.toLowerCase().contains(needle) ||
+        codebase.providerRepository.toLowerCase().contains(needle) ||
+        codebase.aliases.any((alias) => alias.toLowerCase().contains(needle));
+  }).toList();
+}
+
+List<AutomationRuntimeTarget> _filterRuntimeTargets(
+  List<AutomationRuntimeTarget> targets,
+  String query,
+) {
+  final needle = query.toLowerCase();
+  return targets.where((target) {
+    return target.name.toLowerCase().contains(needle) ||
+        target.hostname.toLowerCase().contains(needle) ||
+        target.os.toLowerCase().contains(needle) ||
+        _targetKindLabel(target.kind).toLowerCase().contains(needle) ||
+        _targetStatusLabel(target.status).toLowerCase().contains(needle);
+  }).toList();
+}
+
+List<AutomationCapability> _filterCapabilities(
+  List<AutomationCapability> capabilities,
+  String query,
+) {
+  final needle = query.toLowerCase();
+  return capabilities.where((capability) {
+    return capability.id.toLowerCase().contains(needle) ||
+        capability.name.toLowerCase().contains(needle) ||
+        capability.label.toLowerCase().contains(needle) ||
+        capability.description.toLowerCase().contains(needle) ||
+        _capabilityKindLabel(capability.kind).toLowerCase().contains(needle) ||
+        _capabilityAvailabilityLabel(
+          capability.availability.status,
+        ).toLowerCase().contains(needle);
+  }).toList();
+}
+
+String _capabilityKindLabel(String kind) {
+  return switch (kind.trim()) {
+    'mcp_server' => 'MCP server',
+    'mcp_tool' => 'MCP tool',
+    'agent_profile' => 'agent profile',
+    'workflow_action' => 'workflow action',
+    'node_preset' => 'node preset',
+    'node_scenario' => 'scenario',
+    'command' => 'command',
+    _ => kind.trim().replaceAll('_', ' '),
+  };
+}
+
+String _capabilityAvailabilityLabel(String status) {
+  return switch (status.trim()) {
+    'available' => 'available',
+    'unavailable' => 'Needs Setup',
+    'needs_check' => 'Needs Review',
+    _ => status.trim().isEmpty ? 'unknown' : status.trim().replaceAll('_', ' '),
+  };
+}
+
+List<String> _capabilityInvocationRows(AutomationCapability capability) {
+  final invocation = capability.invocation;
+  return <String>[
+    if (_stringFromMap(invocation, 'direct_tool_name').isNotEmpty)
+      'Direct: ${_stringFromMap(invocation, 'direct_tool_name')}',
+    if (_stringFromMap(invocation, 'workflow_action').isNotEmpty)
+      'Workflow action: ${_stringFromMap(invocation, 'workflow_action')}',
+    if (_stringFromMap(invocation, 'command_template').isNotEmpty)
+      'Command: ${_stringFromMap(invocation, 'command_template')}',
+    if (_stringFromMap(invocation, 'mcp_server').isNotEmpty)
+      'MCP server: ${_stringFromMap(invocation, 'mcp_server')}',
+    if (_stringFromMap(invocation, 'mcp_tool').isNotEmpty)
+      'MCP tool: ${_stringFromMap(invocation, 'mcp_tool')}',
+    if (_stringFromMap(invocation, 'agent_profile_id').isNotEmpty)
+      'Agent profile: ${_stringFromMap(invocation, 'agent_profile_id')}',
+    if (_stringFromMap(invocation, 'node_preset_id').isNotEmpty)
+      'Preset: ${_stringFromMap(invocation, 'node_preset_id')}',
+    if (_stringFromMap(invocation, 'node_scenario_id').isNotEmpty)
+      'Scenario: ${_stringFromMap(invocation, 'node_scenario_id')}',
+  ];
+}
+
+List<String> _capabilitySafetyRows(AutomationCapability capability) {
+  final riskLevel = _stringFromMap(capability.risk, 'level');
+  final confirmationRequired =
+      capability.contract['confirmation_required'] == true ||
+      capability.risk['requires_confirmation'] == true;
+  return <String>[
+    if (riskLevel.isNotEmpty) 'Risk: $riskLevel',
+    confirmationRequired
+        ? 'Confirmation: required'
+        : 'Confirmation: not required',
+  ];
+}
+
+String _stringFromMap(Map<String, dynamic> values, String key) {
+  final value = values[key];
+  if (value == null) {
+    return '';
+  }
+  return '$value'.trim();
+}
+
+/// Reads a display-safe string list from a JSON-like map.
+List<String> _stringListFromMap(Map<String, dynamic> values, String key) {
+  final value = values[key];
+  if (value is List) {
+    return <String>[
+      for (final item in value)
+        if ('$item'.trim().isNotEmpty) '$item'.trim(),
+    ];
+  }
+  final single = '$value'.trim();
+  return single.isEmpty ? const <String>[] : <String>[single];
+}
+
+/// Reads an integer from a JSON-like map.
+int _intFromMap(Map<String, dynamic> values, String key) {
+  final value = values[key];
+  if (value is int) {
+    return value;
+  }
+  if (value is num) {
+    return value.toInt();
+  }
+  return int.tryParse('$value'.trim()) ?? 0;
+}
+
+List<String> _splitCodebaseAliases(String value) {
+  return value
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList();
+}
+
+String _stableCodebaseId(String name) {
+  final buffer = StringBuffer();
+  var lastWasSeparator = false;
+  for (final unit in name.trim().toLowerCase().codeUnits) {
+    final isLetter = unit >= 97 && unit <= 122;
+    final isDigit = unit >= 48 && unit <= 57;
+    if (isLetter || isDigit) {
+      buffer.writeCharCode(unit);
+      lastWasSeparator = false;
+      continue;
+    }
+    if (!lastWasSeparator && buffer.isNotEmpty) {
+      buffer.write('_');
+      lastWasSeparator = true;
+    }
+  }
+  final id = buffer.toString().replaceFirst(RegExp(r'_+$'), '');
+  return id.isEmpty ? 'codebase' : id;
+}
+
 List<AutomationRun> _filterRuns(
   List<AutomationRun> runs,
   String query, {
@@ -4753,6 +8002,85 @@ List<AutomationRun> _filterRuns(
         _draftKindLabel(run.kind).toLowerCase().contains(needle) ||
         _draftStatusLabel(run.status).toLowerCase().contains(needle) ||
         run.state.toLowerCase().contains(needle);
+  }).toList();
+}
+
+/// Builds artifact rows from workflow run output.
+List<_OperationArtifactItem> _operationArtifactsForRuns(
+  List<AutomationRun> runs, {
+  required List<AutomationDefinition> definitions,
+}) {
+  final artifacts = <_OperationArtifactItem>[];
+  for (final run in runs) {
+    final workflowLabel = _runDefinitionLabel(definitions, run);
+    artifacts.addAll(
+      _operationArtifactsForRun(run, workflowLabel: workflowLabel),
+    );
+  }
+  return artifacts;
+}
+
+/// Builds artifact rows from one workflow run output.
+List<_OperationArtifactItem> _operationArtifactsForRun(
+  AutomationRun run, {
+  required String workflowLabel,
+}) {
+  final output = run.output;
+  final artifacts = <_OperationArtifactItem>[];
+  void addArtifact(String title, Object? value) {
+    final text = _displayPreviewValue(value).trim();
+    if (text.isEmpty) {
+      return;
+    }
+    artifacts.add(
+      _OperationArtifactItem(
+        run: run,
+        title: title,
+        subtitle: text,
+        workflowLabel: workflowLabel,
+      ),
+    );
+  }
+
+  addArtifact('Pull request', output['pull_request_url'] ?? output['pr_url']);
+  addArtifact('Branch', output['branch_url']);
+  addArtifact('Commit', output['commit_url']);
+  addArtifact('Report', output['report_url']);
+  final artifactList = output['artifacts'];
+  if (artifactList is List) {
+    for (final item in artifactList) {
+      if (item is Map) {
+        final map = _map(item);
+        addArtifact(
+          _stateMachineDisplayName(
+            '${map['type'] ?? map['name'] ?? 'artifact'}',
+          ),
+          map['url'] ?? map['path'] ?? map['name'],
+        );
+      } else {
+        addArtifact('Artifact', item);
+      }
+    }
+  }
+  final files = output['files'];
+  if (files is List) {
+    for (final file in files) {
+      addArtifact('File', file);
+    }
+  }
+  return artifacts;
+}
+
+/// Filters artifact rows by user-facing labels.
+List<_OperationArtifactItem> _filterOperationArtifacts(
+  List<_OperationArtifactItem> artifacts,
+  String query,
+) {
+  final needle = query.toLowerCase();
+  return artifacts.where((artifact) {
+    return artifact.title.toLowerCase().contains(needle) ||
+        artifact.subtitle.toLowerCase().contains(needle) ||
+        artifact.workflowLabel.toLowerCase().contains(needle);
   }).toList();
 }
 

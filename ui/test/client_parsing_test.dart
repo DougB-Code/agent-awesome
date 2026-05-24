@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:agentawesome_ui/clients/assistant_client.dart';
 import 'package:agentawesome_ui/clients/mcp_client.dart';
 import 'package:agentawesome_ui/domain/executive_summary.dart';
+import 'package:agentawesome_ui/domain/models_automation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -665,6 +666,170 @@ void main() {
   });
 
   group('context client', () {
+    test('parses typed codebase records', () {
+      final codebases = parseAutomationCodebases(<Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'agent_awesome',
+          'name': 'Agent Awesome',
+          'aliases': <String>['aa'],
+          'repository_path': '/repo/agent',
+          'default_remote': 'origin',
+          'default_branch': 'main',
+          'provider': 'github',
+          'provider_repository': 'agentawesome/agent',
+        },
+      ]);
+
+      expect(codebases.single.id, 'agent_awesome');
+      expect(codebases.single.aliases, <String>['aa']);
+      expect(codebases.single.providerRepository, 'agentawesome/agent');
+    });
+
+    test('parses capability registry records', () {
+      final capability = parseAutomationCapability(<String, dynamic>{
+        'id': 'command:go_test_all',
+        'kind': 'command',
+        'name': 'go_test_all',
+        'label': 'Go test all',
+        'description': 'Run Go tests.',
+        'usable_in_chat': true,
+        'usable_in_workflows': true,
+        'invocation': <String, dynamic>{
+          'direct_tool_name': 'command_execute',
+          'workflow_action': 'command.execute',
+          'command_template': 'go_test_all',
+        },
+        'contract': <String, dynamic>{'confirmation_required': true},
+        'risk': <String, dynamic>{
+          'level': 'tool',
+          'requires_confirmation': true,
+        },
+        'availability': <String, dynamic>{
+          'status': 'available',
+          'reasons': <String>[],
+        },
+        'test_results': <Map<String, dynamic>>[
+          <String, dynamic>{'type': 'schema', 'status': 'available'},
+        ],
+      });
+
+      expect(capability.id, 'command:go_test_all');
+      expect(capability.usableInWorkflows, isTrue);
+      expect(capability.invocation['workflow_action'], 'command.execute');
+      expect(capability.availability.status, 'available');
+      expect(capability.testResults.single.type, 'schema');
+    });
+
+    test('parses Operation preview records', () {
+      final preview = parseAutomationOperationPreview(<String, dynamic>{
+        'operation': <String, dynamic>{
+          'id': 'codex_change',
+          'workflow_id': 'professional_coding_change',
+          'name': 'Codex Coding Change',
+          'codebase_id': 'agent_awesome',
+          'runtime_target_id': 'local',
+          'defaults': <String, dynamic>{'binary_package': '.'},
+          'policy': <String, dynamic>{
+            'source_control': 'open_pr_only',
+            'allowed_targets': <String>['local'],
+          },
+        },
+        'status': 'needs_input',
+        'resolved_input': <String, dynamic>{
+          'repository_path': '/repo/agent',
+          'remote': 'origin',
+        },
+        'resolution': <String, dynamic>{
+          'fields': <String, dynamic>{
+            'repository_path': <String, dynamic>{'source': 'codebase_default'},
+          },
+        },
+        'missing_setup': <String>['change_request'],
+        'policy_decision': <String, dynamic>{
+          'status': 'allowed',
+          'reasons': <String>[],
+        },
+      });
+
+      expect(preview.operation.id, 'codex_change');
+      expect(preview.operation.runtimeTargetId, 'local');
+      expect(preview.operation.input['binary_package'], '.');
+      expect(preview.operation.policy['source_control'], 'open_pr_only');
+      expect(preview.status, 'needs_input');
+      expect(preview.resolvedInput['repository_path'], '/repo/agent');
+      expect(preview.missingSetup, <String>['change_request']);
+      expect(preview.policyDecision.status, 'allowed');
+    });
+
+    test('parses Operation run snapshots', () {
+      final snapshot = parseAutomationOperationRunSnapshot(<String, dynamic>{
+        'run_id': 'run_1',
+        'operation_id': 'setup_1',
+        'operation_version': 2,
+        'workflow_id': 'professional_coding_change',
+        'resolved_input': <String, dynamic>{'repository_path': '/repo/agent'},
+        'target': <String, dynamic>{'runtime_target_id': 'local'},
+        'policy': <String, dynamic>{'source_control': 'open_pr_only'},
+        'secret_refs': <Map<String, dynamic>>[
+          <String, dynamic>{'name': 'github_token', 'ref': 'secret://github'},
+        ],
+      });
+
+      expect(snapshot.runId, 'run_1');
+      expect(snapshot.operationId, 'setup_1');
+      expect(snapshot.operationVersion, 2);
+      expect(snapshot.target['runtime_target_id'], 'local');
+      expect(snapshot.secretRefs.single['name'], 'github_token');
+    });
+
+    test('parses Runtime Target records', () {
+      final targets = parseAutomationRuntimeTargets(<String, dynamic>{
+        'targets': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 'local',
+            'name': 'This computer',
+            'kind': 'local',
+            'status': 'healthy',
+            'version': 'dev',
+            'capabilities': <String>['command:go_test_all'],
+            'allowed_codebase_ids': <String>['agent_awesome'],
+            'secret_ref_count': 1,
+            'last_seen_at': '2026-05-24T10:00:00Z',
+            'current_run_count': 2,
+            'os': 'linux',
+            'hostname': 'workstation',
+          },
+        ],
+      });
+      final health = parseAutomationTargetHealth(<String, dynamic>{
+        'target_id': 'local',
+        'status': 'healthy',
+        'message': 'ready',
+        'current_run_count': 2,
+      });
+      final logs = parseAutomationTargetLogs(<String, dynamic>{
+        'logs': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'id': 1,
+            'target_id': 'local',
+            'level': 'info',
+            'message': 'Local target registered',
+          },
+        ],
+      });
+      final secrets = parseAutomationTargetSecretMetadata(<String, dynamic>{
+        'target_id': 'local',
+        'count': 1,
+      });
+
+      expect(targets.single.name, 'This computer');
+      expect(targets.single.capabilities, <String>['command:go_test_all']);
+      expect(targets.single.allowedCodebaseIds, <String>['agent_awesome']);
+      expect(health.currentRunCount, 2);
+      expect(logs.single.message, 'Local target registered');
+      expect(secrets.count, 1);
+    });
+
     test('sends gateway auth headers', () async {
       final client = GatewayContextClient(
         baseUrl: 'http://127.0.0.1:1/api/context',

@@ -113,6 +113,67 @@ class AutomationsClient {
     return _list(decoded['packages']).map(parseAutomationPackage).toList();
   }
 
+  /// Lists normalized harness capabilities.
+  Future<List<AutomationCapability>> listCapabilities({
+    String kind = '',
+    bool? usableInChat,
+    bool? usableInWorkflows,
+  }) async {
+    final query = <String, String>{
+      if (kind.trim().isNotEmpty) 'kind': kind.trim(),
+      if (usableInChat != null) 'usable_in_chat': '$usableInChat',
+      if (usableInWorkflows != null)
+        'usable_in_workflows': '$usableInWorkflows',
+    };
+    final decoded = await _capabilitiesGet('', query: query);
+    return _list(
+      decoded['capabilities'],
+    ).map(parseAutomationCapability).toList();
+  }
+
+  /// Lists Computer or Server targets.
+  Future<List<AutomationRuntimeTarget>> listRuntimeTargets() async {
+    final decoded = await _runtimeTargetsGet('');
+    return parseAutomationRuntimeTargets(decoded);
+  }
+
+  /// Loads one Computer or Server target.
+  Future<AutomationRuntimeTarget> getRuntimeTarget(String targetId) async {
+    final decoded = await _runtimeTargetsGet('/$targetId');
+    return parseAutomationRuntimeTarget(decoded['target']);
+  }
+
+  /// Updates editable Computer or Server target fields.
+  Future<AutomationRuntimeTarget> updateRuntimeTarget(
+    AutomationRuntimeTarget target,
+  ) async {
+    final decoded = await _runtimeTargetsPut('/${target.id}', <String, dynamic>{
+      'name': target.name,
+      'status': target.status,
+      'allowed_codebase_ids': target.allowedCodebaseIds,
+      'secret_ref_count': target.secretRefCount,
+    });
+    return parseAutomationRuntimeTarget(decoded['target']);
+  }
+
+  /// Loads target health metadata.
+  Future<AutomationTargetHealth> targetHealth(String targetId) async {
+    final decoded = await _runtimeTargetsGet('/$targetId/health');
+    return parseAutomationTargetHealth(decoded['health']);
+  }
+
+  /// Lists display-safe target logs.
+  Future<List<AutomationTargetLogEntry>> targetLogs(String targetId) async {
+    final decoded = await _runtimeTargetsGet('/$targetId/logs');
+    return parseAutomationTargetLogs(decoded);
+  }
+
+  /// Loads target secret reference metadata.
+  Future<AutomationTargetSecretMetadata> targetSecrets(String targetId) async {
+    final decoded = await _runtimeTargetsGet('/$targetId/secrets');
+    return parseAutomationTargetSecretMetadata(decoded['secrets']);
+  }
+
   /// Lists workflow runs for operations.
   Future<List<AutomationRun>> listRuns({
     String status = '',
@@ -126,6 +187,96 @@ class AutomationsClient {
     };
     final decoded = await _get('/runs', query: query);
     return _list(decoded['runs']).map(parseAutomationRun).toList();
+  }
+
+  /// Lists saved Operations.
+  Future<List<AutomationRunSetup>> listRunSetups({
+    String definitionId = '',
+  }) async {
+    final query = <String, String>{
+      if (definitionId.trim().isNotEmpty) 'workflow_id': definitionId.trim(),
+    };
+    final decoded = await _operationsGet('', query: query);
+    return _list(decoded['operations']).map(parseAutomationRunSetup).toList();
+  }
+
+  /// Creates one saved Operation.
+  Future<AutomationRunSetup> createRunSetup({
+    required String definitionId,
+    required String name,
+    String description = '',
+    String codebaseId = '',
+    String runtimeTargetId = '',
+    String agentProfileId = '',
+    Map<String, dynamic> input = const <String, dynamic>{},
+    Map<String, dynamic> policy = const <String, dynamic>{},
+    Map<String, dynamic> schedule = const <String, dynamic>{},
+  }) async {
+    final decoded = await _operationsPost('', <String, dynamic>{
+      'workflow_id': definitionId,
+      'name': name,
+      'description': description,
+      if (codebaseId.trim().isNotEmpty) 'codebase_id': codebaseId.trim(),
+      if (runtimeTargetId.trim().isNotEmpty)
+        'runtime_target_id': runtimeTargetId.trim(),
+      if (agentProfileId.trim().isNotEmpty)
+        'agent_profile_id': agentProfileId.trim(),
+      'defaults': input,
+      if (policy.isNotEmpty) 'policy': policy,
+      if (schedule.isNotEmpty) 'schedule': schedule,
+    });
+    return parseAutomationRunSetup(decoded['operation']);
+  }
+
+  /// Updates one saved Operation.
+  Future<AutomationRunSetup> updateRunSetup(AutomationRunSetup setup) async {
+    final decoded = await _operationsPut('/${setup.id}', <String, dynamic>{
+      'workflow_id': setup.definitionId,
+      'name': setup.name,
+      'description': setup.description,
+      if (setup.codebaseId.trim().isNotEmpty)
+        'codebase_id': setup.codebaseId.trim(),
+      if (setup.runtimeTargetId.trim().isNotEmpty)
+        'runtime_target_id': setup.runtimeTargetId.trim(),
+      if (setup.agentProfileId.trim().isNotEmpty)
+        'agent_profile_id': setup.agentProfileId.trim(),
+      'defaults': setup.input,
+      if (setup.policy.isNotEmpty) 'policy': setup.policy,
+      if (setup.schedule.isNotEmpty) 'schedule': setup.schedule,
+    });
+    return parseAutomationRunSetup(decoded['operation']);
+  }
+
+  /// Previews one saved Operation without starting a run.
+  Future<AutomationOperationPreview> previewRunSetup(
+    String setupId, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
+    final decoded = await _operationsPost(
+      '/$setupId/preview',
+      <String, dynamic>{'input': input},
+    );
+    return parseAutomationOperationPreview(decoded['preview']);
+  }
+
+  /// Starts one saved Operation.
+  Future<AutomationRun> startRunSetup(
+    String setupId, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
+    final decoded = await _operationsPost('/$setupId/start', <String, dynamic>{
+      'input': input,
+    });
+    final operationRun = _clientMap(decoded['operation_run']);
+    return parseAutomationRun(operationRun['run']);
+  }
+
+  /// Loads immutable Operation audit data for one workflow run.
+  Future<AutomationOperationRunSnapshot> operationRunSnapshot(
+    String runId,
+  ) async {
+    final decoded = await _operationsGet('/runs/$runId/snapshot');
+    return parseAutomationOperationRunSnapshot(decoded['snapshot']);
   }
 
   /// Starts one workflow definition.
@@ -217,6 +368,84 @@ class AutomationsClient {
     return _decode(response, 'PUT $path');
   }
 
+  Future<Map<String, dynamic>> _operationsGet(
+    String path, {
+    Map<String, String> query = const <String, String>{},
+  }) async {
+    final uri = _operationsUri(path, query: query);
+    await _log('GET $uri');
+    final response = await _http.get(uri, headers: _headers());
+    await _log('GET $uri -> ${response.statusCode}');
+    return _decode(response, 'GET $path');
+  }
+
+  Future<Map<String, dynamic>> _operationsPost(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final uri = _operationsUri(path);
+    await _log('POST $uri');
+    final response = await _http.post(
+      uri,
+      headers: _headers(contentTypeJson: true),
+      body: jsonEncode(body),
+    );
+    await _log('POST $uri -> ${response.statusCode}');
+    return _decode(response, 'POST $path');
+  }
+
+  Future<Map<String, dynamic>> _operationsPut(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final uri = _operationsUri(path);
+    await _log('PUT $uri');
+    final response = await _http.put(
+      uri,
+      headers: _headers(contentTypeJson: true),
+      body: jsonEncode(body),
+    );
+    await _log('PUT $uri -> ${response.statusCode}');
+    return _decode(response, 'PUT $path');
+  }
+
+  Future<Map<String, dynamic>> _capabilitiesGet(
+    String path, {
+    Map<String, String> query = const <String, String>{},
+  }) async {
+    final uri = _capabilitiesUri(path, query: query);
+    await _log('GET $uri');
+    final response = await _http.get(uri, headers: _headers());
+    await _log('GET $uri -> ${response.statusCode}');
+    return _decode(response, 'GET $path');
+  }
+
+  Future<Map<String, dynamic>> _runtimeTargetsGet(
+    String path, {
+    Map<String, String> query = const <String, String>{},
+  }) async {
+    final uri = _runtimeTargetsUri(path, query: query);
+    await _log('GET $uri');
+    final response = await _http.get(uri, headers: _headers());
+    await _log('GET $uri -> ${response.statusCode}');
+    return _decode(response, 'GET $path');
+  }
+
+  Future<Map<String, dynamic>> _runtimeTargetsPut(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final uri = _runtimeTargetsUri(path);
+    await _log('PUT $uri');
+    final response = await _http.put(
+      uri,
+      headers: _headers(contentTypeJson: true),
+      body: jsonEncode(body),
+    );
+    await _log('PUT $uri -> ${response.statusCode}');
+    return _decode(response, 'PUT $path');
+  }
+
   Map<String, dynamic> _decode(http.Response response, String operation) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AutomationsClientException(
@@ -250,6 +479,60 @@ class AutomationsClient {
     return uri.replace(queryParameters: query);
   }
 
+  Uri _operationsUri(
+    String path, {
+    Map<String, String> query = const <String, String>{},
+  }) {
+    final workflow = Uri.parse(baseUrl);
+    final operationsBase = workflow.replace(path: '/api/operations');
+    final trimmed = operationsBase.toString().endsWith('/')
+        ? operationsBase.toString().substring(
+            0,
+            operationsBase.toString().length - 1,
+          )
+        : operationsBase.toString();
+    final uri = Uri.parse('$trimmed$path');
+    if (query.isEmpty) {
+      return uri;
+    }
+    return uri.replace(queryParameters: query);
+  }
+
+  Uri _capabilitiesUri(
+    String path, {
+    Map<String, String> query = const <String, String>{},
+  }) {
+    final workflow = Uri.parse(baseUrl);
+    final capabilitiesBase = workflow.replace(path: '/api/capabilities');
+    final trimmed = capabilitiesBase.toString().endsWith('/')
+        ? capabilitiesBase.toString().substring(
+            0,
+            capabilitiesBase.toString().length - 1,
+          )
+        : capabilitiesBase.toString();
+    final uri = Uri.parse('$trimmed$path');
+    if (query.isEmpty) {
+      return uri;
+    }
+    return uri.replace(queryParameters: query);
+  }
+
+  Uri _runtimeTargetsUri(
+    String path, {
+    Map<String, String> query = const <String, String>{},
+  }) {
+    final workflow = Uri.parse(baseUrl);
+    final targetsBase = workflow.replace(path: '/api/runtime-targets');
+    final trimmed = targetsBase.toString().endsWith('/')
+        ? targetsBase.toString().substring(0, targetsBase.toString().length - 1)
+        : targetsBase.toString();
+    final uri = Uri.parse('$trimmed$path');
+    if (query.isEmpty) {
+      return uri;
+    }
+    return uri.replace(queryParameters: query);
+  }
+
   Map<String, String> _headers({bool contentTypeJson = false}) {
     return <String, String>{
       ...headers,
@@ -267,4 +550,14 @@ List<dynamic> _list(dynamic value) {
     return value;
   }
   return const <dynamic>[];
+}
+
+Map<String, dynamic> _clientMap(dynamic value) {
+  if (value is Map<String, dynamic>) {
+    return value;
+  }
+  if (value is Map) {
+    return value.map((key, value) => MapEntry('$key', value));
+  }
+  return const <String, dynamic>{};
 }

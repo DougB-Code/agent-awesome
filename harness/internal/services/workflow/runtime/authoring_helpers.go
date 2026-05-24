@@ -8,12 +8,46 @@ import (
 	"fmt"
 	"strings"
 
+	"agentawesome/internal/services/capabilities"
 	"agentawesome/internal/services/workflow/definition"
 )
 
 // unavailableActions returns registered actions that cannot be published yet.
 func unavailableActions(_ definition.Definition) []string {
 	return nil
+}
+
+// capabilityDiagnostics converts registry dependency checks into draft validation.
+func (s *Service) capabilityDiagnostics(def definition.Definition) []ValidationDiagnostic {
+	if s == nil || s.capabilities == nil {
+		return nil
+	}
+	diagnostics := s.capabilities.ValidateDefinition(def)
+	out := make([]ValidationDiagnostic, 0, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		severity := strings.TrimSpace(diagnostic.Severity)
+		if severity == "" {
+			severity = "error"
+		}
+		path := strings.TrimSpace(diagnostic.Path)
+		if path == "" && strings.TrimSpace(diagnostic.CapabilityID) != "" {
+			path = "capabilities." + strings.TrimSpace(diagnostic.CapabilityID)
+		}
+		out = append(out, ValidationDiagnostic{
+			Severity: severity,
+			Path:     path,
+			Message:  strings.TrimSpace(diagnostic.Message),
+		})
+	}
+	return out
+}
+
+// Capabilities lists normalized capability registry records for UI consumers.
+func (s *Service) Capabilities(query capabilities.Query) []capabilities.Capability {
+	if s == nil || s.capabilities == nil {
+		return nil
+	}
+	return s.capabilities.List(query)
 }
 
 // invalidValidation builds a failed validation report.

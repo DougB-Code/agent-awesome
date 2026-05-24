@@ -43,6 +43,8 @@ func (s *HTTPServer) Routes() http.Handler {
 	mux.HandleFunc("/api/workflows/drafts/", s.draftHandler)
 	mux.HandleFunc("/api/workflows/packages", s.packagesHandler)
 	mux.HandleFunc("/api/workflows/packages/", s.packageHandler)
+	mux.HandleFunc("/api/workflows/run-setups", s.runSetupsHandler)
+	mux.HandleFunc("/api/workflows/run-setups/", s.runSetupHandler)
 	mux.HandleFunc("/api/workflows/runs", s.runsHandler)
 	mux.HandleFunc("/api/workflows/runs/", s.runHandler)
 	mux.HandleFunc("/api/workflows/inbox", s.inboxHandler)
@@ -285,6 +287,69 @@ func (s *HTTPServer) packageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow package route not found"})
+}
+
+// runSetupsHandler lists or creates reusable workflow run setups.
+func (s *HTTPServer) runSetupsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		setups, err := s.service.ListRunSetups(r.Context(), runtime.RunSetupQuery{
+			DefinitionID: r.URL.Query().Get("definition_id"),
+		})
+		writeResult(w, map[string]any{"run_setups": setups}, err)
+	case http.MethodPost:
+		var req runtime.RunSetupRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		setup, err := s.service.CreateRunSetup(r.Context(), req)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"run_setup": setup})
+	default:
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+	}
+}
+
+// runSetupHandler routes reusable workflow run setup operations.
+func (s *HTTPServer) runSetupHandler(w http.ResponseWriter, r *http.Request) {
+	setupID, action := splitTail(r.URL.Path, "/api/workflows/run-setups/")
+	if setupID == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "run setup id is required"})
+		return
+	}
+	switch {
+	case r.Method == http.MethodGet && action == "":
+		setup, err := s.service.GetRunSetup(r.Context(), setupID)
+		writeResult(w, map[string]any{"run_setup": setup}, err)
+	case r.Method == http.MethodPut && action == "":
+		var req runtime.RunSetupRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		setup, err := s.service.UpdateRunSetup(r.Context(), setupID, req)
+		writeResult(w, map[string]any{"run_setup": setup}, err)
+	case r.Method == http.MethodDelete && action == "":
+		writeResult(w, map[string]any{"deleted": setupID}, s.service.DeleteRunSetup(r.Context(), setupID))
+	case r.Method == http.MethodPost && action == "start":
+		var req startRequest
+		if err := decodeJSON(w, r, &req); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		run, err := s.service.StartRunSetup(r.Context(), setupID, req.Input)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusAccepted, map[string]any{"run": run})
+	default:
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow run setup route not found"})
+	}
 }
 
 // runsHandler lists or starts workflow runs.

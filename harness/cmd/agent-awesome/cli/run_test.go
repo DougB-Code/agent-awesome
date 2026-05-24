@@ -30,6 +30,7 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--workflow-api-addr", "127.0.0.1:8092",
 		"--workflow-definitions", "/tmp/workflows",
 		"--workflow-db", "/tmp/workflow.db",
+		"--runtime-targets-db", "/tmp/runtime-targets.db",
 		"--command-data-dir", "/tmp/command-data",
 		"--command-allow-workdir", "/work/a",
 		"--command-allow-workdir", "/work/b",
@@ -84,6 +85,9 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	}
 	if got, want := captured.WorkflowDatabasePath, "/tmp/workflow.db"; got != want {
 		t.Fatalf("WorkflowDatabasePath = %q, want %q", got, want)
+	}
+	if got, want := captured.RuntimeTargetsDatabasePath, "/tmp/runtime-targets.db"; got != want {
+		t.Fatalf("RuntimeTargetsDatabasePath = %q, want %q", got, want)
 	}
 	if got, want := captured.CommandDataDir, "/tmp/command-data"; got != want {
 		t.Fatalf("CommandDataDir = %q, want %q", got, want)

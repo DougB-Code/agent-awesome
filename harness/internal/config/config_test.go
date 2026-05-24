@@ -451,6 +451,11 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		"task_graph_projection",
 		"project_executive_summary",
 		"explain_executive_summary_item",
+		"upsert_codebase",
+		"get_codebase",
+		"list_codebases",
+		"resolve_codebase",
+		"delete_codebase",
 		"update_task",
 		"complete_task",
 		"cancel_task",
@@ -471,9 +476,11 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		"mutate_context_graph",
 		"create_task",
 		"update_task",
+		"upsert_codebase",
 		"complete_task",
 		"cancel_task",
 		"delete_task",
+		"delete_codebase",
 		"link_task_memory",
 		"upsert_task_relation",
 		"delete_task_relation",
@@ -660,7 +667,7 @@ func TestProfessionalCodingToolPackageConfigProvidesPilotBoundary(t *testing.T) 
 	if got, want := cfg.MCP.Servers[0].Name, "sourcecontrol"; got != want {
 		t.Fatalf("MCP server = %q, want %q", got, want)
 	}
-	if got, want := len(cfg.NodePresets), 8; got != want {
+	if got, want := len(cfg.NodePresets), 9; got != want {
 		t.Fatalf("NodePresets length = %d, want %d", got, want)
 	}
 }

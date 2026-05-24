@@ -26,13 +26,15 @@ type Repositories struct {
 	Memory     ports.Repository
 	Tasks      ports.TaskRepository
 	GraphQuery ports.GraphQueryRepository
+	Codebases  ports.CodebaseRepository
 }
 
 // RepositoriesFrom adapts one composite repository at the process wiring edge.
 func RepositoriesFrom(repo ports.Repository) Repositories {
 	tasks, _ := repo.(ports.TaskRepository)
 	graphQuery, _ := repo.(ports.GraphQueryRepository)
-	return Repositories{Memory: repo, Tasks: tasks, GraphQuery: graphQuery}
+	codebases, _ := repo.(ports.CodebaseRepository)
+	return Repositories{Memory: repo, Tasks: tasks, GraphQuery: graphQuery, Codebases: codebases}
 }
 
 // Service provides process-boundary-safe memory operations.
@@ -40,6 +42,7 @@ type Service struct {
 	repo           ports.Repository
 	taskRepo       ports.TaskRepository
 	graphQueryRepo ports.GraphQueryRepository
+	codebaseRepo   ports.CodebaseRepository
 	steward        ports.Steward
 	firewallPolicy *FirewallPolicy
 	workerCount    int
@@ -62,6 +65,7 @@ func New(repos Repositories, steward ports.Steward, cfg Config) *Service {
 		repo:           repos.Memory,
 		taskRepo:       repos.Tasks,
 		graphQueryRepo: repos.GraphQuery,
+		codebaseRepo:   repos.Codebases,
 		steward:        steward,
 		firewallPolicy: cfg.FirewallPolicy,
 		workerCount:    cfg.WorkerCount,

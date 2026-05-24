@@ -56,6 +56,16 @@ func DefaultWorkflowDatabasePath() string {
 	return filepath.Join(DefaultDataDir(), "workflow", "workflow.db")
 }
 
+// DefaultOperationsDatabasePath returns the embedded operations SQLite path.
+func DefaultOperationsDatabasePath() string {
+	return filepath.Join(DefaultDataDir(), "operations", "operations.db")
+}
+
+// DefaultRuntimeTargetsDatabasePath returns the runtime target SQLite path.
+func DefaultRuntimeTargetsDatabasePath() string {
+	return filepath.Join(DefaultDataDir(), "targets", "targets.db")
+}
+
 // DefaultCommandDataDir returns the embedded command service data path.
 func DefaultCommandDataDir() string {
 	return filepath.Join(DefaultDataDir(), "command")

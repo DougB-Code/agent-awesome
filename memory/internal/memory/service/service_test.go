@@ -113,6 +113,29 @@ func TestBetaMemoryFlowRemembersSearchesAndLoadsContext(t *testing.T) {
 	}
 }
 
+// TestCodebaseCatalogServiceRoundTrip verifies service-level codebase methods.
+func TestCodebaseCatalogServiceRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	saved, err := service.UpsertCodebase(ctx, domain.UpsertCodebaseRequest{Codebase: domain.Codebase{
+		Name:           "Agent Awesome",
+		Aliases:        []string{"AA"},
+		RepositoryPath: "/repo/agent",
+		DefaultRemote:  "origin",
+		DefaultBranch:  "main",
+	}})
+	if err != nil {
+		t.Fatalf("UpsertCodebase() error = %v", err)
+	}
+	resolved, err := service.ResolveCodebase(ctx, domain.ResolveCodebaseRequest{Query: "AA"})
+	if err != nil {
+		t.Fatalf("ResolveCodebase() error = %v", err)
+	}
+	if resolved.Status != "matched" || resolved.Codebase == nil || resolved.Codebase.ID != saved.ID {
+		t.Fatalf("resolution = %#v, want saved codebase", resolved)
+	}
+}
+
 // TestStewardDisabledWorkersComplete verifies the service works without a steward.
 func TestStewardDisabledWorkersComplete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

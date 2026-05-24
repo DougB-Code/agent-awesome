@@ -11,6 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"agentawesome/internal/services/capabilities"
+	"agentawesome/internal/services/operations"
+	"agentawesome/internal/services/targets"
 	"agentawesome/internal/services/workflow/runtime"
 	"agentawesome/internal/services/workflow/transport"
 )
@@ -22,24 +25,30 @@ const (
 
 // Config stores the host-owned workflow listener and runtime settings.
 type Config struct {
-	ListenAddress         string
-	DefinitionsDir        string
-	DatabasePath          string
-	HarnessContextBaseURL string
-	RequestTimeout        time.Duration
-	ToolClient            runtime.ContextToolClient
-	CommandClient         runtime.CommandClient
-	MCPServerEndpoints    map[string]string
-	ReadHeaderTimeout     time.Duration
-	ShutdownTimeout       time.Duration
+	ListenAddress              string
+	DefinitionsDir             string
+	DatabasePath               string
+	OperationsDatabasePath     string
+	RuntimeTargetsDatabasePath string
+	HarnessContextBaseURL      string
+	RequestTimeout             time.Duration
+	ToolClient                 runtime.ContextToolClient
+	CommandClient              runtime.CommandClient
+	MCPServerEndpoints         map[string]string
+	Capabilities               *capabilities.Registry
+	ReadHeaderTimeout          time.Duration
+	ShutdownTimeout            time.Duration
 }
 
 // Server owns one embedded workflow service and its HTTP listener.
 type Server struct {
-	service   *runtime.Service
-	http      *http.Server
-	closeOnce sync.Once
-	closeErr  error
+	service         *runtime.Service
+	operations      *operations.Service
+	operationsStore *operations.Store
+	targetsStore    *targets.Store
+	http            *http.Server
+	closeOnce       sync.Once
+	closeErr        error
 }
 
 // Start opens workflow storage, starts scheduling, and serves workflow routes.
@@ -55,13 +64,42 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		ToolClient:             cfg.ToolClient,
 		CommandClient:          cfg.CommandClient,
 		MCPServerEndpoints:     cfg.MCPServerEndpoints,
+		Capabilities:           cfg.Capabilities,
 		SkipInvalidDefinitions: true,
 	})
 	if err != nil {
 		return nil, err
 	}
+	operationsStore, err := operations.OpenStore(ctx, defaulted(cfg.OperationsDatabasePath, cfg.DatabasePath))
+	if err != nil {
+		_ = service.Close()
+		return nil, err
+	}
+	targetsStore, err := targets.OpenStore(ctx, defaulted(cfg.RuntimeTargetsDatabasePath, cfg.DatabasePath))
+	if err != nil {
+		_ = operationsStore.Close()
+		_ = service.Close()
+		return nil, err
+	}
+	targetsService := targets.NewService(targetsStore)
+	if _, err := targetsService.RegisterLocalTarget(ctx, targets.LocalRegistration{
+		Version:      "0.1.0",
+		Capabilities: capabilityIDs(cfg.Capabilities),
+	}); err != nil {
+		_ = targetsStore.Close()
+		_ = operationsStore.Close()
+		_ = service.Close()
+		return nil, err
+	}
+	var codebases operations.CodebaseCatalog
+	if endpoint := strings.TrimSpace(cfg.MCPServerEndpoints["memory"]); endpoint != "" {
+		codebases = operations.NewMemoryCodebaseClient(endpoint, cfg.RequestTimeout)
+	}
+	operationsService := operations.NewService(operationsStore, operations.NewRuntimeWorkflowExecutor(service), codebases)
 	listener, err := net.Listen("tcp", strings.TrimSpace(cfg.ListenAddress))
 	if err != nil {
+		_ = targetsStore.Close()
+		_ = operationsStore.Close()
 		_ = service.Close()
 		return nil, fmt.Errorf("listen embedded workflow: %w", err)
 	}
@@ -70,10 +108,13 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		readHeaderTimeout = defaultReadHeaderTimeout
 	}
 	server := &Server{
-		service: service,
+		service:         service,
+		operations:      operationsService,
+		operationsStore: operationsStore,
+		targetsStore:    targetsStore,
 		http: &http.Server{
 			Addr:              listener.Addr().String(),
-			Handler:           transport.NewHTTPServer(service).Routes(),
+			Handler:           combinedRoutes(service, operationsService, targetsService, cfg.Capabilities),
 			ReadHeaderTimeout: readHeaderTimeout,
 		},
 	}
@@ -96,6 +137,12 @@ func (s *Server) Close(ctx context.Context) error {
 		var shutdownErr error
 		if s.http != nil {
 			shutdownErr = s.http.Shutdown(ctx)
+		}
+		if s.operationsStore != nil {
+			_ = s.operationsStore.Close()
+		}
+		if s.targetsStore != nil {
+			_ = s.targetsStore.Close()
 		}
 		closeErr := s.service.Close()
 		if shutdownErr != nil {
@@ -130,4 +177,47 @@ func validateConfig(cfg Config) error {
 		return fmt.Errorf("embedded workflow database path is required")
 	}
 	return nil
+}
+
+// combinedRoutes serves workflow and operations routes from one listener.
+func combinedRoutes(workflow *runtime.Service, operationsService *operations.Service, targetsService *targets.Service, capabilityRegistry *capabilities.Registry) http.Handler {
+	mux := http.NewServeMux()
+	if targetsService != nil {
+		targetRoutes := targets.NewHTTPServer(targetsService).Routes()
+		mux.Handle("/api/runtime-targets", targetRoutes)
+		mux.Handle("/api/runtime-targets/", targetRoutes)
+	}
+	if capabilityRegistry != nil {
+		capabilityRoutes := capabilities.NewHTTPServer(capabilityRegistry).Routes()
+		mux.Handle("/api/capabilities", capabilityRoutes)
+		mux.Handle("/api/capabilities/", capabilityRoutes)
+	}
+	if operationsService != nil {
+		operationsRoutes := operations.NewHTTPServer(operationsService).Routes()
+		mux.Handle("/api/operations", operationsRoutes)
+		mux.Handle("/api/operations/", operationsRoutes)
+	}
+	mux.Handle("/", transport.NewHTTPServer(workflow).Routes())
+	return mux
+}
+
+// defaulted returns fallback when value is blank.
+func defaulted(value string, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+// capabilityIDs extracts stable ids from the registry for target heartbeat inventory.
+func capabilityIDs(registry *capabilities.Registry) []string {
+	if registry == nil {
+		return nil
+	}
+	records := registry.List(capabilities.Query{})
+	ids := make([]string, 0, len(records))
+	for _, record := range records {
+		ids = append(ids, record.ID)
+	}
+	return ids
 }

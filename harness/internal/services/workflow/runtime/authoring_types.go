@@ -147,6 +147,15 @@ type PackageImportRequest struct {
 	Package store.PackageRecord `json:"package"`
 }
 
+// RunSetupRequest carries a reusable workflow run setup create or update payload.
+type RunSetupRequest struct {
+	ID           string         `json:"id"`
+	DefinitionID string         `json:"definition_id"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	Input        map[string]any `json:"input"`
+}
+
 // loadedDefinitionDraftSource carries a disk-loaded definition into authoring.
 type loadedDefinitionDraftSource struct {
 	definition definition.Definition
@@ -158,4 +167,9 @@ type RunQuery struct {
 	Status       string
 	DefinitionID string
 	Limit        int
+}
+
+// RunSetupQuery selects reusable workflow run setups for operations.
+type RunSetupQuery struct {
+	DefinitionID string
 }

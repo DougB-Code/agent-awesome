@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"agentawesome/internal/services/capabilities"
 	"agentawesome/internal/services/workflow/actions"
 	"agentawesome/internal/services/workflow/definition"
 	"agentawesome/internal/services/workflow/store"
@@ -42,6 +43,7 @@ type Service struct {
 	cfg                Config
 	store              *store.Store
 	actions            *actions.Registry
+	capabilities       *capabilities.Registry
 	tools              ContextToolClient
 	commands           CommandClient
 	mcpEndpoints       map[string]string
@@ -70,11 +72,12 @@ func Open(ctx context.Context, cfg Config) (*Service, error) {
 		toolClient = NewToolClient(cfg.HarnessContextBaseURL, cfg.RequestTimeout)
 	}
 	service := &Service{
-		cfg:      cfg,
-		store:    workflowStore,
-		actions:  registry,
-		tools:    toolClient,
-		commands: cfg.CommandClient,
+		cfg:          cfg,
+		store:        workflowStore,
+		actions:      registry,
+		capabilities: cfg.Capabilities,
+		tools:        toolClient,
+		commands:     cfg.CommandClient,
 		mcpEndpoints: cloneStringMap(
 			cfg.MCPServerEndpoints,
 		),

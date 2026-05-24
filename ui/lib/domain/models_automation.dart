@@ -161,6 +161,539 @@ class AutomationRun {
   final String updatedAt;
 }
 
+/// AutomationRunSetup stores one saved Operation.
+class AutomationRunSetup {
+  /// Creates an immutable saved Operation.
+  const AutomationRunSetup({
+    required this.id,
+    required this.definitionId,
+    required this.name,
+    this.description = '',
+    this.codebaseId = '',
+    this.runtimeTargetId = '',
+    this.agentProfileId = '',
+    this.input = const <String, dynamic>{},
+    this.policy = const <String, dynamic>{},
+    this.schedule = const <String, dynamic>{},
+    this.createdAt = '',
+    this.updatedAt = '',
+  });
+
+  /// Operation id.
+  final String id;
+
+  /// Workflow definition this Operation starts.
+  final String definitionId;
+
+  /// User-facing Operation name.
+  final String name;
+
+  /// Optional Operation description.
+  final String description;
+
+  /// Bound codebase catalog id.
+  final String codebaseId;
+
+  /// Bound Computer or Server target id.
+  final String runtimeTargetId;
+
+  /// Bound agent profile id.
+  final String agentProfileId;
+
+  /// Saved Operation default input values.
+  final Map<String, dynamic> input;
+
+  /// Saved Operation safety policy.
+  final Map<String, dynamic> policy;
+
+  /// Saved Operation schedule.
+  final Map<String, dynamic> schedule;
+
+  /// Creation timestamp.
+  final String createdAt;
+
+  /// Last update timestamp.
+  final String updatedAt;
+
+  /// Creates a copy with selected fields replaced.
+  AutomationRunSetup copyWith({
+    String? id,
+    String? definitionId,
+    String? name,
+    String? description,
+    String? codebaseId,
+    String? runtimeTargetId,
+    String? agentProfileId,
+    Map<String, dynamic>? input,
+    Map<String, dynamic>? policy,
+    Map<String, dynamic>? schedule,
+    String? createdAt,
+    String? updatedAt,
+  }) {
+    return AutomationRunSetup(
+      id: id ?? this.id,
+      definitionId: definitionId ?? this.definitionId,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      codebaseId: codebaseId ?? this.codebaseId,
+      runtimeTargetId: runtimeTargetId ?? this.runtimeTargetId,
+      agentProfileId: agentProfileId ?? this.agentProfileId,
+      input: input ?? this.input,
+      policy: policy ?? this.policy,
+      schedule: schedule ?? this.schedule,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
+
+/// AutomationOperationPreview stores display-safe Operation dry-run output.
+class AutomationOperationPreview {
+  /// Creates an immutable Operation preview.
+  const AutomationOperationPreview({
+    required this.operation,
+    required this.status,
+    required this.policyDecision,
+    this.resolvedInput = const <String, dynamic>{},
+    this.resolution = const <String, dynamic>{},
+    this.missingSetup = const <String>[],
+  });
+
+  /// Operation being previewed.
+  final AutomationRunSetup operation;
+
+  /// Preview status such as ready, needs_input, or blocked.
+  final String status;
+
+  /// Display-safe resolved workflow input.
+  final Map<String, dynamic> resolvedInput;
+
+  /// Resolver provenance and diagnostics.
+  final Map<String, dynamic> resolution;
+
+  /// Required fields still missing.
+  final List<String> missingSetup;
+
+  /// Policy decision for this run.
+  final AutomationOperationPolicyDecision policyDecision;
+}
+
+/// AutomationOperationRunSnapshot stores immutable Operation run audit data.
+class AutomationOperationRunSnapshot {
+  /// Creates immutable Operation run audit metadata.
+  const AutomationOperationRunSnapshot({
+    required this.runId,
+    required this.operationId,
+    this.operationVersion = 0,
+    this.workflowId = '',
+    this.workflowVersion = '',
+    this.resolvedInput = const <String, dynamic>{},
+    this.resolution = const <String, dynamic>{},
+    this.target = const <String, dynamic>{},
+    this.policy = const <String, dynamic>{},
+    this.secretRefs = const <Map<String, dynamic>>[],
+    this.createdAt = '',
+  });
+
+  /// Workflow run id.
+  final String runId;
+
+  /// Saved Operation id.
+  final String operationId;
+
+  /// Operation version captured at start.
+  final int operationVersion;
+
+  /// Workflow definition id.
+  final String workflowId;
+
+  /// Workflow version captured at start.
+  final String workflowVersion;
+
+  /// Resolved workflow input.
+  final Map<String, dynamic> resolvedInput;
+
+  /// Input provenance and diagnostics.
+  final Map<String, dynamic> resolution;
+
+  /// Runtime target binding.
+  final Map<String, dynamic> target;
+
+  /// Policy captured at start.
+  final Map<String, dynamic> policy;
+
+  /// Secret references captured at start.
+  final List<Map<String, dynamic>> secretRefs;
+
+  /// Snapshot creation timestamp.
+  final String createdAt;
+}
+
+/// AutomationOperationPolicyDecision stores preview safety status.
+class AutomationOperationPolicyDecision {
+  /// Creates an immutable Operation policy decision.
+  const AutomationOperationPolicyDecision({
+    required this.status,
+    this.reasons = const <String>[],
+  });
+
+  /// Decision status.
+  final String status;
+
+  /// Display-safe policy reasons.
+  final List<String> reasons;
+}
+
+/// AutomationCodebase stores one typed repository catalog record.
+class AutomationCodebase {
+  /// Creates an immutable codebase catalog record.
+  const AutomationCodebase({
+    required this.id,
+    required this.name,
+    this.aliases = const <String>[],
+    this.repositoryPath = '',
+    this.defaultRemote = '',
+    this.defaultBranch = '',
+    this.provider = '',
+    this.providerRepository = '',
+    this.goModulePath = '',
+    this.runtimeTargetId = '',
+    this.agentProfileId = '',
+    this.createdAt = '',
+    this.updatedAt = '',
+  });
+
+  /// Stable codebase id.
+  final String id;
+
+  /// User-facing codebase name.
+  final String name;
+
+  /// Alternate names used for conversational resolution.
+  final List<String> aliases;
+
+  /// Local repository path for this codebase.
+  final String repositoryPath;
+
+  /// Default Git remote.
+  final String defaultRemote;
+
+  /// Default branch or pull request base.
+  final String defaultBranch;
+
+  /// Repository provider id.
+  final String provider;
+
+  /// Provider repository in owner/name form.
+  final String providerRepository;
+
+  /// Optional Go module path used by coding workflows.
+  final String goModulePath;
+
+  /// Preferred runtime target id.
+  final String runtimeTargetId;
+
+  /// Preferred agent profile id.
+  final String agentProfileId;
+
+  /// Creation timestamp.
+  final String createdAt;
+
+  /// Last update timestamp.
+  final String updatedAt;
+
+  /// Returns a copy with selected fields replaced.
+  AutomationCodebase copyWith({
+    String? id,
+    String? name,
+    List<String>? aliases,
+    String? repositoryPath,
+    String? defaultRemote,
+    String? defaultBranch,
+    String? provider,
+    String? providerRepository,
+    String? goModulePath,
+    String? runtimeTargetId,
+    String? agentProfileId,
+    String? createdAt,
+    String? updatedAt,
+  }) {
+    return AutomationCodebase(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      aliases: aliases ?? this.aliases,
+      repositoryPath: repositoryPath ?? this.repositoryPath,
+      defaultRemote: defaultRemote ?? this.defaultRemote,
+      defaultBranch: defaultBranch ?? this.defaultBranch,
+      provider: provider ?? this.provider,
+      providerRepository: providerRepository ?? this.providerRepository,
+      goModulePath: goModulePath ?? this.goModulePath,
+      runtimeTargetId: runtimeTargetId ?? this.runtimeTargetId,
+      agentProfileId: agentProfileId ?? this.agentProfileId,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  /// Converts this record to the memory codebase API payload.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'name': name,
+      'aliases': aliases,
+      'repository_path': repositoryPath,
+      'default_remote': defaultRemote,
+      'default_branch': defaultBranch,
+      'provider': provider,
+      'provider_repository': providerRepository,
+      'go_module_path': goModulePath,
+      'runtime_target_id': runtimeTargetId,
+      'agent_profile_id': agentProfileId,
+    };
+  }
+}
+
+/// AutomationCapability stores one normalized harness capability.
+class AutomationCapability {
+  /// Creates an immutable capability registry record.
+  const AutomationCapability({
+    required this.id,
+    required this.kind,
+    required this.name,
+    required this.label,
+    this.description = '',
+    this.usableInChat = false,
+    this.usableInWorkflows = false,
+    this.invocation = const <String, dynamic>{},
+    this.contract = const <String, dynamic>{},
+    this.risk = const <String, dynamic>{},
+    this.availability = const AutomationCapabilityAvailability(),
+    this.testResults = const <AutomationCapabilityTestResult>[],
+    this.metadata = const <String, dynamic>{},
+  });
+
+  /// Stable capability id.
+  final String id;
+
+  /// Capability kind.
+  final String kind;
+
+  /// Technical capability name.
+  final String name;
+
+  /// User-facing capability label.
+  final String label;
+
+  /// Short capability description.
+  final String description;
+
+  /// Whether the capability can be used from chat.
+  final bool usableInChat;
+
+  /// Whether the capability can be used in workflows.
+  final bool usableInWorkflows;
+
+  /// Invocation metadata for direct and workflow calls.
+  final Map<String, dynamic> invocation;
+
+  /// Schema and confirmation metadata.
+  final Map<String, dynamic> contract;
+
+  /// User-facing risk metadata.
+  final Map<String, dynamic> risk;
+
+  /// Display-safe availability state.
+  final AutomationCapabilityAvailability availability;
+
+  /// Latest lab check results.
+  final List<AutomationCapabilityTestResult> testResults;
+
+  /// Additional display-safe metadata.
+  final Map<String, dynamic> metadata;
+}
+
+/// AutomationCapabilityAvailability stores display-safe capability status.
+class AutomationCapabilityAvailability {
+  /// Creates immutable availability metadata.
+  const AutomationCapabilityAvailability({
+    this.status = '',
+    this.reasons = const <String>[],
+  });
+
+  /// Availability status.
+  final String status;
+
+  /// Display-safe reason strings.
+  final List<String> reasons;
+}
+
+/// AutomationCapabilityTestResult stores one lab check result.
+class AutomationCapabilityTestResult {
+  /// Creates an immutable lab result.
+  const AutomationCapabilityTestResult({
+    required this.type,
+    required this.status,
+    this.message = '',
+    this.checkedAt = '',
+  });
+
+  /// Lab test type.
+  final String type;
+
+  /// Lab test status.
+  final String status;
+
+  /// Display-safe result message.
+  final String message;
+
+  /// Check timestamp.
+  final String checkedAt;
+}
+
+/// AutomationRuntimeTarget stores one Computer or Server target.
+class AutomationRuntimeTarget {
+  /// Creates an immutable Runtime Target record.
+  const AutomationRuntimeTarget({
+    required this.id,
+    required this.name,
+    required this.kind,
+    required this.status,
+    this.version = '',
+    this.capabilities = const <String>[],
+    this.allowedCodebaseIds = const <String>[],
+    this.secretRefCount = 0,
+    this.lastSeenAt = '',
+    this.currentRunCount = 0,
+    this.os = '',
+    this.hostname = '',
+    this.createdAt = '',
+    this.updatedAt = '',
+  });
+
+  /// Stable target id.
+  final String id;
+
+  /// User-facing target name.
+  final String name;
+
+  /// Target kind.
+  final String kind;
+
+  /// Health status.
+  final String status;
+
+  /// Runtime version.
+  final String version;
+
+  /// Capability ids advertised by this target.
+  final List<String> capabilities;
+
+  /// Codebase ids allowed on this target.
+  final List<String> allowedCodebaseIds;
+
+  /// Number of target-local secret references.
+  final int secretRefCount;
+
+  /// Last heartbeat timestamp.
+  final String lastSeenAt;
+
+  /// Active run count.
+  final int currentRunCount;
+
+  /// Target OS label.
+  final String os;
+
+  /// Target host name.
+  final String hostname;
+
+  /// Creation timestamp.
+  final String createdAt;
+
+  /// Last update timestamp.
+  final String updatedAt;
+}
+
+/// AutomationTargetHealth stores target health metadata.
+class AutomationTargetHealth {
+  /// Creates immutable target health metadata.
+  const AutomationTargetHealth({
+    required this.targetId,
+    required this.status,
+    this.message = '',
+    this.version = '',
+    this.os = '',
+    this.hostname = '',
+    this.currentRunCount = 0,
+    this.checkedAt = '',
+  });
+
+  /// Target id.
+  final String targetId;
+
+  /// Health status.
+  final String status;
+
+  /// Display-safe health message.
+  final String message;
+
+  /// Runtime version.
+  final String version;
+
+  /// OS label.
+  final String os;
+
+  /// Host name.
+  final String hostname;
+
+  /// Active run count.
+  final int currentRunCount;
+
+  /// Health check timestamp.
+  final String checkedAt;
+}
+
+/// AutomationTargetLogEntry stores one target log row.
+class AutomationTargetLogEntry {
+  /// Creates an immutable target log row.
+  const AutomationTargetLogEntry({
+    required this.id,
+    required this.targetId,
+    required this.level,
+    required this.message,
+    this.createdAt = '',
+  });
+
+  /// Log row id.
+  final int id;
+
+  /// Target id.
+  final String targetId;
+
+  /// Log level.
+  final String level;
+
+  /// Display-safe message.
+  final String message;
+
+  /// Creation timestamp.
+  final String createdAt;
+}
+
+/// AutomationTargetSecretMetadata stores target secret reference metadata.
+class AutomationTargetSecretMetadata {
+  /// Creates immutable target secret metadata.
+  const AutomationTargetSecretMetadata({
+    required this.targetId,
+    required this.count,
+  });
+
+  /// Target id.
+  final String targetId;
+
+  /// Secret reference count.
+  final int count;
+}
+
 /// AutomationEvent stores one durable run event.
 class AutomationEvent {
   /// Creates an immutable workflow event.
@@ -362,6 +895,229 @@ AutomationRun parseAutomationRun(dynamic value) {
     output: _map(map['output']),
     createdAt: _string(map['created_at']),
     updatedAt: _string(map['updated_at']),
+  );
+}
+
+/// Parses one saved Operation from JSON.
+AutomationRunSetup parseAutomationRunSetup(dynamic value) {
+  final map = _map(value);
+  final workflowId = _string(map['workflow_id']);
+  final defaults = _map(map['defaults']);
+  return AutomationRunSetup(
+    id: _string(map['id']),
+    definitionId: workflowId.isNotEmpty
+        ? workflowId
+        : _string(map['definition_id']),
+    name: _string(map['name']),
+    description: _string(map['description']),
+    codebaseId: _string(map['codebase_id']),
+    runtimeTargetId: _string(map['runtime_target_id']),
+    agentProfileId: _string(map['agent_profile_id']),
+    input: defaults.isNotEmpty ? defaults : _map(map['input']),
+    policy: _map(map['policy']),
+    schedule: _map(map['schedule']),
+    createdAt: _string(map['created_at']),
+    updatedAt: _string(map['updated_at']),
+  );
+}
+
+/// Parses one Operation dry-run preview from JSON.
+AutomationOperationPreview parseAutomationOperationPreview(dynamic value) {
+  final map = _map(value);
+  return AutomationOperationPreview(
+    operation: parseAutomationRunSetup(map['operation']),
+    status: _string(map['status']),
+    resolvedInput: _map(map['resolved_input']),
+    resolution: _map(map['resolution']),
+    missingSetup: _stringList(map['missing_setup']),
+    policyDecision: parseAutomationOperationPolicyDecision(
+      map['policy_decision'],
+    ),
+  );
+}
+
+/// Parses one immutable Operation run snapshot from JSON.
+AutomationOperationRunSnapshot parseAutomationOperationRunSnapshot(
+  dynamic value,
+) {
+  final map = _map(value);
+  return AutomationOperationRunSnapshot(
+    runId: _string(map['run_id']),
+    operationId: _string(map['operation_id']),
+    operationVersion: _int(map['operation_version']),
+    workflowId: _string(map['workflow_id']),
+    workflowVersion: _string(map['workflow_version']),
+    resolvedInput: _map(map['resolved_input']),
+    resolution: _map(map['resolution']),
+    target: _map(map['target']),
+    policy: _map(map['policy']),
+    secretRefs: <Map<String, dynamic>>[
+      for (final item in _list(map['secret_refs'])) _map(item),
+    ],
+    createdAt: _string(map['created_at']),
+  );
+}
+
+/// Parses one Operation policy decision from JSON.
+AutomationOperationPolicyDecision parseAutomationOperationPolicyDecision(
+  dynamic value,
+) {
+  final map = _map(value);
+  return AutomationOperationPolicyDecision(
+    status: _string(map['status']),
+    reasons: _stringList(map['reasons']),
+  );
+}
+
+/// Parses one typed codebase catalog record from JSON.
+AutomationCodebase parseAutomationCodebase(dynamic value) {
+  final map = _map(value);
+  return AutomationCodebase(
+    id: _string(map['id']),
+    name: _string(map['name']),
+    aliases: _stringList(map['aliases']),
+    repositoryPath: _string(map['repository_path']),
+    defaultRemote: _string(map['default_remote']),
+    defaultBranch: _string(map['default_branch']),
+    provider: _string(map['provider']),
+    providerRepository: _string(map['provider_repository']),
+    goModulePath: _string(map['go_module_path']),
+    runtimeTargetId: _string(map['runtime_target_id']),
+    agentProfileId: _string(map['agent_profile_id']),
+    createdAt: _string(map['created_at']),
+    updatedAt: _string(map['updated_at']),
+  );
+}
+
+/// Parses a codebase list response from memory MCP structured content.
+List<AutomationCodebase> parseAutomationCodebases(dynamic value) {
+  if (value is List) {
+    return value.map(parseAutomationCodebase).toList();
+  }
+  final map = _map(value);
+  return _list(map['codebases']).map(parseAutomationCodebase).toList();
+}
+
+/// Parses one capability registry record from JSON.
+AutomationCapability parseAutomationCapability(dynamic value) {
+  final map = _map(value);
+  return AutomationCapability(
+    id: _string(map['id']),
+    kind: _string(map['kind']),
+    name: _string(map['name']),
+    label: _string(map['label']),
+    description: _string(map['description']),
+    usableInChat: map['usable_in_chat'] == true,
+    usableInWorkflows: map['usable_in_workflows'] == true,
+    invocation: _map(map['invocation']),
+    contract: _map(map['contract']),
+    risk: _map(map['risk']),
+    availability: parseAutomationCapabilityAvailability(map['availability']),
+    testResults: _list(
+      map['test_results'],
+    ).map(parseAutomationCapabilityTestResult).toList(),
+    metadata: _map(map['metadata']),
+  );
+}
+
+/// Parses capability availability metadata from JSON.
+AutomationCapabilityAvailability parseAutomationCapabilityAvailability(
+  dynamic value,
+) {
+  final map = _map(value);
+  return AutomationCapabilityAvailability(
+    status: _string(map['status']),
+    reasons: _stringList(map['reasons']),
+  );
+}
+
+/// Parses one capability lab test result from JSON.
+AutomationCapabilityTestResult parseAutomationCapabilityTestResult(
+  dynamic value,
+) {
+  final map = _map(value);
+  return AutomationCapabilityTestResult(
+    type: _string(map['type']),
+    status: _string(map['status']),
+    message: _string(map['message']),
+    checkedAt: _string(map['checked_at']),
+  );
+}
+
+/// Parses one Runtime Target record from JSON.
+AutomationRuntimeTarget parseAutomationRuntimeTarget(dynamic value) {
+  final map = _map(value);
+  return AutomationRuntimeTarget(
+    id: _string(map['id']),
+    name: _string(map['name']),
+    kind: _string(map['kind']),
+    status: _string(map['status']),
+    version: _string(map['version']),
+    capabilities: _stringList(map['capabilities']),
+    allowedCodebaseIds: _stringList(map['allowed_codebase_ids']),
+    secretRefCount: _int(map['secret_ref_count']),
+    lastSeenAt: _string(map['last_seen_at']),
+    currentRunCount: _int(map['current_run_count']),
+    os: _string(map['os']),
+    hostname: _string(map['hostname']),
+    createdAt: _string(map['created_at']),
+    updatedAt: _string(map['updated_at']),
+  );
+}
+
+/// Parses a Runtime Target list response from JSON.
+List<AutomationRuntimeTarget> parseAutomationRuntimeTargets(dynamic value) {
+  if (value is List) {
+    return value.map(parseAutomationRuntimeTarget).toList();
+  }
+  final map = _map(value);
+  return _list(map['targets']).map(parseAutomationRuntimeTarget).toList();
+}
+
+/// Parses Runtime Target health metadata from JSON.
+AutomationTargetHealth parseAutomationTargetHealth(dynamic value) {
+  final map = _map(value);
+  return AutomationTargetHealth(
+    targetId: _string(map['target_id']),
+    status: _string(map['status']),
+    message: _string(map['message']),
+    version: _string(map['version']),
+    os: _string(map['os']),
+    hostname: _string(map['hostname']),
+    currentRunCount: _int(map['current_run_count']),
+    checkedAt: _string(map['checked_at']),
+  );
+}
+
+/// Parses one Runtime Target log row from JSON.
+AutomationTargetLogEntry parseAutomationTargetLogEntry(dynamic value) {
+  final map = _map(value);
+  return AutomationTargetLogEntry(
+    id: _int(map['id']),
+    targetId: _string(map['target_id']),
+    level: _string(map['level']),
+    message: _string(map['message']),
+    createdAt: _string(map['created_at']),
+  );
+}
+
+/// Parses Runtime Target log rows from JSON.
+List<AutomationTargetLogEntry> parseAutomationTargetLogs(dynamic value) {
+  if (value is List) {
+    return value.map(parseAutomationTargetLogEntry).toList();
+  }
+  final map = _map(value);
+  return _list(map['logs']).map(parseAutomationTargetLogEntry).toList();
+}
+
+/// Parses target secret reference metadata from JSON.
+AutomationTargetSecretMetadata parseAutomationTargetSecretMetadata(
+  dynamic value,
+) {
+  final map = _map(value);
+  return AutomationTargetSecretMetadata(
+    targetId: _string(map['target_id']),
+    count: _int(map['count']),
   );
 }
 

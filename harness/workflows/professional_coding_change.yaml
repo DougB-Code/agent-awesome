@@ -3,7 +3,7 @@ apiVersion: aa.workflow/v1
 kind: state_machine
 id: professional_coding_change
 name: Professional Coding Change
-description: Prepare an aa-* worktree, run a configured coding agent, verify Go builds and tests, then commit and push for review.
+description: Prepare an aa-* worktree, run a configured coding agent, verify Go builds and tests, then commit, push, and open a pull request for review.
 initial: intake
 states:
   - id: intake
@@ -17,11 +17,16 @@ states:
             commit_message: ${workflow_input.change_request}
             base_ref: HEAD
             remote: origin
-            binary_path: ./.agent-awesome/aa-workflow-binary
+            go_module_path: .
+            binary_path: ""
             binary_package: .
             binary_arg_1: ""
             binary_arg_2: ""
             codex_home: ""
+            pull_request_base: ""
+            pull_request_title: ${workflow_input.change_request}
+            pull_request_body: ${workflow_input.change_request}
+            pull_request_draft: false
       - id: assert_input
         uses: data.assert
         with:
@@ -36,11 +41,16 @@ states:
               - commit_message
               - base_ref
               - remote
+              - go_module_path
               - binary_path
               - binary_package
               - binary_arg_1
               - binary_arg_2
               - codex_home
+              - pull_request_base
+              - pull_request_title
+              - pull_request_body
+              - pull_request_draft
             properties:
               repository_path:
                 type: string
@@ -56,6 +66,8 @@ states:
                 type: string
               remote:
                 type: string
+              go_module_path:
+                type: string
               binary_path:
                 type: string
               binary_package:
@@ -66,6 +78,14 @@ states:
                 type: string
               codex_home:
                 type: string
+              pull_request_base:
+                type: string
+              pull_request_title:
+                type: string
+              pull_request_body:
+                type: string
+              pull_request_draft:
+                type: boolean
     transitions:
       - trigger: succeeded
         to: source_control_prep
@@ -84,6 +104,12 @@ states:
             branch_prefix: aa
             branch_summary: ${normalized_input.branch_summary}
             base_ref: ${normalized_input.base_ref}
+      - id: execution_input
+        uses: data.defaults
+        with:
+          input: ${normalized_input}
+          defaults:
+            binary_path: ${prepare_worktree.worktree_path}.bin
     transitions:
       - trigger: succeeded
         to: agent_implementation
@@ -104,6 +130,7 @@ states:
                 change_request: ${normalized_input.change_request}
                 repository_path: ${normalized_input.repository_path}
                 worktree_path: ${prepare_worktree.worktree_path}
+                go_module_path: ${normalized_input.go_module_path}
                 branch: ${prepare_worktree.branch}
                 codex_home: ${normalized_input.codex_home}
     transitions:
@@ -121,7 +148,7 @@ states:
             uses: command.execute
             with:
               template_id: go_build_all
-              cwd: ${prepare_worktree.worktree_path}
+              cwd: ${prepare_worktree.worktree_path}/${normalized_input.go_module_path}
         transitions:
           - trigger: succeeded
             to: go_test
@@ -131,7 +158,7 @@ states:
             uses: command.execute
             with:
               template_id: go_test_all
-              cwd: ${prepare_worktree.worktree_path}
+              cwd: ${prepare_worktree.worktree_path}/${normalized_input.go_module_path}
         transitions:
           - trigger: succeeded
             to: go_build_binary
@@ -141,9 +168,9 @@ states:
             uses: command.execute
             with:
               template_id: go_build_binary
-              cwd: ${prepare_worktree.worktree_path}
+              cwd: ${prepare_worktree.worktree_path}/${normalized_input.go_module_path}
               parameters:
-                binary_path: ${normalized_input.binary_path}
+                binary_path: ${execution_input.binary_path}
                 package: ${normalized_input.binary_package}
         transitions:
           - trigger: succeeded
@@ -154,9 +181,9 @@ states:
             uses: command.execute
             with:
               template_id: binary_execute_two_args
-              cwd: ${prepare_worktree.worktree_path}
+              cwd: ${prepare_worktree.worktree_path}/${normalized_input.go_module_path}
               parameters:
-                binary_path: ${normalized_input.binary_path}
+                binary_path: ${execution_input.binary_path}
                 arg_1: ${normalized_input.binary_arg_1}
                 arg_2: ${normalized_input.binary_arg_2}
     transitions:
@@ -184,6 +211,19 @@ states:
             worktree_path: ${prepare_worktree.worktree_path}
             remote: ${normalized_input.remote}
             branch: ${prepare_worktree.branch}
+      - id: open_pull_request
+        uses: mcp.call
+        with:
+          server_id: sourcecontrol
+          tool: sourcecontrol.open_pull_request
+          arguments:
+            worktree_path: ${prepare_worktree.worktree_path}
+            remote: ${normalized_input.remote}
+            branch: ${prepare_worktree.branch}
+            base: ${normalized_input.pull_request_base}
+            title: ${normalized_input.pull_request_title}
+            body: ${normalized_input.pull_request_body}
+            draft: ${normalized_input.pull_request_draft}
     transitions:
       - trigger: succeeded
         to: review_ready
@@ -205,5 +245,6 @@ states:
             binary_invoke: ${invoke_binary}
             commit: ${commit_change}
             push: ${push_branch}
+            pull_request: ${open_pull_request}
 
   - id: review_ready

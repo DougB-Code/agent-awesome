@@ -25,6 +25,14 @@ func (s *Store) UpsertAlias(ctx context.Context, req graph.UpsertAliasRequest) (
 	return graph.Alias{NodeID: req.NodeID, Locale: req.Locale, Alias: req.Alias, Kind: req.Kind, CreatedAt: s.now()}, nil
 }
 
+// DeleteNodeAliases removes all aliases for one graph node.
+func (s *Store) DeleteNodeAliases(ctx context.Context, nodeID graph.NodeID) error {
+	if _, err := s.runner.ExecContext(ctx, `DELETE FROM graph_aliases WHERE node_id = ?`, nodeID); err != nil {
+		return fmt.Errorf("delete graph aliases: %w", err)
+	}
+	return nil
+}
+
 // aliasText returns space-joined aliases for FTS indexing.
 func (s *Store) aliasText(ctx context.Context, nodeID graph.NodeID) (string, error) {
 	rows, err := s.runner.QueryContext(ctx, `SELECT alias FROM graph_aliases WHERE node_id = ? ORDER BY alias`, nodeID)

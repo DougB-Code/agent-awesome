@@ -28,7 +28,7 @@ class _MemoryCommandSubShellState extends State<_MemoryCommandSubShell> {
           _buildDetailContent(modeId, query),
       onAreaChanged: widget.onAreaChanged,
       filterHint: 'Filter...',
-      split: const PanelSplit(left: 0.58, min: 0.44, max: 0.82),
+      split: const PanelSplit(left: 0.30, min: 0.22, max: 0.62),
     );
   }
 

@@ -40,7 +40,7 @@ class _BacklogCommandPanelState extends State<BacklogCommandPanel> {
       areaActionsBuilder: _buildAreaActions,
       detailActionsBuilder: _buildDetailActions,
       filterHint: 'Filter...',
-      split: const PanelSplit(left: 0.34, min: 0.24, max: 0.48),
+      split: const PanelSplit(left: 0.30, min: 0.22, max: 0.48),
     );
   }
 

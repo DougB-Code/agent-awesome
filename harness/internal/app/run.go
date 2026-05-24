@@ -16,6 +16,7 @@ import (
 	"agentawesome/internal/logging"
 	"agentawesome/internal/model"
 	"agentawesome/internal/runtime"
+	"agentawesome/internal/services/capabilities"
 	commandservice "agentawesome/internal/services/command/command"
 	workflowactions "agentawesome/internal/services/workflow/actions"
 	workflowembedded "agentawesome/internal/services/workflow/embedded"
@@ -28,27 +29,29 @@ import (
 
 // Options contains CLI-selected runtime and config overrides.
 type Options struct {
-	Args                   []string
-	AgentConfigPath        string
-	ModelConfigPath        string
-	ToolPath               string
-	ToolSet                bool
-	ModelID                string
-	ProviderName           string
-	LogFilePath            string
-	ContextAPIAddr         string
-	ContextAPIToken        string
-	SessionDatabase        string
-	WorkflowAPIAddr        string
-	WorkflowDefinitionsDir string
-	WorkflowDatabasePath   string
-	CommandDataDir         string
-	CommandAllowedWorkdirs []string
-	CommandAllowedEnv      []string
-	CommandTemplatesJSON   string
-	CommandParserDir       string
-	CommandDefaultTimeout  time.Duration
-	CommandMaxOutputBytes  int64
+	Args                       []string
+	AgentConfigPath            string
+	ModelConfigPath            string
+	ToolPath                   string
+	ToolSet                    bool
+	ModelID                    string
+	ProviderName               string
+	LogFilePath                string
+	ContextAPIAddr             string
+	ContextAPIToken            string
+	SessionDatabase            string
+	WorkflowAPIAddr            string
+	WorkflowDefinitionsDir     string
+	WorkflowDatabasePath       string
+	OperationsDatabasePath     string
+	RuntimeTargetsDatabasePath string
+	CommandDataDir             string
+	CommandAllowedWorkdirs     []string
+	CommandAllowedEnv          []string
+	CommandTemplatesJSON       string
+	CommandParserDir           string
+	CommandDefaultTimeout      time.Duration
+	CommandMaxOutputBytes      int64
 }
 
 // Run loads Agent Awesome configuration, builds the runtime config, and starts
@@ -83,7 +86,8 @@ func Run(ctx context.Context, opts Options) error {
 	} else if commandService != nil {
 		defer commandService.Close()
 	}
-	if workflowServer, err := startEmbeddedWorkflow(ctx, opts, toolsCfg, contextServer, commandService); err != nil {
+	capabilityRegistry := capabilities.NewRegistry(toolsCfg, agent)
+	if workflowServer, err := startEmbeddedWorkflow(ctx, opts, toolsCfg, agent, capabilityRegistry, contextServer, commandService); err != nil {
 		return err
 	} else if workflowServer != nil {
 		defer func() {
@@ -102,17 +106,23 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 // startEmbeddedWorkflow serves workflow routes from the harness process when enabled.
-func startEmbeddedWorkflow(ctx context.Context, opts Options, toolsCfg *schema.Tools, contextServer *contextapi.Server, commandService *commandservice.Service) (*workflowembedded.Server, error) {
+func startEmbeddedWorkflow(ctx context.Context, opts Options, toolsCfg *schema.Tools, agent schema.Agent, capabilityRegistry *capabilities.Registry, contextServer *contextapi.Server, commandService *commandservice.Service) (*workflowembedded.Server, error) {
 	if strings.TrimSpace(opts.WorkflowAPIAddr) == "" {
 		return nil, nil
 	}
+	if capabilityRegistry == nil {
+		capabilityRegistry = capabilities.NewRegistry(toolsCfg, agent)
+	}
 	return workflowembedded.Start(ctx, workflowembedded.Config{
-		ListenAddress:  opts.WorkflowAPIAddr,
-		DefinitionsDir: defaulted(opts.WorkflowDefinitionsDir, config.DefaultWorkflowDefinitionsDir()),
-		DatabasePath:   defaulted(opts.WorkflowDatabasePath, config.DefaultWorkflowDatabasePath()),
-		RequestTimeout: 10 * time.Minute,
-		ToolClient:     embeddedWorkflowToolClient(contextServer),
-		CommandClient:  commandService,
+		ListenAddress:              opts.WorkflowAPIAddr,
+		DefinitionsDir:             defaulted(opts.WorkflowDefinitionsDir, config.DefaultWorkflowDefinitionsDir()),
+		DatabasePath:               defaulted(opts.WorkflowDatabasePath, config.DefaultWorkflowDatabasePath()),
+		OperationsDatabasePath:     defaulted(opts.OperationsDatabasePath, config.DefaultOperationsDatabasePath()),
+		RuntimeTargetsDatabasePath: defaulted(opts.RuntimeTargetsDatabasePath, config.DefaultRuntimeTargetsDatabasePath()),
+		RequestTimeout:             10 * time.Minute,
+		ToolClient:                 embeddedWorkflowToolClient(contextServer),
+		CommandClient:              commandService,
+		Capabilities:               capabilityRegistry,
 		MCPServerEndpoints: workflowMCPServerEndpoints(
 			toolsCfg,
 		),

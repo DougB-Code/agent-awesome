@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import '../domain/date_formatting.dart';
 import '../domain/json_value.dart';
 import '../domain/models.dart';
+import '../domain/models_automation.dart';
 import 'client_logger.dart';
 
 part 'mcp_rpc.dart';

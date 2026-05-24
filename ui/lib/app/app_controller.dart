@@ -479,6 +479,20 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Recent workflow runs.
   List<AutomationRun> automationRuns = const <AutomationRun>[];
 
+  /// Saved Operations.
+  List<AutomationRunSetup> automationRunSetups = const <AutomationRunSetup>[];
+
+  /// Codebase catalog records available to Operations.
+  List<AutomationCodebase> automationCodebases = const <AutomationCodebase>[];
+
+  /// Harness capabilities available to Capability Lab.
+  List<AutomationCapability> automationCapabilities =
+      const <AutomationCapability>[];
+
+  /// Computer or Server targets available to Operations.
+  List<AutomationRuntimeTarget> automationRuntimeTargets =
+      const <AutomationRuntimeTarget>[];
+
   /// Pending workflow inbox items.
   List<AutomationPendingItem> automationInbox = const <AutomationPendingItem>[];
 
@@ -488,11 +502,39 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Events for the selected automation run.
   List<AutomationEvent> selectedAutomationEvents = const <AutomationEvent>[];
 
+  /// Latest preview for the selected saved Operation.
+  AutomationOperationPreview? selectedAutomationOperationPreview;
+
+  /// Immutable audit snapshot for the selected Operation run.
+  AutomationOperationRunSnapshot? selectedAutomationOperationRunSnapshot;
+
+  /// Health metadata for the selected Computer or Server target.
+  AutomationTargetHealth? selectedAutomationTargetHealth;
+
+  /// Recent logs for the selected Computer or Server target.
+  List<AutomationTargetLogEntry> selectedAutomationTargetLogs =
+      const <AutomationTargetLogEntry>[];
+
+  /// Secret reference metadata for the selected Computer or Server target.
+  AutomationTargetSecretMetadata? selectedAutomationTargetSecrets;
+
   /// Selected automation draft id.
   String selectedAutomationDraftId = '';
 
   /// Selected automation run id.
   String selectedAutomationRunId = '';
+
+  /// Selected Operation id.
+  String selectedAutomationRunSetupId = '';
+
+  /// Selected codebase catalog id.
+  String selectedAutomationCodebaseId = '';
+
+  /// Selected capability registry id.
+  String selectedAutomationCapabilityId = '';
+
+  /// Selected Computer or Server target id.
+  String selectedAutomationRuntimeTargetId = '';
 
   /// Selected pending automation inbox item id.
   String selectedAutomationPendingItemId = '';

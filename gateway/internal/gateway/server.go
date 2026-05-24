@@ -28,16 +28,19 @@ import (
 
 // Server routes gateway-owned endpoints and harness proxy traffic.
 type Server struct {
-	config         config.Config
-	manager        *supervisor.Manager
-	apiProxy       *proxy.Proxy
-	contextProxy   *proxy.Proxy
-	workflowProxy  *proxy.Proxy
-	apiProxies     map[string]*proxy.Proxy
-	contextProxies map[string]*proxy.Proxy
-	memoryProxies  map[string]*proxy.Proxy
-	slack          *slack.Adapter
-	httpServer     *http.Server
+	config          config.Config
+	manager         *supervisor.Manager
+	apiProxy        *proxy.Proxy
+	contextProxy    *proxy.Proxy
+	workflowProxy   *proxy.Proxy
+	operationsProxy *proxy.Proxy
+	capabilityProxy *proxy.Proxy
+	targetsProxy    *proxy.Proxy
+	apiProxies      map[string]*proxy.Proxy
+	contextProxies  map[string]*proxy.Proxy
+	memoryProxies   map[string]*proxy.Proxy
+	slack           *slack.Adapter
+	httpServer      *http.Server
 }
 
 // readinessView summarizes whether proxied dependency routes should accept traffic.
@@ -246,16 +249,31 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 	if err != nil {
 		return nil, err
 	}
+	operationsProxy, err := proxy.New(operationsBaseURL(cfg.WorkflowBaseURL), "/api/operations", cfg.RequestTimeout, proxy.WithRouteGroup("operations"))
+	if err != nil {
+		return nil, err
+	}
+	capabilityProxy, err := proxy.New(capabilitiesBaseURL(cfg.WorkflowBaseURL), "/api/capabilities", cfg.RequestTimeout, proxy.WithRouteGroup("capabilities"))
+	if err != nil {
+		return nil, err
+	}
+	targetsProxy, err := proxy.New(runtimeTargetsBaseURL(cfg.WorkflowBaseURL), "/api/runtime-targets", cfg.RequestTimeout, proxy.WithRouteGroup("runtime-targets"))
+	if err != nil {
+		return nil, err
+	}
 	server := &Server{
-		config:         cfg,
-		manager:        manager,
-		apiProxy:       apiProxy,
-		contextProxy:   contextProxy,
-		workflowProxy:  workflowProxy,
-		apiProxies:     apiProxies,
-		contextProxies: contextProxies,
-		memoryProxies:  memoryProxies,
-		slack:          slack.NewAdapter(slackConfig(cfg)),
+		config:          cfg,
+		manager:         manager,
+		apiProxy:        apiProxy,
+		contextProxy:    contextProxy,
+		workflowProxy:   workflowProxy,
+		operationsProxy: operationsProxy,
+		capabilityProxy: capabilityProxy,
+		targetsProxy:    targetsProxy,
+		apiProxies:      apiProxies,
+		contextProxies:  contextProxies,
+		memoryProxies:   memoryProxies,
+		slack:           slack.NewAdapter(slackConfig(cfg)),
 	}
 	server.httpServer = &http.Server{
 		Addr:              cfg.ListenAddress,
@@ -363,6 +381,12 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/api/context/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.contextAPIHandler)))
 	mux.HandleFunc("/api/workflows", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.workflowHandler)))
 	mux.HandleFunc("/api/workflows/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.workflowHandler)))
+	mux.HandleFunc("/api/operations", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.operationsHandler)))
+	mux.HandleFunc("/api/operations/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.operationsHandler)))
+	mux.HandleFunc("/api/capabilities", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.capabilitiesHandler)))
+	mux.HandleFunc("/api/capabilities/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.capabilitiesHandler)))
+	mux.HandleFunc("/api/runtime-targets", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.runtimeTargetsHandler)))
+	mux.HandleFunc("/api/runtime-targets/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.runtimeTargetsHandler)))
 	mux.HandleFunc("/api/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.apiHandler)))
 	return s.cors(mux)
 }
@@ -514,6 +538,46 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 // workflowHandler proxies user-channel workflow requests to the configured workflow service.
 func (s *Server) workflowHandler(w http.ResponseWriter, r *http.Request) {
 	s.workflowProxy.ServeHTTP(w, r)
+}
+
+// operationsHandler proxies user-channel operation requests to the workflow service.
+func (s *Server) operationsHandler(w http.ResponseWriter, r *http.Request) {
+	s.operationsProxy.ServeHTTP(w, r)
+}
+
+// capabilitiesHandler proxies user-channel capability requests to the workflow host.
+func (s *Server) capabilitiesHandler(w http.ResponseWriter, r *http.Request) {
+	s.capabilityProxy.ServeHTTP(w, r)
+}
+
+// runtimeTargetsHandler proxies user-channel target requests to the workflow host.
+func (s *Server) runtimeTargetsHandler(w http.ResponseWriter, r *http.Request) {
+	s.targetsProxy.ServeHTTP(w, r)
+}
+
+// operationsBaseURL derives the sibling Operations API base from workflow base.
+func operationsBaseURL(workflowBaseURL string) string {
+	return siblingWorkflowAPIBaseURL(workflowBaseURL, "/api/operations")
+}
+
+// capabilitiesBaseURL derives the sibling Capability Registry API base from workflow base.
+func capabilitiesBaseURL(workflowBaseURL string) string {
+	return siblingWorkflowAPIBaseURL(workflowBaseURL, "/api/capabilities")
+}
+
+// runtimeTargetsBaseURL derives the sibling Runtime Targets API base from workflow base.
+func runtimeTargetsBaseURL(workflowBaseURL string) string {
+	return siblingWorkflowAPIBaseURL(workflowBaseURL, "/api/runtime-targets")
+}
+
+// siblingWorkflowAPIBaseURL replaces the workflow route with a sibling API route.
+func siblingWorkflowAPIBaseURL(workflowBaseURL string, siblingPath string) string {
+	parsed, err := url.Parse(workflowBaseURL)
+	if err != nil {
+		return workflowBaseURL
+	}
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/api/workflows") + siblingPath
+	return parsed.String()
 }
 
 // authorizeMemoryTool selects a domain and checks read/write grants for one tool.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	"agentawesome/internal/services/capabilities"
 	"agentawesome/internal/services/command/command"
 	"agentawesome/internal/services/workflow/actions"
 	"agentawesome/internal/services/workflow/contracts"
@@ -42,6 +43,7 @@ type Config struct {
 	MCPServerEndpoints              map[string]string
 	LLMClient                       LLMClient
 	DesignAssistant                 DesignAssistant
+	Capabilities                    *capabilities.Registry
 	TrustedSigners                  []contracts.TrustedSigner
 	ObservedContractReviewThreshold int
 	SkipInvalidDefinitions          bool

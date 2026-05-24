@@ -94,6 +94,7 @@ const List<String> sourceControlMcpToolNames = <String>[
   'sourcecontrol.status',
   'sourcecontrol.commit',
   'sourcecontrol.push',
+  'sourcecontrol.open_pull_request',
   'sourcecontrol.backup',
   'sourcecontrol.restore',
   'sourcecontrol.cleanup_worktree',

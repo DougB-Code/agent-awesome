@@ -15,6 +15,32 @@ class MemoryClient {
     return _rpc.listToolNames();
   }
 
+  /// Lists typed codebase catalog records used by Operations.
+  Future<List<AutomationCodebase>> listCodebases({
+    String actor = 'agent_awesome_ui',
+    String text = '',
+    int limit = 100,
+  }) async {
+    final content = await _rpc.callTool('list_codebases', <String, dynamic>{
+      'actor': actor,
+      if (text.trim().isNotEmpty) 'text': text.trim(),
+      'limit': limit,
+    });
+    return parseAutomationCodebases(content);
+  }
+
+  /// Saves one typed codebase catalog record.
+  Future<AutomationCodebase> upsertCodebase({
+    required AutomationCodebase codebase,
+    String actor = 'agent_awesome_ui',
+  }) async {
+    final content = await _rpc.callTool('upsert_codebase', <String, dynamic>{
+      'actor': actor,
+      'codebase': codebase.toJson(),
+    });
+    return parseAutomationCodebase(content);
+  }
+
   /// Searches memory records for the memory panel and source list.
   Future<List<MemoryRecord>> searchMemory({
     String actor = 'agent_awesome_ui',

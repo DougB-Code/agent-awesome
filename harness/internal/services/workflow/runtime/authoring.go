@@ -348,6 +348,7 @@ func (s *Service) compileDraftRecord(draft store.DraftRecord) (definition.Defini
 			Message:  fmt.Sprintf("action %q can be drafted but cannot be published yet", name),
 		})
 	}
+	diagnostics = append(diagnostics, s.capabilityDiagnostics(def)...)
 	definitionBody, err := mapFromJSON(def)
 	if err != nil {
 		return def, invalidValidation("definition", err)

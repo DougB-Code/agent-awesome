@@ -321,6 +321,43 @@ nodes:
 	})
 }
 
+// TestRunSetupStartsWorkflowWithMergedInput verifies reusable setup input is applied.
+func TestRunSetupStartsWorkflowWithMergedInput(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "setup.yaml", `
+kind: state_machine
+id: setup_flow
+name: Setup Flow
+initial: done
+states:
+  - id: done
+`)
+	service := openTestService(t, ctx, definitionsDir, "")
+	defer service.Close()
+
+	setup, err := service.CreateRunSetup(ctx, RunSetupRequest{
+		DefinitionID: "setup_flow",
+		Name:         "Repository setup",
+		Input: map[string]any{
+			"repository_path": "/repo",
+			"remote":          "origin",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateRunSetup() error = %v", err)
+	}
+	started, err := service.StartRunSetup(ctx, setup.ID, map[string]any{
+		"change_request": "Fix one bug",
+	})
+	if err != nil {
+		t.Fatalf("StartRunSetup() error = %v", err)
+	}
+	if started.Input["repository_path"] != "/repo" || started.Input["change_request"] != "Fix one bug" {
+		t.Fatalf("run input = %#v, want setup and run inputs merged", started.Input)
+	}
+}
+
 // TestStateMachineRunsNestedEntryActions verifies hierarchical states execute parent and child actions.
 func TestStateMachineRunsNestedEntryActions(t *testing.T) {
 	ctx := context.Background()

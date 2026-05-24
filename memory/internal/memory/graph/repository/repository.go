@@ -39,6 +39,7 @@ type Repository struct {
 
 var _ ports.Repository = (*Repository)(nil)
 var _ ports.GraphQueryRepository = (*Repository)(nil)
+var _ ports.CodebaseRepository = (*Repository)(nil)
 
 // Open creates a graph-backed memory repository.
 func Open(ctx context.Context, cfg Config) (*Repository, error) {

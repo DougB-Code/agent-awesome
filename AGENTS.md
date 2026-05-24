@@ -98,6 +98,8 @@ In command-panel screens, place CRUD controls in the same panel header row as th
 
 Only show manual refresh controls for external resources that cannot reliably push or auto-refresh local app state. Local resources and locally owned services MUST refresh automatically; do not add refresh buttons for local collections, local drafts, or local configuration screens.
 
+Users MUST NOT be asked to configure, edit, paste, or provide raw files, JSON, YAML, TOML, XML, environment files, or other machine-readable configuration text. User-facing setup and run inputs MUST be collected through product UI controls, generated forms, pickers, wizards, import/install actions, or typed fields that write the underlying file or payload for the user.
+
 All command-panel forms MUST use the shared panel form field base classes and decoration primitives. Do not create one-off text fields, dropdowns, or date-field chrome for individual screens when the shared form components can express the field.
 
 Command-panel navigation has four distinct levels. The top sidebar selects the app domain. The left pane quick access selects what the user is working with: supporting context, collections, objects, sources, palettes, references, versions, or search results. The right pane quick access selects what the user is doing: the primary work mode such as Inspect, Edit, Build, Review, Audit, Test, Map, Safety, History, or Profile. Right-side labeled tabs select sub-panels inside the active right mode only. Content-level controls are allowed only for domain-specific manipulation inside the current panel, such as graph zoom, axis selection, local filtering, or form-specific options.

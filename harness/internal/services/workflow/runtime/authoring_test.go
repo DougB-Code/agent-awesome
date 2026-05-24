@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"agentawesome/internal/config/schema"
+	"agentawesome/internal/services/capabilities"
 	"agentawesome/internal/services/workflow/adapters"
 	"agentawesome/internal/services/workflow/contracts"
 	"agentawesome/internal/services/workflow/definition"
@@ -75,6 +77,65 @@ func TestDraftValidatePublishReload(t *testing.T) {
 	}
 	if _, ok := service.DescribeDefinition("publishable"); !ok {
 		t.Fatalf("DescribeDefinition() did not find published definition")
+	}
+}
+
+// TestDraftPublishBlocksUnavailableCapability verifies capability checks gate publication.
+func TestDraftPublishBlocksUnavailableCapability(t *testing.T) {
+	ctx := context.Background()
+	service, err := Open(ctx, Config{
+		DefinitionsDir: t.TempDir(),
+		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
+		RequestTimeout: time.Second,
+		Capabilities: capabilities.NewRegistry(&schema.Tools{
+			LocalExec: schema.LocalExec{
+				Enabled: false,
+				Commands: []schema.LocalExecCommand{{
+					Name:       "go_test_all",
+					Executable: "go",
+				}},
+			},
+		}, schema.Agent{Name: "AA", Instruction: "Work."}),
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer service.Close()
+
+	draft, err := service.CreateDraft(ctx, DraftRequest{
+		ID:   "draft_blocked_capability",
+		Kind: draftKindWorkflow,
+		Body: map[string]any{
+			"kind": draftKindWorkflow,
+			"id":   "blocked_capability",
+			"name": "Blocked Capability",
+			"nodes": []any{
+				map[string]any{
+					"id":   "verify",
+					"uses": "command.execute",
+					"with": map[string]any{
+						"template_id": "go_test_all",
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft() error = %v", err)
+	}
+
+	validation, err := service.ValidateDraft(ctx, draft.ID)
+	if err != nil {
+		t.Fatalf("ValidateDraft() error = %v", err)
+	}
+	if !validation.Valid || validation.Publishable {
+		t.Fatalf("validation = %#v, want valid but not publishable", validation)
+	}
+	if len(validation.Diagnostics) != 1 || validation.Diagnostics[0].Path != "nodes.verify.template_id" {
+		t.Fatalf("diagnostics = %#v, want command template capability diagnostic", validation.Diagnostics)
+	}
+	if _, err := service.PublishDraft(ctx, draft.ID); err == nil {
+		t.Fatalf("PublishDraft() error = nil, want capability rejection")
 	}
 }
 

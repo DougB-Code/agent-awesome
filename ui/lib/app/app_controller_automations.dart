@@ -22,6 +22,48 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationRuns.isEmpty ? null : automationRuns.first;
   }
 
+  /// Returns the currently selected saved Operation.
+  AutomationRunSetup? get selectedAutomationRunSetup {
+    for (final setup in automationRunSetups) {
+      if (setup.id == selectedAutomationRunSetupId) {
+        return setup;
+      }
+    }
+    return automationRunSetups.isEmpty ? null : automationRunSetups.first;
+  }
+
+  /// Returns the currently selected codebase.
+  AutomationCodebase? get selectedAutomationCodebase {
+    for (final codebase in automationCodebases) {
+      if (codebase.id == selectedAutomationCodebaseId) {
+        return codebase;
+      }
+    }
+    return automationCodebases.isEmpty ? null : automationCodebases.first;
+  }
+
+  /// Returns the currently selected capability registry record.
+  AutomationCapability? get selectedAutomationCapability {
+    for (final capability in automationCapabilities) {
+      if (capability.id == selectedAutomationCapabilityId) {
+        return capability;
+      }
+    }
+    return automationCapabilities.isEmpty ? null : automationCapabilities.first;
+  }
+
+  /// Returns the currently selected Computer or Server target.
+  AutomationRuntimeTarget? get selectedAutomationRuntimeTarget {
+    for (final target in automationRuntimeTargets) {
+      if (target.id == selectedAutomationRuntimeTargetId) {
+        return target;
+      }
+    }
+    return automationRuntimeTargets.isEmpty
+        ? null
+        : automationRuntimeTargets.first;
+  }
+
   /// Returns the currently selected pending automation inbox item.
   AutomationPendingItem? get selectedAutomationPendingItem {
     for (final item in automationInbox) {
@@ -114,8 +156,42 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
   /// Selects one automation run and loads its timeline.
   Future<void> selectAutomationRun(String runId) async {
     selectedAutomationRunId = runId;
+    selectedAutomationOperationRunSnapshot = null;
     _notifyControllerListeners();
-    await loadSelectedAutomationRunHistory();
+    await Future.wait(<Future<void>>[
+      loadSelectedAutomationRunHistory(notify: false),
+      loadSelectedAutomationRunSnapshot(notify: false),
+    ]);
+    _notifyControllerListeners();
+  }
+
+  /// Selects one saved Operation.
+  void selectAutomationRunSetup(String setupId) {
+    selectedAutomationRunSetupId = setupId;
+    selectedAutomationOperationPreview = null;
+    _notifyControllerListeners();
+  }
+
+  /// Selects one codebase catalog record.
+  void selectAutomationCodebase(String codebaseId) {
+    selectedAutomationCodebaseId = codebaseId;
+    _notifyControllerListeners();
+  }
+
+  /// Selects one capability registry record.
+  void selectAutomationCapability(String capabilityId) {
+    selectedAutomationCapabilityId = capabilityId;
+    _notifyControllerListeners();
+  }
+
+  /// Selects one Computer or Server target and loads its detail metadata.
+  Future<void> selectAutomationRuntimeTarget(String targetId) async {
+    selectedAutomationRuntimeTargetId = targetId;
+    selectedAutomationTargetHealth = null;
+    selectedAutomationTargetLogs = const <AutomationTargetLogEntry>[];
+    selectedAutomationTargetSecrets = null;
+    _notifyControllerListeners();
+    await loadSelectedAutomationRuntimeTargetDetails();
   }
 
   /// Selects one pending automation inbox item for header actions.
@@ -131,11 +207,13 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
   }
 
   /// Loads the selected automation run timeline.
-  Future<void> loadSelectedAutomationRunHistory() async {
+  Future<void> loadSelectedAutomationRunHistory({bool notify = true}) async {
     final run = selectedAutomationRun;
     if (run == null) {
       selectedAutomationEvents = const <AutomationEvent>[];
-      _notifyControllerListeners();
+      if (notify) {
+        _notifyControllerListeners();
+      }
       return;
     }
     try {
@@ -144,7 +222,65 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsMessage = error.toString();
       await _log('automation history failed: $error');
     }
-    _notifyControllerListeners();
+    if (notify) {
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Loads the selected Operation run audit snapshot when one exists.
+  Future<void> loadSelectedAutomationRunSnapshot({bool notify = true}) async {
+    final run = selectedAutomationRun;
+    if (run == null) {
+      selectedAutomationOperationRunSnapshot = null;
+      if (notify) {
+        _notifyControllerListeners();
+      }
+      return;
+    }
+    try {
+      selectedAutomationOperationRunSnapshot = await automationsClient
+          .operationRunSnapshot(run.id);
+    } catch (error) {
+      selectedAutomationOperationRunSnapshot = null;
+      await _log('operation run snapshot unavailable for ${run.id}: $error');
+    }
+    if (notify) {
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Loads health, logs, and secret metadata for the selected target.
+  Future<void> loadSelectedAutomationRuntimeTargetDetails({
+    bool notify = true,
+  }) async {
+    final target = selectedAutomationRuntimeTarget;
+    if (target == null) {
+      selectedAutomationTargetHealth = null;
+      selectedAutomationTargetLogs = const <AutomationTargetLogEntry>[];
+      selectedAutomationTargetSecrets = null;
+      if (notify) {
+        _notifyControllerListeners();
+      }
+      return;
+    }
+    try {
+      final results = await Future.wait<dynamic>(<Future<dynamic>>[
+        automationsClient.targetHealth(target.id),
+        automationsClient.targetLogs(target.id),
+        automationsClient.targetSecrets(target.id),
+      ]);
+      selectedAutomationTargetHealth = results[0] as AutomationTargetHealth;
+      selectedAutomationTargetLogs =
+          results[1] as List<AutomationTargetLogEntry>;
+      selectedAutomationTargetSecrets =
+          results[2] as AutomationTargetSecretMetadata;
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation target detail load failed: $error');
+    }
+    if (notify) {
+      _notifyControllerListeners();
+    }
   }
 
   /// Creates a new workflow draft from a builder screen.
@@ -305,8 +441,9 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
 
   /// Starts one installed automation definition.
   Future<void> startAutomationDefinitionFromUi(
-    AutomationDefinition definition,
-  ) async {
+    AutomationDefinition definition, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
     automationsBusy = true;
     automationsMessage = 'Starting ${definition.name}';
     _notifyControllerListeners();
@@ -314,7 +451,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       if (!await _ensureAutomationRuntimeReady()) {
         return;
       }
-      final run = await automationsClient.startRun(definition.id);
+      final run = await automationsClient.startRun(definition.id, input: input);
       selectedAutomationRunId = run.id;
       await _loadAutomationRunsAndInbox();
       automationsMessage = '';
@@ -325,6 +462,155 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsBusy = false;
       _notifyControllerListeners();
     }
+  }
+
+  /// Creates one saved Operation for an installed workflow file.
+  Future<void> createAutomationRunSetupFromUi({
+    required AutomationDefinition definition,
+    required String name,
+    String description = '',
+    String codebaseId = '',
+    String runtimeTargetId = '',
+    String agentProfileId = '',
+    Map<String, dynamic> input = const <String, dynamic>{},
+    Map<String, dynamic> policy = const <String, dynamic>{},
+    Map<String, dynamic> schedule = const <String, dynamic>{},
+  }) async {
+    automationsBusy = true;
+    automationsMessage = 'Creating operation';
+    _notifyControllerListeners();
+    try {
+      if (!await _ensureAutomationRuntimeReady()) {
+        return;
+      }
+      final setup = await automationsClient.createRunSetup(
+        definitionId: definition.id,
+        name: name,
+        description: description,
+        codebaseId: codebaseId,
+        runtimeTargetId: runtimeTargetId,
+        agentProfileId: agentProfileId,
+        input: input,
+        policy: policy,
+        schedule: schedule,
+      );
+      selectedAutomationRunSetupId = setup.id;
+      await _loadAutomationRunSetups();
+      automationsMessage = '';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation operation create failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Updates one saved Operation from typed UI fields.
+  Future<void> updateAutomationRunSetupFromUi(AutomationRunSetup setup) async {
+    automationsBusy = true;
+    automationsMessage = 'Updating operation';
+    _notifyControllerListeners();
+    try {
+      if (!await _ensureAutomationRuntimeReady()) {
+        return;
+      }
+      final saved = await automationsClient.updateRunSetup(setup);
+      selectedAutomationRunSetupId = saved.id;
+      await _loadAutomationRunSetups();
+      automationsMessage = '';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation operation update failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Creates or updates one codebase catalog record from typed UI fields.
+  Future<void> upsertAutomationCodebaseFromUi(
+    AutomationCodebase codebase,
+  ) async {
+    automationsBusy = true;
+    automationsMessage = 'Saving codebase';
+    _notifyControllerListeners();
+    try {
+      if (!await _ensureAutomationRuntimeReady()) {
+        return;
+      }
+      final saved = await memoryClient.upsertCodebase(codebase: codebase);
+      selectedAutomationCodebaseId = saved.id;
+      await _loadAutomationCodebases();
+      automationsMessage = '';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation codebase save failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Starts one saved Operation.
+  Future<void> startAutomationRunSetupFromUi(
+    AutomationRunSetup setup, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
+    automationsBusy = true;
+    automationsMessage = 'Starting ${setup.name}';
+    _notifyControllerListeners();
+    try {
+      if (!await _ensureAutomationRuntimeReady()) {
+        return;
+      }
+      final run = await automationsClient.startRunSetup(setup.id, input: input);
+      selectedAutomationRunId = run.id;
+      await _loadAutomationRunsAndInbox();
+      automationsMessage = '';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation operation start failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Previews one saved Operation without starting it.
+  Future<void> previewAutomationRunSetupFromUi(
+    AutomationRunSetup setup, {
+    Map<String, dynamic> input = const <String, dynamic>{},
+  }) async {
+    automationsBusy = true;
+    automationsMessage = 'Testing operation';
+    _notifyControllerListeners();
+    try {
+      if (!await _ensureAutomationRuntimeReady()) {
+        return;
+      }
+      selectedAutomationRunSetupId = setup.id;
+      selectedAutomationOperationPreview = await automationsClient
+          .previewRunSetup(setup.id, input: input);
+      automationsMessage = selectedAutomationOperationPreview?.status == 'ready'
+          ? ''
+          : 'Operation needs setup';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation operation preview failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Previews the selected saved Operation without starting it.
+  Future<void> previewSelectedAutomationRunSetupFromUi() async {
+    final setup = selectedAutomationRunSetup;
+    if (setup == null) {
+      return;
+    }
+    await previewAutomationRunSetupFromUi(setup);
   }
 
   /// Sends an approval signal for one pending automation item.
@@ -378,6 +664,9 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     await Future.wait(<Future<void>>[
       _loadAutomationCatalog(),
       _loadAutomationDrafts(),
+      _loadAutomationRunSetups(),
+      _loadAutomationCodebases(),
+      _loadAutomationRuntimeTargets(),
       _loadAutomationRunsAndInbox(),
     ]);
   }
@@ -389,14 +678,20 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         automationsClient.listActionTypes(),
         automationsClient.listDefinitions(),
         automationsClient.listPackages(),
+        automationsClient.listCapabilities(),
       ]);
       automationActionTypes = results[0] as List<AutomationActionType>;
       automationDefinitions = results[1] as List<AutomationDefinition>;
       automationPackages = results[2] as List<AutomationPackage>;
+      automationCapabilities = results[3] as List<AutomationCapability>;
       await _loadAutomationToolNames();
       if (selectedAutomationDefinitionId.isEmpty &&
           automationDefinitions.isNotEmpty) {
         selectedAutomationDefinitionId = automationDefinitions.first.id;
+      }
+      if (selectedAutomationCapabilityId.isEmpty &&
+          automationCapabilities.isNotEmpty) {
+        selectedAutomationCapabilityId = automationCapabilities.first.id;
       }
     } catch (error) {
       automationsMessage = error.toString();
@@ -424,6 +719,52 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     } catch (error) {
       automationsMessage = error.toString();
       await _log('automation draft load failed: $error');
+    }
+  }
+
+  /// Loads saved Operations.
+  Future<void> _loadAutomationRunSetups() async {
+    try {
+      automationRunSetups = await automationsClient.listRunSetups();
+      if (selectedAutomationRunSetupId.isEmpty &&
+          automationRunSetups.isNotEmpty) {
+        selectedAutomationRunSetupId = automationRunSetups.first.id;
+      }
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation operations load failed: $error');
+    }
+  }
+
+  /// Loads typed codebases for Operations.
+  Future<void> _loadAutomationCodebases() async {
+    try {
+      automationCodebases = await memoryClient.listCodebases();
+      if (selectedAutomationCodebaseId.isEmpty &&
+          automationCodebases.isNotEmpty) {
+        selectedAutomationCodebaseId = automationCodebases.first.id;
+      }
+    } catch (error) {
+      await _log('automation codebases load failed: $error');
+    }
+  }
+
+  /// Loads Computer or Server targets for Operations.
+  Future<void> _loadAutomationRuntimeTargets() async {
+    try {
+      automationRuntimeTargets = await automationsClient.listRuntimeTargets();
+      final selectedStillExists = automationRuntimeTargets.any(
+        (target) => target.id == selectedAutomationRuntimeTargetId,
+      );
+      if (!selectedStillExists) {
+        selectedAutomationRuntimeTargetId = automationRuntimeTargets.isEmpty
+            ? ''
+            : automationRuntimeTargets.first.id;
+      }
+      await loadSelectedAutomationRuntimeTargetDetails(notify: false);
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation runtime targets load failed: $error');
     }
   }
 

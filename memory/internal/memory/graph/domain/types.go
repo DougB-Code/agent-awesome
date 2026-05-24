@@ -24,6 +24,8 @@ type NodeKind string
 const (
 	// KindArtifact represents a generated or imported artifact.
 	KindArtifact NodeKind = "artifact"
+	// KindCodebase represents a durable repository catalog entry.
+	KindCodebase NodeKind = "codebase"
 	// KindEvidence represents source-backed content.
 	KindEvidence NodeKind = "evidence"
 	// KindEntity represents a generic named entity.

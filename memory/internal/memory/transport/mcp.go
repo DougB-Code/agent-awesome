@@ -113,6 +113,23 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		return decodeAndCall(ctx, args, s.service.ProjectExecutiveSummary)
 	case "explain_executive_summary_item":
 		return decodeAndCall(ctx, args, s.service.ExplainExecutiveSummaryItem)
+	case "upsert_codebase":
+		return decodeAndCall(ctx, args, s.service.UpsertCodebase)
+	case "get_codebase":
+		return decodeAndCall(ctx, args, s.service.GetCodebase)
+	case "list_codebases":
+		return decodeAndCall(ctx, args, s.service.ListCodebases)
+	case "resolve_codebase":
+		return decodeAndCall(ctx, args, s.service.ResolveCodebase)
+	case "delete_codebase":
+		var req domain.CodebaseIDRequest
+		if err := decodeArgs(args, &req); err != nil {
+			return nil, err
+		}
+		if err := s.service.DeleteCodebase(ctx, req); err != nil {
+			return nil, err
+		}
+		return map[string]string{"status": "deleted", "id": req.ID}, nil
 	case "update_task":
 		return decodeAndCall(ctx, args, s.service.UpdateTask)
 	case "complete_task":
@@ -238,6 +255,21 @@ func toolDefinitions() []map[string]any {
 		tool("task_graph_projection", "Read a graph-backed task node and edge projection.", taskGraphProjectionSchema(), []string{}),
 		tool("project_executive_summary", "Read the canonical Today executive summary projection.", executiveSummarySchema(), []string{}),
 		tool("explain_executive_summary_item", "Explain why one Today projection item was surfaced.", explainExecutiveSummaryItemSchema(), []string{"item_id"}),
+		tool("upsert_codebase", "Create or update a durable codebase catalog entry for coding operations.", map[string]any{
+			"actor":    stringSchema("Calling agent or user."),
+			"codebase": codebaseSchema(),
+		}, []string{"codebase"}),
+		tool("get_codebase", "Load one durable codebase catalog entry by id.", map[string]any{"id": stringSchema("Codebase id."), "actor": stringSchema("Calling agent or user.")}, []string{"id"}),
+		tool("list_codebases", "List durable codebase catalog entries.", map[string]any{
+			"text":  stringSchema("Optional search text."),
+			"limit": map[string]any{"type": "integer", "description": "Maximum codebases to return."},
+			"actor": stringSchema("Calling agent or user."),
+		}, []string{}),
+		tool("resolve_codebase", "Resolve a human codebase name or alias to one catalog entry or an ambiguity result.", map[string]any{
+			"query": stringSchema("Codebase name, id, alias, or search phrase."),
+			"actor": stringSchema("Calling agent or user."),
+		}, []string{"query"}),
+		tool("delete_codebase", "Lifecycle-delete one durable codebase catalog entry.", map[string]any{"id": stringSchema("Codebase id."), "actor": stringSchema("Calling agent or user.")}, []string{"id"}),
 		tool("update_task", "Patch a graph-backed operational task.", taskUpdateSchema(), []string{"task_id"}),
 		tool("complete_task", "Mark a graph-backed task done.", map[string]any{"task_id": stringSchema("Task id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
 		tool("cancel_task", "Mark a graph-backed task canceled.", map[string]any{"task_id": stringSchema("Task id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
@@ -454,6 +486,23 @@ func retrievalSchema() map[string]any {
 		"allowed_sensitivities": arraySchema("Allowed sensitivity levels.", enumSchema("Sensitivity.", domain.SensitivityStrings())),
 		"limit":                 map[string]any{"type": "integer", "description": "Maximum records to return."},
 	}
+}
+
+// codebaseSchema returns the typed codebase catalog input schema.
+func codebaseSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"id":                  stringSchema("Stable codebase id. Derived from name when omitted."),
+		"name":                stringSchema("Human-readable codebase name."),
+		"aliases":             arraySchema("Normalized lookup aliases.", stringSchema("Codebase alias.")),
+		"repository_path":     stringSchema("Local repository path for local codebases."),
+		"default_remote":      stringSchema("Default Git remote name."),
+		"default_branch":      stringSchema("Default Git branch or ref."),
+		"provider":            stringSchema("Repository provider such as github."),
+		"provider_repository": stringSchema("Provider repository id, normalized as owner/name for GitHub."),
+		"go_module_path":      stringSchema("Default Go module path inside the repository."),
+		"runtime_target_id":   stringSchema("Default runtime target id."),
+		"agent_profile_id":    stringSchema("Default coding agent profile id."),
+	}, []string{"name"})
 }
 
 // tool creates a MCP tool definition.

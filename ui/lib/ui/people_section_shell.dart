@@ -101,7 +101,7 @@ class _PeopleCommandSubShellState extends State<PeopleCommandSubShell> {
       onAreaFilterSelected: (_, filterId) => _selectFilterId(filterId),
       filterHint: 'Filter contacts...',
       emptyLabel: 'No contact areas configured',
-      split: const PanelSplit(left: 0.66, min: 0.5, max: 0.84),
+      split: const PanelSplit(left: 0.30, min: 0.18, max: 0.62),
     );
   }
 

@@ -22,20 +22,21 @@ func newRunCommand(ctx context.Context) *cobra.Command {
 // runner so tests can assert parsed options without launching the full runtime.
 func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, app.Options) error) *cobra.Command {
 	opts := app.Options{
-		AgentConfigPath:        config.DefaultAgentPath(),
-		ModelConfigPath:        config.DefaultModelPath(),
-		ToolPath:               config.DefaultToolPath(),
-		ContextAPIToken:        os.Getenv("AGENTAWESOME_CONTEXT_API_TOKEN"),
-		WorkflowAPIAddr:        os.Getenv("AGENTAWESOME_WORKFLOW_ADDR"),
-		WorkflowDefinitionsDir: os.Getenv("AGENTAWESOME_WORKFLOW_DEFINITIONS_DIR"),
-		WorkflowDatabasePath:   os.Getenv("AGENTAWESOME_WORKFLOW_DB"),
-		CommandDataDir:         envString("AGENTAWESOME_COMMAND_DATA_DIR", config.DefaultCommandDataDir()),
-		CommandAllowedWorkdirs: envList("AGENTAWESOME_COMMAND_ALLOWED_WORKDIRS", []string{"."}),
-		CommandAllowedEnv:      envList("AGENTAWESOME_COMMAND_ALLOWED_ENV", []string{"PATH", "HOME", "USER", "TMPDIR"}),
-		CommandTemplatesJSON:   os.Getenv("AGENTAWESOME_COMMAND_TEMPLATES_JSON"),
-		CommandParserDir:       envString("AGENTAWESOME_COMMAND_PARSER_DIR", config.DefaultCommandParserDir()),
-		CommandDefaultTimeout:  envDuration("AGENTAWESOME_COMMAND_TIMEOUT", 10*time.Minute),
-		CommandMaxOutputBytes:  envInt64("AGENTAWESOME_COMMAND_MAX_OUTPUT_BYTES", 64<<10),
+		AgentConfigPath:            config.DefaultAgentPath(),
+		ModelConfigPath:            config.DefaultModelPath(),
+		ToolPath:                   config.DefaultToolPath(),
+		ContextAPIToken:            os.Getenv("AGENTAWESOME_CONTEXT_API_TOKEN"),
+		WorkflowAPIAddr:            os.Getenv("AGENTAWESOME_WORKFLOW_ADDR"),
+		WorkflowDefinitionsDir:     os.Getenv("AGENTAWESOME_WORKFLOW_DEFINITIONS_DIR"),
+		WorkflowDatabasePath:       os.Getenv("AGENTAWESOME_WORKFLOW_DB"),
+		RuntimeTargetsDatabasePath: os.Getenv("AGENTAWESOME_RUNTIME_TARGETS_DB"),
+		CommandDataDir:             envString("AGENTAWESOME_COMMAND_DATA_DIR", config.DefaultCommandDataDir()),
+		CommandAllowedWorkdirs:     envList("AGENTAWESOME_COMMAND_ALLOWED_WORKDIRS", []string{"."}),
+		CommandAllowedEnv:          envList("AGENTAWESOME_COMMAND_ALLOWED_ENV", []string{"PATH", "HOME", "USER", "TMPDIR"}),
+		CommandTemplatesJSON:       os.Getenv("AGENTAWESOME_COMMAND_TEMPLATES_JSON"),
+		CommandParserDir:           envString("AGENTAWESOME_COMMAND_PARSER_DIR", config.DefaultCommandParserDir()),
+		CommandDefaultTimeout:      envDuration("AGENTAWESOME_COMMAND_TIMEOUT", 10*time.Minute),
+		CommandMaxOutputBytes:      envInt64("AGENTAWESOME_COMMAND_MAX_OUTPUT_BYTES", 64<<10),
 	}
 
 	cmd := &cobra.Command{
@@ -72,6 +73,7 @@ AA runtime syntax:
 	cmd.Flags().StringVar(&opts.WorkflowAPIAddr, "workflow-api-addr", opts.WorkflowAPIAddr, "optional embedded workflow API listen address")
 	cmd.Flags().StringVar(&opts.WorkflowDefinitionsDir, "workflow-definitions", opts.WorkflowDefinitionsDir, "embedded workflow definition directory")
 	cmd.Flags().StringVar(&opts.WorkflowDatabasePath, "workflow-db", opts.WorkflowDatabasePath, "embedded workflow SQLite database path")
+	cmd.Flags().StringVar(&opts.RuntimeTargetsDatabasePath, "runtime-targets-db", opts.RuntimeTargetsDatabasePath, "runtime target SQLite database path")
 	cmd.Flags().StringVar(&opts.CommandDataDir, "command-data-dir", opts.CommandDataDir, "command service data directory")
 	cmd.Flags().StringArrayVar(&opts.CommandAllowedWorkdirs, "command-allow-workdir", opts.CommandAllowedWorkdirs, "allowed command working directory root")
 	cmd.Flags().StringArrayVar(&opts.CommandAllowedEnv, "command-allow-env", opts.CommandAllowedEnv, "allowed process environment variable")

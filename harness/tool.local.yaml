@@ -30,9 +30,11 @@ mcp:
         - mutate_context_graph
         - create_task
         - update_task
+        - upsert_codebase
         - complete_task
         - cancel_task
         - delete_task
+        - delete_codebase
         - link_task_memory
         - upsert_task_relation
         - delete_task_relation
@@ -55,6 +57,11 @@ mcp:
           - task_graph_projection
           - project_executive_summary
           - explain_executive_summary_item
+          - upsert_codebase
+          - get_codebase
+          - list_codebases
+          - resolve_codebase
+          - delete_codebase
           - update_task
           - complete_task
           - cancel_task
@@ -70,17 +77,30 @@ mcp:
       require-confirmation-tools:
         - sourcecontrol.commit
         - sourcecontrol.push
+        - sourcecontrol.open_pull_request
         - sourcecontrol.restore
         - sourcecontrol.cleanup_worktree
       tools:
         allow:
+          - sourcecontrol.inspect_repository
+          - sourcecontrol.validate_repository
           - sourcecontrol.prepare_worktree
           - sourcecontrol.status
           - sourcecontrol.commit
           - sourcecontrol.push
+          - sourcecontrol.open_pull_request
           - sourcecontrol.backup
           - sourcecontrol.restore
           - sourcecontrol.cleanup_worktree
+    - name: operations
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8092/api/operations/mcp
+      tools:
+        allow:
+          - operation_list
+          - operation_get
+          - operation_start
+          - coding_change_start
 memory:
   actor: agent:agent-awesome
   read-domains:

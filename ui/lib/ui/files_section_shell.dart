@@ -79,7 +79,7 @@ class _FilesCommandSubShellState extends State<FilesCommandSubShell> {
       onAreaFilterSelected: (_, filterId) => _selectKindFilterId(filterId),
       filterHint: 'Filter files...',
       emptyLabel: 'No file areas configured',
-      split: const PanelSplit(left: 0.68, min: 0.5, max: 0.84),
+      split: const PanelSplit(left: 0.30, min: 0.18, max: 0.62),
     );
   }
 

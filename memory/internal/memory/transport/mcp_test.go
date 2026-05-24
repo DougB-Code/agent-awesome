@@ -22,8 +22,8 @@ func TestMCPToolsList(t *testing.T) {
 	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
 	result := body["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 26 {
-		t.Fatalf("tool count = %d, want 26", len(tools))
+	if len(tools) != 31 {
+		t.Fatalf("tool count = %d, want 31", len(tools))
 	}
 }
 
@@ -195,6 +195,48 @@ func TestMCPRememberStoresMemoryNugget(t *testing.T) {
 	record := primary[0].(map[string]any)
 	if record["kind"] != "profile_fact" || record["trust_level"] != "user_asserted" {
 		t.Fatalf("record = %#v, want user-asserted profile fact", record)
+	}
+}
+
+// TestMCPCodebaseToolsRoundTrip verifies typed codebase catalog MCP tools.
+func TestMCPCodebaseToolsRoundTrip(t *testing.T) {
+	server := newTestMCPServer(t)
+	upsert := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "upsert_codebase",
+			"arguments": map[string]any{
+				"codebase": map[string]any{
+					"name":            "Agent Awesome",
+					"aliases":         []string{"AA"},
+					"repository_path": "/repo/agent",
+					"default_remote":  "origin",
+					"default_branch":  "main",
+				},
+			},
+		},
+	})
+	if upsert["result"].(map[string]any)["isError"].(bool) {
+		t.Fatalf("upsert returned tool error: %#v", upsert)
+	}
+	resolve := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      "resolve_codebase",
+			"arguments": map[string]any{"query": "Agent Awesome"},
+		},
+	})
+	result := resolve["result"].(map[string]any)
+	if result["isError"].(bool) {
+		t.Fatalf("resolve returned tool error: %#v", result)
+	}
+	structured := result["structuredContent"].(map[string]any)
+	if structured["status"] != "matched" {
+		t.Fatalf("resolution = %#v, want matched", structured)
 	}
 }
 

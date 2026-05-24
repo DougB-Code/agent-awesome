@@ -226,6 +226,90 @@ func (s *Store) ListRuns(ctx context.Context, filter RunFilter) ([]RunRecord, er
 	return records, rows.Err()
 }
 
+// UpsertRunSetup stores or replaces one reusable workflow run setup.
+func (s *Store) UpsertRunSetup(ctx context.Context, record RunSetupRecord) error {
+	now := nowString()
+	input, err := marshalMap(record.Input)
+	if err != nil {
+		return fmt.Errorf("encode workflow run setup input: %w", err)
+	}
+	createdAt := record.CreatedAt
+	if createdAt == "" {
+		createdAt = now
+	}
+	name := record.Name
+	if name == "" {
+		name = record.ID
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO workflow_run_setups
+		(id, definition_id, name, description, input_json, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET definition_id=excluded.definition_id,
+			name=excluded.name, description=excluded.description, input_json=excluded.input_json,
+			updated_at=excluded.updated_at`,
+		record.ID, record.DefinitionID, name, record.Description, string(input), createdAt, now)
+	if err != nil {
+		return fmt.Errorf("upsert workflow run setup %q: %w", record.ID, err)
+	}
+	return nil
+}
+
+// ListRunSetups returns reusable workflow run setups.
+func (s *Store) ListRunSetups(ctx context.Context, filter RunSetupFilter) ([]RunSetupRecord, error) {
+	query := `SELECT id, definition_id, name, description, input_json, created_at, updated_at FROM workflow_run_setups`
+	args := []any{}
+	if strings.TrimSpace(filter.DefinitionID) != "" {
+		query += ` WHERE definition_id = ?`
+		args = append(args, strings.TrimSpace(filter.DefinitionID))
+	}
+	query += ` ORDER BY updated_at DESC`
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list workflow run setups: %w", err)
+	}
+	defer rows.Close()
+	var records []RunSetupRecord
+	for rows.Next() {
+		record, err := scanRunSetup(rows)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+// GetRunSetup returns one reusable workflow run setup.
+func (s *Store) GetRunSetup(ctx context.Context, id string) (RunSetupRecord, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT id, definition_id, name, description, input_json, created_at, updated_at FROM workflow_run_setups WHERE id = ?`, id)
+	return scanRunSetup(row)
+}
+
+// DeleteRunSetup removes one reusable workflow run setup.
+func (s *Store) DeleteRunSetup(ctx context.Context, id string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM workflow_run_setups WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete workflow run setup %q: %w", id, err)
+	}
+	return nil
+}
+
+// scanRunSetup decodes one reusable workflow run setup row.
+func scanRunSetup(row interface{ Scan(...any) error }) (RunSetupRecord, error) {
+	var record RunSetupRecord
+	var input string
+	if err := row.Scan(&record.ID, &record.DefinitionID, &record.Name, &record.Description, &input, &record.CreatedAt, &record.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return RunSetupRecord{}, fmt.Errorf("workflow run setup not found")
+		}
+		return RunSetupRecord{}, err
+	}
+	if err := json.Unmarshal([]byte(input), &record.Input); err != nil {
+		return RunSetupRecord{}, fmt.Errorf("decode workflow run setup input: %w", err)
+	}
+	return record, nil
+}
+
 // scanDraft decodes one workflow draft row.
 func scanDraft(row interface{ Scan(...any) error }) (DraftRecord, error) {
 	var record DraftRecord
