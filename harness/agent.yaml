@@ -7,3 +7,69 @@ instruction: |
   Treat reminders and "remember that I need to..." requests as tasks when they describe an action, purchase, errand, deadline, or todo.
   Use memory tools only when they help preserve or retrieve information that is likely to matter later.
   Do not invent idempotency keys for task calls; the runtime supplies stable keys.
+validations:
+  - id: asks_for_context
+    label: Asks for context
+    mode: mocked
+    prompt: Help me with the thing.
+    mocks:
+      agent.response:
+        text: I need more context to help with that.
+    assertions:
+      - type: response-contains
+        contains: context
+  - id: creates_task_for_todo
+    label: Creates task for todo
+    mode: mocked
+    prompt: Remind me to buy milk tomorrow.
+    mocks:
+      agent.response:
+        text: I created a task to buy milk tomorrow.
+        tool_calls:
+          - id: mcp:memory.create_task
+            name: create_task
+            arguments:
+              title: Buy milk
+              description: Buy milk tomorrow.
+    assertions:
+      - type: tool-call
+        equals: mcp:memory.create_task
+      - type: json-path
+        path: response.tool_calls.0.arguments.title
+        equals: Buy milk
+  - id: searches_memory_for_recall
+    label: Searches memory for recall
+    mode: mocked
+    prompt: What did I say about the migration plan?
+    mocks:
+      agent.response:
+        text: I searched memory for the migration plan.
+        tool_calls:
+          - id: mcp:memory.search_memory
+            name: search_memory
+            arguments:
+              query: migration plan
+    assertions:
+      - type: tool-call
+        equals: mcp:memory.search_memory
+      - type: json-path
+        path: response.tool_calls.0.arguments.query
+        equals: migration plan
+  - id: remembers_durable_preference
+    label: Remembers durable preference
+    mode: mocked
+    prompt: Remember that I prefer terse release notes.
+    mocks:
+      agent.response:
+        text: I recorded that preference.
+        tool_calls:
+          - id: mcp:memory.remember
+            name: remember
+            arguments:
+              content: I prefer terse release notes.
+    assertions:
+      - type: tool-call
+        equals: mcp:memory.remember
+      - type: json-path
+        path: response.tool_calls.0.arguments.content
+        contains: terse release notes

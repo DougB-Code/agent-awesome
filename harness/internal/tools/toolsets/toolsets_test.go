@@ -16,10 +16,9 @@ func TestBuildReturnsMCPToolsetsOnly(t *testing.T) {
 			Enabled: true,
 			Commands: []schema.LocalExecCommand{
 				{
-					Name:        "git_status",
+					Name:        "git",
 					Executable:  "git",
-					Description: "Show repository status.",
-					Args:        []string{"status", "--short"},
+					Description: "Run documented Git CLI subcommands.",
 				},
 			},
 		},

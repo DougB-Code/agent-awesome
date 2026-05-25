@@ -19,6 +19,11 @@ const List<({String label, IconData icon, String detail})> _settingsSections =
         detail: 'Model config and harness runtime.',
       ),
       (
+        label: 'Agents',
+        icon: Icons.psychology_outlined,
+        detail: 'Instructions and behavior validations.',
+      ),
+      (
         label: 'Memory',
         icon: Icons.account_tree_outlined,
         detail: 'Graph-backed memory domains.',
@@ -56,7 +61,9 @@ class SettingsCommandSubShell extends StatefulWidget {
 class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
   String? _selectedProfilePath;
   String? _selectedModelConfigPath;
+  String? _selectedAgentConfigPath;
   String? _selectedMemoryDomainId;
+  final Map<String, String> _selectedDetailModeIds = <String, String>{};
 
   /// Builds the settings command panel and selected editor.
   @override
@@ -77,6 +84,8 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
       detailBuilder: (_) =>
           SettingsDetailsPanel(controller: widget.controller, section: 'App'),
       searchableDetailBuilder: _buildAreaDetail,
+      selectedDetailModeIdBuilder: _selectedDetailModeIdForArea,
+      onAreaDetailModeSelected: _selectDetailModeForArea,
       areaActionsBuilder: _buildAreaActions,
       detailActionsBuilder: _buildDetailActions,
       onAreaChanged: (area) {
@@ -104,10 +113,13 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
             query: query,
             selectedProfilePath: _selectedProfilePathForArea(),
             selectedModelConfigPath: _selectedModelConfigPathForArea(),
+            selectedAgentConfigPath: _selectedAgentConfigPathForArea(),
             selectedMemoryDomainId: _selectedMemoryDomainIdForArea(),
             onProfileSelected: (path) => unawaited(_selectProfile(path)),
             onModelConfigSelected: (path) =>
                 setState(() => _selectedModelConfigPath = path),
+            onAgentConfigSelected: (path) =>
+                setState(() => _selectedAgentConfigPath = path),
             onMemoryDomainSelected: (domainId) =>
                 setState(() => _selectedMemoryDomainId = domainId),
           ),
@@ -117,6 +129,25 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
 
   /// Returns the single right-side settings mode for one left area.
   List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
+    if (area.id == 'Agents') {
+      return const <CommandPanelDetailMode>[
+        CommandPanelDetailMode(
+          id: _settingsAgentDetailsMode,
+          label: 'Details',
+          icon: Icons.info_outline,
+        ),
+        CommandPanelDetailMode(
+          id: _settingsAgentInstructionsMode,
+          label: 'Instructions',
+          icon: Icons.article_outlined,
+        ),
+        CommandPanelDetailMode(
+          id: _settingsAgentValidationsMode,
+          label: 'Validations',
+          icon: Icons.fact_check_outlined,
+        ),
+      ];
+    }
     return <CommandPanelDetailMode>[
       CommandPanelDetailMode(
         id: area.id,
@@ -124,6 +155,21 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
         icon: Icons.info_outline,
       ),
     ];
+  }
+
+  /// Resolves the selected right-pane mode for one settings area.
+  String _selectedDetailModeIdForArea(SwitcherPanelArea area) {
+    final selected = _selectedDetailModeIds[area.id];
+    final modes = _detailModesForArea(area);
+    if (selected != null && modes.any((mode) => mode.id == selected)) {
+      return selected;
+    }
+    return modes.isEmpty ? '' : modes.first.id;
+  }
+
+  /// Stores the selected right-pane mode for one settings area.
+  void _selectDetailModeForArea(SwitcherPanelArea area, String modeId) {
+    setState(() => _selectedDetailModeIds[area.id] = modeId);
   }
 
   /// Builds the active settings editor for the selected left area.
@@ -140,9 +186,16 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
       onModelConfigSelected: area.id == 'Models'
           ? (path) => setState(() => _selectedModelConfigPath = path)
           : null,
+      selectedAgentConfigPath: area.id == 'Agents'
+          ? _selectedAgentConfigPathForArea()
+          : null,
+      onAgentConfigSelected: area.id == 'Agents'
+          ? (path) => setState(() => _selectedAgentConfigPath = path)
+          : null,
       selectedMemoryDomainId: area.id == 'Memory'
           ? _selectedMemoryDomainIdForArea()
           : null,
+      modeId: modeId,
       query: query,
     );
   }
@@ -156,6 +209,7 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     return switch (area.id) {
       'Profiles' => _profileActions(context, area, mode, null),
       'Models' => _modelConfigActions(context, area, mode),
+      'Agents' => _agentConfigActions(context, area, mode),
       'Memory' => _memoryDomainActions(context, area, mode, null),
       _ => null,
     };
@@ -173,6 +227,11 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
         icon: Icons.add,
         tooltip: 'Add model config',
         onPressed: () => unawaited(_createModelConfig()),
+      ),
+      'Agents' => PanelIconButton(
+        icon: Icons.add,
+        tooltip: 'Add agent config',
+        onPressed: () => unawaited(_createAgentConfig()),
       ),
       'Memory' => PanelIconButton(
         icon: Icons.add,
@@ -234,6 +293,26 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     }
     final assignedPath =
         widget.controller.runtimeProfile?.harness.modelConfigPath ?? '';
+    if (assignedPath.isNotEmpty &&
+        entries.any((entry) => entry.path == assignedPath)) {
+      return assignedPath;
+    }
+    return entries.first.path;
+  }
+
+  /// Resolves the selected agent config path for left-area content.
+  String? _selectedAgentConfigPathForArea() {
+    final entries = widget.controller.availableAgentConfigs;
+    if (entries.isEmpty) {
+      return null;
+    }
+    final selectedPath = _selectedAgentConfigPath;
+    if (selectedPath != null &&
+        entries.any((entry) => entry.path == selectedPath)) {
+      return selectedPath;
+    }
+    final assignedPath =
+        widget.controller.runtimeProfile?.harness.agentConfigPath ?? '';
     if (assignedPath.isNotEmpty &&
         entries.any((entry) => entry.path == assignedPath)) {
       return assignedPath;
@@ -311,6 +390,48 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     return null;
   }
 
+  /// Builds selected agent-config controls in the right header.
+  Widget _agentConfigActions(
+    BuildContext context,
+    SwitcherPanelArea area,
+    CommandPanelDetailMode mode,
+  ) {
+    final entry = _selectedAgentConfigEntry();
+    return Wrap(
+      spacing: 8,
+      children: <Widget>[
+        PanelIconButton(
+          icon: Icons.content_copy,
+          tooltip: 'Duplicate agent config',
+          onPressed: entry == null
+              ? null
+              : () => unawaited(_duplicateAgentConfig(entry)),
+        ),
+        PanelIconButton(
+          icon: Icons.delete_outline,
+          tooltip: 'Delete agent config',
+          onPressed: entry == null
+              ? null
+              : () => unawaited(_deleteAgentConfig(entry)),
+        ),
+      ],
+    );
+  }
+
+  /// Returns the selected agent config entry, if one exists.
+  ConfigFileEntry? _selectedAgentConfigEntry() {
+    final selectedPath = _selectedAgentConfigPathForArea();
+    if (selectedPath == null) {
+      return null;
+    }
+    for (final entry in widget.controller.availableAgentConfigs) {
+      if (entry.path == selectedPath) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
   /// Creates a model config and selects it in the left area.
   Future<void> _createModelConfig() async {
     try {
@@ -324,6 +445,19 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     } catch (_) {}
   }
 
+  /// Creates an agent config and selects it in the left area.
+  Future<void> _createAgentConfig() async {
+    try {
+      final path = await widget.controller.createConfigFile(
+        ConfigFileKind.agent,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _selectedAgentConfigPath = path);
+    } catch (_) {}
+  }
+
   /// Duplicates the selected model config and selects the duplicate.
   Future<void> _duplicateModelConfig(ConfigFileEntry entry) async {
     try {
@@ -332,6 +466,17 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
         return;
       }
       setState(() => _selectedModelConfigPath = path);
+    } catch (_) {}
+  }
+
+  /// Duplicates the selected agent config and selects the duplicate.
+  Future<void> _duplicateAgentConfig(ConfigFileEntry entry) async {
+    try {
+      final path = await widget.controller.duplicateConfigFile(entry);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _selectedAgentConfigPath = path);
     } catch (_) {}
   }
 
@@ -348,6 +493,23 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
       }
       setState(
         () => _selectedModelConfigPath = _selectedModelConfigPathForArea(),
+      );
+    } catch (_) {}
+  }
+
+  /// Deletes the selected agent config after confirmation.
+  Future<void> _deleteAgentConfig(ConfigFileEntry entry) async {
+    final confirmed = await _confirmSettingsDelete(context, label: entry.label);
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await widget.controller.deleteConfigFile(entry);
+      if (!mounted) {
+        return;
+      }
+      setState(
+        () => _selectedAgentConfigPath = _selectedAgentConfigPathForArea(),
       );
     } catch (_) {}
   }
@@ -564,9 +726,11 @@ class _SettingsAreaContent extends StatelessWidget {
     required this.query,
     required this.selectedProfilePath,
     required this.selectedModelConfigPath,
+    required this.selectedAgentConfigPath,
     required this.selectedMemoryDomainId,
     required this.onProfileSelected,
     required this.onModelConfigSelected,
+    required this.onAgentConfigSelected,
     required this.onMemoryDomainSelected,
   });
 
@@ -576,9 +740,11 @@ class _SettingsAreaContent extends StatelessWidget {
   final String query;
   final String? selectedProfilePath;
   final String? selectedModelConfigPath;
+  final String? selectedAgentConfigPath;
   final String? selectedMemoryDomainId;
   final ValueChanged<String> onProfileSelected;
   final ValueChanged<String> onModelConfigSelected;
+  final ValueChanged<String> onAgentConfigSelected;
   final ValueChanged<String> onMemoryDomainSelected;
 
   /// Builds area-specific supporting objects for Settings.
@@ -587,6 +753,7 @@ class _SettingsAreaContent extends StatelessWidget {
     return switch (section) {
       'Profiles' => _buildProfiles(),
       'Models' => _buildModels(),
+      'Agents' => _buildAgents(),
       'Memory' => _buildMemoryDomains(),
       _ => _buildSingleAppItem(),
     };
@@ -666,6 +833,36 @@ class _SettingsAreaContent extends StatelessWidget {
             detail: entry.path,
             selected: entry.path == selectedModelConfigPath,
             onTap: () => onModelConfigSelected(entry.path),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAgents() {
+    final matches = controller.availableAgentConfigs.where((entry) {
+      return SettingsQuery.matches(query, <String>[
+        entry.label,
+        entry.fileLabel,
+        entry.path,
+        if (entry.assigned) 'assigned',
+      ]);
+    }).toList();
+    if (controller.availableAgentConfigs.isEmpty) {
+      return const PanelEmptyBlock(label: 'No agent configs configured');
+    }
+    if (matches.isEmpty) {
+      return PanelEmptyState(query: query);
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        for (final entry in matches)
+          _SettingsSectionTile(
+            label: entry.label,
+            icon: Icons.psychology_outlined,
+            detail: entry.path,
+            selected: entry.path == selectedAgentConfigPath,
+            onTap: () => onAgentConfigSelected(entry.path),
           ),
       ],
     );
@@ -792,7 +989,10 @@ class SettingsDetailsPanel extends StatelessWidget {
     this.selectedProfilePath,
     this.selectedModelConfigPath,
     this.onModelConfigSelected,
+    this.selectedAgentConfigPath,
+    this.onAgentConfigSelected,
     this.selectedMemoryDomainId,
+    this.modeId = '',
     this.query = '',
   });
 
@@ -801,7 +1001,10 @@ class SettingsDetailsPanel extends StatelessWidget {
   final String? selectedProfilePath;
   final String? selectedModelConfigPath;
   final ValueChanged<String>? onModelConfigSelected;
+  final String? selectedAgentConfigPath;
+  final ValueChanged<String>? onAgentConfigSelected;
   final String? selectedMemoryDomainId;
+  final String modeId;
   final String query;
 
   /// Builds the selected settings CRUD/details panel.
@@ -843,6 +1046,15 @@ class SettingsDetailsPanel extends StatelessWidget {
         assignedPath: profile.harness.modelConfigPath,
         selectedPath: selectedModelConfigPath,
         onSelectedPathChanged: onModelConfigSelected,
+        query: query,
+      ),
+      'Agents' => _SettingsAgentConfigCollection(
+        controller: controller,
+        entries: controller.availableAgentConfigs,
+        assignedPath: profile.harness.agentConfigPath,
+        selectedPath: selectedAgentConfigPath,
+        onSelectedPathChanged: onAgentConfigSelected,
+        modeId: modeId,
         query: query,
       ),
       'Memory' => _SettingsServerContent(

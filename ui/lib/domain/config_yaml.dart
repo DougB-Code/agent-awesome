@@ -5,6 +5,10 @@ import 'dart:convert';
 
 import 'package:yaml/yaml.dart';
 
+final _yamlTimestampPattern = RegExp(
+  r'^\d{4}-\d{2}-\d{2}([Tt ][0-9:.+-]+Z?)?$',
+);
+
 /// Converts YAML package collection values to plain Dart values.
 dynamic plainYamlValue(dynamic value) {
   if (value is YamlMap) {
@@ -97,6 +101,7 @@ String _yamlScalar(dynamic value) {
       text.contains(': ') ||
       text.startsWith('{') ||
       text.startsWith('[') ||
+      _yamlTimestampPattern.hasMatch(text) ||
       text.contains('\n')) {
     return jsonEncode(text);
   }

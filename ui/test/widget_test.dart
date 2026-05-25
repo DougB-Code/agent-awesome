@@ -16,7 +16,11 @@ import 'package:agentawesome_ui/clients/automations_client.dart';
 import 'package:agentawesome_ui/clients/assistant_client.dart';
 import 'package:agentawesome_ui/clients/executive_summary_client.dart';
 import 'package:agentawesome_ui/clients/mcp_client.dart';
+import 'package:agentawesome_ui/domain/agent_config.dart';
+import 'package:agentawesome_ui/domain/agent_validation_result.dart';
 import 'package:agentawesome_ui/domain/automation_contracts.dart';
+import 'package:agentawesome_ui/domain/tool_config.dart';
+import 'package:agentawesome_ui/domain/tool_validation_result.dart';
 import 'package:agentawesome_ui/ui/theme.dart';
 import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
@@ -29,6 +33,7 @@ import 'package:agentawesome_ui/features/today/widgets/today_schedule_card.dart'
 import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
+import 'package:agentawesome_ui/ui/settings/settings_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -245,7 +250,7 @@ void main() {
       find.byKey(const ValueKey<String>('command-split-handle')),
       findsOneWidget,
     );
-    expect(find.text('INSPECTOR'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
     expect(find.text('Draft task brief'), findsWidgets);
     expect(find.text('TASK'), findsOneWidget);
 
@@ -514,7 +519,7 @@ void main() {
     await tester.tap(find.byTooltip('Computers'));
     await tester.pumpAndSettle();
     expect(find.text('This computer'), findsWidgets);
-    expect(find.text('Status: healthy'), findsOneWidget);
+    expect(find.text('Allowed codebases: Agent Awesome'), findsOneWidget);
     await tester.tap(find.byTooltip('Schedules'));
     await tester.pumpAndSettle();
     expect(find.text('No scheduled operations'), findsOneWidget);
@@ -578,15 +583,15 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
 
-    expect(find.text('FILES'), findsWidgets);
-    expect(find.text('SERVERS'), findsWidgets);
+    expect(find.text('MCP SERVERS'), findsWidgets);
+    expect(find.text('DETAILS'), findsWidgets);
     expect(find.text('No MCP server files configured'), findsWidgets);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Tools')));
     await tester.pumpAndSettle();
 
-    expect(find.text('FILES'), findsWidgets);
-    expect(find.text('COMMANDS'), findsWidgets);
+    expect(find.text('TOOLS'), findsWidgets);
+    expect(find.text('DETAILS'), findsWidgets);
     expect(find.text('No tool files configured'), findsWidgets);
   });
 
@@ -849,7 +854,7 @@ void main() {
     expect(find.text('draft_workflow_graph'), findsNothing);
   });
 
-  testWidgets('shows workflow graph fields in Inspect mode', (tester) async {
+  testWidgets('shows workflow graph fields in Details mode', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -872,10 +877,10 @@ void main() {
     );
     expect(find.text('ACTIONS'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Inspect'));
+    await tester.tap(find.byTooltip('Details'));
     await tester.pumpAndSettle();
 
-    expect(find.text('INSPECT'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
     expect(find.text('FILES'), findsWidgets);
     expect(find.text('Workflow name'), findsOneWidget);
     expect(
@@ -1313,7 +1318,7 @@ void main() {
       find.byKey(const ValueKey<String>('state-machine-inspector')),
       findsNothing,
     );
-    expect(find.byTooltip('Inspect'), findsOneWidget);
+    expect(find.byTooltip('Details'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('state-machine-node-plan')),
       findsOneWidget,
@@ -2777,7 +2782,15 @@ void main() {
         ],
       ),
     ];
-    controller.availableToolConfigs = const <ConfigFileEntry>[
+    controller.availableAgentConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'Default Agent',
+      ),
+    ];
+    controller.availableToolConfigs = <ConfigFileEntry>[
       ConfigFileEntry(
         path: '/tmp/tool.yaml',
         kind: ConfigFileKind.tool,
@@ -2804,6 +2817,7 @@ void main() {
     expect(find.byTooltip('Profiles'), findsOneWidget);
     expect(find.byTooltip('App'), findsOneWidget);
     expect(find.byTooltip('Models'), findsOneWidget);
+    expect(find.byTooltip('Agents'), findsOneWidget);
     expect(find.byTooltip('Memory'), findsOneWidget);
     expect(find.text('APP SETTINGS'), findsNothing);
     expect(find.text('CHAT DEFAULTS'), findsOneWidget);
@@ -2836,6 +2850,24 @@ void main() {
     expect(find.byTooltip('Duplicate model config'), findsOneWidget);
     expect(find.byTooltip('Delete model config'), findsOneWidget);
 
+    await tester.tap(find.byTooltip('Agents'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('Default Agent'), findsWidgets);
+    expect(find.byTooltip('Add agent config'), findsOneWidget);
+    expect(find.byTooltip('Duplicate agent config'), findsOneWidget);
+    expect(find.byTooltip('Delete agent config'), findsOneWidget);
+    expect(find.byTooltip('Details'), findsOneWidget);
+    expect(find.byTooltip('Instructions'), findsOneWidget);
+    expect(find.byTooltip('Validations'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.fact_check_outlined).last);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 5));
+
+    expect(find.text('No validations configured'), findsOneWidget);
+
     await tester.tap(find.byTooltip('Memory'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
@@ -2847,13 +2879,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('SERVERS'), findsWidgets);
+    expect(find.text('MCP SERVERS'), findsWidgets);
     expect(find.text('Memory MCP'), findsOneWidget);
-    expect(find.text('FILES'), findsWidgets);
+    expect(find.text('DETAILS'), findsWidgets);
+    expect(find.byTooltip('Details'), findsOneWidget);
     expect(find.byTooltip('Servers'), findsOneWidget);
-    expect(find.byTooltip('Presets'), findsOneWidget);
-    expect(find.byTooltip('Scenarios'), findsOneWidget);
-    expect(find.byTooltip('Source'), findsOneWidget);
+    expect(find.byTooltip('Validations'), findsOneWidget);
+    expect(find.byTooltip('Source'), findsNothing);
     expect(find.byTooltip('Add MCP config'), findsOneWidget);
     expect(find.byTooltip('Duplicate MCP config'), findsOneWidget);
     expect(find.byTooltip('Delete MCP config'), findsOneWidget);
@@ -2862,13 +2894,1009 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('COMMANDS'), findsWidgets);
+    expect(find.text('TOOLS'), findsWidgets);
     expect(find.text('Personal Tools'), findsOneWidget);
-    expect(find.text('FILES'), findsWidgets);
+    expect(find.text('DETAILS'), findsWidgets);
+    expect(find.byTooltip('Details'), findsOneWidget);
     expect(find.byTooltip('Commands'), findsOneWidget);
-    expect(find.byTooltip('Presets'), findsOneWidget);
-    expect(find.byTooltip('Scenarios'), findsOneWidget);
-    expect(find.byTooltip('Source'), findsOneWidget);
+    expect(find.byTooltip('Validations'), findsOneWidget);
+    expect(find.byTooltip('Source'), findsNothing);
+  });
+
+  testWidgets('shows configured agent validations in settings', (tester) async {
+    const agentPath = '/tmp/agent.yaml';
+    const agentConfig = '''
+name: test_agent
+description: Test agent.
+instruction: Ask for missing context.
+validations:
+  - id: asks_for_context
+    label: Asks for context
+    mode: mocked
+    prompt: Help me with the thing.
+    assertions:
+      - type: response-contains
+        contains: context
+''';
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: _MemoryConfigFileStore(<String, String>{
+        agentPath: agentConfig,
+      }),
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(agentConfigPath: agentPath),
+    );
+    controller.availableAgentConfigs = <ConfigFileEntry>[
+      const ConfigFileEntry(
+        path: agentPath,
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'test_agent',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(
+          body: SettingsDetailsPanel(
+            controller: controller,
+            section: 'Agents',
+            selectedAgentConfigPath: agentPath,
+            modeId: 'agent-validations',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('Asks for context', skipOffstage: false), findsWidgets);
+    expect(find.text('Help me with the thing.'), findsWidgets);
+    expect(find.text('1 assertions'), findsOneWidget);
+    expect(find.byTooltip('Run validation'), findsOneWidget);
+  });
+
+  testWidgets('adds agent validation cases from settings', (tester) async {
+    const agentPath = '/tmp/agent.yaml';
+    final store = _MemoryConfigFileStore(<String, String>{
+      agentPath: '''
+name: test_agent
+description: Test agent.
+instruction: Ask for missing context.
+''',
+    });
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: store,
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(agentConfigPath: agentPath),
+    );
+    controller.availableAgentConfigs = <ConfigFileEntry>[
+      const ConfigFileEntry(
+        path: agentPath,
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'test_agent',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(
+          body: SettingsDetailsPanel(
+            controller: controller,
+            section: 'Agents',
+            selectedAgentConfigPath: agentPath,
+            modeId: 'agent-validations',
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('No validations configured'), findsOneWidget);
+
+    final addButton = tester.widget<OutlinedButton>(
+      find.byKey(const ValueKey<String>('agent-validations-add')),
+    );
+    addButton.onPressed!();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1000));
+
+    expect(
+      AgentConfigDocument.parse(store.files[agentPath]!).validations,
+      hasLength(1),
+    );
+    expect(find.text('New validation', skipOffstage: false), findsWidgets);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'New validation'),
+      'Asks for context',
+    );
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Expected response.'),
+      'I need more context.',
+    );
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.enterText(
+      find.byType(TextFormField).last,
+      'command:rg.search_text',
+    );
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.tap(find.text('Add parameter'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'parameter'),
+      'pattern',
+    );
+    await tester.pump(const Duration(milliseconds: 650));
+    await tester.enterText(find.widgetWithText(TextFormField, 'value'), 'TODO');
+    await tester.pump(const Duration(milliseconds: 650));
+
+    final saved = AgentConfigDocument.parse(store.files[agentPath]!);
+    expect(saved.validations, hasLength(1));
+    expect(saved.validations.first.id, 'validation');
+    expect(saved.validations.first.label, 'Asks for context');
+    expect(
+      saved.validations.first.assertions
+          .where((assertion) => assertion.type == 'response-contains')
+          .single
+          .contains,
+      'Expected',
+    );
+    expect(
+      saved.validations.first.mocks['agent.response']['text'],
+      'I need more context.',
+    );
+    expect(
+      saved.validations.first.mocks['agent.response']['tool_calls'].first['id'],
+      'command:rg.search_text',
+    );
+    expect(
+      saved
+          .validations
+          .first
+          .mocks['agent.response']['tool_calls']
+          .first['arguments']['pattern'],
+      'TODO',
+    );
+    expect(
+      saved.validations.first.assertions
+          .where((assertion) => assertion.type == 'tool-call')
+          .single
+          .equals,
+      'command:rg.search_text',
+    );
+    expect(
+      saved.validations.first.assertions
+          .where((assertion) => assertion.path.endsWith('.pattern'))
+          .single
+          .equals,
+      'TODO',
+    );
+  });
+
+  testWidgets('renders agent validation run evidence', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: const Scaffold(
+          body: SettingsAgentValidationEvidenceView(
+            result: AgentValidationRunResult(
+              id: 'asks_for_context',
+              label: 'Asks for context',
+              mode: 'mocked',
+              prompt: 'Help me with the thing.',
+              input: <String, dynamic>{'topic': 'docs'},
+              fixtures: <String, dynamic>{'memory': 'Buy milk'},
+              status: 'passed',
+              response: AgentValidationResponseResult(
+                text: 'I need more context before I search.',
+                toolCalls: <AgentValidationToolCallResult>[
+                  AgentValidationToolCallResult(
+                    id: 'command:rg.search_text',
+                    name: 'rg.search_text',
+                    arguments: <String, dynamic>{'pattern': 'TODO'},
+                  ),
+                ],
+                output: null,
+              ),
+              assertions: <AgentValidationAssertionResult>[
+                AgentValidationAssertionResult(
+                  type: 'response-contains',
+                  path: 'response.text',
+                  passed: true,
+                  expected: 'context',
+                  actual: 'I need more context before I search.',
+                  message: '',
+                ),
+                AgentValidationAssertionResult(
+                  type: 'required-assertion',
+                  path: '',
+                  passed: false,
+                  expected: null,
+                  actual: null,
+                  message: 'agent validation has no real assertions',
+                ),
+              ],
+              diagnostics: <AgentValidationDiagnostic>[],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Response'), findsOneWidget);
+    expect(find.text('I need more context before I search.'), findsOneWidget);
+    expect(find.text('Tool calls'), findsOneWidget);
+    expect(find.textContaining('rg.search_text'), findsOneWidget);
+    expect(find.text('Assertions'), findsOneWidget);
+    expect(find.textContaining('passed response.text'), findsOneWidget);
+    expect(
+      find.textContaining('agent validation has no real assertions'),
+      findsOneWidget,
+    );
+    expect(find.text('Input'), findsOneWidget);
+    expect(find.text('Fixtures'), findsOneWidget);
+  });
+
+  testWidgets('renders agent validation tool-call references', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: const Scaffold(
+          body: SettingsAgentValidationSummaryView(
+            result: AgentValidationSuiteResult(
+              total: 2,
+              passed: 2,
+              failed: 0,
+              unsupported: 0,
+              toolCallReferences: <String>[
+                'command:rg.search_text',
+                'mcp:memory.search_memory',
+              ],
+              results: <AgentValidationRunResult>[],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Tool calls 2'), findsOneWidget);
+    expect(find.text('Tool call references'), findsOneWidget);
+    expect(find.textContaining('command:rg.search_text'), findsOneWidget);
+    expect(find.textContaining('mcp:memory.search_memory'), findsOneWidget);
+  });
+
+  testWidgets('renders agent validation package gate issues', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: const Scaffold(
+          body: SettingsAgentValidationPackageIssuesView(
+            result: AgentValidationFileResult(
+              path: '/tmp/agent.yaml',
+              name: 'agent',
+              passed: false,
+              unsupported: false,
+              error: 'agent has no behavior validations',
+              missingAssertions: <String>['placeholder_case'],
+              missingToolCalls: <String>['agent'],
+              unknownToolCalls: <String>['uses_search: command:missing.search'],
+              invalidToolArguments: <String>[
+                'uses_search: command:rg.search_text',
+              ],
+              result: AgentValidationSuiteResult(
+                total: 0,
+                passed: 0,
+                failed: 0,
+                unsupported: 0,
+                toolCallReferences: <String>[],
+                results: <AgentValidationRunResult>[],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Package error'), findsOneWidget);
+    expect(find.text('agent has no behavior validations'), findsOneWidget);
+    expect(find.text('Missing assertions'), findsOneWidget);
+    expect(find.text('placeholder_case'), findsOneWidget);
+    expect(find.text('Missing tool calls'), findsOneWidget);
+    expect(find.text('agent'), findsOneWidget);
+    expect(find.text('Unknown tool calls'), findsOneWidget);
+    expect(find.textContaining('command:missing.search'), findsOneWidget);
+    expect(find.text('Invalid tool arguments'), findsOneWidget);
+    expect(find.textContaining('command:rg.search_text'), findsOneWidget);
+  });
+
+  testWidgets('runs tool validation coverage checks without configured cases', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const toolPath = '/tmp/tool.yaml';
+    const toolConfig = '''
+name: test-tools
+local-exec:
+  enabled: true
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search text.
+          args:
+            - "{{pattern}}"
+          input-schema:
+            type: object
+            properties:
+              pattern:
+                type: string
+            required:
+              - pattern
+''';
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: _MemoryConfigFileStore(<String, String>{
+        toolPath: toolConfig,
+      }),
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(toolConfigPath: toolPath),
+    );
+    controller.availableToolConfigs = <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: toolPath,
+        kind: ConfigFileKind.tool,
+        assigned: true,
+        displayName: 'test-tools',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(body: ToolsCommandPanel(controller: controller)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    await tester.tap(find.byIcon(Icons.fact_check_outlined).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('No validations configured'), findsOneWidget);
+    final runAllText = find.text('Run all');
+    expect(runAllText, findsOneWidget);
+    final runAll = tester.widget<SettingsValidationRunModeButton>(
+      find.byType(SettingsValidationRunModeButton).first,
+    );
+    expect(runAll.onRun, isNotNull);
+  });
+
+  testWidgets('adds starter command validation set from tools screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const toolPath = '/tmp/tool.yaml';
+    final store = _MemoryConfigFileStore(<String, String>{
+      toolPath: '''
+name: test-tools
+local-exec:
+  enabled: true
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search text.
+          args:
+            - "{{pattern}}"
+          input-schema:
+            type: object
+            properties:
+              pattern:
+                type: string
+            required:
+              - pattern
+''',
+    });
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: store,
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(toolConfigPath: toolPath),
+    );
+    controller.availableToolConfigs = <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: toolPath,
+        kind: ConfigFileKind.tool,
+        assigned: true,
+        displayName: 'test-tools',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(body: ToolsCommandPanel(controller: controller)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    await tester.tap(find.byIcon(Icons.fact_check_outlined).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.tap(find.text('Add validation'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1000));
+
+    final saved = ToolConfigDocument.parse(store.files[toolPath]!);
+    expect(saved.validations, hasLength(3));
+    expect(
+      saved.validations.map((validation) => validation.target.type),
+      containsAll(<String>[
+        'command-operation',
+        'agent-tool-call',
+        'workflow-node',
+      ]),
+    );
+    expect(
+      saved.validations.every(
+        (validation) =>
+            validation.target.command == 'rg' &&
+            validation.target.operation == 'search_text' &&
+            validation.assertions.first.type == 'status' &&
+            validation.assertions.first.equals == 'succeeded',
+      ),
+      isTrue,
+    );
+    final agentValidation = saved.validations
+        .where((validation) => validation.target.type == 'agent-tool-call')
+        .single;
+    expect(agentValidation.prompt, isNotEmpty);
+    expect(
+      agentValidation.assertions
+          .where((assertion) => assertion.type == 'json-path')
+          .single
+          .path,
+      'output.arguments.template_id',
+    );
+    expect(
+      agentValidation.assertions
+          .where((assertion) => assertion.type == 'json-path')
+          .single
+          .equals,
+      'rg.search_text',
+    );
+  });
+
+  testWidgets('groups tool validations by operation tabs', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const toolPath = '/tmp/tool.yaml';
+    final store = _MemoryConfigFileStore(<String, String>{
+      toolPath: '''
+name: curl
+local-exec:
+  enabled: true
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  commands:
+    - name: curl
+      executable: curl
+      description: Transfer data.
+      operations:
+        - name: http_get
+          description: Fetch text.
+          args:
+            - "{{url}}"
+        - name: download_file
+          description: Download a file.
+          args:
+            - "{{url}}"
+            - "--output"
+            - "{{output_path}}"
+validations:
+  - id: curl_http_get_mocked
+    label: curl HTTP GET
+    description: Fetches text with curl.
+    mode: mocked
+    target:
+      type: command-operation
+      command: curl
+      operation: http_get
+    expected:
+      status: succeeded
+    assertions:
+      - type: status
+        equals: succeeded
+  - id: curl_download_file_mocked
+    label: curl download file
+    description: Downloads a file with curl.
+    mode: mocked
+    target:
+      type: command-operation
+      command: curl
+      operation: download_file
+    expected:
+      status: succeeded
+    assertions:
+      - type: status
+        equals: succeeded
+''',
+    });
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: store,
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(toolConfigPath: toolPath),
+    );
+    controller.availableToolConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: toolPath,
+        kind: ConfigFileKind.tool,
+        assigned: true,
+        displayName: 'curl',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(body: ToolsCommandPanel(controller: controller)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.byIcon(Icons.fact_check_outlined).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+
+    expect(find.text('http_get'), findsOneWidget);
+    expect(find.text('download_file'), findsOneWidget);
+    expect(find.text('curl HTTP GET'), findsOneWidget);
+    expect(find.text('curl download file'), findsNothing);
+
+    await tester.tap(find.text('download_file'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(find.text('curl HTTP GET'), findsNothing);
+    expect(find.text('curl download file'), findsOneWidget);
+  });
+
+  testWidgets('shows cached failed tool validation evidence by target', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final workspace = Directory.systemTemp.createTempSync(
+      'aa-tool-validation-test-',
+    );
+    addTearDown(() {
+      if (workspace.existsSync()) {
+        workspace.deleteSync(recursive: true);
+      }
+    });
+    final config = _testConfig(workspaceRoot: workspace.path);
+    const toolPath = '/tmp/df-tool.yaml';
+    final encoded = base64Url.encode(utf8.encode(toolPath)).replaceAll('=', '');
+    final cacheFile = File(
+      '${config.workspaceRoot}/build/tool-validations/$encoded.json',
+    );
+    cacheFile.parent.createSync(recursive: true);
+    cacheFile.writeAsStringSync(
+      jsonEncode(
+        const ToolValidationSuiteResult(
+          total: 1,
+          passed: 0,
+          failed: 1,
+          unsupported: 0,
+          coverage: ToolValidationCoverageResult(
+            required: 0,
+            covered: 0,
+            missing: <ToolValidationCoverageItem>[],
+          ),
+          inputSchemaCoverage: ToolValidationCoverageResult(
+            required: 0,
+            covered: 0,
+            missing: <ToolValidationCoverageItem>[],
+          ),
+          agentToolCalls: <String>[],
+          agentToolContracts: <String, ToolValidationAgentToolContractResult>{},
+          missingAssertions: <String>[],
+          results: <ToolValidationRunResult>[
+            ToolValidationRunResult(
+              id: 'runner_df_failed',
+              label: 'df filesystem usage',
+              description: 'Command operation for df.filesystem_usage.',
+              mode: 'mocked',
+              status: 'failed',
+              target: ToolValidationTargetResult(
+                type: 'command-operation',
+                presetId: '',
+                command: 'df',
+                operation: 'filesystem_usage',
+                mcpServer: '',
+                mcpTool: '',
+                templateId: 'df.filesystem_usage',
+                boundary: 'command.execute',
+              ),
+              command: ToolValidationCommandResult(
+                jobId: 'job-1',
+                status: 'failed',
+                exitCode: 1,
+                stdoutTail: '',
+                stderrTail: 'df: /missing: No such file or directory',
+                truncated: false,
+                timedOut: false,
+                error: '',
+                startedAt: '2026-05-25T00:00:00Z',
+                endedAt: '2026-05-25T00:00:01Z',
+                output: <String, dynamic>{'text': ''},
+                diagnostics: <ToolValidationCommandDiagnostic>[],
+                artifacts: <ToolValidationCommandArtifact>[],
+                validation: ToolValidationCommandOutputValidation(
+                  checked: true,
+                  valid: true,
+                  errors: <String>[],
+                ),
+              ),
+              assertions: <ToolValidationAssertionResult>[
+                ToolValidationAssertionResult(
+                  type: 'status',
+                  path: '',
+                  passed: false,
+                  expected: 'succeeded',
+                  actual: 'failed',
+                  message: '',
+                ),
+              ],
+              diagnostics: <ToolValidationDiagnostic>[],
+            ),
+          ],
+        ).toJson(),
+      ),
+    );
+    final cachedResult = ToolValidationSuiteResult.fromJson(
+      jsonDecode(cacheFile.readAsStringSync()) as Map<String, dynamic>,
+    );
+    expect(cachedResult.failed, 1);
+    final store = _MemoryConfigFileStore(<String, String>{
+      toolPath: '''
+name: df
+local-exec:
+  enabled: true
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  commands:
+    - name: df
+      executable: df
+      description: Show filesystem usage.
+      operations:
+        - name: filesystem_usage
+          description: Show filesystem usage.
+          args:
+            - "{{path}}"
+validations:
+  - id: df_filesystem_usage_mocked
+    label: df filesystem usage
+    description: Validates the command boundary for df.filesystem_usage.
+    mode: mocked
+    target:
+      type: command-operation
+      command: df
+      operation: filesystem_usage
+    input:
+      path: /missing
+    expected:
+      status: succeeded
+    assertions:
+      - type: status
+        equals: succeeded
+''',
+    });
+    final controller = AgentAwesomeAppController(
+      config: config,
+      configFiles: store,
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(toolConfigPath: toolPath),
+    );
+    controller.availableToolConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: toolPath,
+        kind: ConfigFileKind.tool,
+        assigned: true,
+        displayName: 'df',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(body: ToolsCommandPanel(controller: controller)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    await tester.tap(find.byTooltip('Validations').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+
+    expect(find.text('COMMAND VALIDATIONS'), findsOneWidget);
+    expect(find.text('Failed 1'), findsOneWidget);
+    expect(find.text('failed'), findsWidgets);
+    expect(find.text('not run'), findsNothing);
+
+    await tester.tap(find.text('df filesystem usage').first);
+    await tester.pump();
+    expect(find.text('Stderr'), findsOneWidget);
+    expect(find.textContaining('No such file or directory'), findsOneWidget);
+    expect(find.textContaining('df /missing'), findsOneWidget);
+  });
+
+  testWidgets('validation scenario table runs modes and deletes rows', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SettingsValidationRunRequest? requested;
+    SettingsValidationScenario? deleted;
+    final scenario = SettingsValidationScenario(
+      id: 'curl.http_get',
+      label: 'curl HTTP GET',
+      description: 'Fetches text with curl.',
+      status: 'succeeded',
+      modeStates: const <String, SettingsValidationModeState>{
+        'mocked': SettingsValidationModeState(
+          mode: 'mocked',
+          validationIds: <String>['curl_http_get_mocked'],
+          status: 'succeeded',
+        ),
+        'live': SettingsValidationModeState(
+          mode: 'live',
+          validationIds: <String>['curl_http_get_live'],
+          status: 'failed',
+        ),
+      },
+      details: const Text('Expanded evidence'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(
+          body: SettingsValidationScenarioTable(
+            scenarios: <SettingsValidationScenario>[scenario],
+            selectedRunMode: 'mocked',
+            runningMode: '',
+            runningValidationIds: const <String>{},
+            runningAll: false,
+            onRunAll: (request) => requested = request,
+            onRunScenario: (request) => requested = request,
+            onDeleteScenario: (scenario) => deleted = scenario,
+            onAddValidation: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Validation'), findsOneWidget);
+    expect(find.text('Description'), findsOneWidget);
+    expect(find.text('Mocked'), findsOneWidget);
+    expect(find.text('Live'), findsOneWidget);
+    expect(find.text('Success'), findsWidgets);
+
+    await tester.tap(find.text('Run all'));
+    expect(requested!.mode, 'mocked');
+    expect(requested!.validationIds, <String>['curl_http_get_mocked']);
+
+    await tester.tap(find.byTooltip('Choose validation mode').first);
+    await tester.pumpAndSettle();
+    final allItem = tester.widget<PopupMenuItem<String>>(
+      find.widgetWithText(PopupMenuItem<String>, 'All'),
+    );
+    expect(allItem.enabled, isTrue);
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+    expect(requested!.mode, 'all');
+    expect(requested!.validationIds, <String>[
+      'curl_http_get_mocked',
+      'curl_http_get_live',
+    ]);
+
+    await tester.tap(find.byTooltip('Delete validation'));
+    expect(deleted!.id, 'curl.http_get');
+  });
+
+  testWidgets('validation scenario table gates live and all modes', (
+    tester,
+  ) async {
+    final scenario = SettingsValidationScenario(
+      id: 'curl.http_get',
+      label: 'curl HTTP GET',
+      description: 'Fetches text with curl.',
+      status: '',
+      modeStates: const <String, SettingsValidationModeState>{
+        'mocked': SettingsValidationModeState(
+          mode: 'mocked',
+          validationIds: <String>['curl_http_get_mocked'],
+          status: '',
+        ),
+        'live': SettingsValidationModeState(
+          mode: 'live',
+          validationIds: <String>['curl_http_get_live'],
+          status: '',
+        ),
+      },
+      details: null,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(
+          body: SettingsValidationScenarioTable(
+            scenarios: <SettingsValidationScenario>[scenario],
+            selectedRunMode: 'mocked',
+            runningMode: '',
+            runningValidationIds: const <String>{},
+            runningAll: false,
+            liveAvailable: false,
+            onRunAll: (_) {},
+            onRunScenario: (_) {},
+            onDeleteScenario: (_) {},
+            onAddValidation: () {},
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Choose validation mode').first);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<PopupMenuItem<String>>(
+            find.widgetWithText(PopupMenuItem<String>, 'Live'),
+          )
+          .enabled,
+      isFalse,
+    );
+    expect(
+      tester
+          .widget<PopupMenuItem<String>>(
+            find.widgetWithText(PopupMenuItem<String>, 'All'),
+          )
+          .enabled,
+      isFalse,
+    );
+  });
+
+  testWidgets('renders tool validation run evidence', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: const Scaffold(
+          body: SettingsToolValidationEvidenceView(
+            targetLabel: 'rg TODO src',
+            result: ToolValidationRunResult(
+              id: 'rg_search_text_workflow',
+              label: 'Workflow search',
+              description: 'Runs rg through the workflow boundary.',
+              mode: 'mocked',
+              status: 'passed',
+              target: ToolValidationTargetResult(
+                type: 'workflow-node',
+                presetId: '',
+                command: 'rg',
+                operation: 'search_text',
+                mcpServer: '',
+                mcpTool: '',
+                templateId: 'rg.search_text',
+                boundary: 'command.execute',
+              ),
+              command: ToolValidationCommandResult(
+                jobId: 'job-1',
+                status: 'succeeded',
+                exitCode: 0,
+                stdoutTail: 'src/example.go:TODO',
+                stderrTail: '',
+                truncated: false,
+                timedOut: false,
+                error: '',
+                startedAt: '2026-05-25T00:00:00Z',
+                endedAt: '2026-05-25T00:00:01Z',
+                output: <String, dynamic>{'matches': 1},
+                diagnostics: <ToolValidationCommandDiagnostic>[],
+                artifacts: <ToolValidationCommandArtifact>[
+                  ToolValidationCommandArtifact(
+                    path: 'build/results.json',
+                    size: 42,
+                  ),
+                ],
+                validation: ToolValidationCommandOutputValidation(
+                  checked: true,
+                  valid: true,
+                  errors: <String>[],
+                ),
+              ),
+              assertions: <ToolValidationAssertionResult>[
+                ToolValidationAssertionResult(
+                  type: 'status',
+                  path: '',
+                  passed: true,
+                  expected: 'succeeded',
+                  actual: 'succeeded',
+                  message: '',
+                ),
+              ],
+              diagnostics: <ToolValidationDiagnostic>[
+                ToolValidationDiagnostic(
+                  severity: 'warning',
+                  message: 'diagnostic detail',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Target'), findsOneWidget);
+    expect(find.textContaining('rg TODO src'), findsOneWidget);
+    expect(find.textContaining('Workflow node: rg.search_text'), findsNothing);
+    expect(find.text('Command'), findsOneWidget);
+    expect(find.textContaining('status succeeded'), findsOneWidget);
+    expect(find.text('Stdout'), findsOneWidget);
+    expect(find.text('src/example.go:TODO'), findsOneWidget);
+    expect(find.text('Output'), findsOneWidget);
+    expect(find.textContaining('matches'), findsOneWidget);
+    expect(find.text('Artifacts'), findsOneWidget);
+    expect(find.textContaining('build/results.json'), findsOneWidget);
+    expect(find.text('Assertions'), findsOneWidget);
+    expect(find.textContaining('passed status'), findsOneWidget);
+    expect(find.text('Diagnostics'), findsOneWidget);
+    expect(find.textContaining('diagnostic detail'), findsOneWidget);
   });
 
   testWidgets('keeps selectors for editable single-item collection panels', (
@@ -3393,7 +4421,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('RECORDS'), findsOneWidget);
-    expect(find.text('OVERVIEW'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
     expect(find.text('Preference'), findsWidgets);
     expect(find.text('MEMORY'), findsWidgets);
     expect(find.byTooltip('Refresh'), findsNothing);
@@ -3759,7 +4787,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('QUEUE'), findsOneWidget);
-    expect(find.text('INSPECTOR'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
     expect(find.text('Draft task brief'), findsWidgets);
     expect(find.byTooltip('Delete backlog item'), findsOneWidget);
     expect(find.text('Delete'), findsNothing);
@@ -3778,7 +4806,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('No memory selected'), findsOneWidget);
     expect(find.text('No linked memory'), findsOneWidget);
-    await tester.tap(find.byTooltip('Inspector').last);
+    await tester.tap(find.byTooltip('Details').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Draft task brief').first);
     await tester.pumpAndSettle();
@@ -3856,7 +4884,7 @@ void main() {
       await tester.tap(find.text('Draft task brief').first);
       await tester.pumpAndSettle();
 
-      expect(find.text('INSPECTOR'), findsOneWidget);
+      expect(find.text('DETAILS'), findsOneWidget);
       expect(controller.backlogReviewPanelOpen, isFalse);
     },
   );
@@ -3901,7 +4929,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('QUEUE'), findsOneWidget);
-    expect(find.text('INSPECTOR'), findsOneWidget);
+    expect(find.text('DETAILS'), findsOneWidget);
     expect(find.text('CONVERSATION'), findsOneWidget);
     expect(find.text('What changed here?'), findsOneWidget);
     expect(
@@ -5019,6 +6047,45 @@ class _MemoryAppSettingsStore extends AgentAwesomeAppSettingsStore {
   }
 }
 
+class _MemoryConfigFileStore extends ConfigFileStore {
+  _MemoryConfigFileStore(this.files);
+
+  final Map<String, String> files;
+
+  /// Reads a test configuration file from memory.
+  @override
+  Future<String> read(String path) async {
+    final content = files[path];
+    if (content == null) {
+      throw FileSystemException('Missing config file', path);
+    }
+    return content;
+  }
+
+  /// Writes a test configuration file to memory.
+  @override
+  Future<void> write(String path, String content) async {
+    files[path] = content;
+  }
+
+  /// Lists in-memory configuration files for collection refreshes.
+  @override
+  Future<List<ConfigFileEntry>> list({
+    required ConfigFileKind kind,
+    String assignedPath = '',
+  }) async {
+    return <ConfigFileEntry>[
+      for (final path in files.keys)
+        ConfigFileEntry(
+          path: path,
+          kind: kind,
+          assigned: path == assignedPath,
+          displayName: path.split('/').last,
+        ),
+    ];
+  }
+}
+
 ProjectWorkspace _memoryWorkspace() {
   return const ProjectWorkspace(
     title: 'Workspace',
@@ -5167,7 +6234,10 @@ RuntimeProfile _chatRuntimeProfile() {
   );
 }
 
-AppConfig _testConfig({String runtimeProfilePath = ''}) {
+AppConfig _testConfig({
+  String runtimeProfilePath = '',
+  String workspaceRoot = '/tmp/agentawesome-test',
+}) {
   return AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:1/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:2/api',
@@ -5175,7 +6245,7 @@ AppConfig _testConfig({String runtimeProfilePath = ''}) {
     memoryMcpUrl: 'http://127.0.0.1:1/mcp',
     agentAppName: 'test',
     agentUserId: 'user',
-    workspaceRoot: '/tmp/agentawesome-test',
+    workspaceRoot: workspaceRoot,
     autoStartLocalServices: false,
     runtimeProfilePath: runtimeProfilePath,
   );

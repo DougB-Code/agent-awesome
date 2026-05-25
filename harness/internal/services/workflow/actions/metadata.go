@@ -57,7 +57,7 @@ func MetadataFor(name string) Metadata {
 		action.OutputContracts = []string{"aa.external_call_result.v1"}
 	case "command.execute":
 		action.Label = "Run Command"
-		action.Description = "Run a configured command template."
+		action.Description = "Run a configured deterministic command operation."
 		action.Risk = "tool"
 		action.InputSchema = map[string]any{"type": "object", "required": []any{"template_id"}, "properties": map[string]any{"template_id": map[string]any{"type": "string"}, "parameters": map[string]any{"type": "object"}, "cwd": map[string]any{"type": "string"}, "reason": map[string]any{"type": "string"}}}
 		action.InputContracts = []string{"aa.command_execute_request.v1"}

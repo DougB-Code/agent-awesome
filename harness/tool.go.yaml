@@ -3,9 +3,6 @@ local-exec:
   enabled: true
   default-timeout: 10m
   default-max-output-bytes: 1048576
-  allowed-workdirs:
-    - .
-    - ..
   commands:
     - name: go_build_all
       executable: go
@@ -72,14 +69,17 @@ node-presets:
     description: Invoke a configured binary with two positional arguments.
     arguments:
       template_id: binary_execute_two_args
-node-scenarios:
+validations:
   - id: go_build_all_success
     label: Go build success
-    preset-id: go_build_all
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: go_build_all
     description: Command boundary returns a successful Go build result.
     input:
       cwd: /tmp/repository
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: succeeded
         exit_code: 0
@@ -87,11 +87,14 @@ node-scenarios:
       status: succeeded
   - id: go_test_all_failure
     label: Go test failure
-    preset-id: go_test_all
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: go_test_all
     description: Command boundary returns a failed Go test result.
     input:
       cwd: /tmp/repository
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: failed
         exit_code: 1
@@ -99,12 +102,15 @@ node-scenarios:
       status: failed
   - id: go_build_binary_success
     label: Go binary build success
-    preset-id: go_build_binary
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: go_build_binary
     description: Command boundary returns a successful binary build result.
     input:
       binary_path: build/app
       package: .
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: succeeded
         exit_code: 0
@@ -112,13 +118,16 @@ node-scenarios:
       status: succeeded
   - id: binary_execute_success
     label: Binary invoke success
-    preset-id: binary_execute_two_args
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: binary_execute_two_args
     description: Command boundary returns a successful binary invocation result.
     input:
       binary_path: build/app
       arg_1: "12"
       arg_2: "3"
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: succeeded
         exit_code: 0

@@ -4,12 +4,11 @@ package app
 import (
 	"reflect"
 	"testing"
-	"time"
 
 	"agentawesome/internal/config/schema"
 )
 
-func TestLocalExecCommandTemplatesConvertsLegacyAliases(t *testing.T) {
+func TestLocalExecCommandTemplatesConvertsCLISurfaces(t *testing.T) {
 	templates, err := localExecCommandTemplates(&schema.Tools{
 		LocalExec: schema.LocalExec{
 			Enabled:               true,
@@ -17,12 +16,29 @@ func TestLocalExecCommandTemplatesConvertsLegacyAliases(t *testing.T) {
 			DefaultMaxOutputBytes: 2048,
 			Commands: []schema.LocalExecCommand{
 				{
-					Name:           "git_status",
-					Description:    "Show status.",
-					Executable:     "git",
-					Args:           []string{"status", "--short"},
-					Timeout:        "3s",
-					MaxOutputBytes: 4096,
+					Name:        "git",
+					Description: "Run documented Git CLI subcommands.",
+					Executable:  "git",
+					Surface: schema.CommandSurface{
+						GlobalFlags: []schema.CommandFlag{{
+							Name:        "-C",
+							Description: "Run as if Git started in the given path.",
+						}},
+						Subcommands: []schema.CommandSubcommand{{
+							Name:        "status",
+							Description: "Show working tree status.",
+							Flags: []schema.CommandFlag{{
+								Name:        "--short",
+								Description: "Use short status output.",
+							}},
+						}},
+					},
+					Operations: []schema.CommandOperation{{
+						Name:        "status",
+						Description: "Read repository status.",
+						Args:        []string{"status", "--short"},
+						Output:      schema.CommandOutput{Format: "text", Source: "stdout"},
+					}},
 				},
 			},
 		},
@@ -34,21 +50,21 @@ func TestLocalExecCommandTemplatesConvertsLegacyAliases(t *testing.T) {
 		t.Fatalf("len(templates) = %d, want %d", got, want)
 	}
 	template := templates[0]
-	if template.ID != "git_status" || template.Description != "Show status." || template.Executable != "git" {
-		t.Fatalf("template identity = %#v, want git_status git", template)
+	if template.ID != "git.status" || template.Description != "Read repository status." || template.Executable != "git" {
+		t.Fatalf("template identity = %#v, want git status operation", template)
 	}
 	if want := []string{"status", "--short"}; !reflect.DeepEqual(template.Args, want) {
 		t.Fatalf("template.Args = %#v, want %#v", template.Args, want)
 	}
-	if template.Timeout != 3*time.Second {
-		t.Fatalf("template.Timeout = %s, want 3s", template.Timeout)
+	if template.ParameterSchema != nil {
+		t.Fatalf("template.ParameterSchema = %#v, want nil", template.ParameterSchema)
 	}
-	if template.MaxOutputBytes != 4096 {
-		t.Fatalf("template.MaxOutputBytes = %d, want 4096", template.MaxOutputBytes)
+	if got, want := template.Surface.Subcommands[0].Name, "status"; got != want {
+		t.Fatalf("template.Surface.Subcommands[0].Name = %q, want %q", got, want)
 	}
 }
 
-func TestCommandServiceTemplatesMergesJSONAndLocalExecAliases(t *testing.T) {
+func TestCommandServiceTemplatesMergesJSONAndLocalExecCommands(t *testing.T) {
 	templates, err := commandServiceTemplates(Options{
 		CommandTemplatesJSON: `[{"id":"json_status","description":"JSON status.","executable":"git","args":["status"]}]`,
 	}, &schema.Tools{

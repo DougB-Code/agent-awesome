@@ -42,9 +42,12 @@ func TestRegistryLoadsConfiguredCapabilities(t *testing.T) {
 	expectCapability(t, registry, "workflow_action:data.assert", KindWorkflowAction)
 	expectCapability(t, registry, "agent_profile:default", KindAgentProfile)
 	expectCapability(t, registry, "node_preset:lint", KindNodePreset)
-	scenario := expectCapability(t, registry, "node_scenario:lint_success", KindNodeScenario)
-	if scenario.TestResults[0].Type != TestMockedScenario {
-		t.Fatalf("scenario test type = %q, want %q", scenario.TestResults[0].Type, TestMockedScenario)
+	validation := expectCapability(t, registry, "tool_validation:lint_success", KindToolValidation)
+	if validation.TestResults[0].Type != TestMockedValidation {
+		t.Fatalf("validation test type = %q, want %q", validation.TestResults[0].Type, TestMockedValidation)
+	}
+	if validation.Invocation.ValidationTarget["type"] != "workflow-node" {
+		t.Fatalf("validation target = %#v, want workflow-node", validation.Invocation.ValidationTarget)
 	}
 }
 
@@ -156,10 +159,14 @@ func testToolsConfig(localExecEnabled bool) *schema.Tools {
 				"template_id": "lint",
 			},
 		}},
-		NodeScenarios: []schema.NodeScenario{{
-			ID:       "lint_success",
-			Label:    "Lint success",
-			PresetID: "lint",
+		Validations: []schema.ToolValidation{{
+			ID:    "lint_success",
+			Label: "Lint success",
+			Mode:  "mocked",
+			Target: schema.ToolValidationTarget{
+				Type:     "workflow-node",
+				PresetID: "lint",
+			},
 			Expected: map[string]any{"status": "succeeded"},
 		}},
 	}

@@ -17,8 +17,8 @@ const (
 	KindWorkflowAction CapabilityKind = "workflow_action"
 	// KindNodePreset identifies one workflow node preset.
 	KindNodePreset CapabilityKind = "node_preset"
-	// KindNodeScenario identifies one node preset scenario.
-	KindNodeScenario CapabilityKind = "node_scenario"
+	// KindToolValidation identifies one portable tool-package validation.
+	KindToolValidation CapabilityKind = "tool_validation"
 )
 
 // AvailabilityStatus describes whether a capability can be used.
@@ -59,7 +59,8 @@ type CapabilityInvocation struct {
 	CommandTemplate  string         `json:"command_template,omitempty"`
 	AgentProfileID   string         `json:"agent_profile_id,omitempty"`
 	NodePresetID     string         `json:"node_preset_id,omitempty"`
-	NodeScenarioID   string         `json:"node_scenario_id,omitempty"`
+	ToolValidationID string         `json:"tool_validation_id,omitempty"`
+	ValidationTarget map[string]any `json:"validation_target,omitempty"`
 	DefaultArguments map[string]any `json:"default_arguments,omitempty"`
 }
 
@@ -97,8 +98,8 @@ const (
 	TestSchema = "schema"
 	// TestSafeSmoke verifies a bounded non-destructive live invocation.
 	TestSafeSmoke = "safe_smoke"
-	// TestMockedScenario verifies deterministic behavior with mocked boundary responses.
-	TestMockedScenario = "mocked_scenario"
+	// TestMockedValidation verifies deterministic behavior with mocked boundary responses.
+	TestMockedValidation = "mocked_validation"
 	// TestRiskReview verifies user-facing risk and confirmation metadata.
 	TestRiskReview = "risk_review"
 )

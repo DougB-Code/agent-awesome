@@ -41,6 +41,48 @@ func TestTemplateCommandExecutes(t *testing.T) {
 	}
 }
 
+// TestTemplateArgsCanUseListParameters verifies CLI surfaces can accept argument arrays.
+func TestTemplateArgsCanUseListParameters(t *testing.T) {
+	service, err := Open(Config{
+		DataDir:          t.TempDir(),
+		AllowedWorkdirs:  []string{t.TempDir()},
+		DefaultTimeout:   time.Second,
+		DefaultMaxOutput: 1024,
+		Templates: []Template{{
+			ID:         "git",
+			Executable: shellPath(),
+			Args:       []string{shellFlag(), `printf "%s|%s" "$1" "$2"`, "shell", "{{args}}"},
+			Surface: CommandSurface{
+				Subcommands: []CommandSubcommand{{
+					Name:        "status",
+					Description: "Show working tree status.",
+					Flags: []CommandFlag{{
+						Name:        "--short",
+						Description: "Use short status output.",
+					}},
+				}},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	status, err := service.Execute(context.Background(), ExecuteRequest{
+		TemplateID: "git",
+		Parameters: map[string]any{"args": []any{"status", "--short"}},
+	})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if status.StdoutTail != "status|--short" {
+		t.Fatalf("StdoutTail = %q, want status|--short", status.StdoutTail)
+	}
+	if got, want := service.Templates()[0].Surface.Subcommands[0].Name, "status"; got != want {
+		t.Fatalf("surface subcommand = %q, want %q", got, want)
+	}
+}
+
 // TestTemplateExecutableCanUseParameters verifies executable paths remain generic template data.
 func TestTemplateExecutableCanUseParameters(t *testing.T) {
 	workdir := t.TempDir()

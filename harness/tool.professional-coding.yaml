@@ -3,9 +3,6 @@ local-exec:
   enabled: true
   default-timeout: 20m
   default-max-output-bytes: 1048576
-  allowed-workdirs:
-    - .
-    - ..
   commands:
     - name: codex_implement
       executable: codex
@@ -62,7 +59,7 @@ mcp:
   servers:
     - name: sourcecontrol
       transport: streamable-http
-      endpoint: ${SOURCECONTROL_MCP_URL}
+      endpoint: http://127.0.0.1:8095/mcp
       require-confirmation-tools:
         - sourcecontrol.commit
         - sourcecontrol.push
@@ -149,15 +146,18 @@ node-presets:
     arguments:
       server_id: sourcecontrol
       tool: sourcecontrol.open_pull_request
-node-scenarios:
+validations:
   - id: codex_implement_success
     label: Codex implement success
-    preset-id: codex_implement
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: codex_implement
     description: Command boundary returns a successful Codex implementation result.
     input:
       change_request: Fix one bug.
       worktree_path: /tmp/worktree
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: succeeded
         exit_code: 0
@@ -165,11 +165,14 @@ node-scenarios:
       status: succeeded
   - id: go_build_all_success
     label: Go build success
-    preset-id: go_build_all
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: go_build_all
     description: Command boundary returns a successful Go build result.
     input:
       cwd: /tmp/repository
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: succeeded
         exit_code: 0
@@ -177,11 +180,14 @@ node-scenarios:
       status: succeeded
   - id: go_test_all_failure
     label: Go test failure
-    preset-id: go_test_all
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: go_test_all
     description: Command boundary returns a failed Go test result.
     input:
       cwd: /tmp/repository
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: failed
         exit_code: 1
@@ -189,12 +195,15 @@ node-scenarios:
       status: failed
   - id: go_build_binary_success
     label: Go binary build success
-    preset-id: go_build_binary
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: go_build_binary
     description: Command boundary returns a successful binary build result.
     input:
       binary_path: build/app
       package: .
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: succeeded
         exit_code: 0
@@ -202,15 +211,697 @@ node-scenarios:
       status: succeeded
   - id: binary_execute_success
     label: Binary invoke success
-    preset-id: binary_execute_two_args
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: binary_execute_two_args
     description: Command boundary returns a successful binary invocation result.
     input:
       binary_path: build/app
       arg_1: "12"
       arg_2: "3"
-    mocked-boundary-responses:
+    mocks:
       command.execute:
         status: succeeded
         exit_code: 0
     expected:
       status: succeeded
+
+  - id: sourcecontrol_prepare_worktree_workflow_mocked
+    label: workflow invokes sourcecontrol prepare worktree
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: sourcecontrol_prepare_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          preset: sourcecontrol_prepare_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.preset
+        equals: sourcecontrol_prepare_worktree
+  - id: sourcecontrol_commit_workflow_mocked
+    label: workflow invokes sourcecontrol commit
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: sourcecontrol_commit
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          preset: sourcecontrol_commit
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.preset
+        equals: sourcecontrol_commit
+  - id: sourcecontrol_push_workflow_mocked
+    label: workflow invokes sourcecontrol push
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: sourcecontrol_push
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          preset: sourcecontrol_push
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.preset
+        equals: sourcecontrol_push
+  - id: sourcecontrol_open_pull_request_workflow_mocked
+    label: workflow invokes sourcecontrol open pull request
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: sourcecontrol_open_pull_request
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          preset: sourcecontrol_open_pull_request
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.preset
+        equals: sourcecontrol_open_pull_request
+  - id: sourcecontrol_sourcecontrol_inspect_repository_mcp_mocked
+    label: sourcecontrol sourcecontrol.inspect repository MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.inspect_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.inspect_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.inspect_repository
+  - id: sourcecontrol_sourcecontrol_inspect_repository_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.inspect repository
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.inspect_repository.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.inspect_repository
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.inspect_repository
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.inspect_repository
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.inspect_repository
+  - id: sourcecontrol_sourcecontrol_inspect_repository_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.inspect repository
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.inspect_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.inspect_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.inspect_repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_mcp_mocked
+    label: sourcecontrol sourcecontrol.validate repository MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.validate_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.validate_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.validate_repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.validate repository
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.validate_repository.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.validate_repository
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.validate_repository
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.validate_repository
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.validate_repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.validate repository
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.validate_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.validate_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.validate_repository
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_mcp_mocked
+    label: sourcecontrol sourcecontrol.prepare worktree MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.prepare_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.prepare_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.prepare worktree
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.prepare_worktree.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.prepare_worktree
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.prepare_worktree
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.prepare_worktree
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.prepare worktree
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.prepare_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.prepare_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_sourcecontrol_status_mcp_mocked
+    label: sourcecontrol sourcecontrol.status MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.status
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.status
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_status_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.status
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.status.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.status
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.status
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.status
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_status_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.status
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.status
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.status
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_commit_mcp_mocked
+    label: sourcecontrol sourcecontrol.commit MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.commit
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.commit
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_commit_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.commit
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.commit.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.commit
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.commit
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.commit
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_commit_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.commit
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.commit
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.commit
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_push_mcp_mocked
+    label: sourcecontrol sourcecontrol.push MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.push
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.push
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_push_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.push
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.push.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.push
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.push
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.push
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_push_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.push
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.push
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.push
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_open_pull_request_mcp_mocked
+    label: sourcecontrol sourcecontrol.open pull request MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.open_pull_request
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.open_pull_request
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.open_pull_request
+  - id: sourcecontrol_sourcecontrol_open_pull_request_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.open pull request
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.open_pull_request.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.open_pull_request
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.open_pull_request
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.open_pull_request
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.open_pull_request
+  - id: sourcecontrol_sourcecontrol_open_pull_request_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.open pull request
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.open_pull_request
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.open_pull_request
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.open_pull_request
+  - id: sourcecontrol_sourcecontrol_backup_mcp_mocked
+    label: sourcecontrol sourcecontrol.backup MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.backup
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.backup
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_backup_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.backup
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.backup.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.backup
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.backup
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.backup
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_backup_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.backup
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.backup
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.backup
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_restore_mcp_mocked
+    label: sourcecontrol sourcecontrol.restore MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.restore
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.restore
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_restore_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.restore
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.restore.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.restore
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.restore
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.restore
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_restore_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.restore
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.restore
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.restore
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_mcp_mocked
+    label: sourcecontrol sourcecontrol.cleanup worktree MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.cleanup_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.cleanup_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.cleanup_worktree
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.cleanup worktree
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.cleanup_worktree.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.cleanup_worktree
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.cleanup_worktree
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.cleanup_worktree
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.cleanup_worktree
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_workflow_mocked
+    label: workflow invokes sourcecontrol sourcecontrol.cleanup worktree
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.cleanup_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.cleanup_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.cleanup_worktree

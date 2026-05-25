@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+// ValidateOutput checks parsed output against the configured validation schema.
+func ValidateOutput(output any, schema map[string]any) ValidationResult {
+	return validateOutput(output, schema)
+}
+
 // validateOutput checks parsed output against the configured validation schema.
 func validateOutput(output any, schema map[string]any) ValidationResult {
 	if len(schema) == 0 {

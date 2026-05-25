@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"agentawesome/internal/config/schema"
 	"github.com/go-viper/mapstructure/v2"
@@ -51,6 +53,17 @@ func LoadAgent(path string) (schema.Agent, error) {
 // LoadTools reads and validates tool configuration, treating a missing default
 // tools file as an empty tool config.
 func LoadTools(path string, explicit bool) (*schema.Tools, error) {
+	return loadTools(path, explicit, true)
+}
+
+// LoadToolPackage reads and validates one package without merging sibling MCP
+// package configs.
+func LoadToolPackage(path string) (*schema.Tools, error) {
+	return loadTools(path, true, false)
+}
+
+// loadTools decodes a tool config with optional adjacent MCP package merging.
+func loadTools(path string, explicit bool, mergeMCPPackages bool) (*schema.Tools, error) {
 	if strings.TrimSpace(path) == "" {
 		path = DefaultToolPath()
 	}
@@ -63,8 +76,10 @@ func LoadTools(path string, explicit bool) (*schema.Tools, error) {
 			return nil, fmt.Errorf("decode %s: %w", path, err)
 		}
 	}
-	if err := loadMCPPackageConfigs(mcpConfigDirForToolPath(path), &cfg); err != nil {
-		return nil, err
+	if mergeMCPPackages {
+		if err := loadMCPPackageConfigs(mcpConfigDirForToolPath(path), &cfg); err != nil {
+			return nil, err
+		}
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate %s: %w", path, err)
@@ -80,18 +95,84 @@ func loadYAML(path string, target any) error {
 		if err := k.Load(file.Provider(path), yaml.Parser()); err != nil {
 			return fmt.Errorf("load %s: %w", path, err)
 		}
-	} else if err := k.Load(bytesProvider{data: []byte(os.ExpandEnv(string(data)))}, yaml.Parser()); err != nil {
+	} else if err := k.Load(bytesProvider{data: expandKnownEnvironment(data)}, yaml.Parser()); err != nil {
 		return fmt.Errorf("load %s: %w", path, err)
 	}
 	if err := k.UnmarshalWithConf("", target, koanf.UnmarshalConf{
 		DecoderConfig: &mapstructure.DecoderConfig{
 			ErrorUnused:      true,
 			WeaklyTypedInput: true,
+			DecodeHook:       mapstructure.ComposeDecodeHookFunc(yamlTimeToStringHook),
 		},
 	}); err != nil {
 		return err
 	}
 	return nil
+}
+
+// yamlTimeToStringHook preserves timestamp-like scalar strings parsed by YAML.
+func yamlTimeToStringHook(from reflect.Type, to reflect.Type, data any) (any, error) {
+	if from == reflect.TypeOf(time.Time{}) && to.Kind() == reflect.String {
+		return data.(time.Time).Format(time.RFC3339Nano), nil
+	}
+	return data, nil
+}
+
+// expandKnownEnvironment expands configured environment references without
+// destroying workflow-style references that intentionally remain unresolved.
+func expandKnownEnvironment(data []byte) []byte {
+	text := string(data)
+	var out strings.Builder
+	out.Grow(len(text))
+	for index := 0; index < len(text); {
+		if text[index] != '$' || index+1 >= len(text) {
+			out.WriteByte(text[index])
+			index++
+			continue
+		}
+		if text[index+1] == '{' {
+			end := strings.IndexByte(text[index+2:], '}')
+			if end < 0 {
+				out.WriteByte(text[index])
+				index++
+				continue
+			}
+			end += index + 2
+			name := text[index+2 : end]
+			if value, ok := os.LookupEnv(name); ok {
+				out.WriteString(value)
+			} else {
+				out.WriteString(text[index : end+1])
+			}
+			index = end + 1
+			continue
+		}
+		nameEnd := index + 1
+		for nameEnd < len(text) && isEnvironmentNameByte(text[nameEnd]) {
+			nameEnd++
+		}
+		if nameEnd == index+1 {
+			out.WriteByte(text[index])
+			index++
+			continue
+		}
+		name := text[index+1 : nameEnd]
+		if value, ok := os.LookupEnv(name); ok {
+			out.WriteString(value)
+		} else {
+			out.WriteString(text[index:nameEnd])
+		}
+		index = nameEnd
+	}
+	return []byte(out.String())
+}
+
+// isEnvironmentNameByte reports whether b is valid in simple $NAME references.
+func isEnvironmentNameByte(b byte) bool {
+	return b == '_' ||
+		('A' <= b && b <= 'Z') ||
+		('a' <= b && b <= 'z') ||
+		('0' <= b && b <= '9')
 }
 
 // bytesProvider gives koanf already-expanded configuration bytes.

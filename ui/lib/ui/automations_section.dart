@@ -7893,7 +7893,7 @@ String _capabilityKindLabel(String kind) {
     'agent_profile' => 'agent profile',
     'workflow_action' => 'workflow action',
     'node_preset' => 'node preset',
-    'node_scenario' => 'scenario',
+    'tool_validation' => 'validation',
     'command' => 'command',
     _ => kind.trim().replaceAll('_', ' '),
   };
@@ -7925,8 +7925,8 @@ List<String> _capabilityInvocationRows(AutomationCapability capability) {
       'Agent profile: ${_stringFromMap(invocation, 'agent_profile_id')}',
     if (_stringFromMap(invocation, 'node_preset_id').isNotEmpty)
       'Preset: ${_stringFromMap(invocation, 'node_preset_id')}',
-    if (_stringFromMap(invocation, 'node_scenario_id').isNotEmpty)
-      'Scenario: ${_stringFromMap(invocation, 'node_scenario_id')}',
+    if (_stringFromMap(invocation, 'tool_validation_id').isNotEmpty)
+      'Validation: ${_stringFromMap(invocation, 'tool_validation_id')}',
   ];
 }
 

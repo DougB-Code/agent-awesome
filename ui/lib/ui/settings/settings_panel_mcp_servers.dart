@@ -21,7 +21,7 @@ class _SettingsMcpToolsetsCard extends StatelessWidget {
   /// Builds MCP server toolset settings.
   @override
   Widget build(BuildContext context) {
-    return FormSectionCard(
+    return FormPlainSection(
       title: 'MCP toolsets',
       children: <Widget>[
         SettingsToggleField(

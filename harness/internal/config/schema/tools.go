@@ -26,7 +26,7 @@ func (c *Tools) Validate() error {
 	if err := validateMemory(c.Memory); err != nil {
 		return err
 	}
-	return validateNodeMetadata(c.NodePresets, c.NodeScenarios)
+	return validateToolMetadata(c.NodePresets, c.Validations, c.LocalExec, c.MCP)
 }
 
 // DefaultTimeoutDuration returns the configured local exec timeout or the
@@ -73,11 +73,6 @@ func validateLocalExec(c LocalExec) error {
 	}
 	if c.DefaultMaxOutputBytes <= 0 {
 		return fmt.Errorf("local-exec default-max-output-bytes must be positive")
-	}
-	for _, dir := range c.AllowedWorkdirs {
-		if strings.TrimSpace(dir) == "" {
-			return fmt.Errorf("local-exec allowed-workdirs must not contain empty paths")
-		}
 	}
 	if len(c.Commands) == 0 {
 		return fmt.Errorf("local-exec commands must not be empty when enabled")
@@ -130,6 +125,86 @@ func validateLocalExecCommand(command LocalExecCommand, name string) error {
 	if command.MaxOutputBytes < 0 {
 		return fmt.Errorf("local-exec command %q max-output-bytes must not be negative", name)
 	}
+	if err := validateCommandSurface(name, command.Surface); err != nil {
+		return err
+	}
+	if err := validateCommandOperations(name, command.Operations); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validateCommandSurface checks model-facing CLI surface documentation.
+func validateCommandSurface(commandName string, surface CommandSurface) error {
+	for _, flag := range surface.GlobalFlags {
+		if strings.TrimSpace(flag.Name) == "" {
+			return fmt.Errorf("local-exec command %q global flag name must not be empty", commandName)
+		}
+	}
+	seen := make(map[string]struct{}, len(surface.Subcommands))
+	for _, subcommand := range surface.Subcommands {
+		name := strings.TrimSpace(subcommand.Name)
+		if name == "" {
+			return fmt.Errorf("local-exec command %q subcommand name must not be empty", commandName)
+		}
+		if _, ok := seen[name]; ok {
+			return fmt.Errorf("local-exec command %q duplicate subcommand %q", commandName, name)
+		}
+		seen[name] = struct{}{}
+		for _, flag := range subcommand.Flags {
+			if strings.TrimSpace(flag.Name) == "" {
+				return fmt.Errorf("local-exec command %q subcommand %q flag name must not be empty", commandName, name)
+			}
+		}
+	}
+	return nil
+}
+
+// validateCommandOperations checks deterministic workflow-callable operations.
+func validateCommandOperations(commandName string, operations []CommandOperation) error {
+	seen := make(map[string]struct{}, len(operations))
+	for _, operation := range operations {
+		name, err := validateLocalExecCommandName(operation.Name)
+		if err != nil {
+			return fmt.Errorf("local-exec command %q operation: %w", commandName, err)
+		}
+		if _, ok := seen[name]; ok {
+			return fmt.Errorf("local-exec command %q duplicate operation %q", commandName, name)
+		}
+		seen[name] = struct{}{}
+		if strings.TrimSpace(operation.Description) == "" {
+			return fmt.Errorf("local-exec command %q operation %q description must not be empty", commandName, name)
+		}
+		if err := validateLocalExecCommandTimeout(commandName+"."+name, operation.Timeout); err != nil {
+			return err
+		}
+		if operation.MaxOutputBytes < 0 {
+			return fmt.Errorf("local-exec command %q operation %q max-output-bytes must not be negative", commandName, name)
+		}
+		for key := range operation.Env {
+			if strings.TrimSpace(key) == "" {
+				return fmt.Errorf("local-exec command %q operation %q env must not contain empty variable names", commandName, name)
+			}
+		}
+		if err := validateCommandOutput(commandName, name, operation.Output); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateCommandOutput checks the known generic output contract values.
+func validateCommandOutput(commandName string, operationName string, output CommandOutput) error {
+	switch strings.ToLower(strings.TrimSpace(output.Format)) {
+	case "", "json", "text", "plain":
+	default:
+		return fmt.Errorf("local-exec command %q operation %q output format must be json, text, or plain", commandName, operationName)
+	}
+	switch strings.ToLower(strings.TrimSpace(output.Source)) {
+	case "", "stdout", "stderr", "combined":
+	default:
+		return fmt.Errorf("local-exec command %q operation %q output source must be stdout, stderr, or combined", commandName, operationName)
+	}
 	return nil
 }
 
@@ -148,8 +223,11 @@ func validateLocalExecCommandTimeout(name, value string) error {
 	return nil
 }
 
-// validateNodeMetadata checks authoring-only node preset and scenario metadata.
-func validateNodeMetadata(presets []NodePreset, scenarios []NodeScenario) error {
+// validateToolMetadata checks authoring presets and portable validation metadata.
+func validateToolMetadata(presets []NodePreset, validations []ToolValidation, localExec LocalExec, mcp MCP) error {
+	operations := commandOperationIDs(localExec.Commands)
+	commandTemplates := commandTemplateIDs(localExec.Commands)
+	mcpTools := configuredMCPToolIDs(mcp.Servers)
 	presetIDs := make(map[string]struct{}, len(presets))
 	for _, preset := range presets {
 		id, err := validateLocalExecCommandName(preset.ID)
@@ -165,20 +243,313 @@ func validateNodeMetadata(presets []NodePreset, scenarios []NodeScenario) error 
 		default:
 			return fmt.Errorf("node preset %q action must be command.execute or mcp.call", id)
 		}
+		if err := validateNodePresetArguments(id, preset, commandTemplates, mcpTools); err != nil {
+			return err
+		}
 	}
-	scenarioIDs := make(map[string]struct{}, len(scenarios))
-	for _, scenario := range scenarios {
-		id, err := validateLocalExecCommandName(scenario.ID)
+	validationIDs := make(map[string]struct{}, len(validations))
+	for _, validation := range validations {
+		id, err := validateLocalExecCommandName(validation.ID)
 		if err != nil {
-			return fmt.Errorf("node scenario: %w", err)
+			return fmt.Errorf("validation: %w", err)
 		}
-		if _, ok := scenarioIDs[id]; ok {
-			return fmt.Errorf("node scenario duplicate %q", id)
+		if _, ok := validationIDs[id]; ok {
+			return fmt.Errorf("validation duplicate %q", id)
 		}
-		scenarioIDs[id] = struct{}{}
-		presetID := strings.TrimSpace(scenario.PresetID)
+		validationIDs[id] = struct{}{}
+		if err := validateToolValidation(id, validation, presetIDs, operations, mcpTools); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateNodePresetArguments checks preset action arguments against tools.
+func validateNodePresetArguments(
+	id string,
+	preset NodePreset,
+	commandTemplates map[string]struct{},
+	mcpTools map[string]map[string]struct{},
+) error {
+	switch strings.TrimSpace(preset.Action) {
+	case "command.execute":
+		templateID := stringArgument(preset.Arguments, "template_id")
+		if templateID == "" {
+			return fmt.Errorf("node preset %q command.execute needs template_id", id)
+		}
+		if _, ok := commandTemplates[templateID]; !ok {
+			return fmt.Errorf("node preset %q references unknown command template %q", id, templateID)
+		}
+	case "mcp.call":
+		serverName := stringArgument(preset.Arguments, "server_id")
+		toolName := stringArgument(preset.Arguments, "tool")
+		if serverName == "" || toolName == "" {
+			return fmt.Errorf("node preset %q mcp.call needs server_id and tool", id)
+		}
+		serverTools, ok := mcpTools[serverName]
+		if !ok {
+			return fmt.Errorf("node preset %q references unknown MCP server %q", id, serverName)
+		}
+		if _, ok := serverTools[toolName]; !ok {
+			return fmt.Errorf("node preset %q references unknown MCP tool %q on server %q", id, toolName, serverName)
+		}
+	}
+	return nil
+}
+
+// commandTemplateIDs returns template ids the command runtime can execute.
+func commandTemplateIDs(commands []LocalExecCommand) map[string]struct{} {
+	out := make(map[string]struct{}, len(commands))
+	for _, command := range commands {
+		commandName := strings.TrimSpace(command.Name)
+		if commandName == "" {
+			continue
+		}
+		if len(command.Operations) == 0 {
+			out[commandName] = struct{}{}
+			continue
+		}
+		for _, operation := range command.Operations {
+			operationName := strings.TrimSpace(operation.Name)
+			if operationName != "" {
+				out[commandName+"."+operationName] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+// stringArgument returns a trimmed string action argument.
+func stringArgument(values map[string]any, key string) string {
+	value, _ := values[key].(string)
+	return strings.TrimSpace(value)
+}
+
+// commandOperationIDs returns configured command.operation identifiers.
+func commandOperationIDs(commands []LocalExecCommand) map[string]map[string]struct{} {
+	out := make(map[string]map[string]struct{}, len(commands))
+	for _, command := range commands {
+		commandName := strings.TrimSpace(command.Name)
+		if commandName == "" {
+			continue
+		}
+		if _, ok := out[commandName]; !ok {
+			out[commandName] = make(map[string]struct{}, len(command.Operations))
+		}
+		for _, operation := range command.Operations {
+			operationName := strings.TrimSpace(operation.Name)
+			if operationName != "" {
+				out[commandName][operationName] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+// configuredMCPToolIDs returns configured server.tool identifiers.
+func configuredMCPToolIDs(servers []MCPServer) map[string]map[string]struct{} {
+	out := make(map[string]map[string]struct{}, len(servers))
+	for _, server := range servers {
+		serverName := strings.TrimSpace(server.Name)
+		if serverName == "" {
+			continue
+		}
+		if _, ok := out[serverName]; !ok {
+			out[serverName] = make(map[string]struct{}, len(server.Tools.Allow))
+		}
+		for _, tool := range server.Tools.Allow {
+			toolName := strings.TrimSpace(tool)
+			if toolName != "" {
+				out[serverName][toolName] = struct{}{}
+			}
+		}
+	}
+	return out
+}
+
+// validateToolValidation checks one portable validation target.
+func validateToolValidation(
+	id string,
+	validation ToolValidation,
+	presetIDs map[string]struct{},
+	operations map[string]map[string]struct{},
+	mcpTools map[string]map[string]struct{},
+) error {
+	switch strings.TrimSpace(validation.Mode) {
+	case "", "mocked", "live":
+	default:
+		return fmt.Errorf("validation %q mode must be mocked or live", id)
+	}
+	target := validation.Target
+	switch strings.TrimSpace(target.Type) {
+	case "workflow-node":
+		presetID := strings.TrimSpace(target.PresetID)
+		hasPreset := presetID != ""
+		hasCommand := strings.TrimSpace(target.Command) != "" || strings.TrimSpace(target.Operation) != ""
+		hasMCP := strings.TrimSpace(target.MCPServer) != "" || strings.TrimSpace(target.MCPTool) != ""
+		selected := boolCount(hasPreset, hasCommand, hasMCP)
+		if selected > 1 {
+			return fmt.Errorf("validation %q workflow-node target must choose preset-id, command-operation, or mcp-tool", id)
+		}
+		if hasCommand {
+			return validateCommandOperationTarget(id, target, operations, "workflow-node")
+		}
+		if hasMCP {
+			return validateMCPToolTarget(id, target, mcpTools, "workflow-node")
+		}
 		if _, ok := presetIDs[presetID]; !ok {
-			return fmt.Errorf("node scenario %q references unknown preset %q", id, presetID)
+			return fmt.Errorf("validation %q references unknown preset %q", id, presetID)
+		}
+	case "command-operation":
+		if err := validateCommandOperationTarget(id, target, operations, "command-operation"); err != nil {
+			return err
+		}
+	case "mcp-tool":
+		if err := validateMCPToolTarget(id, target, mcpTools, "mcp-tool"); err != nil {
+			return err
+		}
+	case "agent-tool-call":
+		if strings.TrimSpace(validation.Prompt) == "" {
+			return fmt.Errorf("validation %q agent-tool-call target needs a prompt", id)
+		}
+		if err := validateAgentToolCallTarget(id, target, operations, mcpTools); err != nil {
+			return err
+		}
+	case "":
+		return fmt.Errorf("validation %q target type must not be empty", id)
+	default:
+		return fmt.Errorf("validation %q target type must be workflow-node, command-operation, mcp-tool, or agent-tool-call", id)
+	}
+	if err := validateToolValidationExpected(id, validation.Expected); err != nil {
+		return err
+	}
+	return validateToolValidationAssertions(id, validation.Assertions)
+}
+
+// validateCommandOperationTarget checks one configured command operation target.
+func validateCommandOperationTarget(
+	id string,
+	target ToolValidationTarget,
+	operations map[string]map[string]struct{},
+	targetType string,
+) error {
+	commandName := strings.TrimSpace(target.Command)
+	operationName := strings.TrimSpace(target.Operation)
+	if commandName == "" || operationName == "" {
+		return fmt.Errorf("validation %q %s target needs command and operation", id, targetType)
+	}
+	commandOperations, ok := operations[commandName]
+	if !ok {
+		return fmt.Errorf("validation %q references unknown command %q", id, commandName)
+	}
+	if _, ok := commandOperations[operationName]; !ok {
+		return fmt.Errorf("validation %q references unknown operation %q on command %q", id, operationName, commandName)
+	}
+	return nil
+}
+
+// boolCount returns the number of true values.
+func boolCount(values ...bool) int {
+	count := 0
+	for _, value := range values {
+		if value {
+			count++
+		}
+	}
+	return count
+}
+
+// validateAgentToolCallTarget checks the concrete tool an agent should select.
+func validateAgentToolCallTarget(
+	id string,
+	target ToolValidationTarget,
+	operations map[string]map[string]struct{},
+	mcpTools map[string]map[string]struct{},
+) error {
+	hasCommand := strings.TrimSpace(target.Command) != "" || strings.TrimSpace(target.Operation) != ""
+	hasMCP := strings.TrimSpace(target.MCPServer) != "" || strings.TrimSpace(target.MCPTool) != ""
+	switch {
+	case hasCommand && hasMCP:
+		return fmt.Errorf("validation %q agent-tool-call target must choose command-operation or mcp-tool, not both", id)
+	case hasCommand:
+		commandName := strings.TrimSpace(target.Command)
+		operationName := strings.TrimSpace(target.Operation)
+		if commandName == "" || operationName == "" {
+			return fmt.Errorf("validation %q agent-tool-call command target needs command and operation", id)
+		}
+		commandOperations, ok := operations[commandName]
+		if !ok {
+			return fmt.Errorf("validation %q references unknown command %q", id, commandName)
+		}
+		if _, ok := commandOperations[operationName]; !ok {
+			return fmt.Errorf("validation %q references unknown operation %q on command %q", id, operationName, commandName)
+		}
+	case hasMCP:
+		if err := validateMCPToolTarget(id, target, mcpTools, "agent-tool-call MCP"); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("validation %q agent-tool-call target needs command-operation or mcp-tool", id)
+	}
+	return nil
+}
+
+// validateMCPToolTarget checks one configured MCP tool target.
+func validateMCPToolTarget(
+	id string,
+	target ToolValidationTarget,
+	mcpTools map[string]map[string]struct{},
+	targetType string,
+) error {
+	serverName := strings.TrimSpace(target.MCPServer)
+	toolName := strings.TrimSpace(target.MCPTool)
+	if serverName == "" || toolName == "" {
+		return fmt.Errorf("validation %q %s target needs mcp-server and mcp-tool", id, targetType)
+	}
+	serverTools, ok := mcpTools[serverName]
+	if !ok {
+		return fmt.Errorf("validation %q references unknown MCP server %q", id, serverName)
+	}
+	if _, ok := serverTools[toolName]; !ok {
+		return fmt.Errorf("validation %q references unknown MCP tool %q on server %q", id, toolName, serverName)
+	}
+	return nil
+}
+
+// validateToolValidationAssertions checks assertion metadata without executing it.
+func validateToolValidationAssertions(id string, assertions []ValidationAssertion) error {
+	for index, assertion := range assertions {
+		assertionType := strings.TrimSpace(assertion.Type)
+		switch assertionType {
+		case "status", "exit-code", "json-path", "stdout-contains", "stderr-contains", "schema":
+		default:
+			return fmt.Errorf("validation %q assertion %d uses an unsupported type", id, index+1)
+		}
+		if err := validateValidationAssertionExpectation("validation", id, index, assertion, assertionType); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateToolValidationExpected checks shortcut expectations on tool validations.
+func validateToolValidationExpected(id string, expected map[string]any) error {
+	for key, value := range expected {
+		expectedKey := strings.TrimSpace(key)
+		switch expectedKey {
+		case "status":
+			if value == nil || strings.TrimSpace(fmt.Sprint(value)) == "" {
+				return fmt.Errorf("validation %q expected status must not be empty", id)
+			}
+		case "exit_code":
+			if value == nil {
+				return fmt.Errorf("validation %q expected exit_code must not be empty", id)
+			}
+		default:
+			if expectedKey == "" {
+				return fmt.Errorf("validation %q expected key must not be empty", id)
+			}
+			return fmt.Errorf("validation %q expected %q is unsupported", id, expectedKey)
 		}
 	}
 	return nil

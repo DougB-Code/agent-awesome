@@ -34,6 +34,203 @@ Keeping those files separate preserves the boundary between provider selection, 
 go run ./cmd/agent-awesome run --model model.yaml --agent agent.yaml --tool tool.yaml -- web --port 8080 api
 ----
 
+== Shared Library Validation
+
+Shared package libraries can validate conventional `agents/` and `tools/` directories with one command.
+Use this in GitHub Actions or another CI runner when publishing package libraries for collaboration.
+The same command also accepts explicit `--agent` and `--tool` files so an active local profile can run the combined agent/tool contract gate before it has been arranged into a shared library tree.
+
+A shared package repository should keep each package's contract and validations together:
+
+[source,text]
+----
+agents/
+  research-assistant/
+    agent.yaml
+tools/
+  search/
+    tool.yaml
+mcp/
+  memory/
+    mcp.yaml
+----
+
+Shared library validation discovers tool packages under `tools/` and MCP packages under the sibling `mcp/` directory.
+Each package is validated in isolation, so an individual `tool.yaml` does not inherit sibling MCP servers while its package tests run.
+When an installed runtime loads an active tool package, MCP packages beside the installed `tools/` directory are still merged into the runtime tool config for normal agent use.
+Keep portable mocked validations in the package files so pull requests can prove behavior without secrets, credentials, or live services.
+Use live validations only as an optional CI lane when the repository has an approved runtime, model, and tool environment.
+
+One minimal GitHub Actions job can publish both console output and JUnit test artifacts:
+
+[source,yaml]
+----
+name: Validate Agent Awesome packages
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  validate-library:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: harness/go.mod
+      - run: mkdir -p build
+      - run: |
+          cd harness
+          go run ./cmd/agent-awesome library validate \
+            --root .. \
+            --agent-mode mocked \
+            --tool-mode mocked \
+            --require-agent-validations \
+            --require-agent-assertions \
+            --require-agent-tool-contracts \
+            --require-tool-assertions \
+            --require-tool-input-schemas \
+            --require-tool-coverage \
+            --junit ../build/library-validations.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: library-validations
+          path: build/library-validations.xml
+----
+
+[source,sh]
+----
+go run ./cmd/agent-awesome library validate \
+  --root . \
+  --agent-mode mocked \
+  --tool-mode mocked \
+  --require-agent-validations \
+  --require-agent-assertions \
+  --require-agent-tool-contracts \
+  --require-tool-assertions \
+  --require-tool-input-schemas \
+  --require-tool-coverage \
+  --junit build/library-validations.xml
+----
+
+The combined report delegates to the same agent and tool validators used by the narrower commands.
+Missing default package directories are skipped, but the command fails when neither an agent nor tool package source exists under the selected root.
+If a required gate is enabled, such as `--require-agent-validations`, `--require-agent-assertions`, `--require-agent-tool-contracts`, `--require-tool-assertions`, `--require-tool-input-schemas`, or `--require-tool-coverage`, the corresponding package source must exist.
+When `--json` or `--junit` is enabled, required-source setup failures are emitted as validation failures so CI artifacts preserve why the shared library could not be tested.
+Use `--agent-dir ''`, `--tool-dir ''`, or `--mcp-dir ''` only for intentionally single-surface libraries.
+When `--tool` points at one explicit config file, package directories are disabled; use a package tree with `--tool-dir` and `--mcp-dir` when a run should include multiple tool or MCP packages.
+Use `--agent-mode mocked` for portable CI lanes that should ignore live validation cases while still enforcing mocked assertions and tool contracts.
+Use `--agent-mode live --live-agents` when a shared library should run only agent validations marked `mode: live` through the configured runtime.
+Use `--live-agents` without a mode filter when a shared library should run both mocked and live agent validations in one lane.
+Use `--tool-mode mocked` for portable tool-package CI lanes that should ignore live command, MCP, workflow-node, or agent-call validations.
+Use `--tool-mode live` when a shared library should run only tool validations marked `mode: live`.
+For live tool `agent-tool-call` validations in library runs, pass `--runtime-agent` when the active runtime agent should differ from the package source selected with `--agent`; single-agent runs use `--agent` as the default runtime agent.
+For library trees, pass `--runtime-tool` when live agent validations should use a specific active tool package rather than the package source selected with `--tool` or discovered under `--tool-dir`.
+Use `--require-agent-tool-calls` for tool-using agent libraries that must reject packages whose validations never prove or capture an agent-selected command or MCP tool.
+Use `--require-agent-tool-contracts` in combined agent/tool libraries so agent validations that assert or capture tool calls must resolve to command or MCP tool-call ids declared by the packaged tool library.
+When a packaged command operation declares an `input-schema`, captured agent tool-call arguments must also satisfy that schema.
+The JSON report preserves tool package contract evidence under each package's `agent_tool_calls` and `agent_tool_contracts` fields.
+`agent_tool_calls` lists the model-visible ids that agent tests may assert, while `agent_tool_contracts` carries the same ids with command operation input schemas when schemas exist.
+Library dashboards should display those contract ids and schemas beside agent tool-call references so reviewers can tell which packaged surfaces are proved without opening raw YAML.
+
+[source,sh]
+----
+go run ./cmd/agent-awesome library validate \
+  --root . \
+  --agent agent.yaml \
+  --tool tool.local.yaml \
+  --require-agent-validations \
+  --require-agent-assertions \
+  --require-agent-tool-calls \
+  --require-agent-tool-contracts
+----
+
+== Agent Config Validation
+
+Agent configs can be validated as single files or as recursive library trees.
+This gives shared agent packages the same CI entry point as shared tool packages.
+Directory validation discovers both package-shaped `*/agent.yaml` files and direct root-level YAML/JSON files, so the same command works for GitHub-style package trees and app-managed agent collections such as `config/agents/*.yaml`.
+Agent packages may also include portable `validations` that exercise expected prompt behavior through mocked agent responses, or through the live runtime when `agents validate --live` is selected.
+Use `--mode mocked` for fast local or pull-request checks that should ignore live validations declared in the same package.
+Use `--mode live --live` for focused live validation runs.
+Use `--require-validations` in shared-library CI when every agent package must carry at least one behavior check.
+Use `--require-assertions` for single-agent checks, or `--require-agent-assertions` through `library validate`, when CI must reject placeholder cases that do not assert response text, tool selection, structured output, or another concrete behavior.
+Use `--require-tool-calls` with `agents validate` when a single tool-using agent package must prove or capture at least one command or MCP tool selection.
+Use `--require-tool-contracts` with `agents validate --tool <tool.yaml>` when a single-agent check must prove the captured command or MCP tool ids exist in the active tool config.
+If the active tool contract config cannot be loaded, the focused agent check keeps the agent validation evidence and emits the contract setup failure in JSON/JUnit before returning nonzero.
+Use `--require-agent-tool-calls` through `library validate` for tool-using agent libraries where every package must prove or capture at least one command or MCP tool selection.
+Use `--require-agent-tool-contracts` through `library validate` when agent tests are expected to prove use of packaged tools rather than imagined or external-only tool ids.
+The same gate checks captured agent tool-call arguments against packaged command operation input schemas when schemas are declared.
+JSON output includes `tool_call_references` at the agent aggregate and suite levels so package UIs and CI dashboards can show which command or MCP tool contracts the validations prove or capture.
+Selected validation reruns that reference stale IDs are emitted to JSON and JUnit as validation failures so CI artifacts explain why the requested case did not run.
+Focused directory checks also emit missing or empty package trees as JSON/JUnit failures when those report formats are requested.
+Assertion records must contain concrete expectations: contains-style assertions need non-empty `contains`, tool-call assertions need `equals`, `json-path` assertions need a path plus `contains`, `matches`, or `equals`, and `schema` assertions need a non-empty schema.
+Tool-call assertions compare package contract ids, so a captured `rg.search_text` name or `command_execute` call with `template_id: rg.search_text` can satisfy `equals: command:rg.search_text`.
+Only passed tool-call assertions count as proved references; failed tool-call expectations remain assertion failures and do not count as tool-use evidence unless the agent response also captured an actual tool call.
+Agent `expected` shortcuts are limited to recognized keys such as `response_contains` and `tool_call`; unsupported expected keys fail validation instead of counting as proof.
+Live agent validations use the same validation metadata, run through the production runtime host, capture response text and tool calls from ADK events, and isolate each case in an in-memory session so validation runs do not pollute normal chat history.
+
+[source,sh]
+----
+go run ./cmd/agent-awesome agents validate --agent ./agent.yaml
+----
+
+[source,sh]
+----
+go run ./cmd/agent-awesome agents validate \
+  --agent-dir ./agents \
+  --mode mocked \
+  --require-validations \
+  --require-assertions \
+  --junit build/agent-validations.xml
+----
+
+[source,sh]
+----
+go run ./cmd/agent-awesome agents validate \
+  --agent ./agent.yaml \
+  --live \
+  --model ./model.yaml \
+  --tool ./tool.yaml
+----
+
+One mocked agent validation can assert response text or selected tool calls:
+
+[source,yaml]
+----
+validations:
+  - id: uses_search
+    label: Uses search
+    mode: mocked
+    prompt: Find TODO references in the workspace.
+    input:
+      pattern: TODO
+    fixtures:
+      files:
+        - path: src/example.go
+          content: // TODO: add validation
+    mocks:
+      agent.response:
+        text: I will search for TODO references.
+        tool_calls:
+          - id: command:rg.search_text
+            name: rg.search_text
+            arguments:
+              pattern: TODO
+    assertions:
+      - type: tool-call
+        equals: command:rg.search_text
+      - type: json-path
+        path: input.pattern
+        equals: TODO
+      - type: json-path
+        path: response.tool_calls.0.arguments.pattern
+        equals: TODO
+----
+
 == Model Providers
 
 Provider auth is explicit in `model.yaml`.
@@ -54,8 +251,61 @@ go run ./cmd/agent-awesome models check \
 
 == Command Tools
 
-Local OS command aliases are migrated into command-service templates and exposed through the command MCP boundary.
-Set `local-exec.enabled: true` only to define legacy aliases; the runtime no longer exposes direct `local_exec` or `request_command` ADK function tools.
+Local OS command entries document CLI surfaces for model review and may expose deterministic operations through the command MCP boundary.
+Set `local-exec.enabled: true` to expose configured operations; the runtime no longer exposes direct `local_exec` or `request_command` ADK function tools.
+Use `surface` to describe the broad executable shape, then add narrow `operations` for workflow-callable argv templates with `input-schema`, `output`, and optional `output-schema` contracts.
+Workflow nodes call those operations through `command.execute` with template ids such as `rg.search_text` or `curl.http_get`.
+Workflow node presets are validated against the same configured command templates and MCP tool allowlists, so shared packages fail early when a preset points at an unknown `command.execute` template or `mcp.call` server/tool pair.
+Use `--require-input-schemas` with `tools validate`, or `--require-tool-input-schemas` with `library validate`, when shared package CI must reject command operations that cannot validate structured agent/workflow arguments.
+
+== Tool Package Validations
+
+Tool packages may include portable `validations` beside their command or MCP metadata.
+Each validation declares a target such as `command-operation`, `workflow-node`, `mcp-tool`, or `agent-tool-call`, plus mocked or live boundary data, fixtures, expected values, and assertions.
+Use `--mode mocked` for fast local or pull-request checks that should ignore live validations declared in the same package.
+Use `--mode live` for focused live tool validation runs.
+Agent tool-call validations use a prompt plus a concrete configured command operation or MCP tool target, so package tests prove the agent-facing selection contract is tied to a real tool surface.
+Workflow-node validations may target a reusable `preset-id`, a command operation, or an MCP tool directly; direct command-operation workflow validations execute through the same `command.execute` action that durable workflows use, while MCP workflow validations execute through the generic `mcp.call` boundary.
+Live `agent-tool-call` validations run the prompt through the configured agent runtime, capture observed ADK tool calls, and expose them under `output.tool_calls` for JSON-path assertions.
+Live `mcp-tool` and MCP-backed `workflow-node` validations connect through the configured MCP server transport and expose structured MCP output under `output` for assertions.
+Pass `--agent`, `--model`, `--provider`, or `--model-id` to `tools validate` when a live agent-call validation should use a specific agent or model config instead of the default runtime files.
+Tool assertion records must also contain concrete expectations: `stdout-contains` and `stderr-contains` need non-empty `contains`, `status` and `exit-code` need `equals`, `json-path` needs a path plus an expectation, and `schema` needs a non-empty schema.
+Tool `expected` shortcuts are limited to `status` and `exit_code`; unsupported expected keys fail validation instead of being counted as proof.
+Command-backed tool validations check their declared input against the target command operation `input-schema` before mocked or live execution, including workflow-node presets after `${input}` references are resolved.
+Keep these validations with the package so shared tool libraries can review tool behavior in the same place as the tool contract.
+
+Run one package:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome tools validate --tool ./tool.yaml --mode mocked
+----
+
+Run every package in a library directory. Discovery is recursive, so shared libraries can group packages by domain, platform, or tool family:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome tools validate --tool-dir ./tools --mode mocked
+----
+
+Run a combined shared library, including sibling MCP packages:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome library validate --root .
+----
+
+Use `--json` in CI to publish machine-readable package and validation results, or `--junit build/tool-validations.xml` to publish a generic test report from GitHub Actions or another CI runner.
+The command exits nonzero when any validation fails, cannot be loaded, or is unsupported.
+Selected validation reruns that reference stale IDs are emitted to JSON and JUnit as validation failures so review artifacts preserve the missing case name.
+Focused tool checks also emit missing, empty, or unloadable package sources as JSON/JUnit failures when those report formats are requested.
+Add `--require-coverage` in shared-library CI to fail packages that define command operations, model-visible command/MCP tool calls, workflow node presets, or allowlisted MCP tools without matching validations.
+Only validations with concrete configured expectations count toward coverage; placeholder cases that only name a target are reported as uncovered.
+Add `--require-input-schemas` to fail command operations that do not declare structured input schemas.
+Add `--require-assertions` for single tool-package checks, or `--require-tool-assertions` through `library validate`, to reject placeholder validations that only name a target without proving status, output, parsed data, schema, or another concrete behavior.
+JSON output includes `agent_tool_calls` and `agent_tool_contracts` at the tool suite level.
+Use these fields as the shared-library contract index: agent package validations should assert those ids, and workflow-node validations should prove the same operation ids can be invoked deterministically.
+Human-readable tool validation summaries also list `agent tool calls` so package authors can copy the contract ids into agent validation assertions without opening raw YAML.
 
 == MCP Tools
 

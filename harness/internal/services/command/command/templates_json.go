@@ -41,6 +41,8 @@ func ParseTemplatesJSON(value string) ([]Template, error) {
 			EnvironmentPolicy:      item.EnvironmentPolicy,
 			WorkingDirectoryPolicy: item.WorkingDirectoryPolicy,
 			ValidationSchema:       item.ValidationSchema,
+			Surface:                item.Surface,
+			Annotations:            item.Annotations,
 		})
 	}
 	return templates, nil
@@ -73,4 +75,6 @@ type rawTemplate struct {
 	EnvironmentPolicy      map[string]any    `json:"environment_policy"`
 	WorkingDirectoryPolicy string            `json:"working_directory_policy"`
 	ValidationSchema       map[string]any    `json:"validation_schema"`
+	Surface                CommandSurface    `json:"surface"`
+	Annotations            map[string]any    `json:"annotations"`
 }

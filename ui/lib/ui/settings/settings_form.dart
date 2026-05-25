@@ -310,6 +310,36 @@ class FormSectionCard extends StatelessWidget {
   }
 }
 
+/// FormPlainSection renders one unframed group inside a settings form.
+class FormPlainSection extends StatelessWidget {
+  /// Creates an unbordered form section.
+  const FormPlainSection({super.key, this.title = '', required this.children});
+
+  /// Optional section title.
+  final String title;
+
+  /// Section content.
+  final List<Widget> children;
+
+  /// Builds one plain settings-style form group.
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        if (title.isNotEmpty) ...<Widget>[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: PanelSectionLabel(title),
+          ),
+          const SizedBox(height: 12),
+        ],
+        ...children,
+      ],
+    );
+  }
+}
+
 /// SettingsFormSubsection renders a titled block inside one form section.
 class SettingsFormSubsection extends StatelessWidget {
   /// Creates a reusable inner form subsection.

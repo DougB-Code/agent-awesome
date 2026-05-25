@@ -18,10 +18,9 @@ func newRunCommand(ctx context.Context) *cobra.Command {
 	return newRunCommandWithRunner(ctx, app.Run)
 }
 
-// newRunCommandWithRunner creates a run command with an injectable runtime
-// runner so tests can assert parsed options without launching the full runtime.
-func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, app.Options) error) *cobra.Command {
-	opts := app.Options{
+// defaultAppOptions returns environment-aware runtime defaults shared by commands.
+func defaultAppOptions() app.Options {
+	return app.Options{
 		AgentConfigPath:            config.DefaultAgentPath(),
 		ModelConfigPath:            config.DefaultModelPath(),
 		ToolPath:                   config.DefaultToolPath(),
@@ -38,6 +37,12 @@ func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, a
 		CommandDefaultTimeout:      envDuration("AGENTAWESOME_COMMAND_TIMEOUT", 10*time.Minute),
 		CommandMaxOutputBytes:      envInt64("AGENTAWESOME_COMMAND_MAX_OUTPUT_BYTES", 64<<10),
 	}
+}
+
+// newRunCommandWithRunner creates a run command with an injectable runtime
+// runner so tests can assert parsed options without launching the full runtime.
+func newRunCommandWithRunner(ctx context.Context, runner func(context.Context, app.Options) error) *cobra.Command {
+	opts := defaultAppOptions()
 
 	cmd := &cobra.Command{
 		Use:   "run [runtime args]",

@@ -42,18 +42,34 @@ type ModelConfig struct {
 
 // Agent describes the configured agent identity and instructions.
 type Agent struct {
-	Name        string `koanf:"name"`
-	Description string `koanf:"description"`
-	Instruction string `koanf:"instruction"`
+	Name        string            `koanf:"name"`
+	Description string            `koanf:"description"`
+	Instruction string            `koanf:"instruction"`
+	Validations []AgentValidation `koanf:"validations"`
+}
+
+// AgentValidation describes one portable behavior check for an agent package.
+type AgentValidation struct {
+	ID          string                `koanf:"id"`
+	Label       string                `koanf:"label"`
+	Description string                `koanf:"description"`
+	Mode        string                `koanf:"mode"`
+	Prompt      string                `koanf:"prompt"`
+	Input       map[string]any        `koanf:"input"`
+	Fixtures    map[string]any        `koanf:"fixtures"`
+	Mocks       map[string]any        `koanf:"mocks"`
+	Expected    map[string]any        `koanf:"expected"`
+	Assertions  []ValidationAssertion `koanf:"assertions"`
 }
 
 // Tools describes all configured external tool integrations.
 type Tools struct {
-	LocalExec     LocalExec      `koanf:"local-exec"`
-	MCP           MCP            `koanf:"mcp"`
-	Memory        Memory         `koanf:"memory"`
-	NodePresets   []NodePreset   `koanf:"node-presets"`
-	NodeScenarios []NodeScenario `koanf:"node-scenarios"`
+	Name        string           `koanf:"name"`
+	LocalExec   LocalExec        `koanf:"local-exec"`
+	MCP         MCP              `koanf:"mcp"`
+	Memory      Memory           `koanf:"memory"`
+	NodePresets []NodePreset     `koanf:"node-presets"`
+	Validations []ToolValidation `koanf:"validations"`
 }
 
 // MCP describes configured Model Context Protocol servers.
@@ -112,19 +128,75 @@ type LocalExec struct {
 	Enabled               bool               `koanf:"enabled"`
 	DefaultTimeout        string             `koanf:"default-timeout"`
 	DefaultMaxOutputBytes int                `koanf:"default-max-output-bytes"`
-	AllowedWorkdirs       []string           `koanf:"allowed-workdirs"`
 	Commands              []LocalExecCommand `koanf:"commands"`
 }
 
-// LocalExecCommand describes one allowlisted local command alias.
+// LocalExecCommand describes one allowlisted local CLI surface.
 type LocalExecCommand struct {
-	Name           string            `koanf:"name"`
-	Executable     string            `koanf:"executable"`
-	Description    string            `koanf:"description"`
-	Args           []string          `koanf:"args"`
-	Env            map[string]string `koanf:"env"`
-	Timeout        string            `koanf:"timeout"`
-	MaxOutputBytes int               `koanf:"max-output-bytes"`
+	Name           string             `koanf:"name"`
+	Executable     string             `koanf:"executable"`
+	Description    string             `koanf:"description"`
+	Args           []string           `koanf:"args"`
+	Env            map[string]string  `koanf:"env"`
+	Timeout        string             `koanf:"timeout"`
+	MaxOutputBytes int                `koanf:"max-output-bytes"`
+	Installation   ToolInstallation   `koanf:"installation"`
+	Surface        CommandSurface     `koanf:"surface"`
+	Operations     []CommandOperation `koanf:"operations"`
+}
+
+// ToolInstallation records an environment-specific executable availability check.
+type ToolInstallation struct {
+	Verified   bool   `koanf:"verified"`
+	CheckedAt  string `koanf:"checked-at"`
+	Executable string `koanf:"executable"`
+	Path       string `koanf:"path"`
+	Version    string `koanf:"version"`
+	Error      string `koanf:"error"`
+}
+
+// CommandSurface documents subcommands and flags for one CLI.
+type CommandSurface struct {
+	GlobalFlags []CommandFlag       `koanf:"global-flags"`
+	Subcommands []CommandSubcommand `koanf:"subcommands"`
+}
+
+// CommandFlag documents one CLI flag.
+type CommandFlag struct {
+	Name        string `koanf:"name"`
+	Description string `koanf:"description"`
+}
+
+// CommandSubcommand documents one CLI subcommand.
+type CommandSubcommand struct {
+	Name        string        `koanf:"name"`
+	Description string        `koanf:"description"`
+	Flags       []CommandFlag `koanf:"flags"`
+}
+
+// CommandOperation describes one deterministic workflow-callable CLI call.
+type CommandOperation struct {
+	Name             string            `koanf:"name"`
+	Description      string            `koanf:"description"`
+	Args             []string          `koanf:"args"`
+	Timeout          string            `koanf:"timeout"`
+	MaxOutputBytes   int               `koanf:"max-output-bytes"`
+	InputSchema      map[string]any    `koanf:"input-schema"`
+	Output           CommandOutput     `koanf:"output"`
+	OutputSchema     map[string]any    `koanf:"output-schema"`
+	ParserID         string            `koanf:"parser-id"`
+	OutputSource     string            `koanf:"output-source"`
+	ArtifactGlobs    []string          `koanf:"artifact-globs"`
+	Annotations      map[string]any    `koanf:"annotations"`
+	Env              map[string]string `koanf:"env"`
+	WorkingDir       string            `koanf:"working-dir"`
+	WorkingDirPolicy string            `koanf:"working-directory-policy"`
+}
+
+// CommandOutput describes raw output parsing for one CLI operation.
+type CommandOutput struct {
+	Format string `koanf:"format"`
+	Source string `koanf:"source"`
 }
 
 // NodePreset describes reusable workflow-node metadata for authoring tools.
@@ -138,16 +210,40 @@ type NodePreset struct {
 	InputSchema map[string]any `koanf:"input-schema"`
 }
 
-// NodeScenario describes one node preset test scenario for authoring tools.
-type NodeScenario struct {
-	ID                      string         `koanf:"id"`
-	Label                   string         `koanf:"label"`
-	PresetID                string         `koanf:"preset-id"`
-	Description             string         `koanf:"description"`
-	Live                    bool           `koanf:"live"`
-	Input                   map[string]any `koanf:"input"`
-	MockedBoundaryResponses map[string]any `koanf:"mocked-boundary-responses"`
-	Expected                map[string]any `koanf:"expected"`
+// ToolValidation describes one portable test case for an agent-facing tool.
+type ToolValidation struct {
+	ID          string                `koanf:"id"`
+	Label       string                `koanf:"label"`
+	Description string                `koanf:"description"`
+	Mode        string                `koanf:"mode"`
+	Target      ToolValidationTarget  `koanf:"target"`
+	Prompt      string                `koanf:"prompt"`
+	Input       map[string]any        `koanf:"input"`
+	Fixtures    map[string]any        `koanf:"fixtures"`
+	Mocks       map[string]any        `koanf:"mocks"`
+	Expected    map[string]any        `koanf:"expected"`
+	Assertions  []ValidationAssertion `koanf:"assertions"`
+}
+
+// ToolValidationTarget identifies the invocation surface under test.
+type ToolValidationTarget struct {
+	Type      string `koanf:"type"`
+	PresetID  string `koanf:"preset-id"`
+	Command   string `koanf:"command"`
+	Operation string `koanf:"operation"`
+	MCPServer string `koanf:"mcp-server"`
+	MCPTool   string `koanf:"mcp-tool"`
+}
+
+// ValidationAssertion describes one generic result expectation.
+type ValidationAssertion struct {
+	Type     string         `koanf:"type"`
+	Path     string         `koanf:"path"`
+	Equals   any            `koanf:"equals"`
+	Contains string         `koanf:"contains"`
+	Matches  string         `koanf:"matches"`
+	Schema   map[string]any `koanf:"schema"`
+	Message  string         `koanf:"message"`
 }
 
 // Provider describes one model provider configuration.

@@ -1,15 +1,1372 @@
+name: Linux Tools
 local-exec:
   enabled: true
-  default-timeout: 10s
-  default-max-output-bytes: 65536
-  allowed-workdirs:
-    - .
+  default-timeout: 30s
+  default-max-output-bytes: 1048576
   commands:
-    - name: git_status
-      executable: git
-      description: Show repository status.
-      args:
-        - status
-        - --short
-      timeout: 5s
-      max-output-bytes: 16384
+    - name: curl
+      executable: curl
+      description: Transfer data to or from URLs.
+      surface:
+        global-flags:
+          - name: -f
+            description: Fail on HTTP server errors.
+          - name: -L
+            description: Follow redirects.
+          - name: -s
+            description: Run silently except for output.
+          - name: -o
+            description: Write response body to a file path.
+      operations:
+        - name: http_get
+          description: Fetch one URL and return the response body.
+          args:
+            - -fsSL
+            - "{{url}}"
+          input-schema:
+            type: object
+            required:
+              - url
+            properties:
+              url:
+                type: string
+          output:
+            format: text
+            source: stdout
+        - name: download_file
+          description: Download one URL to a selected output path.
+          args:
+            - -fsSL
+            - -o
+            - "{{output_path}}"
+            - "{{url}}"
+          input-schema:
+            type: object
+            required:
+              - url
+              - output_path
+            properties:
+              url:
+                type: string
+              output_path:
+                type: string
+          output:
+            format: text
+            source: stderr
+    - name: jq
+      executable: jq
+      description: Filter, transform, and validate JSON documents.
+      surface:
+        global-flags:
+          - name: -c
+            description: Emit compact JSON output.
+          - name: -r
+            description: Emit raw strings instead of JSON strings.
+          - name: -e
+            description: Set the exit status from the filter result.
+      operations:
+        - name: query_file
+          description: Run a jq filter against one JSON file.
+          args:
+            - -c
+            - "{{filter}}"
+            - "{{input_path}}"
+          input-schema:
+            type: object
+            required:
+              - filter
+              - input_path
+            properties:
+              filter:
+                type: string
+              input_path:
+                type: string
+          output:
+            format: text
+            source: stdout
+        - name: validate_file
+          description: Validate that one file is parseable JSON.
+          args:
+            - -e
+            - empty
+            - "{{input_path}}"
+          input-schema:
+            type: object
+            required:
+              - input_path
+            properties:
+              input_path:
+                type: string
+          output:
+            format: text
+            source: stdout
+    - name: rg
+      executable: rg
+      description: Search files recursively with ripgrep.
+      surface:
+        global-flags:
+          - name: --line-number
+            description: Include line numbers.
+          - name: --column
+            description: Include column numbers.
+          - name: --glob
+            description: Include or exclude paths with a glob.
+          - name: --files
+            description: Print files that would be searched.
+      operations:
+        - name: search_text
+          description: Search a path for a text pattern with line and column numbers.
+          args:
+            - --line-number
+            - --column
+            - "{{pattern}}"
+            - "{{path}}"
+          input-schema:
+            type: object
+            required:
+              - pattern
+              - path
+            properties:
+              pattern:
+                type: string
+              path:
+                type: string
+          output:
+            format: text
+            source: stdout
+        - name: list_files
+          description: List searchable files under a path.
+          args:
+            - --files
+            - "{{path}}"
+          input-schema:
+            type: object
+            required:
+              - path
+            properties:
+              path:
+                type: string
+          output:
+            format: text
+            source: stdout
+    - name: find
+      executable: find
+      description: Traverse directory trees and select paths by predicates.
+      surface:
+        global-flags:
+          - name: -name
+            description: Match a filename pattern.
+          - name: -type
+            description: Restrict matches to a filesystem entry type.
+          - name: -maxdepth
+            description: Limit traversal depth.
+      operations:
+        - name: by_name
+          description: Find paths under a root that match a filename pattern.
+          args:
+            - "{{root}}"
+            - -name
+            - "{{name_pattern}}"
+            - -print
+          input-schema:
+            type: object
+            required:
+              - root
+              - name_pattern
+            properties:
+              root:
+                type: string
+              name_pattern:
+                type: string
+          output:
+            format: text
+            source: stdout
+        - name: files_by_name
+          description: Find files under a root that match a filename pattern.
+          args:
+            - "{{root}}"
+            - -type
+            - f
+            - -name
+            - "{{name_pattern}}"
+            - -print
+          input-schema:
+            type: object
+            required:
+              - root
+              - name_pattern
+            properties:
+              root:
+                type: string
+              name_pattern:
+                type: string
+          output:
+            format: text
+            source: stdout
+    - name: grep
+      executable: grep
+      description: Search text files for matching lines.
+      surface:
+        global-flags:
+          - name: -R
+            description: Search directories recursively.
+          - name: -n
+            description: Prefix matching lines with line numbers.
+          - name: -i
+            description: Ignore case.
+      operations:
+        - name: recursive_search
+          description: Recursively search a path and return matching lines.
+          args:
+            - -R
+            - -n
+            - "{{pattern}}"
+            - "{{path}}"
+          input-schema:
+            type: object
+            required:
+              - pattern
+              - path
+            properties:
+              pattern:
+                type: string
+              path:
+                type: string
+          output:
+            format: text
+            source: stdout
+    - name: tar
+      executable: tar
+      description: Create, list, and extract tar archives.
+      surface:
+        global-flags:
+          - name: -t
+            description: List archive contents.
+          - name: -c
+            description: Create an archive.
+          - name: -f
+            description: Use the following archive file path.
+      operations:
+        - name: list_archive
+          description: List the contents of a tar archive.
+          args:
+            - -tf
+            - "{{archive_path}}"
+          input-schema:
+            type: object
+            required:
+              - archive_path
+            properties:
+              archive_path:
+                type: string
+          output:
+            format: text
+            source: stdout
+        - name: create_archive
+          description: Create a tar archive from selected source paths.
+          args:
+            - -cf
+            - "{{archive_path}}"
+            - "{{sources}}"
+          input-schema:
+            type: object
+            required:
+              - archive_path
+              - sources
+            properties:
+              archive_path:
+                type: string
+              sources:
+                type: array
+                items:
+                  type: string
+          output:
+            format: text
+            source: stderr
+    - name: du
+      executable: du
+      description: Summarize filesystem space used by paths.
+      surface:
+        global-flags:
+          - name: -s
+            description: Report only a total for each argument.
+          - name: -k
+            description: Report sizes in kibibytes.
+          - name: -h
+            description: Report human-readable sizes.
+      operations:
+        - name: summarize_path
+          description: Report total disk usage for one path in kibibytes.
+          args:
+            - -sk
+            - "{{path}}"
+          input-schema:
+            type: object
+            required:
+              - path
+            properties:
+              path:
+                type: string
+          output:
+            format: text
+            source: stdout
+    - name: df
+      executable: df
+      description: Report filesystem disk space usage.
+      surface:
+        global-flags:
+          - name: -P
+            description: Use portable POSIX output format.
+          - name: -h
+            description: Report human-readable sizes.
+      operations:
+        - name: filesystem_usage
+          description: Report filesystem usage for one path in portable format.
+          args:
+            - -P
+            - "{{path}}"
+          input-schema:
+            type: object
+            required:
+              - path
+            properties:
+              path:
+                type: string
+          output:
+            format: text
+            source: stdout
+    - name: ps
+      executable: ps
+      description: Report current process information.
+      surface:
+        global-flags:
+          - name: -e
+            description: Select all processes.
+          - name: -o
+            description: Select output columns.
+      operations:
+        - name: list_processes
+          description: List processes with pid, parent pid, state, command, and arguments.
+          args:
+            - -eo
+            - pid,ppid,stat,comm,args
+          input-schema:
+            type: object
+          output:
+            format: text
+            source: stdout
+    - name: netstat
+      executable: netstat
+      description: Show network connections, routing tables, and interface statistics.
+      surface:
+        global-flags:
+          - name: -t
+            description: Show TCP sockets.
+          - name: -u
+            description: Show UDP sockets.
+          - name: -l
+            description: Show listening sockets.
+          - name: -n
+            description: Show numeric addresses and ports.
+      operations:
+        - name: listening_ports
+          description: List listening TCP and UDP sockets with numeric addresses.
+          args:
+            - -tuln
+          input-schema:
+            type: object
+          output:
+            format: text
+            source: stdout
+validations:
+  - id: curl_http_get_mocked
+    label: curl HTTP GET
+    mode: mocked
+    target:
+      type: command-operation
+      command: curl
+      operation: http_get
+    input:
+      url: http://127.0.0.1:8080/health
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ok
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: ok
+  - id: curl_download_file_mocked
+    label: curl download file
+    mode: mocked
+    target:
+      type: command-operation
+      command: curl
+      operation: download_file
+    input:
+      url: http://127.0.0.1:8080/report.txt
+      output_path: report.txt
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stderr: downloaded report.txt
+    expected:
+      status: succeeded
+    assertions:
+      - type: stderr-contains
+        contains: report.txt
+  - id: jq_query_file_mocked
+    label: jq query file
+    mode: mocked
+    target:
+      type: command-operation
+      command: jq
+      operation: query_file
+    input:
+      filter: .status
+      input_path: response.json
+    fixtures:
+      files:
+        - path: response.json
+          content: '{"status":"ok"}'
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: '"ok"'
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: ok
+  - id: jq_validate_file_mocked
+    label: jq validate file
+    mode: mocked
+    target:
+      type: command-operation
+      command: jq
+      operation: validate_file
+    input:
+      input_path: response.json
+    fixtures:
+      files:
+        - path: response.json
+          content: '{"status":"ok"}'
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: valid
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: valid
+  - id: rg_search_text_mocked
+    label: ripgrep search text
+    mode: mocked
+    target:
+      type: command-operation
+      command: rg
+      operation: search_text
+    input:
+      pattern: TODO
+      path: .
+    fixtures:
+      files:
+        - path: notes.txt
+          content: TODO write docs
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: notes.txt:1:1:TODO write docs
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: TODO
+  - id: rg_list_files_mocked
+    label: ripgrep list files
+    mode: mocked
+    target:
+      type: command-operation
+      command: rg
+      operation: list_files
+    input:
+      path: .
+    fixtures:
+      files:
+        - path: notes.txt
+          content: searchable
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: notes.txt
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: notes.txt
+  - id: find_by_name_mocked
+    label: find by name
+    mode: mocked
+    target:
+      type: command-operation
+      command: find
+      operation: by_name
+    input:
+      root: .
+      name_pattern: README.md
+    fixtures:
+      files:
+        - path: README.md
+          content: "# Example"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ./README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: README.md
+  - id: find_files_by_name_mocked
+    label: find files by name
+    mode: mocked
+    target:
+      type: command-operation
+      command: find
+      operation: files_by_name
+    input:
+      root: .
+      name_pattern: "*.md"
+    fixtures:
+      files:
+        - path: README.md
+          content: "# Example"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ./README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: README.md
+  - id: grep_recursive_search_mocked
+    label: grep recursive search
+    mode: mocked
+    target:
+      type: command-operation
+      command: grep
+      operation: recursive_search
+    input:
+      pattern: needle
+      path: .
+    fixtures:
+      files:
+        - path: haystack.txt
+          content: needle
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ./haystack.txt:1:needle
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: needle
+  - id: tar_list_archive_mocked
+    label: tar list archive
+    mode: mocked
+    target:
+      type: command-operation
+      command: tar
+      operation: list_archive
+    input:
+      archive_path: bundle.tar
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: README.md
+  - id: tar_create_archive_mocked
+    label: tar create archive
+    mode: mocked
+    target:
+      type: command-operation
+      command: tar
+      operation: create_archive
+    input:
+      archive_path: bundle.tar
+      sources:
+        - README.md
+    fixtures:
+      files:
+        - path: README.md
+          content: "# Example"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stderr: created bundle.tar
+    expected:
+      status: succeeded
+    assertions:
+      - type: stderr-contains
+        contains: bundle.tar
+  - id: du_summarize_path_mocked
+    label: du summarize path
+    mode: mocked
+    target:
+      type: command-operation
+      command: du
+      operation: summarize_path
+    input:
+      path: .
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: "4\t."
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: .
+  - id: df_filesystem_usage_mocked
+    label: df filesystem usage
+    mode: mocked
+    target:
+      type: command-operation
+      command: df
+      operation: filesystem_usage
+    input:
+      path: .
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: Filesystem 1024-blocks Used Available Capacity Mounted on
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: Filesystem
+  - id: ps_list_processes_mocked
+    label: ps list processes
+    mode: mocked
+    target:
+      type: command-operation
+      command: ps
+      operation: list_processes
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: PID PPID STAT COMMAND COMMAND
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: PID
+  - id: netstat_listening_ports_mocked
+    label: netstat listening ports
+    mode: mocked
+    target:
+      type: command-operation
+      command: netstat
+      operation: listening_ports
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: tcp 0 0 127.0.0.1:8080 0.0.0.0:* LISTEN
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: LISTEN
+  - id: curl_http_get_agent_mocked
+    label: agent selects curl HTTP GET
+    mode: mocked
+    prompt: Fetch the health endpoint and return the response body.
+    target:
+      type: agent-tool-call
+      command: curl
+      operation: http_get
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: curl.http_get
+            parameters:
+              url: http://127.0.0.1:8080/health
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: curl.http_get
+  - id: curl_download_file_agent_mocked
+    label: agent selects curl download file
+    mode: mocked
+    prompt: Download a report URL into report.txt.
+    target:
+      type: agent-tool-call
+      command: curl
+      operation: download_file
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: curl.download_file
+            parameters:
+              url: http://127.0.0.1:8080/report.txt
+              output_path: report.txt
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: curl.download_file
+  - id: jq_query_file_agent_mocked
+    label: agent selects jq query file
+    mode: mocked
+    prompt: Read response.json and return the status field.
+    target:
+      type: agent-tool-call
+      command: jq
+      operation: query_file
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: jq.query_file
+            parameters:
+              filter: .status
+              input_path: response.json
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: jq.query_file
+  - id: jq_validate_file_agent_mocked
+    label: agent selects jq validate file
+    mode: mocked
+    prompt: Validate that response.json is parseable JSON.
+    target:
+      type: agent-tool-call
+      command: jq
+      operation: validate_file
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: jq.validate_file
+            parameters:
+              input_path: response.json
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: jq.validate_file
+  - id: rg_search_text_agent_mocked
+    label: agent selects ripgrep search text
+    mode: mocked
+    prompt: Search the current folder for TODO comments.
+    target:
+      type: agent-tool-call
+      command: rg
+      operation: search_text
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: rg.search_text
+            parameters:
+              pattern: TODO
+              path: .
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: rg.search_text
+  - id: rg_list_files_agent_mocked
+    label: agent selects ripgrep list files
+    mode: mocked
+    prompt: List searchable files in the current folder.
+    target:
+      type: agent-tool-call
+      command: rg
+      operation: list_files
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: rg.list_files
+            parameters:
+              path: .
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: rg.list_files
+  - id: find_by_name_agent_mocked
+    label: agent selects find by name
+    mode: mocked
+    prompt: Find README.md under the current folder.
+    target:
+      type: agent-tool-call
+      command: find
+      operation: by_name
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: find.by_name
+            parameters:
+              root: .
+              name_pattern: README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: find.by_name
+  - id: find_files_by_name_agent_mocked
+    label: agent selects find files by name
+    mode: mocked
+    prompt: Find Markdown files under the current folder.
+    target:
+      type: agent-tool-call
+      command: find
+      operation: files_by_name
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: find.files_by_name
+            parameters:
+              root: .
+              name_pattern: "*.md"
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: find.files_by_name
+  - id: grep_recursive_search_agent_mocked
+    label: agent selects grep recursive search
+    mode: mocked
+    prompt: Recursively search the current folder for needle.
+    target:
+      type: agent-tool-call
+      command: grep
+      operation: recursive_search
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: grep.recursive_search
+            parameters:
+              pattern: needle
+              path: .
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: grep.recursive_search
+  - id: tar_list_archive_agent_mocked
+    label: agent selects tar list archive
+    mode: mocked
+    prompt: List the contents of bundle.tar.
+    target:
+      type: agent-tool-call
+      command: tar
+      operation: list_archive
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: tar.list_archive
+            parameters:
+              archive_path: bundle.tar
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: tar.list_archive
+  - id: tar_create_archive_agent_mocked
+    label: agent selects tar create archive
+    mode: mocked
+    prompt: Create bundle.tar from README.md.
+    target:
+      type: agent-tool-call
+      command: tar
+      operation: create_archive
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: tar.create_archive
+            parameters:
+              archive_path: bundle.tar
+              sources:
+                - README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: tar.create_archive
+  - id: du_summarize_path_agent_mocked
+    label: agent selects du summarize path
+    mode: mocked
+    prompt: Summarize disk usage for the current folder.
+    target:
+      type: agent-tool-call
+      command: du
+      operation: summarize_path
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: du.summarize_path
+            parameters:
+              path: .
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: du.summarize_path
+  - id: df_filesystem_usage_agent_mocked
+    label: agent selects df filesystem usage
+    mode: mocked
+    prompt: Report filesystem usage for the current folder.
+    target:
+      type: agent-tool-call
+      command: df
+      operation: filesystem_usage
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: df.filesystem_usage
+            parameters:
+              path: .
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: df.filesystem_usage
+  - id: ps_list_processes_agent_mocked
+    label: agent selects ps list processes
+    mode: mocked
+    prompt: List process details.
+    target:
+      type: agent-tool-call
+      command: ps
+      operation: list_processes
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: ps.list_processes
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: ps.list_processes
+  - id: netstat_listening_ports_agent_mocked
+    label: agent selects netstat listening ports
+    mode: mocked
+    prompt: List listening TCP and UDP ports.
+    target:
+      type: agent-tool-call
+      command: netstat
+      operation: listening_ports
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: netstat.listening_ports
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: netstat.listening_ports
+  - id: curl_http_get_workflow_mocked
+    label: workflow invokes curl HTTP GET
+    mode: mocked
+    target:
+      type: workflow-node
+      command: curl
+      operation: http_get
+    input:
+      url: http://127.0.0.1:8080/health
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ok
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: ok
+  - id: curl_download_file_workflow_mocked
+    label: workflow invokes curl download file
+    mode: mocked
+    target:
+      type: workflow-node
+      command: curl
+      operation: download_file
+    input:
+      url: http://127.0.0.1:8080/report.txt
+      output_path: report.txt
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stderr: downloaded report.txt
+    expected:
+      status: succeeded
+    assertions:
+      - type: stderr-contains
+        contains: report.txt
+  - id: jq_query_file_workflow_mocked
+    label: workflow invokes jq query file
+    mode: mocked
+    target:
+      type: workflow-node
+      command: jq
+      operation: query_file
+    input:
+      filter: .status
+      input_path: response.json
+    fixtures:
+      files:
+        - path: response.json
+          content: '{"status":"ok"}'
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: '"ok"'
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: ok
+  - id: jq_validate_file_workflow_mocked
+    label: workflow invokes jq validate file
+    mode: mocked
+    target:
+      type: workflow-node
+      command: jq
+      operation: validate_file
+    input:
+      input_path: response.json
+    fixtures:
+      files:
+        - path: response.json
+          content: '{"status":"ok"}'
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: valid
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: valid
+  - id: rg_search_text_workflow_mocked
+    label: workflow invokes ripgrep search text
+    mode: mocked
+    target:
+      type: workflow-node
+      command: rg
+      operation: search_text
+    input:
+      pattern: TODO
+      path: .
+    fixtures:
+      files:
+        - path: notes.txt
+          content: TODO write docs
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: notes.txt:1:1:TODO write docs
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: TODO
+  - id: rg_list_files_workflow_mocked
+    label: workflow invokes ripgrep list files
+    mode: mocked
+    target:
+      type: workflow-node
+      command: rg
+      operation: list_files
+    input:
+      path: .
+    fixtures:
+      files:
+        - path: notes.txt
+          content: searchable
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: notes.txt
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: notes.txt
+  - id: find_by_name_workflow_mocked
+    label: workflow invokes find by name
+    mode: mocked
+    target:
+      type: workflow-node
+      command: find
+      operation: by_name
+    input:
+      root: .
+      name_pattern: README.md
+    fixtures:
+      files:
+        - path: README.md
+          content: "# Example"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ./README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: README.md
+  - id: find_files_by_name_workflow_mocked
+    label: workflow invokes find files by name
+    mode: mocked
+    target:
+      type: workflow-node
+      command: find
+      operation: files_by_name
+    input:
+      root: .
+      name_pattern: "*.md"
+    fixtures:
+      files:
+        - path: README.md
+          content: "# Example"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ./README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: README.md
+  - id: grep_recursive_search_workflow_mocked
+    label: workflow invokes grep recursive search
+    mode: mocked
+    target:
+      type: workflow-node
+      command: grep
+      operation: recursive_search
+    input:
+      pattern: needle
+      path: .
+    fixtures:
+      files:
+        - path: haystack.txt
+          content: needle
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: ./haystack.txt:1:needle
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: needle
+  - id: tar_list_archive_workflow_mocked
+    label: workflow invokes tar list archive
+    mode: mocked
+    target:
+      type: workflow-node
+      command: tar
+      operation: list_archive
+    input:
+      archive_path: bundle.tar
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: README.md
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: README.md
+  - id: tar_create_archive_workflow_mocked
+    label: workflow invokes tar create archive
+    mode: mocked
+    target:
+      type: workflow-node
+      command: tar
+      operation: create_archive
+    input:
+      archive_path: bundle.tar
+      sources:
+        - README.md
+    fixtures:
+      files:
+        - path: README.md
+          content: "# Example"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stderr: created bundle.tar
+    expected:
+      status: succeeded
+    assertions:
+      - type: stderr-contains
+        contains: bundle.tar
+  - id: du_summarize_path_workflow_mocked
+    label: workflow invokes du summarize path
+    mode: mocked
+    target:
+      type: workflow-node
+      command: du
+      operation: summarize_path
+    input:
+      path: .
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: "4\t."
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: .
+  - id: df_filesystem_usage_workflow_mocked
+    label: workflow invokes df filesystem usage
+    mode: mocked
+    target:
+      type: workflow-node
+      command: df
+      operation: filesystem_usage
+    input:
+      path: .
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: Filesystem 1024-blocks Used Available Capacity Mounted on
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: Filesystem
+  - id: ps_list_processes_workflow_mocked
+    label: workflow invokes ps list processes
+    mode: mocked
+    target:
+      type: workflow-node
+      command: ps
+      operation: list_processes
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: PID PPID STAT COMMAND COMMAND
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: PID
+  - id: netstat_listening_ports_workflow_mocked
+    label: workflow invokes netstat listening ports
+    mode: mocked
+    target:
+      type: workflow-node
+      command: netstat
+      operation: listening_ports
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: tcp 0 0 127.0.0.1:8080 0.0.0.0:* LISTEN
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: LISTEN

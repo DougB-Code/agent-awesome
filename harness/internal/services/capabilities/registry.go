@@ -148,7 +148,7 @@ func (b *registryBuilder) addAgent(agentCfg schema.Agent) {
 	})
 }
 
-// addTools records configured command, MCP, preset, and scenario capabilities.
+// addTools records configured command, MCP, preset, and validation capabilities.
 func (b *registryBuilder) addTools(tools *schema.Tools) {
 	if tools == nil {
 		return
@@ -156,7 +156,7 @@ func (b *registryBuilder) addTools(tools *schema.Tools) {
 	b.addCommands(tools.LocalExec)
 	b.addMCP(tools.MCP)
 	b.addPresets(tools.NodePresets)
-	b.addScenarios(tools.NodeScenarios)
+	b.addValidations(tools.Validations)
 }
 
 // addCommands records command template capabilities.
@@ -175,6 +175,12 @@ func (b *registryBuilder) addCommands(local schema.LocalExec) {
 		if strings.TrimSpace(command.Executable) == "" {
 			status = AvailabilityUnavailable
 			reasons = append(reasons, "command executable is missing")
+		}
+		if len(command.Operations) > 0 {
+			for _, operation := range command.Operations {
+				b.addCommandOperation(command, operation, status, reasons)
+			}
+			continue
 		}
 		usable := status == AvailabilityAvailable
 		b.add(Capability{
@@ -198,6 +204,48 @@ func (b *registryBuilder) addCommands(local schema.LocalExec) {
 			Availability: CapabilityAvailability{Status: status, Reasons: reasons},
 		})
 	}
+}
+
+// addCommandOperation records one deterministic workflow-callable CLI operation.
+func (b *registryBuilder) addCommandOperation(command schema.LocalExecCommand, operation schema.CommandOperation, status AvailabilityStatus, reasons []string) {
+	commandName := strings.TrimSpace(command.Name)
+	operationName := strings.TrimSpace(operation.Name)
+	if commandName == "" || operationName == "" {
+		return
+	}
+	templateID := commandName + "." + operationName
+	usable := status == AvailabilityAvailable
+	b.add(Capability{
+		ID:                commandID(templateID),
+		Kind:              KindCommand,
+		Name:              templateID,
+		Label:             templateID,
+		Description:       strings.TrimSpace(operation.Description),
+		UsableInChat:      usable,
+		UsableInWorkflows: usable,
+		Invocation: CapabilityInvocation{
+			DirectToolName:  "command_execute",
+			WorkflowAction:  "command.execute",
+			CommandTemplate: templateID,
+		},
+		Contract: CapabilityContract{
+			InputSchema:          cloneMap(operation.InputSchema),
+			OutputSchema:         cloneMap(operation.OutputSchema),
+			ConfirmationRequired: true,
+		},
+		Risk: CapabilityRisk{
+			Level:                "tool",
+			RequiresConfirmation: true,
+		},
+		Availability: CapabilityAvailability{
+			Status:  status,
+			Reasons: append([]string(nil), reasons...),
+		},
+		Metadata: map[string]any{
+			"command":   commandName,
+			"operation": operationName,
+		},
+	})
 }
 
 // addMCP records MCP server and explicitly allowed tool capabilities.
@@ -292,34 +340,35 @@ func (b *registryBuilder) addPresets(presets []schema.NodePreset) {
 	}
 }
 
-// addScenarios records node preset scenario capabilities.
-func (b *registryBuilder) addScenarios(scenarios []schema.NodeScenario) {
-	for _, scenario := range scenarios {
-		id := strings.TrimSpace(scenario.ID)
+// addValidations records portable tool-package validation capabilities.
+func (b *registryBuilder) addValidations(validations []schema.ToolValidation) {
+	for _, validation := range validations {
+		id := strings.TrimSpace(validation.ID)
 		if id == "" {
 			continue
 		}
 		status := AvailabilityAvailable
 		reasons := []string{}
-		if scenario.Live {
+		if strings.TrimSpace(validation.Mode) == "live" {
 			status = AvailabilityNeedsCheck
-			reasons = append(reasons, "live scenario needs an explicit lab run")
+			reasons = append(reasons, "live validation needs an explicit lab run")
 		}
 		b.add(Capability{
-			ID:                nodeScenarioID(id),
-			Kind:              KindNodeScenario,
+			ID:                toolValidationID(id),
+			Kind:              KindToolValidation,
 			Name:              id,
-			Label:             firstNonEmpty(scenario.Label, id),
-			Description:       strings.TrimSpace(scenario.Description),
+			Label:             firstNonEmpty(validation.Label, id),
+			Description:       strings.TrimSpace(validation.Description),
 			UsableInWorkflows: false,
 			Invocation: CapabilityInvocation{
-				NodePresetID:   strings.TrimSpace(scenario.PresetID),
-				NodeScenarioID: id,
+				NodePresetID:     strings.TrimSpace(validation.Target.PresetID),
+				ToolValidationID: id,
+				ValidationTarget: validationTargetMetadata(validation.Target),
 			},
 			Risk:         CapabilityRisk{Level: "test"},
 			Availability: CapabilityAvailability{Status: status, Reasons: reasons},
 			TestResults: []CapabilityTestResult{{
-				Type:   TestMockedScenario,
+				Type:   validationTestType(validation.Mode),
 				Status: string(status),
 			}},
 		})
@@ -544,9 +593,41 @@ func nodePresetID(id string) string {
 	return "node_preset:" + strings.TrimSpace(id)
 }
 
-// nodeScenarioID returns the stable node scenario capability id.
-func nodeScenarioID(id string) string {
-	return "node_scenario:" + strings.TrimSpace(id)
+// toolValidationID returns the stable tool validation capability id.
+func toolValidationID(id string) string {
+	return "tool_validation:" + strings.TrimSpace(id)
+}
+
+// validationTestType returns the registry test result type for one validation mode.
+func validationTestType(mode string) string {
+	if strings.TrimSpace(mode) == "live" {
+		return TestSafeSmoke
+	}
+	return TestMockedValidation
+}
+
+// validationTargetMetadata returns display-safe target metadata for a validation.
+func validationTargetMetadata(target schema.ToolValidationTarget) map[string]any {
+	out := map[string]any{}
+	if value := strings.TrimSpace(target.Type); value != "" {
+		out["type"] = value
+	}
+	if value := strings.TrimSpace(target.PresetID); value != "" {
+		out["preset_id"] = value
+	}
+	if value := strings.TrimSpace(target.Command); value != "" {
+		out["command"] = value
+	}
+	if value := strings.TrimSpace(target.Operation); value != "" {
+		out["operation"] = value
+	}
+	if value := strings.TrimSpace(target.MCPServer); value != "" {
+		out["mcp_server"] = value
+	}
+	if value := strings.TrimSpace(target.MCPTool); value != "" {
+		out["mcp_tool"] = value
+	}
+	return out
 }
 
 // serverHasEndpoint reports whether a server has static transport information.

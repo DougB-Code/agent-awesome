@@ -3,17 +3,36 @@ local-exec:
   enabled: true
   default-timeout: 10s
   default-max-output-bytes: 65536
-  allowed-workdirs:
-    - .
   commands:
-    - name: git_status
+    - name: git
       executable: git
-      description: Show repository status.
-      args:
-        - status
-        - --short
-      timeout: 5s
-      max-output-bytes: 16384
+      description: Run documented Git CLI subcommands.
+      surface:
+        global-flags:
+          - name: -C
+            description: Run as if Git started in the given path.
+        subcommands:
+          - name: status
+            description: Show working tree status.
+            flags:
+              - name: --short
+                description: Use short status output.
+              - name: --branch
+                description: Show branch and tracking information.
+          - name: log
+            description: Show commit logs.
+            flags:
+              - name: --oneline
+                description: Condense each commit to one line.
+              - name: --decorate
+                description: Show ref names for commits.
+          - name: diff
+            description: Show changes between commits, index, and worktree.
+            flags:
+              - name: --stat
+                description: Show a diffstat summary.
+              - name: --cached
+                description: Compare staged changes.
     - name: agent_browser_example_research
       executable: /usr/bin/env
       description: Run agent-browser against example.com only; pass a JSON batch command array in stdin to open pages, wait, snapshot, and extract text.
@@ -109,3 +128,1591 @@ memory:
     - public
     - internal
     - private
+validations:
+
+  - id: memory_remember_mcp_mocked
+    label: memory remember MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: remember
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: remember
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: remember
+  - id: memory_remember_agent_mocked
+    label: agent selects memory remember
+    mode: mocked
+    prompt: Use memory.remember.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: remember
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.remember
+          arguments:
+            server_id: memory
+            tool: remember
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: remember
+  - id: memory_remember_workflow_mocked
+    label: workflow invokes memory remember
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: remember
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: remember
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: remember
+  - id: memory_save_memory_candidate_mcp_mocked
+    label: memory save memory candidate MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: save_memory_candidate
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: save_memory_candidate
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: save_memory_candidate
+  - id: memory_save_memory_candidate_agent_mocked
+    label: agent selects memory save memory candidate
+    mode: mocked
+    prompt: Use memory.save_memory_candidate.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: save_memory_candidate
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.save_memory_candidate
+          arguments:
+            server_id: memory
+            tool: save_memory_candidate
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: save_memory_candidate
+  - id: memory_save_memory_candidate_workflow_mocked
+    label: workflow invokes memory save memory candidate
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: save_memory_candidate
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: save_memory_candidate
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: save_memory_candidate
+  - id: memory_search_memory_mcp_mocked
+    label: memory search memory MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_memory
+  - id: memory_search_memory_agent_mocked
+    label: agent selects memory search memory
+    mode: mocked
+    prompt: Use memory.search_memory.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.search_memory
+          arguments:
+            server_id: memory
+            tool: search_memory
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: search_memory
+  - id: memory_search_memory_workflow_mocked
+    label: workflow invokes memory search memory
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_memory
+  - id: memory_search_sources_mcp_mocked
+    label: memory search sources MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: search_sources
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_sources
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_sources
+  - id: memory_search_sources_agent_mocked
+    label: agent selects memory search sources
+    mode: mocked
+    prompt: Use memory.search_sources.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: search_sources
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.search_sources
+          arguments:
+            server_id: memory
+            tool: search_sources
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: search_sources
+  - id: memory_search_sources_workflow_mocked
+    label: workflow invokes memory search sources
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: search_sources
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_sources
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_sources
+  - id: memory_load_entity_page_mcp_mocked
+    label: memory load entity page MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: load_entity_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_entity_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_entity_page
+  - id: memory_load_entity_page_agent_mocked
+    label: agent selects memory load entity page
+    mode: mocked
+    prompt: Use memory.load_entity_page.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: load_entity_page
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.load_entity_page
+          arguments:
+            server_id: memory
+            tool: load_entity_page
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: load_entity_page
+  - id: memory_load_entity_page_workflow_mocked
+    label: workflow invokes memory load entity page
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: load_entity_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_entity_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_entity_page
+  - id: memory_load_timeline_mcp_mocked
+    label: memory load timeline MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: load_timeline
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_timeline
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_timeline
+  - id: memory_load_timeline_agent_mocked
+    label: agent selects memory load timeline
+    mode: mocked
+    prompt: Use memory.load_timeline.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: load_timeline
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.load_timeline
+          arguments:
+            server_id: memory
+            tool: load_timeline
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: load_timeline
+  - id: memory_load_timeline_workflow_mocked
+    label: workflow invokes memory load timeline
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: load_timeline
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_timeline
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_timeline
+  - id: memory_refresh_compiled_page_mcp_mocked
+    label: memory refresh compiled page MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: refresh_compiled_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: refresh_compiled_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: refresh_compiled_page
+  - id: memory_refresh_compiled_page_agent_mocked
+    label: agent selects memory refresh compiled page
+    mode: mocked
+    prompt: Use memory.refresh_compiled_page.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: refresh_compiled_page
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.refresh_compiled_page
+          arguments:
+            server_id: memory
+            tool: refresh_compiled_page
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: refresh_compiled_page
+  - id: memory_refresh_compiled_page_workflow_mocked
+    label: workflow invokes memory refresh compiled page
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: refresh_compiled_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: refresh_compiled_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: refresh_compiled_page
+  - id: memory_repair_memory_record_mcp_mocked
+    label: memory repair memory record MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: repair_memory_record
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: repair_memory_record
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: repair_memory_record
+  - id: memory_repair_memory_record_agent_mocked
+    label: agent selects memory repair memory record
+    mode: mocked
+    prompt: Use memory.repair_memory_record.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: repair_memory_record
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.repair_memory_record
+          arguments:
+            server_id: memory
+            tool: repair_memory_record
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: repair_memory_record
+  - id: memory_repair_memory_record_workflow_mocked
+    label: workflow invokes memory repair memory record
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: repair_memory_record
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: repair_memory_record
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: repair_memory_record
+  - id: memory_submit_memory_correction_mcp_mocked
+    label: memory submit memory correction MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: submit_memory_correction
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: submit_memory_correction
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: submit_memory_correction
+  - id: memory_submit_memory_correction_agent_mocked
+    label: agent selects memory submit memory correction
+    mode: mocked
+    prompt: Use memory.submit_memory_correction.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: submit_memory_correction
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.submit_memory_correction
+          arguments:
+            server_id: memory
+            tool: submit_memory_correction
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: submit_memory_correction
+  - id: memory_submit_memory_correction_workflow_mocked
+    label: workflow invokes memory submit memory correction
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: submit_memory_correction
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: submit_memory_correction
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: submit_memory_correction
+  - id: memory_query_context_graph_mcp_mocked
+    label: memory query context graph MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: query_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: query_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: query_context_graph
+  - id: memory_query_context_graph_agent_mocked
+    label: agent selects memory query context graph
+    mode: mocked
+    prompt: Use memory.query_context_graph.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: query_context_graph
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.query_context_graph
+          arguments:
+            server_id: memory
+            tool: query_context_graph
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: query_context_graph
+  - id: memory_query_context_graph_workflow_mocked
+    label: workflow invokes memory query context graph
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: query_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: query_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: query_context_graph
+  - id: memory_mutate_context_graph_mcp_mocked
+    label: memory mutate context graph MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: mutate_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: mutate_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: mutate_context_graph
+  - id: memory_mutate_context_graph_agent_mocked
+    label: agent selects memory mutate context graph
+    mode: mocked
+    prompt: Use memory.mutate_context_graph.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: mutate_context_graph
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.mutate_context_graph
+          arguments:
+            server_id: memory
+            tool: mutate_context_graph
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: mutate_context_graph
+  - id: memory_mutate_context_graph_workflow_mocked
+    label: workflow invokes memory mutate context graph
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: mutate_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: mutate_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: mutate_context_graph
+  - id: memory_create_task_mcp_mocked
+    label: memory create task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: create_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: create_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: create_task
+  - id: memory_create_task_agent_mocked
+    label: agent selects memory create task
+    mode: mocked
+    prompt: Use memory.create_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: create_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.create_task
+          arguments:
+            server_id: memory
+            tool: create_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: create_task
+  - id: memory_create_task_workflow_mocked
+    label: workflow invokes memory create task
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: create_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: create_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: create_task
+  - id: memory_get_task_mcp_mocked
+    label: memory get task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: get_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: get_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: get_task
+  - id: memory_get_task_agent_mocked
+    label: agent selects memory get task
+    mode: mocked
+    prompt: Use memory.get_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: get_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.get_task
+          arguments:
+            server_id: memory
+            tool: get_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: get_task
+  - id: memory_get_task_workflow_mocked
+    label: workflow invokes memory get task
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: get_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: get_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: get_task
+  - id: memory_list_tasks_mcp_mocked
+    label: memory list tasks MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: list_tasks
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_tasks
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_tasks
+  - id: memory_list_tasks_agent_mocked
+    label: agent selects memory list tasks
+    mode: mocked
+    prompt: Use memory.list_tasks.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: list_tasks
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.list_tasks
+          arguments:
+            server_id: memory
+            tool: list_tasks
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: list_tasks
+  - id: memory_list_tasks_workflow_mocked
+    label: workflow invokes memory list tasks
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: list_tasks
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_tasks
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_tasks
+  - id: memory_task_graph_projection_mcp_mocked
+    label: memory task graph projection MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: task_graph_projection
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: task_graph_projection
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: task_graph_projection
+  - id: memory_task_graph_projection_agent_mocked
+    label: agent selects memory task graph projection
+    mode: mocked
+    prompt: Use memory.task_graph_projection.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: task_graph_projection
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.task_graph_projection
+          arguments:
+            server_id: memory
+            tool: task_graph_projection
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: task_graph_projection
+  - id: memory_task_graph_projection_workflow_mocked
+    label: workflow invokes memory task graph projection
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: task_graph_projection
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: task_graph_projection
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: task_graph_projection
+  - id: memory_project_executive_summary_mcp_mocked
+    label: memory project executive summary MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: project_executive_summary
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: project_executive_summary
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: project_executive_summary
+  - id: memory_project_executive_summary_agent_mocked
+    label: agent selects memory project executive summary
+    mode: mocked
+    prompt: Use memory.project_executive_summary.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: project_executive_summary
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.project_executive_summary
+          arguments:
+            server_id: memory
+            tool: project_executive_summary
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: project_executive_summary
+  - id: memory_project_executive_summary_workflow_mocked
+    label: workflow invokes memory project executive summary
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: project_executive_summary
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: project_executive_summary
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: project_executive_summary
+  - id: memory_explain_executive_summary_item_mcp_mocked
+    label: memory explain executive summary item MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: explain_executive_summary_item
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: explain_executive_summary_item
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: explain_executive_summary_item
+  - id: memory_explain_executive_summary_item_agent_mocked
+    label: agent selects memory explain executive summary item
+    mode: mocked
+    prompt: Use memory.explain_executive_summary_item.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: explain_executive_summary_item
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.explain_executive_summary_item
+          arguments:
+            server_id: memory
+            tool: explain_executive_summary_item
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: explain_executive_summary_item
+  - id: memory_explain_executive_summary_item_workflow_mocked
+    label: workflow invokes memory explain executive summary item
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: explain_executive_summary_item
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: explain_executive_summary_item
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: explain_executive_summary_item
+  - id: memory_update_task_mcp_mocked
+    label: memory update task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: update_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: update_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: update_task
+  - id: memory_update_task_agent_mocked
+    label: agent selects memory update task
+    mode: mocked
+    prompt: Use memory.update_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: update_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.update_task
+          arguments:
+            server_id: memory
+            tool: update_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: update_task
+  - id: memory_update_task_workflow_mocked
+    label: workflow invokes memory update task
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: update_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: update_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: update_task
+  - id: memory_complete_task_mcp_mocked
+    label: memory complete task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: complete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: complete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: complete_task
+  - id: memory_complete_task_agent_mocked
+    label: agent selects memory complete task
+    mode: mocked
+    prompt: Use memory.complete_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: complete_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.complete_task
+          arguments:
+            server_id: memory
+            tool: complete_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: complete_task
+  - id: memory_complete_task_workflow_mocked
+    label: workflow invokes memory complete task
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: complete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: complete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: complete_task
+  - id: memory_cancel_task_mcp_mocked
+    label: memory cancel task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: cancel_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: cancel_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: cancel_task
+  - id: memory_cancel_task_agent_mocked
+    label: agent selects memory cancel task
+    mode: mocked
+    prompt: Use memory.cancel_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: cancel_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.cancel_task
+          arguments:
+            server_id: memory
+            tool: cancel_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: cancel_task
+  - id: memory_cancel_task_workflow_mocked
+    label: workflow invokes memory cancel task
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: cancel_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: cancel_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: cancel_task
+  - id: memory_delete_task_mcp_mocked
+    label: memory delete task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: delete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task
+  - id: memory_delete_task_agent_mocked
+    label: agent selects memory delete task
+    mode: mocked
+    prompt: Use memory.delete_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: delete_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.delete_task
+          arguments:
+            server_id: memory
+            tool: delete_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: delete_task
+  - id: memory_delete_task_workflow_mocked
+    label: workflow invokes memory delete task
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: delete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task
+  - id: memory_link_task_memory_mcp_mocked
+    label: memory link task memory MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: link_task_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: link_task_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: link_task_memory
+  - id: memory_link_task_memory_agent_mocked
+    label: agent selects memory link task memory
+    mode: mocked
+    prompt: Use memory.link_task_memory.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: link_task_memory
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.link_task_memory
+          arguments:
+            server_id: memory
+            tool: link_task_memory
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: link_task_memory
+  - id: memory_link_task_memory_workflow_mocked
+    label: workflow invokes memory link task memory
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: link_task_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: link_task_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: link_task_memory
+  - id: memory_list_task_relations_mcp_mocked
+    label: memory list task relations MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: list_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_task_relations
+  - id: memory_list_task_relations_agent_mocked
+    label: agent selects memory list task relations
+    mode: mocked
+    prompt: Use memory.list_task_relations.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: list_task_relations
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.list_task_relations
+          arguments:
+            server_id: memory
+            tool: list_task_relations
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: list_task_relations
+  - id: memory_list_task_relations_workflow_mocked
+    label: workflow invokes memory list task relations
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: list_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_task_relations
+  - id: memory_traverse_task_relations_mcp_mocked
+    label: memory traverse task relations MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: traverse_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: traverse_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: traverse_task_relations
+  - id: memory_traverse_task_relations_agent_mocked
+    label: agent selects memory traverse task relations
+    mode: mocked
+    prompt: Use memory.traverse_task_relations.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: traverse_task_relations
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.traverse_task_relations
+          arguments:
+            server_id: memory
+            tool: traverse_task_relations
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: traverse_task_relations
+  - id: memory_traverse_task_relations_workflow_mocked
+    label: workflow invokes memory traverse task relations
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: traverse_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: traverse_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: traverse_task_relations
+  - id: memory_upsert_task_relation_mcp_mocked
+    label: memory upsert task relation MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: upsert_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: upsert_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: upsert_task_relation
+  - id: memory_upsert_task_relation_agent_mocked
+    label: agent selects memory upsert task relation
+    mode: mocked
+    prompt: Use memory.upsert_task_relation.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: upsert_task_relation
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.upsert_task_relation
+          arguments:
+            server_id: memory
+            tool: upsert_task_relation
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: upsert_task_relation
+  - id: memory_upsert_task_relation_workflow_mocked
+    label: workflow invokes memory upsert task relation
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: upsert_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: upsert_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: upsert_task_relation
+  - id: memory_delete_task_relation_mcp_mocked
+    label: memory delete task relation MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: delete_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task_relation
+  - id: memory_delete_task_relation_agent_mocked
+    label: agent selects memory delete task relation
+    mode: mocked
+    prompt: Use memory.delete_task_relation.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: delete_task_relation
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.delete_task_relation
+          arguments:
+            server_id: memory
+            tool: delete_task_relation
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: delete_task_relation
+  - id: memory_delete_task_relation_workflow_mocked
+    label: workflow invokes memory delete task relation
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: delete_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task_relation

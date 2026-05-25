@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"agentawesome/internal/sessionstore"
 	"agentawesome/internal/tools/commandtools"
 	"agentawesome/internal/tools/toolsets"
+	adksession "google.golang.org/adk/session"
 	adktool "google.golang.org/adk/tool"
 )
 
@@ -237,6 +239,11 @@ func openCommandService(opts Options, toolsCfg *schema.Tools) (*commandservice.S
 	return service, nil
 }
 
+// OpenCommandServiceForTools creates the command boundary for a tool package.
+func OpenCommandServiceForTools(opts Options, toolsCfg *schema.Tools) (*commandservice.Service, error) {
+	return openCommandService(opts, toolsCfg)
+}
+
 // commandServiceTools creates direct ADK tools for configured command templates.
 func commandServiceTools(service *commandservice.Service) ([]adktool.Tool, error) {
 	if service == nil {
@@ -266,7 +273,7 @@ func commandServiceConfig(opts Options, toolsCfg *schema.Tools) (commandservice.
 	}, nil
 }
 
-// commandServiceTemplates merges JSON command templates with local-exec aliases.
+// commandServiceTemplates merges JSON command templates with local-exec commands.
 func commandServiceTemplates(opts Options, toolsCfg *schema.Tools) ([]commandservice.Template, error) {
 	templates, err := commandservice.ParseTemplatesJSON(opts.CommandTemplatesJSON)
 	if err != nil {
@@ -293,21 +300,179 @@ func localExecCommandTemplates(toolsCfg *schema.Tools) ([]commandservice.Templat
 	localExec := toolsCfg.LocalExec
 	templates := make([]commandservice.Template, 0, len(localExec.Commands))
 	for _, item := range localExec.Commands {
+		if len(item.Operations) > 0 {
+			operationTemplates, err := localExecOperationTemplates(localExec, item)
+			if err != nil {
+				return nil, err
+			}
+			templates = append(templates, operationTemplates...)
+			continue
+		}
 		timeout, err := localExecCommandTimeout(localExec, item)
 		if err != nil {
 			return nil, err
 		}
 		templates = append(templates, commandservice.Template{
-			ID:             strings.TrimSpace(item.Name),
-			Description:    strings.TrimSpace(item.Description),
-			Executable:     strings.TrimSpace(item.Executable),
-			Args:           append([]string(nil), item.Args...),
-			Env:            copyStringMap(item.Env),
-			Timeout:        timeout,
-			MaxOutputBytes: localExecCommandOutputLimit(localExec, item),
+			ID:              strings.TrimSpace(item.Name),
+			Description:     strings.TrimSpace(item.Description),
+			Executable:      strings.TrimSpace(item.Executable),
+			Args:            localExecCommandArgs(item),
+			Env:             copyStringMap(item.Env),
+			Timeout:         timeout,
+			MaxOutputBytes:  localExecCommandOutputLimit(localExec, item),
+			ParameterSchema: localExecCommandParameterSchema(item),
+			Surface:         localExecCommandSurface(item.Surface),
 		})
 	}
 	return templates, nil
+}
+
+// localExecOperationTemplates converts deterministic operations into templates.
+func localExecOperationTemplates(localExec schema.LocalExec, item schema.LocalExecCommand) ([]commandservice.Template, error) {
+	templates := make([]commandservice.Template, 0, len(item.Operations))
+	for _, operation := range item.Operations {
+		timeout, err := localExecOperationTimeout(localExec, item, operation)
+		if err != nil {
+			return nil, err
+		}
+		templates = append(templates, commandservice.Template{
+			ID:                     localExecOperationTemplateID(item, operation),
+			Description:            strings.TrimSpace(operation.Description),
+			Executable:             strings.TrimSpace(item.Executable),
+			Args:                   append([]string(nil), operation.Args...),
+			WorkingDir:             strings.TrimSpace(operation.WorkingDir),
+			Env:                    mergeStringMaps(item.Env, operation.Env),
+			Timeout:                timeout,
+			MaxOutputBytes:         localExecOperationOutputLimit(localExec, item, operation),
+			ParameterSchema:        localExecOperationParameterSchema(operation),
+			OutputContract:         localExecOperationOutputContract(operation.Output),
+			ParserID:               strings.TrimSpace(operation.ParserID),
+			OutputSource:           strings.TrimSpace(operation.OutputSource),
+			ArtifactGlobs:          append([]string(nil), operation.ArtifactGlobs...),
+			WorkingDirectoryPolicy: strings.TrimSpace(operation.WorkingDirPolicy),
+			ValidationSchema:       cloneAnyMap(operation.OutputSchema),
+			Surface:                localExecCommandSurface(item.Surface),
+			Annotations:            cloneAnyMap(operation.Annotations),
+		})
+	}
+	return templates, nil
+}
+
+// localExecOperationTemplateID returns the workflow-callable operation id.
+func localExecOperationTemplateID(command schema.LocalExecCommand, operation schema.CommandOperation) string {
+	return strings.TrimSpace(command.Name) + "." + strings.TrimSpace(operation.Name)
+}
+
+// localExecCommandArgs returns configured args or a generic CLI argument list.
+func localExecCommandArgs(command schema.LocalExecCommand) []string {
+	if len(command.Args) > 0 {
+		return append([]string(nil), command.Args...)
+	}
+	if hasCommandSurface(command.Surface) {
+		return []string{"{{args}}"}
+	}
+	return nil
+}
+
+// localExecOperationParameterSchema returns configured or inferred operation input.
+func localExecOperationParameterSchema(operation schema.CommandOperation) map[string]any {
+	if len(operation.InputSchema) > 0 {
+		return cloneAnyMap(operation.InputSchema)
+	}
+	return inferTemplateParameterSchema(operation.Args)
+}
+
+// localExecCommandParameterSchema returns the workflow parameter contract.
+func localExecCommandParameterSchema(command schema.LocalExecCommand) map[string]any {
+	if len(command.Args) > 0 || !hasCommandSurface(command.Surface) {
+		return nil
+	}
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"args": map[string]any{"type": "array"},
+		},
+		"required": []any{"args"},
+	}
+}
+
+// inferTemplateParameterSchema creates a string-object schema from placeholders.
+func inferTemplateParameterSchema(values []string) map[string]any {
+	names := templateParameterNames(values)
+	if len(names) == 0 {
+		return nil
+	}
+	properties := make(map[string]any, len(names))
+	required := make([]any, 0, len(names))
+	for _, name := range names {
+		properties[name] = map[string]any{"type": "string"}
+		required = append(required, name)
+	}
+	return map[string]any{
+		"type":       "object",
+		"properties": properties,
+		"required":   required,
+	}
+}
+
+// templateParameterNames extracts unique placeholders from argv template tokens.
+func templateParameterNames(values []string) []string {
+	seen := map[string]struct{}{}
+	names := []string{}
+	for _, value := range values {
+		for _, match := range commandTemplateParameterPattern.FindAllStringSubmatch(value, -1) {
+			if len(match) != 2 {
+				continue
+			}
+			name := strings.TrimSpace(match[1])
+			if name == "" {
+				continue
+			}
+			if _, ok := seen[name]; ok {
+				continue
+			}
+			seen[name] = struct{}{}
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+var commandTemplateParameterPattern = regexp.MustCompile(`\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}`)
+
+// hasCommandSurface reports whether a CLI has model-facing surface metadata.
+func hasCommandSurface(surface schema.CommandSurface) bool {
+	return len(surface.GlobalFlags) > 0 || len(surface.Subcommands) > 0
+}
+
+// localExecCommandSurface converts schema CLI documentation into command metadata.
+func localExecCommandSurface(surface schema.CommandSurface) commandservice.CommandSurface {
+	globalFlags := make([]commandservice.CommandFlag, 0, len(surface.GlobalFlags))
+	for _, flag := range surface.GlobalFlags {
+		globalFlags = append(globalFlags, commandservice.CommandFlag{
+			Name:        strings.TrimSpace(flag.Name),
+			Description: strings.TrimSpace(flag.Description),
+		})
+	}
+	subcommands := make([]commandservice.CommandSubcommand, 0, len(surface.Subcommands))
+	for _, subcommand := range surface.Subcommands {
+		flags := make([]commandservice.CommandFlag, 0, len(subcommand.Flags))
+		for _, flag := range subcommand.Flags {
+			flags = append(flags, commandservice.CommandFlag{
+				Name:        strings.TrimSpace(flag.Name),
+				Description: strings.TrimSpace(flag.Description),
+			})
+		}
+		subcommands = append(subcommands, commandservice.CommandSubcommand{
+			Name:        strings.TrimSpace(subcommand.Name),
+			Description: strings.TrimSpace(subcommand.Description),
+			Flags:       flags,
+		})
+	}
+	return commandservice.CommandSurface{
+		GlobalFlags: globalFlags,
+		Subcommands: subcommands,
+	}
 }
 
 // copyStringMap returns a detached copy of string metadata.
@@ -322,12 +487,55 @@ func copyStringMap(values map[string]string) map[string]string {
 	return next
 }
 
+// mergeStringMaps returns command env with operation-specific values overriding.
+func mergeStringMaps(base map[string]string, overrides map[string]string) map[string]string {
+	if len(base) == 0 && len(overrides) == 0 {
+		return nil
+	}
+	next := copyStringMap(base)
+	if next == nil {
+		next = map[string]string{}
+	}
+	for key, value := range overrides {
+		next[key] = value
+	}
+	return next
+}
+
+// cloneAnyMap returns a detached copy of generic schema metadata.
+func cloneAnyMap(values map[string]any) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	next := make(map[string]any, len(values))
+	for key, value := range values {
+		next[key] = value
+	}
+	return next
+}
+
+// localExecOperationOutputContract converts configured operation output parsing.
+func localExecOperationOutputContract(output schema.CommandOutput) commandservice.OutputContract {
+	return commandservice.OutputContract{
+		Format: strings.TrimSpace(output.Format),
+		Source: strings.TrimSpace(output.Source),
+	}
+}
+
 // localExecCommandTimeout returns the command-specific or local-exec default timeout.
 func localExecCommandTimeout(localExec schema.LocalExec, command schema.LocalExecCommand) (time.Duration, error) {
 	if strings.TrimSpace(command.Timeout) != "" {
 		return time.ParseDuration(strings.TrimSpace(command.Timeout))
 	}
 	return localExec.DefaultTimeoutDuration(), nil
+}
+
+// localExecOperationTimeout returns operation, command, or local-exec timeout.
+func localExecOperationTimeout(localExec schema.LocalExec, command schema.LocalExecCommand, operation schema.CommandOperation) (time.Duration, error) {
+	if strings.TrimSpace(operation.Timeout) != "" {
+		return time.ParseDuration(strings.TrimSpace(operation.Timeout))
+	}
+	return localExecCommandTimeout(localExec, command)
 }
 
 // localExecCommandOutputLimit returns the command-specific or local-exec default output limit.
@@ -338,12 +546,17 @@ func localExecCommandOutputLimit(localExec schema.LocalExec, command schema.Loca
 	return int64(localExec.DefaultOutputLimit())
 }
 
-// commandAllowedWorkdirs merges command-service roots with local-exec roots.
+// localExecOperationOutputLimit returns operation, command, or local-exec output limit.
+func localExecOperationOutputLimit(localExec schema.LocalExec, command schema.LocalExecCommand, operation schema.CommandOperation) int64 {
+	if operation.MaxOutputBytes > 0 {
+		return int64(operation.MaxOutputBytes)
+	}
+	return localExecCommandOutputLimit(localExec, command)
+}
+
+// commandAllowedWorkdirs returns command-service roots from runtime options.
 func commandAllowedWorkdirs(opts Options, toolsCfg *schema.Tools) []string {
 	roots := defaultedStrings(opts.CommandAllowedWorkdirs, []string{"."})
-	if localExecRuntimeEnabled(toolsCfg) {
-		roots = append(roots, toolsCfg.LocalExec.AllowedWorkdirs...)
-	}
 	return uniqueNonEmptyStrings(roots)
 }
 
@@ -369,6 +582,15 @@ func uniqueNonEmptyStrings(values []string) []string {
 // agent, attaches configured tools and toolsets, and returns the executable
 // runtime config.
 func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCfg schema.Agent, toolsCfg *schema.Tools, opts Options, commandService *commandservice.Service) (*runtime.Config, error) {
+	sessionService, err := sessionstore.Open(opts.SessionDatabase)
+	if err != nil {
+		return nil, err
+	}
+	return newRuntimeConfig(ctx, modelCfg, agentCfg, toolsCfg, opts, commandService, sessionService)
+}
+
+// newRuntimeConfig builds runtime wiring with a caller-owned session service.
+func newRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCfg schema.Agent, toolsCfg *schema.Tools, opts Options, commandService *commandservice.Service, sessionService adksession.Service) (*runtime.Config, error) {
 	modelFactory := model.NewFactory()
 	if err := modelFactory.ValidateConfig(modelCfg); err != nil {
 		return nil, err
@@ -410,9 +632,8 @@ func NewRuntimeConfig(ctx context.Context, modelCfg *schema.ModelConfig, agentCf
 	if err != nil {
 		return nil, err
 	}
-	sessionService, err := sessionstore.Open(opts.SessionDatabase)
-	if err != nil {
-		return nil, err
+	if sessionService == nil {
+		sessionService = adksession.InMemoryService()
 	}
 	runtimeConfig.SessionService = sessionService
 	if memoryEnabled {

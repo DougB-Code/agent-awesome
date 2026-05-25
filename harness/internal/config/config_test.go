@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 
 	"agentawesome/internal/config/schema"
@@ -29,6 +30,24 @@ func TestDefaultConfigPathsUseOSConfigDir(t *testing.T) {
 	}
 	if got, want := DefaultMCPConfigDir(), filepath.Join(configHome, "agent-awesome", "mcp"); got != want {
 		t.Fatalf("DefaultMCPConfigDir() = %q, want %q", got, want)
+	}
+}
+
+func TestExpandKnownEnvironmentPreservesWorkflowReferences(t *testing.T) {
+	t.Setenv("AA_TEST_ENDPOINT", "http://127.0.0.1:8095/mcp")
+
+	got := string(expandKnownEnvironment([]byte("endpoint: ${AA_TEST_ENDPOINT}\npath: ${workflow_input.path}\nshort: $AA_TEST_ENDPOINT\nmissing: $AA_UNKNOWN\n")))
+	if !strings.Contains(got, "endpoint: http://127.0.0.1:8095/mcp") {
+		t.Fatalf("expanded = %q, want known braced environment expanded", got)
+	}
+	if !strings.Contains(got, "path: ${workflow_input.path}") {
+		t.Fatalf("expanded = %q, want workflow reference preserved", got)
+	}
+	if !strings.Contains(got, "short: http://127.0.0.1:8095/mcp") {
+		t.Fatalf("expanded = %q, want known short environment expanded", got)
+	}
+	if !strings.Contains(got, "missing: $AA_UNKNOWN") {
+		t.Fatalf("expanded = %q, want unknown short environment preserved", got)
 	}
 }
 
@@ -241,6 +260,22 @@ func TestLoadAgentConfig(t *testing.T) {
 name: test_agent
 description: Test agent.
 instruction: Be helpful.
+validations:
+  - id: greets_user
+    label: Greets user
+    mode: mocked
+    prompt: Say hello.
+    input:
+      audience: tester
+    fixtures:
+      memory:
+        - content: User prefers short answers.
+    mocks:
+      agent.response:
+        text: Hello there.
+    assertions:
+      - type: response-contains
+        contains: Hello
 `)
 
 	agent, err := LoadAgent(path)
@@ -255,6 +290,126 @@ instruction: Be helpful.
 	}
 	if got, want := agent.Instruction, "Be helpful."; got != want {
 		t.Fatalf("agent.Instruction = %q, want %q", got, want)
+	}
+	if len(agent.Validations) != 1 || agent.Validations[0].ID != "greets_user" {
+		t.Fatalf("agent.Validations = %#v, want greets_user validation", agent.Validations)
+	}
+	if got, want := agent.Validations[0].Input["audience"], "tester"; got != want {
+		t.Fatalf("agent.Validations[0].Input[audience] = %q, want %q", got, want)
+	}
+	if len(agent.Validations[0].Fixtures) != 1 {
+		t.Fatalf("agent.Validations[0].Fixtures = %#v, want memory fixture", agent.Validations[0].Fixtures)
+	}
+}
+
+func TestLoadAgentRejectsEmptyValidationAssertionExpectation(t *testing.T) {
+	path := writeTempFile(t, "agent.yaml", `
+name: test_agent
+instruction: Be helpful.
+validations:
+  - id: empty_assertion
+    mode: mocked
+    prompt: Say hello.
+    mocks:
+      agent.response:
+        text: Hello there.
+    assertions:
+      - type: response-contains
+`)
+
+	if _, err := LoadAgent(path); err == nil || !strings.Contains(err.Error(), "must set contains") {
+		t.Fatalf("LoadAgent() error = %v, want empty assertion expectation error", err)
+	}
+}
+
+func TestLoadAgentRejectsJSONPathAssertionWithoutExpectation(t *testing.T) {
+	path := writeTempFile(t, "agent.yaml", `
+name: test_agent
+instruction: Be helpful.
+validations:
+  - id: empty_json_path
+    mode: mocked
+    prompt: Say hello.
+    mocks:
+      agent.response:
+        text: Hello there.
+    assertions:
+      - type: json-path
+        path: response.text
+`)
+
+	if _, err := LoadAgent(path); err == nil || !strings.Contains(err.Error(), "must set contains, matches, or equals") {
+		t.Fatalf("LoadAgent() error = %v, want missing json-path expectation error", err)
+	}
+}
+
+func TestLoadAgentRejectsUnsupportedValidationExpected(t *testing.T) {
+	path := writeTempFile(t, "agent.yaml", `
+name: test_agent
+instruction: Be helpful.
+validations:
+  - id: typo_expected
+    mode: mocked
+    prompt: Say hello.
+    expected:
+      respones_contains: Hello
+    mocks:
+      agent.response:
+        text: Hello there.
+`)
+
+	if _, err := LoadAgent(path); err == nil || !strings.Contains(err.Error(), `expected "respones_contains" is unsupported`) {
+		t.Fatalf("LoadAgent() error = %v, want unsupported expected key error", err)
+	}
+}
+
+func TestLoadAgentRejectsEmptyValidationExpected(t *testing.T) {
+	path := writeTempFile(t, "agent.yaml", `
+name: test_agent
+instruction: Be helpful.
+validations:
+  - id: empty_expected
+    mode: mocked
+    prompt: Search.
+    expected:
+      tool_call: ""
+    mocks:
+      agent.response:
+        tool_calls:
+          - id: command:rg.search_text
+`)
+
+	if _, err := LoadAgent(path); err == nil || !strings.Contains(err.Error(), "expected tool_call must not be empty") {
+		t.Fatalf("LoadAgent() error = %v, want empty expected value error", err)
+	}
+}
+
+func TestLoadToolsRejectsEmptyValidationAssertionExpectation(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: cat
+      executable: cat
+      description: Read files.
+      operations:
+        - name: read
+          description: Read one file.
+          args:
+            - "{{path}}"
+validations:
+  - id: empty_stdout_assertion
+    mode: mocked
+    target:
+      type: command-operation
+      command: cat
+      operation: read
+    assertions:
+      - type: stdout-contains
+`)
+
+	if _, err := LoadTools(path, true); err == nil || !strings.Contains(err.Error(), "must set contains") {
+		t.Fatalf("LoadTools() error = %v, want empty assertion expectation error", err)
 	}
 }
 
@@ -335,6 +490,39 @@ mcp:
 	}
 }
 
+func TestLoadToolPackageSkipsSiblingMCPPackageConfigs(t *testing.T) {
+	root := t.TempDir()
+	toolPath := filepath.Join(root, "tools", "curl", "tool.yaml")
+	mcpPath := filepath.Join(root, "mcp", "memory", "mcp.yaml")
+	if err := os.MkdirAll(filepath.Dir(toolPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(tool package) error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(mcpPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(mcp package) error = %v", err)
+	}
+	writeFile(t, toolPath, `
+name: curl
+local-exec:
+  enabled: false
+`)
+	writeFile(t, mcpPath, `
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+`)
+
+	cfg, err := LoadToolPackage(toolPath)
+	if err != nil {
+		t.Fatalf("LoadToolPackage() error = %v", err)
+	}
+	if cfg.MCP.Enabled || len(cfg.MCP.Servers) != 0 {
+		t.Fatalf("MCP = %#v, want package-only tool config", cfg.MCP)
+	}
+}
+
 func TestLoadToolsExplicitMissingFails(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing-tool.yaml")
 	if _, err := LoadTools(path, true); err == nil {
@@ -348,17 +536,20 @@ local-exec:
   enabled: true
   default-timeout: 10s
   default-max-output-bytes: 1024
-  allowed-workdirs:
-    - .
   commands:
-    - name: git_status
+    - name: git
       executable: git
-      description: Show repository status.
-      args:
-        - status
-        - --short
-      timeout: 2s
-      max-output-bytes: 2048
+      description: Run documented Git CLI subcommands.
+      surface:
+        global-flags:
+          - name: -C
+            description: Run as if Git started in the given path.
+        subcommands:
+          - name: status
+            description: Show working tree status.
+            flags:
+              - name: --short
+                description: Use short status output.
 `)
 
 	cfg, err := LoadTools(path, true)
@@ -374,14 +565,43 @@ local-exec:
 	if got, want := cfg.LocalExec.DefaultOutputLimit(), 1024; got != want {
 		t.Fatalf("DefaultOutputLimit() = %d, want %d", got, want)
 	}
-	if len(cfg.LocalExec.Commands) != 1 || cfg.LocalExec.Commands[0].Name != "git_status" {
-		t.Fatalf("Commands = %#v, want git_status", cfg.LocalExec.Commands)
+	if len(cfg.LocalExec.Commands) != 1 || cfg.LocalExec.Commands[0].Name != "git" {
+		t.Fatalf("Commands = %#v, want git", cfg.LocalExec.Commands)
 	}
-	if got, want := cfg.LocalExec.Commands[0].Timeout, "2s"; got != want {
-		t.Fatalf("command Timeout = %q, want %q", got, want)
+	if got, want := cfg.LocalExec.Commands[0].Surface.Subcommands[0].Name, "status"; got != want {
+		t.Fatalf("command subcommand = %q, want %q", got, want)
 	}
-	if got, want := cfg.LocalExec.Commands[0].MaxOutputBytes, 2048; got != want {
-		t.Fatalf("command MaxOutputBytes = %d, want %d", got, want)
+	if got, want := cfg.LocalExec.Commands[0].Surface.Subcommands[0].Flags[0].Name, "--short"; got != want {
+		t.Fatalf("command subcommand flag = %q, want %q", got, want)
+	}
+}
+
+func TestLoadToolsAcceptsTimestampInstallCheck(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: curl
+      executable: curl
+      description: Transfer data with URLs.
+      installation:
+        verified: true
+        checked-at: 2026-05-25T12:00:00Z
+        executable: curl
+        path: /usr/bin/curl
+        version: curl 8.0.0
+`)
+
+	cfg, err := LoadToolPackage(path)
+	if err != nil {
+		t.Fatalf("LoadToolPackage() error = %v", err)
+	}
+	installation := cfg.LocalExec.Commands[0].Installation
+	if !installation.Verified {
+		t.Fatalf("Installation.Verified = false, want true")
+	}
+	if got, want := installation.CheckedAt, "2026-05-25T12:00:00Z"; got != want {
+		t.Fatalf("Installation.CheckedAt = %q, want %q", got, want)
 	}
 }
 
@@ -516,6 +736,39 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 				t.Fatalf("mutate_context_graph is allowed without confirmation")
 			}
 		})
+	}
+}
+
+// TestStaticLinuxToolsExposeOperations verifies the shipped Linux tool package
+// uses deterministic workflow-callable operations.
+func TestStaticLinuxToolsExposeOperations(t *testing.T) {
+	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.yaml"), true)
+	if err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+	if got, want := strings.TrimSpace(cfg.Name), "Linux Tools"; got != want {
+		t.Fatalf("Tools.Name = %q, want %q", got, want)
+	}
+	if got, want := len(cfg.LocalExec.Commands), 10; got != want {
+		t.Fatalf("len(LocalExec.Commands) = %d, want %d", got, want)
+	}
+	if got, want := len(cfg.Validations), 45; got != want {
+		t.Fatalf("len(Validations) = %d, want %d", got, want)
+	}
+	for _, command := range cfg.LocalExec.Commands {
+		if len(command.Operations) == 0 {
+			t.Fatalf("command %q has no deterministic operations", command.Name)
+		}
+	}
+	for _, validation := range cfg.Validations {
+		switch validation.Target.Type {
+		case "command-operation", "agent-tool-call", "workflow-node":
+			if validation.Target.Command == "" || validation.Target.Operation == "" {
+				t.Fatalf("validation target = %#v, want command operation target", validation.Target)
+			}
+		default:
+			t.Fatalf("validation target = %#v, want command or agent-call operation", validation.Target)
+		}
 	}
 }
 
@@ -797,7 +1050,7 @@ local-exec:
   enabled: true
   default-timeout: forever
   commands:
-    - name: git_status
+    - name: git
       executable: git
       description: Show status.
 `)
@@ -812,7 +1065,7 @@ func TestLoadToolsRejectsInvalidCommandDuration(t *testing.T) {
 local-exec:
   enabled: true
   commands:
-    - name: git_status
+    - name: git
       executable: git
       description: Show status.
       timeout: forever
@@ -828,7 +1081,7 @@ func TestLoadToolsRejectsNegativeCommandMaxOutputBytes(t *testing.T) {
 local-exec:
   enabled: true
   commands:
-    - name: git_status
+    - name: git
       executable: git
       description: Show status.
       max-output-bytes: -1
@@ -845,7 +1098,7 @@ local-exec:
   enabled: true
   workdir: .
   commands:
-    - name: git_status
+    - name: git
       executable: git
       description: Show status.
 `)
@@ -855,34 +1108,281 @@ local-exec:
 	}
 }
 
-func TestLoadToolsRejectsEmptyAllowedWorkdir(t *testing.T) {
-	path := writeTempFile(t, "tool.yaml", `
-local-exec:
-  enabled: true
-  allowed-workdirs:
-    - ""
-  commands:
-    - name: git_status
-      executable: git
-      description: Show status.
-`)
-
-	if _, err := LoadTools(path, true); err == nil {
-		t.Fatalf("LoadTools() error = nil, want empty allowed workdir error")
-	}
-}
-
 func TestLoadToolsRejectsMissingCommandFields(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:
   enabled: true
   commands:
-    - name: git_status
+    - name: git
       description: Show status.
 `)
 
 	if _, err := LoadTools(path, true); err == nil {
 		t.Fatalf("LoadTools() error = nil, want missing executable error")
+	}
+}
+
+func TestLoadToolsValidatesAgentToolCallCommandTarget(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+validations:
+  - id: agent_uses_rg
+    mode: mocked
+    prompt: Find TODO comments.
+    target:
+      type: agent-tool-call
+      command: rg
+      operation: search_text
+    mocks:
+      agent.tool_call:
+        status: succeeded
+`)
+
+	if _, err := LoadTools(path, true); err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+}
+
+func TestLoadToolsRejectsUnsupportedValidationExpectedKey(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+validations:
+  - id: typo_expected
+    mode: mocked
+    target:
+      type: command-operation
+      command: rg
+      operation: search_text
+    mocks:
+      command.execute:
+        status: succeeded
+    expected:
+      stauts: succeeded
+`)
+
+	if _, err := LoadTools(path, true); err == nil || !strings.Contains(err.Error(), `expected "stauts" is unsupported`) {
+		t.Fatalf("LoadTools() error = %v, want unsupported expected key", err)
+	}
+}
+
+func TestLoadToolsValidatesWorkflowNodeCommandTarget(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+validations:
+  - id: workflow_uses_rg
+    mode: mocked
+    target:
+      type: workflow-node
+      command: rg
+      operation: search_text
+    mocks:
+      command.execute:
+        status: succeeded
+`)
+
+	if _, err := LoadTools(path, true); err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+}
+
+func TestLoadToolsValidatesWorkflowNodeMCPTarget(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+mcp:
+  enabled: false
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      tools:
+        allow:
+          - search_memory
+validations:
+  - id: workflow_uses_memory
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+`)
+
+	if _, err := LoadTools(path, true); err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+}
+
+func TestLoadToolsRejectsMixedWorkflowNodeTargets(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+node-presets:
+  - id: rg_search
+    label: RG search
+    action: command.execute
+    arguments:
+      template_id: rg.search_text
+validations:
+  - id: mixed_workflow_target
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: rg_search
+      command: rg
+      operation: search_text
+    mocks:
+      command.execute:
+        status: succeeded
+`)
+
+	if _, err := LoadTools(path, true); err == nil || !strings.Contains(err.Error(), "must choose preset-id, command-operation, or mcp-tool") {
+		t.Fatalf("LoadTools() error = %v, want mixed workflow target error", err)
+	}
+}
+
+func TestLoadToolsRejectsUnknownCommandPresetTemplate(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+node-presets:
+  - id: rg_missing
+    label: RG missing
+    action: command.execute
+    arguments:
+      template_id: rg.missing
+`)
+
+	if _, err := LoadTools(path, true); err == nil || !strings.Contains(err.Error(), `node preset "rg_missing" references unknown command template "rg.missing"`) {
+		t.Fatalf("LoadTools() error = %v, want unknown command template error", err)
+	}
+}
+
+func TestLoadToolsAcceptsLegacyCommandPresetTemplate(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: go_build_all
+      executable: go
+      description: Build every package.
+      args:
+        - build
+        - ./...
+node-presets:
+  - id: go_build_all
+    label: Go build all
+    action: command.execute
+    arguments:
+      template_id: go_build_all
+`)
+
+	if _, err := LoadTools(path, true); err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+}
+
+func TestLoadToolsRejectsUnknownMCPPresetTool(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      tools:
+        allow:
+          - remember
+node-presets:
+  - id: memory_missing
+    label: Memory missing
+    action: mcp.call
+    arguments:
+      server_id: memory
+      tool: missing
+`)
+
+	if _, err := LoadTools(path, true); err == nil || !strings.Contains(err.Error(), `node preset "memory_missing" references unknown MCP tool "missing" on server "memory"`) {
+		t.Fatalf("LoadTools() error = %v, want unknown MCP tool error", err)
+	}
+}
+
+func TestLoadToolsRejectsUnknownAgentToolCallCommandTarget(t *testing.T) {
+	path := writeTempFile(t, "tool.yaml", `
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+validations:
+  - id: agent_uses_missing
+    mode: mocked
+    prompt: Find TODO comments.
+    target:
+      type: agent-tool-call
+      command: rg
+      operation: missing
+    mocks:
+      agent.tool_call:
+        status: succeeded
+`)
+
+	if _, err := LoadTools(path, true); err == nil || !strings.Contains(err.Error(), `unknown operation "missing"`) {
+		t.Fatalf("LoadTools() error = %v, want unknown operation", err)
 	}
 }
 
@@ -1053,6 +1553,20 @@ instruction: Be helpful.
 func TestLoadAgentRejectsMissingInstruction(t *testing.T) {
 	path := writeTempFile(t, "agent.yaml", `
 name: test_agent
+`)
+
+	if _, err := LoadAgent(path); err == nil {
+		t.Fatalf("LoadAgent() error = nil, want validation error")
+	}
+}
+
+func TestLoadAgentRejectsInvalidValidation(t *testing.T) {
+	path := writeTempFile(t, "agent.yaml", `
+name: test_agent
+instruction: Be helpful.
+validations:
+  - id: bad_validation
+    prompt: ""
 `)
 
 	if _, err := LoadAgent(path); err == nil {

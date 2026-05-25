@@ -62,6 +62,170 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     _notifyControllerListeners();
   }
 
+  /// Runs portable validations for one agent package through the harness CLI.
+  Future<AgentValidationResult> runAgentPackageValidations(
+    String agentPath, {
+    String validationId = '',
+    String mode = '',
+    bool live = false,
+    bool requireValidations = false,
+    bool requireAssertions = false,
+    bool requireToolCalls = false,
+    bool requireToolContracts = false,
+  }) async {
+    final harness = runtimeProfile?.harness;
+    final workingDirectory = harness?.workingDirectory.trim().isNotEmpty == true
+        ? harness!.workingDirectory
+        : '${config.workspaceRoot}/harness';
+    final packagePath = harness?.packagePath.trim().isNotEmpty == true
+        ? harness!.packagePath
+        : './cmd/agent-awesome';
+    final result = await processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'agent-validations-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'Agent validations',
+        executable: 'go',
+        arguments: buildAgentValidationCommandArguments(
+          packagePath: packagePath,
+          agentPath: agentPath,
+          validationId: validationId,
+          mode: mode,
+          live: live,
+          modelPath: harness?.modelConfigPath ?? '',
+          toolPath: harness?.toolConfigPath ?? '',
+          requireValidations: requireValidations,
+          requireAssertions: requireAssertions,
+          requireToolCalls: requireToolCalls,
+          requireToolContracts: requireToolContracts,
+        ),
+        workingDirectory: workingDirectory,
+        kind: ManagedProcessKind.oneShotCommand,
+        shutdownMode: ManagedProcessShutdownMode.processOnly,
+        timeout: live
+            ? const Duration(minutes: 10)
+            : const Duration(minutes: 2),
+        scope: 'agent-validations',
+      ),
+    );
+    return parseAgentValidationProcessResult(result);
+  }
+
+  /// Runs portable validations for one tool package through the harness CLI.
+  Future<ToolValidationSuiteResult> runToolPackageValidations(
+    String toolPath, {
+    String validationId = '',
+    List<String> validationIds = const <String>[],
+    String mode = '',
+    bool requireAssertions = false,
+    bool requireCoverage = false,
+    bool requireInputSchemas = false,
+  }) async {
+    final harness = runtimeProfile?.harness;
+    final workingDirectory = harness?.workingDirectory.trim().isNotEmpty == true
+        ? harness!.workingDirectory
+        : '${config.workspaceRoot}/harness';
+    final packagePath = harness?.packagePath.trim().isNotEmpty == true
+        ? harness!.packagePath
+        : './cmd/agent-awesome';
+    final result = await processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'tool-validations-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'Tool validations',
+        executable: 'go',
+        arguments: buildToolValidationCommandArguments(
+          packagePath: packagePath,
+          toolPath: toolPath,
+          validationId: validationId,
+          validationIds: validationIds,
+          mode: mode,
+          agentPath: harness?.agentConfigPath ?? '',
+          modelPath: harness?.modelConfigPath ?? '',
+          requireAssertions: requireAssertions,
+          requireCoverage: requireCoverage,
+          requireInputSchemas: requireInputSchemas,
+        ),
+        workingDirectory: workingDirectory,
+        kind: ManagedProcessKind.oneShotCommand,
+        shutdownMode: ManagedProcessShutdownMode.processOnly,
+        timeout: const Duration(minutes: 2),
+        scope: 'tool-validations',
+      ),
+    );
+    return parseToolValidationProcessResult(result);
+  }
+
+  /// Runs portable validations for a shared package library through the harness CLI.
+  Future<LibraryValidationResult> runPackageLibraryValidations({
+    String root = '.',
+    String agentPath = '',
+    String agentDir = 'agents',
+    String toolPath = '',
+    String toolDir = 'tools',
+    String mcpDir = 'mcp',
+    bool requireAgentValidations = false,
+    bool requireAgentAssertions = false,
+    bool requireAgentToolCalls = false,
+    bool requireAgentToolContracts = false,
+    bool requireToolInputSchemas = false,
+    bool requireToolCoverage = false,
+    bool requireToolAssertions = false,
+    bool liveAgents = false,
+    String agentMode = '',
+    String toolMode = '',
+    String runtimeAgentPath = '',
+  }) async {
+    final harness = runtimeProfile?.harness;
+    final agentDirectory = agentDir.trim();
+    final toolDirectory = toolDir.trim();
+    final mcpDirectory = mcpDir.trim();
+    final rootPath = root.trim().isEmpty ? '.' : root.trim();
+    final workingDirectory = harness?.workingDirectory.trim().isNotEmpty == true
+        ? harness!.workingDirectory
+        : '${config.workspaceRoot}/harness';
+    final packagePath = harness?.packagePath.trim().isNotEmpty == true
+        ? harness!.packagePath
+        : './cmd/agent-awesome';
+    final result = await processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'library-validations-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'Library validations',
+        executable: 'go',
+        arguments: buildLibraryValidationCommandArguments(
+          packagePath: packagePath,
+          rootPath: rootPath,
+          agentPath: agentPath,
+          agentDirectory: agentDirectory,
+          toolPath: toolPath,
+          toolDirectory: toolDirectory,
+          mcpDirectory: mcpDirectory,
+          liveAgents: liveAgents,
+          agentMode: agentMode,
+          toolMode: toolMode,
+          runtimeAgentPath: runtimeAgentPath.trim().isNotEmpty
+              ? runtimeAgentPath
+              : harness?.agentConfigPath ?? '',
+          modelPath: harness?.modelConfigPath ?? '',
+          runtimeToolPath: harness?.toolConfigPath ?? '',
+          requireAgentValidations: requireAgentValidations,
+          requireAgentAssertions: requireAgentAssertions,
+          requireAgentToolCalls: requireAgentToolCalls,
+          requireAgentToolContracts: requireAgentToolContracts,
+          requireToolInputSchemas: requireToolInputSchemas,
+          requireToolCoverage: requireToolCoverage,
+          requireToolAssertions: requireToolAssertions,
+        ),
+        workingDirectory: workingDirectory,
+        kind: ManagedProcessKind.oneShotCommand,
+        shutdownMode: ManagedProcessShutdownMode.processOnly,
+        timeout: liveAgents
+            ? const Duration(minutes: 10)
+            : const Duration(minutes: 2),
+        scope: 'library-validations',
+      ),
+    );
+    return parseLibraryValidationProcessResult(result);
+  }
+
   /// Creates a new runtime profile file copied from the active profile.
   Future<void> createRuntimeProfileFile() async {
     final profile = _activeRuntimeProfile();
@@ -813,6 +977,249 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     }
     return headers;
   }
+}
+
+/// Builds CLI arguments for one tool-package validation run.
+List<String> buildToolValidationCommandArguments({
+  required String packagePath,
+  required String toolPath,
+  String validationId = '',
+  List<String> validationIds = const <String>[],
+  String mode = '',
+  String agentPath = '',
+  String modelPath = '',
+  bool requireAssertions = false,
+  bool requireCoverage = false,
+  bool requireInputSchemas = false,
+}) {
+  final selectedValidationIds = <String>{
+    if (validationId.trim().isNotEmpty) validationId.trim(),
+    for (final id in validationIds)
+      if (id.trim().isNotEmpty) id.trim(),
+  };
+  return <String>[
+    'run',
+    packagePath,
+    'tools',
+    'validate',
+    '--tool',
+    toolPath,
+    if (_validationModeArgument(mode).isNotEmpty) ...<String>[
+      '--mode',
+      _validationModeArgument(mode),
+    ],
+    if (agentPath.trim().isNotEmpty) ...<String>['--agent', agentPath.trim()],
+    if (modelPath.trim().isNotEmpty) ...<String>['--model', modelPath.trim()],
+    for (final id in selectedValidationIds) ...<String>['--validation', id],
+    if (requireAssertions) '--require-assertions',
+    if (requireCoverage) '--require-coverage',
+    if (requireInputSchemas) '--require-input-schemas',
+    '--json',
+  ];
+}
+
+/// Builds CLI arguments for one agent-package validation run.
+List<String> buildAgentValidationCommandArguments({
+  required String packagePath,
+  required String agentPath,
+  String validationId = '',
+  String mode = '',
+  bool live = false,
+  String modelPath = '',
+  String toolPath = '',
+  bool requireValidations = false,
+  bool requireAssertions = false,
+  bool requireToolCalls = false,
+  bool requireToolContracts = false,
+}) {
+  return <String>[
+    'run',
+    packagePath,
+    'agents',
+    'validate',
+    '--agent',
+    agentPath,
+    if (_validationModeArgument(mode).isNotEmpty) ...<String>[
+      '--mode',
+      _validationModeArgument(mode),
+    ],
+    if (live) '--live',
+    if (live && modelPath.trim().isNotEmpty) ...<String>[
+      '--model',
+      modelPath.trim(),
+    ],
+    if ((live || requireToolContracts) &&
+        toolPath.trim().isNotEmpty) ...<String>['--tool', toolPath.trim()],
+    if (validationId.trim().isNotEmpty) ...<String>[
+      '--validation',
+      validationId.trim(),
+    ],
+    if (requireValidations) '--require-validations',
+    if (requireAssertions) '--require-assertions',
+    if (requireToolCalls) '--require-tool-calls',
+    if (requireToolContracts) '--require-tool-contracts',
+    '--json',
+  ];
+}
+
+/// Builds CLI arguments for one shared package-library validation run.
+List<String> buildLibraryValidationCommandArguments({
+  required String packagePath,
+  required String rootPath,
+  String agentPath = '',
+  required String agentDirectory,
+  String toolPath = '',
+  required String toolDirectory,
+  String mcpDirectory = 'mcp',
+  bool requireAgentValidations = false,
+  bool requireAgentAssertions = false,
+  bool requireAgentToolCalls = false,
+  bool requireAgentToolContracts = false,
+  bool requireToolInputSchemas = false,
+  bool requireToolCoverage = false,
+  bool requireToolAssertions = false,
+  bool liveAgents = false,
+  String agentMode = '',
+  String toolMode = '',
+  String runtimeAgentPath = '',
+  String modelPath = '',
+  String runtimeToolPath = '',
+}) {
+  return <String>[
+    'run',
+    packagePath,
+    'library',
+    'validate',
+    '--root',
+    rootPath,
+    if (agentPath.trim().isNotEmpty) ...<String>[
+      '--agent',
+      agentPath.trim(),
+    ] else if (agentDirectory.isNotEmpty) ...<String>[
+      '--agent-dir',
+      agentDirectory,
+    ] else ...<String>['--agent-dir', ''],
+    if (toolPath.trim().isNotEmpty) ...<String>[
+      '--tool',
+      toolPath.trim(),
+    ] else if (toolDirectory.isNotEmpty) ...<String>[
+      '--tool-dir',
+      toolDirectory,
+    ] else ...<String>['--tool-dir', ''],
+    if (toolPath.trim().isEmpty)
+      if (mcpDirectory.isNotEmpty) ...<String>[
+        '--mcp-dir',
+        mcpDirectory,
+      ] else ...<String>['--mcp-dir', ''],
+    if (_validationModeArgument(agentMode).isNotEmpty) ...<String>[
+      '--agent-mode',
+      _validationModeArgument(agentMode),
+    ],
+    if (_validationModeArgument(toolMode).isNotEmpty) ...<String>[
+      '--tool-mode',
+      _validationModeArgument(toolMode),
+    ],
+    if (liveAgents) '--live-agents',
+    if (_validationModeArgument(toolMode) == 'live' &&
+        runtimeAgentPath.trim().isNotEmpty) ...<String>[
+      '--runtime-agent',
+      runtimeAgentPath.trim(),
+    ],
+    if (liveAgents && modelPath.trim().isNotEmpty) ...<String>[
+      '--model',
+      modelPath.trim(),
+    ],
+    if (liveAgents && runtimeToolPath.trim().isNotEmpty) ...<String>[
+      '--runtime-tool',
+      runtimeToolPath.trim(),
+    ],
+    if (requireAgentValidations) '--require-agent-validations',
+    if (requireAgentAssertions) '--require-agent-assertions',
+    if (requireAgentToolCalls) '--require-agent-tool-calls',
+    if (requireAgentToolContracts) '--require-agent-tool-contracts',
+    if (requireToolInputSchemas) '--require-tool-input-schemas',
+    if (requireToolCoverage) '--require-tool-coverage',
+    if (requireToolAssertions) '--require-tool-assertions',
+    '--json',
+  ];
+}
+
+/// Normalizes optional validation mode filters for CLI command builders.
+String _validationModeArgument(String mode) {
+  final value = mode.trim().toLowerCase();
+  if (value == 'mocked' || value == 'live') {
+    return value;
+  }
+  return '';
+}
+
+/// Parses one agent validation process result from harness CLI JSON.
+AgentValidationResult parseAgentValidationProcessResult(
+  ManagedProcessResult result,
+) {
+  return _parseValidationProcessResult(
+    result,
+    failureLabel: 'Agent validation failed',
+    invalidJsonLabel: 'Agent validation returned invalid JSON',
+    parser: AgentValidationResult.fromJson,
+  );
+}
+
+/// Parses one tool validation process result from harness CLI JSON.
+ToolValidationSuiteResult parseToolValidationProcessResult(
+  ManagedProcessResult result,
+) {
+  return _parseValidationProcessResult(
+    result,
+    failureLabel: 'Tool validation failed',
+    invalidJsonLabel: 'Tool validation returned invalid JSON',
+    parser: ToolValidationSuiteResult.fromJson,
+  );
+}
+
+/// Parses one library validation process result from harness CLI JSON.
+LibraryValidationResult parseLibraryValidationProcessResult(
+  ManagedProcessResult result,
+) {
+  return _parseValidationProcessResult(
+    result,
+    failureLabel: 'Library validation failed',
+    invalidJsonLabel: 'Library validation returned invalid JSON',
+    parser: LibraryValidationResult.fromJson,
+  );
+}
+
+/// Parses validation JSON before interpreting nonzero process exits.
+T _parseValidationProcessResult<T>(
+  ManagedProcessResult result, {
+  required String failureLabel,
+  required String invalidJsonLabel,
+  required T Function(Map<String, dynamic> json) parser,
+}) {
+  if (result.timedOut) {
+    final detail = _validationProcessFailureDetail(result);
+    throw StateError(detail.isEmpty ? failureLabel : detail);
+  }
+  try {
+    final decoded = jsonDecode(result.stdout);
+    if (decoded is Map<String, dynamic>) {
+      return parser(decoded);
+    }
+  } catch (_) {
+    // Fall through to process-error reporting below.
+  }
+  if (result.exitCode != 0) {
+    final detail = _validationProcessFailureDetail(result);
+    throw StateError(detail.isEmpty ? failureLabel : detail);
+  }
+  throw StateError(invalidJsonLabel);
+}
+
+/// Returns stderr when available, otherwise stdout, for process errors.
+String _validationProcessFailureDetail(ManagedProcessResult result) {
+  return result.stderr.trim().isEmpty
+      ? result.stdout.trim()
+      : result.stderr.trim();
 }
 
 /// Returns a non-conflicting profile copy path in the profile directory.

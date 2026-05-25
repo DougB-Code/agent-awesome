@@ -1,6 +1,8 @@
 /// Tests structured harness tool config parsing and serialization.
 library;
 
+import 'dart:io';
+
 import 'package:agentawesome_ui/domain/tool_config.dart';
 import 'package:agentawesome_ui/domain/runtime_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,15 +15,26 @@ local-exec:
   enabled: true
   default-timeout: 10s
   default-max-output-bytes: 65536
-  allowed-workdirs:
-    - .
   commands:
-    - name: git_status
+    - name: git
       executable: git
-      description: Show repository status.
-      args:
-        - status
-        - --short
+      description: Run documented Git CLI subcommands.
+      installation:
+        verified: true
+        checked-at: 2026-05-25T12:00:00Z
+        executable: git
+        path: /usr/bin/git
+        version: git version 2.45.0
+      surface:
+        global-flags:
+          - name: -C
+            description: Run as if Git started in the given path.
+        subcommands:
+          - name: status
+            description: Show working tree status.
+            flags:
+              - name: --short
+                description: Use short status output.
 mcp:
   enabled: true
   servers:
@@ -43,21 +56,46 @@ node-presets:
     action: command.execute
     arguments:
       template_id: go_build_all
-node-scenarios:
+validations:
   - id: go_build_all_success
     label: Go build success
-    preset-id: go_build_all
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: go_build_all
     expected:
       status: succeeded
 ''');
 
     expect(document.localExec.enabled, isTrue);
     expect(document.localExec.defaultTimeout, '10s');
-    expect(document.localExec.commands.single.name, 'git_status');
-    expect(document.localExec.commands.single.args, <String>[
+    expect(document.localExec.commands.single.name, 'git');
+    expect(document.localExec.commands.single.installation.verified, isTrue);
+    expect(
+      document.localExec.commands.single.installation.path,
+      '/usr/bin/git',
+    );
+    expect(
+      document.localExec.commands.single.surface.globalFlags.single.name,
+      '-C',
+    );
+    expect(
+      document.localExec.commands.single.surface.subcommands.single.name,
       'status',
+    );
+    expect(
+      document
+          .localExec
+          .commands
+          .single
+          .surface
+          .subcommands
+          .single
+          .flags
+          .single
+          .name,
       '--short',
-    ]);
+    );
     expect(document.mcp.enabled, isTrue);
     expect(document.mcp.servers.single.name, 'memory');
     expect(document.mcp.servers.single.headersFromEnv, <String, String>{
@@ -72,7 +110,55 @@ node-scenarios:
       document.nodePresets.single.arguments['template_id'],
       'go_build_all',
     );
-    expect(document.nodeScenarios.single.presetId, 'go_build_all');
+    expect(document.validations.single.target.presetId, 'go_build_all');
+  });
+
+  test('parses shipped Linux utility operations for UI editing', () {
+    final file = File('${_repoRoot().path}/harness/tool.yaml');
+    final document = ToolConfigDocument.parse(file.readAsStringSync());
+    final commands = document.localExec.commands;
+    final names = commands.map((command) => command.name).toList();
+
+    expect(document.extra['name'], 'Linux Tools');
+    expect(names, <String>[
+      'curl',
+      'jq',
+      'rg',
+      'find',
+      'grep',
+      'tar',
+      'du',
+      'df',
+      'ps',
+      'netstat',
+    ]);
+    expect(commands, everyElement(isA<LocalExecCommandConfig>()));
+    expect(commands.every((command) => command.operations.isNotEmpty), isTrue);
+    expect(document.validations.length, 45);
+    expect(
+      document.validations.where(
+        (validation) => validation.target.type == 'command-operation',
+      ),
+      hasLength(15),
+    );
+    expect(
+      document.validations.where(
+        (validation) => validation.target.type == 'agent-tool-call',
+      ),
+      hasLength(15),
+    );
+    expect(
+      document.validations.where(
+        (validation) => validation.target.type == 'workflow-node',
+      ),
+      hasLength(15),
+    );
+    expect(
+      commands
+          .expand((command) => command.operations)
+          .map((operation) => operation.output.format),
+      everyElement('text'),
+    );
   });
 
   test('serializes tool settings without dropping configured fields', () {
@@ -80,13 +166,56 @@ node-scenarios:
       localExec: emptyToolConfigDocument().localExec.copyWith(
         enabled: true,
         defaultTimeout: '5s',
-        allowedWorkdirs: const <String>['.'],
         commands: <LocalExecCommandConfig>[
           newLocalExecCommandConfig(
-            name: 'git_status',
+            name: 'git',
             executable: 'git',
-            description: 'Show repository status.',
-          ).copyWith(args: const <String>['status', '--short']),
+            description: 'Run documented Git CLI subcommands.',
+          ).copyWith(
+            installation: const LocalExecInstallationConfig(
+              verified: true,
+              checkedAt: '2026-05-25T12:00:00Z',
+              executable: 'git',
+              path: '/usr/bin/git',
+              version: 'git version 2.45.0',
+              error: '',
+            ),
+            surface: const LocalExecCommandSurfaceConfig(
+              globalFlags: <LocalExecCommandFlagConfig>[
+                LocalExecCommandFlagConfig(
+                  name: '-C',
+                  description: 'Run as if Git started in the given path.',
+                ),
+              ],
+              subcommands: <LocalExecSubcommandConfig>[
+                LocalExecSubcommandConfig(
+                  name: 'status',
+                  description: 'Show working tree status.',
+                  flags: <LocalExecCommandFlagConfig>[
+                    LocalExecCommandFlagConfig(
+                      name: '--short',
+                      description: 'Use short status output.',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            operations: const <LocalExecOperationConfig>[
+              LocalExecOperationConfig(
+                name: 'status',
+                description: 'Read repository status.',
+                args: <String>['status', '--short'],
+                inputSchema: <String, dynamic>{},
+                output: LocalExecOperationOutputConfig(
+                  format: 'text',
+                  source: 'stdout',
+                ),
+                outputSchema: <String, dynamic>{},
+                timeout: '',
+                maxOutputBytes: 0,
+              ),
+            ],
+          ),
         ],
       ),
       mcp: McpToolConfig(
@@ -112,8 +241,18 @@ node-scenarios:
     expect(encoded, contains('local-exec:'));
     expect(encoded, isNot(contains('allow-persistent-approvals')));
     expect(encoded, contains('default-timeout: 5s'));
-    expect(encoded, contains('name: git_status'));
+    expect(encoded, contains('name: git'));
     expect(encoded, contains('executable: git'));
+    expect(encoded, contains('installation:'));
+    expect(encoded, contains('verified: true'));
+    expect(encoded, contains('checked-at: "2026-05-25T12:00:00Z"'));
+    expect(encoded, contains('path: /usr/bin/git'));
+    expect(encoded, contains('surface:'));
+    expect(encoded, contains('global-flags:'));
+    expect(encoded, contains('subcommands:'));
+    expect(encoded, contains('operations:'));
+    expect(encoded, contains('name: status'));
+    expect(encoded, contains('format: text'));
     expect(encoded, contains('mcp:'));
     expect(encoded, contains('endpoint: http://127.0.0.1:8090/mcp'));
     expect(encoded, contains('headers-from-env:'));
@@ -359,4 +498,250 @@ node-scenarios:
       'mcp server "memory" endpoint must be an absolute HTTP URL',
     );
   });
+
+  test('validates agent tool-call command targets', () {
+    final document = ToolConfigDocument.parse('''
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+validations:
+  - id: agent_uses_rg
+    mode: mocked
+    prompt: Find TODO comments.
+    target:
+      type: agent-tool-call
+      command: rg
+      operation: search_text
+    mocks:
+      agent.tool_call:
+        status: succeeded
+''');
+
+    expect(toolConfigValidationError(document), isEmpty);
+  });
+
+  test('validates workflow node command targets', () {
+    final document = ToolConfigDocument.parse('''
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+validations:
+  - id: workflow_uses_rg
+    mode: mocked
+    target:
+      type: workflow-node
+      command: rg
+      operation: search_text
+    mocks:
+      command.execute:
+        status: succeeded
+''');
+
+    expect(toolConfigValidationError(document), isEmpty);
+  });
+
+  test('validates workflow node mcp targets', () {
+    final document = ToolConfigDocument.parse('''
+mcp:
+  enabled: false
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      tools:
+        allow:
+          - search_memory
+validations:
+  - id: workflow_uses_memory
+    mode: mocked
+    target:
+      type: workflow-node
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+''');
+
+    expect(toolConfigValidationError(document), isEmpty);
+  });
+
+  test('rejects mixed workflow node targets', () {
+    final document = ToolConfigDocument.parse('''
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+node-presets:
+  - id: rg_search
+    label: RG search
+    action: command.execute
+    arguments:
+      template_id: rg.search_text
+validations:
+  - id: mixed_workflow_target
+    mode: mocked
+    target:
+      type: workflow-node
+      preset-id: rg_search
+      command: rg
+      operation: search_text
+    mocks:
+      command.execute:
+        status: succeeded
+''');
+
+    expect(
+      toolConfigValidationError(document),
+      'validation "mixed_workflow_target" workflow-node target must choose preset-id, command-operation, or mcp-tool',
+    );
+  });
+
+  test('rejects unknown command preset templates', () {
+    final document = ToolConfigDocument.parse('''
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+node-presets:
+  - id: rg_missing
+    label: RG missing
+    action: command.execute
+    arguments:
+      template_id: rg.missing
+''');
+
+    expect(
+      toolConfigValidationError(document),
+      'node preset "rg_missing" references unknown command template "rg.missing"',
+    );
+  });
+
+  test('accepts legacy command preset templates', () {
+    final document = ToolConfigDocument.parse('''
+local-exec:
+  enabled: true
+  commands:
+    - name: go_build_all
+      executable: go
+      description: Build every package.
+      args:
+        - build
+        - ./...
+node-presets:
+  - id: go_build_all
+    label: Go build all
+    action: command.execute
+    arguments:
+      template_id: go_build_all
+''');
+
+    expect(toolConfigValidationError(document), isEmpty);
+  });
+
+  test('rejects unknown mcp preset tools', () {
+    final document = ToolConfigDocument.parse('''
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      tools:
+        allow:
+          - remember
+node-presets:
+  - id: memory_missing
+    label: Memory missing
+    action: mcp.call
+    arguments:
+      server_id: memory
+      tool: missing
+''');
+
+    expect(
+      toolConfigValidationError(document),
+      'node preset "memory_missing" references unknown MCP tool "missing" on server "memory"',
+    );
+  });
+
+  test('rejects unknown agent tool-call command targets', () {
+    final document = ToolConfigDocument.parse('''
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search a path for text.
+          args:
+            - "{{pattern}}"
+            - "{{path}}"
+validations:
+  - id: agent_uses_missing
+    mode: mocked
+    prompt: Find TODO comments.
+    target:
+      type: agent-tool-call
+      command: rg
+      operation: missing
+    mocks:
+      agent.tool_call:
+        status: succeeded
+''');
+
+    expect(
+      toolConfigValidationError(document),
+      'validation "agent_uses_missing" references unknown operation "missing" on command "rg"',
+    );
+  });
+}
+
+/// Returns the repository root when tests run from either repo or ui.
+Directory _repoRoot() {
+  var current = Directory.current;
+  while (true) {
+    if (File('${current.path}/harness/tool.yaml').existsSync() &&
+        File('${current.path}/ui/pubspec.yaml').existsSync()) {
+      return current;
+    }
+    final parent = current.parent;
+    if (parent.path == current.path) {
+      throw StateError('repository root not found from ${Directory.current}');
+    }
+    current = parent;
+  }
 }

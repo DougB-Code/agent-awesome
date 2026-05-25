@@ -60,6 +60,8 @@ type Template struct {
 	EnvironmentPolicy      map[string]any    `json:"environment_policy,omitempty"`
 	WorkingDirectoryPolicy string            `json:"working_directory_policy,omitempty"`
 	ValidationSchema       map[string]any    `json:"validation_schema,omitempty"`
+	Surface                CommandSurface    `json:"surface,omitempty"`
+	Annotations            map[string]any    `json:"annotations,omitempty"`
 }
 
 // TemplateSummary describes a configured command template without secret-bearing fields.
@@ -76,6 +78,27 @@ type TemplateSummary struct {
 	ArtifactGlobs          []string       `json:"artifact_globs,omitempty"`
 	EnvironmentPolicy      map[string]any `json:"environment_policy,omitempty"`
 	WorkingDirectoryPolicy string         `json:"working_directory_policy,omitempty"`
+	Surface                CommandSurface `json:"surface,omitempty"`
+	Annotations            map[string]any `json:"annotations,omitempty"`
+}
+
+// CommandSurface documents the model-facing CLI command surface.
+type CommandSurface struct {
+	GlobalFlags []CommandFlag       `json:"global_flags,omitempty"`
+	Subcommands []CommandSubcommand `json:"subcommands,omitempty"`
+}
+
+// CommandFlag documents one supported CLI flag.
+type CommandFlag struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+// CommandSubcommand documents one supported CLI subcommand.
+type CommandSubcommand struct {
+	Name        string        `json:"name"`
+	Description string        `json:"description,omitempty"`
+	Flags       []CommandFlag `json:"flags,omitempty"`
 }
 
 // StatusResult stores observable command job state.
@@ -133,6 +156,9 @@ func Open(cfg Config) (*Service, error) {
 		if strings.TrimSpace(template.Executable) == "" {
 			return nil, fmt.Errorf("command template %q executable is required", id)
 		}
+		if _, exists := templates[id]; exists {
+			return nil, fmt.Errorf("command template %q is duplicated", id)
+		}
 		templates[id] = template
 	}
 	if err := os.MkdirAll(filepath.Join(normalized.DataDir, "jobs"), 0o700); err != nil {
@@ -184,6 +210,8 @@ func (s *Service) templateSummary(template Template) TemplateSummary {
 		ArtifactGlobs:          append([]string(nil), template.ArtifactGlobs...),
 		EnvironmentPolicy:      cloneMap(template.EnvironmentPolicy),
 		WorkingDirectoryPolicy: template.WorkingDirectoryPolicy,
+		Surface:                cloneCommandSurface(template.Surface),
+		Annotations:            cloneMap(template.Annotations),
 	}
 }
 
@@ -686,11 +714,43 @@ func cleanRoots(values []string) ([]string, error) {
 
 // renderStrings expands simple {{name}} placeholders in a string list.
 func renderStrings(values []string, params map[string]any) []string {
-	next := make([]string, len(values))
-	for index, value := range values {
-		next[index] = renderString(value, params)
+	next := make([]string, 0, len(values))
+	for _, value := range values {
+		if name, ok := wholeTemplateParameter(value); ok {
+			if expanded, ok := stringListParam(params[name]); ok {
+				next = append(next, expanded...)
+				continue
+			}
+		}
+		next = append(next, renderString(value, params))
 	}
 	return next
+}
+
+// wholeTemplateParameter returns the name when a value is exactly one placeholder.
+func wholeTemplateParameter(value string) (string, bool) {
+	trimmed := strings.TrimSpace(value)
+	matches := templateParameterPattern.FindStringSubmatch(trimmed)
+	if len(matches) != 2 || matches[0] != trimmed {
+		return "", false
+	}
+	return matches[1], true
+}
+
+// stringListParam converts a parameter value into command argument strings.
+func stringListParam(value any) ([]string, bool) {
+	switch typed := value.(type) {
+	case []string:
+		return append([]string(nil), typed...), true
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, item := range typed {
+			values = append(values, fmt.Sprint(item))
+		}
+		return values, true
+	default:
+		return nil, false
+	}
 }
 
 // renderStringMap expands simple {{name}} placeholders in a string map.
@@ -795,6 +855,21 @@ func templateParameters(template Template) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// cloneCommandSurface returns a detached copy of CLI surface documentation.
+func cloneCommandSurface(surface CommandSurface) CommandSurface {
+	globalFlags := make([]CommandFlag, len(surface.GlobalFlags))
+	copy(globalFlags, surface.GlobalFlags)
+	subcommands := make([]CommandSubcommand, len(surface.Subcommands))
+	for index, subcommand := range surface.Subcommands {
+		subcommands[index] = CommandSubcommand{
+			Name:        subcommand.Name,
+			Description: subcommand.Description,
+			Flags:       append([]CommandFlag(nil), subcommand.Flags...),
+		}
+	}
+	return CommandSurface{GlobalFlags: globalFlags, Subcommands: subcommands}
 }
 
 // firstNonEmpty returns the first non-empty string.

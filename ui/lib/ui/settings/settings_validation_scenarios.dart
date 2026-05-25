@@ -1,0 +1,858 @@
+/// Shared validation scenario table widgets for settings command panels.
+part of 'settings_panel.dart';
+
+const List<String> _settingsValidationRunModes = <String>[
+  'mocked',
+  'live',
+  'all',
+];
+
+/// SettingsValidationRunRequest describes one requested validation run.
+class SettingsValidationRunRequest {
+  /// Creates a validation run request for one or more scenario ids.
+  const SettingsValidationRunRequest({
+    required this.mode,
+    required this.validationIds,
+    this.allowEmpty = false,
+  });
+
+  /// Requested lane: mocked, live, or all.
+  final String mode;
+
+  /// Validation ids that should be sent to the runner.
+  final List<String> validationIds;
+
+  /// Whether an empty id list should run the package-level validation gate.
+  final bool allowEmpty;
+}
+
+/// SettingsValidationModeState stores status for one scenario lane.
+class SettingsValidationModeState {
+  /// Creates a mode lane result for a scenario row.
+  const SettingsValidationModeState({
+    required this.mode,
+    required this.validationIds,
+    required this.status,
+    this.configured = true,
+  });
+
+  /// Lane name, such as mocked or live.
+  final String mode;
+
+  /// Configured validation ids that belong to this lane.
+  final List<String> validationIds;
+
+  /// Latest runner status for this lane.
+  final String status;
+
+  /// Whether this lane is configured for the scenario.
+  final bool configured;
+}
+
+/// SettingsValidationScenario stores one reusable validation table row.
+class SettingsValidationScenario {
+  /// Creates a table row for one portable validation scenario.
+  const SettingsValidationScenario({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.modeStates,
+    required this.status,
+    required this.details,
+  });
+
+  /// Stable row id.
+  final String id;
+
+  /// Human-readable scenario label.
+  final String label;
+
+  /// Human-readable purpose or invocation surface.
+  final String description;
+
+  /// Mode lane states keyed by mode.
+  final Map<String, SettingsValidationModeState> modeStates;
+
+  /// Latest display status for the scenario.
+  final String status;
+
+  /// Optional expanded evidence widget.
+  final Widget? details;
+
+  /// Returns every configured validation id for this scenario.
+  List<String> get allValidationIds {
+    return <String>[
+      for (final state in modeStates.values) ...state.validationIds,
+    ];
+  }
+
+  /// Returns configured ids that can run for a requested mode.
+  List<String> validationIdsForMode(String mode) {
+    final normalized = _settingsValidationModeValue(mode);
+    if (normalized == 'all') {
+      return allValidationIds;
+    }
+    return modeStates[normalized]?.validationIds ?? const <String>[];
+  }
+
+  /// Reports whether the requested run mode has at least one configured id.
+  bool canRunMode(String mode) {
+    return validationIdsForMode(mode).isNotEmpty;
+  }
+}
+
+/// SettingsValidationScenarioTable renders reusable scenario validation rows.
+class SettingsValidationScenarioTable extends StatefulWidget {
+  /// Creates a reusable validation scenario table.
+  const SettingsValidationScenarioTable({
+    super.key,
+    required this.scenarios,
+    required this.selectedRunMode,
+    required this.runningMode,
+    required this.runningValidationIds,
+    required this.runningAll,
+    required this.onRunAll,
+    required this.onRunScenario,
+    required this.onDeleteScenario,
+    required this.onAddValidation,
+    this.liveAvailable = true,
+    this.extraActions = const <Widget>[],
+    this.emptyLabel = 'No validations configured',
+  });
+
+  /// Rows to render in the scenario table.
+  final List<SettingsValidationScenario> scenarios;
+
+  /// Last selected run lane.
+  final String selectedRunMode;
+
+  /// Lane currently running, when any.
+  final String runningMode;
+
+  /// Validation ids currently running.
+  final Set<String> runningValidationIds;
+
+  /// Whether the run-all action is currently active.
+  final bool runningAll;
+
+  /// Runs every visible scenario in the selected lane.
+  final ValueChanged<SettingsValidationRunRequest> onRunAll;
+
+  /// Runs one visible scenario in the selected lane.
+  final ValueChanged<SettingsValidationRunRequest> onRunScenario;
+
+  /// Deletes one scenario and its configured lanes.
+  final ValueChanged<SettingsValidationScenario> onDeleteScenario;
+
+  /// Adds default validations for the active verification target.
+  final VoidCallback? onAddValidation;
+
+  /// Whether live validations are available for the selected target.
+  final bool liveAvailable;
+
+  /// Additional compact actions shown with the scenario controls.
+  final List<Widget> extraActions;
+
+  /// Empty-state label for tables without scenarios.
+  final String emptyLabel;
+
+  /// Creates mutable expansion state for scenario evidence.
+  @override
+  State<SettingsValidationScenarioTable> createState() =>
+      _SettingsValidationScenarioTableState();
+}
+
+class _SettingsValidationScenarioTableState
+    extends State<SettingsValidationScenarioTable> {
+  final Set<String> _expanded = <String>{};
+
+  /// Builds the table and scenario controls.
+  @override
+  Widget build(BuildContext context) {
+    final anyRunning =
+        widget.runningAll || widget.runningValidationIds.isNotEmpty;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            SettingsValidationRunModeButton(
+              label: widget.runningAll ? 'Running' : 'Run all',
+              selectedMode: widget.selectedRunMode,
+              enabledModes: _enabledModesFor(widget.scenarios),
+              loading: widget.runningAll,
+              onRun: anyRunning ? null : _runAll,
+            ),
+            OutlinedButton.icon(
+              onPressed: anyRunning ? null : widget.onAddValidation,
+              icon: const Icon(Icons.add),
+              label: const Text('Add validation'),
+            ),
+            ...widget.extraActions,
+            if (anyRunning)
+              PanelBadge(
+                label:
+                    'Running ${_settingsValidationModeLabel(widget.runningMode)}',
+              ),
+          ],
+        ),
+        const SizedBox(height: SettingsFormMetrics.sectionGap),
+        if (widget.scenarios.isEmpty)
+          PanelEmptyBlock(label: widget.emptyLabel)
+        else
+          _buildTable(context),
+      ],
+    );
+  }
+
+  /// Builds the scenario table body.
+  Widget _buildTable(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const _SettingsValidationScenarioHeader(),
+        const SizedBox(height: 6),
+        for (var index = 0; index < widget.scenarios.length; index++)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: index == widget.scenarios.length - 1 ? 0 : 6,
+            ),
+            child: _SettingsValidationScenarioRow(
+              scenario: widget.scenarios[index],
+              expanded: _expanded.contains(widget.scenarios[index].id),
+              selectedRunMode: widget.selectedRunMode,
+              runningMode: widget.runningMode,
+              runningIds: widget.runningValidationIds,
+              liveAvailable: widget.liveAvailable,
+              onToggleExpanded: () => _toggleExpanded(widget.scenarios[index]),
+              onRun: (request) {
+                widget.onRunScenario(request);
+                if (!_expanded.contains(widget.scenarios[index].id)) {
+                  setState(() => _expanded.add(widget.scenarios[index].id));
+                }
+              },
+              onDelete: () => widget.onDeleteScenario(widget.scenarios[index]),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Runs every visible scenario for the currently selected mode.
+  void _runAll(String mode) {
+    final ids = <String>[
+      for (final scenario in widget.scenarios)
+        ...scenario.validationIdsForMode(mode),
+    ];
+    widget.onRunAll(
+      SettingsValidationRunRequest(
+        mode: mode,
+        validationIds: ids,
+        allowEmpty: true,
+      ),
+    );
+  }
+
+  /// Expands or collapses one scenario row.
+  void _toggleExpanded(SettingsValidationScenario scenario) {
+    setState(() {
+      if (!_expanded.remove(scenario.id)) {
+        _expanded.add(scenario.id);
+      }
+    });
+  }
+
+  /// Returns run modes that have at least one configured visible scenario.
+  Set<String> _enabledModesFor(List<SettingsValidationScenario> scenarios) {
+    if (scenarios.isEmpty) {
+      return const <String>{'mocked'};
+    }
+    final hasMocked = scenarios.any(
+      (scenario) => scenario.canRunMode('mocked'),
+    );
+    final hasLive =
+        widget.liveAvailable &&
+        scenarios.any((scenario) => scenario.canRunMode('live'));
+    return <String>{
+      if (hasMocked) 'mocked',
+      if (hasLive) 'live',
+      if (hasMocked && hasLive) 'all',
+    };
+  }
+}
+
+/// SettingsValidationRunModeButton renders a split run/dropdown control.
+class SettingsValidationRunModeButton extends StatelessWidget {
+  /// Creates a split validation run control.
+  const SettingsValidationRunModeButton({
+    super.key,
+    required this.label,
+    required this.selectedMode,
+    required this.enabledModes,
+    required this.onRun,
+    this.loading = false,
+  });
+
+  /// Text shown on the primary run segment.
+  final String label;
+
+  /// Last selected validation lane.
+  final String selectedMode;
+
+  /// Modes that have configured validation ids.
+  final Set<String> enabledModes;
+
+  /// Called when the user selects and runs a lane.
+  final ValueChanged<String>? onRun;
+
+  /// Whether the current action should display a spinner.
+  final bool loading;
+
+  /// Builds the split run control.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final mode = _effectiveValidationRunMode(selectedMode, enabledModes);
+    final enabled = onRun != null && enabledModes.contains(mode);
+    return Container(
+      height: 36,
+      decoration: BoxDecoration(
+        color: colors.panel,
+        border: Border.all(color: colors.borderStrong),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          InkWell(
+            borderRadius: const BorderRadius.horizontal(
+              left: Radius.circular(PanelStyleTokens.radius),
+            ),
+            onTap: enabled ? () => onRun?.call(mode) : null,
+            child: Opacity(
+              opacity: enabled ? 1 : 0.45,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(13, 0, 12, 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (loading)
+                      const SizedBox.square(
+                        dimension: 15,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      Icon(Icons.play_arrow, size: 17, color: colors.green),
+                    const SizedBox(width: 7),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: colors.ink,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Container(width: 1, height: 24, color: colors.borderStrong),
+          PopupMenuButton<String>(
+            tooltip: 'Choose validation mode',
+            enabled: onRun != null,
+            color: colors.panelStrong,
+            elevation: 8,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(
+                PanelStyleTokens.compactRadius,
+              ),
+            ),
+            onSelected: (value) => onRun?.call(value),
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              for (final value in _settingsValidationRunModes)
+                PopupMenuItem<String>(
+                  value: value,
+                  enabled: enabledModes.contains(value),
+                  child: Text(
+                    _settingsValidationModeLabel(value),
+                    style: TextStyle(
+                      color: enabledModes.contains(value)
+                          ? colors.ink
+                          : colors.muted.withValues(alpha: 0.48),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+            child: Opacity(
+              opacity: onRun != null ? 1 : 0.45,
+              child: SizedBox(
+                width: 34,
+                child: Icon(
+                  Icons.arrow_drop_down,
+                  size: 20,
+                  color: colors.green,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsValidationScenarioHeader extends StatelessWidget {
+  const _SettingsValidationScenarioHeader();
+
+  /// Builds table column headers for scenario rows.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final style = TextStyle(
+      color: colors.muted,
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Row(
+        children: <Widget>[
+          _SettingsValidationCell(
+            flex: 2,
+            child: Text('Validation', style: style),
+          ),
+          _SettingsValidationCell(
+            flex: 3,
+            child: Text('Description', style: style),
+          ),
+          _SettingsValidationCell(flex: 2, child: Text('Mode', style: style)),
+          _SettingsValidationCell(flex: 2, child: Text('Status', style: style)),
+          SizedBox(
+            width: 124,
+            child: Text('Actions', style: style, textAlign: TextAlign.right),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsValidationScenarioRow extends StatelessWidget {
+  const _SettingsValidationScenarioRow({
+    required this.scenario,
+    required this.expanded,
+    required this.selectedRunMode,
+    required this.runningMode,
+    required this.runningIds,
+    required this.liveAvailable,
+    required this.onToggleExpanded,
+    required this.onRun,
+    required this.onDelete,
+  });
+
+  final SettingsValidationScenario scenario;
+  final bool expanded;
+  final String selectedRunMode;
+  final String runningMode;
+  final Set<String> runningIds;
+  final bool liveAvailable;
+  final VoidCallback onToggleExpanded;
+  final ValueChanged<SettingsValidationRunRequest> onRun;
+  final VoidCallback onDelete;
+
+  /// Builds one scenario row and its optional expanded details.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final running = scenario.allValidationIds.any(runningIds.contains);
+    final canExpand = scenario.details != null;
+    return PanelSurface(
+      fillWidth: true,
+      padding: EdgeInsets.zero,
+      style: PanelSurfaceStyle.card,
+      selected: expanded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          InkWell(
+            onTap: scenario.details == null ? null : onToggleExpanded,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              child: Row(
+                children: <Widget>[
+                  _SettingsValidationCell(
+                    flex: 2,
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          expanded
+                              ? Icons.keyboard_arrow_down
+                              : canExpand
+                              ? Icons.chevron_right
+                              : Icons.circle,
+                          size: 19,
+                          color: canExpand ? colors.muted : Colors.transparent,
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          _scenarioSuccessIcon(scenario),
+                          size: 13,
+                          color: _scenarioSuccessColor(context, scenario),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            scenario.label,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _SettingsValidationCell(
+                    flex: 3,
+                    child: Text(
+                      scenario.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: colors.muted),
+                    ),
+                  ),
+                  _SettingsValidationCell(
+                    flex: 2,
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: <Widget>[
+                        for (final mode in const <String>['mocked', 'live'])
+                          _SettingsValidationModePill(
+                            state:
+                                scenario.modeStates[mode] ??
+                                SettingsValidationModeState(
+                                  mode: mode,
+                                  validationIds: const <String>[],
+                                  status: '',
+                                  configured: false,
+                                ),
+                            running:
+                                running &&
+                                _settingsValidationModeValue(runningMode) ==
+                                    mode,
+                          ),
+                      ],
+                    ),
+                  ),
+                  _SettingsValidationCell(
+                    flex: 2,
+                    child: _SettingsValidationStatusPill(
+                      status: running ? 'running' : scenario.status,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 124,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: <Widget>[
+                        SettingsValidationRunModeButton(
+                          label: '',
+                          selectedMode: selectedRunMode,
+                          enabledModes: _enabledModesForScenario(scenario),
+                          loading: running,
+                          onRun: running ? null : _runScenario,
+                        ),
+                        const SizedBox(width: 6),
+                        PanelInlineIconButton(
+                          icon: Icons.delete_outline,
+                          tooltip: 'Delete validation',
+                          onPressed: onDelete,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded && scenario.details != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+              child: scenario.details!,
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Runs this scenario with the selected mode if it is configured.
+  void _runScenario(String mode) {
+    final ids = scenario.validationIdsForMode(mode);
+    if (ids.isEmpty) {
+      return;
+    }
+    onRun(SettingsValidationRunRequest(mode: mode, validationIds: ids));
+  }
+
+  /// Returns modes that are available for this row.
+  Set<String> _enabledModesForScenario(SettingsValidationScenario scenario) {
+    final hasMocked = scenario.canRunMode('mocked');
+    final hasLive = liveAvailable && scenario.canRunMode('live');
+    return <String>{
+      if (hasMocked) 'mocked',
+      if (hasLive) 'live',
+      if (hasMocked && hasLive) 'all',
+    };
+  }
+}
+
+/// Returns the selected run mode, or the first runnable fallback.
+String _effectiveValidationRunMode(String selectedMode, Set<String> modes) {
+  final requested = _settingsValidationModeValue(selectedMode);
+  if (modes.contains(requested)) {
+    return requested;
+  }
+  for (final mode in const <String>['mocked', 'live', 'all']) {
+    if (modes.contains(mode)) {
+      return mode;
+    }
+  }
+  return requested;
+}
+
+class _SettingsValidationCell extends StatelessWidget {
+  const _SettingsValidationCell({required this.flex, required this.child});
+
+  final int flex;
+  final Widget child;
+
+  /// Builds one flexible table cell with consistent spacing.
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      flex: flex,
+      child: Padding(padding: const EdgeInsets.only(right: 12), child: child),
+    );
+  }
+}
+
+class _SettingsValidationModePill extends StatelessWidget {
+  const _SettingsValidationModePill({
+    required this.state,
+    required this.running,
+  });
+
+  final SettingsValidationModeState state;
+  final bool running;
+
+  /// Builds one mocked/live mode status pill.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final success = _validationStatusIsSuccess(state.status);
+    final failure = _validationStatusIsFailure(state.status);
+    final color = running
+        ? colors.green
+        : success
+        ? colors.green
+        : failure
+        ? colors.coral
+        : colors.muted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+      decoration: BoxDecoration(
+        color: colors.panel,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          if (running)
+            SizedBox.square(
+              dimension: 12,
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
+            )
+          else
+            Icon(
+              success
+                  ? Icons.check_circle_outline
+                  : failure
+                  ? Icons.cancel_outlined
+                  : state.configured
+                  ? Icons.radio_button_unchecked
+                  : Icons.remove_circle_outline,
+              size: 13,
+              color: color,
+            ),
+          const SizedBox(width: 5),
+          Text(
+            _settingsValidationModeLabel(state.mode),
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsValidationStatusPill extends StatelessWidget {
+  const _SettingsValidationStatusPill({required this.status});
+
+  final String status;
+
+  /// Builds the aggregate row status pill.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final value = status.trim().isEmpty ? 'not run' : status.trim();
+    final success = _validationStatusIsSuccess(value);
+    final partial = _validationStatusIsPartial(value);
+    final failure = _validationStatusIsFailure(value);
+    final color = success
+        ? colors.green
+        : partial
+        ? colors.warningText
+        : failure
+        ? colors.coral
+        : colors.muted;
+    final fill = success
+        ? colors.greenSoft
+        : partial
+        ? colors.warningSoft
+        : failure
+        ? colors.coral.withValues(alpha: 0.13)
+        : colors.panel;
+    final border = success
+        ? colors.green.withValues(alpha: 0.5)
+        : partial
+        ? colors.warningBorder
+        : failure
+        ? colors.coral.withValues(alpha: 0.45)
+        : colors.border;
+    final label = _validationStatusLabel(value);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          color: fill,
+          border: Border.all(color: border),
+          borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Icon(
+              success
+                  ? Icons.check_circle_outline
+                  : partial
+                  ? Icons.check_circle_outline
+                  : failure
+                  ? Icons.cancel_outlined
+                  : Icons.radio_button_unchecked,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Returns the normalized validation mode used by UI controls.
+String _settingsValidationModeValue(String mode) {
+  final value = mode.trim().toLowerCase();
+  if (value == 'live' || value == 'all') {
+    return value;
+  }
+  return 'mocked';
+}
+
+/// Returns the user-facing label for a validation mode.
+String _settingsValidationModeLabel(String mode) {
+  return switch (_settingsValidationModeValue(mode)) {
+    'live' => 'Live',
+    'all' => 'All',
+    _ => 'Mocked',
+  };
+}
+
+/// Reports whether a validation status should be treated as successful.
+bool _validationStatusIsSuccess(String status) {
+  final value = status.trim().toLowerCase();
+  return value == 'passed' || value == 'succeeded' || value == 'success';
+}
+
+/// Reports whether a validation status is an incomplete success.
+bool _validationStatusIsPartial(String status) {
+  final value = status.trim().toLowerCase().replaceAll('-', '_');
+  return value == 'partial_success';
+}
+
+/// Reports whether a validation status should be treated as failed.
+bool _validationStatusIsFailure(String status) {
+  final value = status.trim().toLowerCase();
+  return value == 'failed' ||
+      value == 'error' ||
+      value == 'unsupported' ||
+      value == 'timed out' ||
+      value == 'timeout';
+}
+
+/// Returns polished user-facing status copy.
+String _validationStatusLabel(String status) {
+  final value = status.trim().toLowerCase().replaceAll('-', '_');
+  return switch (value) {
+    'partial_success' => 'Partial Success',
+    'success' || 'passed' || 'succeeded' => 'Success',
+    'not_run' || 'not run' || '' => 'not run',
+    _ => status,
+  };
+}
+
+/// Returns the leading row icon for aggregate scenario state.
+IconData _scenarioSuccessIcon(SettingsValidationScenario scenario) {
+  if (_validationStatusIsSuccess(scenario.status) ||
+      _validationStatusIsPartial(scenario.status)) {
+    return Icons.circle;
+  }
+  if (_validationStatusIsFailure(scenario.status)) {
+    return Icons.cancel;
+  }
+  return Icons.radio_button_unchecked;
+}
+
+/// Returns the leading row color for aggregate scenario state.
+Color _scenarioSuccessColor(
+  BuildContext context,
+  SettingsValidationScenario scenario,
+) {
+  final colors = context.agentAwesomeColors;
+  if (_validationStatusIsSuccess(scenario.status) ||
+      _validationStatusIsPartial(scenario.status)) {
+    return colors.green;
+  }
+  if (_validationStatusIsFailure(scenario.status)) {
+    return colors.coral;
+  }
+  return colors.muted;
+}
