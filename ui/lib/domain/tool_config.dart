@@ -784,6 +784,7 @@ class LocalExecSubcommandConfig {
     required this.name,
     required this.description,
     required this.flags,
+    required this.subcommands,
     this.extra = const <String, dynamic>{},
   });
 
@@ -796,6 +797,9 @@ class LocalExecSubcommandConfig {
   /// Flags accepted by this subcommand.
   final List<LocalExecCommandFlagConfig> flags;
 
+  /// Nested subcommands accepted after this subcommand token.
+  final List<LocalExecSubcommandConfig> subcommands;
+
   /// Fields preserved outside the known schema.
   final Map<String, dynamic> extra;
 
@@ -804,13 +808,17 @@ class LocalExecSubcommandConfig {
     final extra = Map<String, dynamic>.from(map)
       ..remove('name')
       ..remove('description')
-      ..remove('flags');
+      ..remove('flags')
+      ..remove('subcommands');
     return LocalExecSubcommandConfig(
       name: stringValue(map['name'], trim: true),
       description: stringValue(map['description'], trim: true),
       flags: jsonObjectList(
         map['flags'],
       ).map(LocalExecCommandFlagConfig.fromMap).toList(),
+      subcommands: jsonObjectList(
+        map['subcommands'],
+      ).map(LocalExecSubcommandConfig.fromMap).toList(),
       extra: extra,
     );
   }
@@ -820,12 +828,14 @@ class LocalExecSubcommandConfig {
     String? name,
     String? description,
     List<LocalExecCommandFlagConfig>? flags,
+    List<LocalExecSubcommandConfig>? subcommands,
     Map<String, dynamic>? extra,
   }) {
     return LocalExecSubcommandConfig(
       name: name ?? this.name,
       description: description ?? this.description,
       flags: flags ?? this.flags,
+      subcommands: subcommands ?? this.subcommands,
       extra: extra ?? this.extra,
     );
   }
@@ -838,6 +848,10 @@ class LocalExecSubcommandConfig {
       if (description.isNotEmpty) 'description': description,
       if (flags.isNotEmpty)
         'flags': flags.map((flag) => flag.toJson()).toList(),
+      if (subcommands.isNotEmpty)
+        'subcommands': subcommands
+            .map((subcommand) => subcommand.toJson())
+            .toList(),
     };
   }
 }

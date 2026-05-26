@@ -142,13 +142,25 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
         entry: widget.entry,
         document: document,
         surface: widget.surface,
+        error: _validationError,
         onRenamed: widget.onRenamed,
         onDocumentChanged: _save,
       );
     }
     final localExec = _localExecWithDetailsDefaults(document.localExec);
+    if (widget.modeId == _toolSurfaceOperationsMode &&
+        widget.surface == _ToolSettingsSurface.osTools) {
+      return const FormPanel(children: <Widget>[]);
+    }
     return FormPanel(
       children: <Widget>[
+        if (_validationError.trim().isNotEmpty)
+          FormPlainSection(
+            title: 'Save issue',
+            children: <Widget>[
+              _SettingsToolValidationError(message: _validationError),
+            ],
+          ),
         if (widget.surface == _ToolSettingsSurface.osTools)
           _SettingsLocalExecCard(
             config: localExec,
@@ -339,10 +351,13 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
   }
 
   /// Saves a typed tool config document after local validation.
-  Future<void> _save(ToolConfigDocument document) async {
+  Future<bool> _save(ToolConfigDocument document) async {
     final validationError = toolConfigValidationError(document);
     if (validationError.isNotEmpty) {
-      return;
+      if (mounted) {
+        setState(() => _validationError = validationError);
+      }
+      return false;
     }
     try {
       await widget.controller.saveConfigurationFile(
@@ -352,12 +367,18 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
       await widget.controller.refreshConfigurationCollections();
       widget.onDocumentChanged(document);
       if (!mounted) {
-        return;
+        return true;
       }
       setState(() {
         _document = document;
+        _validationError = '';
       });
+      return true;
     } catch (_) {}
+    if (mounted) {
+      setState(() => _validationError = 'Tool config could not be saved.');
+    }
+    return false;
   }
 
   /// Runs configured validations for the selected tool package.
@@ -475,21 +496,32 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
     }
   }
 
-  /// Adds starter validations for the next uncovered tool target.
+  /// Opens validation authoring and saves direct plus workflow-envelope cases.
   Future<void> _addValidation(ToolConfigDocument document) async {
-    final additions = _defaultToolValidationSet(
+    final choices = _toolValidationAuthoringChoices(
       document,
       widget.surface,
       tabId: widget.validationTabId,
     );
-    if (additions.isEmpty) {
+    if (choices.isEmpty) {
       return;
     }
+    final draft = await showDialog<_ToolValidationDraft>(
+      context: context,
+      builder: (context) => _ToolValidationDraftDialog(choices: choices),
+    );
+    if (draft == null) {
+      return;
+    }
+    final existingIds = <String>{
+      for (final validation in document.validations) validation.id,
+    };
+    final validations = _toolValidationsForDraft(existingIds, draft);
     await _save(
       document.copyWith(
         validations: <ToolValidationConfig>[
           ...document.validations,
-          ...additions,
+          ...validations,
         ],
       ),
     );
@@ -627,6 +659,7 @@ class _SettingsToolConfigDetailsEditor extends StatefulWidget {
     required this.entry,
     required this.document,
     required this.surface,
+    required this.error,
     required this.onRenamed,
     required this.onDocumentChanged,
   });
@@ -635,8 +668,9 @@ class _SettingsToolConfigDetailsEditor extends StatefulWidget {
   final ConfigFileEntry entry;
   final ToolConfigDocument document;
   final _ToolSettingsSurface surface;
+  final String error;
   final ValueChanged<String> onRenamed;
-  final Future<void> Function(ToolConfigDocument document) onDocumentChanged;
+  final Future<bool> Function(ToolConfigDocument document) onDocumentChanged;
 
   /// Creates state for high-level tool package details editing.
   @override
@@ -680,6 +714,24 @@ class _SettingsToolConfigDetailsEditorState
               ? 'Tool'
               : 'MCP Server',
           children: <Widget>[
+            if (widget.error.trim().isNotEmpty) ...<Widget>[
+              _SettingsToolValidationError(message: widget.error),
+              const SizedBox(height: SettingsFormMetrics.compactGap),
+            ],
+            if (widget.surface == _ToolSettingsSurface.osTools)
+              SettingsToggleField(
+                title: 'Enabled',
+                value: widget.document.localExec.enabled,
+                onChanged: (enabled) => unawaited(
+                  widget.onDocumentChanged(
+                    widget.document.copyWith(
+                      localExec: widget.document.localExec.copyWith(
+                        enabled: enabled,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             _SettingsAutoSaveTextField(
               label: 'Name',
               controller: _name,
@@ -698,20 +750,6 @@ class _SettingsToolConfigDetailsEditorState
                   ),
                 ),
               ),
-            if (widget.surface == _ToolSettingsSurface.osTools)
-              _SettingsActionRow(
-                children: <Widget>[
-                  FilledButton.icon(
-                    onPressed: widget.entry.assigned
-                        ? null
-                        : () => unawaited(_assign()),
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: Text(
-                      widget.entry.assigned ? 'Assigned' : 'Use for profile',
-                    ),
-                  ),
-                ],
-              ),
           ],
         ),
       ],
@@ -725,17 +763,6 @@ class _SettingsToolConfigDetailsEditorState
       return name;
     }
     return widget.entry.label;
-  }
-
-  /// Assigns the selected tool package to the active runtime profile.
-  Future<void> _assign() async {
-    try {
-      await widget.controller.assignConfigFile(widget.entry);
-      if (!mounted) {
-        return;
-      }
-      setState(() {});
-    } catch (_) {}
   }
 
   /// Saves the user-facing package name into typed config metadata.
@@ -782,11 +809,6 @@ class _SettingsLocalExecDetailsFields extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        SettingsToggleField(
-          title: 'Enabled',
-          value: config.enabled,
-          onChanged: (enabled) => onChanged(config.copyWith(enabled: enabled)),
-        ),
         _SettingsInlineField(
           label: 'Default timeout',
           value: config.defaultTimeout,
@@ -1175,7 +1197,7 @@ String _toolValidationResultDescription(ToolValidationRunResult result) {
   final callable = _toolTargetCallableLabel(result.target);
   return switch (result.target.type) {
     'agent-tool-call' => 'Agent selects $callable.',
-    'workflow-node' => 'Workflow invokes $callable.',
+    'workflow-node' => 'Workflow envelope for $callable.',
     'mcp-tool' => 'MCP call for $callable.',
     'command-operation' => 'Command operation for $callable.',
     _ => callable,
@@ -1223,7 +1245,7 @@ String _toolValidationScenarioDescription(ToolValidationConfig validation) {
   final callable = _validationTargetLabel(target);
   return switch (target.type) {
     'agent-tool-call' => 'Agent selects $callable.',
-    'workflow-node' => 'Workflow invokes $callable.',
+    'workflow-node' => 'Workflow envelope for $callable.',
     'mcp-tool' => 'MCP call for $callable.',
     'command-operation' => 'Command operation for $callable.',
     _ => callable,
@@ -1255,8 +1277,8 @@ Set<String> _toolValidationCommandNames(
   };
 }
 
-/// Reports whether live validation is available for the selected target.
-bool _toolLiveValidationAvailable(
+/// Reports whether selected local executables have been found on this machine.
+bool _toolInstallVerified(
   ToolConfigDocument document,
   _ToolSettingsSurface surface,
   List<ToolValidationConfig> validations,
@@ -1275,6 +1297,21 @@ bool _toolLiveValidationAvailable(
     }
   }
   return true;
+}
+
+/// Reports whether live validation is available for the selected target.
+bool _toolLiveValidationAvailable(
+  ToolConfigDocument document,
+  _ToolSettingsSurface surface,
+  List<ToolValidationConfig> validations,
+) {
+  if (surface != _ToolSettingsSurface.osTools) {
+    return true;
+  }
+  if (!document.localExec.enabled) {
+    return false;
+  }
+  return _toolInstallVerified(document, surface, validations);
 }
 
 /// Finds one configured local command by name.
@@ -1539,6 +1576,11 @@ class _SettingsToolValidationCard extends StatelessWidget {
       surface,
       validations,
     );
+    final installVerified = _toolInstallVerified(
+      document,
+      surface,
+      validations,
+    );
     return FormPlainSection(
       title: title,
       children: <Widget>[
@@ -1565,7 +1607,7 @@ class _SettingsToolValidationCard extends StatelessWidget {
           extraActions: <Widget>[
             if (surface == _ToolSettingsSurface.osTools)
               OutlinedButton.icon(
-                style: liveAvailable
+                style: installVerified
                     ? OutlinedButton.styleFrom(
                         backgroundColor: colors.greenSoft,
                         foregroundColor: colors.green,
@@ -1581,12 +1623,12 @@ class _SettingsToolValidationCard extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Icon(
-                        liveAvailable
+                        installVerified
                             ? Icons.check_circle_outline
                             : Icons.verified_outlined,
                       ),
                 label: Text(
-                  liveAvailable ? 'Verified Install' : 'Verify Install',
+                  installVerified ? 'Verified Install' : 'Verify Install',
                 ),
               ),
           ],
@@ -2035,95 +2077,777 @@ String _validationTargetLabel(ToolValidationTargetConfig target) {
   return target.type;
 }
 
-/// Creates starter validations for the next uncovered target on a tool surface.
-List<ToolValidationConfig> _defaultToolValidationSet(
+/// _ToolValidationAuthoringChoice describes one selectable validation target.
+class _ToolValidationAuthoringChoice {
+  /// Creates a validation target option for the Add validation dialog.
+  const _ToolValidationAuthoringChoice({
+    required this.menuLabel,
+    required this.idBase,
+    required this.defaultLabel,
+    required this.target,
+    required this.boundary,
+    required this.input,
+    this.workflowTarget,
+    this.workflowBoundary = '',
+    this.workflowIdBase = '',
+  });
+
+  /// Short user-facing label shown in the target selector.
+  final String menuLabel;
+
+  /// Base id used when creating the validation record.
+  final String idBase;
+
+  /// Suggested validation label.
+  final String defaultLabel;
+
+  /// Invocation target tested by this validation.
+  final ToolValidationTargetConfig target;
+
+  /// Runtime boundary used by this validation.
+  final String boundary;
+
+  /// Suggested input map for the selected target.
+  final Map<String, dynamic> input;
+
+  /// Optional workflow envelope companion target created from the same fields.
+  final ToolValidationTargetConfig? workflowTarget;
+
+  /// Runtime boundary used by the companion workflow envelope validation.
+  final String workflowBoundary;
+
+  /// Base id used for the companion workflow envelope validation.
+  final String workflowIdBase;
+}
+
+/// _ToolValidationExpectedDraft stores user-authored result expectations.
+class _ToolValidationExpectedDraft {
+  /// Creates expected status and output checks for a validation case.
+  const _ToolValidationExpectedDraft({
+    required this.status,
+    required this.exitCodeCheck,
+    required this.outputChecks,
+    required this.errorChecks,
+  });
+
+  /// Expected boundary status.
+  final String status;
+
+  /// Expected process exit-code condition when relevant.
+  final _ToolValidationNumberCheckDraft? exitCodeCheck;
+
+  /// Checks expected against stdout.
+  final List<_ToolValidationTextCheckDraft> outputChecks;
+
+  /// Checks expected against stderr.
+  final List<_ToolValidationTextCheckDraft> errorChecks;
+}
+
+/// _ToolValidationNumberCheckDraft stores one numeric result check.
+class _ToolValidationNumberCheckDraft {
+  /// Creates a numeric check from a condition and operand.
+  const _ToolValidationNumberCheckDraft({
+    required this.condition,
+    required this.value,
+  });
+
+  /// Condition id such as equals, not-equals, greater-than, or less-than.
+  final String condition;
+
+  /// User-entered numeric operand for the condition.
+  final int value;
+}
+
+/// _ToolValidationTextCheckDraft stores one stdout or stderr text check.
+class _ToolValidationTextCheckDraft {
+  /// Creates a text check from a condition and operand.
+  const _ToolValidationTextCheckDraft({
+    required this.condition,
+    required this.value,
+  });
+
+  /// Condition id such as none, equals, contains, starts-with, or ends-with.
+  final String condition;
+
+  /// User-entered operand for the condition.
+  final String value;
+}
+
+/// _ToolValidationDraft holds the dialog result before persistence.
+class _ToolValidationDraft {
+  /// Creates a pending validation from user-authored dialog fields.
+  const _ToolValidationDraft({
+    required this.idBase,
+    required this.scenario,
+    required this.target,
+    required this.boundary,
+    required this.input,
+    required this.expected,
+    this.workflowTarget,
+    this.workflowBoundary = '',
+    this.workflowIdBase = '',
+  });
+
+  /// Base id used when creating the validation record.
+  final String idBase;
+
+  /// User-facing validation scenario name.
+  final String scenario;
+
+  /// Invocation target selected by the user.
+  final ToolValidationTargetConfig target;
+
+  /// Runtime boundary selected by the user.
+  final String boundary;
+
+  /// Input values configured by the user.
+  final Map<String, dynamic> input;
+
+  /// Expected result checks configured by the user.
+  final _ToolValidationExpectedDraft expected;
+
+  /// Optional workflow envelope target created from the same authored fields.
+  final ToolValidationTargetConfig? workflowTarget;
+
+  /// Runtime boundary used by the companion workflow envelope validation.
+  final String workflowBoundary;
+
+  /// Base id used for the companion workflow envelope validation.
+  final String workflowIdBase;
+}
+
+/// _ToolValidationDraftDialog collects one validation case from the user.
+class _ToolValidationDraftDialog extends StatefulWidget {
+  /// Creates a validation-authoring dialog from available target choices.
+  const _ToolValidationDraftDialog({required this.choices});
+
+  /// Target choices available for the active command or MCP tool.
+  final List<_ToolValidationAuthoringChoice> choices;
+
+  /// Creates state for the validation-authoring dialog.
+  @override
+  State<_ToolValidationDraftDialog> createState() =>
+      _ToolValidationDraftDialogState();
+}
+
+class _ToolValidationDraftDialogState
+    extends State<_ToolValidationDraftDialog> {
+  final TextEditingController _scenario = TextEditingController();
+  final TextEditingController _input = TextEditingController();
+  final TextEditingController _exitCode = TextEditingController(text: '0');
+  final List<_ToolValidationCheckEditor> _outputChecks =
+      <_ToolValidationCheckEditor>[_ToolValidationCheckEditor()];
+  final List<_ToolValidationCheckEditor> _errorChecks =
+      <_ToolValidationCheckEditor>[_ToolValidationCheckEditor()];
+  int _choiceIndex = 0;
+  String _expectedStatus = 'succeeded';
+  String _exitCodeCondition = 'equals';
+
+  /// Initializes field controllers from the first available target.
+  @override
+  void initState() {
+    super.initState();
+    _applyChoice(widget.choices.first);
+  }
+
+  /// Cleans up dialog field controllers.
+  @override
+  void dispose() {
+    _scenario.dispose();
+    _input.dispose();
+    _exitCode.dispose();
+    for (final check in _outputChecks) {
+      check.dispose();
+    }
+    for (final check in _errorChecks) {
+      check.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Builds the typed validation authoring dialog.
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add validation'),
+      content: SizedBox(
+        width: 1040,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              if (widget.choices.length > 1) ...<Widget>[
+                DropdownButtonFormField<int>(
+                  initialValue: _choiceIndex,
+                  decoration: SettingsInputDecoration.field(
+                    context,
+                    label: 'Target',
+                  ),
+                  items: <DropdownMenuItem<int>>[
+                    for (var index = 0; index < widget.choices.length; index++)
+                      DropdownMenuItem<int>(
+                        value: index,
+                        child: Text(widget.choices[index].menuLabel),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null || value == _choiceIndex) {
+                      return;
+                    }
+                    setState(() {
+                      _choiceIndex = value;
+                      _applyChoice(widget.choices[value]);
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+              TextField(
+                controller: _scenario,
+                autofocus: true,
+                decoration: SettingsInputDecoration.field(
+                  context,
+                  label: 'Scenario',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _input,
+                minLines: 2,
+                maxLines: 5,
+                decoration: SettingsInputDecoration.field(
+                  context,
+                  label: 'Input',
+                  hintText: 'name=value',
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _expectedStatus,
+                decoration: SettingsInputDecoration.field(
+                  context,
+                  label: 'Expected status',
+                ),
+                items: const <DropdownMenuItem<String>>[
+                  DropdownMenuItem<String>(
+                    value: 'succeeded',
+                    child: Text('Succeeded'),
+                  ),
+                  DropdownMenuItem<String>(
+                    value: 'failed',
+                    child: Text('Failed'),
+                  ),
+                ],
+                onChanged: (value) {
+                  setState(() => _expectedStatus = value ?? 'succeeded');
+                },
+              ),
+              const SizedBox(height: 10),
+              _ToolValidationNumberCheckRow(
+                label: 'Expected return code',
+                condition: _exitCodeCondition,
+                controller: _exitCode,
+                onConditionChanged: (value) {
+                  setState(() => _exitCodeCondition = value);
+                },
+              ),
+              const SizedBox(height: 10),
+              _ToolValidationCheckList(
+                label: 'Expected output',
+                checks: _outputChecks,
+                onChanged: () => setState(() {}),
+                onAdd: () {
+                  setState(() {
+                    _outputChecks.add(_ToolValidationCheckEditor());
+                  });
+                },
+                onRemove: (index) {
+                  setState(() {
+                    _outputChecks.removeAt(index).dispose();
+                    if (_outputChecks.isEmpty) {
+                      _outputChecks.add(_ToolValidationCheckEditor());
+                    }
+                  });
+                },
+              ),
+              const SizedBox(height: 10),
+              _ToolValidationCheckList(
+                label: 'Expected error',
+                checks: _errorChecks,
+                onChanged: () => setState(() {}),
+                onAdd: () {
+                  setState(() {
+                    _errorChecks.add(_ToolValidationCheckEditor());
+                  });
+                },
+                onRemove: (index) {
+                  setState(() {
+                    _errorChecks.removeAt(index).dispose();
+                    if (_errorChecks.isEmpty) {
+                      _errorChecks.add(_ToolValidationCheckEditor());
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Add')),
+      ],
+    );
+  }
+
+  /// Updates controllers with the selected target defaults.
+  void _applyChoice(_ToolValidationAuthoringChoice choice) {
+    _scenario.text = choice.defaultLabel;
+    _input.text = _validationInputText(choice.input);
+  }
+
+  /// Returns a single user-authored validation draft.
+  void _save() {
+    final choice = widget.choices[_choiceIndex];
+    final scenario = _scenario.text.trim();
+    if (scenario.isEmpty) {
+      return;
+    }
+    Navigator.of(context).pop(
+      _ToolValidationDraft(
+        idBase: '${choice.idBase}_mocked',
+        scenario: scenario,
+        target: choice.target,
+        boundary: choice.boundary,
+        input: _validationInputFromText(_input.text, choice.input),
+        expected: _ToolValidationExpectedDraft(
+          status: _expectedStatus,
+          exitCodeCheck: _exitCodeCheckFromEditor(
+            _exitCodeCondition,
+            _exitCode,
+          ),
+          outputChecks: _checksFromEditors(_outputChecks),
+          errorChecks: _checksFromEditors(_errorChecks),
+        ),
+        workflowTarget: choice.workflowTarget,
+        workflowBoundary: choice.workflowBoundary,
+        workflowIdBase: choice.workflowIdBase,
+      ),
+    );
+  }
+}
+
+/// _ToolValidationNumberCheckRow renders one numeric condition/value editor.
+class _ToolValidationNumberCheckRow extends StatelessWidget {
+  /// Creates one numeric check row.
+  const _ToolValidationNumberCheckRow({
+    required this.label,
+    required this.condition,
+    required this.controller,
+    required this.onConditionChanged,
+  });
+
+  /// Field label shown on the value input.
+  final String label;
+
+  /// Selected numeric condition.
+  final String condition;
+
+  /// Numeric value controller.
+  final TextEditingController controller;
+
+  /// Called when the condition changes.
+  final ValueChanged<String> onConditionChanged;
+
+  /// Builds one compact condition picker plus numeric value input.
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 240,
+          child: DropdownButtonFormField<String>(
+            initialValue: condition,
+            isExpanded: true,
+            decoration: SettingsInputDecoration.field(
+              context,
+              label: 'Condition',
+            ),
+            items: const <DropdownMenuItem<String>>[
+              DropdownMenuItem<String>(value: 'equals', child: Text('Equals')),
+              DropdownMenuItem<String>(
+                value: 'not-equals',
+                child: Text('Not equals'),
+              ),
+              DropdownMenuItem<String>(
+                value: 'greater-than',
+                child: Text('Greater than'),
+              ),
+              DropdownMenuItem<String>(
+                value: 'less-than',
+                child: Text('Less than'),
+              ),
+            ],
+            onChanged: (value) => onConditionChanged(value ?? 'equals'),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            decoration: SettingsInputDecoration.field(context, label: label),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// _ToolValidationCheckEditor owns one editable text-check row.
+class _ToolValidationCheckEditor {
+  /// Creates a text-check editor with a default no-op condition.
+  _ToolValidationCheckEditor();
+
+  /// Selected condition id.
+  String condition = 'none';
+
+  /// Operand text for the selected condition.
+  final TextEditingController value = TextEditingController();
+
+  /// Disposes the row controller.
+  void dispose() {
+    value.dispose();
+  }
+}
+
+/// _ToolValidationCheckList renders addable/removable assertion rows.
+class _ToolValidationCheckList extends StatelessWidget {
+  /// Creates a text-check list for stdout or stderr expectations.
+  const _ToolValidationCheckList({
+    required this.label,
+    required this.checks,
+    required this.onChanged,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  /// Field group label.
+  final String label;
+
+  /// Mutable check editors owned by the dialog state.
+  final List<_ToolValidationCheckEditor> checks;
+
+  /// Called when a check row changes.
+  final VoidCallback onChanged;
+
+  /// Called to append a check row.
+  final VoidCallback onAdd;
+
+  /// Called to remove a check row by index.
+  final ValueChanged<int> onRemove;
+
+  /// Builds the list of conditional text assertions.
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+            ),
+            IconButton(
+              tooltip: 'Add $label check',
+              onPressed: onAdd,
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        for (var index = 0; index < checks.length; index++) ...<Widget>[
+          if (index > 0) const SizedBox(height: 8),
+          _ToolValidationCheckRow(
+            check: checks[index],
+            canRemove: checks.length > 1,
+            onChanged: onChanged,
+            onRemove: () => onRemove(index),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// _ToolValidationCheckRow renders one condition/value assertion editor.
+class _ToolValidationCheckRow extends StatelessWidget {
+  /// Creates one conditional text-check row.
+  const _ToolValidationCheckRow({
+    required this.check,
+    required this.canRemove,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  /// Editable row state.
+  final _ToolValidationCheckEditor check;
+
+  /// Whether the delete button should be enabled.
+  final bool canRemove;
+
+  /// Called when condition or value changes.
+  final VoidCallback onChanged;
+
+  /// Called to delete this row.
+  final VoidCallback onRemove;
+
+  /// Builds one compact condition picker plus value input.
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        SizedBox(
+          width: 240,
+          child: DropdownButtonFormField<String>(
+            initialValue: check.condition,
+            isExpanded: true,
+            decoration: SettingsInputDecoration.field(
+              context,
+              label: 'Condition',
+            ),
+            items: const <DropdownMenuItem<String>>[
+              DropdownMenuItem<String>(value: 'none', child: Text('None')),
+              DropdownMenuItem<String>(value: 'equals', child: Text('Equals')),
+              DropdownMenuItem<String>(
+                value: 'contains',
+                child: Text('Contains'),
+              ),
+              DropdownMenuItem<String>(
+                value: 'starts-with',
+                child: Text('Starts with'),
+              ),
+              DropdownMenuItem<String>(
+                value: 'ends-with',
+                child: Text('Ends with'),
+              ),
+            ],
+            onChanged: (value) {
+              check.condition = value ?? 'none';
+              onChanged();
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: check.value,
+            enabled: check.condition != 'none',
+            decoration: SettingsInputDecoration.field(context, label: 'Text'),
+            onChanged: (_) => onChanged(),
+          ),
+        ),
+        const SizedBox(width: 4),
+        IconButton(
+          tooltip: 'Delete check',
+          onPressed: canRemove ? onRemove : null,
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ],
+    );
+  }
+}
+
+/// Returns a numeric exit-code check from the row editor.
+_ToolValidationNumberCheckDraft? _exitCodeCheckFromEditor(
+  String condition,
+  TextEditingController controller,
+) {
+  final value = int.tryParse(controller.text.trim());
+  if (value == null) {
+    return null;
+  }
+  return _ToolValidationNumberCheckDraft(
+    condition: condition.trim().isEmpty ? 'equals' : condition.trim(),
+    value: value,
+  );
+}
+
+/// Returns configured text checks from editable UI rows.
+List<_ToolValidationTextCheckDraft> _checksFromEditors(
+  List<_ToolValidationCheckEditor> editors,
+) {
+  final active = <_ToolValidationTextCheckDraft>[
+    for (final editor in editors)
+      if (editor.condition != 'none' && editor.value.text.trim().isNotEmpty)
+        _ToolValidationTextCheckDraft(
+          condition: editor.condition,
+          value: editor.value.text.trim(),
+        ),
+  ];
+  if (active.isNotEmpty) {
+    return active;
+  }
+  return const <_ToolValidationTextCheckDraft>[
+    _ToolValidationTextCheckDraft(condition: 'none', value: ''),
+  ];
+}
+
+/// Returns validation authoring targets for the active tool surface.
+List<_ToolValidationAuthoringChoice> _toolValidationAuthoringChoices(
   ToolConfigDocument document,
   _ToolSettingsSurface surface, {
   String tabId = '',
 }) {
-  final existingIds = <String>{
-    for (final validation in document.validations) validation.id,
-  };
-  final covered = _toolValidationCoverageKeys(document.validations);
-  final starter = switch (surface) {
-    _ToolSettingsSurface.osTools => _defaultCommandValidationSet(
-      document,
-      existingIds,
-      covered,
-      tabId,
-    ),
-    _ToolSettingsSurface.mcpServer => _defaultMcpValidationSet(
-      document,
-      existingIds,
-      covered,
-      tabId,
-    ),
-  };
-  if (starter.isNotEmpty) {
-    return starter;
-  }
   return switch (surface) {
-    _ToolSettingsSurface.osTools => _additionalCommandValidationSet(
+    _ToolSettingsSurface.osTools => _commandValidationAuthoringChoices(
       document,
-      existingIds,
       tabId,
     ),
-    _ToolSettingsSurface.mcpServer => _additionalMcpValidationSet(
+    _ToolSettingsSurface.mcpServer => _mcpValidationAuthoringChoices(
       document,
-      existingIds,
       tabId,
     ),
   };
 }
 
-/// Creates one additional direct command validation for the active operation.
-List<ToolValidationConfig> _additionalCommandValidationSet(
+/// Returns command validation target choices for one selected operation.
+List<_ToolValidationAuthoringChoice> _commandValidationAuthoringChoices(
   ToolConfigDocument document,
-  Set<String> existingIds,
   String tabId,
 ) {
   final target = _firstCommandValidationTarget(document, tabId);
   if (target == null) {
-    return const <ToolValidationConfig>[];
+    return const <_ToolValidationAuthoringChoice>[];
   }
   final id = '${target.command}.${target.operation}';
-  return <ToolValidationConfig>[
-    _mockedToolValidation(
-      id: _uniqueToolValidationId(
-        existingIds,
-        '${target.command}_${target.operation}_validation',
-      ),
-      label: 'Command $id',
-      description: 'Command operation for $id.',
+  final input = _defaultCommandValidationInput(
+    document,
+    target.command,
+    target.operation,
+  );
+  final workflowTarget = _toolValidationTargetWithType(target, 'workflow-node');
+  return <_ToolValidationAuthoringChoice>[
+    _ToolValidationAuthoringChoice(
+      menuLabel: 'Command operation and workflow envelope',
+      idBase: '${target.command}_${target.operation}_command',
+      defaultLabel: id,
       target: target,
       boundary: 'command.execute',
+      input: input,
+      workflowTarget: workflowTarget,
+      workflowBoundary: 'command.execute',
+      workflowIdBase: '${target.command}_${target.operation}_workflow',
     ),
   ];
 }
 
-/// Creates one additional direct MCP validation for the active tool.
-List<ToolValidationConfig> _additionalMcpValidationSet(
+/// Returns MCP validation target choices for one selected tool.
+List<_ToolValidationAuthoringChoice> _mcpValidationAuthoringChoices(
   ToolConfigDocument document,
-  Set<String> existingIds,
   String tabId,
 ) {
   final target = _firstMcpValidationTarget(document, tabId);
   if (target == null) {
-    return const <ToolValidationConfig>[];
+    return const <_ToolValidationAuthoringChoice>[];
   }
   final id = '${target.mcpServer}.${target.mcpTool}';
-  return <ToolValidationConfig>[
-    _mockedToolValidation(
-      id: _uniqueToolValidationId(
-        existingIds,
-        '${target.mcpServer}_${target.mcpTool}_validation',
-      ),
-      label: 'MCP $id',
-      description: 'MCP call for $id.',
+  final workflowTarget = _toolValidationTargetWithType(target, 'workflow-node');
+  return <_ToolValidationAuthoringChoice>[
+    _ToolValidationAuthoringChoice(
+      menuLabel: 'MCP tool call and workflow envelope',
+      idBase: '${target.mcpServer}_${target.mcpTool}_mcp',
+      defaultLabel: id,
       target: target,
       boundary: 'mcp.call',
+      input: const <String, dynamic>{},
+      workflowTarget: workflowTarget,
+      workflowBoundary: 'mcp.call',
+      workflowIdBase: '${target.mcpServer}_${target.mcpTool}_workflow',
     ),
   ];
+}
+
+/// Returns a validation target with the same surface and a different type.
+ToolValidationTargetConfig _toolValidationTargetWithType(
+  ToolValidationTargetConfig target,
+  String type,
+) {
+  return ToolValidationTargetConfig(
+    type: type,
+    presetId: target.presetId,
+    command: target.command,
+    operation: target.operation,
+    mcpServer: target.mcpServer,
+    mcpTool: target.mcpTool,
+    extra: target.extra,
+  );
+}
+
+/// Formats primitive validation input as user-editable key-value rows.
+String _validationInputText(Map<String, dynamic> input) {
+  return input.entries
+      .map((entry) => '${entry.key}=${_validationInputTextValue(entry.value)}')
+      .join('\n');
+}
+
+/// Formats one validation input value for the key-value editor.
+String _validationInputTextValue(Object? value) {
+  if (value is List || value is Map<String, dynamic>) {
+    return jsonEncode(value);
+  }
+  return '${value ?? ''}';
+}
+
+/// Parses key-value validation input while preserving seeded value types.
+Map<String, dynamic> _validationInputFromText(
+  String text,
+  Map<String, dynamic> seed,
+) {
+  final pairs = SettingsTextCodec.keyValues(text);
+  return <String, dynamic>{
+    for (final entry in pairs.entries)
+      entry.key: _coercedValidationInputValue(entry.value, seed[entry.key]),
+  };
+}
+
+/// Coerces a user-entered validation input value to the seeded value type.
+Object _coercedValidationInputValue(String value, Object? seed) {
+  final trimmed = value.trim();
+  if (seed is int) {
+    return int.tryParse(trimmed) ?? seed;
+  }
+  if (seed is double) {
+    return double.tryParse(trimmed) ?? seed;
+  }
+  if (seed is bool) {
+    final lower = trimmed.toLowerCase();
+    if (lower == 'true' || lower == 'yes' || lower == '1') {
+      return true;
+    }
+    if (lower == 'false' || lower == 'no' || lower == '0') {
+      return false;
+    }
+    return seed;
+  }
+  if (seed is List || seed is Map<String, dynamic>) {
+    try {
+      final decoded = jsonDecode(trimmed);
+      if (decoded is Object) {
+        return decoded;
+      }
+    } on FormatException {
+      return seed ?? trimmed;
+    }
+    return seed ?? trimmed;
+  }
+  return trimmed;
 }
 
 /// Returns the first command validation target for the selected tab.
@@ -2190,221 +2914,196 @@ ToolValidationTargetConfig? _firstMcpValidationTarget(
   return null;
 }
 
-/// Creates direct, agent-call, and workflow validations for one command op.
-List<ToolValidationConfig> _defaultCommandValidationSet(
+/// Creates validation input from one operation's typed sample values.
+Map<String, dynamic> _defaultCommandValidationInput(
   ToolConfigDocument document,
-  Set<String> existingIds,
-  Set<String> covered,
-  String tabId,
+  String commandName,
+  String operationName,
 ) {
-  for (final command in document.localExec.commands) {
-    final commandName = command.name.trim();
-    if (commandName.isEmpty) {
+  final operation = _localExecOperationByName(
+    document,
+    commandName,
+    operationName,
+  );
+  if (operation == null) {
+    return const <String, dynamic>{};
+  }
+  final input = <String, dynamic>{
+    ..._sampleInputFromSchema(operation.inputSchema),
+  };
+  for (final key in _templateParameterNames(operation.args)) {
+    input.putIfAbsent(key, () => 'sample');
+  }
+  return input;
+}
+
+/// Finds one local command operation by command and operation name.
+LocalExecOperationConfig? _localExecOperationByName(
+  ToolConfigDocument document,
+  String commandName,
+  String operationName,
+) {
+  final command = _localExecCommandByName(document, commandName);
+  if (command == null) {
+    return null;
+  }
+  for (final operation in command.operations) {
+    if (operation.name.trim() == operationName.trim()) {
+      return operation;
+    }
+  }
+  return null;
+}
+
+/// Builds sample validation input from supported object-schema properties.
+Map<String, dynamic> _sampleInputFromSchema(Map<String, dynamic> schema) {
+  final properties = jsonObject(schema['properties']);
+  final required = stringList(schema['required'], trim: true).toSet();
+  final input = <String, dynamic>{};
+  for (final entry in properties.entries) {
+    final name = entry.key.trim();
+    if (name.isEmpty) {
       continue;
     }
-    for (final operation in command.operations) {
-      final operationName = operation.name.trim();
-      if (operationName.isEmpty) {
-        continue;
-      }
-      if (tabId.isNotEmpty &&
-          _commandValidationTabId(commandName, operationName) != tabId) {
-        continue;
-      }
-      final id = '$commandName.$operationName';
-      final additions = <ToolValidationConfig>[];
-      if (!covered.contains(_toolCoverageKey('command-operation', id))) {
-        additions.add(
-          _mockedToolValidation(
-            id: _uniqueToolValidationId(
-              existingIds,
-              '${commandName}_${operationName}_command',
-            ),
-            label: 'Command $id',
-            description: 'Validates the command boundary for $id.',
-            target: ToolValidationTargetConfig(
-              type: 'command-operation',
-              presetId: '',
-              command: commandName,
-              operation: operationName,
-              mcpServer: '',
-              mcpTool: '',
-            ),
-            boundary: 'command.execute',
-          ),
-        );
-      }
-      if (!covered.contains(
-        _toolCoverageKey('agent-tool-call', 'command:$id'),
-      )) {
-        additions.add(
-          _mockedToolValidation(
-            id: _uniqueToolValidationId(
-              existingIds,
-              '${commandName}_${operationName}_agent',
-            ),
-            label: 'Agent can call $id',
-            description: 'Validates the direct agent-call contract for $id.',
-            target: ToolValidationTargetConfig(
-              type: 'agent-tool-call',
-              presetId: '',
-              command: commandName,
-              operation: operationName,
-              mcpServer: '',
-              mcpTool: '',
-            ),
-            boundary: 'agent.tool_call',
-            prompt: 'Use $id for this request.',
-          ),
-        );
-      }
-      if (!covered.contains(_toolCoverageKey('workflow-node', 'command:$id'))) {
-        additions.add(
-          _mockedToolValidation(
-            id: _uniqueToolValidationId(
-              existingIds,
-              '${commandName}_${operationName}_workflow',
-            ),
-            label: 'Workflow can call $id',
-            description: 'Validates the workflow-node contract for $id.',
-            target: ToolValidationTargetConfig(
-              type: 'workflow-node',
-              presetId: '',
-              command: commandName,
-              operation: operationName,
-              mcpServer: '',
-              mcpTool: '',
-            ),
-            boundary: 'command.execute',
-          ),
-        );
-      }
-      if (additions.isNotEmpty) {
-        return additions;
+    final property = jsonObject(entry.value);
+    final sample = _sampleValueFromProperty(property);
+    if (sample != null ||
+        required.contains(name) ||
+        property.containsKey('default')) {
+      input[name] = sample ?? _fallbackSampleValue(property);
+    }
+  }
+  return input;
+}
+
+/// Returns the preferred sample value for one JSON Schema property.
+Object? _sampleValueFromProperty(Map<String, dynamic> property) {
+  if (property.containsKey('default')) {
+    return property['default'];
+  }
+  final examples = property['examples'] is List
+      ? property['examples'] as List<dynamic>
+      : const <dynamic>[];
+  if (examples.isNotEmpty) {
+    return examples.first;
+  }
+  final enumValues = property['enum'] is List
+      ? property['enum'] as List<dynamic>
+      : const <dynamic>[];
+  if (enumValues.isNotEmpty) {
+    return enumValues.first;
+  }
+  return null;
+}
+
+/// Returns a type-appropriate placeholder for required generated input.
+Object _fallbackSampleValue(Map<String, dynamic> property) {
+  switch (stringValue(property['type'], trim: true).toLowerCase()) {
+    case 'integer':
+      return 1;
+    case 'number':
+      return 1.0;
+    case 'boolean':
+      return true;
+    case 'array':
+      return const <dynamic>[];
+    case 'object':
+      return const <String, dynamic>{};
+    default:
+      return 'sample';
+  }
+}
+
+/// Extracts simple double-brace parameter names from argv template tokens.
+Set<String> _templateParameterNames(List<String> args) {
+  final names = <String>{};
+  final pattern = RegExp(r'\{\{\s*([\w.-]+)\s*\}\}');
+  for (final token in args) {
+    for (final match in pattern.allMatches(token)) {
+      final name = match.group(1)?.trim() ?? '';
+      if (name.isNotEmpty) {
+        names.add(name);
       }
     }
   }
-  return const <ToolValidationConfig>[];
+  return names;
 }
 
-/// Creates direct, agent-call, and workflow validations for one MCP tool.
-List<ToolValidationConfig> _defaultMcpValidationSet(
-  ToolConfigDocument document,
+/// Creates the direct validation and optional workflow envelope companion.
+List<ToolValidationConfig> _toolValidationsForDraft(
   Set<String> existingIds,
-  Set<String> covered,
-  String tabId,
+  _ToolValidationDraft draft,
 ) {
-  for (final server in document.mcp.servers) {
-    final serverName = server.name.trim();
-    if (serverName.isEmpty) {
-      continue;
-    }
-    for (final tool in server.tools.allow) {
-      final toolName = tool.trim();
-      if (toolName.isEmpty) {
-        continue;
-      }
-      if (tabId.isNotEmpty &&
-          _mcpValidationTabId(serverName, toolName) != tabId) {
-        continue;
-      }
-      final id = '$serverName.$toolName';
-      final additions = <ToolValidationConfig>[];
-      if (!covered.contains(_toolCoverageKey('mcp-tool', id))) {
-        additions.add(
-          _mockedToolValidation(
-            id: _uniqueToolValidationId(
-              existingIds,
-              '${serverName}_${toolName}_mcp',
-            ),
-            label: 'MCP $id',
-            description: 'Validates the MCP boundary for $id.',
-            target: ToolValidationTargetConfig(
-              type: 'mcp-tool',
-              presetId: '',
-              command: '',
-              operation: '',
-              mcpServer: serverName,
-              mcpTool: toolName,
-            ),
-            boundary: 'mcp.call',
-          ),
-        );
-      }
-      if (!covered.contains(_toolCoverageKey('agent-tool-call', 'mcp:$id'))) {
-        additions.add(
-          _mockedToolValidation(
-            id: _uniqueToolValidationId(
-              existingIds,
-              '${serverName}_${toolName}_agent',
-            ),
-            label: 'Agent can call $id',
-            description: 'Validates the direct agent-call contract for $id.',
-            target: ToolValidationTargetConfig(
-              type: 'agent-tool-call',
-              presetId: '',
-              command: '',
-              operation: '',
-              mcpServer: serverName,
-              mcpTool: toolName,
-            ),
-            boundary: 'agent.tool_call',
-            prompt: 'Use $id for this request.',
-          ),
-        );
-      }
-      if (!covered.contains(_toolCoverageKey('workflow-node', 'mcp:$id'))) {
-        additions.add(
-          _mockedToolValidation(
-            id: _uniqueToolValidationId(
-              existingIds,
-              '${serverName}_${toolName}_workflow',
-            ),
-            label: 'Workflow can call $id',
-            description: 'Validates the workflow-node contract for $id.',
-            target: ToolValidationTargetConfig(
-              type: 'workflow-node',
-              presetId: '',
-              command: '',
-              operation: '',
-              mcpServer: serverName,
-              mcpTool: toolName,
-            ),
-            boundary: 'mcp.call',
-          ),
-        );
-      }
-      if (additions.isNotEmpty) {
-        return additions;
-      }
-    }
+  final validations = <ToolValidationConfig>[
+    _toolValidation(
+      id: _uniqueToolValidationId(existingIds, draft.idBase),
+      label: draft.scenario,
+      description: '',
+      mode: 'mocked',
+      target: draft.target,
+      boundary: draft.boundary,
+      input: draft.input,
+      expected: draft.expected,
+    ),
+  ];
+  final workflowTarget = draft.workflowTarget;
+  if (workflowTarget != null && draft.workflowBoundary.trim().isNotEmpty) {
+    validations.add(
+      _toolValidation(
+        id: _uniqueToolValidationId(
+          existingIds,
+          '${draft.workflowIdBase}_mocked',
+        ),
+        label: '${draft.scenario} workflow envelope',
+        description: '',
+        mode: 'mocked',
+        target: workflowTarget,
+        boundary: draft.workflowBoundary,
+        input: draft.input,
+        expected: draft.expected,
+      ),
+    );
   }
-  return const <ToolValidationConfig>[];
+  return validations;
 }
 
-/// Creates one mocked validation with a concrete passing status assertion.
-ToolValidationConfig _mockedToolValidation({
+/// Creates one validation with concrete assertions for its invocation lane.
+ToolValidationConfig _toolValidation({
   required String id,
   required String label,
   required String description,
+  required String mode,
   required ToolValidationTargetConfig target,
   required String boundary,
+  required Map<String, dynamic> input,
+  required _ToolValidationExpectedDraft expected,
   String prompt = '',
 }) {
   return ToolValidationConfig(
     id: id,
     label: label,
     description: description,
-    mode: 'mocked',
+    mode: mode,
     target: target,
     prompt: prompt,
-    input: const <String, dynamic>{},
+    input: input,
     fixtures: const <String, dynamic>{},
-    mocks: <String, dynamic>{
-      boundary: _mockedToolValidationResponse(target, label),
+    mocks: mode == 'mocked'
+        ? <String, dynamic>{
+            boundary: _mockedToolValidationResponse(
+              target,
+              label,
+              input,
+              expected,
+            ),
+          }
+        : const <String, dynamic>{},
+    expected: <String, dynamic>{
+      if (expected.status.trim().isNotEmpty) 'status': expected.status.trim(),
+      if (expected.exitCodeCheck?.condition == 'equals')
+        'exit_code': expected.exitCodeCheck?.value,
     },
-    expected: const <String, dynamic>{},
-    assertions: _mockedToolValidationAssertions(target),
+    assertions: _toolValidationAssertions(target, mode, input, expected),
   );
 }
 
@@ -2412,11 +3111,16 @@ ToolValidationConfig _mockedToolValidation({
 Map<String, dynamic> _mockedToolValidationResponse(
   ToolValidationTargetConfig target,
   String label,
+  Map<String, dynamic> input,
+  _ToolValidationExpectedDraft expected,
 ) {
   final response = <String, dynamic>{
-    'status': 'succeeded',
-    'exit_code': 0,
-    'stdout': label,
+    'status': expected.status.trim().isEmpty ? 'succeeded' : expected.status,
+    if (expected.exitCodeCheck != null)
+      'exit_code': _mockedExitCodeForCheck(expected.exitCodeCheck!),
+    'stdout': _mockedTextForChecks(expected.outputChecks),
+    if (_mockedTextForChecks(expected.errorChecks).isNotEmpty)
+      'stderr': _mockedTextForChecks(expected.errorChecks),
   };
   if (target.type == 'agent-tool-call' &&
       target.command.isNotEmpty &&
@@ -2425,6 +3129,7 @@ Map<String, dynamic> _mockedToolValidationResponse(
       'tool_name': 'command_execute',
       'arguments': <String, dynamic>{
         'template_id': '${target.command}.${target.operation}',
+        if (input.isNotEmpty) 'parameters': input,
       },
     };
   }
@@ -2442,28 +3147,63 @@ Map<String, dynamic> _mockedToolValidationResponse(
   return response;
 }
 
+/// Returns mock text that will satisfy the configured text checks.
+String _mockedTextForChecks(List<_ToolValidationTextCheckDraft> checks) {
+  final values = <String>[
+    for (final check in checks)
+      if (check.condition != 'none' && check.value.trim().isNotEmpty)
+        check.value.trim(),
+  ];
+  return values.join('\n');
+}
+
+/// Returns a mock exit code that satisfies one numeric condition.
+int _mockedExitCodeForCheck(_ToolValidationNumberCheckDraft check) {
+  switch (check.condition) {
+    case 'not-equals':
+    case 'greater-than':
+      return check.value + 1;
+    case 'less-than':
+      return check.value - 1;
+    case 'equals':
+    default:
+      return check.value;
+  }
+}
+
 /// Creates concrete assertions for one generated starter validation.
-List<ToolValidationAssertionConfig> _mockedToolValidationAssertions(
+List<ToolValidationAssertionConfig> _toolValidationAssertions(
   ToolValidationTargetConfig target,
+  String mode,
+  Map<String, dynamic> input,
+  _ToolValidationExpectedDraft expected,
 ) {
   final assertions = <ToolValidationAssertionConfig>[
-    const ToolValidationAssertionConfig(
+    ToolValidationAssertionConfig(
       type: 'status',
       path: '',
-      equals: 'succeeded',
+      equals: expected.status.trim().isEmpty ? 'succeeded' : expected.status,
       contains: '',
       matches: '',
-      schema: <String, dynamic>{},
+      schema: const <String, dynamic>{},
       message: '',
     ),
   ];
+  final exitCodeAssertion = _exitCodeAssertion(expected.exitCodeCheck);
+  if (exitCodeAssertion != null) {
+    assertions.add(exitCodeAssertion);
+  }
+  assertions.addAll(_textCheckAssertions('stdout', expected.outputChecks));
+  assertions.addAll(_textCheckAssertions('stderr', expected.errorChecks));
   if (target.type == 'agent-tool-call' &&
       target.command.isNotEmpty &&
       target.operation.isNotEmpty) {
     assertions.add(
       ToolValidationAssertionConfig(
         type: 'json-path',
-        path: 'output.arguments.template_id',
+        path: mode == 'live'
+            ? 'output.tool_calls.0.arguments.template_id'
+            : 'output.arguments.template_id',
         equals: '${target.command}.${target.operation}',
         contains: '',
         matches: '',
@@ -2472,152 +3212,197 @@ List<ToolValidationAssertionConfig> _mockedToolValidationAssertions(
       ),
     );
   }
-  if (target.type == 'agent-tool-call' &&
-      target.mcpServer.isNotEmpty &&
-      target.mcpTool.isNotEmpty) {
+  if (target.type == 'workflow-node' &&
+      target.command.isNotEmpty &&
+      target.operation.isNotEmpty) {
     assertions.add(
       ToolValidationAssertionConfig(
         type: 'json-path',
-        path: 'output.arguments.tool',
-        equals: target.mcpTool,
+        path: 'output.request.template_id',
+        equals: '${target.command}.${target.operation}',
         contains: '',
         matches: '',
         schema: const <String, dynamic>{},
         message: '',
       ),
     );
+    for (final entry in _orderedValidationInputEntries(input)) {
+      assertions.add(
+        ToolValidationAssertionConfig(
+          type: 'json-path',
+          path: 'output.request.parameters.${entry.key}',
+          equals: entry.value,
+          contains: '',
+          matches: '',
+          schema: const <String, dynamic>{},
+          message: '',
+        ),
+      );
+    }
+  }
+  if (target.type == 'agent-tool-call' &&
+      target.mcpServer.isNotEmpty &&
+      target.mcpTool.isNotEmpty) {
+    assertions.add(
+      ToolValidationAssertionConfig(
+        type: 'json-path',
+        path: mode == 'live'
+            ? 'output.tool_calls.0.name'
+            : 'output.arguments.tool',
+        equals: mode == 'live' ? null : target.mcpTool,
+        contains: mode == 'live' ? target.mcpTool : '',
+        matches: '',
+        schema: const <String, dynamic>{},
+        message: '',
+      ),
+    );
+  }
+  if (target.type == 'workflow-node' &&
+      target.mcpServer.isNotEmpty &&
+      target.mcpTool.isNotEmpty) {
+    assertions.addAll(<ToolValidationAssertionConfig>[
+      ToolValidationAssertionConfig(
+        type: 'json-path',
+        path: 'output.request.server_id',
+        equals: target.mcpServer,
+        contains: '',
+        matches: '',
+        schema: const <String, dynamic>{},
+        message: '',
+      ),
+      ToolValidationAssertionConfig(
+        type: 'json-path',
+        path: 'output.request.tool',
+        equals: target.mcpTool,
+        contains: '',
+        matches: '',
+        schema: const <String, dynamic>{},
+        message: '',
+      ),
+    ]);
+    for (final entry in _orderedValidationInputEntries(input)) {
+      assertions.add(
+        ToolValidationAssertionConfig(
+          type: 'json-path',
+          path: 'output.request.arguments.${entry.key}',
+          equals: entry.value,
+          contains: '',
+          matches: '',
+          schema: const <String, dynamic>{},
+          message: '',
+        ),
+      );
+    }
   }
   return assertions;
 }
 
-/// Returns coverage keys proved by validations with concrete expectations.
-Set<String> _toolValidationCoverageKeys(
-  List<ToolValidationConfig> validations,
+/// Builds one assertion from a numeric exit-code check.
+ToolValidationAssertionConfig? _exitCodeAssertion(
+  _ToolValidationNumberCheckDraft? check,
 ) {
-  final covered = <String>{};
-  for (final validation in validations) {
-    if (!_toolValidationHasConfiguredExpectation(validation)) {
-      continue;
-    }
-    final target = validation.target;
-    switch (target.type.trim()) {
-      case 'command-operation':
-        if (target.command.isNotEmpty && target.operation.isNotEmpty) {
-          covered.add(
-            _toolCoverageKey(
-              'command-operation',
-              '${target.command}.${target.operation}',
-            ),
-          );
-        }
-        break;
-      case 'agent-tool-call':
-        if (target.command.isNotEmpty && target.operation.isNotEmpty) {
-          covered.add(
-            _toolCoverageKey(
-              'agent-tool-call',
-              'command:${target.command}.${target.operation}',
-            ),
-          );
-        } else if (target.mcpServer.isNotEmpty && target.mcpTool.isNotEmpty) {
-          covered.add(
-            _toolCoverageKey(
-              'agent-tool-call',
-              'mcp:${target.mcpServer}.${target.mcpTool}',
-            ),
-          );
-        }
-        break;
-      case 'workflow-node':
-        if (target.command.isNotEmpty && target.operation.isNotEmpty) {
-          covered.add(
-            _toolCoverageKey(
-              'workflow-node',
-              'command:${target.command}.${target.operation}',
-            ),
-          );
-        } else if (target.mcpServer.isNotEmpty && target.mcpTool.isNotEmpty) {
-          covered.add(
-            _toolCoverageKey(
-              'workflow-node',
-              'mcp:${target.mcpServer}.${target.mcpTool}',
-            ),
-          );
-        } else if (target.presetId.isNotEmpty) {
-          covered.add(_toolCoverageKey('workflow-node', target.presetId));
-        }
-        break;
-      case 'mcp-tool':
-        if (target.mcpServer.isNotEmpty && target.mcpTool.isNotEmpty) {
-          covered.add(
-            _toolCoverageKey(
-              'mcp-tool',
-              '${target.mcpServer}.${target.mcpTool}',
-            ),
-          );
-        }
-        break;
-    }
+  if (check == null) {
+    return null;
   }
-  return covered;
+  return ToolValidationAssertionConfig(
+    type: switch (check.condition) {
+      'not-equals' => 'exit-code-not-equals',
+      'greater-than' => 'exit-code-greater-than',
+      'less-than' => 'exit-code-less-than',
+      _ => 'exit-code',
+    },
+    path: '',
+    equals: check.value,
+    contains: '',
+    matches: '',
+    schema: const <String, dynamic>{},
+    message: '',
+  );
 }
 
-/// Returns whether one validation contains a concrete expected behavior.
-bool _toolValidationHasConfiguredExpectation(ToolValidationConfig validation) {
-  for (final entry in validation.expected.entries) {
-    switch (entry.key.trim()) {
-      case 'status':
-        if ('${entry.value}'.trim().isNotEmpty) {
-          return true;
-        }
-        break;
-      case 'exit_code':
-        if (entry.value != null) {
-          return true;
-        }
-        break;
-    }
-  }
-  for (final assertion in validation.assertions) {
-    switch (assertion.type.trim()) {
-      case 'status':
-        if (assertion.equals != null &&
-            '${assertion.equals}'.trim().isNotEmpty) {
-          return true;
-        }
-        break;
-      case 'exit-code':
-        if (assertion.equals != null) {
-          return true;
-        }
-        break;
-      case 'stdout-contains':
-      case 'stderr-contains':
-        if (assertion.contains.trim().isNotEmpty) {
-          return true;
-        }
-        break;
-      case 'json-path':
-        if (assertion.path.trim().isNotEmpty &&
-            (assertion.contains.trim().isNotEmpty ||
-                assertion.matches.trim().isNotEmpty ||
-                assertion.equals != null)) {
-          return true;
-        }
-        break;
-      case 'schema':
-        if (assertion.schema.isNotEmpty) {
-          return true;
-        }
-        break;
-    }
-  }
-  return false;
+/// Builds stdout or stderr assertions from conditional text checks.
+List<ToolValidationAssertionConfig> _textCheckAssertions(
+  String stream,
+  List<_ToolValidationTextCheckDraft> checks,
+) {
+  return <ToolValidationAssertionConfig>[
+    for (final check in checks)
+      if (_textCheckAssertion(stream, check) != null)
+        _textCheckAssertion(stream, check)!,
+  ];
 }
 
-/// Returns a stable coverage lookup key.
-String _toolCoverageKey(String type, String id) {
-  return '${type.trim()}:${id.trim()}';
+/// Builds one assertion from a conditional text check.
+ToolValidationAssertionConfig? _textCheckAssertion(
+  String stream,
+  _ToolValidationTextCheckDraft check,
+) {
+  final value = check.value.trim();
+  final path = stream == 'stderr' ? 'stderr' : 'stdout';
+  if (check.condition == 'none') {
+    return ToolValidationAssertionConfig(
+      type: 'json-path',
+      path: path,
+      equals: '',
+      contains: '',
+      matches: '',
+      schema: const <String, dynamic>{},
+      message: '',
+    );
+  }
+  if (value.isEmpty) {
+    return null;
+  }
+  switch (check.condition) {
+    case 'equals':
+      return ToolValidationAssertionConfig(
+        type: 'json-path',
+        path: path,
+        equals: value,
+        contains: '',
+        matches: '',
+        schema: const <String, dynamic>{},
+        message: '',
+      );
+    case 'starts-with':
+      return ToolValidationAssertionConfig(
+        type: 'json-path',
+        path: path,
+        equals: null,
+        contains: '',
+        matches: '^${RegExp.escape(value)}',
+        schema: const <String, dynamic>{},
+        message: '',
+      );
+    case 'ends-with':
+      return ToolValidationAssertionConfig(
+        type: 'json-path',
+        path: path,
+        equals: null,
+        contains: '',
+        matches: '${RegExp.escape(value)}\$',
+        schema: const <String, dynamic>{},
+        message: '',
+      );
+    case 'contains':
+    default:
+      return ToolValidationAssertionConfig(
+        type: stream == 'stderr' ? 'stderr-contains' : 'stdout-contains',
+        path: '',
+        equals: null,
+        contains: value,
+        matches: '',
+        schema: const <String, dynamic>{},
+        message: '',
+      );
+  }
+}
+
+/// Returns validation input entries in stable UI-authored order.
+Iterable<MapEntry<String, dynamic>> _orderedValidationInputEntries(
+  Map<String, dynamic> input,
+) {
+  return input.entries.where((entry) => entry.key.trim().isNotEmpty);
 }
 
 /// Returns a unique validation id derived from a user-facing target label.
@@ -2662,7 +3447,7 @@ String _toolTargetEvidenceFromConfig(ToolValidationTargetConfig target) {
   final callable = _validationTargetLabel(target);
   return switch (target.type) {
     'agent-tool-call' => 'Agent selection: $callable',
-    'workflow-node' => 'Workflow node: $callable',
+    'workflow-node' => 'Workflow envelope: $callable',
     'mcp-tool' => 'MCP tool: $callable',
     'command-operation' => 'Command operation: $callable',
     _ => callable,
@@ -2674,7 +3459,7 @@ String _toolTargetEvidence(ToolValidationTargetResult target) {
   final callable = _toolTargetCallableLabel(target);
   return switch (target.type) {
     'agent-tool-call' => 'Agent selection: $callable',
-    'workflow-node' => 'Workflow node: $callable',
+    'workflow-node' => 'Workflow envelope: $callable',
     'mcp-tool' => 'MCP tool: $callable',
     'command-operation' => 'Command operation: $callable',
     _ => callable,

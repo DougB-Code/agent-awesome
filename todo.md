@@ -28,6 +28,8 @@
 
 - Add a `go get` style feature so AA can download tools from SCM platforms. Does Go have a dedicated support for GitHub, GitLab, Go.dev, etc? Is everything routed through Go.dev?
 
+- @PRIORITY Add a schema importer (OpenAPI, etc) which automatically creates a REST API as a CLI tool.
+
 ## Priority 5
 
 - Run cleanup passes to eliminate excess logic and duplicate implementations.
@@ -45,4 +47,6 @@
 - Add a batch job to organize memory and ask follow-up questions when an item needs more detail.
 
 - Can the workflow engine itself be used to provide training to employees on how to do processes? For example, can it be used to show people how to use AI to perform a role? 
-acklo
+
+- Add a help icon in a fixed location which loads help documentation according to which screens are loaded. 
+

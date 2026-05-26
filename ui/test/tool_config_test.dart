@@ -35,6 +35,14 @@ local-exec:
             flags:
               - name: --short
                 description: Use short status output.
+          - name: create
+            description: Create Kubernetes resources.
+            subcommands:
+              - name: secret
+                description: Create a secret.
+                subcommands:
+                  - name: docker-registry
+                    description: Create a Docker registry secret.
 mcp:
   enabled: true
   servers:
@@ -96,6 +104,20 @@ validations:
           .name,
       '--short',
     );
+    expect(
+      document
+          .localExec
+          .commands
+          .single
+          .surface
+          .subcommands[1]
+          .subcommands
+          .single
+          .subcommands
+          .single
+          .name,
+      'docker-registry',
+    );
     expect(document.mcp.enabled, isTrue);
     expect(document.mcp.servers.single.name, 'memory');
     expect(document.mcp.servers.single.headersFromEnv, <String, String>{
@@ -131,33 +153,48 @@ validations:
       'df',
       'ps',
       'netstat',
+      'kubectl',
     ]);
     expect(commands, everyElement(isA<LocalExecCommandConfig>()));
+    final kubectl = commands.firstWhere((command) => command.name == 'kubectl');
+    expect(
+      kubectl.surface.subcommands.map((item) => item.name),
+      contains('create'),
+    );
+    expect(
+      kubectl.surface.subcommands
+          .firstWhere((item) => item.name == 'create')
+          .subcommands
+          .firstWhere((item) => item.name == 'secret')
+          .subcommands
+          .map((item) => item.name),
+      contains('docker-registry'),
+    );
     expect(commands.every((command) => command.operations.isNotEmpty), isTrue);
-    expect(document.validations.length, 45);
+    expect(document.validations.length, 48);
     expect(
       document.validations.where(
         (validation) => validation.target.type == 'command-operation',
       ),
-      hasLength(15),
+      hasLength(16),
     );
     expect(
       document.validations.where(
         (validation) => validation.target.type == 'agent-tool-call',
       ),
-      hasLength(15),
+      hasLength(16),
     );
     expect(
       document.validations.where(
         (validation) => validation.target.type == 'workflow-node',
       ),
-      hasLength(15),
+      hasLength(16),
     );
     expect(
       commands
           .expand((command) => command.operations)
           .map((operation) => operation.output.format),
-      everyElement('text'),
+      containsAll(<String>['text', 'json']),
     );
   });
 
@@ -195,6 +232,27 @@ validations:
                     LocalExecCommandFlagConfig(
                       name: '--short',
                       description: 'Use short status output.',
+                    ),
+                  ],
+                  subcommands: <LocalExecSubcommandConfig>[],
+                ),
+                LocalExecSubcommandConfig(
+                  name: 'create',
+                  description: 'Create Kubernetes resources.',
+                  flags: <LocalExecCommandFlagConfig>[],
+                  subcommands: <LocalExecSubcommandConfig>[
+                    LocalExecSubcommandConfig(
+                      name: 'secret',
+                      description: 'Create a secret.',
+                      flags: <LocalExecCommandFlagConfig>[],
+                      subcommands: <LocalExecSubcommandConfig>[
+                        LocalExecSubcommandConfig(
+                          name: 'docker-registry',
+                          description: 'Create a Docker registry secret.',
+                          flags: <LocalExecCommandFlagConfig>[],
+                          subcommands: <LocalExecSubcommandConfig>[],
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -250,6 +308,7 @@ validations:
     expect(encoded, contains('surface:'));
     expect(encoded, contains('global-flags:'));
     expect(encoded, contains('subcommands:'));
+    expect(encoded, contains('docker-registry'));
     expect(encoded, contains('operations:'));
     expect(encoded, contains('name: status'));
     expect(encoded, contains('format: text'));

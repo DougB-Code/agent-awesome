@@ -20,7 +20,7 @@ func validateValidationAssertionExpectation(
 		return validateAssertionContains(context, id, index, assertion, assertionType)
 	case "tool-call", "status":
 		return validateAssertionNonEmptyEquals(context, id, index, assertion, assertionType)
-	case "exit-code":
+	case "exit-code", "exit-code-not-equals", "exit-code-greater-than", "exit-code-less-than":
 		return validateAssertionEquals(context, id, index, assertion, assertionType)
 	case "json-path":
 		return validateJSONPathAssertion(context, id, index, assertion)

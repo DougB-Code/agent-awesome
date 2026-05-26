@@ -169,9 +169,10 @@ type CommandFlag struct {
 
 // CommandSubcommand documents one CLI subcommand.
 type CommandSubcommand struct {
-	Name        string        `koanf:"name"`
-	Description string        `koanf:"description"`
-	Flags       []CommandFlag `koanf:"flags"`
+	Name        string              `koanf:"name"`
+	Description string              `koanf:"description"`
+	Flags       []CommandFlag       `koanf:"flags"`
+	Subcommands []CommandSubcommand `koanf:"subcommands"`
 }
 
 // CommandOperation describes one deterministic workflow-callable CLI call.

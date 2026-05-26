@@ -17,6 +17,7 @@ import '../../domain/agent_validation_merge.dart';
 import '../../domain/agent_validation_result.dart';
 import '../../domain/config_files.dart';
 import '../../domain/credentials.dart';
+import '../../domain/json_value.dart';
 import '../../domain/model_config.dart';
 import '../../domain/runtime_profile.dart';
 import '../../domain/tool_config.dart';

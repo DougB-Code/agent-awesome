@@ -456,21 +456,31 @@ func localExecCommandSurface(surface schema.CommandSurface) commandservice.Comma
 	}
 	subcommands := make([]commandservice.CommandSubcommand, 0, len(surface.Subcommands))
 	for _, subcommand := range surface.Subcommands {
-		flags := make([]commandservice.CommandFlag, 0, len(subcommand.Flags))
-		for _, flag := range subcommand.Flags {
-			flags = append(flags, commandservice.CommandFlag{
-				Name:        strings.TrimSpace(flag.Name),
-				Description: strings.TrimSpace(flag.Description),
-			})
-		}
-		subcommands = append(subcommands, commandservice.CommandSubcommand{
-			Name:        strings.TrimSpace(subcommand.Name),
-			Description: strings.TrimSpace(subcommand.Description),
-			Flags:       flags,
-		})
+		subcommands = append(subcommands, localExecCommandSubcommand(subcommand))
 	}
 	return commandservice.CommandSurface{
 		GlobalFlags: globalFlags,
+		Subcommands: subcommands,
+	}
+}
+
+// localExecCommandSubcommand converts one recursive CLI subcommand node.
+func localExecCommandSubcommand(subcommand schema.CommandSubcommand) commandservice.CommandSubcommand {
+	flags := make([]commandservice.CommandFlag, 0, len(subcommand.Flags))
+	for _, flag := range subcommand.Flags {
+		flags = append(flags, commandservice.CommandFlag{
+			Name:        strings.TrimSpace(flag.Name),
+			Description: strings.TrimSpace(flag.Description),
+		})
+	}
+	subcommands := make([]commandservice.CommandSubcommand, 0, len(subcommand.Subcommands))
+	for _, child := range subcommand.Subcommands {
+		subcommands = append(subcommands, localExecCommandSubcommand(child))
+	}
+	return commandservice.CommandSubcommand{
+		Name:        strings.TrimSpace(subcommand.Name),
+		Description: strings.TrimSpace(subcommand.Description),
+		Flags:       flags,
 		Subcommands: subcommands,
 	}
 }

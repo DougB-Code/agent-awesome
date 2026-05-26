@@ -23,16 +23,16 @@ func TestRunAllPassesLinuxToolMockedValidations(t *testing.T) {
 	}
 
 	result := NewRunner(nil).RunAll(context.Background(), *tools)
-	if result.Total != 45 || result.Passed != 45 || result.Failed != 0 || result.Unsupported != 0 {
-		t.Fatalf("RunAll() = %#v, want forty-five passing mocked validations", result)
+	if result.Total != 48 || result.Passed != 48 || result.Failed != 0 || result.Unsupported != 0 {
+		t.Fatalf("RunAll() = %#v, want forty-eight passing mocked validations", result)
 	}
-	if result.Coverage.Required != 45 || result.Coverage.Covered != 45 || len(result.Coverage.Missing) != 0 {
-		t.Fatalf("Coverage = %#v, want full command-operation, agent-call, and workflow-node coverage", result.Coverage)
+	if result.Coverage.Required != 32 || result.Coverage.Covered != 32 || len(result.Coverage.Missing) != 0 {
+		t.Fatalf("Coverage = %#v, want full command-operation and workflow envelope coverage", result.Coverage)
 	}
-	if result.InputSchemaCoverage.Required != 15 || result.InputSchemaCoverage.Covered != 15 || len(result.InputSchemaCoverage.Missing) != 0 {
+	if result.InputSchemaCoverage.Required != 16 || result.InputSchemaCoverage.Covered != 16 || len(result.InputSchemaCoverage.Missing) != 0 {
 		t.Fatalf("InputSchemaCoverage = %#v, want schemas for all command operations", result.InputSchemaCoverage)
 	}
-	if len(result.AgentToolCalls) != 15 {
+	if len(result.AgentToolCalls) != 16 {
 		t.Fatalf("AgentToolCalls = %#v, want one id per command operation", result.AgentToolCalls)
 	}
 }
@@ -59,14 +59,11 @@ func TestCoverageForReportsMissingTargets(t *testing.T) {
 	}
 
 	coverage := CoverageFor(tools)
-	if coverage.Required != 4 || coverage.Covered != 0 || len(coverage.Missing) != 4 {
+	if coverage.Required != 3 || coverage.Covered != 0 || len(coverage.Missing) != 3 {
 		t.Fatalf("CoverageFor() = %#v, want placeholder validation to leave all targets uncovered", coverage)
 	}
 	if !missingCoverage(coverage.Missing, "command-operation", "rg.search_text") {
 		t.Fatalf("Missing = %#v, want rg.search_text command coverage", coverage.Missing)
-	}
-	if !missingCoverage(coverage.Missing, "agent-tool-call", "command:rg.search_text") {
-		t.Fatalf("Missing = %#v, want rg.search_text agent-call coverage", coverage.Missing)
 	}
 	if !missingCoverage(coverage.Missing, "workflow-node", "command:rg.search_text") {
 		t.Fatalf("Missing = %#v, want rg.search_text workflow-node coverage", coverage.Missing)
@@ -101,8 +98,8 @@ func TestInputSchemaCoverageForReportsMissingSchemas(t *testing.T) {
 	}
 }
 
-// TestCoverageForCountsAgentToolCallTargets verifies agent-facing selections are required.
-func TestCoverageForCountsAgentToolCallTargets(t *testing.T) {
+// TestCoverageForCountsWorkflowEnvelopeTargets verifies workflow envelopes are required.
+func TestCoverageForCountsWorkflowEnvelopeTargets(t *testing.T) {
 	tools := schema.Tools{
 		LocalExec: schema.LocalExec{Commands: []schema.LocalExecCommand{{
 			Name: "rg",
@@ -124,17 +121,6 @@ func TestCoverageForCountsAgentToolCallTargets(t *testing.T) {
 				},
 			},
 			{
-				ID: "rg_search_text_agent_mocked",
-				Expected: map[string]any{
-					"status": "succeeded",
-				},
-				Target: schema.ToolValidationTarget{
-					Type:      "agent-tool-call",
-					Command:   "rg",
-					Operation: "search_text",
-				},
-			},
-			{
 				ID: "rg_search_text_workflow_mocked",
 				Expected: map[string]any{
 					"status": "succeeded",
@@ -149,8 +135,8 @@ func TestCoverageForCountsAgentToolCallTargets(t *testing.T) {
 	}
 
 	coverage := CoverageFor(tools)
-	if coverage.Required != 3 || coverage.Covered != 3 || len(coverage.Missing) != 0 {
-		t.Fatalf("CoverageFor() = %#v, want command, agent-call, and workflow coverage", coverage)
+	if coverage.Required != 2 || coverage.Covered != 2 || len(coverage.Missing) != 0 {
+		t.Fatalf("CoverageFor() = %#v, want command and workflow envelope coverage", coverage)
 	}
 }
 
@@ -202,7 +188,7 @@ func TestAgentToolContractsForReportsInputSchemas(t *testing.T) {
 	}
 }
 
-// TestCoverageForCountsMCPWorkflowTargets verifies MCP tools require workflow coverage.
+// TestCoverageForCountsMCPWorkflowTargets verifies MCP tools require envelope coverage.
 func TestCoverageForCountsMCPWorkflowTargets(t *testing.T) {
 	tools := schema.Tools{
 		MCP: schema.MCP{Servers: []schema.MCPServer{{
@@ -224,17 +210,6 @@ func TestCoverageForCountsMCPWorkflowTargets(t *testing.T) {
 				},
 			},
 			{
-				ID: "memory_search_agent_mocked",
-				Expected: map[string]any{
-					"status": "succeeded",
-				},
-				Target: schema.ToolValidationTarget{
-					Type:      "agent-tool-call",
-					MCPServer: "memory",
-					MCPTool:   "search_memory",
-				},
-			},
-			{
 				ID: "memory_search_workflow_mocked",
 				Expected: map[string]any{
 					"status": "succeeded",
@@ -249,8 +224,8 @@ func TestCoverageForCountsMCPWorkflowTargets(t *testing.T) {
 	}
 
 	coverage := CoverageFor(tools)
-	if coverage.Required != 3 || coverage.Covered != 3 || len(coverage.Missing) != 0 {
-		t.Fatalf("CoverageFor() = %#v, want mcp, agent-call, and workflow coverage", coverage)
+	if coverage.Required != 2 || coverage.Covered != 2 || len(coverage.Missing) != 0 {
+		t.Fatalf("CoverageFor() = %#v, want mcp and workflow envelope coverage", coverage)
 	}
 }
 
@@ -611,6 +586,37 @@ func TestRunMockedWorkflowNodeUsesMCPBoundary(t *testing.T) {
 	}
 }
 
+// TestRunMockedWorkflowNodeRecordsCommandEnvelope verifies node request wiring.
+func TestRunMockedWorkflowNodeRecordsCommandEnvelope(t *testing.T) {
+	validation := schema.ToolValidation{
+		ID:   "grep_workflow_envelope",
+		Mode: "mocked",
+		Target: schema.ToolValidationTarget{
+			Type:      "workflow-node",
+			Command:   "grep",
+			Operation: "recursive_search",
+		},
+		Input: map[string]any{"pattern": "needle", "path": "."},
+		Mocks: map[string]any{
+			"command.execute": map[string]any{
+				"status":    "succeeded",
+				"exit_code": 0,
+				"stdout":    "./haystack.txt:1:needle",
+			},
+		},
+		Assertions: []schema.ValidationAssertion{
+			{Type: "json-path", Path: "output.request.template_id", Equals: "grep.recursive_search"},
+			{Type: "json-path", Path: "output.request.parameters.pattern", Equals: "needle"},
+			{Type: "stdout-contains", Contains: "needle"},
+		},
+	}
+
+	result := NewRunner(nil).Run(context.Background(), schema.Tools{}, validation)
+	if result.Status != StatusPassed {
+		t.Fatalf("Run() status = %q diagnostics = %#v assertions = %#v", result.Status, result.Diagnostics, result.Assertions)
+	}
+}
+
 // TestRunLiveMCPToolUsesMCPExecutor verifies live MCP boundary checks execute.
 func TestRunLiveMCPToolUsesMCPExecutor(t *testing.T) {
 	executor := &recordingMCPExecutor{
@@ -718,6 +724,35 @@ func TestRunMockedValidationFailsAssertion(t *testing.T) {
 	}
 	if len(result.Assertions) != 1 || result.Assertions[0].Passed {
 		t.Fatalf("Assertions = %#v, want failed stdout assertion", result.Assertions)
+	}
+}
+
+// TestRunMockedValidationSupportsExitCodeComparisons verifies numeric exit checks.
+func TestRunMockedValidationSupportsExitCodeComparisons(t *testing.T) {
+	validation := schema.ToolValidation{
+		ID:   "grep_exit_code",
+		Mode: "mocked",
+		Target: schema.ToolValidationTarget{
+			Type:      "command-operation",
+			Command:   "grep",
+			Operation: "recursive_search",
+		},
+		Mocks: map[string]any{
+			"command.execute": map[string]any{
+				"status":    "failed",
+				"exit_code": 1,
+			},
+		},
+		Assertions: []schema.ValidationAssertion{
+			{Type: "exit-code-not-equals", Equals: 0},
+			{Type: "exit-code-greater-than", Equals: 0},
+			{Type: "exit-code-less-than", Equals: 2},
+		},
+	}
+
+	result := NewRunner(nil).Run(context.Background(), schema.Tools{Validations: []schema.ToolValidation{validation}}, validation)
+	if result.Status != StatusPassed {
+		t.Fatalf("Run() status = %q diagnostics = %#v assertions = %#v", result.Status, result.Diagnostics, result.Assertions)
 	}
 }
 

@@ -6,6 +6,7 @@ import 'dart:io';
 
 import '../domain/config_files.dart';
 import '../domain/model_config.dart';
+import '../domain/tool_config.dart';
 import 'runtime_profile.dart';
 
 export '../domain/config_files.dart';
@@ -88,7 +89,7 @@ class ConfigFileStore {
         : await _uniquePath(directory.path, '${_defaultPrefix(kind)}.yaml');
     final file = await _validatedConfigFile(path);
     await file.parent.create(recursive: true);
-    await file.writeAsString('');
+    await file.writeAsString(_initialConfigContent(kind));
     return path;
   }
 
@@ -315,6 +316,23 @@ class ConfigFileStore {
       }
     }
     return null;
+  }
+}
+
+/// Returns valid starter content for new managed configuration files.
+String _initialConfigContent(ConfigFileKind kind) {
+  switch (kind) {
+    case ConfigFileKind.tool:
+      return emptyToolConfigDocument()
+          .copyWith(extra: const <String, dynamic>{'name': 'Tool'})
+          .toYaml();
+    case ConfigFileKind.mcp:
+      return emptyToolConfigDocument()
+          .copyWith(extra: const <String, dynamic>{'name': 'MCP'})
+          .toYaml();
+    case ConfigFileKind.model:
+    case ConfigFileKind.agent:
+      return '';
   }
 }
 

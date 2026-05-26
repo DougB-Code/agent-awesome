@@ -60,6 +60,10 @@ func TestTemplateArgsCanUseListParameters(t *testing.T) {
 						Name:        "--short",
 						Description: "Use short status output.",
 					}},
+					Subcommands: []CommandSubcommand{{
+						Name:        "porcelain",
+						Description: "Show machine-readable status.",
+					}},
 				}},
 			},
 		}},
@@ -80,6 +84,9 @@ func TestTemplateArgsCanUseListParameters(t *testing.T) {
 	}
 	if got, want := service.Templates()[0].Surface.Subcommands[0].Name, "status"; got != want {
 		t.Fatalf("surface subcommand = %q, want %q", got, want)
+	}
+	if got, want := service.Templates()[0].Surface.Subcommands[0].Subcommands[0].Name, "porcelain"; got != want {
+		t.Fatalf("nested surface subcommand = %q, want %q", got, want)
 	}
 }
 

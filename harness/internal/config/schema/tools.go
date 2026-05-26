@@ -141,20 +141,32 @@ func validateCommandSurface(commandName string, surface CommandSurface) error {
 			return fmt.Errorf("local-exec command %q global flag name must not be empty", commandName)
 		}
 	}
-	seen := make(map[string]struct{}, len(surface.Subcommands))
-	for _, subcommand := range surface.Subcommands {
+	return validateCommandSubcommands(commandName, "", surface.Subcommands)
+}
+
+// validateCommandSubcommands checks one sibling level of CLI subcommands.
+func validateCommandSubcommands(commandName string, parentPath string, subcommands []CommandSubcommand) error {
+	seen := make(map[string]struct{}, len(subcommands))
+	for _, subcommand := range subcommands {
 		name := strings.TrimSpace(subcommand.Name)
 		if name == "" {
 			return fmt.Errorf("local-exec command %q subcommand name must not be empty", commandName)
 		}
+		path := name
+		if strings.TrimSpace(parentPath) != "" {
+			path = strings.TrimSpace(parentPath) + " " + name
+		}
 		if _, ok := seen[name]; ok {
-			return fmt.Errorf("local-exec command %q duplicate subcommand %q", commandName, name)
+			return fmt.Errorf("local-exec command %q duplicate subcommand %q", commandName, path)
 		}
 		seen[name] = struct{}{}
 		for _, flag := range subcommand.Flags {
 			if strings.TrimSpace(flag.Name) == "" {
-				return fmt.Errorf("local-exec command %q subcommand %q flag name must not be empty", commandName, name)
+				return fmt.Errorf("local-exec command %q subcommand %q flag name must not be empty", commandName, path)
 			}
+		}
+		if err := validateCommandSubcommands(commandName, path, subcommand.Subcommands); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -521,7 +533,7 @@ func validateToolValidationAssertions(id string, assertions []ValidationAssertio
 	for index, assertion := range assertions {
 		assertionType := strings.TrimSpace(assertion.Type)
 		switch assertionType {
-		case "status", "exit-code", "json-path", "stdout-contains", "stderr-contains", "schema":
+		case "status", "exit-code", "exit-code-not-equals", "exit-code-greater-than", "exit-code-less-than", "json-path", "stdout-contains", "stderr-contains", "schema":
 		default:
 			return fmt.Errorf("validation %q assertion %d uses an unsupported type", id, index+1)
 		}

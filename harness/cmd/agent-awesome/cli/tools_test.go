@@ -728,7 +728,7 @@ mcp:
 	if err != nil {
 		t.Fatalf("runToolValidationSuite() error = %v", err)
 	}
-	if got, want := result.Coverage.Required, 3; got != want {
+	if got, want := result.Coverage.Required, 2; got != want {
 		t.Fatalf("Coverage.Required = %d, want command-only package coverage %d; missing=%#v", got, want, result.Coverage.Missing)
 	}
 	for _, missing := range result.Coverage.Missing {

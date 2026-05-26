@@ -264,19 +264,36 @@ func InputSchemaCoverageFor(tools schema.Tools) Coverage {
 func AgentToolCallIDsFor(tools schema.Tools) []string {
 	ids := make([]string, 0)
 	seen := map[string]struct{}{}
-	for _, item := range validationCoverageTargets(tools) {
-		if item.Type != "agent-tool-call" {
-			continue
+	appendID := func(id string) {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			return
 		}
-		id := strings.TrimSpace(item.ID)
-		if id == "" {
-			continue
+		if _, ok := seen[trimmed]; ok {
+			return
 		}
-		if _, ok := seen[id]; ok {
-			continue
+		seen[trimmed] = struct{}{}
+		ids = append(ids, trimmed)
+	}
+	for _, command := range tools.LocalExec.Commands {
+		commandName := strings.TrimSpace(command.Name)
+		for _, operation := range command.Operations {
+			operationName := strings.TrimSpace(operation.Name)
+			if commandName == "" || operationName == "" {
+				continue
+			}
+			appendID("command:" + commandName + "." + operationName)
 		}
-		seen[id] = struct{}{}
-		ids = append(ids, id)
+	}
+	for _, server := range tools.MCP.Servers {
+		serverName := strings.TrimSpace(server.Name)
+		for _, tool := range server.Tools.Allow {
+			toolName := strings.TrimSpace(tool)
+			if serverName == "" || toolName == "" {
+				continue
+			}
+			appendID("mcp:" + serverName + "." + toolName)
+		}
 	}
 	return ids
 }
@@ -369,14 +386,9 @@ func validationCoverageTargets(tools schema.Tools) []CoverageItem {
 				Label: firstNonEmpty(operation.Description, id),
 			})
 			items = append(items, CoverageItem{
-				Type:  "agent-tool-call",
-				ID:    "command:" + id,
-				Label: "Agent can select " + id,
-			})
-			items = append(items, CoverageItem{
 				Type:  "workflow-node",
 				ID:    "command:" + id,
-				Label: "Workflow can invoke " + id,
+				Label: "Workflow envelope for " + id,
 			})
 		}
 	}
@@ -401,14 +413,9 @@ func validationCoverageTargets(tools schema.Tools) []CoverageItem {
 			id := serverName + "." + toolName
 			items = append(items, CoverageItem{Type: "mcp-tool", ID: id, Label: id})
 			items = append(items, CoverageItem{
-				Type:  "agent-tool-call",
-				ID:    "mcp:" + id,
-				Label: "Agent can select " + id,
-			})
-			items = append(items, CoverageItem{
 				Type:  "workflow-node",
 				ID:    "mcp:" + id,
-				Label: "Workflow can invoke " + id,
+				Label: "Workflow envelope for " + id,
 			})
 		}
 	}
@@ -489,7 +496,7 @@ func validationHasConfiguredAssertion(validation schema.ToolValidation) bool {
 			if assertion.Equals != nil && strings.TrimSpace(fmt.Sprint(assertion.Equals)) != "" {
 				return true
 			}
-		case "exit-code":
+		case "exit-code", "exit-code-not-equals", "exit-code-greater-than", "exit-code-less-than":
 			if assertion.Equals != nil {
 				return true
 			}
@@ -538,9 +545,6 @@ func (r *Runner) Run(ctx context.Context, tools schema.Tools, validation schema.
 	case "command-operation":
 		return r.runCommandOperation(ctx, validation, result)
 	case "workflow-node":
-		if mode == "mocked" {
-			return runMockedBoundary(validation, result)
-		}
 		return r.runWorkflowNode(ctx, tools, validation, result)
 	case "mcp-tool":
 		if mode == "mocked" {
@@ -750,6 +754,9 @@ Use the available tool when the user request calls for it. Prefer a tool call ov
 
 // runWorkflowNode executes one live workflow node preset through action metadata.
 func (r *Runner) runWorkflowNode(ctx context.Context, tools schema.Tools, validation schema.ToolValidation, result Result) Result {
+	if result.Mode == "mocked" {
+		return runMockedWorkflowNodeEnvelope(tools, validation, result)
+	}
 	if result.Target.Command != "" || result.Target.Operation != "" {
 		return r.runWorkflowCommandOperation(ctx, validation, result)
 	}
@@ -816,6 +823,72 @@ func (r *Runner) runWorkflowNode(ctx context.Context, tools schema.Tools, valida
 	result.Assertions = evaluateAssertions(validation, result, status)
 	result.Status = assertionStatus(result.Assertions, result.Diagnostics)
 	return result
+}
+
+// runMockedWorkflowNodeEnvelope verifies workflow request and output envelopes.
+func runMockedWorkflowNodeEnvelope(tools schema.Tools, validation schema.ToolValidation, result Result) Result {
+	envelope, err := workflowNodeRequestEnvelope(tools, validation, result)
+	if err != nil {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{Severity: "error", Message: err.Error()})
+		result.Status = StatusFailed
+		return result
+	}
+	mock, ok := mapValue(validation.Mocks, result.Target.Boundary)
+	if !ok {
+		result.Diagnostics = append(result.Diagnostics, Diagnostic{
+			Severity: "error",
+			Message:  fmt.Sprintf("mocked validation needs %q response", result.Target.Boundary),
+		})
+		result.Status = StatusFailed
+		return result
+	}
+	status := mockedCommandStatus(validation.ID, mock)
+	baseOutput := status.Output
+	output, ok := normalizeValue(baseOutput).(map[string]any)
+	if !ok {
+		output = map[string]any{"value": baseOutput}
+	}
+	output = cloneMap(output)
+	output["request"] = envelope
+	resultSnapshot := commandStatusMap(status)
+	resultSnapshot["output"] = baseOutput
+	output["result"] = resultSnapshot
+	status.Output = output
+	result.Command = &status
+	result.Assertions = evaluateAssertions(validation, result, status)
+	result.Status = assertionStatus(result.Assertions, result.Diagnostics)
+	return result
+}
+
+// workflowNodeRequestEnvelope builds the action arguments a workflow node emits.
+func workflowNodeRequestEnvelope(tools schema.Tools, validation schema.ToolValidation, result Result) (map[string]any, error) {
+	if result.Target.Command != "" || result.Target.Operation != "" {
+		envelope := map[string]any{
+			"template_id": result.Target.TemplateID,
+			"parameters":  cloneMap(validation.Input),
+		}
+		if cwd := stringFromAny(validation.Input["cwd"]); cwd != "" {
+			envelope["cwd"] = cwd
+		}
+		return envelope, nil
+	}
+	if result.Target.MCPServer != "" || result.Target.MCPTool != "" {
+		return map[string]any{
+			"server_id": result.Target.MCPServer,
+			"tool":      result.Target.MCPTool,
+			"arguments": cloneMap(validation.Input),
+		}, nil
+	}
+	preset, ok := findNodePreset(tools.NodePresets, result.Target.PresetID)
+	if !ok {
+		return nil, fmt.Errorf("workflow node preset %q was not found", result.Target.PresetID)
+	}
+	resolved := resolveValidationInputRefs(cloneMap(preset.Arguments), validation.Input)
+	envelope, ok := normalizeValue(resolved).(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("workflow node preset %q arguments must resolve to an object", result.Target.PresetID)
+	}
+	return envelope, nil
 }
 
 // runWorkflowCommandOperation executes a command operation through workflow actions.
@@ -1294,6 +1367,18 @@ func evaluateAssertion(assertion schema.ValidationAssertion, result Result, stat
 		return compareAssertion(assertionType, assertion.Path, assertion.Equals, status.Status, assertion.Message)
 	case "exit-code":
 		return compareAssertion(assertionType, assertion.Path, assertion.Equals, status.ExitCode, assertion.Message)
+	case "exit-code-not-equals":
+		return numericAssertion(assertionType, assertion.Path, assertion.Equals, status.ExitCode, assertion.Message, func(actual float64, expected float64) bool {
+			return actual != expected
+		}, "not equal")
+	case "exit-code-greater-than":
+		return numericAssertion(assertionType, assertion.Path, assertion.Equals, status.ExitCode, assertion.Message, func(actual float64, expected float64) bool {
+			return actual > expected
+		}, "greater than")
+	case "exit-code-less-than":
+		return numericAssertion(assertionType, assertion.Path, assertion.Equals, status.ExitCode, assertion.Message, func(actual float64, expected float64) bool {
+			return actual < expected
+		}, "less than")
 	case "stdout-contains":
 		return containsAssertion(assertionType, assertion.Path, assertion.Contains, status.StdoutTail, assertion.Message)
 	case "stderr-contains":
@@ -1336,6 +1421,46 @@ func compareAssertion(assertionType string, path string, expected any, actual an
 		Expected: expected,
 		Actual:   actual,
 		Message:  assertionMessage(passed, message, fmt.Sprintf("expected %v, got %v", expected, actual)),
+	}
+}
+
+// numericAssertion checks numeric comparison predicates.
+func numericAssertion(assertionType string, path string, expected any, actual any, message string, compare func(actual float64, expected float64) bool, label string) AssertionResult {
+	expectedNumber, expectedOK := numberFromAny(expected)
+	actualNumber, actualOK := numberFromAny(actual)
+	passed := expectedOK && actualOK && compare(actualNumber, expectedNumber)
+	detail := fmt.Sprintf("expected %v to be %s %v", actual, label, expected)
+	if !expectedOK || !actualOK {
+		detail = fmt.Sprintf("expected numeric values, got expected=%v actual=%v", expected, actual)
+	}
+	return AssertionResult{
+		Type:     assertionType,
+		Path:     path,
+		Passed:   passed,
+		Expected: expected,
+		Actual:   actual,
+		Message:  assertionMessage(passed, message, detail),
+	}
+}
+
+// numberFromAny converts common numeric assertion values to float64.
+func numberFromAny(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case float64:
+		return typed, true
+	case json.Number:
+		parsed, err := typed.Float64()
+		return parsed, err == nil
+	case string:
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
+		return parsed, err == nil
+	default:
+		parsed, err := strconv.ParseFloat(fmt.Sprint(value), 64)
+		return parsed, err == nil
 	}
 }
 

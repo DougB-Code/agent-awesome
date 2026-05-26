@@ -167,6 +167,12 @@ class _SettingsToolSurfaceCommandPanelState
             : 'Servers',
         icon: widget.icon,
       ),
+      if (widget.surface == _ToolSettingsSurface.osTools)
+        const CommandPanelDetailMode(
+          id: _toolSurfaceOperationsMode,
+          label: 'Operations',
+          icon: Icons.account_tree_outlined,
+        ),
       const CommandPanelDetailMode(
         id: _toolSurfaceValidationsMode,
         label: 'Validations',
@@ -273,16 +279,9 @@ class _SettingsToolSurfaceCommandPanelState
     return entries.first;
   }
 
-  /// Returns the active profile assignment or first available tool config.
+  /// Returns the first available tool config path.
   String? _initialSelectedPath() {
     final entries = _entries();
-    final assignedPath =
-        widget.controller.runtimeProfile?.harness.toolConfigPath ?? '';
-    if (widget.surface == _ToolSettingsSurface.osTools &&
-        assignedPath.isNotEmpty &&
-        entries.any((entry) => entry.path == assignedPath)) {
-      return assignedPath;
-    }
     if (entries.isEmpty) {
       return null;
     }
@@ -327,7 +326,7 @@ class _SettingsToolSurfaceCommandPanelState
     } catch (_) {}
   }
 
-  /// Deletes an unassigned tool config file after confirmation.
+  /// Deletes a tool config file after confirmation.
   Future<void> _delete(ConfigFileEntry entry) async {
     final confirmed = await _confirmSettingsDelete(context, label: entry.label);
     if (!confirmed) {
@@ -425,7 +424,6 @@ class _SettingsToolConfigFileList extends StatelessWidget {
         entry.label,
         entry.fileLabel,
         entry.path,
-        if (entry.assigned) 'assigned',
       ]);
     }).toList();
     if (entries.isEmpty) {
@@ -498,10 +496,6 @@ class _SettingsToolConfigFileTile extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: colors.muted),
                     ),
-                    if (entry.assigned) ...<Widget>[
-                      const SizedBox(height: 8),
-                      const PanelBadge(label: 'Assigned'),
-                    ],
                   ],
                 ),
               ),
@@ -625,6 +619,7 @@ String _validationTabIdForTarget(ToolValidationTargetConfig target) {
 
 const String _toolSurfaceEditMode = 'edit';
 const String _toolSurfaceDetailsMode = 'details';
+const String _toolSurfaceOperationsMode = 'operations';
 const String _toolSurfaceValidationsMode = 'validations';
 
 class _SettingsMissingToolConfig extends StatelessWidget {

@@ -2899,8 +2899,10 @@ void main() {
     expect(find.text('DETAILS'), findsWidgets);
     expect(find.byTooltip('Details'), findsOneWidget);
     expect(find.byTooltip('Commands'), findsOneWidget);
+    expect(find.byTooltip('Operations'), findsOneWidget);
     expect(find.byTooltip('Validations'), findsOneWidget);
     expect(find.byTooltip('Source'), findsNothing);
+    expect(find.text('Assigned'), findsNothing);
   });
 
   testWidgets('shows configured agent validations in settings', (tester) async {
@@ -3291,7 +3293,7 @@ local-exec:
     expect(runAll.onRun, isNotNull);
   });
 
-  testWidgets('adds starter command validation set from tools screen', (
+  testWidgets('adds one authored command validation from tools screen', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 900);
@@ -3355,46 +3357,264 @@ local-exec:
     await tester.pump(const Duration(milliseconds: 1500));
     await tester.tap(find.text('Add validation'));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Mode'), findsNothing);
+    expect(find.text('Description'), findsNothing);
+    expect(find.text('Scenario'), findsOneWidget);
+    expect(find.text('Input'), findsOneWidget);
+    expect(find.text('Expected output'), findsOneWidget);
+    expect(find.text('Expected error'), findsOneWidget);
+    expect(find.text('None'), findsWidgets);
+    expect(find.text('Agent tool call'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Add').last);
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 1000));
 
     final saved = ToolConfigDocument.parse(store.files[toolPath]!);
-    expect(saved.validations, hasLength(3));
+    expect(saved.validations, hasLength(2));
+    final validation = saved.validations
+        .where((validation) => validation.target.type == 'command-operation')
+        .single;
+    final workflowValidation = saved.validations
+        .where((validation) => validation.target.type == 'workflow-node')
+        .single;
+    expect(validation.target.type, 'command-operation');
+    expect(validation.target.command, 'rg');
+    expect(validation.target.operation, 'search_text');
+    expect(validation.mode, 'mocked');
+    expect(validation.input['pattern'], 'sample');
+    expect(validation.assertions.first.type, 'status');
+    expect(validation.assertions.first.equals, 'succeeded');
     expect(
-      saved.validations.map((validation) => validation.target.type),
+      validation.assertions
+          .where((assertion) => assertion.path == 'stdout')
+          .single
+          .equals,
+      '',
+    );
+    expect(workflowValidation.target.command, 'rg');
+    expect(workflowValidation.target.operation, 'search_text');
+    expect(workflowValidation.mode, 'mocked');
+  });
+
+  testWidgets('adds command and workflow envelope validations from one form', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const toolPath = '/tmp/tool.yaml';
+    final store = _MemoryConfigFileStore(<String, String>{
+      toolPath: '''
+name: test-tools
+local-exec:
+  enabled: true
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+  commands:
+    - name: grep
+      executable: grep
+      description: Search text.
+      operations:
+        - name: recursive_search
+          description: Search text.
+          args:
+            - -R
+            - -n
+            - "{{pattern}}"
+            - "{{path}}"
+          input-schema:
+            type: object
+            properties:
+              pattern:
+                type: string
+              path:
+                type: string
+            required:
+              - pattern
+              - path
+''',
+    });
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: store,
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(toolConfigPath: toolPath),
+    );
+    controller.availableToolConfigs = <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: toolPath,
+        kind: ConfigFileKind.tool,
+        assigned: true,
+        displayName: 'test-tools',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(body: ToolsCommandPanel(controller: controller)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    await tester.tap(find.byIcon(Icons.fact_check_outlined).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.tap(find.text('Add validation'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Input'), findsOneWidget);
+    expect(find.text('Expected status'), findsOneWidget);
+    expect(find.text('Expected return code'), findsOneWidget);
+    expect(find.text('Expected output'), findsOneWidget);
+    expect(find.text('Expected error'), findsOneWidget);
+    await tester.tap(find.text('None').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.text('Contains').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Text').first,
+      'needle',
+    );
+    await tester.tap(find.byTooltip('Add Expected output check'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(find.widgetWithText(TextField, 'Text'), findsNWidgets(3));
+    await tester.tap(find.byTooltip('Delete check').at(1));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.tap(find.widgetWithText(FilledButton, 'Add').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1000));
+
+    final saved = ToolConfigDocument.parse(store.files[toolPath]!);
+    expect(saved.validations, hasLength(2));
+    final commandValidation = saved.validations
+        .where((validation) => validation.target.type == 'command-operation')
+        .single;
+    final validation = saved.validations
+        .where((validation) => validation.target.type == 'workflow-node')
+        .single;
+    expect(commandValidation.target.command, 'grep');
+    expect(commandValidation.target.operation, 'recursive_search');
+    expect(
+      commandValidation.assertions
+          .where((assertion) => assertion.type == 'stdout-contains')
+          .single
+          .contains,
+      'needle',
+    );
+    expect(
+      commandValidation.assertions
+          .where((assertion) => assertion.path == 'stderr')
+          .single
+          .equals,
+      '',
+    );
+    expect(validation.target.type, 'workflow-node');
+    expect(validation.target.command, 'grep');
+    expect(validation.target.operation, 'recursive_search');
+    expect(validation.mode, 'mocked');
+    expect(
+      validation.assertions.map((assertion) => assertion.path),
       containsAll(<String>[
-        'command-operation',
-        'agent-tool-call',
-        'workflow-node',
+        'output.request.template_id',
+        'output.request.parameters.pattern',
+        'output.request.parameters.path',
       ]),
     );
     expect(
-      saved.validations.every(
-        (validation) =>
-            validation.target.command == 'rg' &&
-            validation.target.operation == 'search_text' &&
-            validation.assertions.first.type == 'status' &&
-            validation.assertions.first.equals == 'succeeded',
+      validation.assertions
+          .where((assertion) => assertion.type == 'stdout-contains')
+          .single
+          .contains,
+      'needle',
+    );
+  });
+
+  testWidgets('adds one authored MCP validation from servers screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const mcpPath = '/tmp/mcp.yaml';
+    final store = _MemoryConfigFileStore(<String, String>{
+      mcpPath: '''
+name: memory-mcp
+mcp:
+  enabled: true
+  servers:
+    - name: memory_memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      tools:
+        allow:
+          - remember
+''',
+    });
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: store,
+    );
+    controller.runtimeProfile = _settingsProfile();
+    controller.availableMcpConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: mcpPath,
+        kind: ConfigFileKind.mcp,
+        assigned: true,
+        displayName: 'memory_memory',
       ),
-      isTrue,
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(body: McpServersCommandPanel(controller: controller)),
+      ),
     );
-    final agentValidation = saved.validations
-        .where((validation) => validation.target.type == 'agent-tool-call')
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    await tester.tap(find.byIcon(Icons.fact_check_outlined).last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    await tester.tap(find.text('Add validation'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Input'), findsOneWidget);
+    expect(find.text('Agent tool call'), findsNothing);
+    await tester.tap(find.widgetWithText(FilledButton, 'Add').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1000));
+
+    final saved = ToolConfigDocument.parse(store.files[mcpPath]!);
+    expect(saved.validations, hasLength(2));
+    final validation = saved.validations
+        .where((validation) => validation.target.type == 'mcp-tool')
         .single;
-    expect(agentValidation.prompt, isNotEmpty);
-    expect(
-      agentValidation.assertions
-          .where((assertion) => assertion.type == 'json-path')
-          .single
-          .path,
-      'output.arguments.template_id',
-    );
-    expect(
-      agentValidation.assertions
-          .where((assertion) => assertion.type == 'json-path')
-          .single
-          .equals,
-      'rg.search_text',
-    );
+    final workflowValidation = saved.validations
+        .where((validation) => validation.target.type == 'workflow-node')
+        .single;
+    expect(validation.target.type, 'mcp-tool');
+    expect(validation.target.mcpServer, 'memory_memory');
+    expect(validation.target.mcpTool, 'remember');
+    expect(validation.mode, 'mocked');
+    expect(validation.assertions.first.type, 'status');
+    expect(validation.assertions.first.equals, 'succeeded');
+    expect(workflowValidation.target.mcpServer, 'memory_memory');
+    expect(workflowValidation.target.mcpTool, 'remember');
   });
 
   testWidgets('groups tool validations by operation tabs', (tester) async {

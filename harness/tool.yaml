@@ -378,6 +378,117 @@ local-exec:
           output:
             format: text
             source: stdout
+    - name: kubectl
+      executable: kubectl
+      description: Inspect and manage Kubernetes resources through documented kubectl commands.
+      surface:
+        global-flags:
+          - name: --context
+            description: Select the kubeconfig context to use.
+          - name: --namespace
+            description: Select the namespace scope for namespaced resources.
+          - name: --kubeconfig
+            description: Use a specific kubeconfig file.
+          - name: --request-timeout
+            description: Set the length of time to wait before giving up on one server request.
+        subcommands:
+          - name: get
+            description: Display one or many resources.
+            flags:
+              - name: --output
+                description: Select output format such as json, yaml, wide, or name.
+              - name: --selector
+                description: Filter resources by label selector.
+              - name: --watch
+                description: Watch for changes after listing the requested object.
+            subcommands:
+              - name: pod
+                description: Display pods.
+              - name: deployment
+                description: Display deployments.
+              - name: service
+                description: Display services.
+          - name: describe
+            description: Show details for a resource or group of resources.
+            flags:
+              - name: --selector
+                description: Filter resources by label selector.
+            subcommands:
+              - name: pod
+                description: Show details for pods.
+              - name: node
+                description: Show details for nodes.
+          - name: create
+            description: Create a resource from a file, stdin, or supported generator subcommands.
+            flags:
+              - name: --filename
+                description: Filename, directory, or URL containing resources to create.
+              - name: --dry-run
+                description: Print or submit the object without persisting it.
+            subcommands:
+              - name: secret
+                description: Create a secret.
+                subcommands:
+                  - name: docker-registry
+                    description: Create a Docker registry secret.
+                  - name: generic
+                    description: Create a generic secret from files, directories, or literal values.
+                  - name: tls
+                    description: Create a TLS secret.
+              - name: service
+                description: Create a service.
+                subcommands:
+                  - name: clusterip
+                    description: Create a ClusterIP service.
+                  - name: loadbalancer
+                    description: Create a LoadBalancer service.
+                  - name: nodeport
+                    description: Create a NodePort service.
+          - name: rollout
+            description: Manage rollout state for workload resources.
+            subcommands:
+              - name: status
+                description: Watch rollout status until completion.
+              - name: restart
+                description: Restart a resource.
+              - name: undo
+                description: Roll back to a previous rollout.
+          - name: config
+            description: Modify kubeconfig files.
+            subcommands:
+              - name: current-context
+                description: Display the current context.
+              - name: get-contexts
+                description: List available contexts.
+              - name: set-context
+                description: Set one context entry in kubeconfig.
+              - name: use-context
+                description: Set the current context.
+          - name: auth
+            description: Inspect authorization.
+            subcommands:
+              - name: can-i
+                description: Check whether an action is allowed.
+          - name: alpha
+            description: Preview alpha kubectl commands that may change without notice.
+            subcommands:
+              - name: control-plane-topology
+                description: Inspect Kubernetes control plane topology information.
+                subcommands:
+                  - name: view
+                    description: View the control plane topology.
+      operations:
+        - name: version_client
+          description: Print the local kubectl client version as JSON.
+          args:
+            - version
+            - --client=true
+            - --output=json
+          input-schema:
+            type: object
+          output:
+            format: json
+            source: stdout
 validations:
   - id: curl_http_get_mocked
     label: curl HTTP GET
@@ -700,6 +811,23 @@ validations:
     assertions:
       - type: stdout-contains
         contains: LISTEN
+  - id: kubectl_version_client_mocked
+    label: kubectl client version
+    mode: mocked
+    target:
+      type: command-operation
+      command: kubectl
+      operation: version_client
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: '{"clientVersion":{"gitVersion":"v1.34.0"}}'
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: clientVersion
   - id: curl_http_get_agent_mocked
     label: agent selects curl HTTP GET
     mode: mocked
@@ -1049,6 +1177,27 @@ validations:
       - type: json-path
         path: output.arguments.template_id
         equals: netstat.listening_ports
+  - id: kubectl_version_client_agent_mocked
+    label: agent selects kubectl client version
+    mode: mocked
+    prompt: Show the local kubectl client version as JSON.
+    target:
+      type: agent-tool-call
+      command: kubectl
+      operation: version_client
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: kubectl.version_client
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: kubectl.version_client
   - id: curl_http_get_workflow_mocked
     label: workflow invokes curl HTTP GET
     mode: mocked
@@ -1231,7 +1380,7 @@ validations:
       - type: stdout-contains
         contains: README.md
   - id: grep_recursive_search_workflow_mocked
-    label: workflow invokes grep recursive search
+    label: grep workflow envelope
     mode: mocked
     target:
       type: workflow-node
@@ -1252,6 +1401,15 @@ validations:
     expected:
       status: succeeded
     assertions:
+      - type: json-path
+        path: output.request.template_id
+        equals: grep.recursive_search
+      - type: json-path
+        path: output.request.parameters.pattern
+        equals: needle
+      - type: json-path
+        path: output.request.parameters.path
+        equals: .
       - type: stdout-contains
         contains: needle
   - id: tar_list_archive_workflow_mocked
@@ -1370,3 +1528,20 @@ validations:
     assertions:
       - type: stdout-contains
         contains: LISTEN
+  - id: kubectl_version_client_workflow_mocked
+    label: workflow invokes kubectl client version
+    mode: mocked
+    target:
+      type: workflow-node
+      command: kubectl
+      operation: version_client
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: '{"clientVersion":{"gitVersion":"v1.34.0"}}'
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: clientVersion

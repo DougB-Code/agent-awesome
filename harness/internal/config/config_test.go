@@ -550,6 +550,14 @@ local-exec:
             flags:
               - name: --short
                 description: Use short status output.
+          - name: create
+            description: Create Kubernetes resources.
+            subcommands:
+              - name: secret
+                description: Create a secret.
+                subcommands:
+                  - name: docker-registry
+                    description: Create a Docker registry secret.
 `)
 
 	cfg, err := LoadTools(path, true)
@@ -573,6 +581,9 @@ local-exec:
 	}
 	if got, want := cfg.LocalExec.Commands[0].Surface.Subcommands[0].Flags[0].Name, "--short"; got != want {
 		t.Fatalf("command subcommand flag = %q, want %q", got, want)
+	}
+	if got, want := cfg.LocalExec.Commands[0].Surface.Subcommands[1].Subcommands[0].Subcommands[0].Name, "docker-registry"; got != want {
+		t.Fatalf("nested command subcommand = %q, want %q", got, want)
 	}
 }
 
@@ -749,10 +760,10 @@ func TestStaticLinuxToolsExposeOperations(t *testing.T) {
 	if got, want := strings.TrimSpace(cfg.Name), "Linux Tools"; got != want {
 		t.Fatalf("Tools.Name = %q, want %q", got, want)
 	}
-	if got, want := len(cfg.LocalExec.Commands), 10; got != want {
+	if got, want := len(cfg.LocalExec.Commands), 11; got != want {
 		t.Fatalf("len(LocalExec.Commands) = %d, want %d", got, want)
 	}
-	if got, want := len(cfg.Validations), 45; got != want {
+	if got, want := len(cfg.Validations), 48; got != want {
 		t.Fatalf("len(Validations) = %d, want %d", got, want)
 	}
 	for _, command := range cfg.LocalExec.Commands {

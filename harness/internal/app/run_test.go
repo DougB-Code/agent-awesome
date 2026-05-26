@@ -31,6 +31,10 @@ func TestLocalExecCommandTemplatesConvertsCLISurfaces(t *testing.T) {
 								Name:        "--short",
 								Description: "Use short status output.",
 							}},
+							Subcommands: []schema.CommandSubcommand{{
+								Name:        "porcelain",
+								Description: "Show machine-readable status.",
+							}},
 						}},
 					},
 					Operations: []schema.CommandOperation{{
@@ -61,6 +65,9 @@ func TestLocalExecCommandTemplatesConvertsCLISurfaces(t *testing.T) {
 	}
 	if got, want := template.Surface.Subcommands[0].Name, "status"; got != want {
 		t.Fatalf("template.Surface.Subcommands[0].Name = %q, want %q", got, want)
+	}
+	if got, want := template.Surface.Subcommands[0].Subcommands[0].Name, "porcelain"; got != want {
+		t.Fatalf("template.Surface.Subcommands[0].Subcommands[0].Name = %q, want %q", got, want)
 	}
 }
 

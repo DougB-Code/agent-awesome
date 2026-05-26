@@ -96,9 +96,10 @@ type CommandFlag struct {
 
 // CommandSubcommand documents one supported CLI subcommand.
 type CommandSubcommand struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description,omitempty"`
-	Flags       []CommandFlag `json:"flags,omitempty"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	Flags       []CommandFlag       `json:"flags,omitempty"`
+	Subcommands []CommandSubcommand `json:"subcommands,omitempty"`
 }
 
 // StatusResult stores observable command job state.
@@ -861,15 +862,22 @@ func templateParameters(template Template) []string {
 func cloneCommandSurface(surface CommandSurface) CommandSurface {
 	globalFlags := make([]CommandFlag, len(surface.GlobalFlags))
 	copy(globalFlags, surface.GlobalFlags)
-	subcommands := make([]CommandSubcommand, len(surface.Subcommands))
-	for index, subcommand := range surface.Subcommands {
+	subcommands := cloneCommandSubcommands(surface.Subcommands)
+	return CommandSurface{GlobalFlags: globalFlags, Subcommands: subcommands}
+}
+
+// cloneCommandSubcommands returns detached recursive CLI subcommand metadata.
+func cloneCommandSubcommands(values []CommandSubcommand) []CommandSubcommand {
+	subcommands := make([]CommandSubcommand, len(values))
+	for index, subcommand := range values {
 		subcommands[index] = CommandSubcommand{
 			Name:        subcommand.Name,
 			Description: subcommand.Description,
 			Flags:       append([]CommandFlag(nil), subcommand.Flags...),
+			Subcommands: cloneCommandSubcommands(subcommand.Subcommands),
 		}
 	}
-	return CommandSurface{GlobalFlags: globalFlags, Subcommands: subcommands}
+	return subcommands
 }
 
 // firstNonEmpty returns the first non-empty string.

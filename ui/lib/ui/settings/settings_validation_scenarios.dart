@@ -493,7 +493,6 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
   /// Builds one scenario row and its optional expanded details.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
     final reportColors = _SettingsValidationReportPalette.of(context);
     final running = scenario.allValidationIds.any(runningIds.contains);
     final canExpand = scenario.details != null;
