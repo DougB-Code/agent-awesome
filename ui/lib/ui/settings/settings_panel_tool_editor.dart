@@ -1659,27 +1659,38 @@ class _SettingsToolValidationCoverageDetails extends StatelessWidget {
     final lines = <Widget>[];
     if (result.coverage.missing.isNotEmpty) {
       lines.add(
-        _SettingsToolEvidenceLine(
+        _SettingsToolEvidenceSection(
+          icon: Icons.rule_outlined,
           label: 'Missing coverage',
-          value: result.coverage.missing.map(_toolCoverageEvidence).join('\n'),
+          child: _SettingsToolEvidenceValueBox(
+            value: result.coverage.missing
+                .map(_toolCoverageEvidence)
+                .join('\n'),
+          ),
         ),
       );
     }
     if (result.inputSchemaCoverage.missing.isNotEmpty) {
       lines.add(
-        _SettingsToolEvidenceLine(
+        _SettingsToolEvidenceSection(
+          icon: Icons.schema_outlined,
           label: 'Missing input schemas',
-          value: result.inputSchemaCoverage.missing
-              .map(_toolCoverageEvidence)
-              .join('\n'),
+          child: _SettingsToolEvidenceValueBox(
+            value: result.inputSchemaCoverage.missing
+                .map(_toolCoverageEvidence)
+                .join('\n'),
+          ),
         ),
       );
     }
     if (result.missingAssertions.isNotEmpty) {
       lines.add(
-        _SettingsToolEvidenceLine(
+        _SettingsToolEvidenceSection(
+          icon: Icons.fact_check_outlined,
           label: 'Missing assertions',
-          value: result.missingAssertions.join('\n'),
+          child: _SettingsToolEvidenceValueBox(
+            value: result.missingAssertions.join('\n'),
+          ),
         ),
       );
     }
@@ -1720,61 +1731,98 @@ class SettingsToolValidationEvidenceView extends StatelessWidget {
   Widget build(BuildContext context) {
     final command = result.command;
     final leftLines = <Widget>[
-      _SettingsToolEvidenceLine(
+      _SettingsToolEvidenceSection(
+        icon: Icons.my_location_outlined,
         label: 'Target',
-        value: targetLabel.trim().isEmpty
-            ? _toolTargetEvidence(result.target)
-            : targetLabel.trim(),
+        child: _SettingsToolEvidenceValueBox(
+          value: targetLabel.trim().isEmpty
+              ? _toolTargetEvidence(result.target)
+              : targetLabel.trim(),
+          monospace: true,
+        ),
       ),
     ];
     if (command != null) {
       leftLines.add(
-        _SettingsToolEvidenceLine(
+        _SettingsToolEvidenceSection(
+          icon: Icons.terminal_outlined,
           label: 'Command',
-          value: _toolCommandEvidence(command),
+          child: _SettingsToolEvidenceValueBox(
+            value: _toolCommandEvidence(command),
+            monospace: true,
+          ),
         ),
       );
       if (command.stdoutTail.trim().isNotEmpty) {
         leftLines.add(
-          _SettingsToolEvidenceLine(label: 'Stdout', value: command.stdoutTail),
+          _SettingsToolEvidenceSection(
+            icon: Icons.subject_outlined,
+            label: 'Stdout',
+            child: _SettingsToolEvidenceValueBox(value: command.stdoutTail),
+          ),
         );
       }
       if (command.stderrTail.trim().isNotEmpty) {
         leftLines.add(
-          _SettingsToolEvidenceLine(label: 'Stderr', value: command.stderrTail),
+          _SettingsToolEvidenceSection(
+            icon: Icons.error_outline,
+            label: 'Stderr',
+            child: _SettingsToolEvidenceValueBox(value: command.stderrTail),
+          ),
         );
       }
       if (command.artifacts.isNotEmpty) {
         leftLines.add(
-          _SettingsToolEvidenceLine(
+          _SettingsToolEvidenceSection(
+            icon: Icons.inventory_2_outlined,
             label: 'Artifacts',
-            value: command.artifacts.map(_toolArtifactEvidence).join('\n'),
+            child: _SettingsToolEvidenceValueBox(
+              value: command.artifacts.map(_toolArtifactEvidence).join('\n'),
+            ),
           ),
         );
       }
     }
     if (result.assertions.isNotEmpty) {
       leftLines.add(
-        _SettingsToolEvidenceLine(
+        _SettingsToolEvidenceSection(
+          icon: Icons.verified_outlined,
           label: 'Assertions',
-          value: result.assertions.map(_toolAssertionEvidence).join('\n'),
+          child: _SettingsToolAssertionList(assertions: result.assertions),
         ),
       );
     }
     if (result.diagnostics.isNotEmpty) {
       leftLines.add(
-        _SettingsToolEvidenceLine(
+        _SettingsToolEvidenceSection(
+          icon: Icons.report_problem_outlined,
           label: 'Diagnostics',
-          value: result.diagnostics.map(_toolDiagnosticEvidence).join('\n'),
+          child: _SettingsToolEvidenceValueBox(
+            value: result.diagnostics.map(_toolDiagnosticEvidence).join('\n'),
+          ),
         ),
       );
     }
     final output = command?.output;
     final outputLine = output == null
         ? null
-        : _SettingsToolEvidenceLine(
+        : _SettingsToolEvidenceSection(
+            icon: Icons.data_object_outlined,
             label: 'Output',
-            value: _toolJsonEvidence(output),
+            trailing: PanelInlineIconButton(
+              icon: Icons.content_copy,
+              tooltip: 'Copy output',
+              onPressed: () => unawaited(
+                Clipboard.setData(
+                  ClipboardData(text: _toolJsonEvidence(output)),
+                ),
+              ),
+            ),
+            child: _SettingsToolEvidenceValueBox(
+              value: _toolJsonEvidence(output),
+              monospace: true,
+              minHeight: 176,
+            ),
           );
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1824,29 +1872,150 @@ class _SettingsToolEvidenceColumn extends StatelessWidget {
   }
 }
 
-class _SettingsToolEvidenceLine extends StatelessWidget {
-  const _SettingsToolEvidenceLine({required this.label, required this.value});
+class _SettingsToolEvidenceSection extends StatelessWidget {
+  const _SettingsToolEvidenceSection({
+    required this.icon,
+    required this.label,
+    required this.child,
+    this.trailing,
+  });
+
+  final IconData icon;
 
   final String label;
-  final String value;
 
-  /// Builds one selectable tool validation evidence row.
+  final Widget child;
+
+  final Widget? trailing;
+
+  /// Builds one labeled tool validation evidence block.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Icon(icon, size: 15, color: colors.muted),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            ?trailing,
+          ],
+        ),
+        const SizedBox(height: 6),
+        child,
+      ],
+    );
+  }
+}
+
+class _SettingsToolEvidenceValueBox extends StatelessWidget {
+  const _SettingsToolEvidenceValueBox({
+    required this.value,
+    this.monospace = false,
+    this.minHeight = 0,
+  });
+
+  final String value;
+
+  final bool monospace;
+
+  final double minHeight;
+
+  /// Builds a quiet boxed evidence value.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: minHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.panel.withValues(alpha: 0.74),
+        border: Border.all(color: colors.border.withValues(alpha: 0.78)),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
+      ),
+      child: SelectableText(
+        value,
+        style: TextStyle(
+          color: colors.ink,
+          fontFamily: monospace ? 'monospace' : null,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsToolAssertionList extends StatelessWidget {
+  const _SettingsToolAssertionList({required this.assertions});
+
+  final List<ToolValidationAssertionResult> assertions;
+
+  /// Builds assertion evidence with per-assertion pass/fail icons.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.panel.withValues(alpha: 0.54),
+        border: Border.all(color: colors.border.withValues(alpha: 0.68)),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          for (var index = 0; index < assertions.length; index++) ...<Widget>[
+            if (index > 0) const SizedBox(height: 6),
+            _SettingsToolAssertionRow(assertion: assertions[index]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsToolAssertionRow extends StatelessWidget {
+  const _SettingsToolAssertionRow({required this.assertion});
+
+  final ToolValidationAssertionResult assertion;
+
+  /// Builds one assertion line with semantic color.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final color = assertion.passed ? colors.green : colors.coral;
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: TextStyle(
-            color: colors.muted,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
+        Icon(
+          assertion.passed ? Icons.check_circle : Icons.cancel,
+          size: 14,
+          color: color,
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: SelectableText(
+            _toolAssertionEvidence(assertion),
+            style: TextStyle(
+              color: colors.ink,
+              fontFamily: 'monospace',
+              height: 1.35,
+            ),
           ),
         ),
-        const SizedBox(height: 2),
-        SelectableText(value, style: TextStyle(color: colors.ink)),
       ],
     );
   }
@@ -2569,7 +2738,7 @@ String _toolDiagnosticEvidence(ToolValidationDiagnostic diagnostic) {
 /// Encodes structured tool validation evidence in a stable display form.
 String _toolJsonEvidence(Object? value) {
   try {
-    return jsonEncode(value);
+    return const JsonEncoder.withIndent('  ').convert(value);
   } catch (_) {
     return '$value';
   }

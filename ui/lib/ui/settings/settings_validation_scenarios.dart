@@ -314,14 +314,19 @@ class SettingsValidationRunModeButton extends StatelessWidget {
   /// Builds the split run control.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
+    final reportColors = _SettingsValidationReportPalette.of(context);
     final mode = _effectiveValidationRunMode(selectedMode, enabledModes);
     final enabled = onRun != null && enabledModes.contains(mode);
+    final primary = label.trim().isNotEmpty;
     return Container(
       height: 36,
       decoration: BoxDecoration(
-        color: colors.panel,
-        border: Border.all(color: colors.borderStrong),
+        color: primary ? reportColors.primaryAction : reportColors.action,
+        border: Border.all(
+          color: primary
+              ? reportColors.primaryActionBorder
+              : reportColors.actionBorder,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
       ),
       child: Row(
@@ -340,17 +345,30 @@ class SettingsValidationRunModeButton extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     if (loading)
-                      const SizedBox.square(
+                      SizedBox.square(
                         dimension: 15,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: primary
+                              ? reportColors.primaryActionText
+                              : reportColors.actionText,
+                        ),
                       )
                     else
-                      Icon(Icons.play_arrow, size: 17, color: colors.green),
+                      Icon(
+                        Icons.play_arrow,
+                        size: 17,
+                        color: primary
+                            ? reportColors.primaryActionText
+                            : reportColors.actionText,
+                      ),
                     const SizedBox(width: 7),
                     Text(
                       label,
                       style: TextStyle(
-                        color: colors.ink,
+                        color: primary
+                            ? reportColors.primaryActionText
+                            : reportColors.actionText,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -359,11 +377,17 @@ class SettingsValidationRunModeButton extends StatelessWidget {
               ),
             ),
           ),
-          Container(width: 1, height: 24, color: colors.borderStrong),
+          Container(
+            width: 1,
+            height: 24,
+            color: primary
+                ? reportColors.primaryActionDivider
+                : reportColors.actionBorder,
+          ),
           PopupMenuButton<String>(
             tooltip: 'Choose validation mode',
             enabled: onRun != null,
-            color: colors.panelStrong,
+            color: reportColors.menu,
             elevation: 8,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(
@@ -380,8 +404,8 @@ class SettingsValidationRunModeButton extends StatelessWidget {
                     _settingsValidationModeLabel(value),
                     style: TextStyle(
                       color: enabledModes.contains(value)
-                          ? colors.ink
-                          : colors.muted.withValues(alpha: 0.48),
+                          ? reportColors.text
+                          : reportColors.textMuted.withValues(alpha: 0.48),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -394,7 +418,9 @@ class SettingsValidationRunModeButton extends StatelessWidget {
                 child: Icon(
                   Icons.arrow_drop_down,
                   size: 20,
-                  color: colors.green,
+                  color: primary
+                      ? reportColors.primaryActionText
+                      : reportColors.actionText,
                 ),
               ),
             ),
@@ -468,13 +494,30 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
+    final reportColors = _SettingsValidationReportPalette.of(context);
     final running = scenario.allValidationIds.any(runningIds.contains);
     final canExpand = scenario.details != null;
-    return PanelSurface(
-      fillWidth: true,
-      padding: EdgeInsets.zero,
-      style: PanelSurfaceStyle.card,
-      selected: expanded,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: expanded ? reportColors.rowExpanded : reportColors.row,
+        border: Border.all(
+          color: expanded
+              ? reportColors.rowBorderActive
+              : reportColors.rowBorder,
+        ),
+        borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
+        boxShadow: expanded
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: reportColors.rowGlow,
+                  blurRadius: 24,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : const <BoxShadow>[],
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -495,7 +538,9 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
                               ? Icons.chevron_right
                               : Icons.circle,
                           size: 19,
-                          color: canExpand ? colors.muted : Colors.transparent,
+                          color: canExpand
+                              ? reportColors.textMuted
+                              : Colors.transparent,
                         ),
                         const SizedBox(width: 6),
                         Icon(
@@ -520,7 +565,7 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
                       scenario.description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.muted),
+                      style: TextStyle(color: reportColors.textMuted),
                     ),
                   ),
                   _SettingsValidationCell(
@@ -651,21 +696,29 @@ class _SettingsValidationModePill extends StatelessWidget {
   /// Builds one mocked/live mode status pill.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
+    final reportColors = _SettingsValidationReportPalette.of(context);
     final success = _validationStatusIsSuccess(state.status);
     final failure = _validationStatusIsFailure(state.status);
     final color = running
-        ? colors.green
+        ? reportColors.modeText
         : success
-        ? colors.green
+        ? reportColors.statusSuccessText
         : failure
-        ? colors.coral
-        : colors.muted;
+        ? reportColors.statusFailureText
+        : state.configured
+        ? reportColors.modeText
+        : reportColors.textSubtle;
+    final fill = state.configured
+        ? reportColors.modeFill
+        : reportColors.modeFill.withValues(alpha: 0.36);
+    final border = state.configured
+        ? reportColors.modeBorder
+        : reportColors.modeBorder.withValues(alpha: 0.44);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
       decoration: BoxDecoration(
-        color: colors.panel,
-        border: Border.all(color: colors.border),
+        color: fill,
+        border: Border.all(color: border),
         borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Row(
@@ -711,32 +764,32 @@ class _SettingsValidationStatusPill extends StatelessWidget {
   /// Builds the aggregate row status pill.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
+    final reportColors = _SettingsValidationReportPalette.of(context);
     final value = status.trim().isEmpty ? 'not run' : status.trim();
     final success = _validationStatusIsSuccess(value);
     final partial = _validationStatusIsPartial(value);
     final failure = _validationStatusIsFailure(value);
     final color = success
-        ? colors.green
+        ? reportColors.statusSuccessText
         : partial
-        ? colors.warningText
+        ? reportColors.statusPartialText
         : failure
-        ? colors.coral
-        : colors.muted;
+        ? reportColors.statusFailureText
+        : reportColors.textMuted;
     final fill = success
-        ? colors.greenSoft
+        ? reportColors.statusSuccessFill
         : partial
-        ? colors.warningSoft
+        ? reportColors.statusPartialFill
         : failure
-        ? colors.coral.withValues(alpha: 0.13)
-        : colors.panel;
+        ? reportColors.statusFailureFill
+        : reportColors.pillFill;
     final border = success
-        ? colors.green.withValues(alpha: 0.5)
+        ? reportColors.statusSuccessBorder
         : partial
-        ? colors.warningBorder
+        ? reportColors.statusPartialBorder
         : failure
-        ? colors.coral.withValues(alpha: 0.45)
-        : colors.border;
+        ? reportColors.statusFailureBorder
+        : reportColors.pillBorder;
     final label = _validationStatusLabel(value);
     return Align(
       alignment: Alignment.centerLeft,
@@ -846,13 +899,155 @@ Color _scenarioSuccessColor(
   BuildContext context,
   SettingsValidationScenario scenario,
 ) {
-  final colors = context.agentAwesomeColors;
+  final reportColors = _SettingsValidationReportPalette.of(context);
   if (_validationStatusIsSuccess(scenario.status) ||
       _validationStatusIsPartial(scenario.status)) {
-    return colors.green;
+    return reportColors.dotSuccess;
   }
   if (_validationStatusIsFailure(scenario.status)) {
-    return colors.coral;
+    return reportColors.statusFailureText;
   }
-  return colors.muted;
+  return reportColors.textMuted;
+}
+
+class _SettingsValidationReportPalette {
+  const _SettingsValidationReportPalette({
+    required this.row,
+    required this.rowExpanded,
+    required this.rowBorder,
+    required this.rowBorderActive,
+    required this.rowGlow,
+    required this.text,
+    required this.textMuted,
+    required this.textSubtle,
+    required this.dotSuccess,
+    required this.action,
+    required this.actionBorder,
+    required this.actionText,
+    required this.primaryAction,
+    required this.primaryActionBorder,
+    required this.primaryActionDivider,
+    required this.primaryActionText,
+    required this.menu,
+    required this.modeFill,
+    required this.modeBorder,
+    required this.modeText,
+    required this.pillFill,
+    required this.pillBorder,
+    required this.statusSuccessFill,
+    required this.statusSuccessBorder,
+    required this.statusSuccessText,
+    required this.statusPartialFill,
+    required this.statusPartialBorder,
+    required this.statusPartialText,
+    required this.statusFailureFill,
+    required this.statusFailureBorder,
+    required this.statusFailureText,
+  });
+
+  final Color row;
+  final Color rowExpanded;
+  final Color rowBorder;
+  final Color rowBorderActive;
+  final Color rowGlow;
+  final Color text;
+  final Color textMuted;
+  final Color textSubtle;
+  final Color dotSuccess;
+  final Color action;
+  final Color actionBorder;
+  final Color actionText;
+  final Color primaryAction;
+  final Color primaryActionBorder;
+  final Color primaryActionDivider;
+  final Color primaryActionText;
+  final Color menu;
+  final Color modeFill;
+  final Color modeBorder;
+  final Color modeText;
+  final Color pillFill;
+  final Color pillBorder;
+  final Color statusSuccessFill;
+  final Color statusSuccessBorder;
+  final Color statusSuccessText;
+  final Color statusPartialFill;
+  final Color statusPartialBorder;
+  final Color statusPartialText;
+  final Color statusFailureFill;
+  final Color statusFailureBorder;
+  final Color statusFailureText;
+
+  /// Returns the blue validation-report palette used by scenario tables.
+  static _SettingsValidationReportPalette of(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    if (!dark) {
+      return _SettingsValidationReportPalette(
+        row: colors.surface,
+        rowExpanded: colors.greenSoft,
+        rowBorder: colors.border,
+        rowBorderActive: colors.borderStrong,
+        rowGlow: colors.shadow,
+        text: colors.ink,
+        textMuted: colors.muted,
+        textSubtle: colors.subtle,
+        dotSuccess: colors.green,
+        action: colors.panel,
+        actionBorder: colors.borderStrong,
+        actionText: colors.green,
+        primaryAction: colors.greenSoft,
+        primaryActionBorder: colors.borderStrong,
+        primaryActionDivider: colors.borderStrong,
+        primaryActionText: colors.green,
+        menu: colors.panelStrong,
+        modeFill: colors.panel,
+        modeBorder: colors.border,
+        modeText: colors.green,
+        pillFill: colors.panel,
+        pillBorder: colors.border,
+        statusSuccessFill: colors.greenSoft,
+        statusSuccessBorder: colors.green.withValues(alpha: 0.5),
+        statusSuccessText: colors.green,
+        statusPartialFill: colors.warningSoft,
+        statusPartialBorder: colors.warningBorder,
+        statusPartialText: colors.warningText,
+        statusFailureFill: colors.coral.withValues(alpha: 0.13),
+        statusFailureBorder: colors.coral.withValues(alpha: 0.45),
+        statusFailureText: colors.coral,
+      );
+    }
+    return const _SettingsValidationReportPalette(
+      row: Color(0xff08121f),
+      rowExpanded: Color(0xff0f1a31),
+      rowBorder: Color(0xff1f344f),
+      rowBorderActive: Color(0xff4e82c7),
+      rowGlow: Color(0x55235d9d),
+      text: Color(0xfff3f7ff),
+      textMuted: Color(0xffaebbd0),
+      textSubtle: Color(0xff74849b),
+      dotSuccess: Color(0xff6fe08a),
+      action: Color(0xff101b31),
+      actionBorder: Color(0xff3f5f88),
+      actionText: Color(0xffb4d5ff),
+      primaryAction: Color(0xff8cc5ff),
+      primaryActionBorder: Color(0xffa7d3ff),
+      primaryActionDivider: Color(0xff5f9bd6),
+      primaryActionText: Color(0xff061224),
+      menu: Color(0xff202329),
+      modeFill: Color(0xff0f1d34),
+      modeBorder: Color(0xff284368),
+      modeText: Color(0xffaad0ff),
+      pillFill: Color(0xff0e1a2d),
+      pillBorder: Color(0xff284368),
+      statusSuccessFill: Color(0xff103121),
+      statusSuccessBorder: Color(0xff2f7d4d),
+      statusSuccessText: Color(0xff78e08f),
+      statusPartialFill: Color(0xff2a1d08),
+      statusPartialBorder: Color(0xff9a640d),
+      statusPartialText: Color(0xffffb238),
+      statusFailureFill: Color(0xff281832),
+      statusFailureBorder: Color(0xff6d4baa),
+      statusFailureText: Color(0xffb78dff),
+    );
+  }
 }
