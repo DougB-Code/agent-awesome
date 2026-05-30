@@ -133,11 +133,11 @@ class _MemorySelectionEmpty extends StatelessWidget {
   /// Builds the no-selection state for the stewardship panel.
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'Select a memory',
-        style: TextStyle(color: context.agentAwesomeColors.muted),
-      ),
+    return const PanelEmptyBody(
+      icon: Icons.account_tree_outlined,
+      label: 'No memory selected',
+      message: 'Select a memory record to inspect its details.',
+      padding: EdgeInsets.fromLTRB(18, 18, 18, 28),
     );
   }
 }

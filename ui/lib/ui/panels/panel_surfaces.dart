@@ -76,17 +76,19 @@ class PanelSurface extends StatelessWidget {
     final colors = context.agentAwesomeColors;
     return Container(
       width: fillWidth ? double.infinity : null,
-      padding: padding,
-      clipBehavior: clipBehavior,
+      clipBehavior: _effectiveClipBehavior(),
       decoration: BoxDecoration(
-        color: selected ? colors.greenSoft : _fillColor(colors),
+        color: _fillColor(colors),
         gradient: _gradient(context),
         border: showBorder
-            ? Border.all(color: selected ? colors.borderStrong : colors.border)
+            ? Border.all(
+                color: _borderColor(colors),
+                width: AgentAwesomeStrokeTokens.borderWidth,
+              )
             : null,
         borderRadius: borderRadius ?? _defaultBorderRadius(),
       ),
-      child: child,
+      child: _buildChild(colors),
     );
   }
 
@@ -103,17 +105,59 @@ class PanelSurface extends StatelessWidget {
   /// Returns the flat fill color for the panel role.
   Color _fillColor(AgentAwesomePalette colors) {
     return switch (style) {
-      PanelSurfaceStyle.primary => colors.surface,
-      PanelSurfaceStyle.card => colors.surface,
+      PanelSurfaceStyle.primary => selected ? colors.greenSoft : colors.surface,
+      PanelSurfaceStyle.card => colors.card,
     };
   }
 
-  /// Returns the selected gradient only when it clarifies active state.
+  /// Returns gradients for top-level panel frames only.
   LinearGradient? _gradient(BuildContext context) {
+    if (style == PanelSurfaceStyle.card) {
+      return null;
+    }
     if (selected) {
       return context.agentAwesomeSelectedGradient;
     }
-    return null;
+    return context.agentAwesomeSurfaceGradient;
+  }
+
+  /// Returns the border color for the surface role and state.
+  Color _borderColor(AgentAwesomePalette colors) {
+    return switch (style) {
+      PanelSurfaceStyle.primary =>
+        selected ? colors.borderStrong : colors.border,
+      PanelSurfaceStyle.card => colors.cardBorder,
+    };
+  }
+
+  /// Clips selected cards so their active accent follows the card radius.
+  Clip _effectiveClipBehavior() {
+    if (selected && style == PanelSurfaceStyle.card) {
+      return Clip.antiAlias;
+    }
+    return clipBehavior;
+  }
+
+  /// Builds surface content and the shared selected-card accent stripe.
+  Widget _buildChild(AgentAwesomePalette colors) {
+    final paddedChild = Padding(padding: padding, child: child);
+    if (!selected || style != PanelSurfaceStyle.card) {
+      return paddedChild;
+    }
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          left: 0,
+          top: 0,
+          bottom: 0,
+          child: ColoredBox(
+            color: colors.cardAccent,
+            child: const SizedBox(width: 2),
+          ),
+        ),
+        paddedChild,
+      ],
+    );
   }
 }
 
@@ -130,7 +174,10 @@ class PanelBodySurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     return DecoratedBox(
-      decoration: BoxDecoration(color: colors.surface),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        gradient: context.agentAwesomeSurfaceGradient,
+      ),
       child: child,
     );
   }

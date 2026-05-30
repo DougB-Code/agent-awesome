@@ -44,14 +44,6 @@ class _ConstellationPainter extends CustomPainter {
         ..color = AgentAwesomeColors.green.withValues(
           alpha: selected ? 0.82 : 0.1,
         );
-      if (selected) {
-        final halo = Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 8
-          ..strokeCap = StrokeCap.round
-          ..color = AgentAwesomeColors.green.withValues(alpha: 0.14);
-        canvas.drawLine(anchor.center, node.center, halo);
-      }
       canvas.drawLine(anchor.center, node.center, paint);
     }
     final selectedEdges = <TaskConstellationEdge>[];
@@ -71,14 +63,6 @@ class _ConstellationPainter extends CustomPainter {
         ..strokeWidth = highlighted ? 3 : 1
         ..strokeCap = StrokeCap.round
         ..color = _edgeColor(edge).withValues(alpha: highlighted ? 0.76 : 0.18);
-      if (highlighted) {
-        final halo = Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 8
-          ..strokeCap = StrokeCap.round
-          ..color = _edgeColor(edge).withValues(alpha: 0.12);
-        canvas.drawLine(from.center, to.center, halo);
-      }
       canvas.drawLine(from.center, to.center, paint);
     }
     for (final edge in selectedEdges) {
@@ -88,19 +72,12 @@ class _ConstellationPainter extends CustomPainter {
         continue;
       }
       final color = _edgeColor(edge);
-      final halo = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
-        ..strokeCap = StrokeCap.round
-        ..color = color.withValues(alpha: 0.16);
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3.8
         ..strokeCap = StrokeCap.round
         ..color = color.withValues(alpha: 0.9);
-      canvas
-        ..drawLine(from.center, to.center, halo)
-        ..drawLine(from.center, to.center, paint);
+      canvas.drawLine(from.center, to.center, paint);
     }
   }
 

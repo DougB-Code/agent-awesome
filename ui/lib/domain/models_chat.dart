@@ -32,13 +32,12 @@ class ChatSession {
   final DateTime updatedAt;
 }
 
-/// ChatHistoryEntry stores app-owned chat metadata across profiles.
+/// ChatHistoryEntry stores app-owned chat metadata across selected agents.
 class ChatHistoryEntry {
   /// Creates a local chat history entry.
   const ChatHistoryEntry({
-    required this.profilePath,
-    required this.profileId,
-    required this.profileLabel,
+    required this.agentPath,
+    required this.agentLabel,
     required this.sessionId,
     required this.title,
     required this.updatedAt,
@@ -47,14 +46,11 @@ class ChatHistoryEntry {
     this.titleError = '',
   });
 
-  /// Runtime profile path that owns the chat session.
-  final String profilePath;
+  /// Agent config path captured when the chat was saved.
+  final String agentPath;
 
-  /// Runtime profile id captured when the chat was saved.
-  final String profileId;
-
-  /// Runtime profile label captured when the chat was saved.
-  final String profileLabel;
+  /// Agent label captured when the chat was saved.
+  final String agentLabel;
 
   /// Chat session id inside the owning profile.
   final String sessionId;
@@ -74,16 +70,15 @@ class ChatHistoryEntry {
   /// Last title generation error.
   final String titleError;
 
-  /// Stable app-local key for profile/session lookup.
+  /// Stable app-local key for session lookup.
   String get key {
-    return '$profilePath::$sessionId';
+    return sessionId;
   }
 
   /// Returns a copy with selected metadata changed.
   ChatHistoryEntry copyWith({
-    String? profilePath,
-    String? profileId,
-    String? profileLabel,
+    String? agentPath,
+    String? agentLabel,
     String? sessionId,
     String? title,
     DateTime? createdAt,
@@ -92,9 +87,8 @@ class ChatHistoryEntry {
     String? titleError,
   }) {
     return ChatHistoryEntry(
-      profilePath: profilePath ?? this.profilePath,
-      profileId: profileId ?? this.profileId,
-      profileLabel: profileLabel ?? this.profileLabel,
+      agentPath: agentPath ?? this.agentPath,
+      agentLabel: agentLabel ?? this.agentLabel,
       sessionId: sessionId ?? this.sessionId,
       title: title ?? this.title,
       createdAt: createdAt ?? this.createdAt,
@@ -107,9 +101,8 @@ class ChatHistoryEntry {
   /// Encodes this history entry to JSON.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
-      'profile_path': profilePath,
-      'profile_id': profileId,
-      'profile_label': profileLabel,
+      'agent_path': agentPath,
+      'agent_label': agentLabel,
       'session_id': sessionId,
       'title': title,
       if (createdAt != null) 'created_at': createdAt!.toIso8601String(),
@@ -122,9 +115,8 @@ class ChatHistoryEntry {
   /// Parses a history entry from decoded JSON.
   factory ChatHistoryEntry.fromJson(Map<String, dynamic> json) {
     return ChatHistoryEntry(
-      profilePath: stringValue(json['profile_path']),
-      profileId: stringValue(json['profile_id']),
-      profileLabel: stringValue(json['profile_label']),
+      agentPath: stringValue(json['agent_path']),
+      agentLabel: stringValue(json['agent_label']),
       sessionId: stringValue(json['session_id']),
       title: stringValue(json['title'], fallback: 'Untitled chat'),
       createdAt: parseOptionalDateTime(json['created_at']),

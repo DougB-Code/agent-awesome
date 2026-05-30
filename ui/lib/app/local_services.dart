@@ -37,7 +37,7 @@ class ServiceProcessStatus {
 
 /// _ManagedServiceEndpoint stores a local endpoint the UI is allowed to stop.
 class _ManagedServiceEndpoint {
-  /// Creates an endpoint stop target from runtime profile data.
+  /// Creates an endpoint stop target from agent runtime topology data.
   const _ManagedServiceEndpoint({
     required this.id,
     required this.name,
@@ -45,7 +45,7 @@ class _ManagedServiceEndpoint {
     required this.arguments,
   });
 
-  /// Stable runtime profile service id.
+  /// Stable agent runtime topology service id.
   final String id;
 
   /// Display name used in service logs.
@@ -86,6 +86,8 @@ class LocalServiceSupervisor {
   Future<List<ServiceProcessStatus>> startRequiredServices(
     RuntimeProfile profile, {
     bool restartAutoStarted = false,
+    bool includeHarness = true,
+    bool includeMcpServers = true,
   }) async {
     await _prepareLogDirectory();
     await _writeLogLine(
@@ -114,14 +116,18 @@ class LocalServiceSupervisor {
     }
 
     final statuses = <ServiceProcessStatus>[];
-    for (final server in profile.mcpServers.where((server) => server.enabled)) {
-      final status = await _ensureMcpServerStatus(
-        profile,
-        server,
-        restartAutoStarted: restartAutoStarted,
-      );
-      await _writeStatusLog(status);
-      statuses.add(status);
+    if (includeMcpServers) {
+      for (final server in profile.mcpServers.where(
+        (server) => server.enabled,
+      )) {
+        final status = await _ensureMcpServerStatus(
+          profile,
+          server,
+          restartAutoStarted: restartAutoStarted,
+        );
+        await _writeStatusLog(status);
+        statuses.add(status);
+      }
     }
     if (profile.workflow.enabled && !profile.workflow.hostedByHarness) {
       final workflowStatus = await _ensureWorkflowStatus(
@@ -131,13 +137,17 @@ class LocalServiceSupervisor {
       await _writeStatusLog(workflowStatus);
       statuses.add(workflowStatus);
     }
-    final harnessStatus = await _ensureHarnessStatus(
-      profile,
-      restartAutoStarted: restartAutoStarted,
-    );
-    await _writeStatusLog(harnessStatus);
-    statuses.add(harnessStatus);
-    if (profile.workflow.enabled && profile.workflow.hostedByHarness) {
+    if (includeHarness) {
+      final harnessStatus = await _ensureHarnessStatus(
+        profile,
+        restartAutoStarted: restartAutoStarted,
+      );
+      await _writeStatusLog(harnessStatus);
+      statuses.add(harnessStatus);
+    }
+    if (includeHarness &&
+        profile.workflow.enabled &&
+        profile.workflow.hostedByHarness) {
       final workflowStatus = await _ensureWorkflowStatus(
         profile,
         restartAutoStarted: restartAutoStarted,
@@ -465,16 +475,18 @@ class LocalServiceSupervisor {
     McpServerRuntime server, {
     required bool restartAutoStarted,
   }) async {
+    final serviceId = agentRuntimeServiceId(profile, server.id);
     final health = Uri.parse(server.healthUrl);
+    final logPath = _serviceLogPath(profile, server.kind);
     _rememberServiceEndpoint(
-      id: server.id,
+      id: serviceId,
       name: server.label,
       health: health,
       arguments: server.arguments,
     );
     if (restartAutoStarted && server.autoStart) {
       await _restartAutoStartedEndpoint(
-        id: server.id,
+        id: serviceId,
         name: server.label,
         health: health,
       );
@@ -509,33 +521,32 @@ class LocalServiceSupervisor {
         'External service is not reachable',
       );
     }
-    if (server.workingDirectory.isEmpty || server.packagePath.isEmpty) {
+    if (server.workingDirectory.isEmpty || server.executablePath.isEmpty) {
       return _status(
         server.label,
         server.healthUrl,
         ConnectionStateKind.disconnected,
-        'Managed server has no package path',
+        'Managed server has no executable path',
       );
     }
     await _createArgumentDirectories(server.arguments);
     final process = await _startProcess(
-      id: server.id,
-      profile: profile,
+      id: serviceId,
       name: server.label,
       health: health,
       workingDirectory: server.workingDirectory,
-      packagePath: server.packagePath,
-      arguments: _withLogFile(server.arguments, _serviceLogPath(server.kind)),
+      executablePath: server.executablePath,
+      arguments: _withLogFile(server.arguments, logPath),
     );
-    _started[server.id] = process;
+    _started[serviceId] = process;
     final status = await _waitForProcessHealth(
       server.label,
       health,
       process,
-      logPath: _serviceLogPath(server.kind),
+      logPath: logPath,
     );
     if (status.state != ConnectionStateKind.connected) {
-      _started.remove(server.id);
+      _started.remove(serviceId);
     }
     return status;
   }
@@ -546,6 +557,7 @@ class LocalServiceSupervisor {
     required bool restartAutoStarted,
   }) async {
     final workflow = profile.workflow;
+    final serviceId = agentRuntimeServiceId(profile, workflow.id);
     final health = Uri.parse(workflow.healthUrl);
     final arguments = workflowArgumentsForProfile(profile);
     if (workflow.hostedByHarness) {
@@ -565,14 +577,14 @@ class LocalServiceSupervisor {
       );
     }
     _rememberServiceEndpoint(
-      id: workflow.id,
+      id: serviceId,
       name: workflow.label,
       health: health,
       arguments: arguments,
     );
     if (restartAutoStarted && workflow.autoStart) {
       await _restartAutoStartedEndpoint(
-        id: workflow.id,
+        id: serviceId,
         name: workflow.label,
         health: health,
       );
@@ -600,25 +612,25 @@ class LocalServiceSupervisor {
       );
     }
     await _createArgumentDirectories(arguments);
+    final logPath = _agentServiceLogPath(profile, 'workflow.log');
     final process = await _startProcess(
-      id: workflow.id,
-      profile: profile,
+      id: serviceId,
       name: workflow.label,
       health: health,
       workingDirectory: workflow.workingDirectory,
-      packagePath: workflow.packagePath,
+      executablePath: workflow.executablePath,
       arguments: arguments,
-      outputLogPath: '${config.serviceLogDirectory}/workflow.log',
+      outputLogPath: logPath,
     );
-    _started[workflow.id] = process;
+    _started[serviceId] = process;
     final status = await _waitForProcessHealth(
       workflow.label,
       health,
       process,
-      logPath: '${config.serviceLogDirectory}/workflow.log',
+      logPath: logPath,
     );
     if (status.state != ConnectionStateKind.connected) {
-      _started.remove(workflow.id);
+      _started.remove(serviceId);
     }
     return status;
   }
@@ -629,17 +641,18 @@ class LocalServiceSupervisor {
     required bool restartAutoStarted,
   }) async {
     final harness = profile.harness;
+    final serviceId = agentRuntimeServiceId(profile, harness.id);
     final health = Uri.parse(harness.sessionsUrl);
     final arguments = harnessArgumentsForProfile(profile);
     _rememberServiceEndpoint(
-      id: harness.id,
+      id: serviceId,
       name: harness.label,
       health: health,
       arguments: arguments,
     );
     if (restartAutoStarted && harness.autoStart) {
       await _restartAutoStartedEndpoint(
-        id: harness.id,
+        id: serviceId,
         name: harness.label,
         health: health,
       );
@@ -667,24 +680,24 @@ class LocalServiceSupervisor {
       );
     }
     await _createArgumentDirectories(arguments);
+    final logPath = _agentServiceLogPath(profile, 'harness.log');
     final process = await _startProcess(
-      id: harness.id,
-      profile: profile,
+      id: serviceId,
       name: harness.label,
       health: health,
       workingDirectory: harness.workingDirectory,
-      packagePath: harness.packagePath,
-      arguments: _withHarnessLogFile(arguments),
+      executablePath: harness.executablePath,
+      arguments: _withHarnessLogFile(arguments, logPath),
     );
-    _started[harness.id] = process;
+    _started[serviceId] = process;
     final status = await _waitForProcessHealth(
       harness.label,
       health,
       process,
-      logPath: '${config.serviceLogDirectory}/harness.log',
+      logPath: logPath,
     );
     if (status.state != ConnectionStateKind.connected) {
-      _started.remove(harness.id);
+      _started.remove(serviceId);
     }
     return status;
   }
@@ -695,17 +708,18 @@ class LocalServiceSupervisor {
     GatewayRuntime gateway, {
     required bool restartAutoStarted,
   }) async {
+    final serviceId = agentRuntimeServiceId(profile, gateway.id);
     final health = Uri.parse(gateway.healthUrl);
     final arguments = gatewayArgumentsForProfile(profile);
     _rememberServiceEndpoint(
-      id: gateway.id,
+      id: serviceId,
       name: gateway.label,
       health: health,
       arguments: arguments,
     );
     if (restartAutoStarted && gateway.autoStart) {
       await _restartAutoStartedEndpoint(
-        id: gateway.id,
+        id: serviceId,
         name: gateway.label,
         health: health,
       );
@@ -732,62 +746,50 @@ class LocalServiceSupervisor {
         'External gateway is not reachable',
       );
     }
+    final logPath = _agentServiceLogPath(profile, 'gateway.log');
     final process = await _startProcess(
-      id: gateway.id,
-      profile: profile,
+      id: serviceId,
       name: gateway.label,
       health: health,
       workingDirectory: gateway.workingDirectory,
-      packagePath: gateway.packagePath,
+      executablePath: gateway.executablePath,
       arguments: arguments,
-      outputLogPath: '${config.serviceLogDirectory}/gateway.log',
+      outputLogPath: logPath,
       disableSlackIngress: true,
     );
-    _started[gateway.id] = process;
+    _started[serviceId] = process;
     final status = await _waitForProcessHealth(
       gateway.label,
       health,
       process,
-      logPath: '${config.serviceLogDirectory}/gateway.log',
+      logPath: logPath,
     );
     if (status.state != ConnectionStateKind.connected) {
-      _started.remove(gateway.id);
+      _started.remove(serviceId);
     }
     return status;
   }
 
-  /// Builds and starts one service binary through the shared supervisor.
+  /// Starts one configured service executable through the shared supervisor.
   Future<ManagedProcessHandle> _startProcess({
     required String id,
-    required RuntimeProfile profile,
     required String name,
     required Uri health,
     required String workingDirectory,
-    required String packagePath,
+    required String executablePath,
     required List<String> arguments,
     String? outputLogPath,
     bool disableSlackIngress = false,
   }) async {
-    final goCachePath = '${config.workspaceRoot}/harness/build/gocache';
     final env = disableSlackIngress
-        ? buildManagedGatewayEnvironment(
-            config: config,
-            goCachePath: goCachePath,
-          )
-        : buildLocalServiceEnvironment(
-            config: config,
-            goCachePath: goCachePath,
-          );
-    await Directory(env['GOCACHE']!).create(recursive: true);
+        ? buildManagedGatewayEnvironment(config: config)
+        : buildLocalServiceEnvironment(config: config);
     final resolvedOutputLogPath =
         outputLogPath ?? _processOutputLogPath(arguments);
-    final executable = await _resolveServiceExecutable(
-      profile: profile,
-      name: name,
-      workingDirectory: workingDirectory,
-      packagePath: packagePath,
-      environment: env,
-    );
+    final executable = executablePath.trim();
+    if (executable.isEmpty) {
+      throw StateError('No executable configured for $name.');
+    }
     if (_closed) {
       throw StateError(
         'Local service supervisor closed before starting $name.',
@@ -886,80 +888,6 @@ class LocalServiceSupervisor {
     }
     stdout.writeln('[agentawesome-ui] $line');
     await _writeLogLine('startup', line);
-  }
-
-  /// Builds a Go command binary into the profile build directory.
-  Future<String> _resolveServiceExecutable({
-    required RuntimeProfile profile,
-    required String name,
-    required String workingDirectory,
-    required String packagePath,
-    required Map<String, String> environment,
-  }) async {
-    final executable = managedServiceBinaryPath(
-      workspaceRoot: config.workspaceRoot,
-      profileId: profile.id,
-      serviceName: name,
-    );
-    final prebuiltMarker = File(
-      managedServicePrebuiltMarkerPath(
-        workspaceRoot: config.workspaceRoot,
-        profileId: profile.id,
-      ),
-    );
-    if (await prebuiltMarker.exists() && await File(executable).exists()) {
-      await _writeLogLine(name, 'using prebuilt $executable');
-      return executable;
-    }
-    await _writeLogLine(name, 'building $packagePath in $workingDirectory');
-    return _buildBinary(
-      profile: profile,
-      name: name,
-      workingDirectory: workingDirectory,
-      packagePath: packagePath,
-      environment: environment,
-    );
-  }
-
-  /// Builds a Go command binary into the profile build directory.
-  Future<String> _buildBinary({
-    required RuntimeProfile profile,
-    required String name,
-    required String workingDirectory,
-    required String packagePath,
-    required Map<String, String> environment,
-  }) async {
-    final executable = managedServiceBinaryPath(
-      workspaceRoot: config.workspaceRoot,
-      profileId: profile.id,
-      serviceName: name,
-    );
-    final binRoot = File(executable).parent;
-    await binRoot.create(recursive: true);
-    final result = await _processSupervisor.run(
-      ManagedProcessSpec(
-        id: 'go-build-${serviceBinaryName(profile.id)}-${serviceBinaryName(name)}',
-        name: 'go build $name',
-        executable: 'go',
-        arguments: buildGoBuildArguments(
-          outputPath: executable,
-          packagePath: packagePath,
-        ),
-        workingDirectory: workingDirectory,
-        environment: environment,
-        kind: ManagedProcessKind.oneShotCommand,
-        shutdownMode: ManagedProcessShutdownMode.processGroup,
-        timeout: const Duration(minutes: 5),
-        scope: 'local-services',
-      ),
-    );
-    await _writeLogLine(name, 'go build exit ${result.exitCode}');
-    await _writeLogBlock(name, 'go build stdout', result.stdout.toString());
-    await _writeLogBlock(name, 'go build stderr', result.stderr.toString());
-    if (result.exitCode != 0) {
-      throw StateError('Could not build $name. See service logs for details.');
-    }
-    return executable;
   }
 
   /// Waits for a process health endpoint or an early process exit.
@@ -1072,7 +1000,8 @@ class LocalServiceSupervisor {
       }
       if (flag == '--workflow-definitions' ||
           flag == '--command-data-dir' ||
-          flag == '--command-parser-dir') {
+          flag == '--command-parser-dir' ||
+          flag == '--command-allow-workdir') {
         await Directory(value).create(recursive: true);
       }
     }
@@ -1104,11 +1033,16 @@ class LocalServiceSupervisor {
   }
 
   /// Returns the persistent log path for a managed service kind.
-  String _serviceLogPath(String kind) {
+  String _serviceLogPath(RuntimeProfile profile, String kind) {
     return switch (kind) {
-      'memory' => '${config.serviceLogDirectory}/memory.log',
+      'memory' => _agentServiceLogPath(profile, 'memory.log'),
       _ => '${config.serviceLogDirectory}/ui.log',
     };
+  }
+
+  /// Returns a profile-scoped service log path for one local agent runtime.
+  String _agentServiceLogPath(RuntimeProfile profile, String filename) {
+    return '${config.serviceLogDirectory}/agents/${serviceBinaryName(profile.id)}/$filename';
   }
 
   /// Returns the service log path that should receive process stdio.
@@ -1135,9 +1069,8 @@ class LocalServiceSupervisor {
   }
 
   /// Adds the harness log-file argument before delegated runtime args.
-  List<String> _withHarnessLogFile(List<String> arguments) {
+  List<String> _withHarnessLogFile(List<String> arguments, String path) {
     final boundary = arguments.indexOf('--');
-    final path = '${config.serviceLogDirectory}/harness.log';
     if (boundary == -1) {
       return _withLogFile(arguments, path);
     }
@@ -1161,18 +1094,6 @@ class LocalServiceSupervisor {
     return _logWrite;
   }
 
-  /// Writes a titled multi-line block to the persistent logs.
-  Future<void> _writeLogBlock(String name, String title, String content) async {
-    final trimmed = content.trim();
-    if (trimmed.isEmpty) {
-      return;
-    }
-    await _writeLogLine(name, '$title:');
-    for (final line in trimmed.split('\n')) {
-      await _writeLogLine(name, line);
-    }
-  }
-
   /// Writes a status transition to the combined service log.
   Future<void> _writeStatusLog(ServiceProcessStatus status) async {
     await _writeLogLine(
@@ -1182,37 +1103,11 @@ class LocalServiceSupervisor {
   }
 }
 
-/// Builds Go compiler arguments for managed service binaries.
-List<String> buildGoBuildArguments({
-  required String outputPath,
-  required String packagePath,
-}) {
-  return <String>['build', '-buildvcs=false', '-o', outputPath, packagePath];
-}
-
-/// Returns the app-managed binary path for one service in one runtime profile.
-String managedServiceBinaryPath({
-  required String workspaceRoot,
-  required String profileId,
-  required String serviceName,
-}) {
-  return '${managedServiceProfileBuildPath(workspaceRoot: workspaceRoot, profileId: profileId)}/bin/${serviceBinaryName(serviceName)}';
-}
-
-/// Returns the profile build directory used for managed service binaries.
-String managedServiceProfileBuildPath({
-  required String workspaceRoot,
-  required String profileId,
-}) {
-  return '$workspaceRoot/harness/build/profiles/${serviceBinaryName(profileId)}';
-}
-
-/// Returns the marker path that identifies a packaged prebuilt service set.
-String managedServicePrebuiltMarkerPath({
-  required String workspaceRoot,
-  required String profileId,
-}) {
-  return '${managedServiceProfileBuildPath(workspaceRoot: workspaceRoot, profileId: profileId)}/.prebuilt';
+/// Returns the profile-scoped local service id for one agent runtime.
+String agentRuntimeServiceId(RuntimeProfile profile, String serviceId) {
+  final profilePart = serviceBinaryName(profile.id);
+  final servicePart = serviceBinaryName(serviceId);
+  return '$profilePart-$servicePart';
 }
 
 /// Converts a display name into a stable local binary filename.

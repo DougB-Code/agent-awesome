@@ -196,7 +196,10 @@ class _CommandSubShellAreaFilterButton extends StatelessWidget {
         visualDensity: VisualDensity.compact,
         backgroundColor: selected ? colors.greenSoft : colors.surface,
         foregroundColor: selected ? colors.green : colors.ink,
-        side: BorderSide(color: selected ? colors.borderStrong : colors.border),
+        side: BorderSide(
+          color: selected ? colors.borderStrong : colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       icon: Icon(filter.icon, size: 16),

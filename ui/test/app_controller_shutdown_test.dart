@@ -1,14 +1,20 @@
 /// Tests Agent Awesome controller shutdown boundaries.
 library;
 
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:agentawesome_ui/app/app_config.dart';
+import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
 import 'package:agentawesome_ui/app/chat_history.dart';
 import 'package:agentawesome_ui/app/config_files.dart';
+import 'package:agentawesome_ui/app/local_model_runtime.dart';
 import 'package:agentawesome_ui/app/local_services.dart';
 import 'package:agentawesome_ui/app/process_supervisor.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/clients/assistant_client.dart';
+import 'package:agentawesome_ui/domain/local_models.dart';
 import 'package:agentawesome_ui/domain/model_config.dart';
 import 'package:agentawesome_ui/domain/models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -84,9 +90,8 @@ void main() {
       final historyStore = _MemoryChatHistoryStore(
         entries: <ChatHistoryEntry>[
           ChatHistoryEntry(
-            profilePath: '/tmp/personal.json',
-            profileId: 'personal',
-            profileLabel: 'Personal',
+            agentPath: '/tmp/agent.yaml',
+            agentLabel: 'Personal',
             sessionId: 'stale-session',
             title: 'Old chat',
             createdAt: DateTime(2026, 5, 7, 9),
@@ -123,42 +128,80 @@ void main() {
     },
   );
 
-  test(
-    'selectHistoryChat keeps a cross-profile history card selected on failure',
-    () async {
-      const missingProfilePath = '/tmp/missing-personal-profile.json';
-      const sessionId = 'stale-cross-profile-session';
-      const chatKey = '$missingProfilePath::$sessionId';
-      final historyStore = _MemoryChatHistoryStore(
-        entries: <ChatHistoryEntry>[
-          ChatHistoryEntry(
-            profilePath: missingProfilePath,
-            profileId: 'personal',
-            profileLabel: 'Personal',
-            sessionId: sessionId,
-            title: 'Chat session-',
-            createdAt: DateTime(2026, 5, 16, 9, 17),
-            updatedAt: DateTime(2026, 5, 16, 9, 17),
-          ),
-        ],
-      );
-      final controller = AgentAwesomeAppController(
-        config: _testConfig(),
-        assistantClient: _RejectingAssistantClient(),
-        chatHistoryStore: historyStore,
-      );
-      controller.runtimeProfile = _testProfile();
-      controller.runtimeProfilePath = '/tmp/agent-awesome-profile.json';
-      controller.chatHistory = await historyStore.load();
-      controller.sessions = const <ChatSession>[];
+  test('selectHistoryChat keeps a history card selected on failure', () async {
+    const sessionId = 'stale-session';
+    const chatKey = sessionId;
+    final historyStore = _MemoryChatHistoryStore(
+      entries: <ChatHistoryEntry>[
+        ChatHistoryEntry(
+          agentPath: '/tmp/agent.yaml',
+          agentLabel: 'Personal',
+          sessionId: sessionId,
+          title: 'Chat session-',
+          createdAt: DateTime(2026, 5, 16, 9, 17),
+          updatedAt: DateTime(2026, 5, 16, 9, 17),
+        ),
+      ],
+    );
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      assistantClient: _RejectingAssistantClient(),
+      chatHistoryStore: historyStore,
+    );
+    controller.runtimeProfile = _testProfile();
+    controller.runtimeProfilePath = '/tmp/agent-awesome-profile.json';
+    controller.chatHistory = await historyStore.load();
+    controller.sessions = const <ChatSession>[];
 
-      await controller.selectHistoryChat(chatKey);
+    await controller.selectHistoryChat(chatKey);
 
-      expect(controller.selectedChatKey, chatKey);
-      expect(controller.selectedSessionId, sessionId);
-      expect(controller.messages, isEmpty);
-    },
-  );
+    expect(controller.selectedChatKey, chatKey);
+    expect(controller.selectedSessionId, sessionId);
+    expect(controller.messages, isEmpty);
+  });
+
+  test('initialize restores the latest saved chat card selection', () async {
+    final temp = Directory.systemTemp.createTempSync(
+      'agentawesome-chat-selection-',
+    );
+    addTearDown(() => temp.deleteSync(recursive: true));
+    final profileFile = File('${temp.path}/runtime-profile.json');
+    profileFile.writeAsStringSync(jsonEncode(_testProfile().toJson()));
+    final historyStore = _MemoryChatHistoryStore(
+      entries: <ChatHistoryEntry>[
+        ChatHistoryEntry(
+          agentPath: '/tmp/agent.yaml',
+          agentLabel: 'Personal',
+          sessionId: 'older-session',
+          title: 'Older chat',
+          createdAt: DateTime(2026, 5, 15, 9),
+          updatedAt: DateTime(2026, 5, 15, 9),
+        ),
+        ChatHistoryEntry(
+          agentPath: '/tmp/agent.yaml',
+          agentLabel: 'Personal',
+          sessionId: 'latest-session',
+          title: 'Latest chat',
+          createdAt: DateTime(2026, 5, 16, 9),
+          updatedAt: DateTime(2026, 5, 16, 9),
+        ),
+      ],
+    );
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(
+        runtimeProfilePath: profileFile.path,
+        autoStartLocalServices: false,
+      ),
+      appSettingsStore: _MemoryAppSettingsStore(),
+      chatHistoryStore: historyStore,
+      localModels: const _NoopLocalModelRuntime(),
+    );
+
+    await controller.initialize();
+
+    expect(controller.selectedChatKey, 'latest-session');
+    expect(controller.selectedSessionId, 'latest-session');
+  });
 
   test('selectSession restores the last routed chat model', () async {
     final controller = AgentAwesomeAppController(
@@ -327,6 +370,82 @@ class _MemoryChatHistoryStore extends ChatHistoryStore {
   }
 }
 
+/// Memory-backed app settings store keeps initialization tests off disk.
+class _MemoryAppSettingsStore extends AgentAwesomeAppSettingsStore {
+  /// Creates an in-memory app settings store.
+  const _MemoryAppSettingsStore();
+
+  /// Loads settings that pause initialization before runtime startup.
+  @override
+  Future<AgentAwesomeAppSettings> load() async {
+    return const AgentAwesomeAppSettings();
+  }
+
+  /// Ignores app settings writes during controller tests.
+  @override
+  Future<void> save(
+    AgentAwesomeAppSettings settings, {
+    Iterable<String> extraPolicyActors = const <String>[],
+  }) async {}
+
+  /// Ignores memory firewall policy writes during controller tests.
+  @override
+  Future<void> saveMemoryFirewallPolicy(
+    AgentAwesomeAppSettings settings, {
+    Iterable<String> extraPolicyActors = const <String>[],
+  }) async {}
+}
+
+/// No-op local model runtime keeps initialization tests offline.
+class _NoopLocalModelRuntime implements LocalModelRuntime {
+  /// Creates a local model runtime that never finds installed models.
+  const _NoopLocalModelRuntime();
+
+  /// Reports that the requested model is not installed.
+  @override
+  Future<LocalModelInstall?> recoverInstalled(
+    LocalModelDescriptor model, {
+    List<String> candidatePaths = const <String>[],
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    return null;
+  }
+
+  /// Reports that the requested model is not installed.
+  @override
+  Future<bool> isInstalled(LocalModelDescriptor model) async {
+    return false;
+  }
+
+  /// Runtime installation is not needed for this test double.
+  @override
+  Future<String> ensureRuntimeInstalled({
+    LocalModelDescriptor? model,
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    return '';
+  }
+
+  /// Model installation is not needed for this test double.
+  @override
+  Future<LocalModelInstall> ensureInstalled(
+    LocalModelDescriptor model, {
+    void Function(LocalModelInstallProgress progress)? onProgress,
+  }) async {
+    throw UnsupportedError('No-op local model runtime cannot install models');
+  }
+
+  /// Model startup is not needed for this test double.
+  @override
+  Future<ServiceProcessStatus> start(LocalModelDescriptor model) async {
+    throw UnsupportedError('No-op local model runtime cannot start models');
+  }
+
+  /// Nothing is allocated by this test double.
+  @override
+  Future<void> close() async {}
+}
+
 /// Returns the model choices used by chat restoration tests.
 List<ConfigFileEntry> _testModelConfigs() {
   return const <ConfigFileEntry>[
@@ -356,8 +475,11 @@ List<ConfigFileEntry> _testModelConfigs() {
 }
 
 /// Builds a minimal app config for controller shutdown tests.
-AppConfig _testConfig() {
-  return const AppConfig(
+AppConfig _testConfig({
+  String runtimeProfilePath = '',
+  bool autoStartLocalServices = true,
+}) {
+  return AppConfig(
     agentApiBaseUrl: 'http://127.0.0.1:8080/api',
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
@@ -365,12 +487,12 @@ AppConfig _testConfig() {
     agentAppName: 'agent_awesome',
     agentUserId: 'doug',
     workspaceRoot: '/tmp/agentawesome-ui-test',
-    autoStartLocalServices: true,
-    runtimeProfilePath: '',
+    autoStartLocalServices: autoStartLocalServices,
+    runtimeProfilePath: runtimeProfilePath,
   );
 }
 
-/// Builds a minimal runtime profile for controller unit tests.
+/// Builds a minimal agent runtime topology for controller unit tests.
 RuntimeProfile _testProfile() {
   return const RuntimeProfile(
     id: 'personal',
@@ -383,7 +505,7 @@ RuntimeProfile _testProfile() {
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: '/tmp/model.yaml',
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -396,7 +518,7 @@ RuntimeProfile _testProfile() {
       apiBaseUrl: 'http://127.0.0.1:2/api',
       healthUrl: 'http://127.0.0.1:2/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:1/api',
       contextBaseUrl: 'http://127.0.0.1:1/api/context',
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',

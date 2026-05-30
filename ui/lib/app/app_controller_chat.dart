@@ -5,12 +5,11 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
   /// Selects a chat session and loads its events when connected.
   Future<void> selectSession(String sessionId, {String chatKey = ''}) async {
     await _log('select session requested $sessionId');
-    selectedSessionId = sessionId;
-    selectedChatHistoryKey = chatKey.trim().isEmpty
-        ? runtimeProfilePath.isEmpty
-              ? ''
-              : _chatHistoryKey(runtimeProfilePath, sessionId)
+    final key = chatKey.trim().isEmpty
+        ? _chatHistoryKey(sessionId)
         : chatKey.trim();
+    selectedSessionId = sessionId;
+    selectedChatHistoryKey = key;
     pendingConfirmation = null;
     messages = const <ChatMessage>[];
     _notifyControllerListeners();
@@ -25,7 +24,6 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
           .whereType<ChatMessage>()
           .toList();
       _scheduleChatTitleRefresh(
-        profilePath: runtimeProfilePath,
         sessionId: sessionId,
         transcript: List<ChatMessage>.from(messages),
       );
@@ -49,7 +47,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
-  /// Selects a saved chat, switching profiles when necessary.
+  /// Selects a saved chat in the current agent runtime.
   Future<void> selectHistoryChat(String chatKey) async {
     ChatHistoryEntry? target;
     for (final entry in chatHistory) {
@@ -59,52 +57,15 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       }
     }
     if (target == null) {
-      final parsed = _parseChatHistoryKey(chatKey);
-      if (parsed == null) {
+      final sessionId = chatKey.trim();
+      if (sessionId.isEmpty) {
         return;
       }
-      _selectHistoryChatCard(chatKey, parsed.sessionId);
-      if (parsed.profilePath != runtimeProfilePath) {
-        try {
-          await loadRuntimeProfileFromPath(
-            parsed.profilePath,
-            reloadData: false,
-          );
-        } catch (error) {
-          _setEndpoint(
-            'Runtime Profile',
-            ConnectionStateKind.disconnected,
-            error.toString(),
-          );
-          _notifyControllerListeners();
-          return;
-        }
-        if (!await _ensureChatRuntimeReady()) {
-          return;
-        }
-        await Future.wait(<Future<void>>[_loadMemory(), _loadTasks()]);
-      }
-      await selectSession(parsed.sessionId, chatKey: chatKey);
+      _selectHistoryChatCard(sessionId, sessionId);
+      await selectSession(sessionId, chatKey: sessionId);
       return;
     }
     _selectHistoryChatCard(target.key, target.sessionId);
-    if (target.profilePath != runtimeProfilePath) {
-      try {
-        await loadRuntimeProfileFromPath(target.profilePath, reloadData: false);
-      } catch (error) {
-        _setEndpoint(
-          'Runtime Profile',
-          ConnectionStateKind.disconnected,
-          error.toString(),
-        );
-        _notifyControllerListeners();
-        return;
-      }
-      if (!await _ensureChatRuntimeReady()) {
-        return;
-      }
-      await Future.wait(<Future<void>>[_loadMemory(), _loadTasks()]);
-    }
     await selectSession(target.sessionId, chatKey: target.key);
   }
 
@@ -117,6 +78,37 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
+  /// Restores the most recent saved chat as the active chat card selection.
+  bool _restoreSelectedChatFromHistory() {
+    final selectedKey = selectedChatHistoryKey.trim();
+    if (selectedKey.isNotEmpty) {
+      final entry = _historyEntryByKey(selectedKey);
+      if (entry != null && entry.sessionId.trim().isNotEmpty) {
+        selectedChatHistoryKey = entry.key;
+        selectedSessionId = entry.sessionId;
+        return true;
+      }
+    }
+    final sessionId = selectedSessionId?.trim() ?? '';
+    if (sessionId.isNotEmpty) {
+      final entry = _historyEntryByKey(_chatHistoryKey(sessionId));
+      if (entry != null && entry.sessionId.trim().isNotEmpty) {
+        selectedChatHistoryKey = entry.key;
+        selectedSessionId = entry.sessionId;
+        return true;
+      }
+    }
+    for (final entry in _sortedHistory(chatHistory)) {
+      if (entry.key.trim().isEmpty || entry.sessionId.trim().isEmpty) {
+        continue;
+      }
+      selectedChatHistoryKey = entry.key;
+      selectedSessionId = entry.sessionId;
+      return true;
+    }
+    return false;
+  }
+
   /// Deletes a saved chat and its backing runtime session.
   Future<void> deleteHistoryChat(String chatKey) async {
     await _ensureInitialized();
@@ -126,40 +118,29 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       await _log('delete chat ignored: target not found');
       return;
     }
-    final originalProfilePath = runtimeProfilePath;
-    final shouldRestoreProfile =
-        originalProfilePath.isNotEmpty &&
-        target.profilePath != originalProfilePath;
     try {
-      if (target.profilePath.isNotEmpty &&
-          target.profilePath != runtimeProfilePath) {
-        await loadRuntimeProfileFromPath(target.profilePath, reloadData: false);
-      }
       if (!await _ensureChatRuntimeReady()) {
         await _log('delete chat blocked: managed runtime unavailable');
         _notifyControllerListeners();
         throw StateError(statusMessage);
       }
       await assistantClient.deleteSession(target.sessionId);
-      await _removeHistoryChat(
-        profilePath: target.profilePath,
-        sessionId: target.sessionId,
-      );
+      await _removeHistoryChat(sessionId: target.sessionId);
       _chatTaskIds.remove(target.sessionId);
-      if (target.profilePath == runtimeProfilePath) {
-        sessions = sessions
-            .where((session) => session.id != target.sessionId)
-            .toList();
-        if (selectedSessionId == target.sessionId) {
-          pendingConfirmation = null;
-          if (sessions.isEmpty) {
+      sessions = sessions
+          .where((session) => session.id != target.sessionId)
+          .toList();
+      if (selectedSessionId == target.sessionId) {
+        pendingConfirmation = null;
+        if (sessions.isEmpty) {
+          if (!_restoreSelectedChatFromHistory()) {
             selectedSessionId = null;
             selectedChatHistoryKey = '';
-            messages = const <ChatMessage>[];
-          } else {
-            selectedSessionId = sessions.first.id;
-            await selectSession(sessions.first.id);
           }
+          messages = const <ChatMessage>[];
+        } else {
+          selectedSessionId = sessions.first.id;
+          await selectSession(sessions.first.id);
         }
       }
       _setEndpoint('Agent API', ConnectionStateKind.connected, 'Deleted chat');
@@ -173,55 +154,23 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       );
       rethrow;
     } finally {
-      if (shouldRestoreProfile && runtimeProfilePath != originalProfilePath) {
-        try {
-          await loadRuntimeProfileFromPath(originalProfilePath);
-        } catch (error) {
-          await _log('delete chat profile restore failed: $error');
-          _setEndpoint(
-            'Runtime Profile',
-            ConnectionStateKind.disconnected,
-            error.toString(),
-          );
-          _notifyControllerListeners();
-        }
-      } else {
-        _notifyControllerListeners();
-      }
+      _notifyControllerListeners();
     }
   }
 
   /// Creates a new chat session.
-  Future<bool> createChat({String profilePath = ''}) async {
+  Future<bool> createChat() async {
     await _ensureInitialized();
     await _log('create chat requested');
     if (runtimeProfile == null) {
-      await _log('create chat blocked: runtime profile missing');
+      await _log('create chat blocked: agent runtime missing');
       _setEndpoint(
-        'Runtime Profile',
+        'Agent runtime',
         ConnectionStateKind.disconnected,
         statusMessage,
       );
       _notifyControllerListeners();
       return false;
-    }
-    final targetProfilePath = profilePath.trim().isEmpty
-        ? defaultChatProfilePath
-        : profilePath.trim();
-    if (targetProfilePath.isNotEmpty &&
-        targetProfilePath != runtimeProfilePath) {
-      try {
-        await loadRuntimeProfileFromPath(targetProfilePath, reloadData: false);
-      } catch (error) {
-        await _log('create chat profile switch failed: $error');
-        _setEndpoint(
-          'Runtime Profile',
-          ConnectionStateKind.disconnected,
-          error.toString(),
-        );
-        _notifyControllerListeners();
-        return false;
-      }
     }
     if (!await _ensureChatRuntimeReady()) {
       await _log('create chat blocked: managed runtime unavailable');
@@ -242,7 +191,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       final session = await assistantClient.createSession();
       sessions = <ChatSession>[session, ...sessions];
       selectedSessionId = session.id;
-      selectedChatHistoryKey = _chatHistoryKey(runtimeProfilePath, session.id);
+      selectedChatHistoryKey = _chatHistoryKey(session.id);
       messages = const <ChatMessage>[];
       await _upsertHistoryChat(session);
       _setEndpoint('Agent API', ConnectionStateKind.connected, 'Created chat');
@@ -369,6 +318,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     return _taskWriteToolNames.contains(confirmation.toolName);
   }
 
+  /// Loads live runtime sessions while preserving saved chat selection.
   Future<void> _loadSessions() async {
     await _log('load sessions start');
     try {
@@ -383,8 +333,10 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
         await _log(
           'load sessions empty; preserving local chat history ${chatHistory.length}',
         );
-        selectedSessionId = null;
-        selectedChatHistoryKey = '';
+        if (!_restoreSelectedChatFromHistory()) {
+          selectedSessionId = null;
+          selectedChatHistoryKey = '';
+        }
         messages = const <ChatMessage>[];
       }
       _setEndpoint('Agent API', ConnectionStateKind.connected, 'Connected');
@@ -398,22 +350,22 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     }
   }
 
-  /// Merges active-profile runtime sessions into the local chat history.
+  /// Merges runtime sessions into the local chat history.
   Future<void> _mergeHistorySessions(List<ChatSession> loaded) async {
     var changed = false;
     final entriesByKey = <String, ChatHistoryEntry>{
       for (final entry in chatHistory) entry.key: entry,
     };
-    if (runtimeProfile == null || runtimeProfilePath.isEmpty) {
+    if (runtimeProfile == null) {
       return;
     }
     for (final session in loaded) {
-      final key = _chatHistoryKey(runtimeProfilePath, session.id);
+      final key = _chatHistoryKey(session.id);
       final existing = entriesByKey[key];
       final entry = _historyEntryForSession(session, existing: existing);
       if (existing == null ||
           existing.updatedAt != entry.updatedAt ||
-          existing.profileLabel != entry.profileLabel) {
+          existing.agentLabel != entry.agentLabel) {
         entriesByKey[key] = entry;
         changed = true;
       }
@@ -425,12 +377,12 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     await chatHistoryStore.save(chatHistory);
   }
 
-  /// Adds or updates one active-profile chat history entry.
+  /// Adds or updates one chat history entry.
   Future<void> _upsertHistoryChat(ChatSession session) async {
     final entriesByKey = <String, ChatHistoryEntry>{
       for (final entry in chatHistory) entry.key: entry,
     };
-    final key = _chatHistoryKey(runtimeProfilePath, session.id);
+    final key = _chatHistoryKey(session.id);
     entriesByKey[key] = _historyEntryForSession(
       session,
       existing: entriesByKey[key],
@@ -441,7 +393,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
 
   /// Updates an active chat's history timestamp after it is selected.
   Future<void> _touchHistoryChat(String sessionId) async {
-    if (runtimeProfile == null || runtimeProfilePath.isEmpty) {
+    if (runtimeProfile == null) {
       return;
     }
     final session = sessions.firstWhere(
@@ -455,17 +407,15 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     await _upsertHistoryChat(session);
   }
 
-  /// Builds a history entry for a session in the active profile.
+  /// Builds a history entry for a session in the active agent.
   ChatHistoryEntry _historyEntryForSession(
     ChatSession session, {
     ChatHistoryEntry? existing,
   }) {
-    final profile = _activeRuntimeProfile();
     final existingTitle = existing?.title.trim() ?? '';
     return ChatHistoryEntry(
-      profilePath: runtimeProfilePath,
-      profileId: profile.id,
-      profileLabel: profile.label,
+      agentPath: defaultAgentConfigPath,
+      agentLabel: activeAgentLabel,
       sessionId: session.id,
       title: existingTitle.isEmpty ? session.title : existingTitle,
       createdAt: existing?.createdAt ?? session.updatedAt,
@@ -487,11 +437,8 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
   }
 
   /// Removes one chat from the local history.
-  Future<void> _removeHistoryChat({
-    required String profilePath,
-    required String sessionId,
-  }) async {
-    final key = _chatHistoryKey(profilePath, sessionId);
+  Future<void> _removeHistoryChat({required String sessionId}) async {
+    final key = _chatHistoryKey(sessionId);
     chatHistory = _sortedHistory(
       chatHistory.where((entry) => entry.key != key),
     );
@@ -508,9 +455,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     if (_hasLiveSession(sessionId)) {
       return;
     }
-    final entry = _historyEntryByKey(
-      _chatHistoryKey(runtimeProfilePath, sessionId),
-    );
+    final entry = _historyEntryByKey(_chatHistoryKey(sessionId));
     sessions = <ChatSession>[
       ChatSession(
         id: sessionId,
@@ -531,24 +476,23 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     return null;
   }
 
-  /// Resolves a chat picker key to a profile path and session id.
-  ({String profilePath, String sessionId})? _chatTargetFromKey(String key) {
+  /// Resolves a chat picker key to a session id.
+  ({String sessionId})? _chatTargetFromKey(String key) {
     final entry = _historyEntryByKey(key);
     if (entry != null) {
-      return (profilePath: entry.profilePath, sessionId: entry.sessionId);
+      return (sessionId: entry.sessionId);
     }
-    return _parseChatHistoryKey(key);
+    final trimmed = key.trim();
+    return trimmed.isEmpty ? null : (sessionId: trimmed);
   }
 
   /// Starts model-backed chat title refresh without blocking chat display.
   void _scheduleChatTitleRefresh({
-    required String profilePath,
     required String sessionId,
     required List<ChatMessage> transcript,
   }) {
     unawaited(
       _refreshChatTitle(
-        profilePath: profilePath,
         sessionId: sessionId,
         transcript: transcript,
       ).catchError((Object error) {
@@ -557,39 +501,49 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     );
   }
 
-  /// Generates and persists a model-backed chat title when configured.
+  /// Generates and persists a chat title with a deterministic fallback.
   Future<void> _refreshChatTitle({
-    required String profilePath,
     required String sessionId,
     required List<ChatMessage> transcript,
   }) async {
     final titleModelConfigPath = summaryModelConfigPath;
     final titleModelRef = summaryModelRef;
-    if (!appSettings.chatTitleSummariesEnabled) {
-      await _log('chat title refresh skipped for $sessionId: disabled');
+    if (sessionId.trim().isEmpty) {
+      await _log('chat title refresh skipped: missing session id');
       return;
     }
-    if (titleModelConfigPath.isEmpty) {
-      await _log('chat title refresh skipped for $sessionId: no title model');
-      return;
-    }
-    if (profilePath.trim().isEmpty || sessionId.trim().isEmpty) {
-      await _log('chat title refresh skipped: missing profile or session id');
-      return;
-    }
-    final key = _chatHistoryKey(profilePath, sessionId);
+    final key = _chatHistoryKey(sessionId);
     final entry = _historyEntryByKey(key);
     if (entry == null) {
       await _log('chat title refresh skipped for $sessionId: no history entry');
       return;
     }
     final status = entry.titleStatus.trim();
-    if (status == 'pending' || status == 'generated') {
+    if (status == 'generated' ||
+        (status == 'pending' && appSettings.chatTitleSummariesEnabled)) {
       await _log('chat title refresh skipped for $sessionId: status=$status');
       return;
     }
     if (status == 'manual' && !_isFallbackChatTitle(entry.title, sessionId)) {
       await _log('chat title refresh skipped for $sessionId: manual title');
+      return;
+    }
+    if (!appSettings.chatTitleSummariesEnabled) {
+      await _saveFallbackChatTitle(
+        sessionId: sessionId,
+        transcript: transcript,
+        reason: 'disabled',
+        entry: entry,
+      );
+      return;
+    }
+    if (titleModelConfigPath.isEmpty) {
+      await _saveFallbackChatTitle(
+        sessionId: sessionId,
+        transcript: transcript,
+        reason: 'no title model',
+        entry: entry,
+      );
       return;
     }
     await _saveHistoryEntry(
@@ -621,13 +575,37 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     } catch (error) {
       final current = _historyEntryByKey(key) ?? entry;
       await _saveHistoryEntry(
-        current.copyWith(titleStatus: 'failed', titleError: error.toString()),
+        current.copyWith(
+          title: _fallbackChatTitleFromTranscript(transcript, sessionId),
+          titleStatus: 'failed',
+          titleError: error.toString(),
+        ),
       );
       await _log('chat title generation failed for $sessionId: $error');
     }
   }
 
-  /// Reads a model config referenced by the active runtime profile.
+  /// Saves a transcript-derived title when model summarization is unavailable.
+  Future<void> _saveFallbackChatTitle({
+    required String sessionId,
+    required List<ChatMessage> transcript,
+    required String reason,
+    required ChatHistoryEntry entry,
+  }) async {
+    final status = entry.titleStatus.trim();
+    if (status == 'generated' ||
+        (status == 'manual' && !_isFallbackChatTitle(entry.title, sessionId))) {
+      await _log('chat title fallback skipped for $sessionId: status=$status');
+      return;
+    }
+    final title = _fallbackChatTitleFromTranscript(transcript, sessionId);
+    await _saveHistoryEntry(
+      entry.copyWith(title: title, titleStatus: 'fallback', titleError: ''),
+    );
+    await _log('chat title fallback saved for $sessionId: $reason');
+  }
+
+  /// Reads a model config referenced by the active agent runtime topology.
   Future<String> _readRuntimeModelConfigContent(String path) async {
     final trimmed = path.trim();
     if (trimmed.isEmpty) {
@@ -671,7 +649,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
     }
     try {
       _throwIfClosing();
-      localProcessStatuses = await localServices.startRequiredServices(profile);
+      localProcessStatuses = await _startRequiredRuntimeServices(profile);
       _throwIfClosing();
       await _startConfiguredLocalModelRuntime();
       final failures = localProcessStatuses
@@ -775,7 +753,6 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       }
       if (reply == null) {
         _scheduleChatTitleRefresh(
-          profilePath: runtimeProfilePath,
           sessionId: sessionId,
           transcript: List<ChatMessage>.from(messages),
         );

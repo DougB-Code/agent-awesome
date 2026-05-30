@@ -16,13 +16,6 @@ class _SetupFrame extends StatelessWidget {
         color: AgentAwesomeColors.surface,
         border: Border.all(color: AgentAwesomeColors.border),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const <BoxShadow>[
-          BoxShadow(
-            color: Color(0x0a453421),
-            blurRadius: 28,
-            offset: Offset(0, 14),
-          ),
-        ],
       ),
       child: child,
     );

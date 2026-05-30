@@ -35,33 +35,20 @@ class _SettingsServerContentState extends State<_SettingsServerContent> {
     }
     final query = widget.query;
     if (!SettingsQuery.matches(query, <String>[
-      server.id,
       server.label,
-      server.kind,
-      server.endpoint,
-      server.healthUrl,
-      server.dbPath,
-      server.dataDir,
-      server.workingDirectory,
-      server.packagePath,
-      server.arguments.join(' '),
-      widget.profile.agentMemory.actor,
-      widget.profile.agentMemory.readDomains.join(' '),
-      widget.profile.agentMemory.writeDomains.join(' '),
+      _memoryDomainDisplayName(server),
+      'memory domain',
+      if (server.autoStart) 'auto-start' else 'external',
+      if (server.enabled) 'enabled' else 'disabled',
     ])) {
       return PanelEmptyState(query: query);
     }
     return FormPanel(
       children: <Widget>[
-        _SettingsMemoryAccessReviewTile(profile: widget.profile),
         _SettingsServerTile(
           profile: widget.profile,
           controller: widget.controller,
           server: server,
-        ),
-        _SettingsAgentMemoryTile(
-          profile: widget.profile,
-          controller: widget.controller,
         ),
       ],
     );
@@ -105,32 +92,8 @@ class _SettingsServerTile extends StatefulWidget {
 }
 
 class _SettingsServerTileState extends State<_SettingsServerTile> {
-  late final TextEditingController _id = TextEditingController(
-    text: widget.server.id,
-  );
-  late final TextEditingController _label = TextEditingController(
+  late final TextEditingController _name = TextEditingController(
     text: widget.server.label,
-  );
-  late final TextEditingController _endpoint = TextEditingController(
-    text: widget.server.endpoint,
-  );
-  late final TextEditingController _healthUrl = TextEditingController(
-    text: widget.server.healthUrl,
-  );
-  late final TextEditingController _workingDirectory = TextEditingController(
-    text: widget.server.workingDirectory,
-  );
-  late final TextEditingController _packagePath = TextEditingController(
-    text: widget.server.packagePath,
-  );
-  late final TextEditingController _dbPath = TextEditingController(
-    text: widget.server.dbPath,
-  );
-  late final TextEditingController _dataDir = TextEditingController(
-    text: widget.server.dataDir,
-  );
-  late final TextEditingController _arguments = TextEditingController(
-    text: widget.server.arguments.join('\n'),
   );
   late bool _enabled = widget.server.enabled;
   late bool _autoStart = widget.server.autoStart;
@@ -138,15 +101,7 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
   /// Cleans up MCP server form controllers.
   @override
   void dispose() {
-    _id.dispose();
-    _label.dispose();
-    _endpoint.dispose();
-    _healthUrl.dispose();
-    _workingDirectory.dispose();
-    _packagePath.dispose();
-    _dbPath.dispose();
-    _dataDir.dispose();
-    _arguments.dispose();
+    _name.dispose();
     super.dispose();
   }
 
@@ -158,97 +113,17 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
         oldWidget.server == widget.server) {
       return;
     }
-    _id.text = widget.server.id;
-    _label.text = widget.server.label;
-    _endpoint.text = widget.server.endpoint;
-    _healthUrl.text = widget.server.healthUrl;
-    _workingDirectory.text = widget.server.workingDirectory;
-    _packagePath.text = widget.server.packagePath;
-    _dbPath.text = widget.server.dbPath;
-    _dataDir.text = widget.server.dataDir;
-    _arguments.text = widget.server.arguments.join('\n');
+    _name.text = widget.server.label;
     _enabled = widget.server.enabled;
     _autoStart = widget.server.autoStart;
   }
 
-  /// Builds one memory domain tile from the active profile.
+  /// Builds one memory domain tile from the active topology.
   @override
   Widget build(BuildContext context) {
-    return FormSectionCard(
-      title: widget.server.label.isEmpty
-          ? 'Memory domain'
-          : widget.server.label,
+    return FormPlainSection(
+      title: _memoryDomainDisplayName(widget.server),
       children: <Widget>[
-        SettingsFieldRow(
-          leading: Switch(
-            value: _enabled,
-            onChanged: (value) {
-              setState(() => _enabled = value);
-              unawaited(_save());
-            },
-          ),
-          trailing: PanelBadge(label: _autoStart ? 'Managed' : 'External'),
-          child: _SettingsAutoSaveTextField(
-            label: 'Label',
-            controller: _label,
-            initialSavedValue: widget.server.label,
-            onSave: (_) => _save(),
-          ),
-        ),
-        _SettingsAutoSaveTextField(
-          label: 'Domain ID',
-          controller: _id,
-          initialSavedValue: widget.server.id,
-          onSave: (_) => _save(),
-        ),
-        SettingsFieldGrid(
-          children: <Widget>[
-            _SettingsAutoSaveTextField(
-              label: 'Endpoint',
-              controller: _endpoint,
-              initialSavedValue: widget.server.endpoint,
-              onSave: (_) => _save(),
-            ),
-            _SettingsAutoSaveTextField(
-              label: 'Health URL',
-              controller: _healthUrl,
-              initialSavedValue: widget.server.healthUrl,
-              onSave: (_) => _save(),
-            ),
-            _SettingsAutoSaveTextField(
-              label: 'Database path',
-              controller: _dbPath,
-              initialSavedValue: widget.server.dbPath,
-              onSave: (_) => _save(),
-            ),
-            _SettingsAutoSaveTextField(
-              label: 'Data directory',
-              controller: _dataDir,
-              initialSavedValue: widget.server.dataDir,
-              onSave: (_) => _save(),
-            ),
-            _SettingsAutoSaveTextField(
-              label: 'Working directory',
-              controller: _workingDirectory,
-              initialSavedValue: widget.server.workingDirectory,
-              onSave: (_) => _save(),
-            ),
-            _SettingsAutoSaveTextField(
-              label: 'Package path',
-              controller: _packagePath,
-              initialSavedValue: widget.server.packagePath,
-              onSave: (_) => _save(),
-            ),
-          ],
-        ),
-        _SettingsAutoSaveTextField(
-          label: 'Arguments, one per line',
-          controller: _arguments,
-          initialSavedValue: widget.server.arguments.join('\n'),
-          onSave: (_) => _save(),
-          minLines: 3,
-          maxLines: 8,
-        ),
         SettingsToggleField(
           title: 'Auto-start server',
           value: _autoStart,
@@ -261,25 +136,27 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
           controller: widget.controller,
           server: widget.server,
         ),
+        SettingsToggleField(
+          title: 'Memory domain enabled',
+          value: _enabled,
+          onChanged: (value) {
+            setState(() => _enabled = value);
+            unawaited(_save());
+          },
+        ),
+        _SettingsAutoSaveTextField(
+          label: 'Name',
+          controller: _name,
+          initialSavedValue: widget.server.label,
+          onSave: (_) => _save(),
+        ),
       ],
     );
   }
 
   Future<void> _save() async {
     final replacement = widget.server.copyWith(
-      id: _id.text.trim(),
-      label: _label.text.trim(),
-      endpoint: _endpoint.text.trim(),
-      healthUrl: _healthUrl.text.trim(),
-      workingDirectory: _workingDirectory.text.trim(),
-      packagePath: _packagePath.text.trim(),
-      dbPath: _dbPath.text.trim(),
-      dataDir: _dataDir.text.trim(),
-      arguments: _arguments.text
-          .split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty)
-          .toList(),
+      label: _name.text.trim(),
       autoStart: _autoStart,
       enabled: _enabled,
     );
@@ -307,7 +184,7 @@ class _SettingsMemoryAccessReviewTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final warnings = _memoryProfileWarnings(profile);
     final memory = profile.agentMemory;
-    return FormSectionCard(
+    return FormPlainSection(
       title: 'Effective access',
       children: <Widget>[
         Wrap(
@@ -374,7 +251,6 @@ class _SettingsServerOperations extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const SizedBox(height: SettingsFormMetrics.compactGap),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -442,7 +318,7 @@ class _SettingsAgentMemoryTileState extends State<_SettingsAgentMemoryTile> {
     super.dispose();
   }
 
-  /// Keeps structured selections aligned when profile access grants change.
+  /// Keeps structured selections aligned when memory access grants change.
   @override
   void didUpdateWidget(covariant _SettingsAgentMemoryTile oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -460,7 +336,7 @@ class _SettingsAgentMemoryTileState extends State<_SettingsAgentMemoryTile> {
     final defaultWrite = writeDomains.contains(_defaultWriteDomain)
         ? _defaultWriteDomain
         : (writeDomains.isEmpty ? null : writeDomains.first);
-    return FormSectionCard(
+    return FormPlainSection(
       title: 'Agent access',
       children: <Widget>[
         _SettingsAutoSaveTextField(
@@ -497,32 +373,37 @@ class _SettingsAgentMemoryTileState extends State<_SettingsAgentMemoryTile> {
             ),
           ],
         ),
-        DropdownButtonFormField<String>(
-          key: ValueKey<String?>(defaultWrite),
-          initialValue: defaultWrite,
-          isExpanded: true,
-          items: <DropdownMenuItem<String>>[
-            for (final domain in domains.where(
-              (domain) => _writeDomains.contains(domain.id),
-            ))
-              DropdownMenuItem<String>(
-                value: domain.id,
-                child: Text(
-                  domain.label.trim().isEmpty ? domain.id : domain.label,
-                  overflow: TextOverflow.ellipsis,
+        PanelLabeledFormControl(
+          label: 'Default write domain',
+          child: DropdownButtonFormField<String>(
+            key: ValueKey<String?>(defaultWrite),
+            initialValue: defaultWrite,
+            isDense: true,
+            style: SettingsFormTextStyle.field(context),
+            isExpanded: true,
+            items: <DropdownMenuItem<String>>[
+              for (final domain in domains.where(
+                (domain) => _writeDomains.contains(domain.id),
+              ))
+                DropdownMenuItem<String>(
+                  value: domain.id,
+                  child: Text(
+                    _memoryDomainDisplayName(domain),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-          ],
-          onChanged: (value) {
-            if (value == null) {
-              return;
-            }
-            setState(() => _defaultWriteDomain = value);
-            unawaited(_save());
-          },
-          decoration: SettingsInputDecoration.field(
-            context,
-            label: 'Default write domain',
+            ],
+            onChanged: (value) {
+              if (value == null) {
+                return;
+              }
+              setState(() => _defaultWriteDomain = value);
+              unawaited(_save());
+            },
+            decoration: SettingsInputDecoration.field(
+              context,
+              label: 'Default write domain',
+            ),
           ),
         ),
       ],
@@ -564,7 +445,7 @@ class _SettingsAgentMemoryTileState extends State<_SettingsAgentMemoryTile> {
     } catch (_) {}
   }
 
-  /// Resets local selection state from the current runtime profile.
+  /// Resets local selection state from the current agent runtime topology.
   void _syncFromProfile() {
     final memory = widget.profile.agentMemory;
     _actor.text = memory.actor;
@@ -825,7 +706,10 @@ class _SettingsSelectionBox extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.all(12),
@@ -872,12 +756,12 @@ class _SettingsCheckboxRow extends StatelessWidget {
   }
 }
 
-/// Returns enabled memory domains available for profile grants.
+/// Returns enabled memory domains available for memory grants.
 List<McpServerRuntime> _enabledMemoryDomains(RuntimeProfile profile) {
   return profile.memoryDomains.where((domain) => domain.enabled).toList();
 }
 
-/// Returns domain ids in profile order after applying a selected-id set.
+/// Returns domain ids in topology order after applying a selected-id set.
 List<String> _orderedDomainSelection(
   RuntimeProfile profile,
   Set<String> selected,
@@ -911,7 +795,7 @@ List<String> _sensitivityOptions(RuntimeProfile profile) {
 
 /// Returns a display label for one configured domain.
 String _domainLabel(McpServerRuntime domain) {
-  return domain.label.trim().isEmpty ? domain.id : domain.label;
+  return _memoryDomainDisplayName(domain);
 }
 
 /// Returns comma-separated domain labels for effective access summaries.
@@ -921,12 +805,13 @@ String _domainLabels(RuntimeProfile profile, Iterable<String> ids) {
   };
   final labels = <String>[
     for (final id in ids)
-      if (id.trim().isNotEmpty) byId[id] == null ? id : _domainLabel(byId[id]!),
+      if (id.trim().isNotEmpty)
+        byId[id] == null ? 'Unknown memory domain' : _domainLabel(byId[id]!),
   ];
   return labels.isEmpty ? 'none' : labels.join(', ');
 }
 
-/// Returns guardrail warnings for the active profile memory policy.
+/// Returns guardrail warnings for the active agent memory policy.
 List<String> _memoryProfileWarnings(RuntimeProfile profile) {
   final warnings = <String>[];
   final memory = profile.agentMemory;
@@ -939,7 +824,7 @@ List<String> _memoryProfileWarnings(RuntimeProfile profile) {
     memory.defaultWriteDomain,
   ]) {
     if (!enabledIds.contains(domain)) {
-      warnings.add('Grant references disabled domain "$domain".');
+      warnings.add('Grant references a disabled memory domain.');
     }
   }
   if (!memory.writeDomains.contains(memory.defaultWriteDomain)) {

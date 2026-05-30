@@ -22,6 +22,7 @@ class _CommandSubShellDetailPane extends StatelessWidget {
     required this.onDetailFilterChanged,
     required this.showCollapseButton,
     required this.showHeader,
+    required this.highlightFilterField,
     required this.onTitleTap,
     required this.child,
   });
@@ -44,6 +45,7 @@ class _CommandSubShellDetailPane extends StatelessWidget {
   final ValueChanged<String> onDetailFilterChanged;
   final bool showCollapseButton;
   final bool showHeader;
+  final bool highlightFilterField;
   final VoidCallback? onTitleTap;
   final Widget child;
 
@@ -164,12 +166,17 @@ class _CommandSubShellDetailPane extends StatelessWidget {
                       controller: detailFilterController,
                       hintText: detailFilterHint,
                       onChanged: onDetailFilterChanged,
+                      highlighted: highlightFilterField,
                     ),
                   ],
                 ],
               ),
             ),
-            Divider(height: 1, color: colors.border),
+            Divider(
+              height: AgentAwesomeStrokeTokens.dividerWidth,
+              thickness: AgentAwesomeStrokeTokens.dividerWidth,
+              color: colors.border,
+            ),
           ],
           Expanded(child: PanelBodySurface(child: child)),
         ],
@@ -212,7 +219,10 @@ class _CommandSubShellDetailItemSelect extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: colors.surface,
-          border: Border.all(color: colors.border),
+          border: Border.all(
+            color: colors.border,
+            width: AgentAwesomeStrokeTokens.borderWidth,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(

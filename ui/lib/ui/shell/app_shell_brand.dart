@@ -20,7 +20,12 @@ class _AppBrandHeader extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.chrome,
         gradient: context.agentAwesomeChromeGradient,
-        border: Border(bottom: BorderSide(color: colors.border)),
+        border: Border(
+          bottom: BorderSide(
+            color: colors.border,
+            width: AgentAwesomeStrokeTokens.dividerWidth,
+          ),
+        ),
       ),
       padding: EdgeInsets.fromLTRB(expanded ? 24 : 14, 12, 14, 12),
       child: expanded

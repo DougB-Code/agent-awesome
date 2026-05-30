@@ -141,6 +141,7 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _TaskQueueTile(
+                        controller: widget.controller,
                         task: task,
                         selected: widget.controller.selectedTask?.id == task.id,
                         focused: false,

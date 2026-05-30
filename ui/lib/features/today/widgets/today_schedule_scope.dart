@@ -36,6 +36,7 @@ class _ScheduleScopeSelector extends StatelessWidget {
   /// Builds the segmented scope control.
   @override
   Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: Align(
@@ -54,6 +55,25 @@ class _ScheduleScopeSelector extends StatelessWidget {
           onSelectionChanged: (selection) => onChanged(selection.single),
           style: ButtonStyle(
             visualDensity: VisualDensity.compact,
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return colors.greenSoft;
+              }
+              return colors.panel;
+            }),
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return colors.ink;
+              }
+              return colors.muted;
+            }),
+            side: WidgetStateProperty.resolveWith((states) {
+              return BorderSide(
+                color: states.contains(WidgetState.selected)
+                    ? colors.borderStrong
+                    : colors.border,
+              );
+            }),
             textStyle: WidgetStateProperty.all(
               const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
             ),

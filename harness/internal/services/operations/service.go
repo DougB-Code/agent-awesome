@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,7 +21,6 @@ const (
 	defaultOperationStatus          = "active"
 	defaultOperationRunLeaseSeconds = 300
 	maxOperationRunLeaseSeconds     = 3600
-	codingWorkflowID                = "professional_coding_change"
 )
 
 var operationIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]*$`)
@@ -384,30 +382,6 @@ func (s *Service) EnqueueDueScheduledOperations(ctx context.Context, now time.Ti
 	return result, nil
 }
 
-// StartCodingChange resolves a coding Operation from a conversational request.
-func (s *Service) StartCodingChange(ctx context.Context, req OperationRunRequest) (OperationStartResult, error) {
-	codebase, err := s.resolveRequestedCodebase(ctx, req)
-	if err != nil {
-		return OperationStartResult{}, err
-	}
-	ops, err := s.store.ListOperations(ctx, OperationQuery{WorkflowID: codingWorkflowID, CodebaseID: codebase.ID, Status: defaultOperationStatus})
-	if err != nil {
-		return OperationStartResult{}, err
-	}
-	if len(ops) == 0 {
-		return OperationStartResult{}, fmt.Errorf("no coding operation is configured for codebase %q", codebase.Name)
-	}
-	if len(ops) > 1 {
-		return OperationStartResult{}, fmt.Errorf("multiple coding operations are configured for codebase %q", codebase.Name)
-	}
-	req.OperationID = ops[0].ID
-	if req.Input == nil {
-		req.Input = map[string]any{}
-	}
-	req.Input["codebase_id"] = codebase.ID
-	return s.StartOperation(ctx, ops[0].ID, req)
-}
-
 // ResolveOperationInput applies the shared input resolver for one Operation.
 func (s *Service) ResolveOperationInput(ctx context.Context, op Operation, req OperationRunRequest) (resolution.Result, error) {
 	codebase, codebaseDiagnostics, err := s.operationCodebase(ctx, op, req)
@@ -418,21 +392,17 @@ func (s *Service) ResolveOperationInput(ctx context.Context, op Operation, req O
 	if err != nil {
 		return resolution.Result{}, err
 	}
-	workflowDefaults = mergeDefaults(defaultWorkflowInput(op.WorkflowID), workflowDefaults)
 	if op.WorkflowVersion == "" {
 		op.WorkflowVersion = workflowVersion
 	}
 	codebaseDefaults := codebaseDefaultInput(codebase)
-	generated := generatedInput(op, codebase, req)
 	secretRefs := secretReferenceInput(op.SecretRefs)
-	required := requiredFieldsForWorkflow(op.WorkflowID)
 	result, err := s.resolver.Resolve(ctx, resolution.Request{
-		RequiredFields:    required,
 		RunRequest:        requestInput(req),
 		OperationDefaults: op.Defaults,
 		CodebaseDefaults:  codebaseDefaults,
 		WorkflowDefaults:  workflowDefaults,
-		GeneratedValues:   generated,
+		GeneratedValues:   map[string]any{},
 		SecretReferences:  secretRefs,
 	})
 	if err != nil {
@@ -446,64 +416,34 @@ func (s *Service) ResolveOperationInput(ctx context.Context, op Operation, req O
 
 // operationCodebase returns the codebase bound to a run request or Operation.
 func (s *Service) operationCodebase(ctx context.Context, op Operation, req OperationRunRequest) (Codebase, []string, error) {
+	codebaseName := strings.TrimSpace(req.CodebaseName)
+	inputCodebaseID := ""
+	if codebaseID, ok := req.Input["codebase_id"].(string); ok {
+		inputCodebaseID = strings.TrimSpace(codebaseID)
+	}
+	operationCodebaseID := strings.TrimSpace(op.CodebaseID)
+	if codebaseName == "" && inputCodebaseID == "" && operationCodebaseID == "" {
+		return Codebase{}, nil, nil
+	}
 	if s.codebases == nil {
 		return Codebase{}, nil, errors.New("codebase catalog is not configured")
 	}
-	if strings.TrimSpace(req.CodebaseName) != "" {
-		resolved, err := s.codebases.ResolveCodebase(ctx, req.CodebaseName)
+	if codebaseName != "" {
+		resolved, err := s.codebases.ResolveCodebase(ctx, codebaseName)
 		if err != nil {
 			return Codebase{}, nil, err
 		}
 		if resolved.Status != "matched" || resolved.Codebase == nil {
-			return Codebase{}, resolved.Diagnostics, fmt.Errorf("codebase %q was not resolved: %s", req.CodebaseName, resolved.Status)
+			return Codebase{}, resolved.Diagnostics, fmt.Errorf("codebase %q was not resolved: %s", codebaseName, resolved.Status)
 		}
 		return *resolved.Codebase, resolved.Diagnostics, nil
 	}
-	if codebaseID, ok := req.Input["codebase_id"].(string); ok && strings.TrimSpace(codebaseID) != "" {
-		codebase, err := s.codebases.GetCodebase(ctx, codebaseID)
+	if inputCodebaseID != "" {
+		codebase, err := s.codebases.GetCodebase(ctx, inputCodebaseID)
 		return codebase, nil, err
 	}
-	if strings.TrimSpace(op.CodebaseID) == "" {
-		return Codebase{}, nil, nil
-	}
-	codebase, err := s.codebases.GetCodebase(ctx, op.CodebaseID)
+	codebase, err := s.codebases.GetCodebase(ctx, operationCodebaseID)
 	return codebase, nil, err
-}
-
-// resolveRequestedCodebase resolves the conversational coding codebase.
-func (s *Service) resolveRequestedCodebase(ctx context.Context, req OperationRunRequest) (Codebase, error) {
-	name := strings.TrimSpace(req.CodebaseName)
-	if name == "" {
-		if value, ok := req.Input["codebase"].(string); ok {
-			name = value
-		}
-	}
-	if name == "" {
-		if value, ok := req.Input["codebase_name"].(string); ok {
-			name = value
-		}
-	}
-	if name == "" {
-		if value, ok := req.Task["codebase"].(string); ok {
-			name = value
-		}
-	}
-	if name == "" {
-		if value, ok := req.Task["codebase_name"].(string); ok {
-			name = value
-		}
-	}
-	if name == "" {
-		return Codebase{}, errors.New("codebase name is required")
-	}
-	resolved, err := s.codebases.ResolveCodebase(ctx, name)
-	if err != nil {
-		return Codebase{}, err
-	}
-	if resolved.Status != "matched" || resolved.Codebase == nil {
-		return Codebase{}, fmt.Errorf("codebase %q was not resolved: %s", name, resolved.Status)
-	}
-	return *resolved.Codebase, nil
 }
 
 // operationFromRequest normalizes a create or update request.
@@ -528,9 +468,6 @@ func operationFromRequest(req OperationRequest, create bool) (Operation, error) 
 		status = defaultOperationStatus
 	}
 	policy := req.Policy
-	if workflowID == codingWorkflowID && (policy.SourceControl == "" || policy.SourceControl == "open_pr_only") {
-		policy = defaultCodingPolicy(req)
-	}
 	version := 1
 	return Operation{
 		ID:              id,
@@ -549,36 +486,13 @@ func operationFromRequest(req OperationRequest, create bool) (Operation, error) 
 	}, nil
 }
 
-// defaultCodingPolicy returns source-control-safe coding defaults.
-func defaultCodingPolicy(req OperationRequest) OperationPolicy {
-	policy := req.Policy
-	policy.SourceControl = "open_pr_only"
-	policy.DestructiveAction = "deny"
-	policy.AllowedTools = uniqueStrings(append(policy.AllowedTools,
-		"sourcecontrol.prepare_worktree",
-		"sourcecontrol.status",
-		"sourcecontrol.commit",
-		"sourcecontrol.push",
-		"sourcecontrol.open_pull_request",
-	))
-	policy.AllowedMCPServers = uniqueStrings(append(policy.AllowedMCPServers, "sourcecontrol"))
-	if req.CodebaseID != "" {
-		policy.AllowedCodebases = uniqueStrings(append(policy.AllowedCodebases, req.CodebaseID))
-	}
-	if req.RuntimeTargetID != "" {
-		policy.AllowedTargets = uniqueStrings(append(policy.AllowedTargets, req.RuntimeTargetID))
-	}
-	return policy
-}
-
 // evaluatePolicy checks user-facing Operation safety before start.
 func evaluatePolicy(op Operation, resolved resolution.Result) OperationPolicyDecision {
 	reasons := []string{}
-	if op.Policy.SourceControl == "open_pr_only" || op.Policy.SourceControl == "" {
-		if containsAny(op.Policy.AllowedTools, []string{"sourcecontrol.open_pull_request"}) || op.WorkflowID != codingWorkflowID {
-			return OperationPolicyDecision{Status: "allowed"}
+	if op.Policy.SourceControl == "open_pr_only" {
+		if !containsAny(op.Policy.AllowedTools, []string{"sourcecontrol.open_pull_request"}) {
+			reasons = append(reasons, "open pull request permission is missing")
 		}
-		reasons = append(reasons, "open pull request permission is missing")
 	}
 	for _, unresolved := range resolved.Unresolved {
 		reasons = append(reasons, "missing "+unresolved.Name)
@@ -593,36 +507,11 @@ func evaluatePolicy(op Operation, resolved resolution.Result) OperationPolicyDec
 func requestInput(req OperationRunRequest) map[string]any {
 	input := cloneMap(req.Input)
 	if req.Task != nil {
-		if title := taskString(req.Task, "title"); title != "" && input["change_request"] == nil {
-			input["change_request"] = title
-		}
-		if body := taskString(req.Task, "body"); body != "" && input["change_request"] == nil {
-			input["change_request"] = body
+		if _, ok := input["task"]; !ok {
+			input["task"] = cloneMap(req.Task)
 		}
 	}
 	return secretReferenceSafeInput(input)
-}
-
-// taskString returns one trimmed string from structured task context.
-func taskString(task map[string]any, key string) string {
-	if task == nil {
-		return ""
-	}
-	value, ok := task[key].(string)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(value)
-}
-
-// firstNonEmpty returns the first non-empty string.
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }
 
 // codebaseDefaultInput maps catalog fields onto workflow input names.
@@ -641,50 +530,11 @@ func codebaseDefaultInput(codebase Codebase) map[string]any {
 		values["base_ref"] = codebase.DefaultBranch
 		values["pull_request_base"] = codebase.DefaultBranch
 	}
-	if codebase.GoModulePath != "" {
-		values["go_module_path"] = codebase.GoModulePath
-	}
 	if codebase.RuntimeTargetID != "" {
 		values["runtime_target_id"] = codebase.RuntimeTargetID
 	}
 	if codebase.AgentProfileID != "" {
 		values["agent_profile_id"] = codebase.AgentProfileID
-	}
-	return values
-}
-
-// generatedInput builds deterministic generated coding fields.
-func generatedInput(op Operation, codebase Codebase, req OperationRunRequest) map[string]any {
-	input := requestInput(req)
-	changeRequest, _ := input["change_request"].(string)
-	taskBody := taskString(req.Task, "body")
-	if taskBody == "" {
-		taskBody = taskString(req.Task, "description")
-	}
-	branchSummary := strings.TrimSpace(changeRequest)
-	if branchSummary == "" {
-		branchSummary = strings.TrimSpace(op.Name)
-	}
-	branch := "aa-" + slug(branchSummary)
-	if branch == "aa-" {
-		branch = "aa-change"
-	}
-	values := map[string]any{
-		"branch_summary":     branchSummary,
-		"branch":             branch,
-		"commit_message":     branchSummary,
-		"pull_request_title": branchSummary,
-		"pull_request_body":  firstNonEmpty(taskBody, branchSummary),
-		"worktree_path":      filepath.Join("build", "sourcecontrol", "worktrees", strings.ReplaceAll(branch, "/", "_")),
-	}
-	if _, ok := input["pull_request_draft"]; !ok {
-		values["pull_request_draft"] = false
-	}
-	if codebase.DefaultRemote == "" {
-		values["remote"] = "origin"
-	}
-	if codebase.DefaultBranch == "" {
-		values["base_ref"] = "HEAD"
 	}
 	return values
 }
@@ -698,54 +548,6 @@ func secretReferenceInput(bindings []OperationSecretBinding) map[string]any {
 		}
 	}
 	return values
-}
-
-// requiredFieldsForWorkflow returns the first-pass workflow input contract.
-func requiredFieldsForWorkflow(workflowID string) []string {
-	if workflowID == codingWorkflowID {
-		return []string{
-			"repository_path",
-			"change_request",
-			"branch_summary",
-			"commit_message",
-			"base_ref",
-			"remote",
-			"go_module_path",
-			"pull_request_base",
-			"pull_request_title",
-			"pull_request_body",
-			"pull_request_draft",
-		}
-	}
-	return nil
-}
-
-// defaultWorkflowInput returns conservative first-pass workflow-level defaults.
-func defaultWorkflowInput(workflowID string) map[string]any {
-	if workflowID != codingWorkflowID {
-		return map[string]any{}
-	}
-	return map[string]any{
-		"remote":             "origin",
-		"base_ref":           "HEAD",
-		"go_module_path":     ".",
-		"binary_path":        "",
-		"binary_package":     ".",
-		"binary_arg_1":       "",
-		"binary_arg_2":       "",
-		"codex_home":         "",
-		"pull_request_base":  "HEAD",
-		"pull_request_draft": false,
-	}
-}
-
-// mergeDefaults overlays configured workflow defaults onto built-in defaults.
-func mergeDefaults(base map[string]any, overlay map[string]any) map[string]any {
-	merged := cloneMap(base)
-	for key, value := range overlay {
-		merged[key] = value
-	}
-	return merged
 }
 
 // unresolvedNames returns unresolved field names from a resolution result.
@@ -799,24 +601,6 @@ func slug(value string) string {
 		}
 	}
 	return strings.Trim(builder.String(), "_")
-}
-
-// uniqueStrings trims and deduplicates strings.
-func uniqueStrings(values []string) []string {
-	seen := map[string]struct{}{}
-	out := []string{}
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed == "" {
-			continue
-		}
-		if _, ok := seen[trimmed]; ok {
-			continue
-		}
-		seen[trimmed] = struct{}{}
-		out = append(out, trimmed)
-	}
-	return out
 }
 
 // containsAny reports whether values contains at least one target.
@@ -977,7 +761,7 @@ func secretReferenceSafeInput(values map[string]any) map[string]any {
 	out := map[string]any{}
 	for key, value := range values {
 		if !sensitiveInputKey(key) {
-			out[key] = value
+			out[key] = secretReferenceSafeValue(value)
 			continue
 		}
 		if reference, ok := value.(string); ok && strings.HasPrefix(strings.TrimSpace(reference), "secret://") {
@@ -987,6 +771,28 @@ func secretReferenceSafeInput(values map[string]any) map[string]any {
 		out[key] = "secret://redacted/" + strings.TrimSpace(key)
 	}
 	return out
+}
+
+// secretReferenceSafeValue redacts nested secret-like values while preserving shape.
+func secretReferenceSafeValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return secretReferenceSafeInput(typed)
+	case map[any]any:
+		next := map[string]any{}
+		for key, item := range typed {
+			next[fmt.Sprint(key)] = item
+		}
+		return secretReferenceSafeInput(next)
+	case []any:
+		out := make([]any, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, secretReferenceSafeValue(item))
+		}
+		return out
+	default:
+		return value
+	}
 }
 
 // redactSensitiveMap recursively redacts values under secret-like keys.

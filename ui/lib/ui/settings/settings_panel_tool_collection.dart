@@ -110,7 +110,7 @@ class _SettingsToolSurfaceCommandPanelState
     if (profile == null) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(28, 18, 28, 24),
-        child: _SettingsMissingProfilePanel(section: widget.title, query: ''),
+        child: _SettingsMissingRuntimePanel(section: widget.title, query: ''),
       );
     }
     return CommandPanelSubShell(
@@ -118,7 +118,7 @@ class _SettingsToolSurfaceCommandPanelState
         SwitcherPanelArea(
           id: widget.surface.id,
           title: widget.title,
-          icon: Icons.folder_outlined,
+          icon: widget.icon,
           builder: (query) => _SettingsToolConfigFileList(
             query: query,
             entries: _entries(),
@@ -463,46 +463,12 @@ class _SettingsToolConfigFileTile extends StatelessWidget {
   /// Builds one selectable tool config file row.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: PanelSurface(
-          fillWidth: true,
-          padding: const EdgeInsets.all(12),
-          style: PanelSurfaceStyle.card,
-          selected: selected,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Icon(icon, color: selected ? colors.green : colors.muted),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      entry.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      entry.path,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: colors.muted),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return _SettingsSelectorTile(
+      label: entry.label,
+      icon: icon,
+      detail: entry.path,
+      selected: selected,
+      onTap: onTap,
     );
   }
 }

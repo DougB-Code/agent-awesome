@@ -45,7 +45,7 @@ class _SetupDropdown<T> extends StatelessWidget {
       items: items,
       isExpanded: true,
       onChanged: onChanged,
-      decoration: _setupInputDecoration(label),
+      decoration: _setupInputDecoration(context, label),
     );
   }
 }

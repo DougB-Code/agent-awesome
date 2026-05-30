@@ -129,10 +129,10 @@ class WorkspaceTask {
   /// Backend idempotency key, used to associate agent-created tasks with chats.
   final String idempotencyKey;
 
-  /// Runtime profile graph source id that returned this task.
+  /// Agent runtime graph source id that returned this task.
   final String sourceId;
 
-  /// Runtime profile graph source label that returned this task.
+  /// Agent runtime graph source label that returned this task.
   final String sourceLabel;
 
   /// Returns a copy with changed runtime source metadata.

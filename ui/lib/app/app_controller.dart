@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:yaml/yaml.dart';
 
 import '../clients/assistant_client.dart';
 import '../clients/automations_client.dart';
@@ -13,8 +14,10 @@ import '../clients/chat_title_client.dart';
 import '../clients/executive_summary_client.dart';
 import '../clients/mcp_client.dart';
 import '../clients/screen_command_client.dart';
+import '../domain/agent_config.dart';
 import '../domain/agent_validation_result.dart';
 import '../domain/automation_contracts.dart';
+import '../domain/config_yaml.dart';
 import '../domain/credentials.dart';
 import '../domain/executive_summary.dart';
 import '../domain/json_value.dart';
@@ -68,40 +71,29 @@ const Set<String> _managedLocalModelProviderIds = <String>{
 /// Interval for quietly refreshing user-deployable workflow files.
 const Duration _automationFileRefreshInterval = Duration(seconds: 5);
 
+/// Interval for following active workflow runs after a user starts one.
+const Duration _automationRunRefreshInterval = Duration(seconds: 2);
+
 /// Reports whether a provider id belongs to an app-managed local runtime.
 bool _isManagedLocalModelProviderId(String providerId) {
   return _managedLocalModelProviderIds.contains(providerId.trim());
 }
 
-/// RuntimeProfileFileEntry describes one editable profile JSON file.
-class RuntimeProfileFileEntry {
-  /// Creates a runtime profile file entry.
-  const RuntimeProfileFileEntry({
-    required this.path,
-    required this.id,
-    required this.label,
-    required this.active,
-    this.runtimeKind = '',
-    this.memoryDomainLabels = const <String>[],
-  });
-
-  /// Profile JSON path.
-  final String path;
-
-  /// Profile id parsed from JSON or path.
-  final String id;
-
-  /// Display label parsed from JSON or path.
-  final String label;
-
-  /// Whether the app is currently using this profile.
-  final bool active;
-
-  /// Local or cloud runtime hint parsed from profile endpoints.
-  final String runtimeKind;
-
-  /// Memory domain labels parsed from profile JSON.
-  final List<String> memoryDomainLabels;
+/// Returns the gateway MCP route for one policy-checked memory domain.
+@visibleForTesting
+String gatewayMemoryMcpEndpointFor(
+  RuntimeProfile profile,
+  McpServerRuntime server,
+) {
+  final domainId = server.id.trim();
+  final uri = Uri.parse(profile.gateway.mcpUrl);
+  if (domainId.isEmpty) {
+    return uri.toString();
+  }
+  final basePath = uri.path.endsWith('/')
+      ? uri.path.substring(0, uri.path.length - 1)
+      : uri.path;
+  return uri.replace(path: '$basePath/$domainId').toString();
 }
 
 /// AgentAwesomeAppController stores app state and service orchestration.
@@ -298,7 +290,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Store for app-owned settings.
   final AgentAwesomeAppSettingsStore appSettingsStore;
 
-  /// Store for local cross-profile chat metadata.
+  /// Store for local chat metadata across selected agents.
   final ChatHistoryStore chatHistoryStore;
 
   /// Store for display-safe provider credential lookups.
@@ -320,18 +312,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
   final bool _automationsClientInjected;
   final bool _screenCommandPlannerInjected;
 
-  /// Active runtime profile for harness configs and MCP topology.
+  /// Active agent runtime topology for harness configs and MCP topology.
   RuntimeProfile? runtimeProfile;
 
-  /// Filesystem path for the loaded runtime profile.
+  /// Filesystem path for the loaded agent runtime topology.
   String runtimeProfilePath = '';
-
-  /// Profile files available in the app config directory.
-  List<String> availableProfilePaths = const <String>[];
-
-  /// Runtime profile files available in the app config directory.
-  List<RuntimeProfileFileEntry> availableProfiles =
-      const <RuntimeProfileFileEntry>[];
 
   /// Model config files available in the app config directory.
   List<ConfigFileEntry> availableModelConfigs = const <ConfigFileEntry>[];
@@ -345,7 +330,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// MCP config packages available in the app config directory.
   List<ConfigFileEntry> availableMcpConfigs = const <ConfigFileEntry>[];
 
-  /// App-specific settings outside runtime profile ownership.
+  /// App-specific settings outside agent runtime topology ownership.
   AgentAwesomeAppSettings appSettings = const AgentAwesomeAppSettings();
 
   Future<void>? _initialization;
@@ -358,8 +343,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
   Future<void>? _closeFuture;
   Future<void>? _automationFileRefresh;
   Timer? _automationFileRefreshTimer;
+  Timer? _automationRunRefreshTimer;
+  bool _runtimeServicesNeedRestart = false;
+  bool _automationRunRefreshInFlight = false;
+  int _automationRunRefreshTicks = 0;
   Map<String, String> _runtimeGatewayHeaders = const <String, String>{};
   bool _closing = false;
+
+  /// Reports whether UI listeners are attached to this controller.
+  bool get _hasControllerListeners => hasListeners;
 
   /// All known chat sessions.
   List<ChatSession> sessions = const <ChatSession>[];
@@ -475,6 +467,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Installed workflow definitions.
   List<AutomationDefinition> automationDefinitions =
       const <AutomationDefinition>[];
+
+  /// Definition ids currently backed by local workflow authoring files.
+  Set<String> _localAutomationDefinitionIds = const <String>{};
 
   /// Editable workflow drafts.
   List<AutomationDraft> automationDrafts = const <AutomationDraft>[];
@@ -631,15 +626,17 @@ class AgentAwesomeAppController extends ChangeNotifier {
       appSettings = await appSettingsStore.load();
       memoryFilters = _memoryFiltersForConfiguredFirewalls(memoryFilters);
       chatHistory = await chatHistoryStore.load();
+      _restoreSelectedChatFromHistory();
       await _log(
         'loaded chat history ${chatHistory.length} from ${chatHistoryPath()}',
       );
       final loader = RuntimeProfileLoader(config);
       final profileFile = await _resolveInitialProfileFile(loader);
-      await _log('resolved runtime profile ${profileFile.path}');
+      await _log('resolved agent runtime topology ${profileFile.path}');
       runtimeProfilePath = profileFile.path;
       runtimeProfile = await _loadInitialRuntimeProfile(loader, profileFile);
       runtimeProfile = await _migrateDefaultProfileConfigs(runtimeProfile!);
+      runtimeProfile = await _withAppRuntimeSelections(runtimeProfile!);
       if (config.autoStartLocalServices) {
         await _saveMemoryFirewallPolicyForActiveProfile();
       }
@@ -655,22 +652,22 @@ class AgentAwesomeAppController extends ChangeNotifier {
         await appSettingsStore.save(appSettings);
         await _log('completed setup from verified local model');
       }
-      await _log('loaded runtime profile ${runtimeProfile!.id}');
+      await _log('loaded agent runtime ${runtimeProfile!.id}');
     } catch (error) {
-      await _log('runtime profile load failed: $error');
+      await _log('agent runtime load failed: $error');
       _shellDecisionReady = true;
       runtimeProfile = null;
       runtimeProfilePath = config.runtimeProfilePath;
       endpointStatuses = <EndpointStatus>[
         EndpointStatus(
-          name: 'Runtime Profile',
+          name: 'Agent runtime',
           url: config.runtimeProfilePath,
           state: ConnectionStateKind.disconnected,
           message: error.toString(),
         ),
       ];
       localProcessStatuses = const <ServiceProcessStatus>[];
-      statusMessage = 'Runtime profile failed to load: $error';
+      statusMessage = 'Agent runtime failed to load: $error';
       _initialized = true;
       notifyListeners();
       return;
@@ -735,7 +732,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     try {
       _throwIfClosing();
       await _log('starting required local services');
-      localProcessStatuses = await localServices.startRequiredServices(
+      localProcessStatuses = await _startRequiredRuntimeServices(
         runtimeProfile!,
         restartAutoStarted: true,
       );
@@ -800,23 +797,15 @@ class AgentAwesomeAppController extends ChangeNotifier {
     return false;
   }
 
-  /// Resolves the startup profile from env override, app default, or template.
+  /// Resolves the startup service topology from env override or template.
   Future<File> _resolveInitialProfileFile(RuntimeProfileLoader loader) async {
     if (config.runtimeProfilePath.trim().isNotEmpty) {
       return loader.resolveProfileFile();
     }
-    final defaultChatProfile = appSettings.defaultChatProfilePath.trim();
-    if (defaultChatProfile.isNotEmpty) {
-      final file = File(defaultChatProfile);
-      if (await file.exists()) {
-        return file;
-      }
-      await _log('default chat profile missing: $defaultChatProfile');
-    }
     return loader.resolveProfileFile();
   }
 
-  /// Loads the startup profile and repairs only the app-owned default profile.
+  /// Loads the startup topology and repairs only the app-owned default topology.
   Future<RuntimeProfile> _loadInitialRuntimeProfile(
     RuntimeProfileLoader loader,
     File profileFile,
@@ -827,14 +816,14 @@ class AgentAwesomeAppController extends ChangeNotifier {
       if (!_isAppOwnedDefaultRuntimeProfile(loader, profileFile)) {
         rethrow;
       }
-      await _log('rewriting invalid default runtime profile: $error');
+      await _log('rewriting invalid default agent runtime topology: $error');
       final resetFile = await loader.writeDefaultRuntimeProfileFile();
       runtimeProfilePath = resetFile.path;
       return loader.loadFile(resetFile);
     }
   }
 
-  /// Reports whether a profile path is the managed default profile file.
+  /// Reports whether a topology path is the managed default topology file.
   bool _isAppOwnedDefaultRuntimeProfile(
     RuntimeProfileLoader loader,
     File profileFile,
@@ -844,43 +833,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     return profileFile.absolute.path ==
         File(loader.defaultRuntimeProfilePath()).absolute.path;
-  }
-
-  /// Lists editable runtime profiles from the app config directory.
-  Future<List<String>> listRuntimeProfilePaths() async {
-    final directory = Directory(runtimeProfilesDirectoryPath());
-    if (!await directory.exists()) {
-      return const <String>[];
-    }
-    final files = await directory
-        .list()
-        .where((entity) => entity is File && entity.path.endsWith('.json'))
-        .cast<File>()
-        .toList();
-    files.sort((left, right) => left.path.compareTo(right.path));
-    return files.map((file) => file.path).toList();
-  }
-
-  /// Lists editable runtime profiles with labels parsed from profile JSON.
-  Future<List<RuntimeProfileFileEntry>> listRuntimeProfileFiles() async {
-    final paths = await listRuntimeProfilePaths();
-    final entries = <RuntimeProfileFileEntry>[];
-    for (final path in paths) {
-      entries.add(
-        await _profileEntryForPath(path, activePath: runtimeProfilePath),
-      );
-    }
-    if (runtimeProfilePath.isNotEmpty &&
-        !entries.any((entry) => entry.path == runtimeProfilePath)) {
-      entries.insert(
-        0,
-        await _profileEntryForPath(
-          runtimeProfilePath,
-          activePath: runtimeProfilePath,
-        ),
-      );
-    }
-    return entries;
   }
 
   /// Starts an already installed local model when the active config selects it.
@@ -1138,11 +1090,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
     };
   }
 
-  /// Reloads profile, model, and agent file collection metadata.
+  /// Reloads model, agent, and tool file collection metadata.
   Future<void> _refreshConfigCollections() async {
     final profile = runtimeProfile;
-    availableProfilePaths = await listRuntimeProfilePaths();
-    availableProfiles = await listRuntimeProfileFiles();
     availableModelConfigs = await configFiles.list(
       kind: ConfigFileKind.model,
       assignedPath: profile?.harness.modelConfigPath ?? '',
@@ -1164,10 +1114,43 @@ class AgentAwesomeAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Returns the profile path used by one-click new chat creation.
-  String get defaultChatProfilePath {
-    final configured = appSettings.defaultChatProfilePath.trim();
-    return configured.isEmpty ? runtimeProfilePath : configured;
+  /// Returns the agent config selected for new chat and command traffic.
+  String get defaultAgentConfigPath {
+    final configured = appSettings.defaultAgentConfigPath.trim();
+    if (configured.isNotEmpty) {
+      return configured;
+    }
+    return runtimeProfile?.harness.agentConfigPath.trim() ?? '';
+  }
+
+  /// Returns the selected agent's current display label.
+  String get activeAgentLabel {
+    final path = defaultAgentConfigPath;
+    for (final entry in availableAgentConfigs) {
+      if (entry.path == path) {
+        return entry.label;
+      }
+    }
+    if (path.trim().isEmpty) {
+      return 'Agent';
+    }
+    return ConfigFileEntry(
+      path: path,
+      kind: ConfigFileKind.agent,
+      assigned: true,
+    ).label;
+  }
+
+  /// Returns the memory domain selected for automatic memory operations.
+  String get selectedMemoryDomainId {
+    final configured = appSettings.selectedMemoryDomainId.trim();
+    final profile = runtimeProfile;
+    if (configured.isNotEmpty &&
+        profile != null &&
+        profile.memoryDomains.any((domain) => domain.id == configured)) {
+      return configured;
+    }
+    return profile?.agentMemory.defaultWriteDomain.trim() ?? '';
   }
 
   /// Returns the model config path used for app-owned chat title summaries.
@@ -1259,7 +1242,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
           );
   }
 
-  /// Returns whether the active profile has at least one selectable model.
+  /// Returns whether the active agent runtime has at least one selectable model.
   bool get hasConfiguredModel {
     final profile = runtimeProfile;
     if (profile == null) {
@@ -1310,10 +1293,10 @@ class AgentAwesomeAppController extends ChangeNotifier {
       return selectedChatHistoryKey;
     }
     final sessionId = selectedSessionId;
-    if (sessionId == null || sessionId.isEmpty || runtimeProfilePath.isEmpty) {
+    if (sessionId == null || sessionId.isEmpty) {
       return '';
     }
-    return _chatHistoryKey(runtimeProfilePath, sessionId);
+    return _chatHistoryKey(sessionId);
   }
 
   /// Returns the selected chat history entry, if it exists.
@@ -1356,13 +1339,6 @@ class AgentAwesomeAppController extends ChangeNotifier {
       return const <String>[];
     }
     return <String>[actor];
-  }
-
-  /// Selects the default runtime profile for fast-path new chats.
-  Future<void> setDefaultChatProfile(String profilePath) async {
-    await saveAppSettings(
-      appSettings.copyWith(defaultChatProfilePath: profilePath.trim()),
-    );
   }
 
   /// Selects the app-owned model config for chat title summaries.
@@ -1616,13 +1592,10 @@ class AgentAwesomeAppController extends ChangeNotifier {
     final file = File(path);
     final content = await file.exists() ? await file.readAsString() : '';
     final document = ModelConfigDocument.parse(content);
-    final providers = await _configuredModelProviders(
-      document,
-      replacingProvider: provider,
-    );
-    final next = document.copyWith(
-      defaultRef: modelProviderDefaultRef(provider),
-      providers: providers,
+    final next = modelConfigDocumentForProvider(
+      provider,
+      validations: document.validations,
+      extra: document.extra,
     );
     final validationError = modelConfigValidationError(next);
     if (validationError.isNotEmpty) {
@@ -1654,7 +1627,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     if (profile == null) {
       return OnboardingModelSetupResult(
         success: false,
-        message: 'Runtime profile is not loaded',
+        message: 'Agent runtime is not loaded',
         providerName: providerName,
         modelId: modelId,
       );
@@ -1696,6 +1669,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
       processSupervisor.beginClosing();
       _automationFileRefreshTimer?.cancel();
       _automationFileRefreshTimer = null;
+      _automationRunRefreshTimer?.cancel();
+      _automationRunRefreshTimer = null;
 
       onStatus?.call('Closing service clients');
       closeClients();
@@ -1795,7 +1770,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
         explanation: explanation,
       );
     } catch (error) {
-      todayState = todayState.copyWith(busy: false, error: error.toString());
+      todayState = todayState.copyWith(
+        busy: false,
+        error: _todayProjectionErrorMessage(error, server),
+      );
+      await _log('explain Today item failed: $error');
     }
     notifyListeners();
   }
@@ -1844,12 +1823,10 @@ class AgentAwesomeAppController extends ChangeNotifier {
       todayState = TodayState(projection: projection);
       _setEndpoint(server.label, ConnectionStateKind.connected, 'Today loaded');
     } catch (error) {
-      todayState = todayState.copyWith(busy: false, error: error.toString());
-      _setEndpoint(
-        server.label,
-        ConnectionStateKind.disconnected,
-        error.toString(),
-      );
+      final message = _todayProjectionErrorMessage(error, server);
+      todayState = todayState.copyWith(busy: false, error: message);
+      _setEndpoint(server.label, ConnectionStateKind.disconnected, message);
+      await _log('load Today failed: $error');
     }
     notifyListeners();
   }
@@ -1883,7 +1860,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   RuntimeProfile _activeRuntimeProfile() {
     final profile = runtimeProfile;
     if (profile == null) {
-      throw StateError('Runtime profile is not loaded');
+      throw StateError('Agent runtime is not loaded');
     }
     return profile;
   }
@@ -2027,9 +2004,8 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
     final profile = _activeRuntimeProfile();
     return ExecutiveSummaryClient(
-      rpc: GatewayContextClient(
-        baseUrl: _contextBaseUrl(profile),
-        domainId: server.id,
+      rpc: McpJsonRpcClient(
+        endpoint: gatewayMemoryMcpEndpointFor(profile, server),
         headers: _runtimeGatewayHeaders,
         logger: logger,
       ),
@@ -2098,6 +2074,33 @@ class AgentAwesomeAppController extends ChangeNotifier {
     return _primaryGraphServer()?.label ?? 'Memory';
   }
 
+  /// Returns display-safe Today loading errors for memory service outages.
+  String _todayProjectionErrorMessage(Object error, McpServerRuntime server) {
+    final text = error.toString();
+    if (_isTodayMemoryUnavailable(text)) {
+      return 'Today is unavailable because ${server.label} is not reachable. '
+          'Start or restart local services, then open Today again.';
+    }
+    return text;
+  }
+
+  /// Detects Today memory failures that should not expose raw transport text.
+  bool _isTodayMemoryUnavailable(String message) {
+    final text = message.toLowerCase();
+    final usesTodayMemoryRoute =
+        text.contains('/api/context/tools/call') ||
+        text.contains('context/tools/call') ||
+        text.contains('/mcp');
+    if (!usesTodayMemoryRoute) {
+      return false;
+    }
+    return text.contains('http 503') ||
+        text.contains('memory domain dependency not ready') ||
+        text.contains('connection refused') ||
+        text.contains('failed host lookup') ||
+        text.contains('network is unreachable');
+  }
+
   void _setEndpoint(String name, ConnectionStateKind state, String message) {
     var found = false;
     endpointStatuses = endpointStatuses.map((status) {
@@ -2127,14 +2130,14 @@ class AgentAwesomeAppController extends ChangeNotifier {
         name: 'Agent API',
         url: profile.gateway.apiBaseUrl,
         state: ConnectionStateKind.unknown,
-        message: 'Profile updated',
+        message: 'Agent runtime updated',
       ),
       for (final server in profile.mcpServers.where((server) => server.enabled))
         EndpointStatus(
           name: server.label,
           url: server.endpoint,
           state: ConnectionStateKind.unknown,
-          message: 'Profile updated',
+          message: 'Agent runtime updated',
         ),
     ];
   }
@@ -2311,21 +2314,9 @@ bool _taskTitleAppearsInChat(WorkspaceTask task, String conversationText) {
   return conversationText.toLowerCase().contains(title);
 }
 
-/// Builds the stable app-local key for a profile/session pair.
-String _chatHistoryKey(String profilePath, String sessionId) {
-  return '$profilePath::$sessionId';
-}
-
-/// Parses a chat history key into its profile path and session id.
-({String profilePath, String sessionId})? _parseChatHistoryKey(String key) {
-  final separator = key.lastIndexOf('::');
-  if (separator <= 0 || separator + 2 >= key.length) {
-    return null;
-  }
-  return (
-    profilePath: key.substring(0, separator),
-    sessionId: key.substring(separator + 2),
-  );
+/// Builds the stable app-local key for a chat session.
+String _chatHistoryKey(String sessionId) {
+  return sessionId;
 }
 
 /// Sorts chat history entries by most recently updated first.
@@ -2339,6 +2330,43 @@ List<ChatHistoryEntry> _sortedHistory(Iterable<ChatHistoryEntry> entries) {
 bool _isFallbackChatTitle(String title, String sessionId) {
   final fallback = titleFromSession(sessionId);
   return title.trim().isEmpty || title.trim() == fallback;
+}
+
+/// Builds a readable chat title without calling a model.
+String _fallbackChatTitleFromTranscript(
+  List<ChatMessage> transcript,
+  String sessionId,
+) {
+  for (final role in const <ChatRole>[ChatRole.user, ChatRole.assistant]) {
+    for (final message in transcript) {
+      if (message.role != role) {
+        continue;
+      }
+      final title = _compactFallbackTitle(message.text);
+      if (title.isNotEmpty) {
+        return title;
+      }
+    }
+  }
+  return titleFromSession(sessionId);
+}
+
+/// Trims one chat message into a stable local title.
+String _compactFallbackTitle(String text) {
+  var title = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  title = title.replaceAll(RegExp(r'''^["']+|["']+$'''), '').trim();
+  if (title.length < 4) {
+    return '';
+  }
+  if (title.length <= 64) {
+    return title;
+  }
+  final truncated = title.substring(0, 64).trimRight();
+  final wordBoundary = truncated.lastIndexOf(' ');
+  if (wordBoundary >= 32) {
+    return truncated.substring(0, wordBoundary).trimRight();
+  }
+  return truncated;
 }
 
 /// Graph-backed task write tools that should refresh the backlog workspace.

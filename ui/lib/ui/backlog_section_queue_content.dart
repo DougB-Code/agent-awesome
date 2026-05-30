@@ -13,7 +13,7 @@ class _BacklogQueueContent extends StatelessWidget {
     final tasks = controller.filteredTasks.where((task) {
       return _matchesTask(task, query);
     }).toList();
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -21,19 +21,33 @@ class _BacklogQueueContent extends StatelessWidget {
           _TaskQueueFilterStrip(controller: controller),
           const SizedBox(height: 14),
           if (tasks.isEmpty)
-            const PanelEmptyBlock(label: 'No backlog items match this view')
-          else
-            for (final task in tasks)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _TaskQueueTile(
-                  task: task,
-                  selected: controller.selectedTask?.id == task.id,
-                  focused: controller.focusedBacklogTaskId == task.id,
-                  changes: controller.screenChangesForTask(task.id),
-                  onTap: () => controller.inspectBacklogTask(task.id),
-                ),
+            const Expanded(
+              child: PanelEmptyBlock(
+                icon: Icons.check_circle_outline,
+                label: 'No backlog items match this view',
+                message: 'Adjust the filters or create a backlog item.',
               ),
+            )
+          else
+            Expanded(
+              child: ListView.builder(
+                itemCount: tasks.length,
+                itemBuilder: (context, index) {
+                  final task = tasks[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _TaskQueueTile(
+                      controller: controller,
+                      task: task,
+                      selected: controller.selectedTask?.id == task.id,
+                      focused: controller.focusedBacklogTaskId == task.id,
+                      changes: controller.screenChangesForTask(task.id),
+                      onTap: () => controller.inspectBacklogTask(task.id),
+                    ),
+                  );
+                },
+              ),
+            ),
         ],
       ),
     );

@@ -1,4 +1,4 @@
-// This file tests durable pipe graph workflow runtime behavior.
+// This file tests durable state-machine workflow runtime behavior.
 package runtime
 
 import (
@@ -19,22 +19,25 @@ import (
 	"agentawesome/internal/services/workflow/store"
 )
 
-// TestPipeGraphHumanNodeWaitsForSignal verifies pending user items resume by signal.
-func TestPipeGraphHumanNodeWaitsForSignal(t *testing.T) {
+// TestStateMachineHumanActionWaitsForSignal verifies pending user items resume by signal.
+func TestStateMachineHumanActionWaitsForSignal(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "workflow.db")
 	writeTestDefinition(t, definitionsDir, "approval.yaml", `
-kind: workflow
+kind: state_machine
 id: approval
 name: Approval
-nodes:
+initial: review
+states:
   - id: review
-    type: human
-    with:
-      prompt: Approve this action?
-      payload:
-        operation: archive
+    on_entry:
+      - id: review_request
+        type: human
+        with:
+          prompt: Approve this action?
+          payload:
+            operation: archive
 `)
 	service, err := Open(ctx, Config{
 		DefinitionsDir: definitionsDir,
@@ -96,15 +99,18 @@ states:
   - id: start
 `)
 	writeTestDefinition(t, definitionsDir, "valid.yaml", `
-kind: workflow
+kind: state_machine
 id: valid_flow
 name: Valid Flow
-nodes:
-  - id: assert_input
-    type: assert
-    with:
-      path: body.value.ready
-      mode: exists
+initial: start
+states:
+  - id: start
+    on_entry:
+      - id: assert_input
+        type: assert
+        with:
+          path: workflow_input.ready
+          mode: exists
 `)
 	service, err := Open(ctx, Config{
 		DefinitionsDir:         definitionsDir,
@@ -127,8 +133,8 @@ nodes:
 	}
 }
 
-// TestListDefinitionsReloadsCopiedDefinition verifies user-installed YAML files are visible without service restart.
-func TestListDefinitionsReloadsCopiedDefinition(t *testing.T) {
+// TestDeleteDraftRemovesMirroredWorkflowFile verifies deleting a workflow file removes it from disk.
+func TestDeleteDraftRemovesMirroredWorkflowFile(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	service, err := Open(ctx, Config{
@@ -142,14 +148,17 @@ func TestListDefinitionsReloadsCopiedDefinition(t *testing.T) {
 	defer service.Close()
 
 	writeTestDefinition(t, definitionsDir, "copied.yaml", `
-kind: workflow
+kind: state_machine
 id: copied_workflow
 name: Copied Workflow
-nodes:
+initial: review
+states:
   - id: review
-    type: human
-    with:
-      prompt: Review copied workflow
+    on_entry:
+      - id: review_request
+        type: human
+        with:
+          prompt: Review copied workflow
 `)
 
 	defs, err := service.ListDefinitions(ctx)
@@ -169,12 +178,22 @@ nodes:
 	if err := service.DeleteDraft(ctx, "draft_copied_workflow"); err != nil {
 		t.Fatalf("DeleteDraft() error = %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(definitionsDir, "copied.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("definition file after DeleteDraft() error = %v, want missing", err)
+	}
 	drafts, err = service.ListDrafts(ctx)
 	if err != nil {
 		t.Fatalf("ListDrafts() after delete error = %v", err)
 	}
-	if len(drafts) != 1 || drafts[0].ID != "draft_copied_workflow" {
-		t.Fatalf("ListDrafts() after delete = %#v, want mirrored draft restored", drafts)
+	if len(drafts) != 0 {
+		t.Fatalf("ListDrafts() after delete = %#v, want no drafts", drafts)
+	}
+	defs, err = service.ListDefinitions(ctx)
+	if err != nil {
+		t.Fatalf("ListDefinitions() after delete error = %v", err)
+	}
+	if len(defs) != 0 {
+		t.Fatalf("ListDefinitions() after delete = %#v, want no definitions", defs)
 	}
 }
 
@@ -193,14 +212,17 @@ func TestListDraftsRemovesStalePublishedDefinitionDrafts(t *testing.T) {
 	defer service.Close()
 
 	writeTestDefinition(t, definitionsDir, "old.yaml", `
-kind: workflow
+kind: state_machine
 id: old_workflow
 name: Old Workflow
-nodes:
+initial: review
+states:
   - id: review
-    type: human
-    with:
-      prompt: Review old workflow
+    on_entry:
+      - id: review_request
+        type: human
+        with:
+          prompt: Review old workflow
 `)
 	if _, err := service.ListDrafts(ctx); err != nil {
 		t.Fatalf("ListDrafts() error = %v", err)
@@ -229,7 +251,7 @@ states:
 	if len(drafts) != 1 || drafts[0].ID != "draft_new_workflow" {
 		t.Fatalf("ListDrafts() = %#v, want only draft_new_workflow", drafts)
 	}
-	if drafts[0].Kind != definition.KindWorkflow {
+	if drafts[0].Kind != draftKindWorkflow {
 		t.Fatalf("draft kind = %q, want workflow", drafts[0].Kind)
 	}
 	if got := strings.TrimSpace(stringFromMap(drafts[0].Body, "kind", "")); got != definition.KindStateMachine {
@@ -298,14 +320,17 @@ func TestStartWorkflowReloadsCopiedDefinition(t *testing.T) {
 	defer service.Close()
 
 	writeTestDefinition(t, definitionsDir, "runnable.yaml", `
-kind: workflow
+kind: state_machine
 id: runnable_copy
 name: Runnable Copy
-nodes:
+initial: review
+states:
   - id: review
-    type: human
-    with:
-      prompt: Review runnable copy
+    on_entry:
+      - id: review_request
+        type: human
+        with:
+          prompt: Review runnable copy
 `)
 
 	started, err := service.StartWorkflow(ctx, "runnable_copy", map[string]any{})
@@ -457,6 +482,157 @@ states:
 	}
 }
 
+// TestStateMachineFollowsDecisionRouteTransitions verifies custom route triggers drive state transitions.
+func TestStateMachineFollowsDecisionRouteTransitions(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "decision_transition.yaml", `
+kind: state_machine
+id: decision_transition_flow
+name: Decision Transition Flow
+initial: route
+states:
+  - id: route
+    on_entry:
+      - id: choose_route
+        uses: decision.route
+        with:
+          default: needs_review
+          rules:
+            - id: auto_rule
+              route: auto_approved
+              when:
+                path: workflow_input.auto
+    transitions:
+      - trigger: auto_approved
+        to: auto_done
+      - trigger: needs_review
+        to: review
+  - id: auto_done
+    on_entry:
+      - id: auto_assert
+        uses: data.assert
+        with:
+          path: workflow_input.auto
+          mode: equals
+          value: true
+  - id: review
+    on_entry:
+      - id: review_assert
+        uses: data.assert
+        with:
+          path: workflow_input.auto
+          mode: equals
+          value: false
+`)
+	service := openTestService(t, ctx, definitionsDir, "")
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "decision_transition_flow", map[string]any{"auto": true})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
+	run, err := service.Status(ctx, started.ID)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if run.State != "auto_done" {
+		t.Fatalf("run state = %q, want auto_done", run.State)
+	}
+	if _, ok, err := service.store.GetNodeState(ctx, started.ID, "auto_assert"); err != nil {
+		t.Fatalf("GetNodeState(auto_assert) error = %v", err)
+	} else if !ok {
+		t.Fatalf("auto_assert did not execute")
+	}
+	if _, ok, err := service.store.GetNodeState(ctx, started.ID, "review_assert"); err != nil {
+		t.Fatalf("GetNodeState(review_assert) error = %v", err)
+	} else if ok {
+		t.Fatalf("review_assert executed on auto_approved route")
+	}
+}
+
+// TestStateMachineRoutesFromPriorNodeOutput verifies downstream states can inspect earlier action output.
+func TestStateMachineRoutesFromPriorNodeOutput(t *testing.T) {
+	ctx := context.Background()
+	definitionsDir := t.TempDir()
+	writeTestDefinition(t, definitionsDir, "node_output_route.yaml", `
+kind: state_machine
+id: node_output_route_flow
+name: Node Output Route Flow
+initial: read_yaml
+states:
+  - id: read_yaml
+    on_entry:
+      - id: read_yaml
+        uses: data.defaults
+        with:
+          input: {}
+          defaults:
+            output:
+              ok: true
+    transitions:
+      - trigger: succeeded
+        to: route_yaml
+  - id: route_yaml
+    on_entry:
+      - id: choose_yaml_route
+        uses: decision.route
+        with:
+          default: failed
+          rules:
+            - route: succeeded
+              when:
+                path: read_yaml.output.ok
+    transitions:
+      - trigger: succeeded
+        to: accepted
+      - trigger: failed
+        to: rejected
+  - id: accepted
+    on_entry:
+      - id: accepted_assert
+        uses: data.assert
+        with:
+          path: read_yaml.output.ok
+          mode: equals
+          value: true
+  - id: rejected
+    on_entry:
+      - id: rejected_assert
+        uses: data.assert
+        with:
+          path: read_yaml.output.ok
+          mode: equals
+          value: false
+`)
+	service := openTestService(t, ctx, definitionsDir, "")
+	defer service.Close()
+
+	started, err := service.StartWorkflow(ctx, "node_output_route_flow", map[string]any{})
+	if err != nil {
+		t.Fatalf("StartWorkflow() error = %v", err)
+	}
+	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
+	run, err := service.Status(ctx, started.ID)
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if run.State != "accepted" {
+		t.Fatalf("run state = %q, want accepted", run.State)
+	}
+	if _, ok, err := service.store.GetNodeState(ctx, started.ID, "accepted_assert"); err != nil {
+		t.Fatalf("GetNodeState(accepted_assert) error = %v", err)
+	} else if !ok {
+		t.Fatalf("accepted_assert did not execute")
+	}
+	if _, ok, err := service.store.GetNodeState(ctx, started.ID, "rejected_assert"); err != nil {
+		t.Fatalf("GetNodeState(rejected_assert) error = %v", err)
+	} else if ok {
+		t.Fatalf("rejected_assert executed despite truthy node output")
+	}
+}
+
 // TestStateMachineResumesWaitingEntryAction verifies pending hierarchical actions resume by signal.
 func TestStateMachineResumesWaitingEntryAction(t *testing.T) {
 	ctx := context.Background()
@@ -550,14 +726,17 @@ func TestWorkflowEventsRedactSignalPayload(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "redact.yaml", `
-kind: workflow
+kind: state_machine
 id: redact_signal
 name: Redact Signal
-nodes:
+initial: review
+states:
   - id: review
-    type: human
-    with:
-      prompt: Approve?
+    on_entry:
+      - id: review_request
+        type: human
+        with:
+          prompt: Approve?
 `)
 	service := openTestService(t, ctx, definitionsDir, "")
 	defer service.Close()
@@ -605,8 +784,8 @@ func TestContainsSensitiveKeyDetectsCredentials(t *testing.T) {
 	}
 }
 
-// TestPipeGraphToolCallUsesHarnessContextAPI verifies tool.call stays harness-owned.
-func TestPipeGraphToolCallUsesHarnessContextAPI(t *testing.T) {
+// TestStateMachineToolCallUsesHarnessContextAPI verifies tool.call stays harness-owned.
+func TestStateMachineToolCallUsesHarnessContextAPI(t *testing.T) {
 	ctx := context.Background()
 	var received atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -627,16 +806,19 @@ func TestPipeGraphToolCallUsesHarnessContextAPI(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "tool.yaml", `
-kind: workflow
+kind: state_machine
 id: tool_workflow
 name: Tool Workflow
-nodes:
+initial: call
+states:
   - id: call
-    type: tool
-    tool: mock_tool
-    with:
-      arguments:
-        subject: hello
+    on_entry:
+      - id: call_tool
+        type: tool
+        tool: mock_tool
+        with:
+          arguments:
+            subject: hello
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -651,8 +833,8 @@ nodes:
 	}
 }
 
-// TestPipeGraphRecordsObservedContracts verifies successful node outputs become reviewable contracts.
-func TestPipeGraphRecordsObservedContracts(t *testing.T) {
+// TestStateMachineRecordsObservedContracts verifies successful action outputs become reviewable contracts.
+func TestStateMachineRecordsObservedContracts(t *testing.T) {
 	ctx := context.Background()
 	var total atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -666,15 +848,18 @@ func TestPipeGraphRecordsObservedContracts(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "observe.yaml", `
-kind: workflow
+kind: state_machine
 id: observe_contract
 name: Observe Contract
-nodes:
+initial: fetch
+states:
   - id: fetch
-    type: tool
-    tool: fetch_invoice
-    with:
-      arguments: {}
+    on_entry:
+      - id: fetch
+        type: tool
+        tool: fetch_invoice
+        with:
+          arguments: {}
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -704,8 +889,8 @@ nodes:
 	}
 }
 
-// TestPipeGraphLLMNodeRequiresStructuredSchema verifies model nodes stay schema-constrained.
-func TestPipeGraphLLMNodeRequiresStructuredSchema(t *testing.T) {
+// TestStateMachineLLMActionRequiresStructuredSchema verifies model actions stay schema-constrained.
+func TestStateMachineLLMActionRequiresStructuredSchema(t *testing.T) {
 	ctx := context.Background()
 	llm := &recordingWorkflowLLM{response: map[string]any{
 		"status": "succeeded",
@@ -713,30 +898,33 @@ func TestPipeGraphLLMNodeRequiresStructuredSchema(t *testing.T) {
 	}}
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "llm.yaml", `
-kind: workflow
+kind: state_machine
 id: llm_workflow
 name: LLM Workflow
-nodes:
+initial: classify
+states:
   - id: classify
-    type: llm
-    with:
-      prompt: "Classify ${body.value.subject}"
-      output_schema:
-        type: object
-        required:
-          - status
-          - result
-        properties:
-          status:
-            type: string
-          result:
+    on_entry:
+      - id: classify
+        type: llm
+        with:
+          prompt: "Classify ${body.value.workflow_input.subject}"
+          output_schema:
             type: object
-    output:
-      schema:
-        type: object
-        required:
-          - status
-          - result
+            required:
+              - status
+              - result
+            properties:
+              status:
+                type: string
+              result:
+                type: object
+        output:
+          schema:
+            type: object
+            required:
+              - status
+              - result
 `)
 	service, err := Open(ctx, Config{
 		DefinitionsDir: definitionsDir,
@@ -772,167 +960,8 @@ nodes:
 	}
 }
 
-// TestPipeGraphMappingAdapterFeedsToolArguments verifies node outputs flow through deterministic mappings.
-func TestPipeGraphMappingAdapterFeedsToolArguments(t *testing.T) {
-	ctx := context.Background()
-	var sawRecipient atomic.Bool
-	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		switch body["name"] {
-		case "fetch_customer":
-			writeJSON(w, map[string]any{"structuredContent": map[string]any{
-				"customer": map[string]any{"email": "billing@example.test"},
-			}})
-		case "send_email":
-			arguments, _ := body["arguments"].(map[string]any)
-			if arguments["recipient"] == "billing@example.test" {
-				sawRecipient.Store(true)
-			}
-			writeJSON(w, map[string]any{"structuredContent": map[string]any{"sent": true}})
-		default:
-			http.Error(w, "unexpected tool", http.StatusBadRequest)
-		}
-	}))
-	defer toolServer.Close()
-
-	definitionsDir := t.TempDir()
-	writeTestDefinition(t, definitionsDir, "pipe_mapping.yaml", `
-kind: workflow
-id: pipe_mapping
-name: Pipe Mapping
-nodes:
-  - id: fetch
-    type: tool
-    tool: fetch_customer
-    with:
-      arguments: {}
-  - id: send
-    type: tool
-    tool: send_email
-    with:
-      arguments: "${body.value}"
-edges:
-  - from:
-      node: fetch
-    to:
-      node: send
-    adapter:
-      kind: mapping
-      mapping:
-        name: customer-to-recipient
-        steps:
-          - set:
-              target: recipient
-              value:
-                path: input.body.value.customer.email
-`)
-	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
-	defer service.Close()
-
-	started, err := service.StartWorkflow(ctx, "pipe_mapping", map[string]any{})
-	if err != nil {
-		t.Fatalf("StartWorkflow() error = %v", err)
-	}
-	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
-	if !sawRecipient.Load() {
-		t.Fatalf("send_email did not receive mapped recipient")
-	}
-}
-
-// TestPipeGraphDecisionNodeSkipsInactiveBranch verifies ordered route choices activate one branch.
-func TestPipeGraphDecisionNodeSkipsInactiveBranch(t *testing.T) {
-	ctx := context.Background()
-	var managerCalls atomic.Int64
-	var autoCalls atomic.Int64
-	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]any
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		switch body["name"] {
-		case "manager_tool":
-			managerCalls.Add(1)
-			writeJSON(w, map[string]any{"structuredContent": map[string]any{"approved_by": "manager"}})
-		case "auto_tool":
-			autoCalls.Add(1)
-			writeJSON(w, map[string]any{"structuredContent": map[string]any{"approved_by": "auto"}})
-		default:
-			http.Error(w, "unexpected tool", http.StatusBadRequest)
-		}
-	}))
-	defer toolServer.Close()
-
-	definitionsDir := t.TempDir()
-	writeTestDefinition(t, definitionsDir, "decision.yaml", `
-kind: workflow
-id: decision_workflow
-name: Decision Workflow
-nodes:
-  - id: choose
-    type: decision
-    with:
-      rules:
-        - id: manager_amount
-          route: manager
-          when:
-            expr: input.body.value.amount > 1000
-      default: auto
-  - id: manager
-    type: tool
-    tool: manager_tool
-    with:
-      arguments: {}
-  - id: auto
-    type: tool
-    tool: auto_tool
-    with:
-      arguments: {}
-edges:
-  - from:
-      node: choose
-    to:
-      node: manager
-    when:
-      expr: input.facets["decision.route"] == "manager"
-  - from:
-      node: choose
-    to:
-      node: auto
-    when:
-      expr: input.facets["decision.route"] == "auto"
-`)
-	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
-	defer service.Close()
-
-	started, err := service.StartWorkflow(ctx, "decision_workflow", map[string]any{"amount": float64(1500)})
-	if err != nil {
-		t.Fatalf("StartWorkflow() error = %v", err)
-	}
-	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
-	if managerCalls.Load() != 1 || autoCalls.Load() != 0 {
-		t.Fatalf("calls manager=%d auto=%d, want only manager branch", managerCalls.Load(), autoCalls.Load())
-	}
-	states, err := service.store.ListNodeStates(ctx, started.ID)
-	if err != nil {
-		t.Fatalf("ListNodeStates() error = %v", err)
-	}
-	statuses := nodeStatusByID(states)
-	if statuses["manager"].Status != statusSucceeded || statuses["auto"].Status != statusSkipped {
-		t.Fatalf("branch statuses manager=%q auto=%q, want succeeded/skipped", statuses["manager"].Status, statuses["auto"].Status)
-	}
-	dot, ok := service.DefinitionDOT("decision_workflow")
-	if !ok || !strings.Contains(dot, `"choose" -> "manager"`) || !strings.Contains(dot, `decision.route`) {
-		t.Fatalf("DefinitionDOT() = %q ok=%v, want decision graph", dot, ok)
-	}
-}
-
-// TestPipeGraphRateLimitBlocksExcessInvocations verifies runtime rate policy is enforced.
-func TestPipeGraphRateLimitBlocksExcessInvocations(t *testing.T) {
+// TestStateMachineRateLimitBlocksExcessInvocations verifies runtime rate policy is enforced.
+func TestStateMachineRateLimitBlocksExcessInvocations(t *testing.T) {
 	ctx := context.Background()
 	var calls atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -943,29 +972,32 @@ func TestPipeGraphRateLimitBlocksExcessInvocations(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "rate_limit.yaml", `
-kind: workflow
+kind: state_machine
 id: rate_limit_workflow
 name: Rate Limit Workflow
-nodes:
+initial: first
+states:
   - id: first
-    type: tool
-    tool: shared_tool
-    runtime:
-      rate_limit_per_minute: 1
-    with:
-      arguments: {}
+    on_entry:
+      - id: first
+        type: tool
+        tool: shared_tool
+        runtime:
+          rate_limit_per_minute: 1
+        with:
+          arguments: {}
+    transitions:
+      - trigger: succeeded
+        to: second
   - id: second
-    type: tool
-    tool: shared_tool
-    runtime:
-      rate_limit_per_minute: 1
-    with:
-      arguments: {}
-edges:
-  - from:
-      node: first
-    to:
-      node: second
+    on_entry:
+      - id: second
+        type: tool
+        tool: shared_tool
+        runtime:
+          rate_limit_per_minute: 1
+        with:
+          arguments: {}
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -980,8 +1012,8 @@ edges:
 	}
 }
 
-// TestPipeGraphRejectsSandboxBoundaryMismatch verifies runtime policy cannot claim a false sandbox.
-func TestPipeGraphRejectsSandboxBoundaryMismatch(t *testing.T) {
+// TestStateMachineRejectsSandboxBoundaryMismatch verifies runtime policy cannot claim a false sandbox.
+func TestStateMachineRejectsSandboxBoundaryMismatch(t *testing.T) {
 	ctx := context.Background()
 	var calls atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -992,17 +1024,20 @@ func TestPipeGraphRejectsSandboxBoundaryMismatch(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "sandbox_mismatch.yaml", `
-kind: workflow
+kind: state_machine
 id: sandbox_mismatch
 name: Sandbox Mismatch
-nodes:
+initial: call
+states:
   - id: call
-    type: tool
-    tool: network_tool
-    runtime:
-      sandbox: aa-runtime
-    with:
-      arguments: {}
+    on_entry:
+      - id: call
+        type: tool
+        tool: network_tool
+        runtime:
+          sandbox: aa-runtime
+        with:
+          arguments: {}
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -1017,8 +1052,8 @@ nodes:
 	}
 }
 
-// TestPipeGraphRetryDelayWaitsBetweenAttempts verifies fixed retry_delay policy.
-func TestPipeGraphRetryDelayWaitsBetweenAttempts(t *testing.T) {
+// TestStateMachineRetryDelayWaitsBetweenAttempts verifies fixed retry_delay policy.
+func TestStateMachineRetryDelayWaitsBetweenAttempts(t *testing.T) {
 	ctx := context.Background()
 	var attempts atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1032,17 +1067,20 @@ func TestPipeGraphRetryDelayWaitsBetweenAttempts(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "retry.yaml", `
-kind: workflow
+kind: state_machine
 id: retry_workflow
 name: Retry Workflow
-nodes:
+initial: call
+states:
   - id: call
-    type: tool
-    tool: mock_tool
-    retry: 1
-    retry_delay: 50ms
-    with:
-      arguments: {}
+    on_entry:
+      - id: call
+        type: tool
+        tool: mock_tool
+        retry: 1
+        retry_delay: 50ms
+        with:
+          arguments: {}
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -1061,48 +1099,8 @@ nodes:
 	}
 }
 
-// TestPipeGraphRunsIndependentBranchesConcurrently verifies ready branches fan out.
-func TestPipeGraphRunsIndependentBranchesConcurrently(t *testing.T) {
-	ctx := context.Background()
-	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		time.Sleep(150 * time.Millisecond)
-		writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
-	}))
-	defer toolServer.Close()
-
-	definitionsDir := t.TempDir()
-	writeTestDefinition(t, definitionsDir, "parallel.yaml", `
-kind: workflow
-id: parallel_workflow
-name: Parallel Workflow
-nodes:
-  - id: first
-    type: tool
-    tool: first_tool
-    with:
-      arguments: {}
-  - id: second
-    type: tool
-    tool: second_tool
-    with:
-      arguments: {}
-`)
-	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
-	defer service.Close()
-
-	start := time.Now()
-	started, err := service.StartWorkflow(ctx, "parallel_workflow", map[string]any{})
-	if err != nil {
-		t.Fatalf("StartWorkflow() error = %v", err)
-	}
-	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
-	if elapsed := time.Since(start); elapsed > 280*time.Millisecond {
-		t.Fatalf("elapsed = %s, want independent nodes to run concurrently", elapsed)
-	}
-}
-
-// TestPipeGraphResumeSkipsCompletedNodes verifies completed nodes are not rerun.
-func TestPipeGraphResumeSkipsCompletedNodes(t *testing.T) {
+// TestStateMachineResumeSkipsCompletedActions verifies completed actions are not rerun.
+func TestStateMachineResumeSkipsCompletedActions(t *testing.T) {
 	ctx := context.Background()
 	var firstCalls atomic.Int64
 	var secondCalls atomic.Int64
@@ -1130,25 +1128,28 @@ func TestPipeGraphResumeSkipsCompletedNodes(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "resume.yaml", `
-kind: workflow
+kind: state_machine
 id: resume_workflow
 name: Resume Workflow
-nodes:
+initial: first
+states:
   - id: first
-    type: tool
-    tool: first_tool
-    with:
-      arguments: {}
+    on_entry:
+      - id: first
+        type: tool
+        tool: first_tool
+        with:
+          arguments: {}
+    transitions:
+      - trigger: succeeded
+        to: second
   - id: second
-    type: tool
-    tool: second_tool
-    with:
-      arguments: {}
-edges:
-  - from:
-      node: first
-    to:
-      node: second
+    on_entry:
+      - id: second
+        type: tool
+        tool: second_tool
+        with:
+          arguments: {}
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -1177,8 +1178,8 @@ edges:
 	}
 }
 
-// TestPipeGraphDataAssertGatesOnParentOutput verifies generic data gates use envelope input.
-func TestPipeGraphDataAssertGatesOnParentOutput(t *testing.T) {
+// TestStateMachineDataAssertGatesOnPriorOutput verifies generic data gates use prior action output.
+func TestStateMachineDataAssertGatesOnPriorOutput(t *testing.T) {
 	ctx := context.Background()
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"structuredContent": map[string]any{
@@ -1189,36 +1190,39 @@ func TestPipeGraphDataAssertGatesOnParentOutput(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "gate.yaml", `
-kind: workflow
+kind: state_machine
 id: gated_workflow
 name: Gated Workflow
-nodes:
+initial: plan
+states:
   - id: plan
-    type: tool
-    tool: plan_tool
-    with:
-      arguments: {}
+    on_entry:
+      - id: plan
+        type: tool
+        tool: plan_tool
+        with:
+          arguments: {}
+    transitions:
+      - trigger: succeeded
+        to: assert_plan
   - id: assert_plan
-    type: assert
-    with:
-      checks:
-        - path: body.value.plan.status
-          mode: equals
-          value: approved
-        - path: body.value.plan
-          mode: schema
-          schema:
-            type: object
-            required:
-              - status
-            properties:
-              status:
-                type: string
-edges:
-  - from:
-      node: plan
-    to:
-      node: assert_plan
+    on_entry:
+      - id: assert_plan
+        type: assert
+        with:
+          checks:
+            - path: plan.plan.status
+              mode: equals
+              value: approved
+            - path: plan.plan
+              mode: schema
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -1230,21 +1234,24 @@ edges:
 	waitForRunStatus(t, ctx, service, started.ID, statusSucceeded)
 }
 
-// TestPipeGraphDataAssertFailureFailsRun verifies failed data gates stop progression.
-func TestPipeGraphDataAssertFailureFailsRun(t *testing.T) {
+// TestStateMachineDataAssertFailureFailsRun verifies failed data gates stop progression.
+func TestStateMachineDataAssertFailureFailsRun(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "gate_fail.yaml", `
-kind: workflow
+kind: state_machine
 id: failed_gate_workflow
 name: Failed Gate Workflow
-nodes:
+initial: assert_plan
+states:
   - id: assert_plan
-    type: assert
-    with:
-      path: body.value.status
-      mode: equals
-      value: approved
+    on_entry:
+      - id: assert_plan
+        type: assert
+        with:
+          path: workflow_input.status
+          mode: equals
+          value: approved
 `)
 	service := openTestService(t, ctx, definitionsDir, "")
 	defer service.Close()
@@ -1256,109 +1263,8 @@ nodes:
 	waitForRunStatus(t, ctx, service, started.ID, statusFailed)
 }
 
-// TestPipeGraphContractsRejectMissingFacet verifies declared contracts gate unsafe composition.
-func TestPipeGraphContractsRejectMissingFacet(t *testing.T) {
-	ctx := context.Background()
-	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, map[string]any{"structuredContent": map[string]any{"ok": true}})
-	}))
-	defer toolServer.Close()
-
-	definitionsDir := t.TempDir()
-	writeTestDefinition(t, definitionsDir, "contract_gate.yaml", `
-kind: workflow
-id: contract_gate
-name: Contract Gate
-nodes:
-  - id: source
-    type: tool
-    tool: source_tool
-    with:
-      arguments: {}
-  - id: target
-    type: tool
-    tool: target_tool
-    input:
-      required_facets:
-        - customer.email
-    with:
-      arguments: {}
-edges:
-  - from:
-      node: source
-    to:
-      node: target
-    adapter:
-      kind: direct
-`)
-	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
-	defer service.Close()
-
-	started, err := service.StartWorkflow(ctx, "contract_gate", map[string]any{})
-	if err != nil {
-		t.Fatalf("StartWorkflow() error = %v", err)
-	}
-	waitForRunStatus(t, ctx, service, started.ID, statusFailed)
-}
-
-// TestPipeGraphPolicyBlocksUntrustedNetworkEffects verifies edge safety is enforced before invocation.
-func TestPipeGraphPolicyBlocksUntrustedNetworkEffects(t *testing.T) {
-	ctx := context.Background()
-	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, map[string]any{"structuredContent": map[string]any{
-			"facets": map[string]any{"trust.level": "untrusted"},
-		}})
-	}))
-	defer toolServer.Close()
-
-	definitionsDir := t.TempDir()
-	writeTestDefinition(t, definitionsDir, "policy_gate.yaml", `
-kind: workflow
-id: policy_gate
-name: Policy Gate
-nodes:
-  - id: source
-    uses: data.assert
-    with:
-      path: body.value.ready
-      mode: equals
-      value: true
-  - id: target
-    type: tool
-    tool: network_tool
-    effects:
-      network:
-        allowed_hosts:
-          - example.com
-    with:
-      arguments: {}
-edges:
-  - from:
-      node: source
-    to:
-      node: target
-    adapter:
-      kind: mapping
-      mapping:
-        name: trust-marker
-        steps:
-          - set:
-              target: output.facets.trust.level
-              value:
-                value: untrusted
-`)
-	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
-	defer service.Close()
-
-	started, err := service.StartWorkflow(ctx, "policy_gate", map[string]any{"ready": true})
-	if err != nil {
-		t.Fatalf("StartWorkflow() error = %v", err)
-	}
-	waitForRunStatus(t, ctx, service, started.ID, statusFailed)
-}
-
-// TestPipeGraphPolicyApprovalGatePausesBeforeEffects verifies confirmation-required effects wait.
-func TestPipeGraphPolicyApprovalGatePausesBeforeEffects(t *testing.T) {
+// TestStateMachinePolicyApprovalGatePausesBeforeEffects verifies confirmation-required effects wait.
+func TestStateMachinePolicyApprovalGatePausesBeforeEffects(t *testing.T) {
 	ctx := context.Background()
 	var calls atomic.Int64
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1369,19 +1275,22 @@ func TestPipeGraphPolicyApprovalGatePausesBeforeEffects(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "approval_gate.yaml", `
-kind: workflow
+kind: state_machine
 id: approval_gate
 name: Approval Gate
-nodes:
+initial: send
+states:
   - id: send
-    type: tool
-    tool: send_email
-    effects:
-      user_confirmation:
-        required_for:
-          - send_email
-    with:
-      arguments: {}
+    on_entry:
+      - id: send
+        type: tool
+        tool: send_email
+        effects:
+          user_confirmation:
+            required_for:
+              - send_email
+        with:
+          arguments: {}
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -1404,8 +1313,8 @@ nodes:
 	}
 }
 
-// TestPipeGraphRuntimeMaxInputBytesBlocksInvocation verifies runtime input limits.
-func TestPipeGraphRuntimeMaxInputBytesBlocksInvocation(t *testing.T) {
+// TestStateMachineRuntimeMaxInputBytesBlocksInvocation verifies runtime input limits.
+func TestStateMachineRuntimeMaxInputBytesBlocksInvocation(t *testing.T) {
 	ctx := context.Background()
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"structuredContent": map[string]any{"called": true}})
@@ -1414,17 +1323,20 @@ func TestPipeGraphRuntimeMaxInputBytesBlocksInvocation(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "input_limit.yaml", `
-kind: workflow
+kind: state_machine
 id: input_limit
 name: Input Limit
-nodes:
+initial: gate
+states:
   - id: gate
-    uses: data.assert
-    runtime:
-      max_input_bytes: 10
-    with:
-      path: body.value.payload
-      mode: exists
+    on_entry:
+      - id: gate
+        uses: data.assert
+        runtime:
+          max_input_bytes: 10
+        with:
+          path: workflow_input.payload
+          mode: exists
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()
@@ -1436,8 +1348,8 @@ nodes:
 	waitForRunStatus(t, ctx, service, started.ID, statusFailed)
 }
 
-// TestPipeGraphRuntimeMaxArtifactBytesBlocksOversizedOutput verifies artifact limits.
-func TestPipeGraphRuntimeMaxArtifactBytesBlocksOversizedOutput(t *testing.T) {
+// TestStateMachineRuntimeMaxArtifactBytesBlocksOversizedOutput verifies artifact limits.
+func TestStateMachineRuntimeMaxArtifactBytesBlocksOversizedOutput(t *testing.T) {
 	ctx := context.Background()
 	toolServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"structuredContent": map[string]any{
@@ -1456,17 +1368,20 @@ func TestPipeGraphRuntimeMaxArtifactBytesBlocksOversizedOutput(t *testing.T) {
 
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "artifact_limit.yaml", `
-kind: workflow
+kind: state_machine
 id: artifact_limit
 name: Artifact Limit
-nodes:
+initial: fetch
+states:
   - id: fetch
-    type: tool
-    tool: fetch_pdf
-    runtime:
-      max_artifact_bytes: 16
-    with:
-      arguments: {}
+    on_entry:
+      - id: fetch
+        type: tool
+        tool: fetch_pdf
+        runtime:
+          max_artifact_bytes: 16
+        with:
+          arguments: {}
 `)
 	service := openTestService(t, ctx, definitionsDir, toolServer.URL+"/api/context")
 	defer service.Close()

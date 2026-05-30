@@ -119,15 +119,6 @@ class _AttentionItemCard extends StatelessWidget {
               : context.agentAwesomeCardGradient,
           border: Border.all(color: selected ? colors.green : colors.border),
           borderRadius: BorderRadius.circular(8),
-          boxShadow: selected
-              ? <BoxShadow>[
-                  BoxShadow(
-                    color: colors.softShadow,
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ]
-              : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: IntrinsicHeight(

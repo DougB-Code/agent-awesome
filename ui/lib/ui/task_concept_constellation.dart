@@ -817,12 +817,6 @@ class _PositionedConstellationAnchor extends StatelessWidget {
                 width: expanded ? 2.2 : 1.2,
               ),
               borderRadius: BorderRadius.circular(12),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  blurRadius: expanded ? 22 : 10,
-                  color: colors.green.withValues(alpha: expanded ? 0.22 : 0.08),
-                ),
-              ],
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -903,12 +897,6 @@ class _PositionedConstellationNode extends StatelessWidget {
                     : 1,
               ),
               borderRadius: BorderRadius.circular(10),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  blurRadius: expanded ? 20 : 10 + 8 * node.urgency,
-                  color: color.withValues(alpha: expanded ? 0.26 : 0.13),
-                ),
-              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1136,16 +1124,10 @@ class _ConstellationOffscreenIndicatorPainter extends CustomPainter {
       height: bucket.side.isVertical ? length : thickness,
     );
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(99));
-    final shadow = Paint()
-      ..style = PaintingStyle.fill
-      ..color = bucket.color.withValues(alpha: 0.16)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     final paint = Paint()
       ..style = PaintingStyle.fill
       ..color = bucket.color.withValues(alpha: 0.68);
-    canvas
-      ..drawRRect(rrect.shift(const Offset(0, 1)), shadow)
-      ..drawRRect(rrect, paint);
+    canvas.drawRRect(rrect, paint);
     if (bucket.count > 1) {
       _paintBucketCount(canvas, bucket, center);
     }

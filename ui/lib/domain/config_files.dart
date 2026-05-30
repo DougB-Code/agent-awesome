@@ -47,7 +47,7 @@ class ConfigFileEntry {
   /// Configuration collection kind.
   final ConfigFileKind kind;
 
-  /// Whether the active profile currently references this file.
+  /// Whether the active runtime topology currently references this file.
   final bool assigned;
 
   /// Human-readable name derived from the config content when available.

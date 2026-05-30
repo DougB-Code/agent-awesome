@@ -134,17 +134,6 @@ void main() {
     controller.runtimeProfilePath = '/tmp/external_gateway.json';
     controller.runtimeProfile = _externalGatewayProfile();
     controller.availableModelConfigs = const <ConfigFileEntry>[];
-    controller.availableProfiles = const <RuntimeProfileFileEntry>[
-      RuntimeProfileFileEntry(
-        path: '/tmp/external_gateway.json',
-        id: 'external-shared',
-        label: 'External Shared',
-        active: true,
-        runtimeKind: 'Cloud',
-        memoryDomainLabels: <String>['Doug Memory'],
-      ),
-    ];
-
     await tester.pumpWidget(
       _CommandBarHarness(
         commandController: TextEditingController(),
@@ -184,33 +173,28 @@ void main() {
     },
   );
 
-  testWidgets('shows active runtime profile picker in the top bar', (
-    tester,
-  ) async {
+  testWidgets('shows active agent picker in the top bar', (tester) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final controller = AgentAwesomeAppController(config: _testConfig());
-    final openedSettingsSections = <String>[];
+    final openedSections = <String>[];
     controller.runtimeProfilePath = '/tmp/personal.json';
-    controller.availableProfiles = const <RuntimeProfileFileEntry>[
-      RuntimeProfileFileEntry(
-        path: '/tmp/personal.json',
-        id: 'personal',
-        label: 'Personal',
-        active: true,
-        runtimeKind: 'Local',
-        memoryDomainLabels: <String>['memory'],
+    controller.runtimeProfile = _personalProfile();
+    controller.availableAgentConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'Personal',
       ),
-      RuntimeProfileFileEntry(
-        path: '/tmp/work.json',
-        id: 'work',
-        label: 'Work',
-        active: false,
-        runtimeKind: 'Cloud',
-        memoryDomainLabels: <String>['work'],
+      ConfigFileEntry(
+        path: '/tmp/work-agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: false,
+        displayName: 'Work',
       ),
     ];
 
@@ -220,27 +204,76 @@ void main() {
         appController: controller,
         onScreenCommand: (_) {},
         onNewChatSubmit: () {},
-        onOpenSettingsSection: openedSettingsSections.add,
+        onOpenSection: openedSections.add,
       ),
     );
 
-    expect(find.byTooltip('Active profile'), findsOneWidget);
+    expect(find.byTooltip('Active agent'), findsOneWidget);
     expect(find.text('Personal'), findsOneWidget);
+    expect(find.byTooltip('Active memory'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Active profile'));
+    await tester.tap(find.byTooltip('Active agent'));
     await tester.pumpAndSettle();
 
     expect(find.text('Work'), findsOneWidget);
-    expect(find.textContaining('Cloud'), findsOneWidget);
-    expect(find.textContaining('memory'), findsOneWidget);
+    expect(find.textContaining('work-agent'), findsOneWidget);
 
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
 
-    expect(openedSettingsSections, <String>['Profiles']);
+    expect(openedSections, <String>[AppSections.automationAgents]);
   });
 
-  testWidgets('quick access links profile management and all chats', (
+  testWidgets('keeps top bar action spacing equal', (tester) async {
+    tester.view.physicalSize = const Size(1800, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.appSettings = const AgentAwesomeAppSettings(
+      gettingStartedCompleted: true,
+    );
+    controller.runtimeProfilePath = '/tmp/personal.json';
+    controller.runtimeProfile = _personalProfile();
+    controller.availableAgentConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'Agent Awesome',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: TextEditingController(),
+        appController: controller,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+      ),
+    );
+
+    final agentRect = tester.getRect(
+      find.byKey(const ValueKey<String>('command-agent-picker')),
+    );
+    final memoryRect = tester.getRect(
+      find.byKey(const ValueKey<String>('command-memory-picker')),
+    );
+    final themeRect = tester.getRect(
+      find.byKey(const ValueKey<String>('command-theme-badge')),
+    );
+    final chatRect = tester.getRect(find.byTooltip('AI chat'));
+    final agentMemoryGap = memoryRect.left - agentRect.right;
+    final memoryThemeGap = themeRect.left - memoryRect.right;
+    final themeChatGap = chatRect.left - themeRect.right;
+
+    expect(agentMemoryGap, closeTo(10, 0.1));
+    expect(memoryThemeGap, closeTo(agentMemoryGap, 0.1));
+    expect(themeChatGap, closeTo(agentMemoryGap, 0.1));
+  });
+
+  testWidgets('quick access links agent management and all chats', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 800);
@@ -249,24 +282,21 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
 
     final openedSections = <String>[];
-    final openedSettingsSections = <String>[];
     final controller = AgentAwesomeAppController(config: _testConfig());
     controller.runtimeProfilePath = '/tmp/personal.json';
-    controller.availableProfiles = const <RuntimeProfileFileEntry>[
-      RuntimeProfileFileEntry(
-        path: '/tmp/personal.json',
-        id: 'personal',
-        label: 'Agent Awesome',
-        active: true,
-        runtimeKind: 'Local',
-        memoryDomainLabels: <String>['memory'],
+    controller.runtimeProfile = _personalProfile();
+    controller.availableAgentConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'Agent Awesome',
       ),
     ];
     controller.chatHistory = <ChatHistoryEntry>[
       ChatHistoryEntry(
-        profilePath: '/tmp/personal.json',
-        profileId: 'personal',
-        profileLabel: 'Agent Awesome',
+        agentPath: '/tmp/agent.yaml',
+        agentLabel: 'Agent Awesome',
         sessionId: 'chat-1',
         title: 'Weather information limitation',
         updatedAt: DateTime(2026, 5, 13, 9),
@@ -280,7 +310,6 @@ void main() {
         onScreenCommand: (_) {},
         onNewChatSubmit: () {},
         onOpenSection: openedSections.add,
-        onOpenSettingsSection: openedSettingsSections.add,
       ),
     );
 
@@ -289,11 +318,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('PROFILES'), findsOneWidget);
+    expect(find.text('AGENTS'), findsOneWidget);
     expect(find.text('RECENT CHATS'), findsOneWidget);
     expect(find.text('WORKSPACES'), findsNothing);
     expect(find.text('SETTINGS'), findsOneWidget);
-    expect(find.text('Memory'), findsOneWidget);
+    expect(find.text('Memory'), findsWidgets);
     expect(find.text('Tools'), findsNothing);
     expect(find.text('Manage'), findsOneWidget);
     expect(find.text('All Chats'), findsOneWidget);
@@ -309,14 +338,14 @@ void main() {
           .abs(),
       lessThan(12),
     );
-    final profileGap =
+    final agentGap =
         tester.getTopLeft(find.text('RECENT CHATS')).dx -
-        tester.getTopRight(find.text('Default profile')).dx;
+        tester.getTopRight(find.text('Active agent')).dx;
     final recentGap =
         tester.getTopLeft(find.text('SETTINGS')).dx -
         tester.getTopRight(find.text('Weather information limitation')).dx;
-    expect(profileGap, lessThan(140));
-    expect((profileGap - recentGap).abs(), lessThan(80));
+    expect(agentGap, lessThan(140));
+    expect((agentGap - recentGap).abs(), lessThan(80));
     expect(
       tester.getTopLeft(find.text('Manage')).dy -
           tester.getBottomLeft(find.text('Agent Awesome').last).dy,
@@ -340,10 +369,13 @@ void main() {
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
 
-    expect(openedSettingsSections, <String>['Profiles']);
+    expect(openedSections, <String>[
+      AppSections.chat,
+      AppSections.automationAgents,
+    ]);
   });
 
-  testWidgets('profile picker closes the command quick-access menu', (
+  testWidgets('agent picker closes the command quick-access menu', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 800);
@@ -353,22 +385,19 @@ void main() {
 
     final controller = AgentAwesomeAppController(config: _testConfig());
     controller.runtimeProfilePath = '/tmp/personal.json';
-    controller.availableProfiles = const <RuntimeProfileFileEntry>[
-      RuntimeProfileFileEntry(
-        path: '/tmp/personal.json',
-        id: 'personal',
-        label: 'Agent Awesome',
-        active: true,
-        runtimeKind: 'Local',
-        memoryDomainLabels: <String>['memory'],
+    controller.runtimeProfile = _personalProfile();
+    controller.availableAgentConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'Agent Awesome',
       ),
-      RuntimeProfileFileEntry(
-        path: '/tmp/work.json',
-        id: 'work',
-        label: 'Work',
-        active: false,
-        runtimeKind: 'Cloud',
-        memoryDomainLabels: <String>['work'],
+      ConfigFileEntry(
+        path: '/tmp/work-agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: false,
+        displayName: 'Work',
       ),
     ];
 
@@ -388,7 +417,7 @@ void main() {
 
     expect(find.text('RECENT CHATS'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Active profile'));
+    await tester.tap(find.byTooltip('Active agent'));
     await tester.pumpAndSettle();
 
     expect(find.text('RECENT CHATS'), findsNothing);
@@ -424,7 +453,6 @@ class _CommandBarHarness extends StatelessWidget {
     this.appController,
     this.onOpenSetup,
     this.onOpenSection,
-    this.onOpenSettingsSection,
   });
 
   final TextEditingController commandController;
@@ -438,9 +466,6 @@ class _CommandBarHarness extends StatelessWidget {
   /// Optional workspace navigation callback used by quick-access tests.
   final ValueChanged<String>? onOpenSection;
 
-  /// Optional settings navigation callback used by quick-access tests.
-  final ValueChanged<String>? onOpenSettingsSection;
-
   /// Builds a minimal shell around the command bar.
   @override
   Widget build(BuildContext context) {
@@ -450,20 +475,17 @@ class _CommandBarHarness extends StatelessWidget {
           commandController: commandController,
           appController:
               appController ?? AgentAwesomeAppController(config: _testConfig()),
-          commandContext: (text, {String profilePath = ''}) => CommandContext(
+          commandContext: (text) => CommandContext(
             section: AppSections.backlog,
             area: 'Stream',
             text: text,
-            profilePath: profilePath,
           ),
           onSubmitScreenCommand: (context) async => onScreenCommand(context),
-          onSubmit: ({String profilePath = ''}) async => onNewChatSubmit(),
-          onNewChat: () {},
+          onSubmit: () async => onNewChatSubmit(),
           onToggleAssistantChat: () {},
-          onStartChatWithProfile: (_) {},
           onSelectHistoryChat: (_) {},
           onOpenSection: onOpenSection ?? (_) {},
-          onOpenSettingsSection: onOpenSettingsSection ?? (_) {},
+          onOpenSettingsSection: (_) {},
           onOpenSettings: () {},
           onOpenSetup: onOpenSetup ?? () {},
         ),
@@ -503,17 +525,14 @@ class _ThemeCommandBarHarnessState extends State<_ThemeCommandBarHarness> {
         body: CommandBar(
           commandController: widget.commandController,
           appController: AgentAwesomeAppController(config: _testConfig()),
-          commandContext: (text, {String profilePath = ''}) => CommandContext(
+          commandContext: (text) => CommandContext(
             section: AppSections.backlog,
             area: 'Stream',
             text: text,
-            profilePath: profilePath,
           ),
           onSubmitScreenCommand: (_) async {},
-          onSubmit: ({String profilePath = ''}) async {},
-          onNewChat: () {},
+          onSubmit: () async {},
           onToggleAssistantChat: () {},
-          onStartChatWithProfile: (_) {},
           onSelectHistoryChat: (_) {},
           onOpenSection: (_) {},
           onOpenSettingsSection: (_) {},
@@ -562,7 +581,7 @@ RuntimeProfile _externalGatewayProfile() {
       appName: 'agent_awesome',
       userId: 'doug',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: '/tmp/external-model.yaml',
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -575,7 +594,7 @@ RuntimeProfile _externalGatewayProfile() {
       apiBaseUrl: 'http://127.0.0.1:18070/api',
       healthUrl: 'http://127.0.0.1:18070/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:18070/api',
       contextBaseUrl: 'http://127.0.0.1:18070/api/context',
       memoryMcpUrl: 'http://127.0.0.1:18070/mcp',
@@ -596,7 +615,7 @@ RuntimeProfile _externalGatewayProfile() {
         endpoint: 'http://127.0.0.1:18070/mcp/doug',
         healthUrl: 'http://127.0.0.1:18070/healthz',
         workingDirectory: '',
-        packagePath: '',
+        executablePath: '',
         dbPath: '',
         dataDir: '',
         arguments: <String>[],
@@ -627,7 +646,7 @@ RuntimeProfile _personalProfile() {
       appName: 'agent_awesome',
       userId: 'doug',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: '/tmp/model.yaml',
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -640,7 +659,7 @@ RuntimeProfile _personalProfile() {
       apiBaseUrl: 'http://127.0.0.1:8070/api',
       healthUrl: 'http://127.0.0.1:8070/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:8080/api',
       contextBaseUrl: 'http://127.0.0.1:8081/api/context',
       memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
@@ -658,7 +677,7 @@ RuntimeProfile _personalProfile() {
         endpoint: 'http://127.0.0.1:8090/mcp',
         healthUrl: 'http://127.0.0.1:8090/healthz',
         workingDirectory: '',
-        packagePath: '',
+        executablePath: '',
         dbPath: '',
         dataDir: '',
         arguments: <String>[],

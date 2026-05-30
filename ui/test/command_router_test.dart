@@ -90,6 +90,19 @@ void main() {
     expect(route.section, AppSections.automationWorkflows);
   });
 
+  test('routes agent authoring aliases to Automations Agents', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.memory,
+        area: 'Library',
+        text: 'open agents',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.navigateSection);
+    expect(route.section, AppSections.automationAgents);
+  });
+
   test('does not route removed task authoring aliases', () {
     final route = _router().route(
       const CommandContext(

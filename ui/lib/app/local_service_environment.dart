@@ -18,7 +18,6 @@ const _managedGatewaySlackEnvironmentKeys = <String>[
 /// Builds the shared environment for subprocesses launched by the UI.
 Map<String, String> buildLocalServiceEnvironment({
   required AppConfig config,
-  required String goCachePath,
   Map<String, String>? baseEnvironment,
 }) {
   final env = Map<String, String>.of(baseEnvironment ?? Platform.environment);
@@ -31,19 +30,16 @@ Map<String, String> buildLocalServiceEnvironment({
     'AGENTAWESOME_DATA_DIR',
     () => agentAwesomeDataDirectoryPath(),
   );
-  env['GOCACHE'] = env['GOCACHE'] ?? goCachePath;
   return env;
 }
 
 /// Builds the environment for the UI-managed chat gateway process.
 Map<String, String> buildManagedGatewayEnvironment({
   required AppConfig config,
-  required String goCachePath,
   Map<String, String>? baseEnvironment,
 }) {
   final env = buildLocalServiceEnvironment(
     config: config,
-    goCachePath: goCachePath,
     baseEnvironment: baseEnvironment,
   );
   _disableSlackIngress(env);

@@ -10,6 +10,7 @@ class _SettingsModelProviderCollection extends StatefulWidget {
     required this.assignedPath,
     this.selectedPath,
     this.onSelectedPathChanged,
+    required this.modeId,
     required this.query,
   });
 
@@ -20,6 +21,7 @@ class _SettingsModelProviderCollection extends StatefulWidget {
   final String assignedPath;
   final String? selectedPath;
   final ValueChanged<String>? onSelectedPathChanged;
+  final String modeId;
   final String query;
 
   @override
@@ -30,9 +32,13 @@ class _SettingsModelProviderCollection extends StatefulWidget {
 class _SettingsModelProviderCollectionState
     extends State<_SettingsModelProviderCollection> {
   String? _selectedPath;
-  String? _selectedProviderId;
   ModelConfigDocument? _document;
+  AgentValidationSuiteResult? _validationResult;
+  AgentValidationFileResult? _validationFileResult;
+  String _validationError = '';
+  String _validationRunningId = '';
   bool _loading = true;
+  bool _validationRunning = false;
 
   /// Initializes the selected model config and provider.
   @override
@@ -51,6 +57,7 @@ class _SettingsModelProviderCollectionState
         widget.selectedPath != _selectedPath) {
       _selectedPath = widget.selectedPath;
       _document = null;
+      _clearValidationState();
       _loading = true;
       unawaited(_load());
       return;
@@ -60,6 +67,7 @@ class _SettingsModelProviderCollectionState
         !widget.entries.any((entry) => entry.path == selectedPath)) {
       _selectedPath = _initialSelectedPath();
       _document = null;
+      _clearValidationState();
       _loading = true;
       unawaited(_load());
     }
@@ -83,19 +91,13 @@ class _SettingsModelProviderCollectionState
       }
       return FormPanel(
         children: <Widget>[
-          FormSectionCard(
-            title: 'Model config',
-            children: <Widget>[
-              _SettingsActionRow(
-                children: <Widget>[
-                  OutlinedButton.icon(
-                    onPressed: () => unawaited(_addProvider()),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add provider'),
-                  ),
-                ],
-              ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => unawaited(_createProvider()),
+              icon: const Icon(Icons.add),
+              label: const Text('Create provider'),
+            ),
           ),
         ],
       );
@@ -106,78 +108,64 @@ class _SettingsModelProviderCollectionState
         _providerSearchValues(provider),
       );
     }).toList();
+    if (widget.modeId == 'model-validations') {
+      return _buildValidations(entry, document, visibleProviders);
+    }
     return FormPanel(
       children: <Widget>[
-        FormSectionCard(
-          title: 'Model config',
-          children: <Widget>[
-            _SettingsReadOnlyField(label: 'Path', value: entry.path),
-            _SettingsActionRow(
-              children: <Widget>[
-                FilledButton.icon(
-                  onPressed: entry.assigned
-                      ? null
-                      : () => unawaited(_assign(entry)),
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: Text(entry.assigned ? 'Assigned' : 'Use for profile'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () => unawaited(_addProvider()),
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add provider'),
-                ),
-              ],
+        if (providers.isEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => unawaited(_createProvider()),
+              icon: const Icon(Icons.add),
+              label: const Text('Create provider'),
             ),
-          ],
-        ),
-        if (visibleProviders.isEmpty)
+          )
+        else if (visibleProviders.isEmpty)
           PanelEmptyBlock(label: 'No matching providers')
         else
           for (final provider in visibleProviders) ...<Widget>[
-            FormSectionCard(
-              title: 'Provider actions',
-              children: <Widget>[
-                _SettingsActionRow(
-                  children: <Widget>[
-                    OutlinedButton.icon(
-                      onPressed: _isDefaultProvider(document, provider.id)
-                          ? null
-                          : () => unawaited(
-                              _setDefaultProvider(entry, document, provider),
-                            ),
-                      icon: const Icon(Icons.radio_button_checked),
-                      label: Text(
-                        _isDefaultProvider(document, provider.id)
-                            ? 'Default provider'
-                            : 'Set default provider',
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    PanelInlineIconButton(
-                      icon: Icons.content_copy,
-                      tooltip: 'Duplicate provider',
-                      onPressed: () => unawaited(_duplicateProvider(provider)),
-                    ),
-                    PanelInlineIconButton(
-                      icon: Icons.delete_outline,
-                      tooltip: 'Delete provider',
-                      onPressed: providers.length <= 1
-                          ? null
-                          : () => unawaited(_deleteProvider(provider)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
             _SettingsModelProviderCard(
               controller: widget.controller,
               provider: provider,
               onChanged: (next) =>
                   _replaceProvider(document, provider.id, next),
             ),
-            _SettingsModelProviderYamlPreview(provider: provider),
           ],
+      ],
+    );
+  }
+
+  /// Builds model-owned Agent Awesome compatibility validations.
+  Widget _buildValidations(
+    ConfigFileEntry entry,
+    ModelConfigDocument document,
+    List<ModelProviderConfig> visibleProviders,
+  ) {
+    return FormPanel(
+      children: <Widget>[
+        if (document.providers.isEmpty)
+          PanelEmptyBlock(label: 'No provider configured')
+        else if (visibleProviders.isEmpty)
+          PanelEmptyBlock(label: 'No matching providers')
+        else
+          _SettingsAgentValidationCard(
+            title: 'Model validations',
+            emptyLabel: 'No model validations configured',
+            validations: document.validations,
+            result: _validationResult,
+            fileResult: _validationFileResult,
+            error: _validationError,
+            runningId: _validationRunningId,
+            onRunAll: () => unawaited(_runValidations(entry)),
+            onAddValidation: () => unawaited(_addValidation()),
+            onValidationChanged: (id, validation) =>
+                unawaited(_saveValidation(id, validation)),
+            onDeleteValidation: (id) => unawaited(_deleteValidation(id)),
+            onRunValidation: (validationId) =>
+                unawaited(_runValidations(entry, validationId: validationId)),
+          ),
       ],
     );
   }
@@ -224,23 +212,6 @@ class _SettingsModelProviderCollectionState
     return widget.entries.first;
   }
 
-  String? _selectedProviderIdFor(List<ModelProviderConfig> providers) {
-    if (providers.isEmpty) {
-      return null;
-    }
-    final selected = _selectedProviderId;
-    if (selected != null &&
-        providers.any((provider) => provider.id == selected)) {
-      return selected;
-    }
-    final defaultProviderId = _defaultProviderId(_document);
-    if (defaultProviderId.isNotEmpty &&
-        providers.any((provider) => provider.id == defaultProviderId)) {
-      return defaultProviderId;
-    }
-    return providers.first.id;
-  }
-
   Future<void> _load() async {
     final entry = _selectedEntry();
     if (entry == null) {
@@ -261,7 +232,7 @@ class _SettingsModelProviderCollectionState
       }
       setState(() {
         _document = document;
-        _selectedProviderId = _selectedProviderIdFor(document.providers);
+        _clearValidationState();
         _loading = false;
       });
     } catch (error) {
@@ -275,7 +246,7 @@ class _SettingsModelProviderCollectionState
     }
   }
 
-  Future<void> _addProvider() async {
+  Future<void> _createProvider() async {
     var entry = _selectedEntry();
     if (entry == null) {
       try {
@@ -302,136 +273,158 @@ class _SettingsModelProviderCollectionState
     }
     final document =
         _document ?? const ModelConfigDocument(defaultRef: '', providers: []);
+    if (document.providers.isNotEmpty) {
+      return;
+    }
     final nextId = SettingsConfigIds.uniqueProviderId(document, 'provider');
     final provider = newModelProviderConfig(nextId);
-    final defaultRef = document.defaultRef.trim().isEmpty
-        ? '${provider.id}:${provider.defaultModel}'
-        : document.defaultRef;
     await _saveDocument(
       entry,
-      document.copyWith(
-        defaultRef: defaultRef,
-        providers: <ModelProviderConfig>[...document.providers, provider],
+      modelConfigDocumentForProvider(
+        provider,
+        validations: document.validations,
+        extra: document.extra,
       ),
-      selectedProviderId: provider.id,
-    );
-  }
-
-  Future<void> _duplicateProvider(ModelProviderConfig provider) async {
-    final entry = _selectedEntry();
-    final document = _document;
-    if (entry == null || document == null) {
-      return;
-    }
-    final nextId = SettingsConfigIds.uniqueProviderId(
-      document,
-      '${provider.id}-copy',
-    );
-    final nextProvider = provider.copyWith(
-      id: nextId,
-      name: '${provider.displayName} Copy',
-    );
-    await _saveDocument(
-      entry,
-      document.copyWith(
-        providers: <ModelProviderConfig>[...document.providers, nextProvider],
-      ),
-      selectedProviderId: nextProvider.id,
-    );
-  }
-
-  Future<void> _deleteProvider(ModelProviderConfig provider) async {
-    final entry = _selectedEntry();
-    final document = _document;
-    if (entry == null || document == null) {
-      return;
-    }
-    if (document.providers.length <= 1) {
-      return;
-    }
-    final confirmed = await _confirmSettingsDelete(
-      context,
-      label: provider.displayName,
-    );
-    if (!confirmed) {
-      return;
-    }
-    if (provider.apiKey.trim().isNotEmpty) {
-      await widget.controller.deleteCredential(provider.apiKey);
-    }
-    final providers = document.providers
-        .where((candidate) => candidate.id != provider.id)
-        .toList();
-    final deletingDefault = _isDefaultProvider(document, provider.id);
-    final defaultRef = deletingDefault
-        ? '${providers.first.id}:${providers.first.defaultModel}'
-        : document.defaultRef;
-    await _saveDocument(
-      entry,
-      document.copyWith(defaultRef: defaultRef, providers: providers),
-      selectedProviderId: deletingDefault
-          ? providers.first.id
-          : _selectedProviderIdFor(providers) ?? providers.first.id,
     );
   }
 
   Future<void> _replaceProvider(
     ModelConfigDocument document,
-    String previousId,
+    String _,
     ModelProviderConfig provider,
   ) async {
     final entry = _selectedEntry();
     if (entry == null) {
       return;
     }
-    final duplicate = document.providers.any((candidate) {
-      return candidate.id == provider.id && candidate.id != previousId;
-    });
-    if (duplicate) {
-      return;
-    }
-    final providers = <ModelProviderConfig>[
-      for (final candidate in document.providers)
-        candidate.id == previousId ? provider : candidate,
-    ];
-    final defaultRef = document.defaultRef.startsWith('$previousId:')
-        ? '${provider.id}:${provider.defaultModel}'
-        : document.defaultRef;
     await _saveDocument(
       entry,
-      document.copyWith(defaultRef: defaultRef, providers: providers),
-      selectedProviderId: provider.id,
+      modelConfigDocumentForProvider(
+        provider,
+        validations: document.validations,
+        extra: document.extra,
+      ),
     );
   }
 
-  Future<void> _assign(ConfigFileEntry entry) async {
+  /// Adds one model-owned compatibility validation case.
+  Future<void> _addValidation() async {
+    final entry = _selectedEntry();
+    final document = _document;
+    if (entry == null || document == null) {
+      return;
+    }
+    await _saveDocument(
+      entry,
+      document.copyWith(
+        validations: <AgentValidationConfig>[
+          ...document.validations,
+          _defaultAgentValidation(document.validations).copyWith(mode: 'live'),
+        ],
+      ),
+    );
+  }
+
+  /// Saves one model-owned validation case.
+  Future<void> _saveValidation(
+    String id,
+    AgentValidationConfig validation,
+  ) async {
+    final entry = _selectedEntry();
+    final document = _document;
+    if (entry == null || document == null) {
+      return;
+    }
+    await _saveDocument(
+      entry,
+      document.copyWith(
+        validations: <AgentValidationConfig>[
+          for (final item in document.validations)
+            if (item.id == id) validation else item,
+        ],
+      ),
+    );
+  }
+
+  /// Removes one model-owned validation case.
+  Future<void> _deleteValidation(String id) async {
+    final entry = _selectedEntry();
+    final document = _document;
+    if (entry == null || document == null) {
+      return;
+    }
+    await _saveDocument(
+      entry,
+      document.copyWith(
+        validations: <AgentValidationConfig>[
+          for (final item in document.validations)
+            if (item.id != id) item,
+        ],
+      ),
+    );
+  }
+
+  /// Runs selected model validations through the active agent prompt.
+  Future<void> _runValidations(
+    ConfigFileEntry entry, {
+    String validationId = '',
+  }) async {
+    if (_validationRunning) {
+      return;
+    }
+    final selectedId = validationId.trim();
+    setState(() {
+      _validationRunning = true;
+      _validationRunningId = selectedId.isEmpty
+          ? _allValidationRunId
+          : selectedId;
+      _validationError = '';
+    });
     try {
-      await widget.controller.assignConfigFile(entry);
+      final mode = _modelValidationModeForRun(
+        _document?.validations ?? const <AgentValidationConfig>[],
+        selectedId,
+      );
+      final result = await widget.controller.runModelPackageValidations(
+        entry.path,
+        validationId: selectedId,
+        mode: mode,
+        live: mode == 'live',
+        requireValidations: selectedId.isEmpty,
+        requireAssertions: true,
+        requireToolContracts: true,
+      );
+      final fileResult = _agentValidationFileForEntry(result, entry);
+      final suite = fileResult.result;
       if (!mounted) {
         return;
       }
-      setState(() {});
-    } catch (_) {}
-  }
-
-  /// Marks the selected provider as the config-level default provider.
-  Future<void> _setDefaultProvider(
-    ConfigFileEntry entry,
-    ModelConfigDocument document,
-    ModelProviderConfig provider,
-  ) async {
-    await _saveDocument(
-      entry,
-      document.copyWith(defaultRef: modelProviderDefaultRef(provider)),
-      selectedProviderId: provider.id,
-    );
+      setState(() {
+        _validationResult = selectedId.isEmpty
+            ? suite
+            : _mergedAgentValidationResults(_validationResult, suite);
+        _validationFileResult = fileResult;
+        _validationError = '';
+        _validationRunning = false;
+        _validationRunningId = '';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _validationError = error.toString();
+        _validationFileResult = null;
+        _validationRunning = false;
+        _validationRunningId = '';
+      });
+    }
   }
 
   Future<void> _saveDocument(
     ConfigFileEntry entry,
-    ModelConfigDocument document, {
-    required String selectedProviderId,
-  }) async {
+    ModelConfigDocument document,
+  ) async {
     final validationError = modelConfigValidationError(document);
     if (validationError.isNotEmpty) {
       return;
@@ -447,16 +440,28 @@ class _SettingsModelProviderCollectionState
       }
       setState(() {
         _document = document;
-        _selectedProviderId = selectedProviderId;
       });
     } catch (_) {}
   }
 
-  bool _isDefaultProvider(ModelConfigDocument? document, String providerId) {
-    return _defaultProviderId(document) == providerId;
+  /// Clears validation runner state for a newly selected model file.
+  void _clearValidationState() {
+    _validationResult = null;
+    _validationFileResult = null;
+    _validationError = '';
+    _validationRunning = false;
+    _validationRunningId = '';
   }
+}
 
-  String _defaultProviderId(ModelConfigDocument? document) {
-    return document?.defaultRef.split(':').first.trim() ?? '';
+/// Chooses the validation lane for model compatibility checks.
+String _modelValidationModeForRun(
+  List<AgentValidationConfig> validations,
+  String validationId,
+) {
+  final selectedId = validationId.trim();
+  if (selectedId.isNotEmpty) {
+    return _agentValidationModeForRun(validations, selectedId);
   }
+  return validations.any(_agentValidationIsLive) ? 'live' : 'mocked';
 }

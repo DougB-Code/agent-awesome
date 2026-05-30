@@ -60,57 +60,60 @@ class _SettingsCredentialFieldState extends State<_SettingsCredentialField> {
     final canReveal = hasTypedSecret || (lookup?.found ?? false);
     final copyableSecret = _copyableSecret(lookup, hasTypedSecret);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextField(
-        controller: _controller,
-        obscureText: hasTypedSecret && _obscureText,
-        enabled: !_saving,
-        onChanged: (_) => setState(() {}),
-        onSubmitted: (_) => unawaited(_saveSecret()),
-        decoration: SettingsInputDecoration.field(
-          context,
-          label: 'API key',
-          floatingLabelBehavior: lookup?.found ?? false
-              ? FloatingLabelBehavior.always
-              : FloatingLabelBehavior.auto,
-          hintText: _hintText(lookup),
-          suffixIcon: Wrap(
-            spacing: 2,
-            children: <Widget>[
-              PanelInlineIconButton(
-                icon: _obscureText
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-                tooltip: _obscureText ? 'Show API key' : 'Hide API key',
-                onPressed: canReveal
-                    ? () => setState(() => _obscureText = !_obscureText)
-                    : null,
-              ),
-              if (copyableSecret.isNotEmpty)
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: 'API key',
+        child: TextField(
+          controller: _controller,
+          obscureText: hasTypedSecret && _obscureText,
+          enabled: !_saving,
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => unawaited(_saveSecret()),
+          decoration: SettingsInputDecoration.field(
+            context,
+            label: 'API key',
+            floatingLabelBehavior: lookup?.found ?? false
+                ? FloatingLabelBehavior.always
+                : FloatingLabelBehavior.auto,
+            hintText: _hintText(lookup),
+            suffixIcon: Wrap(
+              spacing: 2,
+              children: <Widget>[
                 PanelInlineIconButton(
-                  icon: Icons.copy_outlined,
-                  tooltip: 'Copy API key',
-                  onPressed: () => unawaited(_copySecret(copyableSecret)),
+                  icon: _obscureText
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  tooltip: _obscureText ? 'Show API key' : 'Hide API key',
+                  onPressed: canReveal
+                      ? () => setState(() => _obscureText = !_obscureText)
+                      : null,
                 ),
-              PanelInlineIconButton(
-                icon: Icons.save_outlined,
-                tooltip: 'Save API key to OS keyring',
-                loading: _saving,
-                onPressed: hasTypedSecret && !_saving
-                    ? () => unawaited(_saveSecret())
-                    : null,
-              ),
-              PanelInlineIconButton(
-                icon: Icons.delete_outline,
-                tooltip: 'Delete API key from OS keyring',
-                onPressed: widget.reference.trim().isNotEmpty && !_saving
-                    ? () => unawaited(_deleteSecret())
-                    : null,
-              ),
-            ],
-          ),
-          suffixIconConstraints: BoxConstraints(
-            minWidth: copyableSecret.isEmpty ? 144 : 192,
+                if (copyableSecret.isNotEmpty)
+                  PanelInlineIconButton(
+                    icon: Icons.copy_outlined,
+                    tooltip: 'Copy API key',
+                    onPressed: () => unawaited(_copySecret(copyableSecret)),
+                  ),
+                PanelInlineIconButton(
+                  icon: Icons.save_outlined,
+                  tooltip: 'Save API key to OS keyring',
+                  loading: _saving,
+                  onPressed: hasTypedSecret && !_saving
+                      ? () => unawaited(_saveSecret())
+                      : null,
+                ),
+                PanelInlineIconButton(
+                  icon: Icons.delete_outline,
+                  tooltip: 'Delete API key from OS keyring',
+                  onPressed: widget.reference.trim().isNotEmpty && !_saving
+                      ? () => unawaited(_deleteSecret())
+                      : null,
+                ),
+              ],
+            ),
+            suffixIconConstraints: BoxConstraints(
+              minWidth: copyableSecret.isEmpty ? 144 : 192,
+            ),
           ),
         ),
       ),

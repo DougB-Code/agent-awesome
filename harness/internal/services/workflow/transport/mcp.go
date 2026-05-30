@@ -97,10 +97,6 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		return decodeKeyedResult(args, "suggestion", func(req runtime.DesignSuggestionRequest) (any, error) {
 			return s.service.SuggestDesignArtifacts(ctx, req)
 		})
-	case "workflow_adapter_choice":
-		return decodeKeyedResult(args, "adapter_choice", func(req runtime.AdapterChoiceRequest) (any, error) {
-			return s.service.SaveAdapterChoice(ctx, req)
-		})
 	case "workflow_observed_contracts":
 		return decodeKeyedResult(args, "observed_contracts", func(req runtime.ObservedContractQuery) (any, error) {
 			return s.service.ListObservedContracts(ctx, req)
@@ -121,10 +117,6 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 	case "workflow_draft_validate":
 		return decodeKeyedResult(args, "validation", func(req workflowDraftRequest) (any, error) {
 			return s.service.ValidateDraft(ctx, req.DraftID)
-		})
-	case "workflow_edge_compatibility":
-		return decodeKeyedResult(args, "compatibility", func(req workflowEdgeCompatibilityRequest) (any, error) {
-			return s.service.CheckDraftEdgeCompatibility(ctx, req.DraftID, req.EdgeCompatibilityRequest)
 		})
 	case "workflow_draft_publish":
 		return decodeKeyedResult(args, "definition", func(req workflowDraftRequest) (any, error) {
@@ -174,12 +166,10 @@ func workflowToolDefinitions() []map[string]any {
 		"workflow_mapping_preview",
 		"workflow_design_artifacts",
 		"workflow_design_suggest",
-		"workflow_adapter_choice",
 		"workflow_observed_contracts",
 		"workflow_draft_create",
 		"workflow_draft_update",
 		"workflow_draft_validate",
-		"workflow_edge_compatibility",
 		"workflow_draft_publish",
 	}
 	tools := make([]map[string]any, 0, len(names))
@@ -201,7 +191,7 @@ func workflowToolDescription(name string) string {
 	case "workflow_describe":
 		return "Describe one installed workflow definition."
 	case "workflow_graph_dot":
-		return "Return a Graphviz DOT graph for one workflow definition."
+		return "Return a Graphviz DOT state-machine view for one workflow definition."
 	case "workflow_start":
 		return "Start a durable workflow run from a definition id."
 	case "workflow_status":
@@ -222,8 +212,6 @@ func workflowToolDescription(name string) string {
 		return "List persisted deterministic design-time workflow artifacts."
 	case "workflow_design_suggest":
 		return "Ask the configured design assistant to propose deterministic workflow artifacts."
-	case "workflow_adapter_choice":
-		return "Persist a user-confirmed adapter choice for a draft workflow edge."
 	case "workflow_observed_contracts":
 		return "List runtime-observed output contracts that can strengthen workflow node contracts."
 	case "workflow_draft_create":
@@ -232,8 +220,6 @@ func workflowToolDescription(name string) string {
 		return "Update an editable workflow draft."
 	case "workflow_draft_validate":
 		return "Validate a workflow draft before publishing."
-	case "workflow_edge_compatibility":
-		return "Check whether two draft workflow nodes can be connected."
 	case "workflow_draft_publish":
 		return "Publish a workflow draft as an installed definition."
 	default:
@@ -278,10 +264,4 @@ type workflowDraftUpdateRequest struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	Body        map[string]any `json:"body"`
-}
-
-// workflowEdgeCompatibilityRequest stores one draft edge compatibility request.
-type workflowEdgeCompatibilityRequest struct {
-	DraftID string `json:"draft_id"`
-	runtime.EdgeCompatibilityRequest
 }

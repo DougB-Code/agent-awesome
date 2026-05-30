@@ -2,15 +2,15 @@
 :description: User-facing local chat workflow.
 
 Local chat uses the Flutter UI, the gateway, the harness, and memory.
-For the default local profile, the workflow endpoint runs inside the harness process, and command tools are attached directly to the ADK runtime.
+For the default local topology, the workflow endpoint runs inside the harness process, and command tools are attached directly to the ADK runtime.
 The UI sends assistant traffic through the configured gateway endpoint; the gateway forwards agent calls to the harness and memory calls to the memory service.
 
 == Before You Chat
 
-Make sure your selected runtime profile has access to a configured model credential.
-For local development profiles, that usually means the credential is available in the shell environment or the Agent Awesome keyring.
+Make sure your selected agent has access to a configured model credential.
+For local runs, that usually means the credential is available in the shell environment or the Agent Awesome keyring.
 
-For the default desktop profile, store the OpenAI credential from `harness`:
+For the default desktop topology, store the OpenAI credential from `harness`:
 
 [source,sh]
 ----
@@ -33,5 +33,5 @@ For a browser-backed web UI session:
 go run ./cmd/agent-awesome run -- web --port 8080 webui api
 ----
 
-The desktop UI always uses the gateway profile.
+The desktop UI always uses the configured gateway.
 Use direct harness commands only when you are testing the agent runtime without the desktop shell.

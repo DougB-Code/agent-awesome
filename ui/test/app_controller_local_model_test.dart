@@ -188,35 +188,159 @@ void main() {
   );
 
   test(
-    'local model setup validates runtime profile before installing',
+    'local model setup replaces hosted providers in the active model file',
     () async {
       final root = await Directory.systemTemp.createTemp(
-        'agentawesome-controller-local-model-preflight-',
+        'agentawesome-controller-local-model-scope-',
       );
       addTearDown(() async {
         if (await root.exists()) {
           await root.delete(recursive: true);
         }
       });
-      final localModels = _CountingLocalModelRuntime();
+      final configDirectory = Directory('${root.path}/config');
+      final modelFile = File('${configDirectory.path}/models/model.yaml');
+      await modelFile.parent.create(recursive: true);
+      await modelFile.writeAsString('''
+default: openai:gpt-mini
+providers:
+  openai:
+    auth: required
+    name: openai
+    adapter: openai
+    api-key: OPENAI_API_KEY
+    default: gpt-mini
+    url: https://api.openai.com/v1/chat/completions
+    models:
+      - id: gpt-mini
+        model: gpt-5-mini
+''');
+      final profileFile = File('${root.path}/profile.json');
+      await profileFile.writeAsString(
+        encodeRuntimeProfileJson(
+          _runtimeProfile(root.path, modelConfigPath: modelFile.path),
+        ),
+      );
+      final settingsStore = _MemoryAppSettingsStore();
       final controller = AgentAwesomeAppController(
-        config: _testConfig(workspaceRoot: root.path, runtimeProfilePath: ''),
-        localModels: localModels,
+        config: _testConfig(
+          workspaceRoot: root.path,
+          runtimeProfilePath: profileFile.path,
+          litertLmExecutable: Platform.resolvedExecutable,
+        ),
+        appSettingsStore: settingsStore,
+        configFiles: ConfigFileStore(configDirectoryPath: configDirectory.path),
+        localModels: _RecoveringLocalModelRuntime(root.path),
       );
       addTearDown(() async {
         await controller.close();
       });
 
-      final result = await controller.configureOnboardingLocalModel(
-        modelId: 'gemma-4-e2b-it',
-      );
+      await controller.initialize();
 
-      expect(result.success, isFalse);
-      expect(result.message, 'Runtime profile is not loaded');
-      expect(localModels.installAttempts, 0);
-      expect(localModels.runtimeInstallAttempts, 0);
+      final modelConfig = await modelFile.readAsString();
+      expect(modelConfig, contains('default: litert-lm:gemma-4-e2b-it'));
+      expect(modelConfig, contains('litert-lm:'));
+      expect(modelConfig, isNot(contains('openai:')));
+      expect(modelConfig, isNot(contains('gpt-mini')));
     },
   );
+
+  test('local model setup validates agent runtime before installing', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-controller-local-model-preflight-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final localModels = _CountingLocalModelRuntime();
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(workspaceRoot: root.path, runtimeProfilePath: ''),
+      localModels: localModels,
+    );
+    addTearDown(() async {
+      await controller.close();
+    });
+
+    final result = await controller.configureOnboardingLocalModel(
+      modelId: 'gemma-4-e2b-it',
+    );
+
+    expect(result.success, isFalse);
+    expect(result.message, 'Agent runtime is not loaded');
+    expect(localModels.installAttempts, 0);
+    expect(localModels.runtimeInstallAttempts, 0);
+  });
+
+  test('agent runtime launch changes restart local services once', () async {
+    final root = await Directory.systemTemp.createTemp(
+      'agentawesome-controller-runtime-restart-',
+    );
+    addTearDown(() async {
+      if (await root.exists()) {
+        await root.delete(recursive: true);
+      }
+    });
+    final configDirectory = Directory('${root.path}/config');
+    final profileFile = File('${root.path}/profile.json');
+    final baseProfile = _runtimeProfile(
+      root.path,
+      modelConfigPath: '${root.path}/model.yaml',
+    );
+    final initialProfile = baseProfile.copyWith(
+      workflow: _hostedWorkflow(root.path),
+      harness: baseProfile.harness.copyWith(
+        commandAllowedWorkdirs: const <String>['/work/old'],
+      ),
+    );
+    await profileFile.writeAsString(encodeRuntimeProfileJson(initialProfile));
+    final processSupervisor = ProcessSupervisor(
+      logDirectory: '${root.path}/logs',
+      workspaceRoot: root.path,
+    );
+    final localServices = _TrackingLocalServiceSupervisor(
+      config: _testConfig(
+        workspaceRoot: root.path,
+        runtimeProfilePath: profileFile.path,
+        autoStartLocalServices: true,
+      ),
+      processSupervisor: processSupervisor,
+    );
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(
+        workspaceRoot: root.path,
+        runtimeProfilePath: profileFile.path,
+        autoStartLocalServices: true,
+      ),
+      appSettingsStore: _MemoryAppSettingsStore(
+        saved: const AgentAwesomeAppSettings(gettingStartedCompleted: true),
+      ),
+      configFiles: ConfigFileStore(configDirectoryPath: configDirectory.path),
+      localModels: const _MissingLocalModelRuntime(),
+      localServices: localServices,
+      processSupervisor: processSupervisor,
+    );
+    addTearDown(() async {
+      await controller.close();
+    });
+    controller
+      ..runtimeProfilePath = profileFile.path
+      ..runtimeProfile = initialProfile;
+
+    await controller.saveRuntimeProfile(
+      initialProfile.copyWith(
+        harness: initialProfile.harness.copyWith(
+          commandAllowedWorkdirs: const <String>['/work/new'],
+        ),
+      ),
+    );
+    await controller.refreshRuntimeServiceStatuses();
+    await controller.refreshRuntimeServiceStatuses();
+
+    expect(localServices.restartRequests, <bool>[true, false]);
+  });
 
   test('startup keeps setup complete when LiteRT-LM cannot start', () async {
     final root = await Directory.systemTemp.createTemp(
@@ -642,13 +766,19 @@ class _TrackingLocalServiceSupervisor extends LocalServiceSupervisor {
   /// Number of service startup requests.
   int startCount = 0;
 
+  /// Restart flags received by service startup requests.
+  final List<bool> restartRequests = <bool>[];
+
   /// Records startup requests without launching subprocesses.
   @override
   Future<List<ServiceProcessStatus>> startRequiredServices(
     RuntimeProfile profile, {
     bool restartAutoStarted = false,
+    bool includeHarness = true,
+    bool includeMcpServers = true,
   }) async {
     startCount++;
+    restartRequests.add(restartAutoStarted);
     return const <ServiceProcessStatus>[];
   }
 }
@@ -669,7 +799,7 @@ RuntimeProfile _runtimeProfile(
       appName: 'test',
       userId: 'user',
       workingDirectory: '$root/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: modelConfigPath,
       agentConfigPath: '$root/agent.yaml',
       toolConfigPath: '$root/tool.yaml',
@@ -682,7 +812,7 @@ RuntimeProfile _runtimeProfile(
       apiBaseUrl: 'http://127.0.0.1:2/api',
       healthUrl: 'http://127.0.0.1:2/healthz',
       workingDirectory: '$root/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:1/api',
       contextBaseUrl: 'http://127.0.0.1:8081/api/context',
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',
@@ -714,10 +844,27 @@ McpServerRuntime _memoryServer(String root) {
     endpoint: 'http://127.0.0.1:1/mcp',
     healthUrl: 'http://127.0.0.1:1/healthz',
     workingDirectory: '$root/memory',
-    packagePath: './cmd/memoryd',
+    executablePath: '/tmp/bin/memoryd',
     dbPath: '$root/memory.db',
     dataDir: '$root/memory-files',
     arguments: const <String>[],
+    autoStart: false,
+    enabled: true,
+  );
+}
+
+WorkflowRuntime _hostedWorkflow(String root) {
+  return WorkflowRuntime(
+    id: 'workflow',
+    label: 'Workflow',
+    apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
+    healthUrl: 'http://127.0.0.1:8092/healthz',
+    hostedByHarness: true,
+    workingDirectory: '',
+    executablePath: '',
+    definitionsDir: '$root/workflows',
+    dbPath: '$root/workflow.db',
+    port: 8092,
     autoStart: false,
     enabled: true,
   );

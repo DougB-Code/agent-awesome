@@ -20,15 +20,18 @@ func TestMCPWorkflowStartReturnsRun(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	writeTransportDefinition(t, definitionsDir, "daily.yaml", `
-kind: workflow
+kind: state_machine
 id: daily_email_triage
 name: Daily Email Triage
-nodes:
+initial: triage
+states:
   - id: triage
-    type: tool
-    tool: mock_tool
-    with:
-      arguments: {}
+    on_entry:
+      - id: triage
+        type: tool
+        tool: mock_tool
+        with:
+          arguments: {}
 `)
 	service, err := runtime.Open(ctx, runtime.Config{
 		DefinitionsDir: definitionsDir,
@@ -168,25 +171,19 @@ func TestMCPWorkflowAuthoringToolsCreateDraft(t *testing.T) {
 				"kind": "workflow",
 				"name": "MCP Draft",
 				"body": map[string]any{
-					"kind": "workflow",
-					"id":   "mcp_draft",
-					"name": "MCP Draft",
-					"nodes": []any{
+					"kind":    "state_machine",
+					"id":      "mcp_draft",
+					"name":    "MCP Draft",
+					"initial": "call",
+					"states": []any{
 						map[string]any{
-							"id":   "source",
-							"uses": "tool.call",
-							"with": map[string]any{"name": "mock_tool", "arguments": map[string]any{}},
-							"output": map[string]any{
-								"produces": []any{map[string]any{"kind": "object"}},
-								"facets":   []any{"document.text"},
-							},
-						},
-						map[string]any{
-							"id":   "target",
-							"uses": "tool.call",
-							"input": map[string]any{
-								"accepts":         []any{map[string]any{"kind": "object"}},
-								"required_facets": []any{"document.text"},
+							"id": "call",
+							"on_entry": []any{
+								map[string]any{
+									"id":   "source",
+									"uses": "tool.call",
+									"with": map[string]any{"name": "mock_tool", "arguments": map[string]any{}},
+								},
 							},
 						},
 					},
@@ -198,44 +195,9 @@ func TestMCPWorkflowAuthoringToolsCreateDraft(t *testing.T) {
 	if createdResult["isError"] == true {
 		t.Fatalf("workflow_draft_create result = %#v, want success", createdResult)
 	}
-	compatibility := postJSONRPC(t, server.URL+"/mcp", map[string]any{
-		"jsonrpc": "2.0",
-		"id":      6,
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": "workflow_edge_compatibility",
-			"arguments": map[string]any{
-				"draft_id":       "draft_mcp",
-				"source_node_id": "source",
-				"target_node_id": "target",
-			},
-		},
-	})
-	compatibilityResult := compatibility["result"].(map[string]any)
-	if compatibilityResult["isError"] == true {
-		t.Fatalf("workflow_edge_compatibility result = %#v, want success", compatibilityResult)
-	}
-	adapterChoice := postJSONRPC(t, server.URL+"/mcp", map[string]any{
-		"jsonrpc": "2.0",
-		"id":      7,
-		"method":  "tools/call",
-		"params": map[string]any{
-			"name": "workflow_adapter_choice",
-			"arguments": map[string]any{
-				"draft_id":       "draft_mcp",
-				"source_node_id": "source",
-				"target_node_id": "target",
-				"adapter":        map[string]any{"kind": "direct"},
-			},
-		},
-	})
-	adapterChoiceResult := adapterChoice["result"].(map[string]any)
-	if adapterChoiceResult["isError"] == true {
-		t.Fatalf("workflow_adapter_choice result = %#v, want success", adapterChoiceResult)
-	}
 	observed := postJSONRPC(t, server.URL+"/mcp", map[string]any{
 		"jsonrpc": "2.0",
-		"id":      8,
+		"id":      6,
 		"method":  "tools/call",
 		"params": map[string]any{
 			"name":      "workflow_observed_contracts",

@@ -21,7 +21,7 @@ const (
 	DecisionBlocked = "blocked"
 )
 
-// Decision records the deterministic policy outcome for a node or edge.
+// Decision records the deterministic policy outcome for an action invocation.
 type Decision struct {
 	Status  string   `json:"status"`
 	Reasons []string `json:"reasons,omitempty"`
@@ -40,7 +40,7 @@ func EvaluateInvocation(input envelope.Envelope, effects contracts.Effects, runt
 		reasons = append(reasons, "untrusted text cannot flow directly into filesystem write effects")
 	}
 	if containsUntrustedText(input) && hasNetworkEffects(effects) {
-		reasons = append(reasons, "untrusted text cannot flow directly into network effects without an approved adapter")
+		reasons = append(reasons, "untrusted text cannot flow directly into network effects")
 	}
 	if containsUntrustedText(input) && len(effects.Secrets.Required) > 0 {
 		reasons = append(reasons, "untrusted text cannot flow directly into secret-using effects")
@@ -55,11 +55,6 @@ func EvaluateInvocation(input envelope.Envelope, effects contracts.Effects, runt
 		return Decision{Status: DecisionNeedsApproval, Reasons: []string{"node declares user-confirmed or secret-using effects"}}
 	}
 	return Decision{Status: DecisionAllowed}
-}
-
-// EvaluateEdge checks whether a source output may feed the target manifest.
-func EvaluateEdge(input envelope.Envelope, target contracts.ToolManifest) Decision {
-	return EvaluateInvocation(input, target.Effects, target.Runtime)
 }
 
 // Allowed reports whether a decision permits immediate execution.

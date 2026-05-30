@@ -89,7 +89,7 @@ class AppConfig {
           defaultValue: '',
         ),
         runtimeName: 'AGENT_USER_ID',
-        fallback: 'doug',
+        fallback: _defaultAgentUserId(),
       ),
       workspaceRoot: workspaceRoot,
       autoStartLocalServices: _boolEnvironmentValue(
@@ -100,14 +100,7 @@ class AppConfig {
         runtimeName: 'AUTO_START_LOCAL_SERVICES',
         fallback: true,
       ),
-      runtimeProfilePath: _environmentValue(
-        compiled: const String.fromEnvironment(
-          'AGENTAWESOME_RUNTIME_PROFILE',
-          defaultValue: '',
-        ),
-        runtimeName: 'AGENTAWESOME_RUNTIME_PROFILE',
-        fallback: '',
-      ),
+      runtimeProfilePath: '',
       litertLmExecutable: _environmentValue(
         compiled: const String.fromEnvironment(
           'AGENTAWESOME_LITERT_LM',
@@ -183,7 +176,7 @@ class AppConfig {
   /// Whether the UI should manage local services during initialization.
   final bool autoStartLocalServices;
 
-  /// Optional JSON runtime profile path for harness and MCP topology.
+  /// Internal JSON runtime topology path used by tests and controlled bootstraps.
   final String runtimeProfilePath;
 
   /// LiteRT-LM executable path used by the local model runtime.
@@ -309,7 +302,18 @@ String _gatewayAuthorizationHeaderFromEnvironment() {
   return 'Bearer ${token.trim()}';
 }
 
-/// Finds the nearest Agent Awesome workspace root for source and release runs.
+/// Returns a non-personal default user id for local runtime sessions.
+String _defaultAgentUserId() {
+  final username = Platform.environment['USER']?.trim().isNotEmpty == true
+      ? Platform.environment['USER']!.trim()
+      : Platform.environment['USERNAME']?.trim();
+  if (username != null && username.isNotEmpty) {
+    return username;
+  }
+  return 'local-user';
+}
+
+/// Finds the nearest Agent Awesome runtime root for app launches.
 String _defaultWorkspaceRoot() {
   final executableDirectory = File(Platform.resolvedExecutable).parent;
   final candidates = <Directory>[
@@ -326,22 +330,23 @@ String _defaultWorkspaceRoot() {
   return Directory.current.absolute.path;
 }
 
-/// Reports whether a directory contains source or release runtime files.
+/// Reports whether a directory contains the shipped runtime topology and binaries.
 bool _isAgentAwesomeWorkspace(Directory directory) {
-  final hasRuntimeProfile = File(
-    '${directory.path}/ui/runtime_profiles/agent_awesome.json',
+  final hasRuntimeTopology = File(
+    '${directory.path}/ui/runtime_topology/agent_awesome.json',
   ).existsSync();
   final hasServiceDirectories =
       Directory('${directory.path}/harness').existsSync() &&
       Directory('${directory.path}/gateway').existsSync() &&
       Directory('${directory.path}/memory').existsSync();
-  final hasPrebuiltReleaseServices = File(
-    '${directory.path}/harness/build/profiles/agent-awesome/.prebuilt',
-  ).existsSync();
-  return hasRuntimeProfile &&
-      hasServiceDirectories &&
-      (hasPrebuiltReleaseServices ||
-          File('${directory.path}/harness/go.mod').existsSync());
+  final hasRuntimeBinaries =
+      File('${directory.path}/harness/build/bin/agent-awesome').existsSync() &&
+      File(
+        '${directory.path}/harness/build/bin/workflow-service',
+      ).existsSync() &&
+      File('${directory.path}/gateway/build/agent-gateway').existsSync() &&
+      File('${directory.path}/memory/build/bin/memoryd').existsSync();
+  return hasRuntimeTopology && hasServiceDirectories && hasRuntimeBinaries;
 }
 
 /// Returns the bundled llama.cpp server path when present.

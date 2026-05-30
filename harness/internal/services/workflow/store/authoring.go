@@ -187,6 +187,67 @@ func (s *Store) UpsertPublishedDefinition(ctx context.Context, record PublishedD
 	return nil
 }
 
+// UpsertDefinitionSource records the current disk path for a loaded definition.
+func (s *Store) UpsertDefinitionSource(ctx context.Context, record PublishedDefinitionRecord) error {
+	publishedAt := record.PublishedAt
+	if publishedAt == "" {
+		publishedAt = nowString()
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO workflow_published_definitions
+		(definition_id, draft_id, path, hash, published_at)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(definition_id) DO UPDATE SET path=excluded.path,
+			hash=excluded.hash, published_at=excluded.published_at`,
+		record.DefinitionID, record.DraftID, record.Path, record.Hash, publishedAt)
+	if err != nil {
+		return fmt.Errorf("upsert definition source %q: %w", record.DefinitionID, err)
+	}
+	return nil
+}
+
+// GetPublishedDefinitionByDraftID returns source metadata for one draft.
+func (s *Store) GetPublishedDefinitionByDraftID(ctx context.Context, draftID string) (PublishedDefinitionRecord, bool, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT definition_id, draft_id, path, hash, published_at FROM workflow_published_definitions WHERE draft_id = ?`, draftID)
+	record, err := scanPublishedDefinition(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return PublishedDefinitionRecord{}, false, nil
+		}
+		return PublishedDefinitionRecord{}, false, err
+	}
+	return record, true, nil
+}
+
+// DeletePublishedDefinition removes source metadata for one definition.
+func (s *Store) DeletePublishedDefinition(ctx context.Context, definitionID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM workflow_published_definitions WHERE definition_id = ?`, definitionID)
+	if err != nil {
+		return fmt.Errorf("delete published definition %q: %w", definitionID, err)
+	}
+	return nil
+}
+
+// DeletePublishedDefinitionsExcept removes source metadata for missing definitions.
+func (s *Store) DeletePublishedDefinitionsExcept(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM workflow_published_definitions`); err != nil {
+			return fmt.Errorf("delete published definitions: %w", err)
+		}
+		return nil
+	}
+	placeholders := make([]string, len(ids))
+	args := make([]any, len(ids))
+	for index, id := range ids {
+		placeholders[index] = "?"
+		args[index] = id
+	}
+	query := `DELETE FROM workflow_published_definitions WHERE definition_id NOT IN (` + strings.Join(placeholders, ",") + `)`
+	if _, err := s.db.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("delete stale published definitions: %w", err)
+	}
+	return nil
+}
+
 // ListRuns returns workflow runs matching operator filters.
 func (s *Store) ListRuns(ctx context.Context, filter RunFilter) ([]RunRecord, error) {
 	clauses := []string{}
@@ -325,6 +386,15 @@ func scanDraft(row interface{ Scan(...any) error }) (DraftRecord, error) {
 	}
 	if err := json.Unmarshal([]byte(validation), &record.Validation); err != nil {
 		return DraftRecord{}, fmt.Errorf("decode workflow draft validation: %w", err)
+	}
+	return record, nil
+}
+
+// scanPublishedDefinition decodes one published definition metadata row.
+func scanPublishedDefinition(row interface{ Scan(...any) error }) (PublishedDefinitionRecord, error) {
+	var record PublishedDefinitionRecord
+	if err := row.Scan(&record.DefinitionID, &record.DraftID, &record.Path, &record.Hash, &record.PublishedAt); err != nil {
+		return PublishedDefinitionRecord{}, err
 	}
 	return record, nil
 }

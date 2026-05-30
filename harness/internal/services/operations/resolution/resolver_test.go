@@ -13,7 +13,7 @@ func TestResolverPrecedenceAndProvenance(t *testing.T) {
 		RunRequest:        map[string]any{"change_request": "Fix crash", "remote": "fork"},
 		OperationDefaults: map[string]any{"remote": "origin"},
 		CodebaseDefaults:  map[string]any{"repository_path": "/repo", "remote": "upstream"},
-		WorkflowDefaults:  map[string]any{"go_module_path": "."},
+		WorkflowDefaults:  map[string]any{"package_path": "."},
 		GeneratedValues:   map[string]any{"commit_message": "Fix crash"},
 	})
 	if err != nil {

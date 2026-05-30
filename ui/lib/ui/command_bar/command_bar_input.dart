@@ -25,20 +25,16 @@ class _CommandInputFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     return Container(
+      key: const ValueKey<String>('global-command-input-frame'),
       height: height,
       padding: const EdgeInsets.only(left: 14, right: 8),
       decoration: BoxDecoration(
-        color: colors.surface,
-        gradient: context.agentAwesomeControlGradient,
-        border: Border.all(color: colors.searchBorder),
+        color: colors.field,
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: colors.softShadow,
-            blurRadius: 12,
-            offset: Offset(0, 6),
-          ),
-        ],
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -88,7 +84,16 @@ class _CommandInputFrame extends StatelessWidget {
                         color: colors.ink,
                       ),
                       decoration: InputDecoration(
+                        filled: false,
+                        fillColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        focusColor: Colors.transparent,
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
                         hintText:
                             'Command current screen, Ctrl/Shift+Enter for chat...',
                         hintStyle: TextStyle(
@@ -110,7 +115,10 @@ class _CommandInputFrame extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 9),
                   decoration: BoxDecoration(
                     color: colors.kbdBackground,
-                    border: Border.all(color: colors.border),
+                    border: Border.all(
+                      color: colors.border,
+                      width: AgentAwesomeStrokeTokens.borderWidth,
+                    ),
                     borderRadius: BorderRadius.circular(7),
                   ),
                   child: Center(

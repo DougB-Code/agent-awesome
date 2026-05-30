@@ -8,11 +8,13 @@ import (
 	"time"
 )
 
-// TestOperationPreviewResolvesCodingInput verifies a change request can use codebase defaults.
-func TestOperationPreviewResolvesCodingInput(t *testing.T) {
+const testWorkflowID = "source_change"
+
+// TestOperationPreviewResolvesCodebaseInput verifies run input can use codebase defaults.
+func TestOperationPreviewResolvesCodebaseInput(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
-	op := createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 
 	preview, err := service.PreviewOperationRun(ctx, op.ID, OperationRunRequest{Input: map[string]any{"change_request": "Fix settings crash"}})
 	if err != nil {
@@ -31,25 +33,28 @@ func TestOperationPreviewResolvesCodingInput(t *testing.T) {
 	}
 }
 
-// TestOperationCreateCompletesOpenPRPolicyDefaults verifies UI-sent safety choices stay runnable.
-func TestOperationCreateCompletesOpenPRPolicyDefaults(t *testing.T) {
+// TestOperationCreatePreservesExplicitPolicy verifies saved policies are not workflow-special-cased.
+func TestOperationCreatePreservesExplicitPolicy(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
 
 	op, err := service.CreateOperation(ctx, OperationRequest{
-		Name:            "Codex Coding Change",
-		WorkflowID:      codingWorkflowID,
+		Name:            "Source Change",
+		WorkflowID:      testWorkflowID,
 		CodebaseID:      "agent_awesome",
 		RuntimeTargetID: "this_computer",
 		Policy: OperationPolicy{
-			SourceControl: "open_pr_only",
+			SourceControl:     "open_pr_only",
+			DestructiveAction: "deny",
+			AllowedTools:      []string{"sourcecontrol.open_pull_request"},
+			AllowedTargets:    []string{"this_computer"},
 		},
 	})
 	if err != nil {
 		t.Fatalf("CreateOperation() error = %v", err)
 	}
 	if op.Policy.SourceControl != "open_pr_only" || op.Policy.DestructiveAction != "deny" {
-		t.Fatalf("policy = %#v, want open-pr deny defaults", op.Policy)
+		t.Fatalf("policy = %#v, want explicit open-pr policy", op.Policy)
 	}
 	if !containsAny(op.Policy.AllowedTools, []string{"sourcecontrol.open_pull_request"}) {
 		t.Fatalf("allowed tools = %#v, want sourcecontrol open PR", op.Policy.AllowedTools)
@@ -63,7 +68,7 @@ func TestOperationCreateCompletesOpenPRPolicyDefaults(t *testing.T) {
 func TestOperationStartPersistsRunLinkAndSnapshot(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
-	op := createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 
 	started, err := service.StartOperation(ctx, op.ID, OperationRunRequest{Input: map[string]any{"change_request": "Fix settings crash"}})
 	if err != nil {
@@ -85,12 +90,16 @@ func TestOperationStartPersistsRunLinkAndSnapshot(t *testing.T) {
 func TestOperationSnapshotRedactsRawSecretRequestValues(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
-	op := createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 
 	started, err := service.StartOperation(ctx, op.ID, OperationRunRequest{
 		Input: map[string]any{
 			"change_request": "Fix settings crash",
 			"api_token":      "plain-secret-value",
+		},
+		Task: map[string]any{
+			"title":     "Fix settings crash",
+			"api_token": "nested-secret-value",
 		},
 	})
 	if err != nil {
@@ -106,49 +115,34 @@ func TestOperationSnapshotRedactsRawSecretRequestValues(t *testing.T) {
 	if snapshot.ResolvedInput["api_token"] != "secret://redacted/api_token" {
 		t.Fatalf("api_token = %#v, want redacted secret reference", snapshot.ResolvedInput["api_token"])
 	}
+	task, ok := snapshot.ResolvedInput["task"].(map[string]any)
+	if !ok {
+		t.Fatalf("task = %#v, want redacted task map", snapshot.ResolvedInput["task"])
+	}
+	if task["api_token"] != "secret://redacted/api_token" {
+		t.Fatalf("task api_token = %#v, want redacted secret reference", task["api_token"])
+	}
 }
 
-// TestCodingChangeStartFindsOperationByCodebase verifies Slack-like start behavior.
-func TestCodingChangeStartFindsOperationByCodebase(t *testing.T) {
+// TestOperationStartResolvesCodebaseByName verifies generic starts can resolve codebase defaults.
+func TestOperationStartResolvesCodebaseByName(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
-	_ = createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 
-	started, err := service.StartCodingChange(ctx, OperationRunRequest{
+	started, err := service.StartOperation(ctx, op.ID, OperationRunRequest{
 		CodebaseName: "Agent Awesome",
 		Input:        map[string]any{"change_request": "Fix settings crash"},
-		Source:       "slack",
+		Source:       "api",
 	})
 	if err != nil {
-		t.Fatalf("StartCodingChange() error = %v", err)
+		t.Fatalf("StartOperation() error = %v", err)
 	}
-	if started.Run.DefinitionID != codingWorkflowID {
-		t.Fatalf("definition = %q, want coding workflow", started.Run.DefinitionID)
+	if started.Run.DefinitionID != testWorkflowID {
+		t.Fatalf("definition = %q, want test workflow", started.Run.DefinitionID)
 	}
-}
-
-// TestCodingChangeStartUsesTaskContext verifies agent-assigned tasks can start coding.
-func TestCodingChangeStartUsesTaskContext(t *testing.T) {
-	ctx := context.Background()
-	service := newTestOperationsService(t)
-	_ = createTestCodingOperation(t, service)
-
-	started, err := service.StartCodingChange(ctx, OperationRunRequest{
-		Source: "task",
-		Task: map[string]any{
-			"title":         "Fix settings crash",
-			"body":          "The settings panel crashes when provider data is empty.",
-			"codebase_name": "Agent Awesome",
-		},
-	})
-	if err != nil {
-		t.Fatalf("StartCodingChange() error = %v", err)
-	}
-	if started.Run.Input["change_request"] != "Fix settings crash" {
-		t.Fatalf("change_request = %#v, want task title", started.Run.Input["change_request"])
-	}
-	if started.Run.Input["pull_request_body"] != "The settings panel crashes when provider data is empty." {
-		t.Fatalf("pull_request_body = %#v, want task body", started.Run.Input["pull_request_body"])
+	if started.Run.Input["repository_path"] != "/repo/agent" {
+		t.Fatalf("repository_path = %#v, want codebase default", started.Run.Input["repository_path"])
 	}
 }
 
@@ -156,7 +150,7 @@ func TestCodingChangeStartUsesTaskContext(t *testing.T) {
 func TestQueuedOperationRunLeasesAndStarts(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
-	op := createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 
 	queued, err := service.EnqueueOperationRun(ctx, op.ID, OperationRunRequest{
 		Input:  map[string]any{"change_request": "Fix settings crash", "api_token": "secret"},
@@ -219,17 +213,14 @@ func TestExpiredQueueLeaseRecovery(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
 	op, err := service.CreateOperation(ctx, OperationRequest{
-		ID:              "retrying_coding_change",
-		Name:            "Retrying Coding Change",
-		WorkflowID:      codingWorkflowID,
+		ID:              "retrying_source_change",
+		Name:            "Retrying Source Change",
+		WorkflowID:      testWorkflowID,
 		CodebaseID:      "agent_awesome",
 		RuntimeTargetID: "this_computer",
-		AgentProfileID:  "codex",
-		Defaults: map[string]any{
-			"codex_home":     "/tmp/codex-home",
-			"binary_package": ".",
-		},
-		Policy: OperationPolicy{RetryLimit: 1},
+		AgentProfileID:  "automation_agent",
+		Defaults:        map[string]any{"package_path": "."},
+		Policy:          OperationPolicy{RetryLimit: 1},
 	})
 	if err != nil {
 		t.Fatalf("CreateOperation() error = %v", err)
@@ -276,16 +267,15 @@ func TestEnqueueDueScheduledOperations(t *testing.T) {
 	ctx := context.Background()
 	service := newTestOperationsService(t)
 	_, err := service.CreateOperation(ctx, OperationRequest{
-		ID:              "scheduled_coding_change",
-		Name:            "Scheduled Coding Change",
-		WorkflowID:      codingWorkflowID,
+		ID:              "scheduled_source_change",
+		Name:            "Scheduled Source Change",
+		WorkflowID:      testWorkflowID,
 		CodebaseID:      "agent_awesome",
 		RuntimeTargetID: "this_computer",
-		AgentProfileID:  "codex",
+		AgentProfileID:  "automation_agent",
 		Defaults: map[string]any{
 			"change_request": "Refresh generated docs",
-			"codex_home":     "/tmp/codex-home",
-			"binary_package": ".",
+			"package_path":   ".",
 		},
 		Policy:   OperationPolicy{MaxParallelism: 1},
 		Schedule: OperationSchedule{Enabled: true, Cron: "5 12 * * *"},
@@ -327,28 +317,24 @@ func newTestOperationsService(t *testing.T) *Service {
 				RepositoryPath:  "/repo/agent",
 				DefaultRemote:   "origin",
 				DefaultBranch:   "main",
-				GoModulePath:    ".",
 				RuntimeTargetID: "this_computer",
-				AgentProfileID:  "codex",
+				AgentProfileID:  "automation_agent",
 			},
 		},
 	})
 }
 
-// createTestCodingOperation stores a coding Operation fixture.
-func createTestCodingOperation(t *testing.T, service *Service) Operation {
+// createTestSourceOperation stores a source-control Operation fixture.
+func createTestSourceOperation(t *testing.T, service *Service) Operation {
 	t.Helper()
 	op, err := service.CreateOperation(context.Background(), OperationRequest{
-		ID:              "codex_coding_change_agent_awesome",
-		Name:            "Codex Coding Change for Agent Awesome",
-		WorkflowID:      codingWorkflowID,
+		ID:              "source_change_agent_awesome",
+		Name:            "Source Change for Agent Awesome",
+		WorkflowID:      testWorkflowID,
 		CodebaseID:      "agent_awesome",
 		RuntimeTargetID: "this_computer",
-		AgentProfileID:  "codex",
-		Defaults: map[string]any{
-			"codex_home":     "/tmp/codex-home",
-			"binary_package": ".",
-		},
+		AgentProfileID:  "automation_agent",
+		Defaults:        map[string]any{"package_path": "."},
 	})
 	if err != nil {
 		t.Fatalf("CreateOperation() error = %v", err)

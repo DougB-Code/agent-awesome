@@ -3,6 +3,15 @@ library;
 
 import 'package:flutter/material.dart';
 
+/// AgentAwesomeStrokeTokens defines shared border and divider thicknesses.
+abstract final class AgentAwesomeStrokeTokens {
+  /// Standard outline thickness for cards, fields, and panel frames.
+  static const double borderWidth = 1.25;
+
+  /// Standard divider thickness for command-shell section seams.
+  static const double dividerWidth = 1.25;
+}
+
 /// AgentAwesomeColors stores stable light-theme constants for legacy call sites.
 class AgentAwesomeColors {
   /// Prevents construction because this is a static light palette.
@@ -54,6 +63,10 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
     required this.surface,
     required this.panel,
     required this.panelStrong,
+    required this.field,
+    required this.card,
+    required this.cardBorder,
+    required this.cardAccent,
     required this.border,
     required this.borderStrong,
     required this.green,
@@ -85,6 +98,10 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
     surface: AgentAwesomeColors.surface,
     panel: AgentAwesomeColors.panel,
     panelStrong: Color(0xffe8e8d2),
+    field: AgentAwesomeColors.surface,
+    card: AgentAwesomeColors.surface,
+    cardBorder: AgentAwesomeColors.border,
+    cardAccent: AgentAwesomeColors.green,
     border: AgentAwesomeColors.border,
     borderStrong: Color(0xffc8bba8),
     green: AgentAwesomeColors.green,
@@ -103,42 +120,46 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
     orbit: Color(0xffb7c4ae),
     layerFill: Color(0xffe6e7d8),
     layerBorder: Color(0xff93a98f),
-    shadow: Color(0x12382718),
-    softShadow: Color(0x04453421),
+    shadow: Color(0x00000000),
+    softShadow: Color(0x00000000),
     warningSoft: Color(0xfffff7ef),
     warningBorder: AgentAwesomeColors.border,
     warningText: AgentAwesomeColors.green,
   );
 
-  /// Documentation-inspired dark palette for the Flutter UI.
+  /// Restyled dark palette for the Flutter UI.
   static const AgentAwesomePalette dark = AgentAwesomePalette(
-    page: Color(0xff060a12),
-    surface: Color(0xff0b121c),
-    panel: Color(0xff111827),
-    panelStrong: Color(0xff17213a),
-    border: Color(0xff25364d),
-    borderStrong: Color(0xff405879),
-    green: Color(0xff8ca7c7),
-    greenSoft: Color(0xff111a31),
-    coral: Color(0xffa871ff),
-    ink: Color(0xfff7f9ff),
-    muted: Color(0xffc2cadc),
-    subtle: Color(0xff8793a6),
-    chrome: Color(0xff0b121c),
-    sidebar: Color(0xff08111c),
-    searchBorder: Color(0xff3b587a),
-    kbdBackground: Color(0xff162232),
-    heroEnd: Color(0xff0b1017),
-    cardIconBackground: Color(0xff181d34),
-    cardIcon: Color(0xffa871ff),
-    orbit: Color(0xff5f49a8),
-    layerFill: Color(0xff172232),
-    layerBorder: Color(0xff4c5f89),
-    shadow: Color(0x66000000),
-    softShadow: Color(0x1c8b5cf6),
-    warningSoft: Color(0xff221a12),
-    warningBorder: Color(0xff725022),
-    warningText: Color(0xfff0ad37),
+    page: Color(0xff040a12),
+    surface: Color(0xff0c131f),
+    panel: Color(0xff0c131f),
+    panelStrong: Color(0xff162235),
+    field: Color(0xff141b27),
+    card: Color(0xff151b27),
+    cardBorder: Color(0xff1c232f),
+    cardAccent: Color(0xff24b6c7),
+    border: Color(0xff1c232f),
+    borderStrong: Color(0xff22b4dc),
+    green: Color(0xff2fc4e7),
+    greenSoft: Color(0xff102a40),
+    coral: Color(0xffff5f7d),
+    ink: Color(0xfff5f8ff),
+    muted: Color(0xffc1cad8),
+    subtle: Color(0xff8491a4),
+    chrome: Color(0xff070e18),
+    sidebar: Color(0xff091321),
+    searchBorder: Color(0xff1c232f),
+    kbdBackground: Color(0xff172131),
+    heroEnd: Color(0xff08111b),
+    cardIconBackground: Color(0xff102a3e),
+    cardIcon: Color(0xff2fc4e7),
+    orbit: Color(0xff41506b),
+    layerFill: Color(0xff102236),
+    layerBorder: Color(0xff325671),
+    shadow: Color(0x00000000),
+    softShadow: Color(0x00000000),
+    warningSoft: Color(0xff251d0d),
+    warningBorder: Color(0xff806122),
+    warningText: Color(0xffffc453),
   );
 
   /// App page background.
@@ -152,6 +173,18 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
 
   /// Stronger inset panel background.
   final Color panelStrong;
+
+  /// Form field background.
+  final Color field;
+
+  /// Repeated selectable card background.
+  final Color card;
+
+  /// Repeated selectable card border.
+  final Color cardBorder;
+
+  /// Repeated selectable card active accent.
+  final Color cardAccent;
 
   /// Default border color.
   final Color border;
@@ -207,10 +240,10 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
   /// Diagram layer border color.
   final Color layerBorder;
 
-  /// Standard decorative shadow color.
+  /// No-op decorative shadow color; AA shared chrome stays flat.
   final Color shadow;
 
-  /// Softer control shadow color.
+  /// No-op soft shadow color; AA shared chrome stays flat.
   final Color softShadow;
 
   /// Warning background.
@@ -228,6 +261,10 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
     Color? surface,
     Color? panel,
     Color? panelStrong,
+    Color? field,
+    Color? card,
+    Color? cardBorder,
+    Color? cardAccent,
     Color? border,
     Color? borderStrong,
     Color? green,
@@ -257,6 +294,10 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
       surface: surface ?? this.surface,
       panel: panel ?? this.panel,
       panelStrong: panelStrong ?? this.panelStrong,
+      field: field ?? this.field,
+      card: card ?? this.card,
+      cardBorder: cardBorder ?? this.cardBorder,
+      cardAccent: cardAccent ?? this.cardAccent,
       border: border ?? this.border,
       borderStrong: borderStrong ?? this.borderStrong,
       green: green ?? this.green,
@@ -296,6 +337,10 @@ class AgentAwesomePalette extends ThemeExtension<AgentAwesomePalette> {
       surface: Color.lerp(surface, other.surface, t)!,
       panel: Color.lerp(panel, other.panel, t)!,
       panelStrong: Color.lerp(panelStrong, other.panelStrong, t)!,
+      field: Color.lerp(field, other.field, t)!,
+      card: Color.lerp(card, other.card, t)!,
+      cardBorder: Color.lerp(cardBorder, other.cardBorder, t)!,
+      cardAccent: Color.lerp(cardAccent, other.cardAccent, t)!,
       border: Color.lerp(border, other.border, t)!,
       borderStrong: Color.lerp(borderStrong, other.borderStrong, t)!,
       green: Color.lerp(green, other.green, t)!,
@@ -338,7 +383,7 @@ extension AgentAwesomeThemeLookup on BuildContext {
   /// Whether the active Agent Awesome theme is dark.
   bool get agentAwesomeIsDark => Theme.of(this).brightness == Brightness.dark;
 
-  /// Dark-mode page gradient borrowed from the documentation shell.
+  /// Dark-mode page gradient matching the restyled canvas.
   LinearGradient? get agentAwesomeWorkspaceGradient {
     if (!agentAwesomeIsDark) {
       return null;
@@ -346,7 +391,7 @@ extension AgentAwesomeThemeLookup on BuildContext {
     return const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: <Color>[Color(0xff0d1421), Color(0xff060a12)],
+      colors: <Color>[Color(0xff0b1624), Color(0xff040a12)],
     );
   }
 
@@ -358,11 +403,11 @@ extension AgentAwesomeThemeLookup on BuildContext {
     return const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: <Color>[Color(0xff101720), Color(0xff0b121c)],
+      colors: <Color>[Color(0xff0b1421), Color(0xff070e18)],
     );
   }
 
-  /// Dark-mode sidebar gradient matching the docs navigation rail.
+  /// Dark-mode sidebar gradient matching the restyled rail.
   LinearGradient? get agentAwesomeSidebarGradient {
     if (!agentAwesomeIsDark) {
       return null;
@@ -370,35 +415,61 @@ extension AgentAwesomeThemeLookup on BuildContext {
     return const LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: <Color>[Color(0xff0b1725), Color(0xff07101a)],
+      colors: <Color>[Color(0xff0d1827), Color(0xff07111d)],
     );
   }
 
   /// Dark-mode panel gradient for primary bordered surfaces.
   LinearGradient? get agentAwesomeSurfaceGradient {
+    return null;
+  }
+
+  /// Dark-mode card gradient for repeated work items.
+  LinearGradient? get agentAwesomeCardGradient {
     if (!agentAwesomeIsDark) {
       return null;
     }
     return const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: <Color>[Color(0xff101827), Color(0xff0b121c)],
+      colors: <Color>[Color(0xff121f31), Color(0xff0a1422)],
     );
-  }
-
-  /// Dark-mode card gradient for repeated work items.
-  LinearGradient? get agentAwesomeCardGradient {
-    return null;
   }
 
   /// Dark-mode control gradient for buttons, tabs, and filter triggers.
   LinearGradient? get agentAwesomeControlGradient {
-    return null;
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff162233), Color(0xff0f1927)],
+    );
   }
 
   /// Dark-mode selected gradient for active controls without a green wash.
   LinearGradient? get agentAwesomeSelectedGradient {
-    return null;
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: <Color>[Color(0xff14304a), Color(0xff0f1c2e)],
+    );
+  }
+
+  /// Dark-mode selected gradient for active shell sidebar routes.
+  LinearGradient? get agentAwesomeSidebarSelectedGradient {
+    if (!agentAwesomeIsDark) {
+      return null;
+    }
+    return const LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: <Color>[Color(0xff15202d), Color(0xff111b27)],
+    );
   }
 
   /// Dark-mode primary gradient for compact brand marks and main actions.
@@ -409,19 +480,19 @@ extension AgentAwesomeThemeLookup on BuildContext {
     return const LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: <Color>[Color(0xff9a7ddb), Color(0xff8ca7c7)],
+      colors: <Color>[Color(0xff35d7ff), Color(0xff1687ad)],
     );
   }
 
   /// Semantic low-positive accent, cooler in dark mode than success green.
   Color get agentAwesomeLowAccent {
     if (agentAwesomeIsDark) {
-      return const Color(0xff7fa9b0);
+      return const Color(0xff2ed884);
     }
     return agentAwesomeColors.green;
   }
 
-  /// Semantic warning accent, matched to the documentation amber.
+  /// Semantic warning accent, matched to the restyled amber.
   Color get agentAwesomeWarningAccent {
     if (agentAwesomeIsDark) {
       return agentAwesomeColors.warningText;
@@ -466,12 +537,29 @@ ThemeData buildAgentAwesomeTheme({Brightness brightness = Brightness.light}) {
   final colors = brightness == Brightness.dark
       ? AgentAwesomePalette.dark
       : AgentAwesomePalette.light;
-  final scheme = ColorScheme.fromSeed(
+  final baseScheme = ColorScheme.fromSeed(
     seedColor: colors.green,
     brightness: brightness,
     primary: colors.green,
     secondary: colors.coral,
     surface: colors.surface,
+  );
+  final scheme = baseScheme.copyWith(
+    primary: colors.green,
+    onPrimary: colors.page,
+    primaryContainer: colors.greenSoft,
+    onPrimaryContainer: colors.ink,
+    secondary: colors.cardIcon,
+    onSecondary: colors.page,
+    secondaryContainer: colors.cardIconBackground,
+    onSecondaryContainer: colors.ink,
+    error: colors.coral,
+    onError: colors.page,
+    surface: colors.surface,
+    onSurface: colors.ink,
+    surfaceContainerHighest: colors.panelStrong,
+    outline: colors.border,
+    outlineVariant: colors.borderStrong,
   );
   return ThemeData(
     useMaterial3: true,
@@ -480,11 +568,14 @@ ThemeData buildAgentAwesomeTheme({Brightness brightness = Brightness.light}) {
     canvasColor: colors.surface,
     fontFamily: 'Inter',
     extensions: <ThemeExtension<dynamic>>[colors],
-    dividerTheme: DividerThemeData(color: colors.border, thickness: 1),
+    dividerTheme: DividerThemeData(
+      color: colors.border,
+      thickness: AgentAwesomeStrokeTokens.dividerWidth,
+    ),
     iconTheme: IconThemeData(color: colors.ink),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: colors.surface,
+      fillColor: colors.field,
       border: _agentAwesomeInputBorder(colors.border),
       enabledBorder: _agentAwesomeInputBorder(colors.border),
       disabledBorder: _agentAwesomeInputBorder(colors.border),
@@ -520,6 +611,9 @@ ThemeData buildAgentAwesomeTheme({Brightness brightness = Brightness.light}) {
 OutlineInputBorder _agentAwesomeInputBorder(Color color) {
   return OutlineInputBorder(
     borderRadius: BorderRadius.circular(8),
-    borderSide: BorderSide(color: color),
+    borderSide: BorderSide(
+      color: color,
+      width: AgentAwesomeStrokeTokens.borderWidth,
+    ),
   );
 }

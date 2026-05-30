@@ -55,23 +55,26 @@ func TestRegistryLoadsConfiguredCapabilities(t *testing.T) {
 func TestValidateDefinitionBlocksUnavailableCapabilities(t *testing.T) {
 	registry := NewRegistry(testToolsConfig(false), schema.Agent{Name: "AA", Instruction: "Work."})
 	def := definition.Definition{
-		Kind: definition.KindWorkflow,
+		Kind: definition.KindStateMachine,
 		ID:   "missing_capabilities",
-		Nodes: []definition.NodeDefinition{
-			{
-				ID:   "run_lint",
-				Uses: "command.execute",
-				With: map[string]any{"template_id": "lint"},
-			},
-			{
-				ID:   "push",
-				Uses: "mcp.call",
-				With: map[string]any{
-					"server_id": "sourcecontrol",
-					"tool":      "sourcecontrol.missing",
+		States: []definition.StateDefinition{{
+			ID: "start",
+			OnEntry: []definition.NodeDefinition{
+				{
+					ID:   "run_lint",
+					Uses: "command.execute",
+					With: map[string]any{"template_id": "lint"},
+				},
+				{
+					ID:   "push",
+					Uses: "mcp.call",
+					With: map[string]any{
+						"server_id": "sourcecontrol",
+						"tool":      "sourcecontrol.missing",
+					},
 				},
 			},
-		},
+		}},
 	}
 
 	diagnostics := registry.ValidateDefinition(def)
@@ -90,13 +93,16 @@ func TestValidateDefinitionBlocksUnavailableCapabilities(t *testing.T) {
 func TestValidateDefinitionAcceptsShorthandNodeTool(t *testing.T) {
 	registry := NewRegistry(testToolsConfig(true), schema.Agent{Name: "AA", Instruction: "Work."})
 	def := definition.Definition{
-		Kind: definition.KindWorkflow,
+		Kind: definition.KindStateMachine,
 		ID:   "shorthand",
-		Nodes: []definition.NodeDefinition{
-			{ID: "run_lint", Type: "command", Tool: "lint"},
-			{ID: "inspect", Type: "mcp", Tool: "sourcecontrol.inspect_repository", With: map[string]any{"server_id": "sourcecontrol"}},
-			{ID: "tool_call", Type: "tool", Tool: "sourcecontrol.inspect_repository"},
-		},
+		States: []definition.StateDefinition{{
+			ID: "start",
+			OnEntry: []definition.NodeDefinition{
+				{ID: "run_lint", Type: "command", Tool: "lint"},
+				{ID: "inspect", Type: "mcp", Tool: "sourcecontrol.inspect_repository", With: map[string]any{"server_id": "sourcecontrol"}},
+				{ID: "tool_call", Type: "tool", Tool: "sourcecontrol.inspect_repository"},
+			},
+		}},
 	}
 
 	if diagnostics := registry.ValidateDefinition(def); len(diagnostics) != 0 {

@@ -84,6 +84,19 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationDefinitions.isEmpty ? null : automationDefinitions.first;
   }
 
+  /// Returns the editable draft that backs one workflow definition.
+  AutomationDraft? automationDraftForDefinition(
+    AutomationDefinition definition,
+  ) {
+    for (final draft in automationDrafts) {
+      final draftDefinition = _automationDefinitionFromDraft(draft);
+      if (draftDefinition?.id == definition.id) {
+        return draft;
+      }
+    }
+    return null;
+  }
+
   /// Starts quiet polling for user-deployable workflow files.
   void startAutomationFileRefreshFromUi() {
     if (_automationFileRefreshTimer != null || _isClosing) {
@@ -96,7 +109,28 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     );
   }
 
-  /// Refreshes all Automations data from the workflow service through the gateway.
+  /// Refreshes workflow authoring files without requiring runnable services.
+  Future<void> refreshAutomationAuthoringFromUi() async {
+    if (automationsBusy) {
+      return;
+    }
+    automationsBusy = true;
+    automationsMessage = '';
+    _notifyControllerListeners();
+    try {
+      await _loadAutomationDrafts();
+      startAutomationFileRefreshFromUi();
+      automationsMessage = '';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('workflow authoring refresh failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Refreshes all runnable Automations data through the gateway.
   Future<void> refreshAutomationsFromUi() async {
     if (automationsBusy) {
       return;
@@ -105,6 +139,8 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     automationsMessage = 'Refreshing automations';
     _notifyControllerListeners();
     try {
+      await _loadAutomationDrafts();
+      _notifyControllerListeners();
       if (!await _ensureAutomationRuntimeReady()) {
         return;
       }
@@ -130,10 +166,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         if (!_initialized || _isClosing || automationsBusy) {
           return;
         }
-        await Future.wait(<Future<void>>[
-          _loadAutomationCatalog(),
-          _loadAutomationDrafts(),
-        ]);
+        await _loadAutomationDrafts();
         if (automationsMessage == 'Refreshing automations') {
           automationsMessage = '';
         }
@@ -150,6 +183,10 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
   /// Selects one automation draft for builder screens.
   void selectAutomationDraft(String draftId) {
     selectedAutomationDraftId = draftId;
+    final definitionId = _definitionIdForDraftId(automationDrafts, draftId);
+    if (definitionId.isNotEmpty) {
+      selectedAutomationDefinitionId = definitionId;
+    }
     _notifyControllerListeners();
   }
 
@@ -292,10 +329,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     automationsMessage = 'Creating automation draft';
     _notifyControllerListeners();
     try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
-      final draft = await automationsClient.createDraft(kind: kind, name: name);
+      final draft = await _createAutomationDraft(kind: kind, name: name);
       selectedAutomationDraftId = draft.id;
       await _loadAutomationDrafts();
       automationsMessage = '';
@@ -323,11 +357,11 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     automationsMessage = 'Validating ${draft.name}';
     _notifyControllerListeners();
     try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
       selectedAutomationDraftId = draft.id;
-      final result = await automationsClient.validateDraft(draft.id);
+      final result = await _validateAutomationDraft(draft);
+      _replaceAutomationDraft(
+        _automationDraftWithValidation(draft, _validationResultMap(result)),
+      );
       automationsMessage = result.publishable
           ? ''
           : 'Draft needs review before publishing';
@@ -356,12 +390,9 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     automationsMessage = 'Publishing ${draft.name}';
     _notifyControllerListeners();
     try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
       selectedAutomationDraftId = draft.id;
-      await automationsClient.publishDraft(draft.id);
-      await _loadAutomations();
+      await _publishAutomationDraft(draft);
+      await _loadAutomationDrafts();
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
@@ -374,14 +405,13 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
 
   /// Saves one editable automation draft.
   Future<void> saveAutomationDraftFromUi(AutomationDraft draft) async {
+    _replaceAutomationDraft(draft);
+    selectedAutomationDraftId = draft.id;
     automationsBusy = true;
     automationsMessage = 'Saving ${draft.name}';
     _notifyControllerListeners();
     try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
-      final updated = await automationsClient.updateDraft(draft);
+      final updated = await _saveAutomationDraft(draft);
       selectedAutomationDraftId = updated.id;
       await _loadAutomationDrafts();
       automationsMessage = '';
@@ -394,7 +424,122 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Adds one action node or state entry action to the selected draft.
+  /// Duplicates one editable workflow draft into a new authoring file.
+  Future<void> duplicateAutomationDraftFromUi(AutomationDraft draft) async {
+    automationsBusy = true;
+    automationsMessage = 'Duplicating ${draft.name}';
+    _notifyControllerListeners();
+    try {
+      final name =
+          '${draft.name.trim().isEmpty ? 'Workflow' : draft.name} Copy';
+      final created = await _createAutomationDraft(
+        kind: draft.kind,
+        name: name,
+      );
+      final definitionId = _definitionIdFromDraftId(created.id);
+      final body = _normalizedWorkflowBody(
+        <String, dynamic>{...draft.body, 'id': definitionId, 'name': name},
+        fallbackId: definitionId,
+        fallbackName: name,
+      );
+      final duplicate = await _saveAutomationDraft(
+        AutomationDraft(
+          id: created.id,
+          kind: draft.kind,
+          name: name,
+          description: draft.description,
+          status: 'draft',
+          body: body,
+        ),
+      );
+      selectedAutomationDraftId = duplicate.id;
+      await _loadAutomationDrafts();
+      automationsMessage = 'Duplicated ${draft.name}';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation draft duplicate failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Deletes one editable workflow draft from the authoring file list.
+  Future<void> deleteAutomationDraftFromUi(AutomationDraft draft) async {
+    automationsBusy = true;
+    automationsMessage = 'Deleting ${draft.name}';
+    _notifyControllerListeners();
+    try {
+      final definitionId = _automationDraftDefinitionId(draft);
+      await _deleteAutomationDraft(draft);
+      automationDrafts = <AutomationDraft>[
+        for (final existing in automationDrafts)
+          if (existing.id != draft.id) existing,
+      ];
+      if (selectedAutomationDraftId == draft.id) {
+        selectedAutomationDraftId = '';
+      }
+      if (definitionId.isNotEmpty &&
+          selectedAutomationDefinitionId == definitionId) {
+        selectedAutomationDefinitionId = '';
+      }
+      await _loadAutomationDrafts();
+      automationsMessage = '';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation draft delete failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
+  /// Saves metadata for an operation-selectable workflow file.
+  Future<void> saveAutomationDefinitionMetadataFromUi(
+    AutomationDefinition definition, {
+    required String name,
+    required String description,
+  }) async {
+    final draft = automationDraftForDefinition(definition);
+    if (draft == null) {
+      automationsMessage = 'Workflow file is not editable';
+      _notifyControllerListeners();
+      return;
+    }
+    await saveAutomationDraftFromUi(
+      _automationDraftWithMetadata(draft, name: name, description: description),
+    );
+    selectedAutomationDefinitionId = definition.id;
+    _notifyControllerListeners();
+  }
+
+  /// Deletes the editable workflow file represented by one definition.
+  Future<void> deleteAutomationDefinitionFromUi(
+    AutomationDefinition definition,
+  ) async {
+    final draft = automationDraftForDefinition(definition);
+    if (draft == null) {
+      automationsMessage = 'Workflow file is not editable';
+      _notifyControllerListeners();
+      return;
+    }
+    await deleteAutomationDraftFromUi(draft);
+  }
+
+  /// Replaces one draft in local state so editor navigation keeps pending edits.
+  void _replaceAutomationDraft(AutomationDraft draft) {
+    final index = automationDrafts.indexWhere((item) => item.id == draft.id);
+    if (index < 0) {
+      automationDrafts = <AutomationDraft>[...automationDrafts, draft];
+      return;
+    }
+    automationDrafts = <AutomationDraft>[
+      for (var itemIndex = 0; itemIndex < automationDrafts.length; itemIndex++)
+        itemIndex == index ? draft : automationDrafts[itemIndex],
+    ];
+  }
+
+  /// Adds one state entry action to the selected workflow draft.
   Future<void> addAutomationActionToSelectedDraftFromUi(
     String actionName,
   ) async {
@@ -402,21 +547,10 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     if (draft == null || actionName.trim().isEmpty) {
       return;
     }
-    automationsBusy = true;
-    automationsMessage = 'Adding action';
-    _notifyControllerListeners();
-    try {
-      if (!await _ensureAutomationRuntimeReady()) {
-        return;
-      }
-      final body = _jsonMapCopy(draft.body);
-      if (draft.kind == automationWorkflowKind ||
-          draft.kind == automationTaskGraphKind) {
-        _appendWorkflowGraphNode(body, actionName);
-      } else {
-        _appendStateMachineAction(body, actionName);
-      }
-      final updated = AutomationDraft(
+    final body = _jsonMapCopy(draft.body);
+    _appendStateMachineAction(body, actionName);
+    await saveAutomationDraftFromUi(
+      AutomationDraft(
         id: draft.id,
         kind: draft.kind,
         name: draft.name,
@@ -426,17 +560,8 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         validation: draft.validation,
         createdAt: draft.createdAt,
         updatedAt: draft.updatedAt,
-      );
-      await automationsClient.updateDraft(updated);
-      await _loadAutomationDrafts();
-      automationsMessage = '';
-    } catch (error) {
-      automationsMessage = error.toString();
-      await _log('automation action add failed: $error');
-    } finally {
-      automationsBusy = false;
-      _notifyControllerListeners();
-    }
+      ),
+    );
   }
 
   /// Starts one installed automation definition.
@@ -452,8 +577,10 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         return;
       }
       final run = await automationsClient.startRun(definition.id, input: input);
-      selectedAutomationRunId = run.id;
+      _recordStartedAutomationRun(run);
       await _loadAutomationRunsAndInbox();
+      _recordStartedAutomationRunIfMissing(run);
+      _startAutomationRunRefreshPolling();
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
@@ -528,6 +655,36 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
+  /// Deletes one saved Operation from the Operations catalog.
+  Future<void> deleteAutomationRunSetupFromUi(AutomationRunSetup setup) async {
+    automationsBusy = true;
+    automationsMessage = 'Deleting ${setup.name}';
+    _notifyControllerListeners();
+    try {
+      if (!await _ensureAutomationRuntimeReady()) {
+        return;
+      }
+      await automationsClient.deleteRunSetup(setup.id);
+      automationRunSetups = <AutomationRunSetup>[
+        for (final existing in automationRunSetups)
+          if (existing.id != setup.id) existing,
+      ];
+      if (selectedAutomationRunSetupId == setup.id) {
+        selectedAutomationRunSetupId = automationRunSetups.isEmpty
+            ? ''
+            : automationRunSetups.first.id;
+      }
+      await _loadAutomationRunSetups();
+      automationsMessage = '';
+    } catch (error) {
+      automationsMessage = error.toString();
+      await _log('automation operation delete failed: $error');
+    } finally {
+      automationsBusy = false;
+      _notifyControllerListeners();
+    }
+  }
+
   /// Creates or updates one codebase catalog record from typed UI fields.
   Future<void> upsertAutomationCodebaseFromUi(
     AutomationCodebase codebase,
@@ -565,8 +722,10 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
         return;
       }
       final run = await automationsClient.startRunSetup(setup.id, input: input);
-      selectedAutomationRunId = run.id;
+      _recordStartedAutomationRun(run);
       await _loadAutomationRunsAndInbox();
+      _recordStartedAutomationRunIfMissing(run);
+      _startAutomationRunRefreshPolling();
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
@@ -684,11 +843,8 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationDefinitions = results[1] as List<AutomationDefinition>;
       automationPackages = results[2] as List<AutomationPackage>;
       automationCapabilities = results[3] as List<AutomationCapability>;
+      _syncAutomationDefinitionsFromDrafts();
       await _loadAutomationToolNames();
-      if (selectedAutomationDefinitionId.isEmpty &&
-          automationDefinitions.isNotEmpty) {
-        selectedAutomationDefinitionId = automationDefinitions.first.id;
-      }
       if (selectedAutomationCapabilityId.isEmpty &&
           automationCapabilities.isNotEmpty) {
         selectedAutomationCapabilityId = automationCapabilities.first.id;
@@ -712,13 +868,48 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
   /// Loads editable workflow drafts.
   Future<void> _loadAutomationDrafts() async {
     try {
-      automationDrafts = await automationsClient.listDrafts();
+      automationDrafts = await _listAutomationDrafts();
+      _syncAutomationDefinitionsFromDrafts();
       if (selectedAutomationDraftId.isEmpty && automationDrafts.isNotEmpty) {
         selectedAutomationDraftId = automationDrafts.first.id;
       }
     } catch (error) {
       automationsMessage = error.toString();
       await _log('automation draft load failed: $error');
+    }
+  }
+
+  /// Mirrors local workflow files into the Operations workflow selector.
+  void _syncAutomationDefinitionsFromDrafts() {
+    final localDefinitions = _automationDefinitionsFromDrafts(automationDrafts);
+    final localIds = <String>{
+      for (final definition in localDefinitions) definition.id,
+    };
+    final serviceDefinitions = <AutomationDefinition>[
+      for (final definition in automationDefinitions)
+        if (!_localAutomationDefinitionIds.contains(definition.id) &&
+            !localIds.contains(definition.id))
+          definition,
+    ];
+    automationDefinitions = <AutomationDefinition>[
+      ...localDefinitions,
+      ...serviceDefinitions,
+    ];
+    _localAutomationDefinitionIds = localIds;
+    _selectAvailableAutomationDefinition();
+  }
+
+  /// Selects the first available workflow file when the previous one is gone.
+  void _selectAvailableAutomationDefinition() {
+    if (automationDefinitions.isEmpty) {
+      selectedAutomationDefinitionId = '';
+      return;
+    }
+    final selectedExists = automationDefinitions.any(
+      (definition) => definition.id == selectedAutomationDefinitionId,
+    );
+    if (!selectedExists) {
+      selectedAutomationDefinitionId = automationDefinitions.first.id;
     }
   }
 
@@ -787,6 +978,87 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
+  /// Inserts a just-started run immediately so Operations does not look idle.
+  void _recordStartedAutomationRun(AutomationRun run) {
+    selectedAutomationRunId = run.id;
+    automationRuns = <AutomationRun>[
+      run,
+      for (final existing in automationRuns)
+        if (existing.id != run.id) existing,
+    ];
+    _notifyControllerListeners();
+  }
+
+  /// Keeps the accepted run visible if an immediate list call is stale.
+  void _recordStartedAutomationRunIfMissing(AutomationRun run) {
+    if (automationRuns.any((existing) => existing.id == run.id)) {
+      selectedAutomationRunId = run.id;
+      return;
+    }
+    _recordStartedAutomationRun(run);
+  }
+
+  /// Starts bounded run polling while any local run is still active.
+  void _startAutomationRunRefreshPolling() {
+    if (!_hasControllerListeners ||
+        _automationRunRefreshTimer != null ||
+        !_automationRunsNeedPolling()) {
+      return;
+    }
+    _automationRunRefreshTicks = 0;
+    _automationRunRefreshTimer = Timer.periodic(
+      _automationRunRefreshInterval,
+      (_) => unawaited(_pollAutomationRuns()),
+    );
+  }
+
+  /// Refreshes run state without blocking unrelated UI interactions.
+  Future<void> _pollAutomationRuns() async {
+    if (_isClosing ||
+        !_hasControllerListeners ||
+        _automationRunRefreshTicks >= 30 ||
+        !_automationRunsNeedPolling()) {
+      _stopAutomationRunRefreshPolling();
+      return;
+    }
+    if (_automationRunRefreshInFlight) {
+      return;
+    }
+    _automationRunRefreshInFlight = true;
+    _automationRunRefreshTicks++;
+    try {
+      await _loadAutomationRunsAndInbox();
+      _notifyControllerListeners();
+      if (!_automationRunsNeedPolling()) {
+        _stopAutomationRunRefreshPolling();
+      }
+    } finally {
+      _automationRunRefreshInFlight = false;
+    }
+  }
+
+  /// Stops active run polling when no visible runs still need updates.
+  void _stopAutomationRunRefreshPolling() {
+    _automationRunRefreshTimer?.cancel();
+    _automationRunRefreshTimer = null;
+    _automationRunRefreshTicks = 0;
+  }
+
+  /// Reports whether any known run is still expected to change.
+  bool _automationRunsNeedPolling() {
+    return automationRuns.any((run) {
+      final status = run.status.trim().toLowerCase();
+      final state = run.state.trim().toLowerCase();
+      return <String>{
+            'running',
+            'waiting',
+            'pending',
+            'queued',
+          }.contains(status) ||
+          <String>{'running', 'waiting', 'pending', 'queued'}.contains(state);
+    });
+  }
+
   Future<void> _signalAutomationItem(
     AutomationPendingItem item,
     String signal,
@@ -834,6 +1106,258 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
 ''';
   }
 
+  /// Lists editable workflow files without requiring runnable workflow services.
+  Future<List<AutomationDraft>> _listAutomationDrafts() async {
+    if (_automationsClientInjected) {
+      return automationsClient.listDrafts();
+    }
+    return _listLocalAutomationDrafts();
+  }
+
+  /// Creates one workflow authoring file through the local file boundary.
+  Future<AutomationDraft> _createAutomationDraft({
+    required String kind,
+    required String name,
+  }) async {
+    if (_automationsClientInjected) {
+      return automationsClient.createDraft(kind: kind, name: name);
+    }
+    return _createLocalAutomationDraft(kind: kind, name: name);
+  }
+
+  /// Saves one workflow authoring file through the local file boundary.
+  Future<AutomationDraft> _saveAutomationDraft(AutomationDraft draft) async {
+    if (_automationsClientInjected) {
+      return automationsClient.updateDraft(draft);
+    }
+    return _saveLocalAutomationDraft(draft);
+  }
+
+  /// Validates a workflow draft without starting runnable services.
+  Future<AutomationValidationResult> _validateAutomationDraft(
+    AutomationDraft draft,
+  ) async {
+    if (_automationsClientInjected) {
+      return automationsClient.validateDraft(draft.id);
+    }
+    return _validateLocalAutomationDraft(draft);
+  }
+
+  /// Publishes a workflow draft without starting runnable services.
+  Future<void> _publishAutomationDraft(AutomationDraft draft) async {
+    if (_automationsClientInjected) {
+      await automationsClient.publishDraft(draft.id);
+      return;
+    }
+    await _saveLocalAutomationDraft(draft);
+  }
+
+  /// Deletes one workflow authoring file through the local file boundary.
+  Future<void> _deleteAutomationDraft(AutomationDraft draft) async {
+    if (_automationsClientInjected) {
+      await automationsClient.deleteDraft(draft.id);
+      return;
+    }
+    await _deleteLocalAutomationDraft(draft);
+  }
+
+  /// Lists YAML workflow files from the selected agent's authoring folder.
+  Future<List<AutomationDraft>> _listLocalAutomationDrafts() async {
+    final directory = await _workflowAuthoringDirectory();
+    if (!await directory.exists()) {
+      return const <AutomationDraft>[];
+    }
+    final drafts = <AutomationDraft>[];
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File || !_isWorkflowYamlPath(entity.path)) {
+        continue;
+      }
+      final draft = await _draftFromLocalWorkflowFile(entity);
+      if (draft != null) {
+        drafts.add(draft);
+      }
+    }
+    drafts.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    return drafts;
+  }
+
+  /// Creates a blank state-machine workflow YAML file in the authoring folder.
+  Future<AutomationDraft> _createLocalAutomationDraft({
+    required String kind,
+    required String name,
+  }) async {
+    if (kind.trim() != automationWorkflowKind) {
+      throw StateError('Workflow authoring only supports workflow files');
+    }
+    final directory = await _workflowAuthoringDirectory();
+    await directory.create(recursive: true);
+    final baseId = _safeWorkflowDefinitionId(name);
+    final definitionId = await _uniqueWorkflowDefinitionId(directory, baseId);
+    final body = _blankWorkflowBody(definitionId, name);
+    final file = File(
+      await _uniqueWorkflowPath(
+        directory.path,
+        '${_safeWorkflowFileStem(name)}.yaml',
+      ),
+    );
+    await file.writeAsString(encodeYamlMap(body));
+    final draft = await _draftFromLocalWorkflowFile(file);
+    if (draft == null) {
+      throw StateError('Created workflow file could not be loaded');
+    }
+    return draft;
+  }
+
+  /// Saves a state-machine workflow draft as readable local YAML.
+  Future<AutomationDraft> _saveLocalAutomationDraft(
+    AutomationDraft draft,
+  ) async {
+    final file = await _localWorkflowFileForDraft(draft);
+    await file.parent.create(recursive: true);
+    final body = _normalizedWorkflowBody(
+      draft.body,
+      fallbackId: _definitionIdFromDraftId(draft.id),
+      fallbackName: draft.name,
+    );
+    await file.writeAsString(encodeYamlMap(body));
+    final saved = await _draftFromLocalWorkflowFile(file);
+    if (saved == null) {
+      throw StateError('Saved workflow file could not be loaded');
+    }
+    return saved;
+  }
+
+  /// Deletes the local YAML file backing an editable workflow draft.
+  Future<void> _deleteLocalAutomationDraft(AutomationDraft draft) async {
+    final file = await _localWorkflowFileForDraft(draft, mustExist: true);
+    await file.delete();
+  }
+
+  /// Performs local structural validation for a state-machine workflow file.
+  AutomationValidationResult _validateLocalAutomationDraft(
+    AutomationDraft draft,
+  ) {
+    final diagnostics = <AutomationValidationDiagnostic>[];
+    final body = _normalizedWorkflowBody(
+      draft.body,
+      fallbackId: _definitionIdFromDraftId(draft.id),
+      fallbackName: draft.name,
+    );
+    final states = body['states'];
+    if (states is! List || states.isEmpty) {
+      diagnostics.add(
+        const AutomationValidationDiagnostic(
+          severity: 'error',
+          path: 'states',
+          message: 'At least one state is required.',
+        ),
+      );
+    }
+    final initial = _stringFromWorkflowBody(body, 'initial');
+    if (initial.isNotEmpty && states is List && states.isNotEmpty) {
+      final hasInitial = states.any((state) {
+        return state is Map && '${state['id'] ?? ''}'.trim() == initial;
+      });
+      if (!hasInitial) {
+        diagnostics.add(
+          AutomationValidationDiagnostic(
+            severity: 'error',
+            path: 'initial',
+            message: 'Initial state "$initial" does not exist.',
+          ),
+        );
+      }
+    }
+    final valid = diagnostics
+        .where((diagnostic) => diagnostic.severity == 'error')
+        .isEmpty;
+    return AutomationValidationResult(
+      valid: valid,
+      publishable: valid,
+      diagnostics: diagnostics,
+      definition: valid ? body : const <String, dynamic>{},
+    );
+  }
+
+  /// Resolves the active workflow authoring directory without starting services.
+  Future<Directory> _workflowAuthoringDirectory() async {
+    final profile = await _workflowAuthoringProfile();
+    return Directory(workflowDefinitionsDirectoryPathForProfile(profile));
+  }
+
+  /// Loads enough topology for authoring paths without booting the harness.
+  Future<RuntimeProfile> _workflowAuthoringProfile() async {
+    final loaded = runtimeProfile;
+    if (loaded != null) {
+      return loaded;
+    }
+    final loader = RuntimeProfileLoader(config);
+    final profileFile = await _resolveInitialProfileFile(loader);
+    runtimeProfilePath = profileFile.path;
+    final profile = await _loadInitialRuntimeProfile(loader, profileFile);
+    runtimeProfile = profile;
+    return profile;
+  }
+
+  /// Loads one local workflow YAML file as an editable draft row.
+  Future<AutomationDraft?> _draftFromLocalWorkflowFile(File file) async {
+    try {
+      final body = _workflowBodyFromYaml(await file.readAsString());
+      if (body == null) {
+        return null;
+      }
+      final definitionId = _workflowBodyId(body, file.path);
+      final name = _workflowBodyName(body, definitionId);
+      final normalized = _normalizedWorkflowBody(
+        body,
+        fallbackId: definitionId,
+        fallbackName: name,
+      );
+      final stat = await file.stat();
+      final updatedAt = stat.modified.toUtc().toIso8601String();
+      return AutomationDraft(
+        id: _draftIdFromDefinitionId(definitionId),
+        kind: automationWorkflowKind,
+        name: name,
+        description: _stringFromWorkflowBody(normalized, 'description'),
+        status: 'draft',
+        body: normalized,
+        updatedAt: updatedAt,
+      );
+    } catch (error) {
+      await _log('workflow file load skipped ${file.path}: $error');
+      return null;
+    }
+  }
+
+  /// Resolves the YAML file backing a local workflow draft.
+  Future<File> _localWorkflowFileForDraft(
+    AutomationDraft draft, {
+    bool mustExist = false,
+  }) async {
+    final directory = await _workflowAuthoringDirectory();
+    final definitionId = _automationDraftDefinitionId(draft).isEmpty
+        ? _definitionIdFromDraftId(draft.id)
+        : _automationDraftDefinitionId(draft);
+    if (await directory.exists()) {
+      await for (final entity in directory.list(followLinks: false)) {
+        if (entity is! File || !_isWorkflowYamlPath(entity.path)) {
+          continue;
+        }
+        final body = _workflowBodyFromYaml(await entity.readAsString());
+        if (body != null &&
+            _workflowBodyId(body, entity.path) == definitionId) {
+          return entity;
+        }
+      }
+    }
+    if (mustExist) {
+      throw FileSystemException('Workflow file not found', definitionId);
+    }
+    final filename = '${_safeWorkflowFileStem(draft.name)}.yaml';
+    return File(await _uniqueWorkflowPath(directory.path, filename));
+  }
+
   /// Ensures the gateway-routed workflow API is reachable before UI actions.
   Future<bool> _ensureAutomationRuntimeReady() async {
     await _ensureInitialized();
@@ -850,7 +1374,11 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
     }
     try {
       _throwIfClosing();
-      localProcessStatuses = await localServices.startRequiredServices(profile);
+      localProcessStatuses = await _startRequiredRuntimeServices(
+        profile,
+        includeHarness: profile.workflow.hostedByHarness,
+        includeMcpServers: false,
+      );
       final failures = localProcessStatuses
           .where(
             (status) =>
@@ -883,25 +1411,355 @@ String _workflowBaseUrl(String gatewayBaseUrl) {
   return uri.replace(path: '/api/workflows', query: null).toString();
 }
 
+/// Returns a draft copy with updated validation metadata.
+AutomationDraft _automationDraftWithValidation(
+  AutomationDraft draft,
+  Map<String, dynamic> validation,
+) {
+  return AutomationDraft(
+    id: draft.id,
+    kind: draft.kind,
+    name: draft.name,
+    description: draft.description,
+    status: draft.status,
+    body: draft.body,
+    validation: validation,
+    createdAt: draft.createdAt,
+    updatedAt: draft.updatedAt,
+  );
+}
+
+/// Encodes a validation result for draft card badges.
+Map<String, dynamic> _validationResultMap(AutomationValidationResult result) {
+  return <String, dynamic>{
+    'valid': result.valid,
+    'publishable': result.publishable,
+    'diagnostics': <Map<String, dynamic>>[
+      for (final diagnostic in result.diagnostics)
+        <String, dynamic>{
+          'severity': diagnostic.severity,
+          'path': diagnostic.path,
+          'message': diagnostic.message,
+        },
+    ],
+    if (result.definition.isNotEmpty) 'definition': result.definition,
+  };
+}
+
+/// Converts editable workflow drafts into operation-selectable definitions.
+List<AutomationDefinition> _automationDefinitionsFromDrafts(
+  List<AutomationDraft> drafts,
+) {
+  final definitions = <AutomationDefinition>[];
+  final seenIds = <String>{};
+  for (final draft in drafts) {
+    final definition = _automationDefinitionFromDraft(draft);
+    if (definition == null || !seenIds.add(definition.id)) {
+      continue;
+    }
+    definitions.add(definition);
+  }
+  return definitions;
+}
+
+/// Converts one local workflow draft into a runnable definition snapshot.
+AutomationDefinition? _automationDefinitionFromDraft(AutomationDraft draft) {
+  if (!_isWorkflowDefinitionDraft(draft)) {
+    return null;
+  }
+  final fallbackId = _automationDefinitionIdFromDraft(draft);
+  if (fallbackId.isEmpty) {
+    return null;
+  }
+  final body = _normalizedWorkflowBody(
+    draft.body,
+    fallbackId: fallbackId,
+    fallbackName: draft.name,
+  );
+  final definitionId = _workflowBodyId(body, '$fallbackId.yaml');
+  return AutomationDefinition(
+    id: definitionId,
+    kind: _stringFromWorkflowBody(body, 'kind').isEmpty
+        ? automationWorkflowKind
+        : _stringFromWorkflowBody(body, 'kind'),
+    name: _workflowBodyName(body, definitionId),
+    hash: _localAutomationDefinitionHash(draft),
+    body: body,
+    updatedAt: draft.updatedAt,
+  );
+}
+
+/// Returns a workflow definition id for the selected draft id.
+String _definitionIdForDraftId(List<AutomationDraft> drafts, String draftId) {
+  for (final draft in drafts) {
+    if (draft.id == draftId) {
+      return _automationDefinitionIdFromDraft(draft);
+    }
+  }
+  return '';
+}
+
+/// Returns the workflow definition id represented by one draft.
+String _automationDefinitionIdFromDraft(AutomationDraft draft) {
+  final bodyId = _automationDraftDefinitionId(draft);
+  return bodyId.isEmpty ? _definitionIdFromDraftId(draft.id) : bodyId;
+}
+
+/// Reports whether a draft can appear as a workflow file in Operations.
+bool _isWorkflowDefinitionDraft(AutomationDraft draft) {
+  final kind = draft.kind.trim();
+  return kind == automationWorkflowKind || kind == 'state_machine';
+}
+
+/// Returns a stable local hash placeholder for a file-backed definition.
+String _localAutomationDefinitionHash(AutomationDraft draft) {
+  final updatedAt = draft.updatedAt.trim();
+  return updatedAt.isEmpty ? 'local:${draft.id}' : 'local:$updatedAt';
+}
+
+/// Returns a draft copy with user-editable workflow metadata changed.
+AutomationDraft _automationDraftWithMetadata(
+  AutomationDraft draft, {
+  required String name,
+  required String description,
+}) {
+  final trimmedName = name.trim();
+  final body = _normalizedWorkflowBody(
+    <String, dynamic>{...draft.body},
+    fallbackId: _automationDefinitionIdFromDraft(draft),
+    fallbackName: draft.name,
+  );
+  if (trimmedName.isNotEmpty) {
+    body['name'] = trimmedName;
+  }
+  body['description'] = description.trim();
+  return AutomationDraft(
+    id: draft.id,
+    kind: draft.kind,
+    name: trimmedName.isEmpty ? draft.name : trimmedName,
+    description: description.trim(),
+    status: draft.status,
+    body: body,
+    validation: draft.validation,
+    createdAt: draft.createdAt,
+    updatedAt: draft.updatedAt,
+  );
+}
+
+/// Decodes one workflow YAML document into a mutable map.
+Map<String, dynamic>? _workflowBodyFromYaml(String content) {
+  final decoded = plainYamlValue(loadYaml(content));
+  if (decoded is! Map) {
+    return null;
+  }
+  return _stringKeyedMap(decoded);
+}
+
+/// Creates a minimal state-machine workflow definition.
+Map<String, dynamic> _blankWorkflowBody(String definitionId, String name) {
+  final displayName = name.trim().isEmpty ? definitionId : name.trim();
+  return <String, dynamic>{
+    'apiVersion': automationWorkflowApiVersion,
+    'kind': 'state_machine',
+    'id': definitionId,
+    'name': displayName,
+    'description': '',
+    'initial': 'start',
+    'states': <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'start'},
+    ],
+  };
+}
+
+/// Returns a workflow body with required state-machine fields populated.
+Map<String, dynamic> _normalizedWorkflowBody(
+  Map<String, dynamic> body, {
+  required String fallbackId,
+  required String fallbackName,
+}) {
+  final normalized = _jsonCompatibleMap(body);
+  final definitionId = _stringFromWorkflowBody(normalized, 'id').isEmpty
+      ? fallbackId
+      : _stringFromWorkflowBody(normalized, 'id');
+  final name = _stringFromWorkflowBody(normalized, 'name').isEmpty
+      ? fallbackName
+      : _stringFromWorkflowBody(normalized, 'name');
+  normalized['apiVersion'] =
+      _stringFromWorkflowBody(normalized, 'apiVersion').isEmpty
+      ? automationWorkflowApiVersion
+      : normalized['apiVersion'];
+  normalized['kind'] = 'state_machine';
+  normalized['id'] = definitionId.trim().isEmpty
+      ? _safeWorkflowDefinitionId(name)
+      : definitionId;
+  normalized['name'] = name.trim().isEmpty ? normalized['id'] : name;
+  normalized.putIfAbsent('description', () => '');
+  final states = normalized['states'];
+  if (states is! List || states.isEmpty) {
+    normalized['initial'] = 'start';
+    normalized['states'] = <Map<String, dynamic>>[
+      <String, dynamic>{'id': 'start'},
+    ];
+  } else if (_stringFromWorkflowBody(normalized, 'initial').isEmpty) {
+    final first = states.first;
+    if (first is Map) {
+      normalized['initial'] = '${first['id'] ?? 'start'}'.trim();
+    } else {
+      normalized['initial'] = 'start';
+    }
+  }
+  return normalized;
+}
+
+/// Converts nested YAML values into JSON-compatible maps and lists.
+Map<String, dynamic> _jsonCompatibleMap(Map<String, dynamic> values) {
+  return <String, dynamic>{
+    for (final entry in values.entries)
+      entry.key: _jsonCompatibleValue(entry.value),
+  };
+}
+
+/// Converts one nested YAML value into JSON-compatible data.
+dynamic _jsonCompatibleValue(dynamic value) {
+  if (value is Map) {
+    return _stringKeyedMap(value);
+  }
+  if (value is List) {
+    return value.map(_jsonCompatibleValue).toList();
+  }
+  return value;
+}
+
+/// Converts any map with string-like keys into a JSON-compatible map.
+Map<String, dynamic> _stringKeyedMap(Map<dynamic, dynamic> values) {
+  return <String, dynamic>{
+    for (final entry in values.entries)
+      '${entry.key}': _jsonCompatibleValue(entry.value),
+  };
+}
+
+/// Returns the workflow definition id from body or filename fallback.
+String _workflowBodyId(Map<String, dynamic> body, String path) {
+  final id = _stringFromWorkflowBody(body, 'id');
+  if (id.isNotEmpty) {
+    return id;
+  }
+  final filename = path.replaceAll('\\', '/').split('/').last;
+  final dot = filename.lastIndexOf('.');
+  final stem = dot <= 0 ? filename : filename.substring(0, dot);
+  return _safeWorkflowDefinitionId(stem);
+}
+
+/// Returns the workflow display name from body or id fallback.
+String _workflowBodyName(Map<String, dynamic> body, String definitionId) {
+  final name = _stringFromWorkflowBody(body, 'name');
+  if (name.isNotEmpty) {
+    return name;
+  }
+  return definitionId
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
+}
+
+/// Reads a trimmed string from a workflow body map.
+String _stringFromWorkflowBody(Map<String, dynamic> body, String key) {
+  final value = body[key];
+  return value == null ? '' : '$value'.trim();
+}
+
+/// Creates a stable draft id for one local workflow definition id.
+String _draftIdFromDefinitionId(String definitionId) {
+  return 'draft_${_safeWorkflowDefinitionId(definitionId)}';
+}
+
+/// Returns a definition id from a draft id fallback.
+String _definitionIdFromDraftId(String draftId) {
+  final trimmed = draftId.trim();
+  if (trimmed.startsWith('draft_') && trimmed.length > 'draft_'.length) {
+    return trimmed.substring('draft_'.length);
+  }
+  return _safeWorkflowDefinitionId(trimmed);
+}
+
+/// Reports whether a filesystem path is a workflow YAML file.
+bool _isWorkflowYamlPath(String path) {
+  final lower = path.toLowerCase();
+  return lower.endsWith('.yaml') || lower.endsWith('.yml');
+}
+
+/// Returns a filesystem-safe workflow filename stem.
+String _safeWorkflowFileStem(String name) {
+  final safe = name
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
+  return safe.isEmpty ? 'workflow' : safe;
+}
+
+/// Returns a workflow definition id made of stable lowercase tokens.
+String _safeWorkflowDefinitionId(String value) {
+  final safe = value
+      .trim()
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+      .replaceAll(RegExp(r'_+'), '_')
+      .replaceAll(RegExp(r'^_+|_+$'), '');
+  return safe.isEmpty ? 'workflow' : safe;
+}
+
+/// Returns a non-conflicting workflow definition id in one directory.
+Future<String> _uniqueWorkflowDefinitionId(
+  Directory directory,
+  String baseId,
+) async {
+  final existing = <String>{};
+  if (await directory.exists()) {
+    await for (final entity in directory.list(followLinks: false)) {
+      if (entity is! File || !_isWorkflowYamlPath(entity.path)) {
+        continue;
+      }
+      final body = _workflowBodyFromYaml(await entity.readAsString());
+      if (body != null) {
+        existing.add(_workflowBodyId(body, entity.path));
+      }
+    }
+  }
+  var candidate = _safeWorkflowDefinitionId(baseId);
+  var suffix = 2;
+  while (existing.contains(candidate)) {
+    candidate = '${_safeWorkflowDefinitionId(baseId)}_$suffix';
+    suffix++;
+  }
+  return candidate;
+}
+
+/// Returns a non-conflicting path in one workflow authoring directory.
+Future<String> _uniqueWorkflowPath(String directory, String filename) async {
+  final dot = filename.lastIndexOf('.');
+  final base = dot <= 0 ? filename : filename.substring(0, dot);
+  final extension = dot <= 0 ? '.yaml' : filename.substring(dot);
+  var candidate = '$directory/$filename';
+  var suffix = 2;
+  while (await File(candidate).exists()) {
+    candidate = '$directory/$base-$suffix$extension';
+    suffix++;
+  }
+  return candidate;
+}
+
 /// Creates a detached JSON-compatible copy of a draft body.
 Map<String, dynamic> _jsonMapCopy(Map<String, dynamic> value) {
   return jsonDecode(jsonEncode(value)) as Map<String, dynamic>;
 }
 
-/// Appends one executable action node to a workflow graph draft body.
-void _appendWorkflowGraphNode(
-  Map<String, dynamic> body,
-  String actionName, [
-  Map<String, dynamic>? args,
-]) {
-  final nodes = _editableList(body, 'nodes');
-  final id = _nextAutomationStepId(nodes, actionName);
-  nodes.add(<String, dynamic>{
-    'id': id,
-    'uses': actionName,
-    'with': args ?? _defaultAutomationActionArgs(actionName),
-  });
-  body['nodes'] = nodes;
+/// Returns the published definition id represented by one authoring draft.
+String _automationDraftDefinitionId(AutomationDraft draft) {
+  return '${draft.body['id'] ?? ''}'.trim();
 }
 
 /// Appends one executable entry action to a state-machine draft body.

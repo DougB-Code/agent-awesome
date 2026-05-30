@@ -236,13 +236,6 @@ class _ShutdownOverlay extends StatelessWidget {
             color: colors.surface,
             border: Border.all(color: colors.border),
             borderRadius: BorderRadius.circular(8),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x33000000),
-                blurRadius: 24,
-                offset: Offset(0, 14),
-              ),
-            ],
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minWidth: 340, maxWidth: 460),

@@ -11,7 +11,7 @@ List<_ChatRuntimeSummary> _chatRuntimeSummaries(
   ];
 }
 
-/// Returns model summaries for every model available to the active profile.
+/// Returns model summaries for every model available to the selected agent.
 List<_ChatRuntimeSummary> _chatModelRuntimeSummaries(
   AgentAwesomeAppController controller,
 ) {
@@ -76,7 +76,7 @@ ModelConfigChoice? _chatModelChoiceByRef(
   return null;
 }
 
-/// Returns memory sources granted to the active runtime profile.
+/// Returns memory sources granted to the selected memory routing.
 List<_ChatRuntimeSummary> _chatMemoryRuntimeSummaries(
   AgentAwesomeAppController controller,
 ) {
@@ -108,7 +108,7 @@ _ChatRuntimeSummary _chatMemoryRuntimeSummary(
   );
 }
 
-/// Returns active memory servers in profile grant order.
+/// Returns active memory servers in configured grant order.
 List<McpServerRuntime> _activeMemoryServers(
   AgentAwesomeAppController controller,
 ) {
@@ -144,7 +144,7 @@ List<String> _orderedMemoryGrantIds(AgentMemoryRuntime agentMemory) {
   return ids;
 }
 
-/// Returns the profile access grants shown on a memory runtime card.
+/// Returns access grants shown on a memory runtime card.
 String _memoryRuntimeAccessLabel(
   AgentAwesomeAppController controller,
   McpServerRuntime? memoryServer,
@@ -169,7 +169,7 @@ _ChatRuntimeSummary _chatSessionRuntimeSummary(
   AgentAwesomeAppController controller,
 ) {
   final profile = controller.runtimeProfile;
-  final label = profile?.label ?? 'No profile selected';
+  final label = controller.activeAgentLabel;
   final serviceLabel = profile?.gateway.label ?? '';
   final endpoint = _statusNamed(controller.endpointStatuses, 'Agent API');
   final process = _statusNamed(controller.localProcessStatuses, serviceLabel);
@@ -178,7 +178,7 @@ _ChatRuntimeSummary _chatSessionRuntimeSummary(
       ? endpoint!.message
       : process?.message ?? '';
   return _ChatRuntimeSummary(
-    title: 'Profile',
+    title: 'Agent',
     detail: label,
     state: state,
     icon: Icons.forum_outlined,

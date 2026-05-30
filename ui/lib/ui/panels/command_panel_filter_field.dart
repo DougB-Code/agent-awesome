@@ -7,11 +7,13 @@ class _CommandSubShellFilterField extends StatelessWidget {
     required this.controller,
     required this.hintText,
     required this.onChanged,
+    this.highlighted = true,
   });
 
   final TextEditingController controller;
   final String hintText;
   final ValueChanged<String> onChanged;
+  final bool highlighted;
 
   /// Builds the local command-area filter.
   @override
@@ -33,19 +35,28 @@ class _CommandSubShellFilterField extends StatelessWidget {
             horizontal: 12,
             vertical: 10,
           ),
-          filled: true,
-          fillColor: colors.surface,
+          filled: highlighted,
+          fillColor: highlighted ? colors.field : Colors.transparent,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: colors.border),
+            borderSide: BorderSide(
+              color: colors.border,
+              width: AgentAwesomeStrokeTokens.borderWidth,
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: colors.border),
+            borderSide: BorderSide(
+              color: colors.border,
+              width: AgentAwesomeStrokeTokens.borderWidth,
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(color: colors.searchBorder),
+            borderSide: BorderSide(
+              color: highlighted ? colors.searchBorder : colors.border,
+              width: AgentAwesomeStrokeTokens.borderWidth,
+            ),
           ),
         ),
       ),

@@ -22,7 +22,7 @@ import (
 const (
 	draftStatusDraft      = "draft"
 	draftStatusPublished  = "published"
-	draftKindWorkflow     = definition.KindWorkflow
+	draftKindWorkflow     = "workflow"
 	draftKindStateMachine = definition.KindStateMachine
 )
 
@@ -178,7 +178,67 @@ func (s *Service) UpdateDraft(ctx context.Context, id string, req DraftRequest) 
 
 // DeleteDraft removes one editable workflow draft.
 func (s *Service) DeleteDraft(ctx context.Context, id string) error {
-	return s.store.DeleteDraft(ctx, strings.TrimSpace(id))
+	draftID := strings.TrimSpace(id)
+	if draftID == "" {
+		return fmt.Errorf("workflow draft id is required")
+	}
+	if _, err := s.store.GetDraft(ctx, draftID); err != nil {
+		return err
+	}
+	published, ok, err := s.store.GetPublishedDefinitionByDraftID(ctx, draftID)
+	if err != nil {
+		return err
+	}
+	if ok {
+		if err := s.deletePublishedDefinitionFile(published.Path); err != nil {
+			return err
+		}
+	}
+	if err := s.store.DeleteDraft(ctx, draftID); err != nil {
+		return err
+	}
+	if ok {
+		if err := s.store.DeletePublishedDefinition(ctx, published.DefinitionID); err != nil {
+			return err
+		}
+		return s.ReloadDefinitions(ctx)
+	}
+	return nil
+}
+
+// deletePublishedDefinitionFile removes a workflow YAML file inside DefinitionsDir.
+func (s *Service) deletePublishedDefinitionFile(path string) error {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return nil
+	}
+	extension := strings.ToLower(filepath.Ext(trimmed))
+	if extension != ".yaml" && extension != ".yml" {
+		return fmt.Errorf("refusing to delete non-workflow definition file %q", trimmed)
+	}
+	configuredDir := strings.TrimSpace(s.cfg.DefinitionsDir)
+	if configuredDir == "" {
+		return fmt.Errorf("workflow definitions directory is required")
+	}
+	definitionsDir, err := filepath.Abs(configuredDir)
+	if err != nil {
+		return fmt.Errorf("resolve workflow definitions directory: %w", err)
+	}
+	targetPath, err := filepath.Abs(trimmed)
+	if err != nil {
+		return fmt.Errorf("resolve workflow definition path: %w", err)
+	}
+	relative, err := filepath.Rel(definitionsDir, targetPath)
+	if err != nil {
+		return fmt.Errorf("compare workflow definition path: %w", err)
+	}
+	if relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) || filepath.IsAbs(relative) {
+		return fmt.Errorf("refusing to delete workflow definition outside definitions directory")
+	}
+	if err := os.Remove(targetPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("delete workflow definition file %q: %w", targetPath, err)
+	}
+	return nil
 }
 
 // ValidateDraft checks whether a draft can be compiled and published.
@@ -287,21 +347,21 @@ func (s *Service) draftRecordFromRequest(req DraftRequest, create bool) (store.D
 	}
 	kind := strings.TrimSpace(req.Kind)
 	if kind == "" {
-		kind = stringFromMap(req.Body, "kind", draftKindWorkflow)
+		kind = draftKindWorkflow
 	}
-	if kind != draftKindWorkflow && kind != draftKindStateMachine {
-		return store.DraftRecord{}, fmt.Errorf("draft kind must be %q or %q", draftKindWorkflow, draftKindStateMachine)
+	if kind != draftKindWorkflow {
+		return store.DraftRecord{}, fmt.Errorf("draft kind must be %q", draftKindWorkflow)
 	}
 	body := cloneMap(req.Body)
 	if len(body) == 0 {
-		body = blankDefinitionBody(id, kind, req.Name, req.Description)
+		body = blankDefinitionBody(id, req.Name, req.Description)
 	}
 	bodyKind := strings.TrimSpace(stringFromMap(body, "kind", ""))
 	if bodyKind == "" {
-		bodyKind = kind
+		bodyKind = draftKindStateMachine
 	}
-	if bodyKind != draftKindWorkflow && bodyKind != draftKindStateMachine {
-		return store.DraftRecord{}, fmt.Errorf("draft body kind must be %q or %q", draftKindWorkflow, draftKindStateMachine)
+	if bodyKind != draftKindStateMachine {
+		return store.DraftRecord{}, fmt.Errorf("draft body kind must be %q", draftKindStateMachine)
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
@@ -381,7 +441,7 @@ func definitionFromDraft(draft store.DraftRecord) (definition.Definition, error)
 		def.ID = definitionIDFromDraftID(draft.ID)
 	}
 	if strings.TrimSpace(def.Kind) == "" {
-		def.Kind = draftKindWorkflow
+		def.Kind = draftKindStateMachine
 	}
 	if strings.TrimSpace(def.Name) == "" {
 		def.Name = draft.Name
@@ -393,44 +453,30 @@ func definitionFromDraft(draft store.DraftRecord) (definition.Definition, error)
 	return def, nil
 }
 
-// blankDefinitionBody returns a minimal editable definition body.
-func blankDefinitionBody(id string, kind string, name string, description string) map[string]any {
+// blankDefinitionBody returns a minimal editable state-machine definition body.
+func blankDefinitionBody(id string, name string, description string) map[string]any {
 	definitionID := definitionIDFromDraftID(id)
 	if strings.TrimSpace(name) == "" {
 		name = definitionID
 	}
 	body := map[string]any{
-		"kind":        kind,
+		"kind":        draftKindStateMachine,
 		"id":          definitionID,
 		"name":        name,
 		"description": strings.TrimSpace(description),
 	}
 	body["apiVersion"] = "aa.workflow/v1"
-	if kind == draftKindStateMachine {
-		body["initial"] = "start"
-		body["states"] = []any{
-			map[string]any{"id": "start"},
-		}
-		return body
-	}
-	body["nodes"] = []any{
-		map[string]any{
-			"id":   "tool_task",
-			"type": "tool",
-			"tool": "",
-			"with": map[string]any{
-				"arguments": map[string]any{},
-			},
-		},
+	body["initial"] = "start"
+	body["states"] = []any{
+		map[string]any{"id": "start"},
 	}
 	return body
 }
 
 // draftKindForDefinitionKind maps runtime definitions into authoring sections.
 func draftKindForDefinitionKind(kind string) string {
-	trimmed := strings.TrimSpace(kind)
-	if trimmed == draftKindStateMachine {
+	if strings.TrimSpace(kind) == draftKindStateMachine {
 		return draftKindWorkflow
 	}
-	return trimmed
+	return ""
 }

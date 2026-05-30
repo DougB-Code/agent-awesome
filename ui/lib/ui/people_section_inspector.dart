@@ -31,7 +31,11 @@ class _ContactInspectorContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = contact;
     if (selected == null) {
-      return const PanelEmptyBlock(label: 'No contacts indexed yet');
+      return const PanelEmptyBody(
+        icon: Icons.people_alt_outlined,
+        label: 'No contacts indexed yet',
+        message: 'Add or select a contact to inspect contexts and activity.',
+      );
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),

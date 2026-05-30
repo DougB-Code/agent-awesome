@@ -138,6 +138,9 @@ class _HorizonBucket extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: bucket.id == 'today' ? colors.greenSoft : colors.surface,
+          gradient: bucket.id == 'today'
+              ? context.agentAwesomeSelectedGradient
+              : context.agentAwesomeControlGradient,
           border: Border.all(
             color: bucket.id == 'today' ? colors.green : colors.border,
           ),

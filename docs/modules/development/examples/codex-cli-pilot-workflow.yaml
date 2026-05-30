@@ -1,6 +1,6 @@
 id: codex_cli_pilot
 name: Codex CLI Pilot
-description: Plan, implement, test, review, clean up, commit, push, and open a PR through generic pipe nodes.
+description: Plan, implement, test, review, clean up, commit, push, and open a PR through generic state-machine actions.
 category: source_control
 tags:
   - codex
@@ -25,117 +25,113 @@ requirements:
     - commit_message
 body:
   apiVersion: aa.workflow/v1
-  kind: workflow
+  kind: state_machine
   id: codex_cli_pilot
   name: Codex CLI Pilot
   description: Generic Codex CLI pilot workflow.
-  nodes:
+  initial: assert_request
+  states:
     - id: assert_request
-      type: assert
-      with:
-        checks:
-          - path: body.value.repository_path
-            mode: exists
-          - path: body.value.worktree_path
-            mode: exists
-          - path: body.value.branch
-            mode: exists
-          - path: body.value.base_ref
-            mode: exists
-          - path: body.value.commit_message
-            mode: exists
+      on_entry:
+        - id: assert_request
+          type: assert
+          with:
+            checks:
+              - path: workflow_input.repository_path
+                mode: exists
+              - path: workflow_input.worktree_path
+                mode: exists
+              - path: workflow_input.branch
+                mode: exists
+              - path: workflow_input.base_ref
+                mode: exists
+              - path: workflow_input.commit_message
+                mode: exists
+      transitions:
+        - trigger: succeeded
+          to: prepare
     - id: prepare
-      type: mcp
-      tool: sourcecontrol.prepare_worktree
-      with:
-        endpoint: "{{sourcecontrol_mcp_endpoint}}"
-        arguments:
-          repository_path: "${body.value.repository_path}"
-          worktree_path: "${body.value.worktree_path}"
-          branch: "${body.value.branch}"
-          base_ref: "${body.value.base_ref}"
+      on_entry:
+        - id: prepare
+          type: mcp
+          tool: sourcecontrol.prepare_worktree
+          with:
+            endpoint: "{{sourcecontrol_mcp_endpoint}}"
+            arguments:
+              repository_path: "${workflow_input.repository_path}"
+              worktree_path: "${workflow_input.worktree_path}"
+              branch: "${workflow_input.branch}"
+              base_ref: "${workflow_input.base_ref}"
+      transitions:
+        - trigger: succeeded
+          to: plan
     - id: plan
-      type: command
-      tool: codex_plan
-      with:
-        cwd: "${body.value.worktree_path}"
+      on_entry:
+        - id: plan
+          type: command
+          tool: codex_plan
+          with:
+            cwd: "${workflow_input.worktree_path}"
+      transitions:
+        - trigger: succeeded
+          to: assert_plan
     - id: assert_plan
-      type: assert
-      with:
-        checks:
-          - path: body.value.output.plan.compliant
-            mode: equals
-            value: true
-          - path: body.value.output.plan.project_conventions
-            mode: equals
-            value: true
-          - path: body.value.output.plan.solid
-            mode: equals
-            value: true
-          - path: body.value.output.plan.agents
-            mode: equals
-            value: true
-          - path: body.value.output.plan.relevant_skills
-            mode: equals
-            value: true
-          - path: body.value.output.plan.no_unnecessary_backwards_compatibility
-            mode: equals
-            value: true
-          - path: body.value.output.plan.no_duplicate_implementations
-            mode: equals
-            value: true
-          - path: body.value.output.plan.no_hardcoded_values
-            mode: equals
-            value: true
+      on_entry:
+        - id: assert_plan
+          type: assert
+          with:
+            checks:
+              - path: plan.output.plan.compliant
+                mode: equals
+                value: true
+              - path: plan.output.plan.project_conventions
+                mode: equals
+                value: true
+              - path: plan.output.plan.solid
+                mode: equals
+                value: true
+              - path: plan.output.plan.agents
+                mode: equals
+                value: true
+              - path: plan.output.plan.relevant_skills
+                mode: equals
+                value: true
+              - path: plan.output.plan.no_unnecessary_backwards_compatibility
+                mode: equals
+                value: true
+              - path: plan.output.plan.no_duplicate_implementations
+                mode: equals
+                value: true
+              - path: plan.output.plan.no_hardcoded_values
+                mode: equals
+                value: true
+      transitions:
+        - trigger: succeeded
+          to: implement
     - id: implement
-      type: command
-      tool: codex_implement
-      with:
-        cwd: "${body.value.worktree_path}"
+      on_entry:
+        - id: implement
+          type: command
+          tool: codex_implement
+          with:
+            cwd: "${workflow_input.worktree_path}"
+      transitions:
+        - trigger: succeeded
+          to: test
     - id: test
-      type: command
-      tool: test
-      with:
-        cwd: "${body.value.worktree_path}"
+      on_entry:
+        - id: test
+          type: command
+          tool: test
+          with:
+            cwd: "${workflow_input.worktree_path}"
+      transitions:
+        - trigger: succeeded
+          to: review
     - id: review
-      type: command
-      tool: codex_review
-      with:
-        cwd: "${body.value.worktree_path}"
-  edges:
-    - from:
-        node: assert_request
-      to:
-        node: prepare
-      adapter:
-        kind: direct
-    - from:
-        node: prepare
-      to:
-        node: plan
-      adapter:
-        kind: direct
-    - from:
-        node: plan
-      to:
-        node: assert_plan
-      adapter:
-        kind: direct
-    - from:
-        node: assert_plan
-      to:
-        node: implement
-      adapter:
-        kind: direct
-    - from:
-        node: implement
-      to:
-        node: test
-      adapter:
-        kind: direct
-    - from:
-        node: test
-      to:
-        node: review
-      adapter:
-        kind: direct
+      on_entry:
+        - id: review
+          type: command
+          tool: codex_review
+          with:
+            cwd: "${workflow_input.worktree_path}"

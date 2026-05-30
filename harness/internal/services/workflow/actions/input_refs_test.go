@@ -17,3 +17,11 @@ func TestResolveInputRefsReplacesNestedValues(t *testing.T) {
 		t.Fatalf("resolved = %#v, want substituted values", values)
 	}
 }
+
+// TestUnresolvedInputRefPathsFindsRemainingTokens verifies unresolved refs can be reported clearly.
+func TestUnresolvedInputRefPathsFindsRemainingTokens(t *testing.T) {
+	paths := unresolvedInputRefPaths("/work/${workflow_input.workdir}/${missing}")
+	if len(paths) != 2 || paths[0] != "workflow_input.workdir" || paths[1] != "missing" {
+		t.Fatalf("paths = %#v, want unresolved reference paths", paths)
+	}
+}

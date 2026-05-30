@@ -19,13 +19,6 @@ class _HeroPanel extends StatelessWidget {
         color: colors.surface,
         border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: colors.shadow,
-            blurRadius: 38,
-            offset: Offset(0, 20),
-          ),
-        ],
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,

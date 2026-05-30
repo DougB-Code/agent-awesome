@@ -23,9 +23,8 @@ func TestCodebaseCatalogRoundTrip(t *testing.T) {
 		DefaultBranch:      "main",
 		Provider:           "github",
 		ProviderRepository: "github.com/doug/agentawesome.git",
-		GoModulePath:       "harness",
 		RuntimeTargetID:    "this_computer",
-		AgentProfileID:     "codex",
+		AgentProfileID:     "automation_agent",
 	}})
 	if err != nil {
 		t.Fatalf("UpsertCodebase() error = %v", err)

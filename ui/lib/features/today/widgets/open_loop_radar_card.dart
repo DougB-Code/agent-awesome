@@ -64,17 +64,6 @@ class OpenLoopRadarCard extends StatelessWidget {
               style: TextStyle(color: colors.muted, fontSize: 12),
             ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: <Widget>[
-              Icon(Icons.schedule, size: 14, color: colors.muted),
-              const SizedBox(width: 6),
-              Text(
-                'Updated just now',
-                style: TextStyle(color: colors.muted, fontSize: 12),
-              ),
-            ],
-          ),
         ],
       ),
     );

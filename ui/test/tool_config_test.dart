@@ -145,6 +145,7 @@ validations:
     expect(names, <String>[
       'curl',
       'jq',
+      'yq',
       'rg',
       'find',
       'grep',
@@ -332,7 +333,7 @@ validations:
           endpoint: 'http://127.0.0.1:8090/mcp',
           healthUrl: 'http://127.0.0.1:8090/healthz',
           workingDirectory: '/tmp/memory',
-          packagePath: './cmd/memoryd',
+          executablePath: '/tmp/bin/memoryd',
           dbPath: '/tmp/memory.db',
           dataDir: '/tmp/memory-files',
           arguments: <String>[],
@@ -388,7 +389,7 @@ validations:
           endpoint: 'http://127.0.0.1:8090/mcp',
           healthUrl: 'http://127.0.0.1:8090/healthz',
           workingDirectory: '/tmp/memory',
-          packagePath: './cmd/memoryd',
+          executablePath: '/tmp/bin/memoryd',
           dbPath: '/tmp/memory.db',
           dataDir: '/tmp/memory-files',
           arguments: <String>[],
@@ -409,7 +410,7 @@ validations:
         apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
         healthUrl: 'http://127.0.0.1:8092/healthz',
         workingDirectory: '/tmp/workflow',
-        packagePath: './cmd/workflow-service',
+        executablePath: '/tmp/bin/workflow-service',
         definitionsDir: '/tmp/workflows',
         dbPath: '/tmp/workflow.db',
         port: 8092,
@@ -426,56 +427,59 @@ validations:
     expect(workflowServer.tools.allow, workflowMcpToolNames);
   });
 
-  test('adds generic source-control MCP server from runtime profile', () {
-    final document = graphBackedMemoryToolConfigForDomains(
-      memoryDomains: const <McpServerRuntime>[
-        McpServerRuntime(
-          id: 'memory',
-          label: 'Memory',
-          kind: 'memory',
-          endpoint: 'http://127.0.0.1:8090/mcp',
-          healthUrl: 'http://127.0.0.1:8090/healthz',
-          workingDirectory: '/tmp/memory',
-          packagePath: './cmd/memoryd',
-          dbPath: '/tmp/memory.db',
-          dataDir: '/tmp/memory-files',
-          arguments: <String>[],
-          autoStart: false,
-          enabled: true,
+  test(
+    'adds generic source-control MCP server from agent runtime topology',
+    () {
+      final document = graphBackedMemoryToolConfigForDomains(
+        memoryDomains: const <McpServerRuntime>[
+          McpServerRuntime(
+            id: 'memory',
+            label: 'Memory',
+            kind: 'memory',
+            endpoint: 'http://127.0.0.1:8090/mcp',
+            healthUrl: 'http://127.0.0.1:8090/healthz',
+            workingDirectory: '/tmp/memory',
+            executablePath: '/tmp/bin/memoryd',
+            dbPath: '/tmp/memory.db',
+            dataDir: '/tmp/memory-files',
+            arguments: <String>[],
+            autoStart: false,
+            enabled: true,
+          ),
+        ],
+        mcpServers: const <McpServerRuntime>[
+          McpServerRuntime(
+            id: 'sourcecontrol',
+            label: 'Source Control',
+            kind: 'sourcecontrol',
+            endpoint: 'http://127.0.0.1:8095/mcp',
+            healthUrl: 'http://127.0.0.1:8095/healthz',
+            workingDirectory: '/tmp/sourcecontrol',
+            executablePath: '/tmp/bin/sourcecontrold',
+            dbPath: '',
+            dataDir: '',
+            arguments: <String>[],
+            autoStart: false,
+            enabled: true,
+          ),
+        ],
+        agentMemory: const AgentMemoryRuntime(
+          actor: 'agent:test',
+          readDomains: <String>['memory'],
+          writeDomains: <String>['memory'],
+          defaultWriteDomain: 'memory',
+          allowedSensitivities: <String>['public'],
         ),
-      ],
-      mcpServers: const <McpServerRuntime>[
-        McpServerRuntime(
-          id: 'sourcecontrol',
-          label: 'Source Control',
-          kind: 'sourcecontrol',
-          endpoint: 'http://127.0.0.1:8095/mcp',
-          healthUrl: 'http://127.0.0.1:8095/healthz',
-          workingDirectory: '/tmp/sourcecontrol',
-          packagePath: './cmd/sourcecontrold',
-          dbPath: '',
-          dataDir: '',
-          arguments: <String>[],
-          autoStart: false,
-          enabled: true,
-        ),
-      ],
-      agentMemory: const AgentMemoryRuntime(
-        actor: 'agent:test',
-        readDomains: <String>['memory'],
-        writeDomains: <String>['memory'],
-        defaultWriteDomain: 'memory',
-        allowedSensitivities: <String>['public'],
-      ),
-      localExec: emptyToolConfigDocument().localExec,
-    );
+        localExec: emptyToolConfigDocument().localExec,
+      );
 
-    final sourceControl = document.mcp.servers.firstWhere(
-      (server) => server.name == 'sourcecontrol',
-    );
-    expect(sourceControl.endpoint, 'http://127.0.0.1:8095/mcp');
-    expect(sourceControl.tools.allow, sourceControlMcpToolNames);
-  });
+      final sourceControl = document.mcp.servers.firstWhere(
+        (server) => server.name == 'sourcecontrol',
+      );
+      expect(sourceControl.endpoint, 'http://127.0.0.1:8095/mcp');
+      expect(sourceControl.tools.allow, sourceControlMcpToolNames);
+    },
+  );
 
   test('limits model-exposed tools when profile reads multiple domains', () {
     final document = graphBackedMemoryToolConfigForDomains(
@@ -487,7 +491,7 @@ validations:
           endpoint: 'http://127.0.0.1:8090/mcp',
           healthUrl: 'http://127.0.0.1:8090/healthz',
           workingDirectory: '/tmp/memory',
-          packagePath: './cmd/memoryd',
+          executablePath: '/tmp/bin/memoryd',
           dbPath: '/tmp/memory.db',
           dataDir: '/tmp/memory-files',
           arguments: <String>[],
@@ -501,7 +505,7 @@ validations:
           endpoint: 'http://127.0.0.1:8091/mcp',
           healthUrl: 'http://127.0.0.1:8091/healthz',
           workingDirectory: '/tmp/memory',
-          packagePath: './cmd/memoryd',
+          executablePath: '/tmp/bin/memoryd',
           dbPath: '/tmp/shared-project.db',
           dataDir: '/tmp/shared-project-files',
           arguments: <String>[],

@@ -1,159 +1,328 @@
 /// Global command bar chrome button and theme toggle widgets.
 part of 'command_bar.dart';
 
-/// _CommandProfilePicker switches the active runtime profile.
-class _CommandProfilePicker extends StatelessWidget {
-  /// Creates a top-bar runtime profile picker.
-  const _CommandProfilePicker({
-    required this.profiles,
+/// _CommandAgentPicker switches the active agent prompt config.
+class _CommandAgentPicker extends StatelessWidget {
+  /// Creates a top-bar agent picker.
+  const _CommandAgentPicker({
+    required this.agents,
     required this.activePath,
-    required this.defaultPath,
     required this.compact,
     required this.switching,
     required this.size,
     required this.onChanged,
-    required this.onManageProfiles,
+    required this.onManageAgents,
     required this.onOpen,
   });
 
-  static const String _manageProfilesValue = '__manage_profiles__';
+  static const String _manageAgentsValue = '__manage_agents__';
 
-  /// Profiles available in app-owned profile storage.
-  final List<RuntimeProfileFileEntry> profiles;
+  /// Agent configs available in app-owned storage.
+  final List<ConfigFileEntry> agents;
 
-  /// Currently loaded profile path.
+  /// Currently selected agent config path.
   final String activePath;
-
-  /// Profile path used when starting default chats.
-  final String defaultPath;
 
   /// Whether the control should render as an icon-only button.
   final bool compact;
 
-  /// Whether a profile switch is currently in progress.
+  /// Whether an agent switch is currently in progress.
   final bool switching;
 
   /// Control height.
   final double size;
 
-  /// Callback invoked with the selected profile path.
+  /// Callback invoked with the selected agent config path.
   final ValueChanged<String>? onChanged;
 
-  /// Callback invoked when the user opens profile management.
-  final VoidCallback onManageProfiles;
+  /// Callback invoked when the user opens agent management.
+  final VoidCallback onManageAgents;
 
   /// Callback invoked before the picker menu is shown.
   final VoidCallback onOpen;
 
-  /// Builds the profile picker.
+  /// Builds the agent picker.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    final active = _activeProfile();
-    final label = active?.label ?? 'Profile';
-    final enabled = profiles.isNotEmpty && onChanged != null;
+    final active = _activeAgent();
+    final label = active?.label ?? 'Agent';
+    final enabled = agents.isNotEmpty && onChanged != null;
     return PopupMenuButton<String>(
       enabled: enabled,
-      tooltip: 'Active profile',
+      tooltip: 'Active agent',
       offset: Offset(0, size + 8),
       onOpened: onOpen,
       onSelected: (value) {
-        if (value == _manageProfilesValue) {
-          onManageProfiles();
+        if (value == _manageAgentsValue) {
+          onManageAgents();
           return;
         }
         onChanged?.call(value);
       },
       itemBuilder: (context) {
-        if (profiles.isEmpty) {
+        if (agents.isEmpty) {
           return <PopupMenuEntry<String>>[
             PopupMenuItem<String>(
               enabled: false,
               child: Text(
-                'No profiles configured',
+                'No agents configured',
                 style: TextStyle(color: colors.muted),
               ),
             ),
           ];
         }
         return <PopupMenuEntry<String>>[
-          for (final profile in profiles)
+          for (final agent in agents)
             PopupMenuItem<String>(
-              value: profile.path,
-              enabled: profile.path != activePath,
-              child: _CommandProfileMenuItem(
-                profile: profile,
+              value: agent.path,
+              enabled: agent.path != activePath,
+              child: _CommandAgentMenuItem(
+                agent: agent,
                 activePath: activePath,
-                defaultPath: defaultPath,
               ),
             ),
           const PopupMenuDivider(height: 1),
           const PopupMenuItem<String>(
-            value: _manageProfilesValue,
+            value: _manageAgentsValue,
             height: 24,
-            child: _CommandProfileManageItem(),
+            child: _CommandManageItem(),
           ),
         ];
       },
-      child: Container(
-        height: size,
-        width: compact ? size : 178,
-        padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
-        decoration: BoxDecoration(
-          color: colors.surface,
-          gradient: context.agentAwesomeControlGradient,
-          border: Border.all(color: colors.border),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisAlignment: compact
-              ? MainAxisAlignment.center
-              : MainAxisAlignment.spaceBetween,
-          children: <Widget>[
-            Icon(
-              switching ? Icons.sync_outlined : Icons.manage_accounts_outlined,
-              size: 19,
-              color: enabled ? colors.ink : colors.muted,
-            ),
-            if (!compact) ...<Widget>[
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  switching ? 'Switching...' : label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.ink,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 4),
-              Icon(Icons.expand_more, size: 18, color: colors.muted),
-            ],
-          ],
-        ),
+      child: _CommandPickerFrame(
+        key: const ValueKey<String>('command-agent-picker'),
+        size: size,
+        width: 164,
+        compact: compact,
+        enabled: enabled,
+        switching: switching,
+        icon: Icons.psychology_outlined,
+        label: label,
       ),
     );
   }
 
-  RuntimeProfileFileEntry? _activeProfile() {
-    for (final profile in profiles) {
-      if (profile.path == activePath || profile.active) {
-        return profile;
+  /// Returns the currently active agent entry.
+  ConfigFileEntry? _activeAgent() {
+    for (final agent in agents) {
+      if (agent.path == activePath || agent.assigned) {
+        return agent;
       }
     }
-    return profiles.isEmpty ? null : profiles.first;
+    return agents.isEmpty ? null : agents.first;
   }
 }
 
-/// _CommandProfileManageItem renders the compact profile management shortcut.
-class _CommandProfileManageItem extends StatelessWidget {
-  /// Creates the compact profile-management menu row.
-  const _CommandProfileManageItem();
+/// _CommandMemoryPicker switches the active memory domain.
+class _CommandMemoryPicker extends StatelessWidget {
+  /// Creates a top-bar memory picker.
+  const _CommandMemoryPicker({
+    required this.domains,
+    required this.activeId,
+    required this.compact,
+    required this.switching,
+    required this.size,
+    required this.onChanged,
+    required this.onManageMemory,
+    required this.onOpen,
+  });
 
-  /// Builds a half-height manage row for profile settings.
+  static const String _manageMemoryValue = '__manage_memory__';
+
+  /// Memory domains available for reads and writes.
+  final List<McpServerRuntime> domains;
+
+  /// Currently selected memory domain id.
+  final String activeId;
+
+  /// Whether the control should render as an icon-only button.
+  final bool compact;
+
+  /// Whether a memory switch is currently in progress.
+  final bool switching;
+
+  /// Control height.
+  final double size;
+
+  /// Callback invoked with the selected memory domain id.
+  final ValueChanged<String>? onChanged;
+
+  /// Callback invoked when the user opens memory settings.
+  final VoidCallback onManageMemory;
+
+  /// Callback invoked before the picker menu is shown.
+  final VoidCallback onOpen;
+
+  /// Builds the memory picker.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final active = _activeDomain();
+    final label = _domainLabel(active) ?? 'Memory';
+    final enabled = domains.isNotEmpty && onChanged != null;
+    return PopupMenuButton<String>(
+      enabled: enabled,
+      tooltip: 'Active memory',
+      offset: Offset(0, size + 8),
+      onOpened: onOpen,
+      onSelected: (value) {
+        if (value == _manageMemoryValue) {
+          onManageMemory();
+          return;
+        }
+        onChanged?.call(value);
+      },
+      itemBuilder: (context) {
+        if (domains.isEmpty) {
+          return <PopupMenuEntry<String>>[
+            PopupMenuItem<String>(
+              enabled: false,
+              child: Text(
+                'No memory domains configured',
+                style: TextStyle(color: colors.muted),
+              ),
+            ),
+          ];
+        }
+        return <PopupMenuEntry<String>>[
+          for (final domain in domains)
+            PopupMenuItem<String>(
+              value: domain.id,
+              enabled: domain.id != activeId,
+              child: _CommandMemoryMenuItem(domain: domain, activeId: activeId),
+            ),
+          const PopupMenuDivider(height: 1),
+          const PopupMenuItem<String>(
+            value: _manageMemoryValue,
+            height: 24,
+            child: _CommandManageItem(),
+          ),
+        ];
+      },
+      child: _CommandPickerFrame(
+        key: const ValueKey<String>('command-memory-picker'),
+        size: size,
+        width: 150,
+        compact: compact,
+        enabled: enabled,
+        switching: switching,
+        icon: Icons.account_tree_outlined,
+        label: label,
+      ),
+    );
+  }
+
+  /// Returns the currently active memory domain.
+  McpServerRuntime? _activeDomain() {
+    for (final domain in domains) {
+      if (domain.id == activeId) {
+        return domain;
+      }
+    }
+    return domains.isEmpty ? null : domains.first;
+  }
+
+  /// Returns a user-facing memory domain label.
+  String? _domainLabel(McpServerRuntime? domain) {
+    if (domain == null) {
+      return null;
+    }
+    return domain.label.trim().isEmpty ? domain.id : domain.label;
+  }
+}
+
+/// _CommandPickerFrame renders a compact top-bar selector body.
+class _CommandPickerFrame extends StatelessWidget {
+  /// Creates a shared top-bar picker frame.
+  const _CommandPickerFrame({
+    super.key,
+    required this.size,
+    required this.width,
+    required this.compact,
+    required this.enabled,
+    required this.switching,
+    required this.icon,
+    required this.label,
+  });
+
+  /// Control height.
+  final double size;
+
+  /// Expanded control width.
+  final double width;
+
+  /// Whether only the icon should be visible.
+  final bool compact;
+
+  /// Whether the picker can be used.
+  final bool enabled;
+
+  /// Whether an async switch is in progress.
+  final bool switching;
+
+  /// Icon shown for the selected resource.
+  final IconData icon;
+
+  /// Label shown for the selected resource.
+  final String label;
+
+  /// Builds a top-bar selector frame.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Container(
+      height: size,
+      width: compact ? size : width,
+      padding: EdgeInsets.symmetric(horizontal: compact ? 0 : 12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        gradient: context.agentAwesomeControlGradient,
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisAlignment: compact
+            ? MainAxisAlignment.center
+            : MainAxisAlignment.spaceBetween,
+        children: <Widget>[
+          Icon(
+            switching ? Icons.sync_outlined : icon,
+            size: 19,
+            color: enabled ? colors.ink : colors.muted,
+          ),
+          if (!compact) ...<Widget>[
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                switching ? 'Switching...' : label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.ink,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.expand_more, size: 18, color: colors.muted),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// _CommandManageItem renders the compact management shortcut.
+class _CommandManageItem extends StatelessWidget {
+  /// Creates the compact management menu row.
+  const _CommandManageItem();
+
+  /// Builds a half-height manage row for settings.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
@@ -181,42 +350,28 @@ class _CommandProfileManageItem extends StatelessWidget {
   }
 }
 
-/// _CommandProfileMenuItem renders one profile choice with policy context.
-class _CommandProfileMenuItem extends StatelessWidget {
-  /// Creates one profile picker row.
-  const _CommandProfileMenuItem({
-    required this.profile,
-    required this.activePath,
-    required this.defaultPath,
-  });
+/// _CommandAgentMenuItem renders one agent choice.
+class _CommandAgentMenuItem extends StatelessWidget {
+  /// Creates one agent picker row.
+  const _CommandAgentMenuItem({required this.agent, required this.activePath});
 
-  /// Profile represented by this row.
-  final RuntimeProfileFileEntry profile;
+  /// Agent represented by this row.
+  final ConfigFileEntry agent;
 
-  /// Active profile path.
+  /// Active agent path.
   final String activePath;
-
-  /// Default chat profile path.
-  final String defaultPath;
 
   /// Builds the menu row.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    final active = profile.path == activePath || profile.active;
-    final defaultProfile = profile.path == defaultPath;
-    final details = <String>[
-      if (profile.runtimeKind.isNotEmpty) profile.runtimeKind,
-      if (profile.memoryDomainLabels.isNotEmpty)
-        profile.memoryDomainLabels.take(3).join(', '),
-      if (defaultProfile) 'Default',
-    ];
+    final active = agent.path == activePath || agent.assigned;
     return SizedBox(
       width: 280,
       child: Row(
         children: <Widget>[
           Icon(
-            active ? Icons.check_circle_outline : Icons.person_outline,
+            active ? Icons.check_circle_outline : Icons.psychology_outlined,
             color: active ? colors.green : colors.muted,
             size: 20,
           ),
@@ -227,7 +382,7 @@ class _CommandProfileMenuItem extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 Text(
-                  profile.label,
+                  agent.label,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: colors.ink,
@@ -235,7 +390,61 @@ class _CommandProfileMenuItem extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  details.isEmpty ? profile.id : details.join(' • '),
+                  active ? 'Active agent' : agent.fileLabel,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: colors.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _CommandMemoryMenuItem renders one memory-domain choice.
+class _CommandMemoryMenuItem extends StatelessWidget {
+  /// Creates one memory picker row.
+  const _CommandMemoryMenuItem({required this.domain, required this.activeId});
+
+  /// Memory domain represented by this row.
+  final McpServerRuntime domain;
+
+  /// Active memory domain id.
+  final String activeId;
+
+  /// Builds the menu row.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final active = domain.id == activeId;
+    final label = domain.label.trim().isEmpty ? domain.id : domain.label;
+    return SizedBox(
+      width: 280,
+      child: Row(
+        children: <Widget>[
+          Icon(
+            active ? Icons.check_circle_outline : Icons.account_tree_outlined,
+            color: active ? colors.green : colors.muted,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  active ? 'Active memory' : domain.id,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: colors.muted, fontSize: 12),
                 ),
@@ -294,6 +503,7 @@ class _CommandChromeButton extends StatelessWidget {
               color: enabled
                   ? colors.border
                   : colors.border.withValues(alpha: 0.45),
+              width: AgentAwesomeStrokeTokens.borderWidth,
             ),
             borderRadius: BorderRadius.circular(8),
           ),
@@ -344,13 +554,17 @@ class _ThemeBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
         onTap: themeScope?.onToggleTheme,
         child: Container(
+          key: const ValueKey<String>('command-theme-badge'),
           height: 42,
           width: 118,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             color: colors.surface,
             gradient: context.agentAwesomeControlGradient,
-            border: Border.all(color: colors.border),
+            border: Border.all(
+              color: colors.border,
+              width: AgentAwesomeStrokeTokens.borderWidth,
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(

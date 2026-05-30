@@ -98,6 +98,7 @@ class _ChatCommandSubShellState extends State<_ChatCommandSubShell> {
       searchableDetailBuilder: (_, modeId, query) =>
           _buildDetailContent(modeId, query),
       onAreaChanged: widget.onAreaChanged,
+      detailActionsBuilder: _buildDetailActions,
       areaActionsBuilder: (context, area) => PanelIconButton(
         icon: Icons.add_comment_outlined,
         tooltip: 'Start new chat',
@@ -105,6 +106,7 @@ class _ChatCommandSubShellState extends State<_ChatCommandSubShell> {
       ),
       filterHint: 'Filter chats...',
       detailFilterHint: 'Filter selected chat...',
+      highlightFilterFields: false,
       split: const PanelSplit(left: 0.30, min: 0.18, max: 0.48),
     );
   }
@@ -113,6 +115,39 @@ class _ChatCommandSubShellState extends State<_ChatCommandSubShell> {
   void _selectDetailMode(String modeId) {
     setState(() => _detailModeId = modeId);
     widget.onDetailModeChanged?.call(modeId);
+  }
+
+  /// Builds selected-chat actions in the right detail header.
+  Widget? _buildDetailActions(
+    BuildContext context,
+    SwitcherPanelArea area,
+    CommandPanelDetailMode mode,
+  ) {
+    final key = widget.controller.selectedChatKey;
+    final entry = widget.controller.selectedChatEntry;
+    if (key.isEmpty) {
+      return null;
+    }
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        PanelIconButton(
+          icon: Icons.content_copy,
+          tooltip: 'Copy chat title',
+          onPressed: () {
+            final title =
+                entry?.title ?? widget.controller.selectedSessionId ?? key;
+            unawaited(Clipboard.setData(ClipboardData(text: title)));
+          },
+        ),
+        const SizedBox(width: 8),
+        PanelIconButton(
+          icon: Icons.delete_outline,
+          tooltip: 'Delete selected chat',
+          onPressed: () => unawaited(widget.controller.deleteHistoryChat(key)),
+        ),
+      ],
+    );
   }
 
   /// Builds the selected right-side chat utility surface.

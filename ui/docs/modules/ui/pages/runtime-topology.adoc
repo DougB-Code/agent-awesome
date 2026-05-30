@@ -1,0 +1,27 @@
+= Runtime Topology
+:description: UI runtime topology responsibilities.
+
+Runtime topology files describe the services the UI should use.
+Managed services include a working directory, executable path, and argument list.
+External services set auto-start to false and provide only connection details.
+Gateway topology settings also name the beta status endpoint and the non-secret model/provider identifier shown to operators.
+
+== Shipped Topologies
+
+[cols="1,2",options="header"]
+|===
+|Topology |Use
+
+|`runtime_topology/agent_awesome.json`
+|Default local Agent Awesome topology.
+
+|===
+
+Use topology files to change service wiring without mixing hosting policy into widgets.
+Each topology owns a `memory_domains` list and an `agent_memory` grant block.
+Memory domains are user-defined topology data; domain labels such as family, work, or project are not encoded in application logic.
+The default shipped topology defines one domain named `memory`.
+
+The default topology reads model, agent, and tool config from the harness package.
+Keep `harness/model.yaml`, `harness/agent.yaml`, and `harness/tool.local.yaml` present when packaging or distributing the desktop app.
+The gateway status URL resolves to `/api/gateway/beta-status`, which returns authenticated health, Slack scope, snapshot freshness, and model identity without exposing secrets.

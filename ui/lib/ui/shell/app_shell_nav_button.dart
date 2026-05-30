@@ -24,13 +24,14 @@ class _NavButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     final selectedGradient = selected
-        ? context.agentAwesomeSelectedGradient
+        ? context.agentAwesomeSidebarSelectedGradient
         : null;
     final foreground = selected ? colors.ink : colors.muted;
+    final radius = BorderRadius.circular(8);
     return Tooltip(
       message: compact ? label : '',
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: radius,
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
@@ -47,7 +48,7 @@ class _NavButton extends StatelessWidget {
                       : Colors.transparent
                 : null,
             gradient: selectedGradient,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: radius,
           ),
           child: Row(
             mainAxisAlignment: compact
@@ -60,7 +61,7 @@ class _NavButton extends StatelessWidget {
               ),
               if (!compact) ...<Widget>[
                 const SizedBox(width: 8),
-                Flexible(
+                Expanded(
                   child: Text(
                     label,
                     overflow: TextOverflow.ellipsis,
@@ -73,6 +74,17 @@ class _NavButton extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (selected) ...<Widget>[
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
               ],
             ],
           ),

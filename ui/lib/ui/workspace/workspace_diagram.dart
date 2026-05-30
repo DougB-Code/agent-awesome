@@ -89,13 +89,6 @@ class _OrbitLabel extends StatelessWidget {
           color: colors.surface,
           border: Border.all(color: colors.border),
           borderRadius: BorderRadius.circular(12),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: colors.shadow,
-              blurRadius: 14,
-              offset: Offset(0, 8),
-            ),
-          ],
         ),
         child: Text(
           label,
@@ -151,13 +144,6 @@ class _LayeredAgentCore extends StatelessWidget {
               decoration: BoxDecoration(
                 color: colors.coral,
                 borderRadius: BorderRadius.circular(22),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: colors.shadow,
-                    blurRadius: 30,
-                    offset: Offset(0, 18),
-                  ),
-                ],
               ),
               child: Center(
                 child: Container(height: 22, width: 22, color: Colors.white),

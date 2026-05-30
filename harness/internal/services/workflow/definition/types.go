@@ -1,14 +1,11 @@
-// This file defines the declarative workflow definition model.
+// This file defines the declarative workflow state-machine model.
 package definition
 
 import (
-	"agentawesome/internal/services/workflow/adapters"
 	"agentawesome/internal/services/workflow/contracts"
-	"agentawesome/internal/services/workflow/decision"
-	"agentawesome/internal/services/workflow/mapping"
 )
 
-// Definition is one user-authored executable workflow graph.
+// Definition is one user-authored executable hierarchical state machine.
 type Definition struct {
 	APIVersion  string             `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty"`
 	Kind        string             `json:"kind" yaml:"kind"`
@@ -19,20 +16,17 @@ type Definition struct {
 	Schedule    string             `json:"schedule,omitempty" yaml:"schedule,omitempty"`
 	Initial     string             `json:"initial,omitempty" yaml:"initial,omitempty"`
 	States      []StateDefinition  `json:"states,omitempty" yaml:"states,omitempty"`
-	Nodes       []NodeDefinition   `json:"nodes,omitempty" yaml:"nodes,omitempty"`
-	Edges       []EdgeDefinition   `json:"edges,omitempty" yaml:"edges,omitempty"`
-	Mappings    []mapping.Spec     `json:"mappings,omitempty" yaml:"mappings,omitempty"`
 	Authoring   map[string]any     `json:"authoring,omitempty" yaml:"authoring,omitempty"`
 }
 
-// MetadataDefinition stores workflow identity metadata for the target graph format.
+// MetadataDefinition stores workflow identity metadata for published definitions.
 type MetadataDefinition struct {
 	ID      string `json:"id,omitempty" yaml:"id,omitempty"`
 	Name    string `json:"name,omitempty" yaml:"name,omitempty"`
 	Version int    `json:"version,omitempty" yaml:"version,omitempty"`
 }
 
-// NodeDefinition describes one executable pipe graph node.
+// NodeDefinition describes one executable state entry action.
 type NodeDefinition struct {
 	ID         string             `json:"id" yaml:"id"`
 	Type       string             `json:"type,omitempty" yaml:"type,omitempty"`
@@ -61,18 +55,4 @@ type StateDefinition struct {
 type TransitionDefinition struct {
 	Trigger string `json:"trigger" yaml:"trigger"`
 	To      string `json:"to,omitempty" yaml:"to,omitempty"`
-}
-
-// EdgeDefinition describes one data edge between node ports.
-type EdgeDefinition struct {
-	From    PortRef             `json:"from" yaml:"from"`
-	To      PortRef             `json:"to" yaml:"to"`
-	Adapter adapters.Definition `json:"adapter,omitempty" yaml:"adapter,omitempty"`
-	When    decision.When       `json:"when,omitempty" yaml:"when,omitempty"`
-}
-
-// PortRef identifies one node output or input port.
-type PortRef struct {
-	Node string `json:"node" yaml:"node"`
-	Port string `json:"port,omitempty" yaml:"port,omitempty"`
 }

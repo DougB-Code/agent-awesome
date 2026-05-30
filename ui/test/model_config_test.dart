@@ -94,6 +94,33 @@ providers:
     expect(encoded, contains('streaming: true'));
   });
 
+  test('parses model compatibility validations from YAML', () {
+    final document = ModelConfigDocument.parse('''
+default: openai:gpt-mini
+providers:
+  openai:
+    name: OpenAI
+    adapter: openai
+    default: gpt-mini
+    models:
+      - id: gpt-mini
+        model: gpt-5-mini
+validations:
+  - id: follows_tools
+    label: Follows tool contracts
+    mode: mocked
+    prompt: Use the configured tool.
+    assertions:
+      - type: response-contains
+        contains: done
+''');
+
+    expect(document.validations.single.id, 'follows_tools');
+    expect(document.validations.single.label, 'Follows tool contracts');
+    expect(document.toYaml(), contains('validations:'));
+    expect(document.toYaml(), contains('contains: done'));
+  });
+
   test('validates duplicate provider and model ids', () {
     final document = ModelConfigDocument.parse('''
 default: openai:gpt-mini
@@ -156,7 +183,7 @@ providers:
     expect(provider.toJson()['name'], 'Provider 2');
   });
 
-  test('appends generated provider without changing existing default', () {
+  test('scopes multi-provider documents to the default provider', () {
     final document = ModelConfigDocument.parse('''
 default: openai:gpt-mini
 providers:
@@ -167,15 +194,45 @@ providers:
     models:
       - id: gpt-mini
         model: gpt-5-mini
+  cloudflare:
+    name: Cloudflare
+    adapter: openai
+    default: gemma
+    models:
+      - id: gemma
+        model: workers-ai/@cf/google/gemma-4-26b-a4b-it
 ''');
-    final provider = newModelProviderConfig('provider');
-    final next = document.copyWith(
-      providers: <ModelProviderConfig>[...document.providers, provider],
-    );
+    final next = modelConfigDocumentForDefaultProvider(document);
 
     expect(next.defaultRef, 'openai:gpt-mini');
-    expect(next.providers.last.name, 'Provider');
+    expect(next.providers.single.id, 'openai');
     expect(modelConfigDisplayName(next.toYaml()), 'openai');
+  });
+
+  test('validates one provider per model config file', () {
+    final document = ModelConfigDocument.parse('''
+default: openai:gpt-mini
+providers:
+  openai:
+    name: openai
+    adapter: openai
+    default: gpt-mini
+    models:
+      - id: gpt-mini
+        model: gpt-5-mini
+  litert-lm:
+    name: LiteRT-LM
+    adapter: openai
+    default: gemma-4-e2b-it
+    models:
+      - id: gemma-4-e2b-it
+        model: gemma-4-E2B-it
+''');
+
+    expect(
+      modelConfigValidationError(document),
+      'Model config files can contain only one provider',
+    );
   });
 
   test('encodes a selected provider preview without sibling providers', () {

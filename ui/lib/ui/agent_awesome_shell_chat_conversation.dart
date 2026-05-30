@@ -33,6 +33,7 @@ class _ChatCommandPanelState extends State<_ChatCommandPanel> {
       areaActionsBuilder: (context, area) =>
           _ChatSessionPicker(controller: widget.controller),
       filterHint: 'Filter...',
+      highlightFilterFields: false,
       showAreaTabs: false,
       showDetailPane: false,
       showPaneCollapseButtons: false,
@@ -92,7 +93,9 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
             Expanded(
               child: ChatPanel(
                 controller: _timelineController,
-                empty: PanelEmptyState(query: query),
+                empty: query.trim().isEmpty
+                    ? const SizedBox.shrink()
+                    : PanelEmptyState(query: query),
                 compact: compact,
                 children: timelineChildren,
               ),
@@ -170,7 +173,11 @@ class _ChatSessionListContent extends StatelessWidget {
     }).toList();
     if (entries.isEmpty) {
       return query.trim().isEmpty
-          ? const PanelEmptyBlock(label: 'No chats yet')
+          ? const PanelEmptyBlock(
+              icon: Icons.chat_bubble_outline,
+              label: 'No chats yet',
+              message: 'Start a chat to create the first conversation.',
+            )
           : PanelEmptyState(query: query);
     }
     final selectedKey = controller.selectedChatKey;
@@ -184,6 +191,9 @@ class _ChatSessionListContent extends StatelessWidget {
           entry: entry,
           selected: entry.key == selectedKey,
           onTap: () => unawaited(controller.selectHistoryChat(entry.key)),
+          onCopy: () =>
+              unawaited(Clipboard.setData(ClipboardData(text: entry.title))),
+          onDelete: () => unawaited(controller.deleteHistoryChat(entry.key)),
         );
       },
     );
@@ -195,11 +205,15 @@ class _ChatSessionTile extends StatelessWidget {
     required this.entry,
     required this.selected,
     required this.onTap,
+    required this.onCopy,
+    required this.onDelete,
   });
 
   final _ChatSessionListEntry entry;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onCopy;
+  final VoidCallback onDelete;
 
   /// Builds one selectable chat session card.
   @override
@@ -218,7 +232,7 @@ class _ChatSessionTile extends StatelessWidget {
           children: <Widget>[
             Icon(
               Icons.chat_bubble_outline,
-              color: selected ? colors.green : colors.muted,
+              color: selected ? colors.cardAccent : colors.muted,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -240,12 +254,25 @@ class _ChatSessionTile extends StatelessWidget {
                       style: TextStyle(color: colors.muted, fontSize: 12),
                     ),
                   ],
-                  if (selected) ...<Widget>[
-                    const SizedBox(height: 8),
-                    const PanelBadge(label: 'Active'),
-                  ],
                 ],
               ),
+            ),
+            const SizedBox(width: 8),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                PanelInlineIconButton(
+                  icon: Icons.content_copy,
+                  tooltip: 'Copy chat title',
+                  onPressed: onCopy,
+                ),
+                const SizedBox(width: 6),
+                PanelInlineIconButton(
+                  icon: Icons.delete_outline,
+                  tooltip: 'Delete chat',
+                  onPressed: onDelete,
+                ),
+              ],
             ),
           ],
         ),
@@ -280,15 +307,14 @@ List<_ChatSessionListEntry> _chatSessionListEntries(
         key: chat.key,
         title: chat.title,
         subtitle:
-            '${chat.profileLabel} • ${formatLocalMonthDayTime(chat.updatedAt)}',
-        searchText:
-            '${chat.sessionId} ${chat.profileId} ${chat.profilePath} ${chat.titleStatus}',
+            '${chat.agentLabel} / ${formatLocalMonthDayTime(chat.updatedAt)}',
+        searchText: '${chat.sessionId} ${chat.agentPath} ${chat.titleStatus}',
       ),
     );
     seenKeys.add(chat.key);
   }
   for (final session in controller.sessions) {
-    final key = '${controller.runtimeProfilePath}::${session.id}';
+    final key = session.id;
     if (seenKeys.contains(key)) {
       continue;
     }

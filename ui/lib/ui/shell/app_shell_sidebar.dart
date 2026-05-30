@@ -34,7 +34,12 @@ class _AppSidebarColumn extends StatelessWidget {
     return Container(
       width: width,
       foregroundDecoration: BoxDecoration(
-        border: Border(right: BorderSide(color: colors.border)),
+        border: Border(
+          right: BorderSide(
+            color: colors.border,
+            width: AgentAwesomeStrokeTokens.dividerWidth,
+          ),
+        ),
       ),
       child: Column(
         children: <Widget>[
@@ -110,6 +115,11 @@ class _AppSidebar extends StatelessWidget {
           label: AppSections.automationWorkflows,
           section: AppSections.automationWorkflows,
           icon: Icons.route_outlined,
+        ),
+        _SidebarItem(
+          label: AppSections.automationAgents,
+          section: AppSections.automationAgents,
+          icon: Icons.psychology_outlined,
         ),
         _SidebarItem(
           label: AppSections.automationMcpServers,

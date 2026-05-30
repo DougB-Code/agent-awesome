@@ -327,14 +327,20 @@ class _CollectionSwitcherPanelState<T>
                         vertical: 10,
                       ),
                       filled: true,
-                      fillColor: colors.surface,
+                      fillColor: colors.field,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: colors.border),
+                        borderSide: BorderSide(
+                          color: colors.border,
+                          width: AgentAwesomeStrokeTokens.borderWidth,
+                        ),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide(color: colors.border),
+                        borderSide: BorderSide(
+                          color: colors.border,
+                          width: AgentAwesomeStrokeTokens.borderWidth,
+                        ),
                       ),
                     ),
                   ),
@@ -342,7 +348,11 @@ class _CollectionSwitcherPanelState<T>
               ],
             ),
           ),
-          Divider(height: 1, color: colors.border),
+          Divider(
+            height: AgentAwesomeStrokeTokens.dividerWidth,
+            thickness: AgentAwesomeStrokeTokens.dividerWidth,
+            color: colors.border,
+          ),
           Expanded(
             child: selectedItem == null
                 ? _CollectionEmptyState(
@@ -476,7 +486,10 @@ class _CollectionPanelSelect<T> extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: colors.surface,
-          border: Border.all(color: colors.border),
+          border: Border.all(
+            color: colors.border,
+            width: AgentAwesomeStrokeTokens.borderWidth,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: DropdownButtonHideUnderline(

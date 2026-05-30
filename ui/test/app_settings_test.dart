@@ -9,9 +9,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Runs app settings tests.
 void main() {
+  test('environment config does not expose a topology override', () {
+    final config = AppConfig.fromEnvironment();
+
+    expect(config.runtimeProfilePath, '');
+  });
+
   test('serializes exact summary model selection', () {
     const settings = AgentAwesomeAppSettings(
-      defaultChatProfilePath: '/tmp/profile.json',
+      defaultAgentConfigPath: '/tmp/agent.yaml',
+      selectedMemoryDomainId: 'project',
       summaryModelConfigPath: '/tmp/models.yaml',
       summaryModelRef: 'openai:gpt-nano',
       chatTitleSummariesEnabled: true,
@@ -22,6 +29,10 @@ void main() {
     final decoded = AgentAwesomeAppSettings.fromJson(encoded);
 
     expect(encoded['summary_model_ref'], 'openai:gpt-nano');
+    expect(encoded['default_agent_config'], '/tmp/agent.yaml');
+    expect(encoded['selected_memory_domain'], 'project');
+    expect(decoded.defaultAgentConfigPath, '/tmp/agent.yaml');
+    expect(decoded.selectedMemoryDomainId, 'project');
     expect(decoded.summaryModelConfigPath, '/tmp/models.yaml');
     expect(decoded.summaryModelRef, 'openai:gpt-nano');
     expect(encoded['getting_started_completed'], isTrue);
@@ -148,7 +159,7 @@ void main() {
     );
   });
 
-  test('chat title model falls back to active profile model config', () {
+  test('chat title model falls back to active agent model config', () {
     final controller = AgentAwesomeAppController(config: _testConfig());
     controller.appSettings = const AgentAwesomeAppSettings(
       chatTitleSummariesEnabled: true,
@@ -221,7 +232,7 @@ RuntimeProfile _testProfile(String modelConfigPath) {
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: modelConfigPath,
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -234,7 +245,7 @@ RuntimeProfile _testProfile(String modelConfigPath) {
       apiBaseUrl: 'http://127.0.0.1:2/api',
       healthUrl: 'http://127.0.0.1:2/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:1/api',
       contextBaseUrl: 'http://127.0.0.1:1/api/context',
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',

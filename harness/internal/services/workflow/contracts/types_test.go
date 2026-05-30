@@ -30,26 +30,6 @@ func TestInferObservedContractDerivesSchemaAndFacets(t *testing.T) {
 	}
 }
 
-// TestCheckCompatibilityUsesExampleInference verifies sample shapes participate in edge checks.
-func TestCheckCompatibilityUsesExampleInference(t *testing.T) {
-	result := CheckCompatibility(
-		Contract{Examples: []Example{{Name: "crm", OutputShape: map[string]any{
-			"customer": map[string]any{"email": "ada@example.com"},
-		}}}},
-		Contract{
-			Accepts:        []Carrier{{Kind: "object"}},
-			RequiredFacets: []string{"email.recipient"},
-		},
-	)
-
-	if result.Status != CompatibilityAdapted {
-		t.Fatalf("status = %q, want adapted", result.Status)
-	}
-	if len(result.Choices) != 1 {
-		t.Fatalf("choices = %#v, want one semantic choice", result.Choices)
-	}
-}
-
 // TestVerifyManifestRequiresExternalTrust verifies non-AA tools prove provenance.
 func TestVerifyManifestRequiresExternalTrust(t *testing.T) {
 	if err := ValidateManifest(ToolManifest{ID: "aa.mail.send", Version: "1"}); err != nil {

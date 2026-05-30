@@ -89,6 +89,11 @@ class AutomationsClient {
     return parseAutomationDraft(decoded['draft']);
   }
 
+  /// Deletes one editable workflow draft.
+  Future<void> deleteDraft(String draftId) async {
+    await _delete('/drafts/$draftId');
+  }
+
   /// Validates one workflow draft.
   Future<AutomationValidationResult> validateDraft(String draftId) async {
     final decoded = await _post(
@@ -247,6 +252,11 @@ class AutomationsClient {
     return parseAutomationRunSetup(decoded['operation']);
   }
 
+  /// Deletes one saved Operation.
+  Future<void> deleteRunSetup(String setupId) async {
+    await _operationsDelete('/$setupId');
+  }
+
   /// Previews one saved Operation without starting a run.
   Future<AutomationOperationPreview> previewRunSetup(
     String setupId, {
@@ -368,6 +378,14 @@ class AutomationsClient {
     return _decode(response, 'PUT $path');
   }
 
+  Future<Map<String, dynamic>> _delete(String path) async {
+    final uri = _uri(path);
+    await _log('DELETE $uri');
+    final response = await _http.delete(uri, headers: _headers());
+    await _log('DELETE $uri -> ${response.statusCode}');
+    return _decode(response, 'DELETE $path');
+  }
+
   Future<Map<String, dynamic>> _operationsGet(
     String path, {
     Map<String, String> query = const <String, String>{},
@@ -407,6 +425,14 @@ class AutomationsClient {
     );
     await _log('PUT $uri -> ${response.statusCode}');
     return _decode(response, 'PUT $path');
+  }
+
+  Future<Map<String, dynamic>> _operationsDelete(String path) async {
+    final uri = _operationsUri(path);
+    await _log('DELETE $uri');
+    final response = await _http.delete(uri, headers: _headers());
+    await _log('DELETE $uri -> ${response.statusCode}');
+    return _decode(response, 'DELETE $path');
   }
 
   Future<Map<String, dynamic>> _capabilitiesGet(

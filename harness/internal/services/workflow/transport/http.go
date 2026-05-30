@@ -35,7 +35,6 @@ func (s *HTTPServer) Routes() http.Handler {
 	mux.HandleFunc("/api/workflows/mappings/preview", s.mappingPreviewHandler)
 	mux.HandleFunc("/api/workflows/design/artifacts", s.designArtifactsHandler)
 	mux.HandleFunc("/api/workflows/design/suggest", s.designSuggestHandler)
-	mux.HandleFunc("/api/workflows/adapters/choices", s.adapterChoicesHandler)
 	mux.HandleFunc("/api/workflows/observed-contracts", s.observedContractsHandler)
 	mux.HandleFunc("/api/workflows/definitions", s.definitionsHandler)
 	mux.HandleFunc("/api/workflows/definitions/", s.definitionHandler)
@@ -79,21 +78,6 @@ func (s *HTTPServer) designSuggestHandler(w http.ResponseWriter, r *http.Request
 	}
 	result, err := s.service.SuggestDesignArtifacts(r.Context(), req)
 	writeResult(w, map[string]any{"suggestion": result}, err)
-}
-
-// adapterChoicesHandler stores a user-confirmed edge adapter decision.
-func (s *HTTPServer) adapterChoicesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-		return
-	}
-	var req runtime.AdapterChoiceRequest
-	if err := decodeJSON(w, r, &req); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-		return
-	}
-	result, err := s.service.SaveAdapterChoice(r.Context(), req)
-	writeResult(w, map[string]any{"adapter_choice": result}, err)
 }
 
 // observedContractsHandler lists runtime-observed contract shapes for review.
@@ -229,14 +213,6 @@ func (s *HTTPServer) draftHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && action == "compile":
 		result, err := s.service.CompileDraft(r.Context(), draftID)
 		writeResult(w, map[string]any{"compiled": result}, err)
-	case r.Method == http.MethodPost && action == "compatibility":
-		var req runtime.EdgeCompatibilityRequest
-		if err := decodeJSON(w, r, &req); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		result, err := s.service.CheckDraftEdgeCompatibility(r.Context(), draftID, req)
-		writeResult(w, map[string]any{"compatibility": result}, err)
 	case r.Method == http.MethodPost && action == "publish":
 		definition, err := s.service.PublishDraft(r.Context(), draftID)
 		writeResult(w, map[string]any{"definition": definition}, err)

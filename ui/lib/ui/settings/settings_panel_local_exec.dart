@@ -518,7 +518,10 @@ class _SettingsCommandTree extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
       ),
       clipBehavior: Clip.antiAlias,
@@ -548,7 +551,12 @@ class _SettingsCommandTreeHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.border)),
+        border: Border(
+          bottom: BorderSide(
+            color: colors.border,
+            width: AgentAwesomeStrokeTokens.dividerWidth,
+          ),
+        ),
       ),
       child: Row(
         children: <Widget>[
@@ -599,7 +607,10 @@ class _SettingsCommandTreeNode extends StatelessWidget {
             decoration: BoxDecoration(
               color: selected ? colors.greenSoft : Colors.transparent,
               border: Border(
-                bottom: BorderSide(color: colors.border.withValues(alpha: 0.7)),
+                bottom: BorderSide(
+                  color: colors.border.withValues(alpha: 0.7),
+                  width: AgentAwesomeStrokeTokens.dividerWidth,
+                ),
               ),
             ),
             child: Row(
@@ -700,7 +711,10 @@ class _SettingsCommandSubcommandDetails extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: colors.panel,
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
       ),
       padding: const EdgeInsets.all(14),
@@ -806,7 +820,10 @@ class _SettingsCommandPathView extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Row(

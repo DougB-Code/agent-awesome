@@ -30,6 +30,31 @@ String formatLocalDateTime(DateTime value) {
       '${twoDigitDatePart(local.minute)}';
 }
 
+/// Formats a timestamp as a local date and second.
+String formatLocalDateTimeSeconds(DateTime value) {
+  final local = value.toLocal();
+  return '${formatLocalDateTime(local)}:'
+      '${twoDigitDatePart(local.second)}';
+}
+
+/// Formats a persisted timestamp string as local time with a zone label.
+String formatStoredTimestampLocal(String value, {String fallback = ''}) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return fallback;
+  }
+  final parsed = DateTime.tryParse(trimmed);
+  if (parsed == null) {
+    return trimmed;
+  }
+  final local = parsed.toLocal();
+  final zone = local.timeZoneName.trim();
+  if (zone.isEmpty) {
+    return '${formatLocalDateTimeSeconds(local)} ${_timeZoneOffset(local)}';
+  }
+  return '${formatLocalDateTimeSeconds(local)} $zone';
+}
+
 /// Formats an optional timestamp as a local date and minute.
 String formatOptionalLocalDateTime(DateTime? value, {String fallback = ''}) {
   if (value == null) {
@@ -52,4 +77,13 @@ String formatOptionalLocalMonthDay(DateTime? value, {String fallback = ''}) {
   }
   final local = value.toLocal();
   return '${local.month}/${local.day}';
+}
+
+/// Returns a numeric timezone offset for local timestamps without zone names.
+String _timeZoneOffset(DateTime local) {
+  final offset = local.timeZoneOffset;
+  final sign = offset.isNegative ? '-' : '+';
+  final absolute = offset.abs();
+  return '$sign${twoDigitDatePart(absolute.inHours)}:'
+      '${twoDigitDatePart(absolute.inMinutes.remainder(60))}';
 }

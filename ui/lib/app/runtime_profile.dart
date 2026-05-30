@@ -1,4 +1,4 @@
-/// Loads runtime profile files and resolves app-owned profile paths.
+/// Loads agent runtime topology files and resolves app-owned topology paths.
 library;
 
 import 'dart:convert';
@@ -12,7 +12,7 @@ import 'app_config.dart';
 
 export '../domain/runtime_profile.dart';
 
-/// HarnessRuntimeLaunch derives app launch details from harness profile data.
+/// HarnessRuntimeLaunch derives app launch details from harness topology data.
 extension HarnessRuntimeLaunch on HarnessRuntime {
   /// URL used to prove harness readiness.
   String get sessionsUrl {
@@ -22,7 +22,7 @@ extension HarnessRuntimeLaunch on HarnessRuntime {
     return '$base/apps/$appName/users/$userId/sessions';
   }
 
-  /// Command arguments passed to the built harness executable.
+  /// Command arguments passed to the harness executable.
   List<String> get arguments {
     return _harnessBaseArguments(this);
   }
@@ -40,7 +40,7 @@ extension HarnessRuntimeLaunch on HarnessRuntime {
   }
 }
 
-/// Builds harness launch arguments for the complete active runtime profile.
+/// Builds harness launch arguments for the complete active agent runtime topology.
 List<String> harnessArgumentsForProfile(RuntimeProfile profile) {
   final arguments = _harnessBaseArguments(profile.harness);
   if (!profile.workflow.enabled || !profile.workflow.hostedByHarness) {
@@ -50,19 +50,21 @@ List<String> harnessArgumentsForProfile(RuntimeProfile profile) {
     '--workflow-api-addr',
     _listenAddress(profile.workflow.apiBaseUrl, profile.workflow.port),
     '--workflow-definitions',
-    profile.workflow.definitionsDir,
+    workflowDefinitionsDirectoryPathForProfile(profile),
     '--workflow-db',
-    profile.workflow.dbPath,
+    workflowDatabasePathForProfile(profile),
     '--command-data-dir',
-    defaultCommandDataDirectoryPath(),
+    commandDataDirectoryPathForProfile(profile),
     '--command-parser-dir',
     defaultCommandParserDirectoryPath(),
-    '--command-allow-workdir',
-    _commandAllowedWorkdir(profile.harness),
+    for (final root in commandAllowedWorkdirsForProfile(profile)) ...[
+      '--command-allow-workdir',
+      root,
+    ],
   ]);
 }
 
-/// GatewayRuntimeLaunch derives app launch details from gateway profile data.
+/// GatewayRuntimeLaunch derives app launch details from gateway topology data.
 extension GatewayRuntimeLaunch on GatewayRuntime {
   /// Memory MCP URL exposed by this gateway control plane.
   String get mcpUrl {
@@ -81,7 +83,7 @@ extension GatewayRuntimeLaunch on GatewayRuntime {
         .toString();
   }
 
-  /// Command arguments passed to the built gateway executable without profile grants.
+  /// Command arguments passed to the gateway executable without memory grants.
   List<String> get arguments {
     return _gatewayBaseArguments(this);
   }
@@ -96,7 +98,7 @@ extension WorkflowRuntimeLaunch on WorkflowRuntime {
   }
 }
 
-/// Builds standalone workflow launch arguments for the active runtime profile.
+/// Builds standalone workflow launch arguments for the active agent runtime topology.
 List<String> workflowArgumentsForProfile(RuntimeProfile profile) {
   final workflow = profile.workflow;
   if (workflow.hostedByHarness) {
@@ -106,15 +108,29 @@ List<String> workflowArgumentsForProfile(RuntimeProfile profile) {
     '--addr',
     _listenAddress(workflow.apiBaseUrl, workflow.port),
     '--definitions',
-    workflow.definitionsDir,
+    workflowDefinitionsDirectoryPathForProfile(profile),
     '--db',
-    workflow.dbPath,
+    workflowDatabasePathForProfile(profile),
+    '--operations-db',
+    workflowOperationsDatabasePathForProfile(profile),
+    '--runtime-targets-db',
+    workflowRuntimeTargetsDatabasePathForProfile(profile),
     '--harness-context-base-url',
     profile.gateway.contextBaseUrl,
+    '--tool',
+    profile.harness.toolConfigPath,
+    '--command-data-dir',
+    commandDataDirectoryPathForProfile(profile),
+    '--command-parser-dir',
+    defaultCommandParserDirectoryPath(),
+    for (final root in commandAllowedWorkdirsForProfile(profile)) ...[
+      '--command-allow-workdir',
+      root,
+    ],
   ];
 }
 
-/// Builds gateway launch arguments for the complete active runtime profile.
+/// Builds gateway launch arguments for the complete active agent runtime topology.
 List<String> gatewayArgumentsForProfile(RuntimeProfile profile) {
   return <String>[
     ..._gatewayBaseArguments(profile.gateway),
@@ -178,16 +194,59 @@ List<String> _insertBeforeRuntimeArgs(
   ];
 }
 
-/// Returns the command working-directory root implied by the harness package.
-String _commandAllowedWorkdir(HarnessRuntime harness) {
-  final workingDirectory = harness.workingDirectory.trim();
-  if (workingDirectory.isEmpty) {
-    return '.';
+/// Returns command roots configured for harness-hosted workflow execution.
+List<String> commandAllowedWorkdirsForHarness(HarnessRuntime harness) {
+  final explicit = harness.commandAllowedWorkdirs
+      .map((root) => root.trim())
+      .where((root) => root.isNotEmpty)
+      .toList();
+  if (explicit.isNotEmpty) {
+    return explicit;
   }
-  return Directory(workingDirectory).parent.path;
+  return <String>[defaultCommandAllowedWorkdirForHarness(harness)];
 }
 
-/// Encodes the active runtime profile as a gateway agent profile registry.
+/// Returns command roots configured for an agent runtime topology.
+List<String> commandAllowedWorkdirsForProfile(RuntimeProfile profile) {
+  final explicit = profile.harness.commandAllowedWorkdirs
+      .map((root) => root.trim())
+      .where((root) => root.isNotEmpty)
+      .toList();
+  if (explicit.isNotEmpty) {
+    return explicit;
+  }
+  return _uniqueStrings(<String>[
+    defaultCommandAllowedWorkdirForProfile(profile),
+    defaultWorkspaceCommandAllowedWorkdirForProfile(profile),
+  ]);
+}
+
+/// Returns the default app-owned command root for an agent runtime topology.
+String defaultCommandAllowedWorkdirForProfile(RuntimeProfile profile) {
+  return agentCommandWorkdirDirectoryPath(profile.id);
+}
+
+/// Returns the configured workspace root for workflow command execution.
+String defaultWorkspaceCommandAllowedWorkdirForProfile(RuntimeProfile profile) {
+  final workspaceRoot = _localWorkspaceRootForHarness(profile.harness);
+  if (workspaceRoot.isEmpty) {
+    return '';
+  }
+  if (_pathBasename(workspaceRoot) == 'agent') {
+    final parent = Directory(workspaceRoot).parent.path;
+    if (Directory('$parent/agent').existsSync()) {
+      return parent;
+    }
+  }
+  return workspaceRoot;
+}
+
+/// Returns the app-owned command root used when only harness data is known.
+String defaultCommandAllowedWorkdirForHarness(HarnessRuntime _) {
+  return '${agentAwesomeDataDirectoryPath()}/command/workdir';
+}
+
+/// Encodes the active agent runtime topology as a gateway agent profile registry.
 List<Map<String, dynamic>> _gatewayAgentProfilesJson(RuntimeProfile profile) {
   return <Map<String, dynamic>>[
     <String, dynamic>{
@@ -236,7 +295,7 @@ List<Map<String, dynamic>> _gatewayMemoryServiceJson(
       .toList();
 }
 
-/// Builds gateway arguments that do not depend on agent-profile grants.
+/// Builds gateway arguments that do not depend on agent memory grants.
 List<String> _gatewayBaseArguments(GatewayRuntime gateway) {
   return <String>[
     '--addr',
@@ -262,7 +321,7 @@ List<String> _gatewayBaseArguments(GatewayRuntime gateway) {
   ];
 }
 
-/// Encodes a runtime profile as stable, human-editable JSON.
+/// Encodes an agent runtime topology as stable, human-editable JSON.
 String encodeRuntimeProfileJson(RuntimeProfile profile) {
   const encoder = JsonEncoder.withIndent('  ');
   return '${encoder.convert(profile.toJson())}\n';
@@ -274,30 +333,30 @@ String encodeMcpServerRuntimeJson(McpServerRuntime server) {
   return '${encoder.convert(server.toJson())}\n';
 }
 
-/// RuntimeProfileLoader loads and validates the configured or shipped profile.
+/// RuntimeProfileLoader loads and validates configured or shipped topology.
 class RuntimeProfileLoader {
-  /// Creates a runtime profile loader.
+  /// Creates an agent runtime topology loader.
   const RuntimeProfileLoader(this.config);
 
-  /// App configuration containing the optional profile path.
+  /// App configuration containing the optional topology path.
   final AppConfig config;
 
-  /// Loads the profile file selected by AppConfig.
+  /// Loads the topology file selected by AppConfig.
   Future<RuntimeProfile> load() async {
     final file = await resolveProfileFile();
     return loadFile(file);
   }
 
-  /// Loads one profile file and expands supported environment templates.
+  /// Loads one topology file and expands supported environment templates.
   Future<RuntimeProfile> loadFile(File file) async {
     final decoded = jsonDecode(_expandTemplate(await file.readAsString()));
     if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Runtime profile must be a JSON object');
+      throw const FormatException('Agent runtime must be a JSON object');
     }
     return RuntimeProfile.fromJson(decoded);
   }
 
-  /// Resolves and creates the selected profile file when using defaults.
+  /// Resolves and creates the selected topology file when using defaults.
   Future<File> resolveProfileFile() async {
     final configured = config.runtimeProfilePath.trim();
     if (configured.isNotEmpty) {
@@ -310,7 +369,7 @@ class RuntimeProfileLoader {
     return writeDefaultRuntimeProfileFile();
   }
 
-  /// Writes the bundled target-state default profile into app-owned storage.
+  /// Writes the bundled target-state default topology into app-owned storage.
   Future<File> writeDefaultRuntimeProfileFile() async {
     final file = File(defaultRuntimeProfilePath());
     await file.parent.create(recursive: true);
@@ -318,23 +377,23 @@ class RuntimeProfileLoader {
     return file;
   }
 
-  /// Returns the default profile path in the operating system config folder.
+  /// Returns the default topology path in the operating system config folder.
   String defaultRuntimeProfilePath() {
     return '${runtimeProfilesDirectoryPath()}/agent_awesome.json';
   }
 
-  /// Returns the shipped profile template path in the workspace.
+  /// Returns the shipped topology template path in the workspace.
   String shippedRuntimeProfilePath() {
-    return '${config.workspaceRoot}/ui/runtime_profiles/agent_awesome.json';
+    return '${config.workspaceRoot}/ui/runtime_topology/agent_awesome.json';
   }
 
-  /// Loads the bundled default profile from the release bundle or app assets.
+  /// Loads the bundled default topology from the release bundle or app assets.
   Future<String> loadShippedRuntimeProfileTemplate() async {
     final template = File(shippedRuntimeProfilePath());
     if (await template.exists()) {
       return template.readAsString();
     }
-    return rootBundle.loadString('runtime_profiles/agent_awesome.json');
+    return rootBundle.loadString('runtime_topology/agent_awesome.json');
   }
 
   /// Expands supported template variables in profile JSON content.
@@ -346,7 +405,7 @@ class RuntimeProfileLoader {
     return expanded;
   }
 
-  /// Returns template variables available to shipped runtime profiles.
+  /// Returns template variables available to shipped agent runtime topologies.
   Map<String, String> _templateVariables() {
     final agentApi = Uri.parse(config.agentApiBaseUrl);
     final memoryMcp = Uri.parse(config.memoryMcpUrl);
@@ -364,8 +423,10 @@ class RuntimeProfileLoader {
       'WORKFLOW_API_BASE_URL': _workflowApiBaseUrl(),
       'WORKFLOW_API_PORT': '8092',
       'WORKFLOW_HEALTH_URL': _healthUrl(_workflowApiBaseUrl()),
-      'WORKFLOW_DEFINITIONS_DIR': defaultWorkflowDefinitionsDirectoryPath(),
-      'WORKFLOW_DB_PATH': defaultWorkflowDatabasePath(),
+      'WORKFLOW_DEFINITIONS_DIR': agentWorkflowDefinitionsDirectoryPath(
+        'agent-awesome',
+      ),
+      'WORKFLOW_DB_PATH': agentWorkflowDatabasePath('agent-awesome'),
       'AGENT_GATEWAY_BASE_URL': config.agentGatewayBaseUrl,
       'AGENT_GATEWAY_CONTEXT_BASE_URL': config.agentGatewayContextBaseUrl,
       'AGENT_GATEWAY_MCP_URL': config.agentGatewayMcpUrl,
@@ -424,9 +485,9 @@ String agentAwesomeDataDirectoryPath() {
   return '${agentAwesomeAppConfigDirectoryPath()}/data';
 }
 
-/// Returns the directory where editable runtime profiles live.
+/// Returns the directory where editable agent runtime topologies live.
 String runtimeProfilesDirectoryPath() {
-  return '${agentAwesomeConfigDirectoryPath()}/profiles';
+  return '${agentAwesomeConfigDirectoryPath()}/runtime';
 }
 
 /// Returns the directory where editable model config files live.
@@ -434,7 +495,7 @@ String modelConfigsDirectoryPath() {
   return '${agentAwesomeConfigDirectoryPath()}/models';
 }
 
-/// Returns the shared model config referenced by runtime profiles.
+/// Returns the shared model config referenced by agent runtime topologies.
 String defaultModelConfigPath() {
   return '${modelConfigsDirectoryPath()}/model.yaml';
 }
@@ -494,6 +555,93 @@ String defaultCommandDataDirectoryPath() {
   return '${agentAwesomeDataDirectoryPath()}/command';
 }
 
+/// Returns the config root containing all local agent bundles.
+String agentRuntimeConfigRootDirectoryPath() {
+  return '${agentAwesomeConfigDirectoryPath()}/agents';
+}
+
+/// Returns the config root for one local agent bundle.
+String agentRuntimeConfigDirectoryPath(String profileId) {
+  return '${agentRuntimeConfigRootDirectoryPath()}/${_safePackageId(profileId)}';
+}
+
+/// Returns the data root containing all local agent runtime bundles.
+String agentRuntimeDataRootDirectoryPath() {
+  return '${agentAwesomeDataDirectoryPath()}/agents';
+}
+
+/// Returns the data root for one local agent runtime bundle.
+String agentRuntimeDataDirectoryPath(String profileId) {
+  return '${agentRuntimeDataRootDirectoryPath()}/${_safePackageId(profileId)}';
+}
+
+/// Returns the workflow definition directory for one local agent bundle.
+String agentWorkflowDefinitionsDirectoryPath(String profileId) {
+  return '${agentRuntimeConfigDirectoryPath(profileId)}/workflows';
+}
+
+/// Returns the workflow database path for one local agent runtime bundle.
+String agentWorkflowDatabasePath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/workflow/workflow.db';
+}
+
+/// Returns the operations database path for one local agent runtime bundle.
+String agentWorkflowOperationsDatabasePath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/workflow/operations.db';
+}
+
+/// Returns the runtime target database path for one local agent runtime bundle.
+String agentWorkflowRuntimeTargetsDatabasePath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/workflow/runtime-targets.db';
+}
+
+/// Returns the command data path for one local agent runtime bundle.
+String agentCommandDataDirectoryPath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/command';
+}
+
+/// Returns the default command workdir for one local agent runtime bundle.
+String agentCommandWorkdirDirectoryPath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/workdir';
+}
+
+/// Returns the effective workflow definition directory for an agent runtime topology.
+String workflowDefinitionsDirectoryPathForProfile(RuntimeProfile profile) {
+  final configured = profile.workflow.definitionsDir.trim();
+  if (configured.isEmpty ||
+      configured == defaultWorkflowDefinitionsDirectoryPath() ||
+      _isAgentWorkflowDefinitionsPath(configured)) {
+    return agentWorkflowDefinitionsDirectoryPath(profile.id);
+  }
+  return configured;
+}
+
+/// Returns the effective workflow database path for an agent runtime topology.
+String workflowDatabasePathForProfile(RuntimeProfile profile) {
+  final configured = profile.workflow.dbPath.trim();
+  if (configured.isEmpty ||
+      configured == defaultWorkflowDatabasePath() ||
+      _isAgentWorkflowDatabasePath(configured)) {
+    return agentWorkflowDatabasePath(profile.id);
+  }
+  return configured;
+}
+
+/// Returns the effective operations database path for an agent runtime topology.
+String workflowOperationsDatabasePathForProfile(RuntimeProfile profile) {
+  return agentWorkflowOperationsDatabasePath(profile.id);
+}
+
+/// Returns the effective runtime target database path for an agent runtime topology.
+String workflowRuntimeTargetsDatabasePathForProfile(RuntimeProfile profile) {
+  return agentWorkflowRuntimeTargetsDatabasePath(profile.id);
+}
+
+/// Returns the effective command data directory for an agent runtime topology.
+String commandDataDirectoryPathForProfile(RuntimeProfile profile) {
+  return agentCommandDataDirectoryPath(profile.id);
+}
+
 /// Returns the default parser catalog directory for command output parsers.
 String defaultCommandParserDirectoryPath() {
   return '${agentAwesomeConfigDirectoryPath()}/command/parsers';
@@ -523,6 +671,71 @@ String _safePackageId(String value) {
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
   return safe.isEmpty ? 'default' : safe;
+}
+
+/// Reports whether a path belongs to a local agent workflow bundle.
+bool _isAgentWorkflowDefinitionsPath(String path) {
+  final normalized = _normalizedConfigPath(path);
+  final root =
+      '${_normalizedConfigPath(agentRuntimeConfigRootDirectoryPath())}/';
+  return normalized.startsWith(root) && normalized.endsWith('/workflows');
+}
+
+/// Reports whether a path belongs to a local agent workflow database bundle.
+bool _isAgentWorkflowDatabasePath(String path) {
+  final normalized = _normalizedConfigPath(path);
+  final root = '${_normalizedConfigPath(agentRuntimeDataRootDirectoryPath())}/';
+  return normalized.startsWith(root) &&
+      normalized.endsWith('/workflow/workflow.db');
+}
+
+/// Returns the workspace root implied by the configured harness directory.
+String _localWorkspaceRootForHarness(HarnessRuntime harness) {
+  final workingDirectory = harness.workingDirectory.trim();
+  if (workingDirectory.isEmpty) {
+    return '';
+  }
+  final root = Directory(workingDirectory).parent;
+  if (!_isLocalAgentAwesomeWorkspace(root.path)) {
+    return '';
+  }
+  return root.path;
+}
+
+/// Reports whether a directory looks like a local Agent Awesome source bundle.
+bool _isLocalAgentAwesomeWorkspace(String path) {
+  return Directory('$path/harness').existsSync() &&
+      Directory('$path/gateway').existsSync() &&
+      Directory('$path/memory').existsSync();
+}
+
+/// Returns the final path segment without depending on package:path.
+String _pathBasename(String path) {
+  final normalized = path.replaceAll('\\', '/').replaceAll(RegExp(r'/+$'), '');
+  if (normalized.isEmpty) {
+    return '';
+  }
+  final index = normalized.lastIndexOf('/');
+  return index == -1 ? normalized : normalized.substring(index + 1);
+}
+
+/// Returns stable unique non-empty strings.
+List<String> _uniqueStrings(List<String> values) {
+  final seen = <String>{};
+  final results = <String>[];
+  for (final value in values) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || !seen.add(trimmed)) {
+      continue;
+    }
+    results.add(trimmed);
+  }
+  return results;
+}
+
+/// Normalizes path separators for app-owned path classification.
+String _normalizedConfigPath(String path) {
+  return path.trim().replaceAll('\\', '/');
 }
 
 /// Returns the health-check URL for a base service endpoint.

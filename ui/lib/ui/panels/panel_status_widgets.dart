@@ -174,7 +174,10 @@ class PanelBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
       decoration: BoxDecoration(
         color: colors.panel,
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Text(
@@ -220,7 +223,10 @@ class PanelFilterChip extends StatelessWidget {
       backgroundColor: colors.surface,
       selectedColor: colors.panelStrong,
       checkmarkColor: colors.green,
-      side: BorderSide(color: selected ? colors.borderStrong : colors.border),
+      side: BorderSide(
+        color: selected ? colors.borderStrong : colors.border,
+        width: AgentAwesomeStrokeTokens.borderWidth,
+      ),
       labelStyle: TextStyle(
         color: selected ? colors.ink : colors.muted,
         fontWeight: FontWeight.w700,
@@ -254,7 +260,10 @@ class PanelRemovableChip extends StatelessWidget {
       onDeleted: onDeleted,
       deleteIcon: const Icon(Icons.close, size: 16),
       backgroundColor: colors.panel,
-      side: BorderSide(color: colors.border),
+      side: BorderSide(
+        color: colors.border,
+        width: AgentAwesomeStrokeTokens.borderWidth,
+      ),
       labelStyle: TextStyle(color: colors.muted, fontWeight: FontWeight.w700),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
@@ -263,29 +272,97 @@ class PanelRemovableChip extends StatelessWidget {
   }
 }
 
-/// PanelEmptyBlock renders a bordered empty state block.
+/// PanelEmptyBlock renders the shared no-content panel state.
 class PanelEmptyBlock extends StatelessWidget {
   /// Creates a reusable empty state block.
-  const PanelEmptyBlock({super.key, required this.label});
+  const PanelEmptyBlock({
+    super.key,
+    required this.label,
+    this.icon = Icons.inbox_outlined,
+    this.message = '',
+  });
 
-  /// Empty-state text.
+  /// Empty-state title or combined title and instruction text.
   final String label;
 
-  /// Builds a compact bordered empty block.
+  /// Icon representing the panel or empty-state domain.
+  final IconData icon;
+
+  /// Optional instruction text for moving forward.
+  final String message;
+
+  /// Builds compact no-content copy directly on the pane background.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    return PanelSurface(
-      fillWidth: true,
-      padding: const EdgeInsets.all(14),
-      style: PanelSurfaceStyle.card,
-      showBorder: false,
-      child: Center(
+    final content = _PanelEmptyContent.from(label: label, message: message);
+    return Center(
+      child: SizedBox(
+        width: double.infinity,
         child: Padding(
-          padding: const EdgeInsets.all(22),
-          child: SelectableText(label, style: TextStyle(color: colors.muted)),
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, color: colors.ink, size: 30),
+              const SizedBox(height: 14),
+              SelectableText(
+                content.title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: colors.ink,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                ),
+              ),
+              if (content.message.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: SelectableText(
+                    content.message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: colors.ink, height: 1.35),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+/// _PanelEmptyContent stores parsed empty-state title and instruction text.
+class _PanelEmptyContent {
+  /// Creates parsed empty-state content.
+  const _PanelEmptyContent({required this.title, required this.message});
+
+  /// Header text.
+  final String title;
+
+  /// Supporting instruction text.
+  final String message;
+
+  /// Splits legacy combined labels into title and instruction text.
+  factory _PanelEmptyContent.from({
+    required String label,
+    required String message,
+  }) {
+    final explicitMessage = message.trim();
+    final trimmed = label.trim();
+    if (explicitMessage.isNotEmpty) {
+      return _PanelEmptyContent(title: trimmed, message: explicitMessage);
+    }
+    final sentenceBreak = trimmed.indexOf('. ');
+    if (sentenceBreak <= 0 || sentenceBreak >= trimmed.length - 2) {
+      return _PanelEmptyContent(title: trimmed, message: '');
+    }
+    return _PanelEmptyContent(
+      title: trimmed.substring(0, sentenceBreak + 1),
+      message: trimmed.substring(sentenceBreak + 2),
     );
   }
 }

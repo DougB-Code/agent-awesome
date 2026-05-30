@@ -2,7 +2,6 @@
 package runtime
 
 import (
-	"agentawesome/internal/services/workflow/adapters"
 	"agentawesome/internal/services/workflow/contracts"
 	"agentawesome/internal/services/workflow/definition"
 	"agentawesome/internal/services/workflow/mapping"
@@ -53,23 +52,6 @@ type CompileResult struct {
 	Validation ValidationResult      `json:"validation"`
 }
 
-// EdgeCompatibilityRequest selects a prospective edge in an editable draft.
-type EdgeCompatibilityRequest struct {
-	SourceNodeID string              `json:"source_node_id"`
-	TargetNodeID string              `json:"target_node_id"`
-	Adapter      adapters.Definition `json:"adapter,omitempty"`
-}
-
-// EdgeCompatibilityResult reports whether two workflow nodes can be connected.
-type EdgeCompatibilityResult struct {
-	SourceNodeID     string                  `json:"source_node_id"`
-	TargetNodeID     string                  `json:"target_node_id"`
-	Source           contracts.ToolManifest  `json:"source"`
-	Target           contracts.ToolManifest  `json:"target"`
-	Compatibility    contracts.Compatibility `json:"compatibility"`
-	SuggestedAdapter adapters.Definition     `json:"suggested_adapter,omitempty"`
-}
-
 // MappingPreviewRequest carries a mapping and sample input for deterministic preview.
 type MappingPreviewRequest struct {
 	Mapping  mapping.Spec   `json:"mapping"`
@@ -95,34 +77,6 @@ type DesignArtifact struct {
 // DesignSuggestionResult returns validated and persisted design artifacts.
 type DesignSuggestionResult struct {
 	Artifacts []store.DesignArtifactRecord `json:"artifacts"`
-}
-
-// AdapterChoiceRequest stores a user-confirmed adapter decision for a draft edge.
-type AdapterChoiceRequest struct {
-	ID           string              `json:"id,omitempty"`
-	Name         string              `json:"name,omitempty"`
-	DraftID      string              `json:"draft_id"`
-	SourceNodeID string              `json:"source_node_id"`
-	TargetNodeID string              `json:"target_node_id"`
-	ChoiceIDs    []string            `json:"choice_ids,omitempty"`
-	Adapter      adapters.Definition `json:"adapter,omitempty"`
-}
-
-// AdapterChoiceResult returns the persisted adapter artifact and selected adapter.
-type AdapterChoiceResult struct {
-	Artifact      store.DesignArtifactRecord `json:"artifact"`
-	Adapter       adapters.Definition        `json:"adapter"`
-	Compatibility contracts.Compatibility    `json:"compatibility"`
-}
-
-// AdapterArtifact stores a reusable deterministic edge adapter.
-type AdapterArtifact struct {
-	SourceTool   string              `json:"source_tool"`
-	TargetTool   string              `json:"target_tool"`
-	SourceNodeID string              `json:"source_node_id,omitempty"`
-	TargetNodeID string              `json:"target_node_id,omitempty"`
-	ChoiceIDs    []string            `json:"choice_ids,omitempty"`
-	Adapter      adapters.Definition `json:"adapter"`
 }
 
 // FacetSuggestionArtifact stores deterministic semantic facet suggestions.
@@ -160,6 +114,8 @@ type RunSetupRequest struct {
 type loadedDefinitionDraftSource struct {
 	definition definition.Definition
 	body       map[string]any
+	path       string
+	hash       string
 }
 
 // RunQuery selects workflow runs for the operations screen.

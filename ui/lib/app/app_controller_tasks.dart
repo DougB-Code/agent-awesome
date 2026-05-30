@@ -529,7 +529,7 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
       );
       _clearTaskProjections();
       tasksBusy = false;
-      tasksMessage = 'Runtime profile is not loaded';
+      tasksMessage = 'Agent runtime is not loaded';
       _notifyControllerListeners();
       return;
     }

@@ -8,7 +8,7 @@
 //     setup forms.
 //
 // High-level example:
-//   - A Slack request calls coding_change_start with a change request and
-//     codebase name. Operations resolves the codebase, builds complete workflow
-//     input, records provenance, and starts the configured coding workflow.
+//   - A client calls operation_start with a saved Operation id and run input.
+//     Operations resolves configured defaults, records provenance, and starts
+//     the bound workflow through the workflow runtime.
 package operations

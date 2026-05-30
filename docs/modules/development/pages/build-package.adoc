@@ -82,7 +82,7 @@ ui/build/linux/x64/release/bundle
 
 == Assemble Release Bundle
 
-Copy the Flutter bundle, runtime profile templates, and harness configs into the release directory:
+Copy the Flutter bundle, runtime topology templates, and harness configs into the release directory:
 
 [source,sh]
 ----
@@ -91,7 +91,7 @@ RELEASE_ROOT="$PWD/build/release/agent-awesome-linux-x64"
 
 cp -a ui/build/linux/x64/release/bundle/. "$RELEASE_ROOT/"
 mkdir -p "$RELEASE_ROOT/ui" "$RELEASE_ROOT/harness" "$RELEASE_ROOT/gateway" "$RELEASE_ROOT/memory"
-cp -a ui/runtime_profiles "$RELEASE_ROOT/ui/"
+cp -a ui/runtime_topology "$RELEASE_ROOT/ui/"
 cp harness/agent.yaml harness/model.yaml harness/tool.yaml harness/tool.local.yaml "$RELEASE_ROOT/harness/"
 cp -a gateway/slack-manifest.json "$RELEASE_ROOT/gateway/"
 
@@ -117,4 +117,4 @@ sha256sum agent-awesome-linux-x64.tar.gz > agent-awesome-linux-x64.tar.gz.sha256
 ls -lh agent-awesome-linux-x64.tar.gz agent-awesome-linux-x64.tar.gz.sha256
 ----
 
-The archive contains the Flutter Linux bundle, prebuilt service binaries, runtime profiles, default Agent Awesome harness config, and the user-local installer.
+The archive contains the Flutter Linux bundle, prebuilt service binaries, runtime topology templates, default Agent Awesome harness config, and the user-local installer.

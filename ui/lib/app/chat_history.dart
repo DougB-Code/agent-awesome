@@ -1,4 +1,4 @@
-/// Persists app-owned chat metadata across runtime profiles.
+/// Persists app-owned chat metadata across agent runtime topologies.
 library;
 
 import 'dart:convert';

@@ -251,18 +251,6 @@ func (s *HTTPServer) callTool(ctx context.Context, name string, args json.RawMes
 		}
 		items, err := s.service.ListQueuedOperationRuns(ctx, req)
 		return map[string]any{"queued_runs": items}, err
-	case "coding_change_start":
-		var req codingChangeArgs
-		if err := decodeArgs(args, &req); err != nil {
-			return nil, err
-		}
-		result, err := s.service.StartCodingChange(ctx, OperationRunRequest{
-			Input:        map[string]any{"change_request": req.ChangeRequest},
-			CodebaseName: req.Codebase,
-			Source:       req.Source,
-			Task:         req.Task,
-		})
-		return map[string]any{"operation_run": result}, err
 	default:
 		return nil, fmt.Errorf("operations tool %q is not supported", name)
 	}
@@ -301,12 +289,6 @@ func operationToolDefinitions() []map[string]any {
 			"target_id": stringSchema("Filter by eligible Computer or Server target."),
 			"limit":     integerSchema("Maximum queued runs to return."),
 		}, []string{}),
-		tool("coding_change_start", "Start the configured coding Operation for a codebase change request.", map[string]any{
-			"change_request": stringSchema("Coding change request."),
-			"codebase":       stringSchema("Codebase name, id, or alias."),
-			"source":         stringSchema("Start source such as slack or task."),
-			"task":           mapSchema("Structured task context."),
-		}, []string{"change_request", "codebase"}),
 	}
 }
 
@@ -408,12 +390,4 @@ type operationRunIDArgs struct {
 type operationStartArgs struct {
 	OperationID string `json:"operation_id"`
 	OperationRunRequest
-}
-
-// codingChangeArgs stores one coding-change MCP start request.
-type codingChangeArgs struct {
-	ChangeRequest string         `json:"change_request"`
-	Codebase      string         `json:"codebase"`
-	Source        string         `json:"source,omitempty"`
-	Task          map[string]any `json:"task,omitempty"`
 }

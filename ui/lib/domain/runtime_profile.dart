@@ -1,11 +1,11 @@
-/// Defines runtime profile topology data.
+/// Defines agent runtime topology data.
 library;
 
 import 'json_value.dart';
 
-/// RuntimeProfile describes the complete service topology for one UI session.
+/// Service topology for one UI session.
 class RuntimeProfile {
-  /// Creates an immutable runtime profile.
+  /// Creates an immutable agent runtime topology.
   const RuntimeProfile({
     required this.id,
     required this.label,
@@ -18,7 +18,7 @@ class RuntimeProfile {
       healthUrl: 'http://127.0.0.1:8092/healthz',
       hostedByHarness: false,
       workingDirectory: '',
-      packagePath: '',
+      executablePath: '',
       definitionsDir: '',
       dbPath: '',
       port: 8092,
@@ -45,7 +45,7 @@ class RuntimeProfile {
   /// Workflow process and API configuration used for durable orchestration.
   final WorkflowRuntime workflow;
 
-  /// Configured memory domains available to this runtime profile.
+  /// Configured memory domains available to this agent runtime topology.
   final List<McpServerRuntime> memoryDomains;
 
   /// Generic managed MCP servers available outside the memory domain boundary.
@@ -66,7 +66,7 @@ class RuntimeProfile {
         .toList();
   }
 
-  /// Creates a runtime profile with selected fields replaced.
+  /// Creates an agent runtime topology with selected fields replaced.
   RuntimeProfile copyWith({
     String? id,
     String? label,
@@ -106,7 +106,7 @@ class RuntimeProfile {
     };
   }
 
-  /// Parses a runtime profile shell from decoded JSON.
+  /// Parses an agent runtime topology shell from decoded JSON.
   factory RuntimeProfile.fromJson(Map<String, dynamic> json) {
     final domains = jsonObjectList(
       json['memory_domains'],
@@ -231,7 +231,7 @@ class GatewayRuntime {
     required this.healthUrl,
     this.statusUrl = '',
     required this.workingDirectory,
-    required this.packagePath,
+    required this.executablePath,
     required this.harnessBaseUrl,
     required this.contextBaseUrl,
     required this.memoryMcpUrl,
@@ -261,11 +261,11 @@ class GatewayRuntime {
   /// Gateway beta status URL for operator checks.
   final String statusUrl;
 
-  /// Directory where the Go gateway package is built and run.
+  /// Working directory used when launching the gateway executable.
   final String workingDirectory;
 
-  /// Go package path for the gateway command.
-  final String packagePath;
+  /// Gateway executable or start-script path.
+  final String executablePath;
 
   /// Upstream harness API base URL.
   final String harnessBaseUrl;
@@ -282,7 +282,7 @@ class GatewayRuntime {
   /// Assistant user id passed through gateway status and policy.
   final String userId;
 
-  /// Server-side gateway profile selected for this UI runtime.
+  /// Server-side gateway routing id selected for this UI runtime.
   final String profileId;
 
   /// Credential reference used to resolve the gateway bearer token.
@@ -303,6 +303,51 @@ class GatewayRuntime {
   /// Whether the UI should use this gateway for assistant traffic.
   final bool enabled;
 
+  /// Creates a gateway runtime with selected fields replaced.
+  GatewayRuntime copyWith({
+    String? id,
+    String? label,
+    String? apiBaseUrl,
+    String? healthUrl,
+    String? statusUrl,
+    String? workingDirectory,
+    String? executablePath,
+    String? harnessBaseUrl,
+    String? contextBaseUrl,
+    String? memoryMcpUrl,
+    String? appName,
+    String? userId,
+    String? profileId,
+    String? authCredential,
+    String? modelProviderId,
+    String? modelId,
+    int? port,
+    bool? autoStart,
+    bool? enabled,
+  }) {
+    return GatewayRuntime(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
+      healthUrl: healthUrl ?? this.healthUrl,
+      statusUrl: statusUrl ?? this.statusUrl,
+      workingDirectory: workingDirectory ?? this.workingDirectory,
+      executablePath: executablePath ?? this.executablePath,
+      harnessBaseUrl: harnessBaseUrl ?? this.harnessBaseUrl,
+      contextBaseUrl: contextBaseUrl ?? this.contextBaseUrl,
+      memoryMcpUrl: memoryMcpUrl ?? this.memoryMcpUrl,
+      appName: appName ?? this.appName,
+      userId: userId ?? this.userId,
+      profileId: profileId ?? this.profileId,
+      authCredential: authCredential ?? this.authCredential,
+      modelProviderId: modelProviderId ?? this.modelProviderId,
+      modelId: modelId ?? this.modelId,
+      port: port ?? this.port,
+      autoStart: autoStart ?? this.autoStart,
+      enabled: enabled ?? this.enabled,
+    );
+  }
+
   /// Encodes this gateway runtime to explicit JSON values.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -312,7 +357,7 @@ class GatewayRuntime {
       'health_url': healthUrl,
       if (statusUrl.isNotEmpty) 'status_url': statusUrl,
       'working_directory': workingDirectory,
-      'package_path': packagePath,
+      'executable_path': executablePath,
       'harness_base_url': harnessBaseUrl,
       'context_base_url': contextBaseUrl,
       'memory_mcp_url': memoryMcpUrl,
@@ -339,7 +384,7 @@ class GatewayRuntime {
       healthUrl: _requiredString(json, 'health_url'),
       statusUrl: _optionalString(json['status_url']),
       workingDirectory: _requiredString(json, 'working_directory'),
-      packagePath: _requiredString(json, 'package_path'),
+      executablePath: _requiredString(json, 'executable_path'),
       harnessBaseUrl: harnessBaseUrl,
       contextBaseUrl: contextBaseUrl.isEmpty
           ? _defaultContextBaseUrl(harnessBaseUrl)
@@ -368,7 +413,7 @@ class WorkflowRuntime {
     required this.healthUrl,
     this.hostedByHarness = false,
     required this.workingDirectory,
-    required this.packagePath,
+    required this.executablePath,
     required this.definitionsDir,
     required this.dbPath,
     required this.port,
@@ -394,8 +439,8 @@ class WorkflowRuntime {
   /// Working directory for an externally launched workflow service.
   final String workingDirectory;
 
-  /// Package or command path for an externally launched workflow service.
-  final String packagePath;
+  /// Workflow executable or start-script path.
+  final String executablePath;
 
   /// Directory containing user-authored workflow YAML files.
   final String definitionsDir;
@@ -412,6 +457,37 @@ class WorkflowRuntime {
   /// Whether this profile exposes workflow orchestration.
   final bool enabled;
 
+  /// Creates a workflow runtime with selected fields replaced.
+  WorkflowRuntime copyWith({
+    String? id,
+    String? label,
+    String? apiBaseUrl,
+    String? healthUrl,
+    bool? hostedByHarness,
+    String? workingDirectory,
+    String? executablePath,
+    String? definitionsDir,
+    String? dbPath,
+    int? port,
+    bool? autoStart,
+    bool? enabled,
+  }) {
+    return WorkflowRuntime(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
+      healthUrl: healthUrl ?? this.healthUrl,
+      hostedByHarness: hostedByHarness ?? this.hostedByHarness,
+      workingDirectory: workingDirectory ?? this.workingDirectory,
+      executablePath: executablePath ?? this.executablePath,
+      definitionsDir: definitionsDir ?? this.definitionsDir,
+      dbPath: dbPath ?? this.dbPath,
+      port: port ?? this.port,
+      autoStart: autoStart ?? this.autoStart,
+      enabled: enabled ?? this.enabled,
+    );
+  }
+
   /// Encodes this workflow runtime to explicit JSON values.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -421,7 +497,7 @@ class WorkflowRuntime {
       'health_url': healthUrl,
       'hosted_by_harness': hostedByHarness,
       'working_directory': workingDirectory,
-      'package_path': packagePath,
+      'executable_path': executablePath,
       'definitions_dir': definitionsDir,
       'db_path': dbPath,
       'port': port,
@@ -439,7 +515,7 @@ class WorkflowRuntime {
       healthUrl: _requiredString(json, 'health_url'),
       hostedByHarness: _optionalBool(json['hosted_by_harness']),
       workingDirectory: _optionalString(json['working_directory']),
-      packagePath: _optionalString(json['package_path']),
+      executablePath: _optionalString(json['executable_path']),
       definitionsDir: _optionalString(json['definitions_dir']),
       dbPath: _optionalString(json['db_path']),
       port: _requiredInt(json, 'port'),
@@ -460,10 +536,11 @@ class HarnessRuntime {
     required this.appName,
     required this.userId,
     required this.workingDirectory,
-    required this.packagePath,
+    required this.executablePath,
     required this.modelConfigPath,
     required this.agentConfigPath,
     required this.toolConfigPath,
+    this.commandAllowedWorkdirs = const <String>[],
     required this.port,
     required this.autoStart,
   });
@@ -486,11 +563,11 @@ class HarnessRuntime {
   /// Assistant user id used for session APIs.
   final String userId;
 
-  /// Directory where the Go package is built and run.
+  /// Working directory used when launching the harness executable.
   final String workingDirectory;
 
-  /// Go package path for the harness command.
-  final String packagePath;
+  /// Harness executable or start-script path.
+  final String executablePath;
 
   /// Model config path passed to the harness.
   final String modelConfigPath;
@@ -500,6 +577,9 @@ class HarnessRuntime {
 
   /// Tool config path passed to the harness.
   final String toolConfigPath;
+
+  /// Command working-directory roots allowed for workflow command actions.
+  final List<String> commandAllowedWorkdirs;
 
   /// Web API listen port.
   final int port;
@@ -516,10 +596,11 @@ class HarnessRuntime {
     String? appName,
     String? userId,
     String? workingDirectory,
-    String? packagePath,
+    String? executablePath,
     String? modelConfigPath,
     String? agentConfigPath,
     String? toolConfigPath,
+    List<String>? commandAllowedWorkdirs,
     int? port,
     bool? autoStart,
   }) {
@@ -531,10 +612,12 @@ class HarnessRuntime {
       appName: appName ?? this.appName,
       userId: userId ?? this.userId,
       workingDirectory: workingDirectory ?? this.workingDirectory,
-      packagePath: packagePath ?? this.packagePath,
+      executablePath: executablePath ?? this.executablePath,
       modelConfigPath: modelConfigPath ?? this.modelConfigPath,
       agentConfigPath: agentConfigPath ?? this.agentConfigPath,
       toolConfigPath: toolConfigPath ?? this.toolConfigPath,
+      commandAllowedWorkdirs:
+          commandAllowedWorkdirs ?? this.commandAllowedWorkdirs,
       port: port ?? this.port,
       autoStart: autoStart ?? this.autoStart,
     );
@@ -550,10 +633,12 @@ class HarnessRuntime {
       'app_name': appName,
       'user_id': userId,
       'working_directory': workingDirectory,
-      'package_path': packagePath,
+      'executable_path': executablePath,
       'model_config': modelConfigPath,
       'agent_config': agentConfigPath,
       'tool_config': toolConfigPath,
+      if (commandAllowedWorkdirs.isNotEmpty)
+        'command_allowed_workdirs': commandAllowedWorkdirs,
       'port': port,
       'auto_start': autoStart,
     };
@@ -573,10 +658,14 @@ class HarnessRuntime {
       appName: _requiredString(json, 'app_name'),
       userId: _requiredString(json, 'user_id'),
       workingDirectory: _requiredString(json, 'working_directory'),
-      packagePath: _requiredString(json, 'package_path'),
+      executablePath: _requiredString(json, 'executable_path'),
       modelConfigPath: _requiredString(json, 'model_config'),
       agentConfigPath: _requiredString(json, 'agent_config'),
       toolConfigPath: _requiredString(json, 'tool_config'),
+      commandAllowedWorkdirs: stringList(
+        json['command_allowed_workdirs'],
+        trim: true,
+      ),
       port: _requiredInt(json, 'port'),
       autoStart: _requiredBool(json, 'auto_start'),
     );
@@ -593,7 +682,7 @@ class McpServerRuntime {
     required this.endpoint,
     required this.healthUrl,
     required this.workingDirectory,
-    required this.packagePath,
+    required this.executablePath,
     required this.dbPath,
     required this.dataDir,
     required this.arguments,
@@ -616,11 +705,11 @@ class McpServerRuntime {
   /// Health URL used before and after launching.
   final String healthUrl;
 
-  /// Directory where the Go package is built and run.
+  /// Working directory used when launching the local server executable.
   final String workingDirectory;
 
-  /// Go package path for managed local servers.
-  final String packagePath;
+  /// Local server executable or start-script path.
+  final String executablePath;
 
   /// Domain-specific database path for managed memory services.
   final String dbPath;
@@ -647,7 +736,7 @@ class McpServerRuntime {
       endpoint: endpoint,
       healthUrl: _requiredString(json, 'health_url'),
       workingDirectory: _optionalString(json['working_directory']),
-      packagePath: _optionalString(json['package_path']),
+      executablePath: _optionalString(json['executable_path']),
       dbPath: _optionalString(json['db_path']),
       dataDir: _optionalString(json['data_dir']),
       arguments: stringList(json['arguments']),
@@ -664,7 +753,7 @@ class McpServerRuntime {
     String? endpoint,
     String? healthUrl,
     String? workingDirectory,
-    String? packagePath,
+    String? executablePath,
     String? dbPath,
     String? dataDir,
     List<String>? arguments,
@@ -678,7 +767,7 @@ class McpServerRuntime {
       endpoint: endpoint ?? this.endpoint,
       healthUrl: healthUrl ?? this.healthUrl,
       workingDirectory: workingDirectory ?? this.workingDirectory,
-      packagePath: packagePath ?? this.packagePath,
+      executablePath: executablePath ?? this.executablePath,
       dbPath: dbPath ?? this.dbPath,
       dataDir: dataDir ?? this.dataDir,
       arguments: arguments ?? this.arguments,
@@ -696,7 +785,7 @@ class McpServerRuntime {
       'endpoint': endpoint,
       'health_url': healthUrl,
       'working_directory': workingDirectory,
-      'package_path': packagePath,
+      'executable_path': executablePath,
       'db_path': dbPath,
       'data_dir': dataDir,
       'arguments': arguments,
@@ -713,29 +802,29 @@ String _defaultContextBaseUrl(String apiBaseUrl) {
   return uri.replace(path: '/api/context', query: null, port: port).toString();
 }
 
-/// Reads a required nested JSON object from a profile map.
+/// Reads a required nested JSON object from a topology map.
 Map<String, dynamic> _requiredMap(Map<String, dynamic> json, String field) {
   final value = json[field];
   if (value is Map<String, dynamic>) {
     return value;
   }
-  throw FormatException('Runtime profile field "$field" must be an object');
+  throw FormatException('Agent runtime field "$field" must be an object');
 }
 
 /// Parses and validates the required gateway runtime object.
 GatewayRuntime _requiredGateway(Map<String, dynamic> value) {
   final gateway = GatewayRuntime.fromJson(value);
   if (!gateway.enabled) {
-    throw const FormatException('Runtime profile gateway must be enabled');
+    throw const FormatException('Agent runtime gateway must be enabled');
   }
   return gateway;
 }
 
-/// Validates configured memory domains as target-state profile data.
+/// Validates configured memory domains as target-state topology data.
 void _validateMemoryDomains(List<McpServerRuntime> domains) {
   if (domains.isEmpty) {
     throw const FormatException(
-      'Runtime profile field "memory_domains" must not be empty',
+      'Agent runtime field "memory_domains" must not be empty',
     );
   }
   final ids = <String>{};
@@ -760,9 +849,9 @@ void _validateMemoryDomains(List<McpServerRuntime> domains) {
     }
     if (domain.autoStart &&
         (domain.workingDirectory.trim().isEmpty ||
-            domain.packagePath.trim().isEmpty)) {
+            domain.executablePath.trim().isEmpty)) {
       throw FormatException(
-        'Managed memory domain "${domain.id}" requires working_directory and package_path',
+        'Managed memory domain "${domain.id}" requires working_directory and executable_path',
       );
     }
     if (domain.autoStart) {
@@ -824,9 +913,9 @@ void _validateServiceMcpServers(
     }
     if (server.autoStart &&
         (server.workingDirectory.trim().isEmpty ||
-            server.packagePath.trim().isEmpty)) {
+            server.executablePath.trim().isEmpty)) {
       throw FormatException(
-        'Managed MCP server "${server.id}" requires working_directory and package_path',
+        'Managed MCP server "${server.id}" requires working_directory and executable_path',
       );
     }
     if (server.autoStart) {
@@ -867,11 +956,11 @@ void _validateWorkflowRuntime(WorkflowRuntime workflow) {
   if (!workflow.hostedByHarness &&
       workflow.autoStart &&
       (workflow.workingDirectory.trim().isEmpty ||
-          workflow.packagePath.trim().isEmpty ||
+          workflow.executablePath.trim().isEmpty ||
           workflow.definitionsDir.trim().isEmpty ||
           workflow.dbPath.trim().isEmpty)) {
     throw const FormatException(
-      'Managed workflow runtime requires working_directory, package_path, definitions_dir, and db_path',
+      'Managed workflow runtime requires working_directory, executable_path, definitions_dir, and db_path',
     );
   }
 }
@@ -967,11 +1056,11 @@ void _validateSafeId(String value, String label) {
   }
 }
 
-/// Reads a required string field from a profile map.
+/// Reads a required string field from a topology map.
 String _requiredString(Map<String, dynamic> json, String field) {
   final text = _optionalString(json[field]);
   if (text.isEmpty) {
-    throw FormatException('Runtime profile field "$field" is required');
+    throw FormatException('Agent runtime field "$field" is required');
   }
   return text;
 }
@@ -981,7 +1070,7 @@ String _optionalString(dynamic value) {
   return stringValue(value);
 }
 
-/// Reads a required integer field from a profile map.
+/// Reads a required integer field from a topology map.
 int _requiredInt(Map<String, dynamic> json, String field) {
   final value = json[field];
   if (value is int) {
@@ -989,12 +1078,12 @@ int _requiredInt(Map<String, dynamic> json, String field) {
   }
   final parsed = int.tryParse(_optionalString(value));
   if (parsed == null) {
-    throw FormatException('Runtime profile field "$field" must be an integer');
+    throw FormatException('Agent runtime field "$field" must be an integer');
   }
   return parsed;
 }
 
-/// Reads a required boolean field from a profile map.
+/// Reads a required boolean field from a topology map.
 bool _requiredBool(Map<String, dynamic> json, String field) {
   final value = json[field];
   if (value is bool) {
@@ -1007,7 +1096,7 @@ bool _requiredBool(Map<String, dynamic> json, String field) {
   if (text == 'false') {
     return false;
   }
-  throw FormatException('Runtime profile field "$field" must be a boolean');
+  throw FormatException('Agent runtime field "$field" must be a boolean');
 }
 
 /// Converts an optional profile field to a boolean with a false default.
@@ -1025,5 +1114,5 @@ bool _optionalBool(dynamic value) {
   if (text == 'false') {
     return false;
   }
-  throw const FormatException('Runtime profile optional boolean is invalid');
+  throw const FormatException('Agent runtime optional boolean is invalid');
 }

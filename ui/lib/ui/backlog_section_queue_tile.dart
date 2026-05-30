@@ -3,6 +3,7 @@ part of 'backlog_section.dart';
 
 class _TaskQueueTile extends StatelessWidget {
   const _TaskQueueTile({
+    required this.controller,
     required this.task,
     required this.selected,
     required this.focused,
@@ -10,6 +11,7 @@ class _TaskQueueTile extends StatelessWidget {
     required this.onTap,
   });
 
+  final AgentAwesomeAppController controller;
   final WorkspaceTask task;
   final bool selected;
   final bool focused;
@@ -119,6 +121,11 @@ class _TaskQueueTile extends StatelessWidget {
                               ],
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          _TaskQueueTileActions(
+                            controller: controller,
+                            task: task,
+                          ),
                         ],
                       ),
                     ),
@@ -137,5 +144,48 @@ class _TaskQueueTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _TaskQueueTileActions extends StatelessWidget {
+  const _TaskQueueTileActions({required this.controller, required this.task});
+
+  final AgentAwesomeAppController controller;
+  final WorkspaceTask task;
+
+  /// Builds compact row-level actions for one backlog item.
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        PanelInlineIconButton(
+          icon: Icons.content_copy,
+          tooltip: 'Copy backlog item title',
+          onPressed: () {
+            unawaited(Clipboard.setData(ClipboardData(text: task.title)));
+          },
+        ),
+        const SizedBox(width: 6),
+        PanelInlineIconButton(
+          icon: Icons.delete_outline,
+          tooltip: 'Delete backlog item',
+          onPressed: controller.tasksBusy
+              ? null
+              : () => unawaited(_delete(context)),
+        ),
+      ],
+    );
+  }
+
+  /// Deletes this backlog item after confirmation.
+  Future<void> _delete(BuildContext context) async {
+    if (!await _confirmTaskWrite(
+      context,
+      'Delete backlog item "${task.title}"?',
+    )) {
+      return;
+    }
+    await controller.deleteTaskFromUi(task.id);
   }
 }

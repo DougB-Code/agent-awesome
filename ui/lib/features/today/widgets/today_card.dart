@@ -38,9 +38,10 @@ class TodaySectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: colors.surface,
-        gradient: context.agentAwesomeSurfaceGradient,
+        gradient: context.agentAwesomeCardGradient,
         border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -144,6 +145,7 @@ class TodayIconBadge extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         color: foreground.withValues(alpha: 0.12),
+        border: Border.all(color: foreground.withValues(alpha: 0.18)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(icon, color: foreground, size: size * 0.52),

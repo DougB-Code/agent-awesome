@@ -200,10 +200,14 @@ func commandExecute(ctx context.Context, execCtx Context, args map[string]any) (
 	if execCtx.Host == nil {
 		return nil, fmt.Errorf("command.execute host is not configured")
 	}
+	workingDir := resolvedStringArg(args, "cwd", execCtx.Input)
+	if refs := unresolvedInputRefPaths(workingDir); len(refs) > 0 {
+		return nil, fmt.Errorf("command.execute cwd contains unresolved workflow references: %s", strings.Join(refs, ", "))
+	}
 	return execCtx.Host.ExecuteCommand(ctx, CommandRequest{
 		TemplateID: resolvedStringArg(args, "template_id", execCtx.Input),
 		Parameters: resolvedMapArg(args, "parameters", nil, execCtx.Input),
-		WorkingDir: resolvedStringArg(args, "cwd", execCtx.Input),
+		WorkingDir: workingDir,
 		Reason:     resolvedStringArg(args, "reason", execCtx.Input),
 		Actor:      resolvedStringArg(args, "actor", execCtx.Input),
 		SessionID:  resolvedStringArg(args, "session_id", execCtx.Input),

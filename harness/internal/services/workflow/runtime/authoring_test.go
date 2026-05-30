@@ -6,13 +6,13 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/services/capabilities"
-	"agentawesome/internal/services/workflow/adapters"
 	"agentawesome/internal/services/workflow/contracts"
 	"agentawesome/internal/services/workflow/definition"
 	"agentawesome/internal/services/workflow/store"
@@ -21,8 +21,9 @@ import (
 // TestDraftValidatePublishReload verifies draft publication installs definitions immediately.
 func TestDraftValidatePublishReload(t *testing.T) {
 	ctx := context.Background()
+	definitionsDir := t.TempDir()
 	service, err := Open(ctx, Config{
-		DefinitionsDir: t.TempDir(),
+		DefinitionsDir: definitionsDir,
 		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
 		RequestTimeout: time.Second,
 	})
@@ -36,16 +37,22 @@ func TestDraftValidatePublishReload(t *testing.T) {
 		Kind: draftKindWorkflow,
 		Name: "Publishable",
 		Body: map[string]any{
-			"kind": draftKindWorkflow,
-			"id":   "publishable",
-			"name": "Publishable",
-			"nodes": []any{
+			"kind":    definition.KindStateMachine,
+			"id":      "publishable",
+			"name":    "Publishable",
+			"initial": "call",
+			"states": []any{
 				map[string]any{
-					"id":   "tool",
-					"uses": "tool.call",
-					"with": map[string]any{
-						"name":      "mock_tool",
-						"arguments": map[string]any{},
+					"id": "call",
+					"on_entry": []any{
+						map[string]any{
+							"id":   "tool",
+							"uses": "tool.call",
+							"with": map[string]any{
+								"name":      "mock_tool",
+								"arguments": map[string]any{},
+							},
+						},
 					},
 				},
 			},
@@ -62,8 +69,8 @@ func TestDraftValidatePublishReload(t *testing.T) {
 	if !validation.Valid || !validation.Publishable {
 		t.Fatalf("validation = %#v, want valid and publishable", validation)
 	}
-	if _, ok := validation.Definition["nodes"]; !ok {
-		t.Fatalf("compiled definition = %#v, want workflow nodes", validation.Definition)
+	if _, ok := validation.Definition["states"]; !ok {
+		t.Fatalf("compiled definition = %#v, want workflow states", validation.Definition)
 	}
 	definitionRecord, err := service.PublishDraft(ctx, draft.ID)
 	if err != nil {
@@ -72,11 +79,20 @@ func TestDraftValidatePublishReload(t *testing.T) {
 	if definitionRecord.ID != "publishable" {
 		t.Fatalf("published definition id = %q, want publishable", definitionRecord.ID)
 	}
-	if definitionRecord.Kind != definition.KindWorkflow {
-		t.Fatalf("published definition kind = %q, want workflow", definitionRecord.Kind)
+	if definitionRecord.Kind != definition.KindStateMachine {
+		t.Fatalf("published definition kind = %q, want state_machine", definitionRecord.Kind)
 	}
 	if _, ok := service.DescribeDefinition("publishable"); !ok {
 		t.Fatalf("DescribeDefinition() did not find published definition")
+	}
+	if err := service.DeleteDraft(ctx, draft.ID); err != nil {
+		t.Fatalf("DeleteDraft() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(definitionsDir, "publishable.yaml")); !os.IsNotExist(err) {
+		t.Fatalf("published file after DeleteDraft() error = %v, want missing", err)
+	}
+	if _, ok := service.DescribeDefinition("publishable"); ok {
+		t.Fatalf("DescribeDefinition() found deleted definition")
 	}
 }
 
@@ -106,15 +122,21 @@ func TestDraftPublishBlocksUnavailableCapability(t *testing.T) {
 		ID:   "draft_blocked_capability",
 		Kind: draftKindWorkflow,
 		Body: map[string]any{
-			"kind": draftKindWorkflow,
-			"id":   "blocked_capability",
-			"name": "Blocked Capability",
-			"nodes": []any{
+			"kind":    definition.KindStateMachine,
+			"id":      "blocked_capability",
+			"name":    "Blocked Capability",
+			"initial": "verify",
+			"states": []any{
 				map[string]any{
-					"id":   "verify",
-					"uses": "command.execute",
-					"with": map[string]any{
-						"template_id": "go_test_all",
+					"id": "verify",
+					"on_entry": []any{
+						map[string]any{
+							"id":   "verify",
+							"uses": "command.execute",
+							"with": map[string]any{
+								"template_id": "go_test_all",
+							},
+						},
 					},
 				},
 			},
@@ -131,7 +153,7 @@ func TestDraftPublishBlocksUnavailableCapability(t *testing.T) {
 	if !validation.Valid || validation.Publishable {
 		t.Fatalf("validation = %#v, want valid but not publishable", validation)
 	}
-	if len(validation.Diagnostics) != 1 || validation.Diagnostics[0].Path != "nodes.verify.template_id" {
+	if len(validation.Diagnostics) != 1 || validation.Diagnostics[0].Path != "states.verify.on_entry.verify.template_id" {
 		t.Fatalf("diagnostics = %#v, want command template capability diagnostic", validation.Diagnostics)
 	}
 	if _, err := service.PublishDraft(ctx, draft.ID); err == nil {
@@ -144,16 +166,19 @@ func TestOpenCreatesEditableDraftForLoadedDefinition(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	writeTestDefinition(t, definitionsDir, "loaded.yaml", `
-kind: workflow
+kind: state_machine
 id: loaded_tool
 name: Loaded Tool
 description: Loaded from the config workflow directory.
-nodes:
-  - id: call_tool
-    type: tool
-    tool: mock_tool
-    with:
-      arguments: {}
+initial: call
+states:
+  - id: call
+    on_entry:
+      - id: call_tool
+        type: tool
+        tool: mock_tool
+        with:
+          arguments: {}
 `)
 	service, err := Open(ctx, Config{
 		DefinitionsDir: definitionsDir,
@@ -173,7 +198,7 @@ nodes:
 		if draft.ID != "draft_loaded_tool" {
 			continue
 		}
-		if draft.Kind != definition.KindWorkflow {
+		if draft.Kind != draftKindWorkflow {
 			t.Fatalf("draft kind = %q, want workflow", draft.Kind)
 		}
 		if draft.Name != "Loaded Tool" {
@@ -187,8 +212,8 @@ nodes:
 	t.Fatalf("ListDrafts() = %#v, want draft_loaded_tool", drafts)
 }
 
-// TestDraftAcceptsStateMachineKind verifies authoring accepts hierarchical workflow drafts.
-func TestDraftAcceptsStateMachineKind(t *testing.T) {
+// TestDraftUsesWorkflowArtifactKind verifies authoring stores workflows as workflow artifacts.
+func TestDraftUsesWorkflowArtifactKind(t *testing.T) {
 	ctx := context.Background()
 	service, err := Open(ctx, Config{
 		DefinitionsDir: t.TempDir(),
@@ -202,7 +227,7 @@ func TestDraftAcceptsStateMachineKind(t *testing.T) {
 
 	draft, err := service.CreateDraft(ctx, DraftRequest{
 		ID:   "draft_state_machine",
-		Kind: definition.KindStateMachine,
+		Kind: draftKindWorkflow,
 		Body: map[string]any{
 			"kind":    definition.KindStateMachine,
 			"id":      "state_machine",
@@ -215,8 +240,8 @@ func TestDraftAcceptsStateMachineKind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateDraft() error = %v", err)
 	}
-	if draft.Kind != definition.KindStateMachine {
-		t.Fatalf("draft kind = %q, want state_machine", draft.Kind)
+	if draft.Kind != draftKindWorkflow {
+		t.Fatalf("draft kind = %q, want workflow", draft.Kind)
 	}
 }
 
@@ -249,11 +274,17 @@ func TestActionCatalogOmitsRemovedActions(t *testing.T) {
 		ID:   "draft_cli",
 		Kind: draftKindWorkflow,
 		Body: map[string]any{
-			"kind": draftKindWorkflow,
-			"id":   "cli_draft",
-			"name": "CLI Draft",
-			"nodes": []any{
-				map[string]any{"id": "command", "uses": "cli.command"},
+			"kind":    definition.KindStateMachine,
+			"id":      "cli_draft",
+			"name":    "CLI Draft",
+			"initial": "command",
+			"states": []any{
+				map[string]any{
+					"id": "command",
+					"on_entry": []any{
+						map[string]any{"id": "command", "uses": "cli.command"},
+					},
+				},
 			},
 		},
 	})
@@ -295,158 +326,6 @@ func TestActionManifestsExposeContracts(t *testing.T) {
 		return
 	}
 	t.Fatalf("ActionManifests() missing tool.call")
-}
-
-// TestDraftEdgeCompatibilityReportsContracts verifies node contracts can be checked before publishing.
-func TestDraftEdgeCompatibilityReportsContracts(t *testing.T) {
-	ctx := context.Background()
-	service, err := Open(ctx, Config{
-		DefinitionsDir: t.TempDir(),
-		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
-		RequestTimeout: time.Second,
-	})
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	defer service.Close()
-
-	draft, err := service.CreateDraft(ctx, DraftRequest{
-		ID:   "draft_compatibility",
-		Kind: draftKindWorkflow,
-		Body: map[string]any{
-			"kind": draftKindWorkflow,
-			"id":   "compatibility",
-			"nodes": []any{
-				map[string]any{
-					"id":   "source",
-					"uses": "tool.call",
-					"output": map[string]any{
-						"produces": []any{map[string]any{"kind": "object"}},
-						"facets":   []any{"document.text"},
-					},
-				},
-				map[string]any{
-					"id":   "direct_target",
-					"uses": "tool.call",
-					"input": map[string]any{
-						"accepts":         []any{map[string]any{"kind": "object"}},
-						"required_facets": []any{"document.text"},
-					},
-				},
-				map[string]any{
-					"id":   "blocked_target",
-					"uses": "tool.call",
-					"input": map[string]any{
-						"required_facets": []any{"customer.email"},
-					},
-				},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("CreateDraft() error = %v", err)
-	}
-
-	direct, err := service.CheckDraftEdgeCompatibility(ctx, draft.ID, EdgeCompatibilityRequest{
-		SourceNodeID: "source",
-		TargetNodeID: "direct_target",
-	})
-	if err != nil {
-		t.Fatalf("CheckDraftEdgeCompatibility() direct error = %v", err)
-	}
-	if direct.Compatibility.Status != contracts.CompatibilityDirect {
-		t.Fatalf("direct compatibility = %#v, want direct", direct.Compatibility)
-	}
-	blocked, err := service.CheckDraftEdgeCompatibility(ctx, draft.ID, EdgeCompatibilityRequest{
-		SourceNodeID: "source",
-		TargetNodeID: "blocked_target",
-	})
-	if err != nil {
-		t.Fatalf("CheckDraftEdgeCompatibility() blocked error = %v", err)
-	}
-	if blocked.Compatibility.Status != contracts.CompatibilityBlocked {
-		t.Fatalf("blocked compatibility = %#v, want blocked", blocked.Compatibility)
-	}
-}
-
-// TestAdapterChoicePersistsReusableAdapter verifies ambiguous edges can be resolved once.
-func TestAdapterChoicePersistsReusableAdapter(t *testing.T) {
-	ctx := context.Background()
-	service, err := Open(ctx, Config{
-		DefinitionsDir: t.TempDir(),
-		DatabasePath:   filepath.Join(t.TempDir(), "workflow.db"),
-		RequestTimeout: time.Second,
-	})
-	if err != nil {
-		t.Fatalf("Open() error = %v", err)
-	}
-	defer service.Close()
-
-	draft, err := service.CreateDraft(ctx, DraftRequest{
-		ID:   "draft_adapter_choice",
-		Kind: draftKindWorkflow,
-		Body: map[string]any{
-			"kind": draftKindWorkflow,
-			"id":   "adapter_choice",
-			"nodes": []any{
-				map[string]any{
-					"id":   "source",
-					"uses": "tool.call",
-					"output": map[string]any{
-						"produces": []any{map[string]any{"kind": "object"}},
-						"facets":   []any{"contact.email", "account.owner.email"},
-					},
-				},
-				map[string]any{
-					"id":   "target",
-					"uses": "tool.call",
-					"input": map[string]any{
-						"accepts":         []any{map[string]any{"kind": "object"}},
-						"required_facets": []any{"email.recipient"},
-					},
-				},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatalf("CreateDraft() error = %v", err)
-	}
-	initial, err := service.CheckDraftEdgeCompatibility(ctx, draft.ID, EdgeCompatibilityRequest{
-		SourceNodeID: "source",
-		TargetNodeID: "target",
-	})
-	if err != nil {
-		t.Fatalf("CheckDraftEdgeCompatibility() initial error = %v", err)
-	}
-	if initial.Compatibility.Status != contracts.CompatibilityNeedsUserChoice {
-		t.Fatalf("initial compatibility = %#v, want needs_user_choice", initial.Compatibility)
-	}
-
-	result, err := service.SaveAdapterChoice(ctx, AdapterChoiceRequest{
-		DraftID:      draft.ID,
-		SourceNodeID: "source",
-		TargetNodeID: "target",
-		ChoiceIDs:    []string{initial.Compatibility.Choices[0].ID},
-	})
-	if err != nil {
-		t.Fatalf("SaveAdapterChoice() error = %v", err)
-	}
-	if result.Adapter.Kind != adapters.KindMapping {
-		t.Fatalf("adapter = %#v, want mapping adapter", result.Adapter)
-	}
-	after, err := service.CheckDraftEdgeCompatibility(ctx, draft.ID, EdgeCompatibilityRequest{
-		SourceNodeID: "source",
-		TargetNodeID: "target",
-	})
-	if err != nil {
-		t.Fatalf("CheckDraftEdgeCompatibility() after error = %v", err)
-	}
-	if after.Compatibility.Status != contracts.CompatibilityAdapted || after.Compatibility.AdapterRef != result.Artifact.ID {
-		t.Fatalf("after compatibility = %#v, want reusable adapter ref %q", after.Compatibility, result.Artifact.ID)
-	}
-	if after.SuggestedAdapter.Kind != adapters.KindMapping {
-		t.Fatalf("suggested adapter = %#v, want persisted mapping adapter", after.SuggestedAdapter)
-	}
 }
 
 // TestDesignAssistantPersistsValidatedArtifacts verifies suggestions persist only deterministic artifacts.
@@ -553,7 +432,7 @@ func TestDesignAssistantPersistsFacetAndExplanationArtifacts(t *testing.T) {
 				Body: map[string]any{
 					"workflow_id": "email_approval",
 					"summary":     "Customer email is mapped into the approval recipient facet.",
-					"decisions":   []any{"Use a mapping adapter for semantic alignment."},
+					"decisions":   []any{"Use typed state actions for semantic alignment."},
 				},
 			},
 		}},
@@ -623,8 +502,8 @@ func TestDesignAssistantVerifiesExternalManifestArtifacts(t *testing.T) {
 	}
 }
 
-// TestWorkflowDraftPublishPreservesEdges verifies pipe edges are published.
-func TestWorkflowDraftPublishPreservesEdges(t *testing.T) {
+// TestWorkflowDraftPublishPreservesHierarchy verifies nested states are published.
+func TestWorkflowDraftPublishPreservesHierarchy(t *testing.T) {
 	ctx := context.Background()
 	definitionsDir := t.TempDir()
 	service, err := Open(ctx, Config{
@@ -639,16 +518,24 @@ func TestWorkflowDraftPublishPreservesEdges(t *testing.T) {
 
 	draft, err := service.CreateDraft(ctx, DraftRequest{
 		ID:   "draft_hierarchy",
-		Kind: definition.KindWorkflow,
+		Kind: draftKindWorkflow,
 		Body: map[string]any{
-			"kind": definition.KindWorkflow,
-			"id":   "hierarchy_publish",
-			"nodes": []any{
-				map[string]any{"id": "first", "uses": "data.assert", "with": map[string]any{"path": "body.value.ready", "mode": "exists"}},
-				map[string]any{"id": "second", "uses": "data.assert", "with": map[string]any{"path": "body.value.ready", "mode": "exists"}},
-			},
-			"edges": []any{
-				map[string]any{"from": map[string]any{"node": "first"}, "to": map[string]any{"node": "second"}},
+			"kind":    definition.KindStateMachine,
+			"id":      "hierarchy_publish",
+			"initial": "parent",
+			"states": []any{
+				map[string]any{
+					"id":      "parent",
+					"initial": "child",
+					"states": []any{
+						map[string]any{
+							"id": "child",
+							"on_entry": []any{
+								map[string]any{"id": "first", "uses": "data.assert", "with": map[string]any{"path": "workflow_input.ready", "mode": "exists"}},
+							},
+						},
+					},
+				},
 			},
 		},
 	})
@@ -662,8 +549,8 @@ func TestWorkflowDraftPublishPreservesEdges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFile() error = %v", err)
 	}
-	if len(loaded.Definition.Edges) != 1 || loaded.Definition.Edges[0].From.Node != "first" {
-		t.Fatalf("published edges = %#v, want first -> second", loaded.Definition.Edges)
+	if len(loaded.Definition.States) != 1 || loaded.Definition.States[0].Initial != "child" {
+		t.Fatalf("published states = %#v, want parent with child initial", loaded.Definition.States)
 	}
 }
 

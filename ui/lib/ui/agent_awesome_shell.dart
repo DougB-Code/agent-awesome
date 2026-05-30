@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../app/app_controller.dart';
 import 'theme.dart';
@@ -95,9 +96,7 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
               onSelected: _selectSection,
               onToggleSidebar: _toggleSidebar,
               onSubmit: _submitCommand,
-              onNewChat: _startNewChat,
               onToggleAssistantChat: _toggleAssistantChatPanel,
-              onStartChatWithProfile: _startNewChatWithProfile,
               onSelectHistoryChat: _selectHistoryChat,
               onOpenSection: _selectSection,
               onOpenSettingsSection: _openSettingsSection,
@@ -183,6 +182,14 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           ),
           legacyOpen: widget.controller.automationsChatPanelOpen,
         );
+      case AppSections.automationAgents:
+        return _withAssistantChat(
+          AutomationAgentsCommandPanel(
+            controller: widget.controller,
+            onAreaChanged: _rememberArea(AppSections.automationAgents),
+          ),
+          legacyOpen: widget.controller.automationsChatPanelOpen,
+        );
       case AppSections.automationMcpServers:
         return _withAssistantChat(
           McpServersCommandPanel(
@@ -244,9 +251,13 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
         builder: (context) {
           return DecoratedBox(
             key: const ValueKey<String>('assistant-chat-split-pane'),
+            position: DecorationPosition.foreground,
             decoration: BoxDecoration(
               border: Border(
-                left: BorderSide(color: context.agentAwesomeColors.border),
+                left: BorderSide(
+                  color: context.agentAwesomeColors.border,
+                  width: AgentAwesomeStrokeTokens.dividerWidth,
+                ),
               ),
             ),
             child: _ChatCommandPanel(controller: widget.controller),
@@ -316,23 +327,21 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
   }
 
   /// Starts a new chat from the global command input.
-  Future<void> _submitCommand({String profilePath = ''}) async {
+  Future<void> _submitCommand() async {
     final value = _commandController.text;
     _commandController.clear();
     setState(() {
       _section = AppSections.chat;
       _chatDetailModeId = _chatConversationDetailId;
     });
-    final created = await widget.controller.createChat(
-      profilePath: profilePath,
-    );
+    final created = await widget.controller.createChat();
     if (created && value.trim().isNotEmpty) {
       await widget.controller.sendUserMessage(value);
     }
   }
 
   /// Builds the context used by Enter-submitted global commands.
-  CommandContext _commandContext(String text, {String profilePath = ''}) {
+  CommandContext _commandContext(String text) {
     return CommandContext(
       section: _section,
       area: _commandAreaForSection(),
@@ -343,7 +352,6 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           : widget.controller.memorySelectionKey(
               widget.controller.selectedMemory!,
             ),
-      profilePath: profilePath,
     );
   }
 
@@ -410,24 +418,6 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     setState(() {
       _chatDetailModeId = modeId;
     });
-  }
-
-  /// Starts a blank chat from the global app bar.
-  Future<void> _startNewChat() async {
-    setState(() {
-      _section = AppSections.chat;
-      _chatDetailModeId = _chatConversationDetailId;
-    });
-    await widget.controller.createChat();
-  }
-
-  /// Starts a blank chat with a specific runtime profile.
-  Future<void> _startNewChatWithProfile(String profilePath) async {
-    setState(() {
-      _section = AppSections.chat;
-      _chatDetailModeId = _chatConversationDetailId;
-    });
-    await widget.controller.createChat(profilePath: profilePath);
   }
 
   /// Selects an existing saved chat from quick access.

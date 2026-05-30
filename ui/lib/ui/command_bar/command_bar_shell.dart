@@ -11,9 +11,7 @@ class CommandBar extends StatefulWidget {
     required this.commandContext,
     required this.onSubmitScreenCommand,
     required this.onSubmit,
-    required this.onNewChat,
     required this.onToggleAssistantChat,
-    required this.onStartChatWithProfile,
     required this.onSelectHistoryChat,
     required this.onOpenSection,
     required this.onOpenSettingsSection,
@@ -29,26 +27,19 @@ class CommandBar extends StatefulWidget {
   final AgentAwesomeAppController appController;
 
   /// Current screen context used by plain Enter commands.
-  final CommandContext Function(String text, {String profilePath})
-  commandContext;
+  final CommandContext Function(String text) commandContext;
 
   /// Sends the current command input to the active screen.
   final Future<void> Function(CommandContext context) onSubmitScreenCommand;
 
   /// Sends the current command input into a new chat.
-  final Future<void> Function({String profilePath}) onSubmit;
-
-  /// Starts a blank default-profile chat.
-  final VoidCallback onNewChat;
+  final Future<void> Function() onSubmit;
 
   /// Toggles the auxiliary AI chat panel.
   final VoidCallback onToggleAssistantChat;
 
   /// Whether the auxiliary AI chat pane can be opened for the current screen.
   final bool assistantChatEnabled;
-
-  /// Starts a blank chat with a chosen runtime profile.
-  final ValueChanged<String> onStartChatWithProfile;
 
   /// Opens an existing saved chat.
   final ValueChanged<String> onSelectHistoryChat;
@@ -81,8 +72,8 @@ class _CommandBarState extends State<CommandBar> {
   final LayerLink _fieldLink = LayerLink();
   OverlayEntry? _quickAccessEntry;
   bool _quickAccessRebuildScheduled = false;
-  bool _profileSwitching = false;
-  String _profilePathForNextChat = '';
+  bool _agentSwitching = false;
+  bool _memorySwitching = false;
 
   /// Cleans up quick-access overlay and text focus resources.
   @override
@@ -108,13 +99,60 @@ class _CommandBarState extends State<CommandBar> {
       decoration: BoxDecoration(
         color: colors.chrome,
         gradient: context.agentAwesomeChromeGradient,
-        border: Border(bottom: BorderSide(color: colors.border)),
+        border: Border(
+          bottom: BorderSide(
+            color: colors.border,
+            width: AgentAwesomeStrokeTokens.dividerWidth,
+          ),
+        ),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 760;
           final actionCompact = constraints.maxWidth < 980;
           final roomy = constraints.maxWidth >= 1400;
+          final actionGap = compact ? 8.0 : 10.0;
+          final actions = <Widget>[
+            _CommandAgentPicker(
+              agents: _agentEntries(),
+              activePath: widget.appController.defaultAgentConfigPath,
+              compact: actionCompact,
+              switching: _agentSwitching,
+              size: _buttonSize,
+              onChanged: _agentSwitching
+                  ? null
+                  : (path) => unawaited(_handleActiveAgentChanged(path)),
+              onManageAgents: _handleManageAgents,
+              onOpen: _handleExternalControlOpened,
+            ),
+            _CommandMemoryPicker(
+              domains: _memoryEntries(),
+              activeId: widget.appController.selectedMemoryDomainId,
+              compact: actionCompact,
+              switching: _memorySwitching,
+              size: _buttonSize,
+              onChanged: _memorySwitching
+                  ? null
+                  : (domainId) =>
+                        unawaited(_handleMemoryDomainChanged(domainId)),
+              onManageMemory: _handleManageMemory,
+              onOpen: _handleExternalControlOpened,
+            ),
+            if (!compact && !widget.appController.gettingStartedCompleted)
+              _SetupStatusButton(onTap: _handleOpenSetup),
+            if (roomy) const _ThemeBadge(),
+            _CommandChromeButton(
+              icon: Icons.chat_bubble_outline,
+              label: '',
+              tooltip: widget.assistantChatEnabled
+                  ? 'AI chat'
+                  : 'AI chat is unavailable in this view',
+              size: _buttonSize,
+              onTap: widget.assistantChatEnabled
+                  ? _handleAssistantChatToggle
+                  : null,
+            ),
+          ];
           return Padding(
             padding: EdgeInsets.symmetric(
               horizontal: compact ? 12 : _horizontalPadding,
@@ -142,44 +180,10 @@ class _CommandBarState extends State<CommandBar> {
                     ),
                   ),
                 ),
-                SizedBox(width: compact ? 10 : 16),
-                _CommandChromeButton(
-                  icon: Icons.add,
-                  label: actionCompact ? '' : 'New chat',
-                  tooltip: 'New chat',
-                  size: _buttonSize,
-                  onTap: _handleNewChat,
-                ),
-                SizedBox(width: compact ? 8 : 10),
-                _CommandProfilePicker(
-                  profiles: _profileEntries(),
-                  activePath: widget.appController.runtimeProfilePath,
-                  defaultPath: widget.appController.defaultChatProfilePath,
-                  compact: actionCompact,
-                  switching: _profileSwitching,
-                  size: _buttonSize,
-                  onChanged: _profileSwitching
-                      ? null
-                      : (path) => unawaited(_handleActiveProfileChanged(path)),
-                  onManageProfiles: _handleManageProfiles,
-                  onOpen: _handleExternalControlOpened,
-                ),
-                SizedBox(width: compact ? 8 : 10),
-                if (!compact && !widget.appController.gettingStartedCompleted)
-                  _SetupStatusButton(onTap: _handleOpenSetup),
-                if (roomy) ...const <Widget>[SizedBox(width: 8), _ThemeBadge()],
-                SizedBox(width: compact ? 8 : 10),
-                _CommandChromeButton(
-                  icon: Icons.chat_bubble_outline,
-                  label: '',
-                  tooltip: widget.assistantChatEnabled
-                      ? 'AI chat'
-                      : 'AI chat is unavailable in this view',
-                  size: _buttonSize,
-                  onTap: widget.assistantChatEnabled
-                      ? _handleAssistantChatToggle
-                      : null,
-                ),
+                for (final action in actions) ...<Widget>[
+                  SizedBox(width: actionGap),
+                  action,
+                ],
               ],
             ),
           );
@@ -197,28 +201,13 @@ class _CommandBarState extends State<CommandBar> {
       return;
     }
     widget.commandController.clear();
-    final profilePath = _consumeProfilePathForNextChat();
-    await widget.onSubmitScreenCommand(
-      widget.commandContext(text, profilePath: profilePath),
-    );
+    await widget.onSubmitScreenCommand(widget.commandContext(text));
   }
 
   /// Starts a chat from the global input and closes transient navigation.
   Future<void> _handleNewChatWithText() async {
     _removeQuickAccess();
-    final profilePath = _consumeProfilePathForNextChat();
-    await widget.onSubmit(profilePath: profilePath);
-  }
-
-  /// Starts an empty chat from the global bar.
-  void _handleNewChat() {
-    _removeQuickAccess();
-    final profilePath = _consumeProfilePathForNextChat();
-    if (profilePath.isEmpty) {
-      widget.onNewChat();
-      return;
-    }
-    widget.onStartChatWithProfile(profilePath);
+    await widget.onSubmit();
   }
 
   /// Toggles the global auxiliary AI chat pane.
@@ -229,7 +218,6 @@ class _CommandBarState extends State<CommandBar> {
 
   /// Opens the setup wizard from the app shell.
   void _handleOpenSetup() {
-    _clearProfilePathForNextChat();
     _removeQuickAccess();
     widget.onOpenSetup();
   }
@@ -240,39 +228,64 @@ class _CommandBarState extends State<CommandBar> {
     _removeQuickAccess();
   }
 
-  /// Switches the active runtime profile from the top-bar picker.
-  Future<void> _handleActiveProfileChanged(String profilePath) async {
-    if (profilePath.trim().isEmpty ||
-        profilePath == widget.appController.runtimeProfilePath ||
-        _profileSwitching) {
+  /// Switches the active agent from the top-bar picker.
+  Future<void> _handleActiveAgentChanged(String agentPath) async {
+    if (agentPath.trim().isEmpty ||
+        agentPath == widget.appController.defaultAgentConfigPath ||
+        _agentSwitching) {
       return;
     }
-    _clearProfilePathForNextChat();
     _removeQuickAccess();
     setState(() {
-      _profileSwitching = true;
+      _agentSwitching = true;
     });
     try {
-      await widget.appController.loadRuntimeProfileFromPath(profilePath);
+      await widget.appController.selectActiveAgentConfig(agentPath);
     } finally {
       if (mounted) {
         setState(() {
-          _profileSwitching = false;
+          _agentSwitching = false;
         });
       }
     }
   }
 
-  /// Opens profile settings from point-of-use profile controls.
-  void _handleManageProfiles() {
-    _clearProfilePathForNextChat();
+  /// Switches the default memory domain from the top-bar picker.
+  Future<void> _handleMemoryDomainChanged(String domainId) async {
+    if (domainId.trim().isEmpty ||
+        domainId == widget.appController.selectedMemoryDomainId ||
+        _memorySwitching) {
+      return;
+    }
     _removeQuickAccess();
-    widget.onOpenSettingsSection('Profiles');
+    setState(() {
+      _memorySwitching = true;
+    });
+    try {
+      await widget.appController.selectDefaultMemoryDomain(domainId);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _memorySwitching = false;
+        });
+      }
+    }
+  }
+
+  /// Opens agent authoring from point-of-use controls.
+  void _handleManageAgents() {
+    _removeQuickAccess();
+    widget.onOpenSection(AppSections.automationAgents);
+  }
+
+  /// Opens memory settings from point-of-use controls.
+  void _handleManageMemory() {
+    _removeQuickAccess();
+    widget.onOpenSettingsSection('Memory');
   }
 
   /// Opens the full chat workspace from recent-chat quick access.
   void _handleOpenAllChats() {
-    _clearProfilePathForNextChat();
     _removeQuickAccess();
     widget.onOpenSection(AppSections.chat);
   }
@@ -322,7 +335,6 @@ class _CommandBarState extends State<CommandBar> {
                   child: QuickAccessMenu(
                     groups: _quickAccessGroups(),
                     onViewSettings: () {
-                      _clearProfilePathForNextChat();
                       _removeQuickAccess();
                       widget.onOpenSettings();
                     },
@@ -378,12 +390,12 @@ class _CommandBarState extends State<CommandBar> {
   List<QuickAccessGroup> _quickAccessGroups() {
     return <QuickAccessGroup>[
       QuickAccessGroup(
-        title: 'Profiles',
-        icon: Icons.manage_accounts_outlined,
-        emptyLabel: 'No profiles configured',
-        actions: _profileActions(),
+        title: 'Agents',
+        icon: Icons.psychology_outlined,
+        emptyLabel: 'No agents configured',
+        actions: _agentActions(),
         linkLabel: 'Manage',
-        onLinkTap: _handleManageProfiles,
+        onLinkTap: _handleManageAgents,
       ),
       QuickAccessGroup(
         title: 'Recent chats',
@@ -402,86 +414,51 @@ class _CommandBarState extends State<CommandBar> {
     ];
   }
 
-  /// Builds new-chat actions for configured runtime profiles.
-  List<QuickAccessAction> _profileActions() {
-    final profiles = _profileEntries();
+  /// Builds quick actions for configured agents.
+  List<QuickAccessAction> _agentActions() {
+    final agents = _agentEntries();
     return <QuickAccessAction>[
-      for (final profile in profiles)
+      for (final agent in agents)
         QuickAccessAction(
-          label: profile.label,
-          detail: _profileDetail(profile),
-          icon: profile.path == _profilePathForNextChat || profile.active
+          label: agent.label,
+          detail: _agentDetail(agent),
+          icon: agent.path == widget.appController.defaultAgentConfigPath
               ? Icons.check_circle_outline
-              : Icons.person_outline,
-          onTap: () => _selectProfileForNextChat(profile.path),
+              : Icons.psychology_outlined,
+          onTap: () => unawaited(_handleActiveAgentChanged(agent.path)),
         ),
     ];
   }
 
-  /// Selects a profile for the next top-bar chat without closing quick access.
-  void _selectProfileForNextChat(String profilePath) {
-    setState(() {
-      _profilePathForNextChat = profilePath;
-    });
-    _scheduleQuickAccessRebuild();
-    _focusCommandInput();
-  }
-
-  /// Focuses the global chat input after selecting a profile.
-  void _focusCommandInput() {
-    if (!mounted) {
-      return;
+  /// Returns agent choices, including the loaded agent path when needed.
+  List<ConfigFileEntry> _agentEntries() {
+    if (widget.appController.availableAgentConfigs.isNotEmpty) {
+      return widget.appController.availableAgentConfigs;
     }
-    FocusScope.of(context).requestFocus(_focusNode);
-  }
-
-  /// Returns and clears the selected profile for the next top-bar chat.
-  String _consumeProfilePathForNextChat() {
-    final profilePath = _profilePathForNextChat;
-    _clearProfilePathForNextChat();
-    return profilePath;
-  }
-
-  /// Clears a staged profile when the next action is not a new chat.
-  void _clearProfilePathForNextChat() {
-    if (_profilePathForNextChat.isNotEmpty && mounted) {
-      setState(() {
-        _profilePathForNextChat = '';
-      });
+    final path = widget.appController.runtimeProfile?.harness.agentConfigPath;
+    if (path == null || path.trim().isEmpty) {
+      return const <ConfigFileEntry>[];
     }
-  }
-
-  /// Returns profile choices, including the loaded profile when needed.
-  List<RuntimeProfileFileEntry> _profileEntries() {
-    if (widget.appController.availableProfiles.isNotEmpty) {
-      return widget.appController.availableProfiles;
-    }
-    final profile = widget.appController.runtimeProfile;
-    if (profile == null || widget.appController.runtimeProfilePath.isEmpty) {
-      return const <RuntimeProfileFileEntry>[];
-    }
-    return <RuntimeProfileFileEntry>[
-      RuntimeProfileFileEntry(
-        path: widget.appController.runtimeProfilePath,
-        id: profile.id,
-        label: profile.label,
-        active: true,
-      ),
+    return <ConfigFileEntry>[
+      ConfigFileEntry(path: path, kind: ConfigFileKind.agent, assigned: true),
     ];
   }
 
-  /// Labels profile rows with default and active state.
-  String _profileDetail(RuntimeProfileFileEntry profile) {
-    if (profile.path == _profilePathForNextChat) {
-      return 'Selected for new chat';
+  /// Returns selectable memory domains from the active service topology.
+  List<McpServerRuntime> _memoryEntries() {
+    return widget.appController.runtimeProfile?.memoryDomains
+            .where((domain) => domain.enabled)
+            .toList() ??
+        const <McpServerRuntime>[];
+  }
+
+  /// Labels agent rows with active state.
+  String _agentDetail(ConfigFileEntry agent) {
+    if (agent.path == widget.appController.defaultAgentConfigPath ||
+        agent.assigned) {
+      return 'Active agent';
     }
-    if (profile.path == widget.appController.defaultChatProfilePath) {
-      return 'Default profile';
-    }
-    if (profile.active) {
-      return 'Active profile';
-    }
-    return profile.id;
+    return agent.fileLabel;
   }
 
   /// Builds recent chat actions from the app history or active sessions.
@@ -492,20 +469,16 @@ class _CommandBarState extends State<CommandBar> {
           QuickAccessAction(
             label: chat.title,
             detail:
-                '${chat.profileLabel} • ${formatLocalMonthDayTime(chat.updatedAt)}',
+                '${chat.agentLabel} / ${formatLocalMonthDayTime(chat.updatedAt)}',
             icon: chat.key == widget.appController.selectedChatKey
                 ? Icons.check_circle_outline
                 : Icons.chat_bubble_outline,
             onTap: () {
-              _clearProfilePathForNextChat();
               _removeQuickAccess();
               widget.onSelectHistoryChat(chat.key);
             },
           ),
       ];
-    }
-    if (widget.appController.runtimeProfilePath.isEmpty) {
-      return const <QuickAccessAction>[];
     }
     return <QuickAccessAction>[
       for (final session in widget.appController.sessions.take(4))
@@ -516,11 +489,8 @@ class _CommandBarState extends State<CommandBar> {
               ? Icons.check_circle_outline
               : Icons.chat_bubble_outline,
           onTap: () {
-            _clearProfilePathForNextChat();
             _removeQuickAccess();
-            widget.onSelectHistoryChat(
-              '${widget.appController.runtimeProfilePath}::${session.id}',
-            );
+            widget.onSelectHistoryChat(session.id);
           },
         ),
     ];
@@ -530,7 +500,6 @@ class _CommandBarState extends State<CommandBar> {
   List<QuickAccessAction> _settingsActions() {
     return <QuickAccessAction>[
       _settingsAction('App', Icons.app_settings_alt_outlined),
-      _settingsAction('Profiles', Icons.manage_accounts_outlined),
       _settingsAction('Models', Icons.memory_outlined),
       _settingsAction('Memory', Icons.account_tree_outlined),
     ];
@@ -543,7 +512,6 @@ class _CommandBarState extends State<CommandBar> {
       detail: '',
       icon: icon,
       onTap: () {
-        _clearProfilePathForNextChat();
         _removeQuickAccess();
         widget.onOpenSettingsSection(section);
       },

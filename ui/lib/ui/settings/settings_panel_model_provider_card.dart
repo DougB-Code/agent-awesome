@@ -1,4 +1,4 @@
-/// Settings model provider card and provider YAML preview widgets.
+/// Settings model provider card widgets.
 part of 'settings_panel.dart';
 
 class _SettingsModelProviderCard extends StatelessWidget {
@@ -15,7 +15,7 @@ class _SettingsModelProviderCard extends StatelessWidget {
   /// Builds one editable provider card and its model rows.
   @override
   Widget build(BuildContext context) {
-    return FormSectionCard(
+    return FormPlainSection(
       title: provider.displayName,
       children: <Widget>[
         SettingsFieldGrid(
@@ -113,38 +113,5 @@ class _SettingsModelProviderCard extends StatelessWidget {
         ? nextModels.first.id
         : provider.defaultModel;
     onChanged(provider.copyWith(models: nextModels, defaultModel: nextDefault));
-  }
-}
-
-class _SettingsModelProviderYamlPreview extends StatelessWidget {
-  const _SettingsModelProviderYamlPreview({required this.provider});
-
-  final ModelProviderConfig provider;
-
-  /// Builds a selected-provider YAML preview without exposing sibling providers.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return FormSectionCard(
-      title: 'Provider YAML',
-      children: <Widget>[
-        Container(
-          width: double.infinity,
-          constraints: const BoxConstraints(maxHeight: 320),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: colors.surface,
-            border: Border.all(color: colors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: SingleChildScrollView(
-            child: SelectableText(
-              modelProviderConfigYaml(provider),
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }

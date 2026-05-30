@@ -31,18 +31,28 @@ class _LocalExecFlagDialogState extends State<_LocalExecFlagDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            TextField(
-              controller: _name,
-              autofocus: true,
-              decoration: SettingsInputDecoration.field(context, label: 'Flag'),
-            ),
-            TextField(
-              controller: _description,
-              decoration: SettingsInputDecoration.field(
-                context,
-                label: 'Description',
+            PanelLabeledFormControl(
+              label: 'Flag',
+              child: TextField(
+                controller: _name,
+                autofocus: true,
+                decoration: SettingsInputDecoration.field(
+                  context,
+                  label: 'Flag',
+                ),
               ),
-              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: SettingsFormMetrics.compactGap),
+            PanelLabeledFormControl(
+              label: 'Description',
+              child: TextField(
+                controller: _description,
+                decoration: SettingsInputDecoration.field(
+                  context,
+                  label: 'Description',
+                ),
+                onSubmitted: (_) => _save(),
+              ),
             ),
           ],
         ),
@@ -104,18 +114,28 @@ class _LocalExecSubcommandDialogState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            TextField(
-              controller: _name,
-              autofocus: true,
-              decoration: SettingsInputDecoration.field(context, label: 'Name'),
-            ),
-            TextField(
-              controller: _description,
-              decoration: SettingsInputDecoration.field(
-                context,
-                label: 'Description',
+            PanelLabeledFormControl(
+              label: 'Name',
+              child: TextField(
+                controller: _name,
+                autofocus: true,
+                decoration: SettingsInputDecoration.field(
+                  context,
+                  label: 'Name',
+                ),
               ),
-              onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: SettingsFormMetrics.compactGap),
+            PanelLabeledFormControl(
+              label: 'Description',
+              child: TextField(
+                controller: _description,
+                decoration: SettingsInputDecoration.field(
+                  context,
+                  label: 'Description',
+                ),
+                onSubmitted: (_) => _save(),
+              ),
             ),
           ],
         ),

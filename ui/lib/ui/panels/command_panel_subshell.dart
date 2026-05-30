@@ -36,9 +36,11 @@ class CommandPanelSubShell extends StatefulWidget {
     this.selectedAreaId = '',
     this.split = const PanelSplit(left: 0.72, min: 0.46, max: 0.86),
     this.gutterWidth = 0,
+    this.stackBelowWidth = 560,
     this.padding = EdgeInsets.zero,
     this.filterHint = 'Filter...',
     this.detailFilterHint = 'Filter selected...',
+    this.highlightFilterFields = true,
     this.emptyLabel = 'No command areas configured',
     this.showDetailPane = true,
     this.showAreaTabs = true,
@@ -136,6 +138,9 @@ class CommandPanelSubShell extends StatefulWidget {
   /// Horizontal space between command and detail columns.
   final double gutterWidth;
 
+  /// Width below which the command and detail columns stack vertically.
+  final double stackBelowWidth;
+
   /// Outer page padding for the subshell.
   final EdgeInsetsGeometry padding;
 
@@ -144,6 +149,9 @@ class CommandPanelSubShell extends StatefulWidget {
 
   /// Placeholder text for the detail-area filter.
   final String detailFilterHint;
+
+  /// Whether filter fields use the default filled field highlight.
+  final bool highlightFilterFields;
 
   /// Empty-state label when there are no command areas.
   final String emptyLabel;
@@ -227,7 +235,7 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     if (widget.areas.isEmpty) {
       return Padding(
         padding: widget.padding,
-        child: PanelEmptyBlock(label: widget.emptyLabel),
+        child: PanelEmptyBody(label: widget.emptyLabel),
       );
     }
     final boundedIndex = _selectedAreaIndex.clamp(0, widget.areas.length - 1);
@@ -258,6 +266,7 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
           widget.onAreaFilterSelected?.call(area, option.id),
       showAreaTabs: widget.showAreaTabs,
       showCollapseButton: widget.showPaneCollapseButtons,
+      highlightFilterField: widget.highlightFilterFields,
       child: area.builder(_query),
     );
     return Padding(
@@ -265,12 +274,16 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
       child: DecoratedBox(
         key: const ValueKey<String>('main-content-sub-shell'),
         decoration: BoxDecoration(
-          border: Border.all(color: context.agentAwesomeColors.border),
+          border: Border.all(
+            color: context.agentAwesomeColors.border,
+            width: AgentAwesomeStrokeTokens.dividerWidth,
+          ),
         ),
         child: widget.showDetailPane
             ? SplitPanelShell(
                 split: widget.split,
                 gutterWidth: widget.gutterWidth,
+                stackBelowWidth: widget.stackBelowWidth,
                 left: commandPane,
                 right: _CommandSubShellDetailPane(
                   title: detailTabs.isEmpty && detailMode.id.isNotEmpty
@@ -308,6 +321,7 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
                       setState(() => _detailQuery = value),
                   showCollapseButton: widget.showPaneCollapseButtons,
                   showHeader: widget.showDetailHeader,
+                  highlightFilterField: widget.highlightFilterFields,
                   onTitleTap: detailModes.length > 1
                       ? () =>
                             _selectNextDetailMode(area, detailModes, detailMode)
@@ -615,6 +629,8 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
   void _selectAreaById(String areaId) {
     final index = _areaIndexForId(areaId);
     if (index == _selectedAreaIndex) {
+      _clearCompanionSelection();
+      _clearPaneFiltersIfNeeded();
       return;
     }
     _clearCompanionSelection();
@@ -629,6 +645,22 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
       if (mounted) {
         _notifyAreaChanged();
       }
+    });
+  }
+
+  /// Clears pane filters for programmatic area reveals.
+  void _clearPaneFiltersIfNeeded() {
+    if (_query.isEmpty &&
+        _detailQuery.isEmpty &&
+        _filterController.text.isEmpty &&
+        _detailFilterController.text.isEmpty) {
+      return;
+    }
+    setState(() {
+      _query = '';
+      _detailQuery = '';
+      _filterController.clear();
+      _detailFilterController.clear();
     });
   }
 

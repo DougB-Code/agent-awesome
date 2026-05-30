@@ -190,11 +190,11 @@ class _ChatContextEmpty extends StatelessWidget {
   /// Builds the centered empty-state message.
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        label,
-        style: TextStyle(color: context.agentAwesomeColors.muted),
-      ),
+    return PanelEmptyBody(
+      icon: Icons.chat_bubble_outline,
+      label: label,
+      message: 'Use this chat to build context for the selected view.',
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
     );
   }
 }

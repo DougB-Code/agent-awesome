@@ -20,7 +20,7 @@ flutter run -d linux \
   --dart-define=AGENT_GATEWAY_BASE_URL=http://127.0.0.1:8070/api
 ```
 
-The default UI runtime profile can start memory, the harness, and the gateway
+The default UI runtime topology can start memory, the harness, and the gateway
 for development pilots. Use `AUTO_START_LOCAL_SERVICES=false` only when an outer
 launcher or cloud process manager owns those binaries.
 

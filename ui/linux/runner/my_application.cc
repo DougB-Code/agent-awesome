@@ -14,6 +14,25 @@ struct _MyApplication {
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
+// Applies dark desktop chrome so native GTK window surfaces match the app shell.
+static void apply_dark_window_chrome(GtkWindow* window) {
+  GtkCssProvider* provider = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(
+      provider,
+      "window, headerbar, headerbar.titlebar, .titlebar {"
+      " background: #070e18;"
+      " color: #f5f8ff;"
+      " border-color: #1f2d40;"
+      " box-shadow: none;"
+      "}"
+      "headerbar { border-bottom: 1px solid #1f2d40; }",
+      -1, nullptr);
+  gtk_style_context_add_provider_for_screen(
+      gtk_window_get_screen(window), GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  g_object_unref(provider);
+}
+
 static void first_frame_cb(MyApplication* self, FlView* view) {
   gtk_widget_show(gtk_widget_get_toplevel(GTK_WIDGET(view)));
 }
@@ -22,6 +41,8 @@ static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
+  gtk_window_set_title(window, "Agent Awesome");
+  apply_dark_window_chrome(window);
 
   gboolean use_header_bar = TRUE;
 #ifdef GDK_WINDOWING_X11
@@ -36,11 +57,9 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "Agent Awesome");
+    gtk_header_bar_set_title(header_bar, "");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
-  } else {
-    gtk_window_set_title(window, "Agent Awesome");
   }
 
   gtk_window_set_default_size(window, 1306, 856);
@@ -52,7 +71,7 @@ static void my_application_activate(GApplication* application) {
 
   FlView* view = fl_view_new(project);
   GdkRGBA background_color;
-  gdk_rgba_parse(&background_color, "#f3eee4");
+  gdk_rgba_parse(&background_color, "#040a12");
   fl_view_set_background_color(view, &background_color);
   gtk_widget_show(GTK_WIDGET(view));
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(view));

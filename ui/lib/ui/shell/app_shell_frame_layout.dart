@@ -15,9 +15,7 @@ class AppShellFrame extends StatelessWidget {
     required this.onSelected,
     required this.onToggleSidebar,
     required this.onSubmit,
-    required this.onNewChat,
     required this.onToggleAssistantChat,
-    required this.onStartChatWithProfile,
     required this.onSelectHistoryChat,
     required this.onOpenSection,
     required this.onOpenSettingsSection,
@@ -37,8 +35,7 @@ class AppShellFrame extends StatelessWidget {
   final TextEditingController commandController;
 
   /// Builds the current screen command context.
-  final CommandContext Function(String text, {String profilePath})
-  commandContext;
+  final CommandContext Function(String text) commandContext;
 
   /// Sends text as a command for the current screen.
   final Future<void> Function(CommandContext context) onSubmitScreenCommand;
@@ -53,16 +50,10 @@ class AppShellFrame extends StatelessWidget {
   final VoidCallback onToggleSidebar;
 
   /// Sends the global command input into a new chat.
-  final Future<void> Function({String profilePath}) onSubmit;
-
-  /// Starts a blank default-profile chat.
-  final VoidCallback onNewChat;
+  final Future<void> Function() onSubmit;
 
   /// Toggles the auxiliary AI chat panel.
   final VoidCallback onToggleAssistantChat;
-
-  /// Starts a blank chat with a selected runtime profile.
-  final ValueChanged<String> onStartChatWithProfile;
 
   /// Opens a saved chat from quick access.
   final ValueChanged<String> onSelectHistoryChat;
@@ -110,9 +101,7 @@ class AppShellFrame extends StatelessWidget {
                 commandContext: commandContext,
                 onSubmitScreenCommand: onSubmitScreenCommand,
                 onSubmit: onSubmit,
-                onNewChat: onNewChat,
                 onToggleAssistantChat: onToggleAssistantChat,
-                onStartChatWithProfile: onStartChatWithProfile,
                 onSelectHistoryChat: onSelectHistoryChat,
                 onOpenSection: onOpenSection,
                 onOpenSettingsSection: onOpenSettingsSection,

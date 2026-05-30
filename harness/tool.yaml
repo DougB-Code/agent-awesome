@@ -100,6 +100,35 @@ local-exec:
           output:
             format: text
             source: stdout
+    - name: yq
+      executable: yq
+      description: Read and query YAML documents with JSON output.
+      surface:
+        global-flags:
+          - name: -o
+            description: Select the output format.
+          - name: -e
+            description: Set the exit status from the expression result.
+      operations:
+        - name: read_file
+          description: Read one YAML file through a yq expression and return JSON.
+          args:
+            - -o=json
+            - "{{expression}}"
+            - "{{input_path}}"
+          input-schema:
+            type: object
+            required:
+              - expression
+              - input_path
+            properties:
+              expression:
+                type: string
+              input_path:
+                type: string
+          output:
+            format: json
+            source: stdout
     - name: rg
       executable: rg
       description: Search files recursively with ripgrep.
@@ -576,6 +605,30 @@ validations:
     assertions:
       - type: stdout-contains
         contains: valid
+  - id: yq_read_file_mocked
+    label: yq read file
+    mode: mocked
+    target:
+      type: command-operation
+      command: yq
+      operation: read_file
+    input:
+      expression: .
+      input_path: status.yaml
+    fixtures:
+      files:
+        - path: status.yaml
+          content: "ok: true\n"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: '{"ok":true}'
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: ok
   - id: rg_search_text_mocked
     label: ripgrep search text
     mode: mocked
@@ -922,6 +975,30 @@ validations:
       - type: json-path
         path: output.arguments.template_id
         equals: jq.validate_file
+  - id: yq_read_file_agent_mocked
+    label: agent selects yq read file
+    mode: mocked
+    prompt: Read status.yaml and return the parsed YAML object.
+    target:
+      type: agent-tool-call
+      command: yq
+      operation: read_file
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: yq.read_file
+            parameters:
+              expression: .
+              input_path: status.yaml
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: yq.read_file
   - id: rg_search_text_agent_mocked
     label: agent selects ripgrep search text
     mode: mocked
@@ -1284,6 +1361,30 @@ validations:
     assertions:
       - type: stdout-contains
         contains: valid
+  - id: yq_read_file_workflow_mocked
+    label: workflow invokes yq read file
+    mode: mocked
+    target:
+      type: workflow-node
+      command: yq
+      operation: read_file
+    input:
+      expression: .
+      input_path: status.yaml
+    fixtures:
+      files:
+        - path: status.yaml
+          content: "ok: true\n"
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: '{"ok":true}'
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: ok
   - id: rg_search_text_workflow_mocked
     label: workflow invokes ripgrep search text
     mode: mocked

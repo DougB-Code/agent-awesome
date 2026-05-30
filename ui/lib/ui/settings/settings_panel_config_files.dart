@@ -1,10 +1,6 @@
 /// Config file text editor widgets.
 part of 'settings_panel.dart';
 
-const String _settingsAgentDetailsMode = 'agent-details';
-const String _settingsAgentInstructionsMode = 'agent-instructions';
-const String _settingsAgentValidationsMode = 'agent-validations';
-
 class _SettingsConfigFileEditor extends StatefulWidget {
   const _SettingsConfigFileEditor({
     required this.controller,
@@ -68,20 +64,6 @@ class _SettingsConfigFileEditorState extends State<_SettingsConfigFileEditor> {
               initialSavedValue: _savedName,
               onSave: _rename,
             ),
-            _SettingsReadOnlyField(label: 'Path', value: widget.entry.path),
-            _SettingsActionRow(
-              children: <Widget>[
-                FilledButton.icon(
-                  onPressed: widget.entry.assigned
-                      ? null
-                      : () => unawaited(_assign()),
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: Text(
-                    widget.entry.assigned ? 'Assigned' : 'Use for profile',
-                  ),
-                ),
-              ],
-            ),
           ],
         ),
         _SettingsTextFileEditor(
@@ -91,16 +73,6 @@ class _SettingsConfigFileEditorState extends State<_SettingsConfigFileEditor> {
         ),
       ],
     );
-  }
-
-  Future<void> _assign() async {
-    try {
-      await widget.controller.assignConfigFile(widget.entry);
-      if (!mounted) {
-        return;
-      }
-      setState(() {});
-    } catch (_) {}
   }
 
   Future<void> _rename(String value) async {
@@ -120,8 +92,9 @@ class _SettingsConfigFileEditorState extends State<_SettingsConfigFileEditor> {
   }
 }
 
-class _SettingsAgentConfigCollection extends StatefulWidget {
-  const _SettingsAgentConfigCollection({
+class SettingsAgentConfigCollection extends StatefulWidget {
+  const SettingsAgentConfigCollection({
+    super.key,
     required this.controller,
     required this.entries,
     required this.assignedPath,
@@ -140,25 +113,20 @@ class _SettingsAgentConfigCollection extends StatefulWidget {
   final String query;
 
   @override
-  State<_SettingsAgentConfigCollection> createState() =>
+  State<SettingsAgentConfigCollection> createState() =>
       _SettingsAgentConfigCollectionState();
 }
 
 class _SettingsAgentConfigCollectionState
-    extends State<_SettingsAgentConfigCollection> {
+    extends State<SettingsAgentConfigCollection> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _description = TextEditingController();
   final TextEditingController _instruction = TextEditingController();
   AgentConfigDocument? _document;
-  AgentValidationSuiteResult? _validationResult;
-  AgentValidationFileResult? _validationFileResult;
-  String _validationError = '';
   String _savedName = '';
   String _savedDescription = '';
   String _savedInstruction = '';
   bool _loading = true;
-  bool _validationRunning = false;
-  String _validationRunningId = '';
 
   /// Loads the selected agent config file.
   @override
@@ -169,15 +137,10 @@ class _SettingsAgentConfigCollectionState
 
   /// Reloads structured state when the selected file changes.
   @override
-  void didUpdateWidget(covariant _SettingsAgentConfigCollection oldWidget) {
+  void didUpdateWidget(covariant SettingsAgentConfigCollection oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_selectedEntry()?.path != _selectedEntryFor(oldWidget)?.path) {
       _document = null;
-      _validationResult = null;
-      _validationFileResult = null;
-      _validationError = '';
-      _validationRunning = false;
-      _validationRunningId = '';
       _loading = true;
       unawaited(_load());
     }
@@ -221,15 +184,12 @@ class _SettingsAgentConfigCollectionState
     if (!SettingsQuery.matches(widget.query, _searchValues(entry, document))) {
       return PanelEmptyState(query: widget.query);
     }
-    return switch (widget.modeId) {
-      _settingsAgentInstructionsMode => _buildInstructions(document),
-      _settingsAgentValidationsMode => _buildValidations(entry, document),
-      _ => _buildDetails(entry, document),
-    };
+    return _buildDetails(entry, document);
   }
 
-  /// Builds high-level agent metadata fields.
+  /// Builds high-level agent metadata and instruction fields.
   Widget _buildDetails(ConfigFileEntry entry, AgentConfigDocument document) {
+    final profile = widget.controller.runtimeProfile;
     return FormPanel(
       children: <Widget>[
         FormPlainSection(
@@ -249,29 +209,6 @@ class _SettingsAgentConfigCollectionState
               minLines: 2,
               maxLines: 4,
             ),
-            _SettingsReadOnlyField(label: 'Path', value: entry.path),
-            _SettingsActionRow(
-              children: <Widget>[
-                FilledButton.icon(
-                  onPressed: entry.assigned ? null : () => unawaited(_assign()),
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: Text(entry.assigned ? 'Assigned' : 'Use for profile'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  /// Builds the agent instruction editor.
-  Widget _buildInstructions(AgentConfigDocument document) {
-    return FormPanel(
-      children: <Widget>[
-        FormPlainSection(
-          title: 'Instructions',
-          children: <Widget>[
             _SettingsAutoSaveTextField(
               label: 'Instruction',
               controller: _instruction,
@@ -282,31 +219,13 @@ class _SettingsAgentConfigCollectionState
             ),
           ],
         ),
-      ],
-    );
-  }
-
-  /// Builds the agent behavior validation runner.
-  Widget _buildValidations(
-    ConfigFileEntry entry,
-    AgentConfigDocument document,
-  ) {
-    return FormPanel(
-      children: <Widget>[
-        _SettingsAgentValidationCard(
-          validations: document.validations,
-          result: _validationResult,
-          fileResult: _validationFileResult,
-          error: _validationError,
-          runningId: _validationRunningId,
-          onRunAll: () => unawaited(_runValidations(entry)),
-          onAddValidation: () => unawaited(_addValidation()),
-          onValidationChanged: (id, validation) =>
-              unawaited(_saveValidation(id, validation)),
-          onDeleteValidation: (id) => unawaited(_deleteValidation(id)),
-          onRunValidation: (validationId) =>
-              unawaited(_runValidations(entry, validationId: validationId)),
-        ),
+        if (profile != null) ...<Widget>[
+          _SettingsMemoryAccessReviewTile(profile: profile),
+          _SettingsAgentMemoryTile(
+            profile: profile,
+            controller: widget.controller,
+          ),
+        ],
       ],
     );
   }
@@ -322,12 +241,11 @@ class _SettingsAgentConfigCollectionState
       document.name,
       document.description,
       document.instruction,
-      for (final validation in document.validations) ...<String>[
-        validation.id,
-        validation.label,
-        validation.description,
-        validation.prompt,
-        validation.mode,
+      if (widget.controller.runtimeProfile != null) ...<String>[
+        widget.controller.runtimeProfile!.agentMemory.actor,
+        widget.controller.runtimeProfile!.agentMemory.readDomains.join(' '),
+        widget.controller.runtimeProfile!.agentMemory.writeDomains.join(' '),
+        widget.controller.runtimeProfile!.agentMemory.defaultWriteDomain,
       ],
     ];
   }
@@ -338,7 +256,7 @@ class _SettingsAgentConfigCollectionState
   }
 
   /// Resolves the selected agent config entry for one widget snapshot.
-  ConfigFileEntry? _selectedEntryFor(_SettingsAgentConfigCollection widget) {
+  ConfigFileEntry? _selectedEntryFor(SettingsAgentConfigCollection widget) {
     if (widget.entries.isEmpty) {
       return null;
     }
@@ -427,21 +345,6 @@ class _SettingsAgentConfigCollectionState
     } catch (_) {}
   }
 
-  /// Assigns the selected agent config to the active profile.
-  Future<void> _assign() async {
-    final entry = _selectedEntry();
-    if (entry == null) {
-      return;
-    }
-    try {
-      await widget.controller.assignConfigFile(entry);
-      if (!mounted) {
-        return;
-      }
-      setState(() {});
-    } catch (_) {}
-  }
-
   /// Saves the user-facing agent name into typed config metadata.
   Future<void> _rename(String value) async {
     final entry = _selectedEntry();
@@ -487,119 +390,12 @@ class _SettingsAgentConfigCollectionState
     _savedInstruction = next.instruction;
     await _save(next);
   }
-
-  /// Adds one editable mocked validation case to the selected agent package.
-  Future<void> _addValidation() async {
-    final document = _document;
-    if (document == null) {
-      return;
-    }
-    final validation = _defaultAgentValidation(document.validations);
-    await _save(
-      document.copyWith(
-        validations: <AgentValidationConfig>[
-          ...document.validations,
-          validation,
-        ],
-      ),
-    );
-  }
-
-  /// Saves one updated validation case in the selected agent package.
-  Future<void> _saveValidation(
-    String id,
-    AgentValidationConfig validation,
-  ) async {
-    final document = _document;
-    if (document == null) {
-      return;
-    }
-    await _save(
-      document.copyWith(
-        validations: <AgentValidationConfig>[
-          for (final item in document.validations)
-            if (item.id == id) validation else item,
-        ],
-      ),
-    );
-  }
-
-  /// Removes one validation case from the selected agent package.
-  Future<void> _deleteValidation(String id) async {
-    final document = _document;
-    if (document == null) {
-      return;
-    }
-    await _save(
-      document.copyWith(
-        validations: <AgentValidationConfig>[
-          for (final item in document.validations)
-            if (item.id != id) item,
-        ],
-      ),
-    );
-  }
-
-  /// Runs configured validations for the selected agent package.
-  Future<void> _runValidations(
-    ConfigFileEntry entry, {
-    String validationId = '',
-  }) async {
-    if (_validationRunning) {
-      return;
-    }
-    final selectedId = validationId.trim();
-    setState(() {
-      _validationRunning = true;
-      _validationRunningId = selectedId.isEmpty
-          ? _allValidationRunId
-          : selectedId;
-      _validationError = '';
-    });
-    try {
-      final mode = _agentValidationModeForRun(
-        _document?.validations ?? const <AgentValidationConfig>[],
-        selectedId,
-      );
-      final result = await widget.controller.runAgentPackageValidations(
-        entry.path,
-        validationId: selectedId,
-        mode: mode,
-        live: mode == 'live',
-        requireValidations: selectedId.isEmpty,
-        requireAssertions: true,
-        requireToolContracts: true,
-      );
-      final fileResult = _agentValidationFileForEntry(result, entry);
-      final suite = fileResult.result;
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _validationResult = selectedId.isEmpty
-            ? suite
-            : _mergedAgentValidationResults(_validationResult, suite);
-        _validationFileResult = fileResult;
-        _validationError = '';
-        _validationRunning = false;
-        _validationRunningId = '';
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _validationError = error.toString();
-        _validationFileResult = null;
-        _validationRunning = false;
-        _validationRunningId = '';
-      });
-    }
-  }
 }
 
 class _SettingsAgentValidationCard extends StatelessWidget {
   const _SettingsAgentValidationCard({
+    this.title = 'Validations',
+    this.emptyLabel = 'No validations configured',
     required this.validations,
     required this.result,
     required this.fileResult,
@@ -612,6 +408,8 @@ class _SettingsAgentValidationCard extends StatelessWidget {
     required this.onRunValidation,
   });
 
+  final String title;
+  final String emptyLabel;
   final List<AgentValidationConfig> validations;
   final AgentValidationSuiteResult? result;
   final AgentValidationFileResult? fileResult;
@@ -634,7 +432,7 @@ class _SettingsAgentValidationCard extends StatelessWidget {
         item.id: item,
     };
     return FormPlainSection(
-      title: 'Validations',
+      title: title,
       children: <Widget>[
         _SettingsActionRow(
           children: <Widget>[
@@ -675,7 +473,7 @@ class _SettingsAgentValidationCard extends StatelessWidget {
         if (validations.isNotEmpty)
           const SizedBox(height: SettingsFormMetrics.sectionGap),
         if (validations.isEmpty)
-          const PanelEmptyBlock(label: 'No validations configured')
+          PanelEmptyBlock(label: emptyLabel)
         else
           for (var index = 0; index < validations.length; index++) ...<Widget>[
             if (index > 0)
@@ -1001,19 +799,25 @@ class _SettingsAgentValidationModeField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String>(
-        initialValue: value == 'live' ? 'live' : 'mocked',
-        items: const <DropdownMenuItem<String>>[
-          DropdownMenuItem<String>(value: 'mocked', child: Text('Mocked')),
-          DropdownMenuItem<String>(value: 'live', child: Text('Live')),
-        ],
-        onChanged: (next) {
-          if (next != null) {
-            onChanged(next);
-          }
-        },
-        decoration: SettingsInputDecoration.field(context, label: 'Mode'),
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: 'Mode',
+        child: DropdownButtonFormField<String>(
+          initialValue: value == 'live' ? 'live' : 'mocked',
+          isDense: true,
+          style: SettingsFormTextStyle.field(context),
+          isExpanded: true,
+          items: const <DropdownMenuItem<String>>[
+            DropdownMenuItem<String>(value: 'mocked', child: Text('Mocked')),
+            DropdownMenuItem<String>(value: 'live', child: Text('Live')),
+          ],
+          onChanged: (next) {
+            if (next != null) {
+              onChanged(next);
+            }
+          },
+          decoration: SettingsInputDecoration.field(context, label: 'Mode'),
+        ),
       ),
     );
   }

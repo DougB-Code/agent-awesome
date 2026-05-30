@@ -11,22 +11,34 @@ import '../panels/panels.dart';
 /// SettingsFormMetrics defines spacing and sizing used by settings forms.
 abstract final class SettingsFormMetrics {
   /// Outer padding for scrollable settings content.
-  static const EdgeInsets panelPadding = EdgeInsets.all(24);
+  static const EdgeInsets panelPadding = PanelFormMetrics.panelPadding;
 
   /// Padding inside each settings form section.
-  static const EdgeInsets sectionPadding = EdgeInsets.all(18);
+  static const EdgeInsets sectionPadding = PanelFormMetrics.sectionPadding;
 
   /// Gap between form sections.
-  static const double sectionGap = 18;
+  static const double sectionGap = PanelFormMetrics.sectionGap;
 
   /// Gap between fields inside a grid.
-  static const double fieldGap = 10;
+  static const double fieldGap = PanelFormMetrics.fieldGap;
 
   /// Compact vertical gap inside a section.
-  static const double compactGap = 10;
+  static const double compactGap = PanelFormMetrics.compactGap;
 
   /// Minimum width that allows two fields to sit side by side.
-  static const double twoColumnMinWidth = 760;
+  static const double twoColumnMinWidth = PanelFormMetrics.twoColumnMinWidth;
+}
+
+/// SettingsFormTextStyle builds shared settings form text styles.
+abstract final class SettingsFormTextStyle {
+  /// Creates the standard single-line input text style.
+  static TextStyle field(BuildContext context) {
+    return TextStyle(
+      color: context.agentAwesomeColors.ink,
+      fontSize: PanelFormMetrics.fieldFontSize,
+      height: PanelFormMetrics.fieldLineHeight,
+    );
+  }
 }
 
 /// SettingsInputDecoration builds the shared form field chrome.
@@ -37,6 +49,7 @@ abstract final class SettingsInputDecoration {
     required String label,
     String? hintText,
     bool isDense = false,
+    bool multiline = false,
     bool? alignLabelWithHint,
     FloatingLabelBehavior? floatingLabelBehavior,
     Widget? prefixIcon,
@@ -48,7 +61,6 @@ abstract final class SettingsInputDecoration {
     final colors = context.agentAwesomeColors;
     final border = _border(SettingsSaveFeedback.borderColorOf(context));
     return InputDecoration(
-      labelText: label,
       hintText: hintText,
       isDense: isDense,
       alignLabelWithHint: alignLabelWithHint,
@@ -58,11 +70,15 @@ abstract final class SettingsInputDecoration {
       suffixIcon: suffixIcon,
       suffixIconConstraints: suffixIconConstraints,
       filled: true,
-      fillColor: colors.surface,
+      fillColor: colors.field,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: multiline ? 12 : 8,
+      ),
       border: border,
       enabledBorder: border,
       disabledBorder: border,
-      focusedBorder: activeFeedback ? border : null,
+      focusedBorder: activeFeedback ? border : _border(colors.searchBorder),
     );
   }
 
@@ -70,7 +86,10 @@ abstract final class SettingsInputDecoration {
   static OutlineInputBorder _border(Color color) {
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: color),
+      borderSide: BorderSide(
+        color: color,
+        width: AgentAwesomeStrokeTokens.borderWidth,
+      ),
     );
   }
 }
@@ -265,33 +284,26 @@ class _SettingsSaveFeedbackScope extends InheritedWidget {
 }
 
 /// FormPanel renders grouped form content with standard padding.
-class FormPanel extends StatelessWidget {
+class FormPanel extends PanelFormView {
   /// Creates a reusable settings form panel.
-  const FormPanel({super.key, required this.children});
-
-  /// Form sections and content blocks.
-  final List<Widget> children;
-
-  /// Builds a scrollable settings form body.
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: SettingsFormMetrics.panelPadding,
-      itemBuilder: (context, index) => children[index],
-      separatorBuilder: (context, index) =>
-          const SizedBox(height: SettingsFormMetrics.sectionGap),
-      itemCount: children.length,
-    );
-  }
+  const FormPanel({super.key, required super.children});
 }
 
 /// FormSectionCard renders one bordered group inside a settings form.
 class FormSectionCard extends StatelessWidget {
   /// Creates a reusable form section card.
-  const FormSectionCard({super.key, this.title = '', required this.children});
+  const FormSectionCard({
+    super.key,
+    this.title = '',
+    this.icon,
+    required this.children,
+  });
 
   /// Optional section title.
   final String title;
+
+  /// Optional section icon.
+  final IconData? icon;
 
   /// Section content.
   final List<Widget> children;
@@ -300,44 +312,31 @@ class FormSectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PanelSectionBlock.gradient(
-      title: title,
+      title: '',
       padding: SettingsFormMetrics.sectionPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
+        children: <Widget>[
+          if (title.isNotEmpty) ...<Widget>[
+            PanelFormSectionHeader(title: title, icon: icon),
+            const SizedBox(height: 26),
+          ],
+          ...children,
+        ],
       ),
     );
   }
 }
 
 /// FormPlainSection renders one unframed group inside a settings form.
-class FormPlainSection extends StatelessWidget {
+class FormPlainSection extends PanelFormSection {
   /// Creates an unbordered form section.
-  const FormPlainSection({super.key, this.title = '', required this.children});
-
-  /// Optional section title.
-  final String title;
-
-  /// Section content.
-  final List<Widget> children;
-
-  /// Builds one plain settings-style form group.
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        if (title.isNotEmpty) ...<Widget>[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: PanelSectionLabel(title),
-          ),
-          const SizedBox(height: 12),
-        ],
-        ...children,
-      ],
-    );
-  }
+  const FormPlainSection({
+    super.key,
+    super.title = '',
+    super.icon,
+    required super.children,
+  });
 }
 
 /// SettingsFormSubsection renders a titled block inside one form section.
@@ -362,7 +361,7 @@ class SettingsFormSubsection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         PanelSectionLabel(title),
-        const SizedBox(height: 12),
+        const SizedBox(height: SettingsFormMetrics.compactGap),
         ...children,
       ],
     );
@@ -370,33 +369,9 @@ class SettingsFormSubsection extends StatelessWidget {
 }
 
 /// SettingsFieldGrid lays out fields in one or two responsive columns.
-class SettingsFieldGrid extends StatelessWidget {
+class SettingsFieldGrid extends PanelFieldGrid {
   /// Creates a reusable responsive settings field grid.
-  const SettingsFieldGrid({super.key, required this.children});
-
-  /// Field widgets to arrange.
-  final List<Widget> children;
-
-  /// Builds a stable responsive field grid.
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final useTwoColumns =
-            constraints.maxWidth >= SettingsFormMetrics.twoColumnMinWidth;
-        final itemWidth = useTwoColumns
-            ? (constraints.maxWidth - SettingsFormMetrics.fieldGap) / 2
-            : constraints.maxWidth;
-        return Wrap(
-          spacing: SettingsFormMetrics.fieldGap,
-          children: <Widget>[
-            for (final child in children)
-              SizedBox(width: itemWidth, child: child),
-          ],
-        );
-      },
-    );
-  }
+  const SettingsFieldGrid({super.key, required super.children});
 }
 
 /// SettingsFieldRow aligns leading, main, and trailing field controls.

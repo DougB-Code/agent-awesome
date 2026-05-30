@@ -18,6 +18,9 @@ abstract final class AppSections {
   /// State-machine workflow authoring section.
   static const String automationWorkflows = 'Workflows';
 
+  /// Reusable agent prompt package section.
+  static const String automationAgents = 'Agents';
+
   /// MCP server toolset configuration section.
   static const String automationMcpServers = 'MCP Servers';
 

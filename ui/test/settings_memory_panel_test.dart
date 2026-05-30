@@ -47,7 +47,7 @@ void main() {
   });
 }
 
-/// Builds a minimal multi-memory runtime profile for settings rendering.
+/// Builds a minimal multi-memory agent runtime topology for settings rendering.
 RuntimeProfile _multiMemoryProfile() {
   return const RuntimeProfile(
     id: 'multi',
@@ -60,7 +60,7 @@ RuntimeProfile _multiMemoryProfile() {
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: '/tmp/model.yaml',
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -73,7 +73,7 @@ RuntimeProfile _multiMemoryProfile() {
       apiBaseUrl: 'http://127.0.0.1:8070/api',
       healthUrl: 'http://127.0.0.1:8070/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:8080/api',
       contextBaseUrl: 'http://127.0.0.1:8081/api/context',
       memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
@@ -91,7 +91,7 @@ RuntimeProfile _multiMemoryProfile() {
         endpoint: 'http://127.0.0.1:8090/mcp',
         healthUrl: 'http://127.0.0.1:8090/healthz',
         workingDirectory: '/tmp/memory',
-        packagePath: './cmd/memoryd',
+        executablePath: '/tmp/bin/memoryd',
         dbPath: '/tmp/memory.db',
         dataDir: '/tmp/memory-files',
         arguments: <String>[],
@@ -105,7 +105,7 @@ RuntimeProfile _multiMemoryProfile() {
         endpoint: 'http://127.0.0.1:8091/mcp',
         healthUrl: 'http://127.0.0.1:8091/healthz',
         workingDirectory: '/tmp/memory',
-        packagePath: './cmd/memoryd',
+        executablePath: '/tmp/bin/memoryd',
         dbPath: '/tmp/project.db',
         dataDir: '/tmp/project-files',
         arguments: <String>[],

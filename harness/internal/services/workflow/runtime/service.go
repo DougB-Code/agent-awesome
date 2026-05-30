@@ -158,15 +158,28 @@ func (s *Service) reloadDefinitions(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
+		if err := s.store.UpsertDefinitionSource(ctx, store.PublishedDefinitionRecord{
+			DefinitionID: item.Definition.ID,
+			DraftID:      draftIDForDefinition(item.Definition.ID),
+			Path:         item.Path,
+			Hash:         item.Hash,
+		}); err != nil {
+			return err
+		}
 		ids = append(ids, item.Definition.ID)
 		nextDefs[item.Definition.ID] = item.Definition
 		nextHash[item.Definition.ID] = item.Hash
 		draftSources = append(draftSources, loadedDefinitionDraftSource{
 			definition: item.Definition,
 			body:       body,
+			path:       item.Path,
+			hash:       item.Hash,
 		})
 	}
 	if err := s.store.DeleteDefinitionsExcept(ctx, ids); err != nil {
+		return err
+	}
+	if err := s.store.DeletePublishedDefinitionsExcept(ctx, ids); err != nil {
 		return err
 	}
 	if err := s.ensureDraftsForDefinitions(ctx, draftSources); err != nil {
@@ -359,10 +372,10 @@ func (s *Service) Signal(ctx context.Context, runID string, signal string, paylo
 	if err := s.appendEvent(ctx, run.ID, "signal_received", "workflow signal received", map[string]any{"signal": signal, "payload": payload}); err != nil {
 		return store.RunRecord{}, err
 	}
-	if !definition.HasPipeGraph(def) && !definition.HasStateMachine(def) {
+	if !definition.HasStateMachine(def) {
 		return store.RunRecord{}, fmt.Errorf("workflow definition %q is not executable", def.ID)
 	}
-	if err := s.completePipePendingSignals(ctx, run, openItems, payload); err != nil {
+	if err := s.completePendingSignals(ctx, run, openItems, payload); err != nil {
 		return store.RunRecord{}, err
 	}
 	go s.executeRun(context.Background(), run.ID)

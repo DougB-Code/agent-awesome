@@ -760,10 +760,10 @@ func TestStaticLinuxToolsExposeOperations(t *testing.T) {
 	if got, want := strings.TrimSpace(cfg.Name), "Linux Tools"; got != want {
 		t.Fatalf("Tools.Name = %q, want %q", got, want)
 	}
-	if got, want := len(cfg.LocalExec.Commands), 11; got != want {
+	if got, want := len(cfg.LocalExec.Commands), 12; got != want {
 		t.Fatalf("len(LocalExec.Commands) = %d, want %d", got, want)
 	}
-	if got, want := len(cfg.Validations), 48; got != want {
+	if got, want := len(cfg.Validations), 51; got != want {
 		t.Fatalf("len(Validations) = %d, want %d", got, want)
 	}
 	for _, command := range cfg.LocalExec.Commands {

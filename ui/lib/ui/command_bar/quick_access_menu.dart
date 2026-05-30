@@ -88,15 +88,11 @@ class QuickAccessMenu extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.surface,
-        border: Border.all(color: colors.border),
+        border: Border.all(
+          color: colors.border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: colors.shadow,
-            blurRadius: 24,
-            offset: Offset(0, 12),
-          ),
-        ],
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxHeight: 360),
@@ -155,7 +151,11 @@ class QuickAccessMenu extends StatelessWidget {
                 ),
               ),
             ),
-            Divider(height: 1, color: colors.border),
+            Divider(
+              height: AgentAwesomeStrokeTokens.dividerWidth,
+              thickness: AgentAwesomeStrokeTokens.dividerWidth,
+              color: colors.border,
+            ),
             _QuickAccessFooter(onViewSettings: onViewSettings),
           ],
         ),

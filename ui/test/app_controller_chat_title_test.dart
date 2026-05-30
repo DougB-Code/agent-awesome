@@ -23,9 +23,8 @@ void main() {
       final historyStore = _MemoryChatHistoryStore(
         entries: <ChatHistoryEntry>[
           ChatHistoryEntry(
-            profilePath: '/tmp/personal.json',
-            profileId: 'personal',
-            profileLabel: 'Personal',
+            agentPath: '/tmp/agent.yaml',
+            agentLabel: 'Personal',
             sessionId: 'session-12345678',
             title: 'Chat session-',
             createdAt: DateTime(2026, 5, 8, 12),
@@ -76,6 +75,55 @@ void main() {
       expect(titleClient.modelConfigContent, modelConfigContent);
       expect(historyStore.saved.single.title, 'UI Regression Fix');
       expect(historyStore.saved.single.titleStatus, 'generated');
+    },
+  );
+
+  test(
+    'selectSession saves transcript fallback title when title model is disabled',
+    () async {
+      final historyStore = _MemoryChatHistoryStore(
+        entries: <ChatHistoryEntry>[
+          ChatHistoryEntry(
+            agentPath: '/tmp/agent.yaml',
+            agentLabel: 'Personal',
+            sessionId: 'session-12345678',
+            title: 'Chat session',
+            createdAt: DateTime(2026, 5, 8, 12),
+            updatedAt: DateTime(2026, 5, 8, 12),
+          ),
+        ],
+      );
+      final titleClient = _FakeChatTitleClient(title: 'Should Not Run');
+      final controller = AgentAwesomeAppController(
+        config: _testConfig(),
+        assistantClient: _TranscriptAssistantClient(),
+        chatHistoryStore: historyStore,
+        titleClient: titleClient,
+      );
+      controller.appSettings = const AgentAwesomeAppSettings(
+        chatTitleSummariesEnabled: false,
+      );
+      controller.runtimeProfile = _testProfile('/tmp/general-model.yaml');
+      controller.runtimeProfilePath = '/tmp/personal.json';
+      controller.chatHistory = await historyStore.load();
+      controller.sessions = <ChatSession>[
+        ChatSession(
+          id: 'session-12345678',
+          title: 'Chat session',
+          updatedAt: DateTime(2026, 5, 8, 12),
+        ),
+      ];
+
+      await controller.selectSession('session-12345678');
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(titleClient.completed.isCompleted, isFalse);
+      expect(
+        historyStore.saved.single.title,
+        'The chat title is not updating.',
+      );
+      expect(historyStore.saved.single.titleStatus, 'fallback');
     },
   );
 }
@@ -184,7 +232,7 @@ RuntimeProfile _testProfile(String modelConfigPath) {
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: modelConfigPath,
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -197,7 +245,7 @@ RuntimeProfile _testProfile(String modelConfigPath) {
       apiBaseUrl: 'http://127.0.0.1:2/api',
       healthUrl: 'http://127.0.0.1:2/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:1/api',
       contextBaseUrl: 'http://127.0.0.1:1/api/context',
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',

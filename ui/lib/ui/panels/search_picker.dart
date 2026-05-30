@@ -84,7 +84,10 @@ class SearchPickerDropdown<T> extends StatelessWidget {
             alignment: Alignment.centerLeft,
             backgroundColor: colors.surface,
             foregroundColor: colors.ink,
-            side: BorderSide(color: colors.border),
+            side: BorderSide(
+              color: colors.border,
+              width: AgentAwesomeStrokeTokens.borderWidth,
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -196,19 +199,29 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
                   hintText: 'Search...',
                   hintStyle: TextStyle(color: colors.muted),
                   filled: true,
-                  fillColor: colors.surface,
+                  fillColor: colors.field,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: colors.border),
+                    borderSide: BorderSide(
+                      color: colors.border,
+                      width: AgentAwesomeStrokeTokens.borderWidth,
+                    ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: colors.border),
+                    borderSide: BorderSide(
+                      color: colors.border,
+                      width: AgentAwesomeStrokeTokens.borderWidth,
+                    ),
                   ),
                 ),
               ),
             ),
-            Divider(height: 1, color: colors.border),
+            Divider(
+              height: AgentAwesomeStrokeTokens.dividerWidth,
+              thickness: AgentAwesomeStrokeTokens.dividerWidth,
+              color: colors.border,
+            ),
             Flexible(
               child: options.isEmpty
                   ? Center(

@@ -18,22 +18,27 @@ class _SettingsProviderDefaultModelDropdown extends StatelessWidget {
         ? provider.defaultModel
         : null;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String>(
-        initialValue: selected,
-        isExpanded: true,
-        items: <DropdownMenuItem<String>>[
-          for (final modelId in modelIds)
-            DropdownMenuItem<String>(value: modelId, child: Text(modelId)),
-        ],
-        onChanged: (value) {
-          if (value != null) {
-            onChanged(value);
-          }
-        },
-        decoration: SettingsInputDecoration.field(
-          context,
-          label: 'Default model',
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: 'Default model',
+        child: DropdownButtonFormField<String>(
+          initialValue: selected,
+          isDense: true,
+          style: SettingsFormTextStyle.field(context),
+          isExpanded: true,
+          items: <DropdownMenuItem<String>>[
+            for (final modelId in modelIds)
+              DropdownMenuItem<String>(value: modelId, child: Text(modelId)),
+          ],
+          onChanged: (value) {
+            if (value != null) {
+              onChanged(value);
+            }
+          },
+          decoration: SettingsInputDecoration.field(
+            context,
+            label: 'Default model',
+          ),
         ),
       ),
     );

@@ -6,8 +6,8 @@ It provides the desktop-first workspace for chat, memory, and task context surfa
 
 == Responsibilities
 
-* Load runtime profiles and app configuration.
-* Start local services when the selected profile owns them.
+* Load service topology and app configuration.
+* Start local services when the topology owns them.
 * Connect to the gateway, harness, and memory endpoints.
 * Present assistant chat and context surfaces.
 * Keep UI state and presentation separate from business logic and service clients.
@@ -22,7 +22,7 @@ The UI should not implement model provider calls, memory persistence, Slack even
 |Path |Use
 
 |`lib/app`
-|Application controller, settings, runtime profile handling, service startup, and theme.
+|Application controller, settings, service topology handling, service startup, and theme.
 
 |`lib/clients`
 |HTTP and MCP clients used by UI state.
@@ -33,7 +33,7 @@ The UI should not implement model provider calls, memory persistence, Slack even
 |`lib/ui`
 |Widgets, layouts, and visual presentation.
 
-|`runtime_profiles`
+|`runtime_topology`
 |JSON service topologies for local runs.
 |===
 

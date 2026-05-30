@@ -17,7 +17,7 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
     try {
       final profile = runtimeProfile;
       if (profile == null) {
-        throw StateError('Runtime profile is not loaded');
+        throw StateError('Agent runtime is not loaded');
       }
       final modelConfigContent = await _readRuntimeModelConfigContent(
         profile.harness.modelConfigPath,

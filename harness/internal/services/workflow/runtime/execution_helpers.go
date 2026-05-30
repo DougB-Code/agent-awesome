@@ -1,4 +1,4 @@
-// This file contains pipe graph execution state and policy helpers.
+// This file contains state-machine execution state and policy helpers.
 package runtime
 
 import (
@@ -13,15 +13,14 @@ import (
 
 	"agentawesome/internal/services/workflow/actions"
 	"agentawesome/internal/services/workflow/contracts"
-	"agentawesome/internal/services/workflow/decision"
 	"agentawesome/internal/services/workflow/definition"
 	"agentawesome/internal/services/workflow/envelope"
 	"agentawesome/internal/services/workflow/policy"
 	"agentawesome/internal/services/workflow/store"
 )
 
-// completePipePendingSignals turns completed pending items into node outputs.
-func (s *Service) completePipePendingSignals(ctx context.Context, run store.RunRecord, items []store.PendingItem, payload map[string]any) error {
+// completePendingSignals turns completed pending items into action outputs.
+func (s *Service) completePendingSignals(ctx context.Context, run store.RunRecord, items []store.PendingItem, payload map[string]any) error {
 	for _, item := range items {
 		if item.RunID != run.ID {
 			continue
@@ -121,122 +120,7 @@ func (s *Service) failRun(ctx context.Context, run store.RunRecord, err error) {
 	_ = s.appendEvent(ctx, run.ID, "run_failed", err.Error(), nil)
 }
 
-// pipeNodesByID indexes executable pipe graph nodes by id.
-func pipeNodesByID(def definition.Definition) map[string]definition.NodeDefinition {
-	nodes := map[string]definition.NodeDefinition{}
-	for _, node := range def.Nodes {
-		nodes[node.ID] = node
-	}
-	return nodes
-}
-
-// pipeNodesSucceeded reports whether every pipe graph node has completed.
-func pipeNodesSucceeded(nodes map[string]definition.NodeDefinition, statuses map[string]store.NodeStateRecord) bool {
-	for id := range nodes {
-		if !pipeNodeTerminalStatus(statuses[id].Status) {
-			return false
-		}
-	}
-	return true
-}
-
-// firstFailedPipeNode returns the first failed graph node record.
-func firstFailedPipeNode(nodes map[string]definition.NodeDefinition, statuses map[string]store.NodeStateRecord) (string, bool) {
-	for id := range nodes {
-		if statuses[id].Status == statusFailed {
-			return id, true
-		}
-	}
-	return "", false
-}
-
-// pipeDependenciesTerminal reports whether all source nodes for a target reached terminal states.
-func pipeDependenciesTerminal(def definition.Definition, nodeID string, statuses map[string]store.NodeStateRecord) bool {
-	for _, edge := range incomingEdges(def, nodeID) {
-		if !pipeNodeTerminalStatus(statuses[edge.From.Node].Status) {
-			return false
-		}
-	}
-	return true
-}
-
-// pipeNodeTerminalStatus reports whether a node status no longer blocks dependents.
-func pipeNodeTerminalStatus(status string) bool {
-	return status == statusSucceeded || status == statusSkipped
-}
-
-// pipeActiveIncomingEdges returns conditional incoming edges whose source outputs are active.
-func (s *Service) pipeActiveIncomingEdges(ctx context.Context, def definition.Definition, runID string, nodeID string, statuses map[string]store.NodeStateRecord) ([]definition.EdgeDefinition, error) {
-	edges := incomingEdges(def, nodeID)
-	active := make([]definition.EdgeDefinition, 0, len(edges))
-	for _, edge := range edges {
-		if statuses[edge.From.Node].Status == statusSkipped {
-			continue
-		}
-		sourceMap, ok, err := s.store.StepOutput(ctx, runID, edge.From.Node)
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("source node %q output is missing", edge.From.Node)
-		}
-		source := envelope.FromMap(sourceMap)
-		matched, err := decision.MatchWhen(edge.When, source)
-		if err != nil {
-			return nil, fmt.Errorf("edge from %q to %q condition: %w", edge.From.Node, edge.To.Node, err)
-		}
-		if matched {
-			active = append(active, edge)
-		}
-	}
-	return active, nil
-}
-
-// skipPipeNode records that a node's conditional upstream edges were inactive.
-func (s *Service) skipPipeNode(ctx context.Context, run store.RunRecord, node definition.NodeDefinition, reason string) error {
-	output := envelope.Empty(run.ID, node.ID, 0)
-	output.Control.Status = envelope.StatusSkipped
-	output.SetFacet("workflow.skip_reason", reason)
-	outputMap := output.ToMap()
-	if err := s.store.SaveStepOutput(ctx, run.ID, node.ID, outputMap); err != nil {
-		return err
-	}
-	_ = s.appendEvent(ctx, run.ID, "node_skipped", "workflow node skipped", map[string]any{"node_id": node.ID, "reason": reason})
-	return s.fireNodeStateTrigger(ctx, run.ID, node.ID, nodeTriggerSkip, 0, outputMap, "")
-}
-
-// incomingEdges returns every edge that targets a node.
-func incomingEdges(def definition.Definition, nodeID string) []definition.EdgeDefinition {
-	edges := []definition.EdgeDefinition{}
-	for _, edge := range def.Edges {
-		if strings.TrimSpace(edge.To.Node) == nodeID {
-			edges = append(edges, edge)
-		}
-	}
-	return edges
-}
-
-// outgoingEdges returns every edge that starts at a node.
-func outgoingEdges(def definition.Definition, nodeID string) []definition.EdgeDefinition {
-	edges := []definition.EdgeDefinition{}
-	for _, edge := range def.Edges {
-		if strings.TrimSpace(edge.From.Node) == nodeID {
-			edges = append(edges, edge)
-		}
-	}
-	return edges
-}
-
-// edgeTargetPort returns the stable target input port for an edge.
-func edgeTargetPort(edge definition.EdgeDefinition) string {
-	port := strings.TrimSpace(edge.To.Port)
-	if port == "" {
-		return "input"
-	}
-	return port
-}
-
-// nodeRetryDelay parses fixed retry delay settings for one graph node.
+// nodeRetryDelay parses fixed retry delay settings for one action node.
 func nodeRetryDelay(node definition.NodeDefinition) (time.Duration, error) {
 	if strings.TrimSpace(node.RetryDelay) == "" {
 		return 0, nil
@@ -319,8 +203,8 @@ func runtimeArtifactPolicyError(env envelope.Envelope, runtime contracts.Runtime
 	return nil
 }
 
-// pipeNodeArgs builds action arguments from node config and type-specific defaults.
-func pipeNodeArgs(node definition.NodeDefinition) map[string]any {
+// actionNodeArgs builds action arguments from node config and type-specific defaults.
+func actionNodeArgs(node definition.NodeDefinition) map[string]any {
 	args := cloneMap(node.With)
 	switch strings.ToLower(strings.TrimSpace(node.Type)) {
 	case "tool":
@@ -363,38 +247,6 @@ func envelopeDiagnosticsError(stage string, diagnostics []envelope.Diagnostic) e
 	return fmt.Errorf("%s envelope validation failed: %s", stage, strings.Join(messages, "; "))
 }
 
-// pipeGraphOutput returns the final run output from graph sink node envelopes.
-func (s *Service) pipeGraphOutput(ctx context.Context, def definition.Definition, runID string) (map[string]any, error) {
-	sinks := []string{}
-	for _, node := range def.Nodes {
-		if len(outgoingEdges(def, node.ID)) == 0 {
-			sinks = append(sinks, node.ID)
-		}
-	}
-	if len(sinks) == 1 {
-		output, ok, err := s.store.StepOutput(ctx, runID, sinks[0])
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("sink node %q output is missing", sinks[0])
-		}
-		return output, nil
-	}
-	result := map[string]any{"status": statusSucceeded, "sinks": map[string]any{}}
-	sinkOutputs := result["sinks"].(map[string]any)
-	for _, nodeID := range sinks {
-		output, ok, err := s.store.StepOutput(ctx, runID, nodeID)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			sinkOutputs[nodeID] = output
-		}
-	}
-	return result, nil
-}
-
 // lockRun serializes in-process execution for one run id.
 func (s *Service) lockRun(runID string) func() {
 	s.mu.Lock()
@@ -406,12 +258,6 @@ func (s *Service) lockRun(runID string) func() {
 	s.mu.Unlock()
 	mutex.Lock()
 	return mutex.Unlock
-}
-
-// nodeStateResult reports one concurrent workflow node completion.
-type nodeStateResult struct {
-	stateID string
-	err     error
 }
 
 // nodeStatusByID indexes durable node-state records by node id.

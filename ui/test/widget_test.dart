@@ -16,9 +16,9 @@ import 'package:agentawesome_ui/clients/automations_client.dart';
 import 'package:agentawesome_ui/clients/assistant_client.dart';
 import 'package:agentawesome_ui/clients/executive_summary_client.dart';
 import 'package:agentawesome_ui/clients/mcp_client.dart';
-import 'package:agentawesome_ui/domain/agent_config.dart';
 import 'package:agentawesome_ui/domain/agent_validation_result.dart';
 import 'package:agentawesome_ui/domain/automation_contracts.dart';
+import 'package:agentawesome_ui/domain/date_formatting.dart';
 import 'package:agentawesome_ui/domain/tool_config.dart';
 import 'package:agentawesome_ui/domain/tool_validation_result.dart';
 import 'package:agentawesome_ui/ui/theme.dart';
@@ -51,6 +51,7 @@ void main() {
     expect(find.byTooltip('Refresh Today'), findsNothing);
     expect(find.text('Decide'), findsOneWidget);
     expect(find.text('OPEN LOOP RADAR'), findsOneWidget);
+    expect(find.text('Updated just now'), findsNothing);
     expect(find.text("TODAY'S ATTENTION"), findsOneWidget);
     expect(find.text('Prepare investor meeting brief'), findsNothing);
   });
@@ -68,6 +69,14 @@ void main() {
 
     expect(find.widgetWithText(SelectableText, error), findsOneWidget);
     expect(find.byTooltip('Copy error'), findsNothing);
+  });
+
+  test('builds the Today gateway memory MCP route', () {
+    final profile = _settingsProfile();
+    expect(
+      gatewayMemoryMcpEndpointFor(profile, profile.memoryServers.single),
+      'http://127.0.0.1:2/mcp/memory',
+    );
   });
 
   testWidgets('renders populated Today lower sections without overflow', (
@@ -336,45 +345,6 @@ void main() {
             ],
           },
         ),
-        AutomationDraft(
-          id: 'draft_task',
-          kind: automationTaskGraphKind,
-          name: 'Task Flow',
-          status: 'draft',
-          body: <String, dynamic>{
-            'kind': automationTaskGraphKind,
-            'id': 'task_flow',
-            'nodes': <Object>[
-              <String, Object>{
-                'id': 'fetch_email',
-                'uses': 'mcp.call',
-                'with': <String, Object>{
-                  'endpoint': 'http://127.0.0.1:8090/mcp',
-                  'tool': 'email.search',
-                  'arguments': <String, Object>{},
-                },
-              },
-              <String, Object>{
-                'id': 'classify_email',
-                'uses': 'tool.call',
-                'depends_on': <Object>['fetch_email'],
-                'with': <String, Object>{'name': 'email.classify'},
-              },
-              <String, Object>{
-                'id': 'summarize_email',
-                'uses': 'tool.call',
-                'depends_on': <Object>['fetch_email'],
-                'with': <String, Object>{'name': 'email.summarize'},
-              },
-              <String, Object>{
-                'id': 'prepare_review',
-                'uses': 'workflow.run',
-                'depends_on': <Object>['classify_email', 'summarize_email'],
-                'with': <String, Object>{'workflow': 'review_flow'},
-              },
-            ],
-          },
-        ),
       ]
       ..automationRuns = const <AutomationRun>[
         AutomationRun(
@@ -474,7 +444,7 @@ void main() {
     expect(find.text('Operations'), findsWidgets);
     expect(find.text('Workflows'), findsOneWidget);
     expect(find.text('Tasks'), findsNothing);
-    expect(find.text('Agents'), findsNothing);
+    expect(find.text('Agents'), findsOneWidget);
     expect(find.text('MCP Servers'), findsOneWidget);
     expect(find.text('Tools'), findsOneWidget);
     expect(find.text('›'), findsNothing);
@@ -495,43 +465,59 @@ void main() {
       find.byKey(const ValueKey<String>('main-content-right-pane')),
       findsOneWidget,
     );
-    expect(find.text('INBOX'), findsWidgets);
+    expect(find.text('OPERATIONS'), findsWidgets);
     expect(find.byTooltip('Inbox'), findsOneWidget);
-    expect(find.byTooltip('Files'), findsOneWidget);
     expect(find.byTooltip('Operations'), findsWidgets);
-    expect(find.byTooltip('Codebases'), findsOneWidget);
+    expect(find.byTooltip('Files'), findsNothing);
     expect(find.byTooltip('Computers'), findsOneWidget);
+    expect(find.byTooltip('Refresh automations'), findsNothing);
+    expect(find.text('Daily Email'), findsWidgets);
+    expect(find.byTooltip('Codebases'), findsNothing);
     expect(find.byTooltip('Schedules'), findsOneWidget);
     expect(find.byTooltip('Artifacts'), findsOneWidget);
     expect(find.byTooltip('Runs'), findsWidgets);
-    expect(find.byTooltip('Refresh automations'), findsNothing);
-    expect(find.text('Approve archive?'), findsOneWidget);
-    expect(find.text('Daily Email'), findsNothing);
-    await tester.tap(find.byTooltip('Files'));
-    await tester.pumpAndSettle();
-    expect(find.text('Daily Email'), findsWidgets);
+    expect(find.byTooltip('Safety'), findsNothing);
     await tester.tap(find.byTooltip('Operations').last);
     await tester.pumpAndSettle();
-    expect(find.text('Daily Email Setup'), findsOneWidget);
-    await tester.tap(find.byTooltip('Codebases'));
+    expect(find.text('Daily Email Setup'), findsWidgets);
+    await tester.tap(find.byTooltip('Inbox'));
     await tester.pumpAndSettle();
-    expect(find.text('Agent Awesome'), findsWidgets);
-    await tester.tap(find.byTooltip('Computers'));
+    expect(find.text('Approve archive?'), findsOneWidget);
+    await tester.tap(find.byTooltip('Operations').first);
     await tester.pumpAndSettle();
-    expect(find.text('This computer'), findsWidgets);
-    expect(find.text('Allowed codebases: Agent Awesome'), findsOneWidget);
     await tester.tap(find.byTooltip('Schedules'));
     await tester.pumpAndSettle();
     expect(find.text('No scheduled operations'), findsOneWidget);
     await tester.tap(find.byTooltip('Artifacts'));
     await tester.pumpAndSettle();
     expect(find.text('No artifacts'), findsOneWidget);
-    await tester.tap(find.byTooltip('Runs').first);
+    await tester.ensureVisible(find.byTooltip('Runs').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Runs').last);
     await tester.pumpAndSettle();
     expect(find.text('run_1 / running'), findsNothing);
-    expect(find.text('running'), findsWidgets);
+    expect(find.text('Run'), findsOneWidget);
+    expect(find.text('Ran'), findsOneWidget);
+    expect(find.text('Daily Email'), findsWidgets);
+    expect(find.text('waiting'), findsOneWidget);
+    await tester.tap(find.byTooltip('Computers'));
+    await tester.pumpAndSettle();
+    expect(find.text('This computer'), findsWidgets);
+    expect(find.text('Allowed codebases: Agent Awesome'), findsOneWidget);
+    expect(find.byTooltip('Capabilities'), findsOneWidget);
+    expect(find.byTooltip('Secrets'), findsOneWidget);
+    expect(find.byTooltip('Logs'), findsOneWidget);
+    expect(find.byTooltip('Updates'), findsOneWidget);
+    expect(find.byTooltip('Codebases'), findsNothing);
+    expect(find.byTooltip('Schedules'), findsNothing);
+    await tester.tap(find.byTooltip('Capabilities'));
+    await tester.pumpAndSettle();
+    expect(find.text('Go test all'), findsOneWidget);
 
-    expect(find.byKey(const ValueKey<String>('sidebar-Agents')), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('sidebar-Agents')),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey<String>('sidebar-Workflows')),
       findsOneWidget,
@@ -541,44 +527,40 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
     await tester.pumpAndSettle();
 
-    expect(find.text('ACTIONS'), findsWidgets);
+    expect(find.text('ACTIONS'), findsNothing);
     expect(find.byTooltip('Builder'), findsOneWidget);
+    expect(find.byTooltip('State'), findsOneWidget);
+    expect(find.byTooltip('States'), findsNothing);
+    expect(find.byTooltip('Map'), findsNothing);
+    expect(find.byTooltip('Safety'), findsNothing);
     expect(
-      find.byKey(const ValueKey<String>('task-graph-canvas')),
-      findsOneWidget,
+      find.byKey(const ValueKey<String>('state-machine-canvas')),
+      findsNothing,
     );
     expect(
-      find.byKey(const ValueKey<String>('task-graph-action-data.assert')),
-      findsOneWidget,
+      find.byKey(const ValueKey<String>('state-machine-palette')),
+      findsNothing,
     );
     expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
-    expect(find.byTooltip('Capabilities'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Files'));
+    await tester.tap(find.byTooltip('Workflows'));
     await tester.pumpAndSettle();
 
-    expect(find.text('FILES'), findsWidgets);
-    expect(find.text('Filter files...'), findsOneWidget);
+    expect(find.text('WORKFLOWS'), findsWidgets);
+    expect(find.text('Filter workflows...'), findsOneWidget);
     expect(find.text('Review Flow'), findsWidgets);
 
     await tester.tap(find.byTooltip('Actions'));
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey<String>('task-graph-action-data.assert')),
+      find.byKey(const ValueKey<String>('state-machine-palette')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('task-graph-canvas')),
-      findsOneWidget,
+      find.byKey(const ValueKey<String>('state-machine-canvas')),
+      findsNothing,
     );
-
-    await tester.tap(find.byTooltip('Capabilities'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('CAPABILITIES'), findsWidgets);
-    expect(find.text('Go test all'), findsWidgets);
-    expect(find.text('Workflow action: command.execute'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pumpAndSettle();
@@ -593,6 +575,64 @@ void main() {
     expect(find.text('TOOLS'), findsWidgets);
     expect(find.text('DETAILS'), findsWidgets);
     expect(find.text('No tool files configured'), findsWidgets);
+  });
+
+  testWidgets('renders Operations detail empty state with shared guidance', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()..automationsBusy = true;
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.pumpAndSettle();
+
+    void expectLeftEmptyCentered(String label) {
+      final text = find.text(label);
+      expect(text, findsOneWidget);
+      final paneRect = tester.getRect(
+        find.byKey(const ValueKey<String>('main-content-left-pane')),
+      );
+      final textRect = tester.getRect(text);
+      expect((paneRect.center.dy - textRect.center.dy).abs(), lessThan(120));
+    }
+
+    expectLeftEmptyCentered('No operations');
+    await tester.tap(find.byTooltip('Inbox'));
+    await tester.pumpAndSettle();
+    expectLeftEmptyCentered('No pending automation items');
+    await tester.tap(find.byTooltip('Computers'));
+    await tester.pumpAndSettle();
+    expectLeftEmptyCentered('No computers');
+    await tester.tap(find.byTooltip('Operations').first);
+    await tester.pumpAndSettle();
+
+    final emptyText = find.text('No operation selected');
+    expect(emptyText, findsOneWidget);
+    expect(
+      find.text('Select or create an item in the left panel to continue.'),
+      findsOneWidget,
+    );
+    expect(find.byIcon(Icons.info_outline), findsWidgets);
+    final ancestorSurfaces = tester.widgetList<PanelSurface>(
+      find.ancestor(of: emptyText, matching: find.byType(PanelSurface)),
+    );
+    expect(
+      ancestorSurfaces.where(
+        (surface) => surface.style == PanelSurfaceStyle.card,
+      ),
+      isEmpty,
+    );
+    final paneRect = tester.getRect(
+      find.byKey(const ValueKey<String>('main-content-right-pane')),
+    );
+    final textRect = tester.getRect(emptyText);
+    expect((paneRect.center.dy - textRect.center.dy).abs(), lessThan(80));
   });
 
   testWidgets('does not render passive Automations status blocks', (
@@ -619,6 +659,43 @@ void main() {
     expect(find.text('Automations refreshed'), findsNothing);
   });
 
+  testWidgets('shows saved Operations in Operations', (tester) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final harness = _readyCapturingController();
+    final controller = harness.controller;
+    harness.client.seedDefinitions(<AutomationDefinition>[
+      _sourceChangeDefinitionForRunTest(),
+    ]);
+    harness.client.seedRunSetups(const <AutomationRunSetup>[
+      AutomationRunSetup(
+        id: 'setup_1',
+        definitionId: 'source_change_workflow',
+        name: 'Agent Awesome Repo',
+        description: 'Run source changes for the app repo.',
+      ),
+    ]);
+    controller.automationDefinitions = harness.client.definitions;
+    controller.automationRunSetups = harness.client.runSetups;
+    controller.selectedAutomationRunSetupId = 'setup_1';
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Operations').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Agent Awesome Repo'), findsWidgets);
+    expect(find.text('Source Change Workflow'), findsWidgets);
+    await tester.tap(find.text('Agent Awesome Repo').first);
+    await tester.pump();
+    expect(controller.selectedAutomationRunSetupId, 'setup_1');
+  });
+
   testWidgets('opens Operations workflow run input dialog', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
@@ -627,10 +704,18 @@ void main() {
     final harness = _readyCapturingController();
     final controller = harness.controller;
     harness.client.seedDefinitions(<AutomationDefinition>[
-      _professionalCodingDefinitionForRunTest(),
+      _sourceChangeDefinitionForRunTest(),
+    ]);
+    harness.client.seedRunSetups(const <AutomationRunSetup>[
+      AutomationRunSetup(
+        id: 'setup_1',
+        definitionId: 'source_change_workflow',
+        name: 'Source Change Workflow',
+      ),
     ]);
     controller.automationDefinitions = harness.client.definitions;
-    controller.selectedAutomationDefinitionId = 'professional_coding_change';
+    controller.automationRunSetups = harness.client.runSetups;
+    controller.selectedAutomationRunSetupId = 'setup_1';
     controller.automationCodebases = const <AutomationCodebase>[
       AutomationCodebase(
         id: 'agent_awesome',
@@ -657,13 +742,13 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Files'));
+    await tester.tap(find.byTooltip('Operations').first);
     await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(const ValueKey<String>('automation-start-run-button')),
+      find.byKey(const ValueKey<String>('automation-start-run-setup-button')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Run Professional Coding Change'), findsOneWidget);
+    expect(find.text('Run Source Change Workflow'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('automation-run-input-json')),
       findsNothing,
@@ -692,17 +777,17 @@ void main() {
     final harness = _readyCapturingController();
     final controller = harness.controller;
     harness.client.seedDefinitions(<AutomationDefinition>[
-      _professionalCodingDefinitionForRunTest(),
+      _sourceChangeDefinitionForRunTest(),
     ]);
     controller.automationDefinitions = harness.client.definitions;
-    controller.selectedAutomationDefinitionId = 'professional_coding_change';
+    controller.selectedAutomationDefinitionId = 'source_change_workflow';
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Files'));
+    await tester.tap(find.byTooltip('Operations').first);
     await tester.pumpAndSettle();
     controller.automationCodebases = const <AutomationCodebase>[
       AutomationCodebase(
@@ -778,7 +863,7 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Files'));
+    await tester.tap(find.byTooltip('Workflows'));
     await tester.pumpAndSettle();
     for (
       var attempt = 0;
@@ -792,37 +877,66 @@ void main() {
     final createButton = find.byKey(
       const ValueKey<String>('automation-new-workflow-draft-button'),
     );
+    final deleteButton = find.byKey(
+      const ValueKey<String>('automation-delete-workflow-button'),
+    );
     expect(createButton, findsOneWidget);
+    expect(deleteButton, findsOneWidget);
     final createTapTarget = find.descendant(
       of: createButton,
       matching: find.byType(GestureDetector),
     );
+    final deleteTapTarget = find.descendant(
+      of: deleteButton,
+      matching: find.byType(GestureDetector),
+    );
     expect(createTapTarget, findsOneWidget);
+    expect(deleteTapTarget, findsOneWidget);
     expect(tester.widget<GestureDetector>(createTapTarget).onTap, isNotNull);
     final paneRight = tester
         .getTopRight(
           find.byKey(const ValueKey<String>('main-content-left-pane')),
         )
         .dx;
-    final buttonRight = tester.getTopRight(createTapTarget).dx;
+    final buttonRight = tester.getTopRight(deleteTapTarget).dx;
     expect(paneRight - buttonRight, lessThanOrEqualTo(28));
     expect(find.text('Workflow name'), findsNothing);
 
     await tester.tap(createTapTarget);
     await tester.pumpAndSettle();
-    expect(find.text('FILES'), findsWidgets);
-    expect(find.text('Filter files...'), findsOneWidget);
+    expect(find.text('WORKFLOWS'), findsWidgets);
+    expect(find.text('Filter workflows...'), findsOneWidget);
+    expect(find.text('New Workflow'), findsWidgets);
+    expect(controller.selectedAutomationDraftId, 'draft_2');
+    await tester.tap(createTapTarget);
+    await tester.pumpAndSettle();
+    expect(find.text('New Workflow 2'), findsWidgets);
+    expect(controller.selectedAutomationDraftId, 'draft_3');
     expect(find.text('draft_workflow_graph'), findsNothing);
   });
 
-  testWidgets('renames workflow drafts from the catalog title', (tester) async {
+  testWidgets('renames workflow drafts from Details metadata', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final harness = _readyCapturingController();
     final controller = harness.controller;
-    harness.client.seedDrafts(<AutomationDraft>[_workflowGraphDraft()]);
+    harness.client.seedDrafts(<AutomationDraft>[
+      const AutomationDraft(
+        id: 'draft_workflow_graph',
+        kind: automationWorkflowKind,
+        name: 'Workflow Graph',
+        status: 'draft',
+        updatedAt: '2026-05-28T21:27:28.926Z',
+        body: <String, dynamic>{
+          'apiVersion': automationWorkflowApiVersion,
+          'kind': automationWorkflowKind,
+          'id': 'workflow_graph',
+          'nodes': <Object>[],
+        },
+      ),
+    ]);
     controller.automationDrafts = harness.client.drafts;
     controller.selectedAutomationDraftId = harness.client.drafts.first.id;
 
@@ -831,26 +945,24 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Files'));
+    await tester.tap(find.byTooltip('Workflows'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Workflow Graph'));
+    await tester.tap(find.text('Workflow Graph').first);
     await tester.pump();
-    expect(
-      find.byKey(const ValueKey<String>('automation-draft-title-editor')),
-      findsNothing,
-    );
+    expect(find.byTooltip('Rename workflow file'), findsNothing);
 
-    await tester.tap(find.byTooltip('Rename workflow file'));
-    await tester.pump();
+    await tester.tap(find.byTooltip('Details'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Updated 2026-05-28'), findsNothing);
+    expect(find.textContaining('2026-05-28T21:27:28.926Z'), findsNothing);
     await tester.enterText(
-      find.byKey(const ValueKey<String>('automation-draft-title-editor')),
+      find.byKey(const ValueKey<String>('workflow-metadata-name')),
       'Renamed Workflow',
     );
-    await tester.tap(find.text('FILES'));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 800));
 
-    expect(controller.automationsMessage, 'Saving Renamed Workflow');
+    expect(harness.client.savedDraft?.name, 'Renamed Workflow');
     expect(find.text('draft_workflow_graph'), findsNothing);
   });
 
@@ -872,19 +984,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey<String>('task-graph-canvas')),
-      findsOneWidget,
+      find.byKey(const ValueKey<String>('state-machine-canvas')),
+      findsNothing,
     );
-    expect(find.text('ACTIONS'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Details'));
-    await tester.pumpAndSettle();
+    expect(find.text('ACTIONS'), findsNothing);
 
     expect(find.text('DETAILS'), findsOneWidget);
-    expect(find.text('FILES'), findsWidgets);
-    expect(find.text('Workflow name'), findsOneWidget);
+    expect(find.text('WORKFLOWS'), findsWidgets);
+    expect(find.text('Workflow Graph'), findsWidgets);
     expect(
-      find.byKey(const ValueKey<String>('task-graph-canvas')),
+      find.byKey(const ValueKey<String>('state-machine-canvas')),
       findsNothing,
     );
   });
@@ -900,13 +1009,13 @@ void main() {
     final controller = harness.controller;
     harness.client.seedDrafts(const <AutomationDraft>[
       AutomationDraft(
-        id: 'draft_professional_coding_change',
+        id: 'draft_source_change_workflow',
         kind: 'state_machine',
-        name: 'Professional Coding Change',
+        name: 'Source Change Workflow',
         status: 'published',
         body: <String, dynamic>{
           'kind': 'state_machine',
-          'id': 'professional_coding_change',
+          'id': 'source_change_workflow',
           'initial': 'intake',
           'states': <Object>[
             <String, Object>{'id': 'intake'},
@@ -916,7 +1025,7 @@ void main() {
       ),
     ]);
     controller.automationDrafts = harness.client.drafts;
-    controller.selectedAutomationDraftId = 'draft_professional_coding_change';
+    controller.selectedAutomationDraftId = 'draft_source_change_workflow';
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
@@ -928,9 +1037,9 @@ void main() {
       find.byKey(const ValueKey<String>('state-machine-node-intake')),
       findsOneWidget,
     );
-    await tester.tap(find.byTooltip('Files'));
+    await tester.tap(find.byTooltip('Workflows'));
     await tester.pumpAndSettle();
-    expect(find.text('Professional Coding Change'), findsWidgets);
+    expect(find.text('Source Change Workflow'), findsWidgets);
     expect(find.text('workflow'), findsWidgets);
   });
 
@@ -954,9 +1063,9 @@ void main() {
   test('starts workflow definitions with input payloads', () async {
     final harness = _readyCapturingController();
     const definition = AutomationDefinition(
-      id: 'professional_coding_change',
+      id: 'source_change_workflow',
       kind: automationWorkflowKind,
-      name: 'Professional Coding Change',
+      name: 'Source Change Workflow',
       hash: 'sha256:professional',
     );
 
@@ -968,7 +1077,7 @@ void main() {
       },
     );
 
-    expect(harness.client.startedDefinitionId, 'professional_coding_change');
+    expect(harness.client.startedDefinitionId, 'source_change_workflow');
     expect(harness.client.startedInput['repository_path'], '/repo');
     expect(harness.client.startedInput['change_request'], 'Fix it');
     expect(harness.controller.selectedAutomationRunId, 'run_1');
@@ -977,9 +1086,9 @@ void main() {
   test('creates and starts reusable Operations', () async {
     final harness = _readyCapturingController();
     const definition = AutomationDefinition(
-      id: 'professional_coding_change',
+      id: 'source_change_workflow',
       kind: automationWorkflowKind,
-      name: 'Professional Coding Change',
+      name: 'Source Change Workflow',
       hash: 'sha256:professional',
     );
 
@@ -1011,9 +1120,9 @@ void main() {
   test('previews reusable Operations without starting runs', () async {
     final harness = _readyCapturingController();
     const definition = AutomationDefinition(
-      id: 'professional_coding_change',
+      id: 'source_change_workflow',
       kind: automationWorkflowKind,
-      name: 'Professional Coding Change',
+      name: 'Source Change Workflow',
       hash: 'sha256:professional',
     );
 
@@ -1040,7 +1149,7 @@ void main() {
     final harness = _readyCapturingController();
     const setup = AutomationRunSetup(
       id: 'setup_1',
-      definitionId: 'professional_coding_change',
+      definitionId: 'source_change_workflow',
       name: 'Agent Awesome Repo',
       codebaseId: 'agent_awesome',
       runtimeTargetId: 'local',
@@ -1069,7 +1178,7 @@ void main() {
     final harness = _readyCapturingController();
     const run = AutomationRun(
       id: 'run_1',
-      definitionId: 'professional_coding_change',
+      definitionId: 'source_change_workflow',
       kind: automationWorkflowKind,
       status: 'completed',
       state: 'done',
@@ -1107,7 +1216,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final setup = const AutomationRunSetup(
       id: 'setup_1',
-      definitionId: 'professional_coding_change',
+      definitionId: 'source_change_workflow',
       name: 'Agent Awesome Repo',
       codebaseId: 'agent_awesome',
       input: <String, dynamic>{'repository_path': '/repo/agent'},
@@ -1133,9 +1242,13 @@ void main() {
     );
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Operations').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Operations').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Test'));
+    await tester.ensureVisible(find.text('Test'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Test'));
     await tester.pumpAndSettle();
 
     expect(find.text('TEST RUN'), findsOneWidget);
@@ -1152,7 +1265,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     const setup = AutomationRunSetup(
       id: 'setup_1',
-      definitionId: 'professional_coding_change',
+      definitionId: 'source_change_workflow',
       name: 'Agent Awesome Repo',
       codebaseId: 'agent_awesome',
       runtimeTargetId: 'local',
@@ -1168,9 +1281,9 @@ void main() {
     final controller = _readyController()
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
-          id: 'professional_coding_change',
+          id: 'source_change_workflow',
           kind: automationWorkflowKind,
-          name: 'Professional Coding Change',
+          name: 'Source Change Workflow',
           hash: 'sha256:professional',
         ),
       ]
@@ -1194,13 +1307,16 @@ void main() {
       ..automationRuns = const <AutomationRun>[
         AutomationRun(
           id: 'run_1',
-          definitionId: 'professional_coding_change',
+          definitionId: 'source_change_workflow',
           kind: automationWorkflowKind,
           status: 'completed',
           state: 'done',
+          input: <String, dynamic>{'repository_path': '/repo/agent'},
           output: <String, dynamic>{
             'pull_request_url': 'https://github.com/acme/agent/pull/7',
           },
+          createdAt: '2026-05-28T10:00:00Z',
+          updatedAt: '2026-05-28T10:03:05Z',
         ),
       ]
       ..selectedAutomationRunId = 'run_1'
@@ -1209,7 +1325,7 @@ void main() {
             runId: 'run_1',
             operationId: 'setup_1',
             operationVersion: 3,
-            workflowId: 'professional_coding_change',
+            workflowId: 'source_change_workflow',
             resolvedInput: <String, dynamic>{'repository_path': '/repo/agent'},
             target: <String, dynamic>{'runtime_target_id': 'local'},
             policy: <String, dynamic>{'source_control': 'open_pr_only'},
@@ -1219,39 +1335,88 @@ void main() {
                 'ref': 'secret://github',
               },
             ],
-          );
+          )
+      ..selectedAutomationEvents = const <AutomationEvent>[
+        AutomationEvent(
+          id: 1,
+          runId: 'run_1',
+          type: 'step_started',
+          message: 'workflow state action started',
+          createdAt: '2026-05-28T10:00:01Z',
+        ),
+        AutomationEvent(
+          id: 2,
+          runId: 'run_1',
+          type: 'step_succeeded',
+          message: 'workflow state action succeeded',
+          createdAt: '2026-05-28T10:00:02Z',
+        ),
+      ];
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
     await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Operations').first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Operations').last);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Setup'));
+    await tester.tap(find.text('Setup'));
     await tester.pumpAndSettle();
-    expect(find.text('Run on: This computer'), findsOneWidget);
+    expect(find.text('Run on'), findsOneWidget);
+    expect(find.text('This computer'), findsWidgets);
 
-    await tester.tap(find.byTooltip('Inputs'));
+    await tester.tap(find.text('Inputs'));
     await tester.pumpAndSettle();
     expect(find.text('Repository Path: /repo/agent'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Targets'));
+    await tester.tap(find.text('Targets'));
     await tester.pumpAndSettle();
     expect(find.text('Allowed targets: This computer'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Schedule'));
+    await tester.tap(find.text('Schedule'));
     await tester.pumpAndSettle();
     expect(find.text('Schedule: Daily at 09:00'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Safety'));
+    await tester.tap(find.text('Safety'));
     await tester.pumpAndSettle();
     expect(find.text('Source control: Open PR only'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Runs').last);
+    await tester.ensureVisible(find.byTooltip('Runs'));
     await tester.pumpAndSettle();
-    expect(find.text('Runs: 1'), findsOneWidget);
+    await tester.tap(find.byTooltip('Runs'));
+    await tester.pumpAndSettle();
+    expect(find.text('Run'), findsOneWidget);
+    expect(find.text('Ran'), findsOneWidget);
+    expect(find.text('Status'), findsWidgets);
+    final runTitle = find.text('Source Change Workflow');
+    expect(runTitle, findsWidgets);
+    expect(
+      find.text(
+        'Started ${formatStoredTimestampLocal('2026-05-28T10:00:00Z')}, '
+        'updated ${formatStoredTimestampLocal('2026-05-28T10:03:05Z')}',
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Success'), findsOneWidget);
+
+    await tester.tap(runTitle.last);
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Copy metrics'), findsOneWidget);
+    expect(find.textContaining('Duration: 3m 5s'), findsOneWidget);
+    expect(find.textContaining('Input fields: 1'), findsOneWidget);
+    expect(find.textContaining('Output fields: 1'), findsOneWidget);
+    expect(find.textContaining('Artifacts: 1'), findsOneWidget);
+    expect(
+      find.textContaining('Operation: Agent Awesome Repo'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Resolved inputs: 1'), findsOneWidget);
+    expect(find.byTooltip('Copy events'), findsOneWidget);
+    expect(find.textContaining('step_started'), findsOneWidget);
+    expect(find.textContaining('step_succeeded'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Artifacts'));
     await tester.pumpAndSettle();
@@ -2647,6 +2812,103 @@ void main() {
     expect(find.byTooltip('Delete chat'), findsNothing);
   });
 
+  testWidgets('keeps command panels side-by-side when AI chat opens', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1500, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Backlog').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('AI chat'));
+    await tester.pumpAndSettle();
+
+    final queueOffset = tester.getTopLeft(find.text('QUEUE').first);
+    final detailsOffset = tester.getTopLeft(find.text('DETAILS').first);
+    final conversationOffset = tester.getTopLeft(
+      find.text('CONVERSATION').first,
+    );
+    expect(controller.assistantChatPanelOpen, isTrue);
+    expect((queueOffset.dy - detailsOffset.dy).abs(), lessThan(8));
+    expect(detailsOffset.dx, greaterThan(queueOffset.dx));
+    expect(conversationOffset.dx, greaterThan(detailsOffset.dx));
+    final assistantPane = tester.widget<DecoratedBox>(
+      find.byKey(const ValueKey<String>('assistant-chat-split-pane')),
+    );
+    expect(assistantPane.position, DecorationPosition.foreground);
+    final assistantDecoration = assistantPane.decoration;
+    expect(assistantDecoration, isA<BoxDecoration>());
+    final border = (assistantDecoration as BoxDecoration).border;
+    expect(border, isA<Border>());
+    expect(
+      (border! as Border).left.width,
+      AgentAwesomeStrokeTokens.dividerWidth,
+    );
+  });
+
+  testWidgets('keeps chat command fields on the shared input fill', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+
+    final commandFrame = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('global-command-input-frame')),
+    );
+    final commandDecoration = commandFrame.decoration;
+    expect(commandDecoration, isA<BoxDecoration>());
+    final commandColor = (commandDecoration! as BoxDecoration).color;
+    final commandField = tester.widget<TextField>(
+      find.byKey(const ValueKey<String>('global-command-input')),
+    );
+    expect(commandField.decoration?.filled, isFalse);
+    expect(commandField.decoration?.hoverColor, Colors.transparent);
+
+    final composerFrame = tester.widget<Container>(
+      find.byKey(const ValueKey<String>('chat-thread-composer-frame')),
+    );
+    final composerDecoration = composerFrame.decoration;
+    expect(composerDecoration, isA<BoxDecoration>());
+    final composerColor = (composerDecoration! as BoxDecoration).color;
+    expect(commandColor, composerColor);
+    expect(commandColor, isNot(Colors.transparent));
+    final composerField = tester.widget<TextField>(
+      find.byKey(const ValueKey<String>('chat-thread-composer')),
+    );
+    expect(composerField.decoration?.filled, isFalse);
+    expect(composerField.decoration?.hoverColor, Colors.transparent);
+    expect(find.text('Message Agent Awesome in this chat...'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('chat-thread-composer')),
+    );
+    await tester.pump();
+    expect(find.text('Message Agent Awesome in this chat...'), findsNothing);
+    expect(find.text('No results for ""'), findsNothing);
+
+    final filterFields = tester.widgetList<TextField>(
+      find.byKey(const ValueKey<String>('command-subshell-filter')),
+    );
+    expect(filterFields, isNotEmpty);
+    for (final field in filterFields) {
+      expect(field.decoration?.filled, isFalse);
+    }
+  });
+
   testWidgets(
     'global AI chat header starts chats without local delete/collapse',
     (tester) async {
@@ -2699,7 +2961,7 @@ void main() {
     expect(find.text('Connect your model'), findsOneWidget);
     expect(find.text('Use API key'), findsOneWidget);
     expect(find.text('Run local model'), findsOneWidget);
-    expect(find.textContaining('go run'), findsNothing);
+    expect(find.textContaining(RegExp(r'go\s+run')), findsNothing);
 
     await tester.tap(find.text('Connect provider'));
     await tester.pumpAndSettle();
@@ -2742,7 +3004,7 @@ void main() {
     expect(controller.hasConfiguredModel, isTrue);
     expect(controller.canStartChat, isTrue);
     expect(find.text('Connect your model'), findsNothing);
-    expect(find.byTooltip('New chat'), findsOneWidget);
+    expect(find.byTooltip('New chat'), findsNothing);
 
     await tester.tap(find.text('Chat'));
     await tester.pumpAndSettle();
@@ -2757,12 +3019,12 @@ void main() {
     final controller = _readyController();
     controller.runtimeProfile = _settingsProfile();
     controller.runtimeProfilePath = '/tmp/personal.json';
-    controller.availableProfiles = const <RuntimeProfileFileEntry>[
-      RuntimeProfileFileEntry(
-        path: '/tmp/personal.json',
-        id: 'personal',
-        label: 'Personal',
-        active: true,
+    controller.availableAgentConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'Personal',
       ),
     ];
     controller.availableModelConfigs = const <ConfigFileEntry>[
@@ -2814,29 +3076,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('Settings'), findsWidgets);
-    expect(find.byTooltip('Profiles'), findsOneWidget);
     expect(find.byTooltip('App'), findsOneWidget);
     expect(find.byTooltip('Models'), findsOneWidget);
-    expect(find.byTooltip('Agents'), findsOneWidget);
     expect(find.byTooltip('Memory'), findsOneWidget);
+    expect(find.text('App settings'), findsOneWidget);
     expect(find.text('APP SETTINGS'), findsNothing);
     expect(find.text('CHAT DEFAULTS'), findsOneWidget);
-    expect(find.text('Default profile'), findsOneWidget);
-    expect(find.text('Personal'), findsWidgets);
+    expect(find.text('Default agent'), findsOneWidget);
+    expect(find.text('Default Agent'), findsWidgets);
     expect(find.text('APPLICATION MODELS'), findsOneWidget);
     expect(find.text('Summarize titles with a model.'), findsOneWidget);
     expect(find.text('Summary model'), findsOneWidget);
     expect(find.text('openai / gpt-mini'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('Profiles'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(find.text('ASSIGNMENTS'), findsOneWidget);
-    expect(find.text('Model'), findsWidgets);
-    expect(find.text('Agent'), findsWidgets);
-    expect(find.text('Tools'), findsWidgets);
-    expect(find.text('Memory'), findsWidgets);
 
     expect(find.text('OS Tools'), findsNothing);
     expect(find.text('MCP Server'), findsNothing);
@@ -2849,31 +3100,53 @@ void main() {
     expect(find.byTooltip('Add model config'), findsOneWidget);
     expect(find.byTooltip('Duplicate model config'), findsOneWidget);
     expect(find.byTooltip('Delete model config'), findsOneWidget);
+    expect(find.byTooltip('Validations'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Agents'));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Agents')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.text('Default Agent'), findsWidgets);
+    expect(find.byTooltip('Agents'), findsWidgets);
     expect(find.byTooltip('Add agent config'), findsOneWidget);
-    expect(find.byTooltip('Duplicate agent config'), findsOneWidget);
-    expect(find.byTooltip('Delete agent config'), findsOneWidget);
-    expect(find.byTooltip('Details'), findsOneWidget);
-    expect(find.byTooltip('Instructions'), findsOneWidget);
-    expect(find.byTooltip('Validations'), findsOneWidget);
+    expect(find.byTooltip('Duplicate agent config'), findsWidgets);
+    expect(find.byTooltip('Delete agent config'), findsWidgets);
+    expect(find.text('Instruction'), findsWidgets);
+    expect(find.byTooltip('Instructions'), findsNothing);
+    expect(find.byTooltip('Validations'), findsNothing);
+    expect(find.text('EFFECTIVE ACCESS'), findsOneWidget);
+    expect(find.text('AGENT ACCESS'), findsOneWidget);
+    expect(find.text('Readable domains'), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.fact_check_outlined).last);
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Settings')));
     await tester.pump();
-    await tester.pump(const Duration(seconds: 5));
-
-    expect(find.text('No validations configured'), findsOneWidget);
-
+    await tester.pump(const Duration(milliseconds: 250));
     await tester.tap(find.byTooltip('Memory'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
     expect(find.byTooltip('Add memory domain'), findsOneWidget);
     expect(find.byTooltip('Remove memory domain'), findsOneWidget);
+    expect(find.text('EFFECTIVE ACCESS'), findsNothing);
+    expect(find.text('AGENT ACCESS'), findsNothing);
+    expect(find.text('Readable domains'), findsNothing);
+    expect(find.text('Auto-start server'), findsOneWidget);
+    expect(find.text('Memory domain enabled'), findsOneWidget);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('Managed'), findsNothing);
+    expect(find.text('Domain ID'), findsNothing);
+    expect(find.text('Endpoint'), findsNothing);
+    expect(find.text('Health URL'), findsNothing);
+    expect(find.text('Database path'), findsNothing);
+    expect(find.text('Data directory'), findsNothing);
+    expect(find.text('Working directory'), findsNothing);
+    expect(find.text('Executable path'), findsNothing);
+    expect(find.text('Arguments, one per line'), findsNothing);
+    expect(find.text('http://127.0.0.1:1/mcp'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('Auto-start server')).dy,
+      lessThan(tester.getTopLeft(find.text('Name')).dy),
+    );
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
     await tester.pump();
@@ -2905,12 +3178,20 @@ void main() {
     expect(find.text('Assigned'), findsNothing);
   });
 
-  testWidgets('shows configured agent validations in settings', (tester) async {
-    const agentPath = '/tmp/agent.yaml';
-    const agentConfig = '''
-name: test_agent
-description: Test agent.
-instruction: Ask for missing context.
+  testWidgets('shows configured model validations in settings', (tester) async {
+    const modelPath = '/tmp/model.yaml';
+    const modelConfig = '''
+default: openai:gpt-mini
+providers:
+  openai:
+    name: OpenAI
+    adapter: openai
+    api-key: env:OPENAI_API_KEY
+    default: gpt-mini
+    url: https://api.openai.com/v1/chat/completions
+    models:
+      - id: gpt-mini
+        model: gpt-5-mini
 validations:
   - id: asks_for_context
     label: Asks for context
@@ -2923,18 +3204,18 @@ validations:
     final controller = AgentAwesomeAppController(
       config: _testConfig(),
       configFiles: _MemoryConfigFileStore(<String, String>{
-        agentPath: agentConfig,
+        modelPath: modelConfig,
       }),
     );
     controller.runtimeProfile = _settingsProfile().copyWith(
-      harness: _settingsProfile().harness.copyWith(agentConfigPath: agentPath),
+      harness: _settingsProfile().harness.copyWith(modelConfigPath: modelPath),
     );
-    controller.availableAgentConfigs = <ConfigFileEntry>[
+    controller.availableModelConfigs = <ConfigFileEntry>[
       const ConfigFileEntry(
-        path: agentPath,
-        kind: ConfigFileKind.agent,
+        path: modelPath,
+        kind: ConfigFileKind.model,
         assigned: true,
-        displayName: 'test_agent',
+        displayName: 'OpenAI',
       ),
     ];
 
@@ -2944,9 +3225,9 @@ validations:
         home: Scaffold(
           body: SettingsDetailsPanel(
             controller: controller,
-            section: 'Agents',
-            selectedAgentConfigPath: agentPath,
-            modeId: 'agent-validations',
+            section: 'Models',
+            selectedModelConfigPath: modelPath,
+            modeId: 'model-validations',
           ),
         ),
       ),
@@ -2960,13 +3241,25 @@ validations:
     expect(find.byTooltip('Run validation'), findsOneWidget);
   });
 
-  testWidgets('adds agent validation cases from settings', (tester) async {
-    const agentPath = '/tmp/agent.yaml';
+  testWidgets('adds model validation cases from settings', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const modelPath = '/tmp/model.yaml';
     final store = _MemoryConfigFileStore(<String, String>{
-      agentPath: '''
-name: test_agent
-description: Test agent.
-instruction: Ask for missing context.
+      modelPath: '''
+default: openai:gpt-mini
+providers:
+  openai:
+    name: OpenAI
+    adapter: openai
+    api-key: env:OPENAI_API_KEY
+    default: gpt-mini
+    url: https://api.openai.com/v1/chat/completions
+    models:
+      - id: gpt-mini
+        model: gpt-5-mini
 ''',
     });
     final controller = AgentAwesomeAppController(
@@ -2974,14 +3267,14 @@ instruction: Ask for missing context.
       configFiles: store,
     );
     controller.runtimeProfile = _settingsProfile().copyWith(
-      harness: _settingsProfile().harness.copyWith(agentConfigPath: agentPath),
+      harness: _settingsProfile().harness.copyWith(modelConfigPath: modelPath),
     );
-    controller.availableAgentConfigs = <ConfigFileEntry>[
+    controller.availableModelConfigs = <ConfigFileEntry>[
       const ConfigFileEntry(
-        path: agentPath,
-        kind: ConfigFileKind.agent,
+        path: modelPath,
+        kind: ConfigFileKind.model,
         assigned: true,
-        displayName: 'test_agent',
+        displayName: 'OpenAI',
       ),
     ];
 
@@ -2991,9 +3284,9 @@ instruction: Ask for missing context.
         home: Scaffold(
           body: SettingsDetailsPanel(
             controller: controller,
-            section: 'Agents',
-            selectedAgentConfigPath: agentPath,
-            modeId: 'agent-validations',
+            section: 'Models',
+            selectedModelConfigPath: modelPath,
+            modeId: 'model-validations',
           ),
         ),
       ),
@@ -3001,7 +3294,7 @@ instruction: Ask for missing context.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(find.text('No validations configured'), findsOneWidget);
+    expect(find.text('No model validations configured'), findsOneWidget);
 
     final addButton = tester.widget<OutlinedButton>(
       find.byKey(const ValueKey<String>('agent-validations-add')),
@@ -3011,19 +3304,24 @@ instruction: Ask for missing context.
     await tester.pump(const Duration(milliseconds: 1000));
 
     expect(
-      AgentConfigDocument.parse(store.files[agentPath]!).validations,
+      ModelConfigDocument.parse(store.files[modelPath]!).validations,
       hasLength(1),
     );
     expect(find.text('New validation', skipOffstage: false), findsWidgets);
 
+    final labelField = find.widgetWithText(TextFormField, 'New validation');
+    final modeField = find.byType(DropdownButtonFormField<String>).first;
+    expect(labelField, findsOneWidget);
+    expect(modeField, findsOneWidget);
+    expect(
+      (tester.getSize(labelField).height - tester.getSize(modeField).height)
+          .abs(),
+      lessThanOrEqualTo(1),
+    );
+
     await tester.enterText(
       find.widgetWithText(TextFormField, 'New validation'),
       'Asks for context',
-    );
-    await tester.pump(const Duration(milliseconds: 650));
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Expected response.'),
-      'I need more context.',
     );
     await tester.pump(const Duration(milliseconds: 650));
     await tester.enterText(
@@ -3042,7 +3340,7 @@ instruction: Ask for missing context.
     await tester.enterText(find.widgetWithText(TextFormField, 'value'), 'TODO');
     await tester.pump(const Duration(milliseconds: 650));
 
-    final saved = AgentConfigDocument.parse(store.files[agentPath]!);
+    final saved = ModelConfigDocument.parse(store.files[modelPath]!);
     expect(saved.validations, hasLength(1));
     expect(saved.validations.first.id, 'validation');
     expect(saved.validations.first.label, 'Asks for context');
@@ -3052,22 +3350,6 @@ instruction: Ask for missing context.
           .single
           .contains,
       'Expected',
-    );
-    expect(
-      saved.validations.first.mocks['agent.response']['text'],
-      'I need more context.',
-    );
-    expect(
-      saved.validations.first.mocks['agent.response']['tool_calls'].first['id'],
-      'command:rg.search_text',
-    );
-    expect(
-      saved
-          .validations
-          .first
-          .mocks['agent.response']['tool_calls']
-          .first['arguments']['pattern'],
-      'TODO',
     );
     expect(
       saved.validations.first.assertions
@@ -4251,14 +4533,6 @@ validations:
         ],
       ),
     ];
-    controller.availableProfiles = const <RuntimeProfileFileEntry>[
-      RuntimeProfileFileEntry(
-        path: '/tmp/personal.json',
-        id: 'personal',
-        label: 'Personal',
-        active: true,
-      ),
-    ];
     controller.sessions = <ChatSession>[
       ChatSession(
         id: 'session-live',
@@ -4413,8 +4687,7 @@ validations:
     expect(find.text('Chat message from user in session-live'), findsNothing);
     expect(find.byTooltip('Select chat'), findsNothing);
     expect(find.byTooltip('Start new chat'), findsOneWidget);
-    expect(find.byTooltip('Delete selected chat'), findsNothing);
-    expect(find.byTooltip('New chat with profile'), findsNothing);
+    expect(find.byTooltip('Delete selected chat'), findsOneWidget);
     expect(find.byTooltip('Chats'), findsOneWidget);
     expect(find.byTooltip('Sessions'), findsNothing);
     expect(find.text('Live chat'), findsOneWidget);
@@ -4508,27 +4781,19 @@ validations:
       find.byKey(const ValueKey<String>('global-command-input')),
     );
     await tester.pump();
-    expect(find.text('PROFILES'), findsOneWidget);
+    expect(find.text('AGENTS'), findsOneWidget);
     expect(find.text('RECENT CHATS'), findsOneWidget);
     expect(find.text('WORKSPACES'), findsNothing);
     expect(find.text('SETTINGS'), findsOneWidget);
     expect(find.text('Manage'), findsOneWidget);
     expect(find.text('All Chats'), findsOneWidget);
     expect(find.text('Personal'), findsWidgets);
-    await tester.tap(find.text('Personal').last);
-    await tester.pumpAndSettle();
-    expect(find.text('PROFILES'), findsOneWidget);
-    expect(find.text('Selected for new chat'), findsOneWidget);
-    final globalInput = tester.widget<TextField>(
-      find.byKey(const ValueKey<String>('global-command-input')),
-    );
-    expect(globalInput.focusNode?.hasFocus, isTrue);
     await tester.enterText(
       find.byKey(const ValueKey<String>('global-command-input')),
-      'Start from selected profile',
+      'Start from selected agent',
     );
     await tester.pump();
-    expect(find.text('PROFILES'), findsNothing);
+    expect(find.text('AGENTS'), findsNothing);
     await tester.tap(find.byTooltip('People'));
     await tester.pumpAndSettle();
     expect(find.text('Alex'), findsOneWidget);
@@ -4605,7 +4870,7 @@ validations:
 
     expect(controller.hasConfiguredModel, isFalse);
     expect(controller.canStartChat, isTrue);
-    expect(find.byTooltip('New chat'), findsOneWidget);
+    expect(find.byTooltip('New chat'), findsNothing);
     expect(find.text('Setup incomplete'), findsNothing);
 
     await tester.tap(find.text('Chat'));
@@ -4621,7 +4886,7 @@ validations:
       find.byKey(const ValueKey<String>('global-command-input')),
     );
     await tester.pump();
-    expect(find.text('No profiles configured'), findsNothing);
+    expect(find.text('No runtime agents configured'), findsNothing);
     expect(find.text('Chat'), findsWidgets);
   });
 
@@ -5009,7 +5274,7 @@ validations:
     expect(find.text('QUEUE'), findsOneWidget);
     expect(find.text('DETAILS'), findsOneWidget);
     expect(find.text('Draft task brief'), findsWidgets);
-    expect(find.byTooltip('Delete backlog item'), findsOneWidget);
+    expect(find.byTooltip('Delete backlog item'), findsWidgets);
     expect(find.text('Delete'), findsNothing);
     expect(find.text('Backlog Stream'), findsNothing);
     expect(find.byTooltip('Stream'), findsOneWidget);
@@ -5156,7 +5421,7 @@ validations:
       find.byKey(const ValueKey<String>('global-command-input')),
       findsOneWidget,
     );
-    expect(find.byTooltip('New chat'), findsOneWidget);
+    expect(find.byTooltip('New chat'), findsNothing);
     expect(find.byTooltip('Settings'), findsNothing);
   });
 
@@ -5192,7 +5457,7 @@ validations:
       find.byKey(const ValueKey<String>('global-command-input')),
     );
     await tester.pump();
-    expect(find.text('PROFILES'), findsOneWidget);
+    expect(find.text('AGENTS'), findsOneWidget);
 
     controller.backlogChatPanelOpen = true;
     controller.notifyListeners();
@@ -5297,11 +5562,11 @@ AgentAwesomeAppController _readyController({AgentFileImporter? fileImporter}) {
 }
 
 /// Returns a workflow definition with schema-backed run inputs for UI tests.
-AutomationDefinition _professionalCodingDefinitionForRunTest() {
+AutomationDefinition _sourceChangeDefinitionForRunTest() {
   return const AutomationDefinition(
-    id: 'professional_coding_change',
+    id: 'source_change_workflow',
     kind: automationWorkflowKind,
-    name: 'Professional Coding Change',
+    name: 'Source Change Workflow',
     hash: 'sha256:professional',
     body: <String, dynamic>{
       'authoring': <String, Object>{
@@ -5311,7 +5576,7 @@ AutomationDefinition _professionalCodingDefinitionForRunTest() {
         'run_setup': <String, Object>{
           'setup_fields': <Object>[
             'repository_path',
-            'go_module_path',
+            'package_path',
             'binary_package',
           ],
           'run_fields': <Object>['change_request'],
@@ -5445,6 +5710,8 @@ class _ReadyLocalServiceSupervisor extends LocalServiceSupervisor {
   Future<List<ServiceProcessStatus>> startRequiredServices(
     RuntimeProfile profile, {
     bool restartAutoStarted = false,
+    bool includeHarness = true,
+    bool includeMcpServers = true,
   }) async {
     return const <ServiceProcessStatus>[];
   }
@@ -5723,9 +5990,12 @@ class _CapturingAutomationsClient extends AutomationsClient {
       body: body.isEmpty
           ? <String, dynamic>{
               'apiVersion': automationWorkflowApiVersion,
-              'kind': kind,
+              'kind': 'state_machine',
               'id': 'workflow_${drafts.length + 1}',
-              'nodes': const <Object>[],
+              'initial': 'start',
+              'states': const <Object>[
+                <String, Object>{'id': 'start'},
+              ],
             }
           : body,
     );
@@ -6351,7 +6621,7 @@ RuntimeProfile _settingsProfile() {
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: '/tmp/model.yaml',
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -6364,7 +6634,7 @@ RuntimeProfile _settingsProfile() {
       apiBaseUrl: 'http://127.0.0.1:2/api',
       healthUrl: 'http://127.0.0.1:2/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:1/api',
       contextBaseUrl: 'http://127.0.0.1:8081/api/context',
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',
@@ -6382,7 +6652,7 @@ RuntimeProfile _settingsProfile() {
         endpoint: 'http://127.0.0.1:1/mcp',
         healthUrl: 'http://127.0.0.1:1/healthz',
         workingDirectory: '/tmp/memory',
-        packagePath: './cmd/memoryd',
+        executablePath: '/tmp/bin/memoryd',
         dbPath: '/tmp/memory.db',
         dataDir: '/tmp/memory-files',
         arguments: <String>[],
@@ -6422,7 +6692,7 @@ RuntimeProfile _chatRuntimeProfile() {
         endpoint: 'http://127.0.0.1:1/mcp',
         healthUrl: 'http://127.0.0.1:1/healthz',
         workingDirectory: '/tmp/memory',
-        packagePath: './cmd/memoryd',
+        executablePath: '/tmp/bin/memoryd',
         dbPath: '/tmp/memory.db',
         dataDir: '/tmp/memory-files',
         arguments: <String>[],
@@ -6436,7 +6706,7 @@ RuntimeProfile _chatRuntimeProfile() {
         endpoint: 'http://127.0.0.1:3/mcp',
         healthUrl: 'http://127.0.0.1:3/healthz',
         workingDirectory: '/tmp/project-memory',
-        packagePath: './cmd/memoryd',
+        executablePath: '/tmp/bin/memoryd',
         dbPath: '/tmp/project-memory.db',
         dataDir: '/tmp/project-memory-files',
         arguments: <String>[],

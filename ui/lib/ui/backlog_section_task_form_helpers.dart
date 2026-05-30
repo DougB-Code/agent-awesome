@@ -36,7 +36,7 @@ InputDecoration _taskDialogDecoration(BuildContext context, String label) {
   return InputDecoration(
     labelText: label,
     filled: true,
-    fillColor: colors.surface,
+    fillColor: colors.field,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
       borderSide: BorderSide(color: colors.border),

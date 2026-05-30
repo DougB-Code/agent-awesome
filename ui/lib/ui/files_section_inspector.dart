@@ -28,9 +28,11 @@ class _FileInspectorContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final selected = file;
     if (selected == null) {
-      return const PanelEmptyBlock(
-        label:
-            'No files indexed yet. Files are PDFs, spreadsheets, images, and other files, not chat messages.',
+      return const PanelEmptyBody(
+        icon: Icons.folder_outlined,
+        label: 'No files indexed yet',
+        message:
+            'Add PDFs, spreadsheets, images, and other files here. Chat messages belong in Memory, not Files.',
       );
     }
     return SingleChildScrollView(

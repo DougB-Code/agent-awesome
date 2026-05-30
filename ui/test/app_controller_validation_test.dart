@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   test('builds strict tool validation command arguments', () {
     final arguments = buildToolValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       toolPath: '/tmp/tool.yaml',
       validationId: ' curl_http_get ',
       requireAssertions: true,
@@ -18,8 +17,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'tools',
       'validate',
       '--tool',
@@ -35,7 +32,6 @@ void main() {
 
   test('builds tool validation command arguments with live agent runtime', () {
     final arguments = buildToolValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       toolPath: '/tmp/tool.yaml',
       agentPath: '/tmp/agent.yaml',
       modelPath: '/tmp/model.yaml',
@@ -43,8 +39,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'tools',
       'validate',
       '--tool',
@@ -61,14 +55,11 @@ void main() {
 
   test('builds filtered tool validation command arguments', () {
     final arguments = buildToolValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       toolPath: '/tmp/tool.yaml',
       mode: ' mocked ',
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'tools',
       'validate',
       '--tool',
@@ -81,7 +72,6 @@ void main() {
 
   test('builds multi-scenario tool validation command arguments', () {
     final arguments = buildToolValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       toolPath: '/tmp/tool.yaml',
       validationIds: const <String>[
         ' curl_http_get_command ',
@@ -91,8 +81,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'tools',
       'validate',
       '--tool',
@@ -107,7 +95,6 @@ void main() {
 
   test('builds strict agent validation command arguments', () {
     final arguments = buildAgentValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       agentPath: '/tmp/agent.yaml',
       toolPath: '/tmp/tool.yaml',
       validationId: ' asks_for_context ',
@@ -118,8 +105,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'agents',
       'validate',
       '--agent',
@@ -138,7 +123,6 @@ void main() {
 
   test('builds live agent validation command arguments', () {
     final arguments = buildAgentValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       agentPath: '/tmp/agent.yaml',
       validationId: ' live_check ',
       live: true,
@@ -147,8 +131,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'agents',
       'validate',
       '--agent',
@@ -166,14 +148,11 @@ void main() {
 
   test('builds filtered agent validation command arguments', () {
     final arguments = buildAgentValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       agentPath: '/tmp/agent.yaml',
       mode: ' mocked ',
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'agents',
       'validate',
       '--agent',
@@ -186,7 +165,6 @@ void main() {
 
   test('builds strict library validation command arguments', () {
     final arguments = buildLibraryValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       rootPath: '.',
       agentDirectory: 'agents',
       toolDirectory: 'tools',
@@ -200,8 +178,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'library',
       'validate',
       '--root',
@@ -225,7 +201,6 @@ void main() {
 
   test('builds filtered library validation command arguments', () {
     final arguments = buildLibraryValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       rootPath: '.',
       agentDirectory: 'agents',
       toolDirectory: 'tools',
@@ -234,8 +209,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'library',
       'validate',
       '--root',
@@ -256,7 +229,6 @@ void main() {
 
   test('builds live library agent validation command arguments', () {
     final arguments = buildLibraryValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       rootPath: '.',
       agentDirectory: 'agents',
       toolDirectory: 'tools',
@@ -266,8 +238,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'library',
       'validate',
       '--root',
@@ -289,7 +259,6 @@ void main() {
 
   test('builds live library tool validation runtime arguments', () {
     final arguments = buildLibraryValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       rootPath: '.',
       agentDirectory: 'agents',
       toolDirectory: 'tools',
@@ -298,8 +267,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'library',
       'validate',
       '--root',
@@ -320,7 +287,6 @@ void main() {
 
   test('builds agent-only library validation command arguments', () {
     final arguments = buildLibraryValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       rootPath: '/tmp/library',
       agentDirectory: 'agents',
       toolDirectory: '',
@@ -330,8 +296,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'library',
       'validate',
       '--root',
@@ -350,7 +314,6 @@ void main() {
 
   test('builds single-file library validation command arguments', () {
     final arguments = buildLibraryValidationCommandArguments(
-      packagePath: './cmd/agent-awesome',
       rootPath: '/tmp/library',
       agentPath: 'agent.yaml',
       agentDirectory: 'agents',
@@ -360,8 +323,6 @@ void main() {
     );
 
     expect(arguments, <String>[
-      'run',
-      './cmd/agent-awesome',
       'library',
       'validate',
       '--root',

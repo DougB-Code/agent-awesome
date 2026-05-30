@@ -44,13 +44,6 @@ class _StreamTaskCard extends StatelessWidget {
               color: emphasized ? colors.panelStrong : colors.surface,
               border: Border.all(color: borderColor, width: emphasized ? 2 : 1),
               borderRadius: BorderRadius.circular(8),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  blurRadius: emphasized ? 16 : 12,
-                  offset: const Offset(0, 4),
-                  color: row.color.withValues(alpha: emphasized ? 0.16 : 0.1),
-                ),
-              ],
             ),
             child: Row(
               children: <Widget>[

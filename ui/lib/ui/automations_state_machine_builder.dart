@@ -19,12 +19,14 @@ class _StateMachineDraftEditController extends ChangeNotifier {
   String _draftFingerprint = '';
   List<Map<String, dynamic>> _states = <Map<String, dynamic>>[];
   Map<String, Offset> _positions = <String, Offset>{};
+  Set<String> _pinnedStateIds = <String>{};
   Map<String, Offset> _focusOffsets = <String, Offset>{};
   Set<String> _collapsedPhaseIds = <String>{};
   String _initialStateId = '';
   String _focusedPhaseId = '';
   String _selectedStateId = '';
   String _connectionSourceId = '';
+  String _connectionTrigger = _stateMachineSuccessConnectionTrigger;
   double _zoom = 1;
   Offset _canvasOffset = Offset.zero;
   ScrollController _horizontalCanvasController = ScrollController();
@@ -69,6 +71,9 @@ class _StateMachineDraftEditController extends ChangeNotifier {
 
   /// State id currently used as a transition source.
   String get connectionSourceId => _connectionSourceId;
+
+  /// Transition trigger currently used by the connection gesture.
+  String get connectionTrigger => _connectionTrigger;
 
   /// Canvas zoom factor.
   double get zoom => _zoom;
@@ -123,7 +128,11 @@ class _StateMachineDraftEditController extends ChangeNotifier {
   /// Selects a state or completes the active connection gesture.
   void selectOrConnectState(String stateId) {
     if (_connectionSourceId.isNotEmpty && _connectionSourceId != stateId) {
-      toggleTransition(_connectionSourceId, stateId);
+      toggleTransition(
+        _connectionSourceId,
+        stateId,
+        trigger: _connectionTrigger,
+      );
       return;
     }
     if (_selectedStateId == stateId) {
@@ -143,8 +152,12 @@ class _StateMachineDraftEditController extends ChangeNotifier {
   }
 
   /// Toggles transition-connection mode from one source state.
-  void startConnection(String stateId) {
-    _connectionSourceId = _connectionSourceId == stateId ? '' : stateId;
+  void startConnection(String stateId, String trigger) {
+    final nextTrigger = _stateMachineConnectionTrigger(trigger);
+    final alreadyConnecting =
+        _connectionSourceId == stateId && _connectionTrigger == nextTrigger;
+    _connectionSourceId = alreadyConnecting ? '' : stateId;
+    _connectionTrigger = nextTrigger;
     _selectedStateId = stateId;
     notifyListeners();
   }
@@ -155,6 +168,7 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       return;
     }
     _connectionSourceId = '';
+    _connectionTrigger = _stateMachineSuccessConnectionTrigger;
     notifyListeners();
   }
 
@@ -171,9 +185,8 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       if (_initialStateId.isEmpty) {
         _initialStateId = _selectedStateId;
       }
-      _positions[_selectedStateId] = _nextStateMachinePosition(
-        _stateMachinePositionsForScope(_states, _positions, ''),
-      );
+      _positions.remove(_selectedStateId);
+      _pinnedStateIds.remove(_selectedStateId);
     });
   }
 
@@ -200,9 +213,8 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       }
       _states.add(state);
       _selectedStateId = stateId;
-      _positions[stateId] = _nextStateMachinePosition(
-        _stateMachinePositionsForScope(_states, _positions, parentStateId),
-      );
+      _positions.remove(stateId);
+      _pinnedStateIds.remove(stateId);
       _collapsedPhaseIds.remove(parentStateId);
     });
   }
@@ -220,6 +232,7 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       _selectedStateId = stateId;
     }
     _connectionSourceId = '';
+    _connectionTrigger = _stateMachineSuccessConnectionTrigger;
     prepareCanvasControllersForRestore();
     notifyListeners();
   }
@@ -277,7 +290,11 @@ class _StateMachineDraftEditController extends ChangeNotifier {
   }
 
   /// Adds or removes a transition between two process states.
-  void toggleTransition(String sourceStateId, String targetStateId) {
+  void toggleTransition(
+    String sourceStateId,
+    String targetStateId, {
+    String? trigger,
+  }) {
     final index = _states.indexWhere(
       (state) => _stateId(state) == sourceStateId,
     );
@@ -287,14 +304,19 @@ class _StateMachineDraftEditController extends ChangeNotifier {
     _mutateStates(() {
       final state = Map<String, dynamic>.from(_states[index]);
       final transitions = _stateTransitions(state).map(_map).toList();
+      final transitionTrigger = trigger == null
+          ? _nextTransitionTrigger(transitions)
+          : _stateMachineConnectionTrigger(trigger);
       final existingIndex = transitions.indexWhere(
-        (transition) => _transitionTarget(transition) == targetStateId,
+        (transition) =>
+            _transitionTarget(transition) == targetStateId &&
+            _transitionTrigger(transition) == transitionTrigger,
       );
       if (existingIndex >= 0) {
         transitions.removeAt(existingIndex);
       } else {
         transitions.add(<String, dynamic>{
-          'trigger': _nextTransitionTrigger(transitions),
+          'trigger': transitionTrigger,
           'to': targetStateId,
         });
       }
@@ -306,6 +328,7 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       _states[index] = state;
       _selectedStateId = sourceStateId;
       _connectionSourceId = '';
+      _connectionTrigger = _stateMachineSuccessConnectionTrigger;
     });
   }
 
@@ -377,12 +400,14 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       _selectedStateId = _states.isEmpty ? '' : _stateId(_states.first);
       if (deleted.contains(_connectionSourceId)) {
         _connectionSourceId = '';
+        _connectionTrigger = _stateMachineSuccessConnectionTrigger;
       }
       if (deleted.contains(_focusedPhaseId)) {
         _focusedPhaseId = '';
       }
       for (final id in deleted) {
         _positions.remove(id);
+        _pinnedStateIds.remove(id);
         _focusOffsets.remove(_stateMachineFocusOffsetKey(id));
         _collapsedPhaseIds.remove(id);
       }
@@ -394,17 +419,24 @@ class _StateMachineDraftEditController extends ChangeNotifier {
     if (delta.distance < 1) {
       return;
     }
-    final current = _stateMachinePositionForState(
-      stateId,
+    final visiblePositions = _stateMachineVisibleLayoutPositions(
       _states,
-      _positions,
-      _initialStateId,
+      initialStateId: focusedInitialStateId,
+      focusedPhaseId: _focusedPhaseId,
+      positions: _positions,
+      collapsedPhaseIds: _collapsedPhaseIds,
     );
+    final current =
+        visiblePositions[stateId] ??
+        _stateMachinePositionForState(
+          stateId,
+          _states,
+          _positions,
+          _initialStateId,
+        );
     _mutateStates(() {
-      _positions[stateId] = Offset(
-        (current.dx + delta.dx).clamp(24.0, 10000.0).toDouble(),
-        (current.dy + delta.dy).clamp(24.0, 10000.0).toDouble(),
-      );
+      _positions[stateId] = _stateMachineClampedCanvasPosition(current + delta);
+      _pinnedStateIds.add(stateId);
       _selectedStateId = stateId;
     });
   }
@@ -504,6 +536,9 @@ class _StateMachineDraftEditController extends ChangeNotifier {
       final position = _positions.remove(oldStateId);
       if (position != null) {
         _positions[nextId] = position;
+      }
+      if (_pinnedStateIds.remove(oldStateId)) {
+        _pinnedStateIds.add(nextId);
       }
       final focusOffset = _focusOffsets.remove(
         _stateMachineFocusOffsetKey(oldStateId),
@@ -718,7 +753,17 @@ class _StateMachineDraftEditController extends ChangeNotifier {
           : _stateId(_states.first);
     }
     _connectionSourceId = '';
-    _positions = _stateMachinePositionsFromAuthoring(body);
+    _connectionTrigger = _stateMachineSuccessConnectionTrigger;
+    final stateIds = _states.map(_stateId).where((id) => id.isNotEmpty).toSet();
+    final pinnedStateIds = _stateMachinePinnedStatesFromAuthoring(
+      body,
+    ).where(stateIds.contains).toSet();
+    final authoredPositions = _stateMachinePositionsFromAuthoring(body);
+    _pinnedStateIds = pinnedStateIds;
+    _positions = <String, Offset>{
+      for (final entry in authoredPositions.entries)
+        if (pinnedStateIds.contains(entry.key)) entry.key: entry.value,
+    };
     _focusOffsets = _stateMachineFocusOffsetsFromAuthoring(body);
     _collapsedPhaseIds = _stateMachineCollapsedPhasesFromAuthoring(body);
     _canvasOffset =
@@ -780,7 +825,8 @@ class _StateMachineDraftEditController extends ChangeNotifier {
     }
     body['authoring'] = _stateMachineAuthoringWithPositions(
       _map(body['authoring']),
-      _positions,
+      _stateMachinePinnedPositions(_positions, _pinnedStateIds),
+      _pinnedStateIds,
       _collapsedPhaseIds,
       _focusOffsets,
     );
@@ -1004,7 +1050,7 @@ class _StateMachineBuilderDetail extends StatefulWidget {
 /// _StateMachineBuilderDetailState connects shell intents to the canvas.
 class _StateMachineBuilderDetailState
     extends State<_StateMachineBuilderDetail> {
-  _TaskGraphActionIntentController? _actionIntents;
+  _WorkflowActionIntentController? _actionIntents;
   int _lastActionIntentRevision = 0;
 
   /// Loads editable process-state data from the selected workflow draft.
@@ -1032,7 +1078,7 @@ class _StateMachineBuilderDetailState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final nextIntents = _TaskGraphActionIntentScope.maybeOf(context);
+    final nextIntents = _WorkflowActionIntentScope.maybeOf(context);
     if (nextIntents == _actionIntents) {
       return;
     }
@@ -1062,6 +1108,7 @@ class _StateMachineBuilderDetailState
             focusPath: widget.editor.focusPath,
             selectedStateId: widget.editor.selectedStateId,
             connectionSourceId: widget.editor.connectionSourceId,
+            connectionTrigger: widget.editor.connectionTrigger,
             canvasOffset: widget.editor.canvasOffset,
             horizontalScrollController:
                 widget.editor.horizontalCanvasController,
@@ -1209,6 +1256,7 @@ class _StateMachineInspectorDetailState
                 initialStateId: widget.editor.initialStateId,
                 focusedPhaseId: widget.editor.focusedPhaseId,
                 connectionSourceId: widget.editor.connectionSourceId,
+                connectionTrigger: widget.editor.connectionTrigger,
                 onSetInitial: widget.editor.setInitialState,
                 onFocusPhase: widget.editor.focusPhase,
                 onStartConnection: widget.editor.startConnection,
@@ -1413,6 +1461,7 @@ class _StateMachineCanvasViewport extends StatefulWidget {
     required this.focusPath,
     required this.selectedStateId,
     required this.connectionSourceId,
+    required this.connectionTrigger,
     required this.canvasOffset,
     required this.horizontalScrollController,
     required this.verticalScrollController,
@@ -1444,6 +1493,7 @@ class _StateMachineCanvasViewport extends StatefulWidget {
   final List<String> focusPath;
   final String selectedStateId;
   final String connectionSourceId;
+  final String connectionTrigger;
   final Offset canvasOffset;
   final ScrollController horizontalScrollController;
   final ScrollController verticalScrollController;
@@ -1453,7 +1503,7 @@ class _StateMachineCanvasViewport extends StatefulWidget {
   final ValueChanged<String> onSelectState;
   final ValueChanged<String> onFocusPhase;
   final ValueChanged<String> onFocusStateScope;
-  final ValueChanged<String> onStartConnection;
+  final void Function(String stateId, String trigger) onStartConnection;
   final ValueChanged<String> onSetInitial;
   final ValueChanged<String> onDeleteState;
   final ValueChanged<String> onAddState;
@@ -1531,6 +1581,9 @@ class _StateMachineCanvasViewportState
       collapsedPhaseIds: widget.collapsedPhaseIds,
       edgeViewMode: _edgeViewMode,
       selectedStateId: widget.selectedStateId,
+    );
+    final connectedAnchorsByState = _stateMachineConnectedAnchorsByState(
+      layout,
     );
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1654,6 +1707,7 @@ class _StateMachineCanvasViewportState
                                               ),
                                               state: placement.state,
                                               stateLabelsById: stateLabelsById,
+                                              zoom: widget.zoom,
                                               childCount: placement.childCount,
                                               collapsed: widget
                                                   .collapsedPhaseIds
@@ -1674,6 +1728,19 @@ class _StateMachineCanvasViewportState
                                               connectingFromThis:
                                                   _stateId(placement.state) ==
                                                   widget.connectionSourceId,
+                                              connectedAnchors:
+                                                  connectedAnchorsByState[_stateId(
+                                                    placement.state,
+                                                  )] ??
+                                                  _stateMachineNoConnectedAnchors,
+                                              connectionTrigger:
+                                                  widget.connectionTrigger,
+                                              decisionTrigger:
+                                                  _nextDecisionTransitionTrigger(
+                                                    _stateTransitions(
+                                                      placement.state,
+                                                    ).map(_map).toList(),
+                                                  ),
                                               connectionTarget:
                                                   widget
                                                       .connectionSourceId
@@ -1687,9 +1754,10 @@ class _StateMachineCanvasViewportState
                                                   widget.onFocusPhase(
                                                     _stateId(placement.state),
                                                   ),
-                                              onStartConnection: () =>
+                                              onStartConnection: (trigger) =>
                                                   widget.onStartConnection(
                                                     _stateId(placement.state),
+                                                    trigger,
                                                   ),
                                               onSetInitial: () =>
                                                   widget.onSetInitial(
@@ -1895,17 +1963,27 @@ class _StateMachineCanvasViewportState
     if (_dragPreviewOffsets.isEmpty) {
       return widget.positions;
     }
+    final visiblePositions = _stateMachineVisibleLayoutPositions(
+      widget.states,
+      initialStateId: widget.focusedPhaseId.isEmpty
+          ? widget.initialStateId
+          : widget.focusedInitialStateId,
+      focusedPhaseId: widget.focusedPhaseId,
+      positions: widget.positions,
+      collapsedPhaseIds: widget.collapsedPhaseIds,
+    );
     final positions = Map<String, Offset>.from(widget.positions);
     for (final entry in _dragPreviewOffsets.entries) {
-      final base = _stateMachinePositionForState(
-        entry.key,
-        widget.states,
-        widget.positions,
-        widget.initialStateId,
-      );
-      positions[entry.key] = Offset(
-        (base.dx + entry.value.dx).clamp(24.0, 10000.0).toDouble(),
-        (base.dy + entry.value.dy).clamp(24.0, 10000.0).toDouble(),
+      final base =
+          visiblePositions[entry.key] ??
+          _stateMachinePositionForState(
+            entry.key,
+            widget.states,
+            widget.positions,
+            widget.initialStateId,
+          );
+      positions[entry.key] = _stateMachineClampedCanvasPosition(
+        base + entry.value,
       );
     }
     return positions;
@@ -2085,7 +2163,10 @@ class _StateMachineCanvasControls extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
-        _TaskGraphGraphMenu(zoom: zoom, onZoomChanged: onZoomChanged),
+        _StateMachineCanvasZoomControls(
+          zoom: zoom,
+          onZoomChanged: onZoomChanged,
+        ),
         const SizedBox(width: 8),
         if (focusPath.isNotEmpty) ...<Widget>[
           PanelInlineIconButton(
@@ -2298,13 +2379,6 @@ class _StateMachineExitBadge extends StatelessWidget {
               borderRadius: BorderRadius.circular(
                 PanelStyleTokens.compactRadius,
               ),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: colors.surface.withValues(alpha: 0.42),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -2339,11 +2413,15 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
     super.key,
     required this.state,
     required this.stateLabelsById,
+    required this.zoom,
     required this.childCount,
     required this.collapsed,
     required this.initial,
     required this.selected,
     required this.connectingFromThis,
+    required this.connectedAnchors,
+    required this.connectionTrigger,
+    required this.decisionTrigger,
     required this.connectionTarget,
     required this.onTap,
     required this.onFocusPhase,
@@ -2362,15 +2440,19 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
 
   final Map<String, dynamic> state;
   final Map<String, String> stateLabelsById;
+  final double zoom;
   final int childCount;
   final bool collapsed;
   final bool initial;
   final bool selected;
   final bool connectingFromThis;
+  final _StateMachineNodeConnectedAnchors connectedAnchors;
+  final String connectionTrigger;
+  final String decisionTrigger;
   final bool connectionTarget;
   final VoidCallback onTap;
   final VoidCallback onFocusPhase;
-  final VoidCallback onStartConnection;
+  final ValueChanged<String> onStartConnection;
   final VoidCallback onSetInitial;
   final VoidCallback onDeleteState;
   final void Function(String parentStateId, String actionName)
@@ -2410,6 +2492,7 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
         final active = candidateData.isNotEmpty;
         return _StateMachineNodeDragTracker(
           stateId: stateId,
+          zoom: zoom,
           onPointerDown: (position) {
             if (_stateMachinePointerHitsPhaseControls(
               position,
@@ -2571,6 +2654,8 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
                     ),
                     child: _StateMachineNodeToolbar(
                       connectingFromThis: connectingFromThis,
+                      connectionTrigger: connectionTrigger,
+                      decisionTrigger: decisionTrigger,
                       phase: childCount > 0,
                       onStartConnection: onStartConnection,
                       onFocusPhase: onFocusPhase,
@@ -2580,28 +2665,80 @@ class _StateMachineCanvasNodeCard extends StatelessWidget {
                     ),
                   ),
                 ),
-              Positioned(
-                left: -5,
-                top: 58,
-                child: _TaskGraphPort(
-                  color: connectionTarget ? colors.green : colors.muted,
-                ),
-              ),
-              Positioned(
-                right: -5,
-                top: 58,
-                child: GestureDetector(
-                  onTap: onStartConnection,
-                  child: Tooltip(
-                    message: connectingFromThis
-                        ? 'Cancel connection'
-                        : 'Connect from state',
-                    child: _TaskGraphPort(
-                      color: connectingFromThis ? colors.coral : colors.green,
+              for (final kind in _stateMachinePortKinds)
+                if (connectedAnchors.hasInputSide(kind))
+                  Positioned(
+                    left: -5,
+                    top: _stateMachinePortWidgetTop(kind),
+                    child: _StateMachineInputConnectionPort(
+                      kind: kind,
+                      highlighted:
+                          connectionTarget &&
+                          _stateMachineTransitionKind(connectionTrigger) ==
+                              kind,
                     ),
                   ),
+              for (final kind in _stateMachinePortKinds)
+                if (connectedAnchors.hasOutputSide(kind))
+                  Positioned(
+                    right: -5,
+                    top: _stateMachinePortWidgetTop(kind),
+                    child: _StateMachineOutputConnectionPort(
+                      kind: kind,
+                      connectingFromThis: connectingFromThis,
+                      connectionTrigger: connectionTrigger,
+                      decisionTrigger: decisionTrigger,
+                      onStartConnection: onStartConnection,
+                    ),
+                  ),
+              if (connectedAnchors.hasInputBoundary(
+                _StateMachineAnchorSide.top,
+              ))
+                Positioned(
+                  left: _stateMachineInputHorizontalPortWidgetLeft(),
+                  top: -_stateMachineConnectionPortDiameter / 2,
+                  child: const _StateMachineBoundaryConnectionPort(
+                    direction: _StateMachineConnectionDirection.input,
+                    position: _StateMachineBoundaryPortPosition.top,
+                  ),
                 ),
-              ),
+              if (connectedAnchors.hasInputBoundary(
+                _StateMachineAnchorSide.bottom,
+              ))
+                Positioned(
+                  left: _stateMachineInputHorizontalPortWidgetLeft(),
+                  top:
+                      _stateMachineNodeCardHeight -
+                      _stateMachineConnectionPortDiameter / 2,
+                  child: const _StateMachineBoundaryConnectionPort(
+                    direction: _StateMachineConnectionDirection.input,
+                    position: _StateMachineBoundaryPortPosition.bottom,
+                  ),
+                ),
+              if (connectedAnchors.hasOutputBoundary(
+                _StateMachineAnchorSide.top,
+              ))
+                Positioned(
+                  left: _stateMachineOutputHorizontalPortWidgetLeft(),
+                  top: -_stateMachineConnectionPortDiameter / 2,
+                  child: const _StateMachineBoundaryConnectionPort(
+                    direction: _StateMachineConnectionDirection.output,
+                    position: _StateMachineBoundaryPortPosition.top,
+                  ),
+                ),
+              if (connectedAnchors.hasOutputBoundary(
+                _StateMachineAnchorSide.bottom,
+              ))
+                Positioned(
+                  left: _stateMachineOutputHorizontalPortWidgetLeft(),
+                  top:
+                      _stateMachineNodeCardHeight -
+                      _stateMachineConnectionPortDiameter / 2,
+                  child: const _StateMachineBoundaryConnectionPort(
+                    direction: _StateMachineConnectionDirection.output,
+                    position: _StateMachineBoundaryPortPosition.bottom,
+                  ),
+                ),
             ],
           ),
         );
@@ -2629,9 +2766,137 @@ bool _stateMachinePointerHitsPhaseControls(
       position.dx >= _stateMachineNodeWidth - 86;
 }
 
+/// _StateMachineInputConnectionPort renders a left-edge input anchor.
+class _StateMachineInputConnectionPort extends StatelessWidget {
+  /// Creates one visual input anchor for a transition kind.
+  const _StateMachineInputConnectionPort({
+    required this.kind,
+    required this.highlighted,
+  });
+
+  /// Transition kind represented by this port.
+  final _StateMachineTransitionKind kind;
+
+  /// Whether this node can accept the active connection gesture.
+  final bool highlighted;
+
+  /// Builds a non-interactive input port.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Tooltip(
+      message: _stateMachineInputPortTooltip(kind),
+      child: _StateMachineConnectionPort(
+        color: highlighted
+            ? colors.green
+            : colors.green.withValues(alpha: 0.76),
+      ),
+    );
+  }
+}
+
+/// _StateMachineOutputConnectionPort renders a right-edge output anchor.
+class _StateMachineOutputConnectionPort extends StatelessWidget {
+  /// Creates one visual output anchor for a transition kind.
+  const _StateMachineOutputConnectionPort({
+    required this.kind,
+    required this.connectingFromThis,
+    required this.connectionTrigger,
+    required this.decisionTrigger,
+    required this.onStartConnection,
+  });
+
+  /// Transition kind represented by this port.
+  final _StateMachineTransitionKind kind;
+
+  /// Whether this node is the active connection source.
+  final bool connectingFromThis;
+
+  /// Transition trigger currently being connected.
+  final String connectionTrigger;
+
+  /// Route trigger to use when connecting a decision output.
+  final String decisionTrigger;
+
+  /// Starts a connection from this state with the selected trigger.
+  final ValueChanged<String> onStartConnection;
+
+  /// Builds an output port with quick gestures for built-in exits.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final trigger = _stateMachinePortTrigger(kind, decisionTrigger);
+    final active =
+        trigger.isNotEmpty &&
+        connectingFromThis &&
+        connectionTrigger == trigger;
+    final color = active ? colors.coral : colors.coral.withValues(alpha: 0.76);
+    final port = _StateMachineConnectionPort(color: color);
+    return GestureDetector(
+      onTap: () => onStartConnection(trigger),
+      child: Tooltip(
+        message: active
+            ? _stateMachineCancelPortTooltip(kind)
+            : _stateMachineOutputPortTooltip(kind),
+        child: port,
+      ),
+    );
+  }
+}
+
+/// _StateMachineConnectionDirection classifies node boundary port direction.
+enum _StateMachineConnectionDirection {
+  /// Incoming transition anchors.
+  input,
+
+  /// Outgoing transition anchors.
+  output,
+}
+
+/// _StateMachineBoundaryPortPosition classifies top and bottom anchors.
+enum _StateMachineBoundaryPortPosition {
+  /// Top edge anchor.
+  top,
+
+  /// Bottom edge anchor.
+  bottom,
+}
+
+/// _StateMachineBoundaryConnectionPort renders a non-semantic route anchor.
+class _StateMachineBoundaryConnectionPort extends StatelessWidget {
+  /// Creates a top or bottom route anchor for one node side.
+  const _StateMachineBoundaryConnectionPort({
+    required this.direction,
+    required this.position,
+  });
+
+  /// Whether this anchor accepts incoming or outgoing edge routes.
+  final _StateMachineConnectionDirection direction;
+
+  /// Edge position represented by this anchor.
+  final _StateMachineBoundaryPortPosition position;
+
+  /// Builds a visual-only route anchor.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final input = direction == _StateMachineConnectionDirection.input;
+    final color = input
+        ? colors.green.withValues(alpha: 0.76)
+        : colors.coral.withValues(alpha: 0.76);
+    return Tooltip(
+      message: _stateMachineBoundaryPortTooltip(direction, position),
+      child: _StateMachineConnectionPort(color: color),
+    );
+  }
+}
+
+/// _StateMachineNodeDragTracker coordinates pointer-driven node moves.
 class _StateMachineNodeDragTracker extends StatefulWidget {
+  /// Creates pointer tracking for moving existing state-machine nodes.
   const _StateMachineNodeDragTracker({
     required this.stateId,
+    required this.zoom,
     required this.onPointerDown,
     required this.onPreviewMoveBy,
     required this.onMoveStateBy,
@@ -2640,18 +2905,20 @@ class _StateMachineNodeDragTracker extends StatefulWidget {
   });
 
   final String stateId;
+  final double zoom;
   final ValueChanged<Offset> onPointerDown;
   final void Function(String stateId, Offset delta) onPreviewMoveBy;
   final void Function(String stateId, Offset delta) onMoveStateBy;
   final ValueChanged<String> onCancelMove;
   final Widget child;
 
-  /// Creates pointer tracking for moving existing state-machine nodes.
+  /// Creates drag-tracking state for one canvas node.
   @override
   State<_StateMachineNodeDragTracker> createState() =>
       _StateMachineNodeDragTrackerState();
 }
 
+/// _StateMachineNodeDragTrackerState tracks one active node pointer gesture.
 class _StateMachineNodeDragTrackerState
     extends State<_StateMachineNodeDragTracker> {
   Offset _delta = Offset.zero;
@@ -2661,13 +2928,16 @@ class _StateMachineNodeDragTrackerState
   /// Builds a draggable wrapper around one state-machine node.
   @override
   Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      onPointerDown: _start,
-      onPointerMove: _preview,
-      onPointerUp: _commit,
-      onPointerCancel: _cancel,
-      child: RepaintBoundary(child: widget.child),
+    return MouseRegion(
+      cursor: SystemMouseCursors.move,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        onPointerDown: _start,
+        onPointerMove: _preview,
+        onPointerUp: _commit,
+        onPointerCancel: _cancel,
+        child: RepaintBoundary(child: widget.child),
+      ),
     );
   }
 
@@ -2687,7 +2957,7 @@ class _StateMachineNodeDragTrackerState
     if (_activePointer != event.pointer || _emitted) {
       return;
     }
-    _delta += event.delta;
+    _delta += _stateMachineCanvasDelta(event.delta, widget.zoom);
     if (_delta.distance < 2) {
       return;
     }
@@ -2730,6 +3000,8 @@ class _StateMachineNodeToolbar extends StatelessWidget {
   /// Creates compact controls for one selected state.
   const _StateMachineNodeToolbar({
     required this.connectingFromThis,
+    required this.connectionTrigger,
+    required this.decisionTrigger,
     required this.phase,
     required this.onStartConnection,
     required this.onFocusPhase,
@@ -2739,8 +3011,10 @@ class _StateMachineNodeToolbar extends StatelessWidget {
   });
 
   final bool connectingFromThis;
+  final String connectionTrigger;
+  final String decisionTrigger;
   final bool phase;
-  final VoidCallback onStartConnection;
+  final ValueChanged<String> onStartConnection;
   final VoidCallback onFocusPhase;
   final VoidCallback onSetInitial;
   final VoidCallback onDeleteState;
@@ -2761,37 +3035,194 @@ class _StateMachineNodeToolbar extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            _TaskGraphNodeToolbarButton(
+            _StateMachineNodeToolbarButton(
               icon: Icons.tune_outlined,
               tooltip: 'Inspect state',
               onPressed: onOpenInspector,
             ),
             if (phase)
-              _TaskGraphNodeToolbarButton(
+              _StateMachineNodeToolbarButton(
                 icon: Icons.open_in_full,
                 tooltip: 'Focus phase',
                 onPressed: onFocusPhase,
               ),
-            _TaskGraphNodeToolbarButton(
-              icon: Icons.link,
-              tooltip: connectingFromThis
-                  ? 'Cancel connection'
-                  : 'Connect from state',
-              selected: connectingFromThis,
-              onPressed: onStartConnection,
+            _StateMachineNodeToolbarButton(
+              icon: Icons.check,
+              tooltip:
+                  connectingFromThis &&
+                      connectionTrigger == _stateMachineSuccessConnectionTrigger
+                  ? 'Cancel success connection'
+                  : 'Connect success',
+              selected:
+                  connectingFromThis &&
+                  connectionTrigger == _stateMachineSuccessConnectionTrigger,
+              onPressed: () =>
+                  onStartConnection(_stateMachineSuccessConnectionTrigger),
             ),
-            _TaskGraphNodeToolbarButton(
+            _StateMachineNodeToolbarButton(
+              icon: Icons.close,
+              tooltip:
+                  connectingFromThis &&
+                      connectionTrigger == _stateMachineFailureConnectionTrigger
+                  ? 'Cancel failure connection'
+                  : 'Connect failure',
+              selected:
+                  connectingFromThis &&
+                  connectionTrigger == _stateMachineFailureConnectionTrigger,
+              onPressed: () =>
+                  onStartConnection(_stateMachineFailureConnectionTrigger),
+            ),
+            _StateMachineNodeToolbarButton(
+              icon: Icons.alt_route,
+              tooltip:
+                  connectingFromThis &&
+                      _stateMachineTransitionKind(connectionTrigger) ==
+                          _StateMachineTransitionKind.decision
+                  ? 'Cancel decision connection'
+                  : 'Connect decision',
+              selected:
+                  connectingFromThis &&
+                  _stateMachineTransitionKind(connectionTrigger) ==
+                      _StateMachineTransitionKind.decision,
+              onPressed: () => onStartConnection(decisionTrigger),
+            ),
+            _StateMachineNodeToolbarButton(
               icon: Icons.flag_outlined,
               tooltip: 'Set initial state',
               onPressed: onSetInitial,
             ),
-            _TaskGraphNodeToolbarButton(
+            _StateMachineNodeToolbarButton(
               icon: Icons.delete_outline,
               tooltip: 'Delete state',
               onPressed: onDeleteState,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// _StateMachineCanvasZoomControls renders compact canvas zoom controls.
+class _StateMachineCanvasZoomControls extends StatelessWidget {
+  /// Creates zoom controls for the process-state canvas.
+  const _StateMachineCanvasZoomControls({
+    required this.zoom,
+    required this.onZoomChanged,
+  });
+
+  /// Current zoom factor.
+  final double zoom;
+
+  /// Handles zoom changes.
+  final ValueChanged<double> onZoomChanged;
+
+  /// Builds functional canvas zoom controls.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.panel.withValues(alpha: 0.95),
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          PanelInlineIconButton(
+            icon: Icons.remove,
+            tooltip: 'Zoom out',
+            onPressed: () => onZoomChanged((zoom - 0.1).clamp(0.7, 1.4)),
+          ),
+          SizedBox(
+            width: 56,
+            child: Text(
+              '${(zoom * 100).round()}%',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: colors.ink, fontWeight: FontWeight.w700),
+            ),
+          ),
+          PanelInlineIconButton(
+            icon: Icons.add,
+            tooltip: 'Zoom in',
+            onPressed: () => onZoomChanged((zoom + 0.1).clamp(0.7, 1.4)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _StateMachineNodeToolbarButton renders one compact node toolbar action.
+class _StateMachineNodeToolbarButton extends StatelessWidget {
+  /// Creates a compact node toolbar button.
+  const _StateMachineNodeToolbarButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.selected = false,
+  });
+
+  /// Button icon.
+  final IconData icon;
+
+  /// Tooltip copy.
+  final String tooltip;
+
+  /// Handles button activation.
+  final VoidCallback onPressed;
+
+  /// Whether the button is in a selected state.
+  final bool selected;
+
+  /// Builds one compact point-of-use node toolbar button.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onPressed,
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: selected ? colors.greenSoft : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: selected ? colors.green : colors.muted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// _StateMachineConnectionPort renders a state-transition connection point.
+class _StateMachineConnectionPort extends StatelessWidget {
+  /// Creates a connection port with one semantic color.
+  const _StateMachineConnectionPort({required this.color});
+
+  /// Port fill color.
+  final Color color;
+
+  /// Builds a graph connection port.
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: context.agentAwesomeColors.surface, width: 2),
+      ),
+      child: const SizedBox(
+        width: _stateMachineConnectionPortDiameter,
+        height: _stateMachineConnectionPortDiameter,
       ),
     );
   }
@@ -2808,6 +3239,7 @@ class _StateMachineInspector extends StatefulWidget {
     required this.initialStateId,
     required this.focusedPhaseId,
     required this.connectionSourceId,
+    required this.connectionTrigger,
     required this.onSetInitial,
     required this.onFocusPhase,
     required this.onStartConnection,
@@ -2825,9 +3257,10 @@ class _StateMachineInspector extends StatefulWidget {
   final String initialStateId;
   final String focusedPhaseId;
   final String connectionSourceId;
+  final String connectionTrigger;
   final ValueChanged<String> onSetInitial;
   final ValueChanged<String> onFocusPhase;
-  final ValueChanged<String> onStartConnection;
+  final void Function(String stateId, String trigger) onStartConnection;
   final ValueChanged<String> onDeleteState;
   final void Function(String oldStateId, String nextStateId) onRenameState;
   final void Function(
@@ -2910,6 +3343,9 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
     final stateLabel = _stateMachineStateLabel(selected);
     final actions = _stateEntryActions(selected);
     final transitions = _stateTransitions(selected);
+    final decisionTrigger = _nextDecisionTransitionTrigger(
+      transitions.map(_map).toList(),
+    );
     final childCount =
         _stateMachineChildIdsByParent(widget.states)[stateId]?.length ?? 0;
     return PanelSurface(
@@ -2973,12 +3409,55 @@ class _StateMachineInspectorState extends State<_StateMachineInspector> {
           Row(
             children: <Widget>[
               PanelInlineIconButton(
-                icon: Icons.link,
-                tooltip: widget.connectionSourceId == stateId
-                    ? 'Cancel connection'
-                    : 'Connect from state',
-                selected: widget.connectionSourceId == stateId,
-                onPressed: () => widget.onStartConnection(stateId),
+                icon: Icons.check,
+                tooltip:
+                    widget.connectionSourceId == stateId &&
+                        widget.connectionTrigger ==
+                            _stateMachineSuccessConnectionTrigger
+                    ? 'Cancel success connection'
+                    : 'Connect success',
+                selected:
+                    widget.connectionSourceId == stateId &&
+                    widget.connectionTrigger ==
+                        _stateMachineSuccessConnectionTrigger,
+                onPressed: () => widget.onStartConnection(
+                  stateId,
+                  _stateMachineSuccessConnectionTrigger,
+                ),
+              ),
+              const SizedBox(width: 8),
+              PanelInlineIconButton(
+                icon: Icons.close,
+                tooltip:
+                    widget.connectionSourceId == stateId &&
+                        widget.connectionTrigger ==
+                            _stateMachineFailureConnectionTrigger
+                    ? 'Cancel failure connection'
+                    : 'Connect failure',
+                selected:
+                    widget.connectionSourceId == stateId &&
+                    widget.connectionTrigger ==
+                        _stateMachineFailureConnectionTrigger,
+                onPressed: () => widget.onStartConnection(
+                  stateId,
+                  _stateMachineFailureConnectionTrigger,
+                ),
+              ),
+              const SizedBox(width: 8),
+              PanelInlineIconButton(
+                icon: Icons.alt_route,
+                tooltip:
+                    widget.connectionSourceId == stateId &&
+                        _stateMachineTransitionKind(widget.connectionTrigger) ==
+                            _StateMachineTransitionKind.decision
+                    ? 'Cancel decision connection'
+                    : 'Connect decision',
+                selected:
+                    widget.connectionSourceId == stateId &&
+                    _stateMachineTransitionKind(widget.connectionTrigger) ==
+                        _StateMachineTransitionKind.decision,
+                onPressed: () =>
+                    widget.onStartConnection(stateId, decisionTrigger),
               ),
               if (childCount > 0) ...<Widget>[
                 const SizedBox(width: 8),
@@ -3202,6 +3681,35 @@ class _StateMachineEntryActionEditor extends StatelessWidget {
     };
     final withValue = _map(action['with']);
     final inputSchema = _stateMachineActionInputSchema(actionType, withValue);
+    final sources = _stateMachineBindingSources(
+      states,
+      currentStateId,
+      withValue,
+      currentActionId: '${action['id'] ?? ''}',
+    );
+    final transitionRouteValues = _stateMachineTransitionRouteValues(
+      states,
+      currentStateId,
+    );
+    final argumentsEditor = switch (uses) {
+      'data.assert' => _StateMachineDataAssertArgumentsEditor(
+        value: withValue,
+        sources: sources,
+        onChanged: onWithChanged,
+      ),
+      'decision.route' => _StateMachineDecisionRouteArgumentsEditor(
+        value: withValue,
+        sources: sources,
+        routeValues: transitionRouteValues,
+        onChanged: onWithChanged,
+      ),
+      _ => _StateMachineActionArgumentsEditor(
+        value: withValue,
+        schema: inputSchema,
+        sources: sources,
+        onChanged: onWithChanged,
+      ),
+    };
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: PanelSurface(
@@ -3224,13 +3732,7 @@ class _StateMachineEntryActionEditor extends StatelessWidget {
               onChanged: onUsesChanged,
             ),
             const SizedBox(height: 8),
-            _StateMachineActionArgumentsEditor(
-              value: withValue,
-              schema: inputSchema,
-              states: states,
-              currentStateId: currentStateId,
-              onChanged: onWithChanged,
-            ),
+            argumentsEditor,
             _StateMachineRawActionArgumentsEditor(
               value: withValue,
               onChanged: onWithChanged,
@@ -3242,14 +3744,737 @@ class _StateMachineEntryActionEditor extends StatelessWidget {
   }
 }
 
+/// _StateMachineDataAssertArgumentsEditor edits deterministic data checks.
+class _StateMachineDataAssertArgumentsEditor extends StatelessWidget {
+  /// Creates a data assertion editor backed by workflow data paths.
+  const _StateMachineDataAssertArgumentsEditor({
+    required this.value,
+    required this.sources,
+    required this.onChanged,
+  });
+
+  /// Current data.assert argument map.
+  final Map<String, dynamic> value;
+
+  /// Available workflow data sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Emits a complete replacement argument map.
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  /// Builds typed check rows for the data assertion action.
+  @override
+  Widget build(BuildContext context) {
+    final checks = _stateMachineAssertionChecks(value);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            const Expanded(child: PanelSectionLabel('Checks')),
+            PanelInlineIconButton(
+              icon: Icons.add,
+              tooltip: 'Add check',
+              onPressed: () {
+                final next = <Map<String, dynamic>>[
+                  ...checks,
+                  <String, dynamic>{
+                    'path': _stateMachineDefaultDataPath(sources),
+                    'mode': 'equals',
+                    'value': true,
+                  },
+                ];
+                onChanged(_stateMachineAssertionArgsWithChecks(value, next));
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (checks.isEmpty)
+          const PanelEmptyBlock(label: 'No checks')
+        else
+          for (var index = 0; index < checks.length; index++) ...<Widget>[
+            _StateMachineDataAssertCheckEditor(
+              key: ValueKey<String>('state-machine-assert-check-$index'),
+              check: checks[index],
+              sources: sources,
+              onChanged: (nextCheck) {
+                final next = <Map<String, dynamic>>[...checks];
+                next[index] = nextCheck;
+                onChanged(_stateMachineAssertionArgsWithChecks(value, next));
+              },
+              onDelete: () {
+                final next = <Map<String, dynamic>>[...checks]..removeAt(index);
+                onChanged(_stateMachineAssertionArgsWithChecks(value, next));
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+      ],
+    );
+  }
+}
+
+/// _StateMachineDataAssertCheckEditor edits one data.assert check.
+class _StateMachineDataAssertCheckEditor extends StatelessWidget {
+  /// Creates one editable assertion row.
+  const _StateMachineDataAssertCheckEditor({
+    super.key,
+    required this.check,
+    required this.sources,
+    required this.onChanged,
+    required this.onDelete,
+  });
+
+  /// Current check definition.
+  final Map<String, dynamic> check;
+
+  /// Available workflow data sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Emits a replacement check definition.
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  /// Removes this check.
+  final VoidCallback onDelete;
+
+  /// Builds path, mode, and expected-value controls.
+  @override
+  Widget build(BuildContext context) {
+    final mode = _stateMachineAssertionMode(check);
+    return PanelSurface(
+      style: PanelSurfaceStyle.card,
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: _StateMachineDataPathEditor(
+                  label: 'Path',
+                  path: '${check['path'] ?? ''}',
+                  sources: sources,
+                  onChanged: (path) =>
+                      onChanged(<String, dynamic>{...check, 'path': path}),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 150,
+                child: _AutomationDropdown(
+                  label: 'Mode',
+                  value: mode,
+                  values: const <String>[
+                    'equals',
+                    'not_equals',
+                    'exists',
+                    'schema',
+                  ],
+                  labels: const <String, String>{
+                    'equals': 'Equals',
+                    'not_equals': 'Not equals',
+                    'exists': 'Exists',
+                    'schema': 'Schema',
+                  },
+                  onChanged: (nextMode) =>
+                      onChanged(_stateMachineCheckWithMode(check, nextMode)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              PanelInlineIconButton(
+                icon: Icons.delete_outline,
+                tooltip: 'Remove check',
+                onPressed: onDelete,
+              ),
+            ],
+          ),
+          if (mode != 'exists') ...<Widget>[
+            const SizedBox(height: 8),
+            if (mode == 'schema')
+              _StateMachineComparableValueEditor(
+                label: 'Schema',
+                value:
+                    check['schema'] ??
+                    check['value'] ??
+                    <String, dynamic>{'type': 'object'},
+                onChanged: (nextValue) => onChanged(
+                  <String, dynamic>{...check, 'mode': mode, 'schema': nextValue}
+                    ..remove('value'),
+                ),
+              )
+            else
+              _StateMachineComparableValueEditor(
+                label: 'Expected value',
+                value: check['value'],
+                onChanged: (nextValue) => onChanged(
+                  <String, dynamic>{...check, 'mode': mode, 'value': nextValue}
+                    ..remove('schema'),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// _StateMachineDecisionRouteArgumentsEditor edits ordered route rules.
+class _StateMachineDecisionRouteArgumentsEditor extends StatelessWidget {
+  /// Creates a decision.route editor backed by workflow data paths.
+  const _StateMachineDecisionRouteArgumentsEditor({
+    required this.value,
+    required this.sources,
+    required this.routeValues,
+    required this.onChanged,
+  });
+
+  /// Current decision.route argument map.
+  final Map<String, dynamic> value;
+
+  /// Available workflow data sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Route trigger choices from this state.
+  final List<String> routeValues;
+
+  /// Emits a complete replacement argument map.
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  /// Builds typed route rules and a default route.
+  @override
+  Widget build(BuildContext context) {
+    final rules = _stateMachineDecisionRules(value);
+    final defaultRoute = _stateMachineDecisionDefault(value);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            const Expanded(child: PanelSectionLabel('Routes')),
+            PanelInlineIconButton(
+              icon: Icons.add,
+              tooltip: 'Add rule',
+              onPressed: () {
+                final next = <Map<String, dynamic>>[
+                  ...rules,
+                  <String, dynamic>{
+                    'route': _stateMachinePreferredRoute(routeValues),
+                    'when': <String, dynamic>{
+                      'path': _stateMachineDefaultDataPath(sources),
+                    },
+                  },
+                ];
+                onChanged(_stateMachineDecisionArgs(value, next, defaultRoute));
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (rules.isEmpty)
+          const PanelEmptyBlock(label: 'No rules')
+        else
+          for (var index = 0; index < rules.length; index++) ...<Widget>[
+            _StateMachineDecisionRuleEditor(
+              key: ValueKey<String>('state-machine-decision-rule-$index'),
+              rule: rules[index],
+              sources: sources,
+              routeValues: routeValues,
+              onChanged: (nextRule) {
+                final next = <Map<String, dynamic>>[...rules];
+                next[index] = nextRule;
+                onChanged(_stateMachineDecisionArgs(value, next, defaultRoute));
+              },
+              onDelete: () {
+                final next = <Map<String, dynamic>>[...rules]..removeAt(index);
+                onChanged(_stateMachineDecisionArgs(value, next, defaultRoute));
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        _StateMachineRouteEditor(
+          label: 'Default route',
+          value: defaultRoute,
+          routeValues: routeValues,
+          onChanged: (nextDefault) =>
+              onChanged(_stateMachineDecisionArgs(value, rules, nextDefault)),
+        ),
+      ],
+    );
+  }
+}
+
+/// _StateMachineDecisionRuleEditor edits one decision route row.
+class _StateMachineDecisionRuleEditor extends StatelessWidget {
+  /// Creates one editable decision rule.
+  const _StateMachineDecisionRuleEditor({
+    super.key,
+    required this.rule,
+    required this.sources,
+    required this.routeValues,
+    required this.onChanged,
+    required this.onDelete,
+  });
+
+  /// Current route rule.
+  final Map<String, dynamic> rule;
+
+  /// Available workflow data sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Route trigger choices from this state.
+  final List<String> routeValues;
+
+  /// Emits a replacement rule.
+  final ValueChanged<Map<String, dynamic>> onChanged;
+
+  /// Removes this rule.
+  final VoidCallback onDelete;
+
+  /// Builds route and condition controls.
+  @override
+  Widget build(BuildContext context) {
+    final when = _map(rule['when']);
+    final expr = '${when['expr'] ?? ''}'.trim();
+    final path = '${when['path'] ?? ''}'.trim();
+    final conditionType = expr.isNotEmpty && path.isEmpty ? 'expr' : 'path';
+    return PanelSurface(
+      style: PanelSurfaceStyle.card,
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: _StateMachineRouteEditor(
+                  label: 'Route',
+                  value: '${rule['route'] ?? ''}',
+                  routeValues: routeValues,
+                  onChanged: (route) =>
+                      onChanged(<String, dynamic>{...rule, 'route': route}),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                width: 130,
+                child: _AutomationDropdown(
+                  label: 'Condition',
+                  value: conditionType,
+                  values: const <String>['path', 'expr'],
+                  labels: const <String, String>{
+                    'path': 'Path',
+                    'expr': 'Expression',
+                  },
+                  onChanged: (nextType) {
+                    final nextWhen = nextType == 'expr'
+                        ? <String, dynamic>{'expr': expr}
+                        : <String, dynamic>{
+                            'path': path.isNotEmpty
+                                ? path
+                                : _stateMachineDefaultDataPath(sources),
+                          };
+                    onChanged(<String, dynamic>{...rule, 'when': nextWhen});
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              PanelInlineIconButton(
+                icon: Icons.delete_outline,
+                tooltip: 'Remove rule',
+                onPressed: onDelete,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (conditionType == 'expr')
+            _StateMachineExpressionEditor(
+              value: expr,
+              onChanged: (nextExpr) => onChanged(<String, dynamic>{
+                ...rule,
+                'when': <String, dynamic>{'expr': nextExpr},
+              }),
+            )
+          else
+            _StateMachineDataPathEditor(
+              label: 'When path is truthy',
+              path: path,
+              sources: sources,
+              onChanged: (nextPath) => onChanged(<String, dynamic>{
+                ...rule,
+                'when': <String, dynamic>{'path': nextPath},
+              }),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// _StateMachineDataPathEditor edits one dotted workflow input path.
+class _StateMachineDataPathEditor extends StatefulWidget {
+  /// Creates a path editor with selectable source anchors.
+  const _StateMachineDataPathEditor({
+    required this.label,
+    required this.path,
+    required this.sources,
+    required this.onChanged,
+  });
+
+  /// Field label for the editable path.
+  final String label;
+
+  /// Current dotted path.
+  final String path;
+
+  /// Available workflow data sources.
+  final List<_StateMachineBindingSource> sources;
+
+  /// Emits a replacement dotted path.
+  final ValueChanged<String> onChanged;
+
+  /// Creates mutable path text state.
+  @override
+  State<_StateMachineDataPathEditor> createState() =>
+      _StateMachineDataPathEditorState();
+}
+
+class _StateMachineDataPathEditorState
+    extends State<_StateMachineDataPathEditor> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  /// Initializes the path controller.
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.path)..addListener(_emit);
+  }
+
+  /// Syncs path text when a parent row changes.
+  @override
+  void didUpdateWidget(covariant _StateMachineDataPathEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.path == _controller.text) {
+      return;
+    }
+    _loading = true;
+    _controller.text = widget.path;
+    _loading = false;
+  }
+
+  /// Disposes the path controller.
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_emit)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Builds source selection and direct path editing.
+  @override
+  Widget build(BuildContext context) {
+    final current = widget.path.trim();
+    final options = <String>{
+      '',
+      if (current.isNotEmpty) current,
+      for (final source in widget.sources) source.path,
+    }.toList();
+    final labels = <String, String>{
+      '': 'Select source',
+      for (final source in widget.sources) source.path: source.label,
+      if (current.isNotEmpty) current: _stateMachineBindingLabel(current),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _AutomationDropdown(
+          label: 'Source',
+          value: options.contains(current) ? current : '',
+          values: options,
+          labels: labels,
+          onChanged: _selectPath,
+        ),
+        const SizedBox(height: 6),
+        _AutomationTextField(controller: _controller, label: widget.label),
+      ],
+    );
+  }
+
+  void _selectPath(String path) {
+    _loading = true;
+    _controller.text = path;
+    _loading = false;
+    widget.onChanged(path.trim());
+  }
+
+  void _emit() {
+    if (_loading) {
+      return;
+    }
+    widget.onChanged(_controller.text.trim());
+  }
+}
+
+/// _StateMachineRouteEditor edits one transition route trigger.
+class _StateMachineRouteEditor extends StatefulWidget {
+  /// Creates a route editor with selectable existing triggers.
+  const _StateMachineRouteEditor({
+    required this.label,
+    required this.value,
+    required this.routeValues,
+    required this.onChanged,
+  });
+
+  /// Field label for the route text.
+  final String label;
+
+  /// Current route trigger.
+  final String value;
+
+  /// Available route trigger choices.
+  final List<String> routeValues;
+
+  /// Emits a replacement route trigger.
+  final ValueChanged<String> onChanged;
+
+  /// Creates mutable route text state.
+  @override
+  State<_StateMachineRouteEditor> createState() =>
+      _StateMachineRouteEditorState();
+}
+
+class _StateMachineRouteEditorState extends State<_StateMachineRouteEditor> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  /// Initializes the route controller.
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value)..addListener(_emit);
+  }
+
+  /// Syncs route text when another control changes it.
+  @override
+  void didUpdateWidget(covariant _StateMachineRouteEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value == _controller.text) {
+      return;
+    }
+    _loading = true;
+    _controller.text = widget.value;
+    _loading = false;
+  }
+
+  /// Disposes the route controller.
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_emit)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Builds route selection and direct trigger editing.
+  @override
+  Widget build(BuildContext context) {
+    final current = widget.value.trim();
+    final options = <String>{
+      '',
+      if (current.isNotEmpty) current,
+      ...widget.routeValues,
+    }.toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _AutomationDropdown(
+          label: 'Transition',
+          value: options.contains(current) ? current : '',
+          values: options,
+          labels: const <String, String>{'': 'Custom route'},
+          onChanged: _selectRoute,
+        ),
+        const SizedBox(height: 6),
+        _AutomationTextField(controller: _controller, label: widget.label),
+      ],
+    );
+  }
+
+  void _selectRoute(String route) {
+    _loading = true;
+    _controller.text = route;
+    _loading = false;
+    widget.onChanged(route.trim());
+  }
+
+  void _emit() {
+    if (_loading) {
+      return;
+    }
+    widget.onChanged(_controller.text.trim());
+  }
+}
+
+/// _StateMachineExpressionEditor edits one deterministic condition expression.
+class _StateMachineExpressionEditor extends StatefulWidget {
+  /// Creates an expression editor.
+  const _StateMachineExpressionEditor({
+    required this.value,
+    required this.onChanged,
+  });
+
+  /// Current expression.
+  final String value;
+
+  /// Emits a replacement expression.
+  final ValueChanged<String> onChanged;
+
+  /// Creates mutable expression text state.
+  @override
+  State<_StateMachineExpressionEditor> createState() =>
+      _StateMachineExpressionEditorState();
+}
+
+class _StateMachineExpressionEditorState
+    extends State<_StateMachineExpressionEditor> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  /// Initializes the expression controller.
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value)..addListener(_emit);
+  }
+
+  /// Syncs expression text when a parent row changes.
+  @override
+  void didUpdateWidget(covariant _StateMachineExpressionEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value == _controller.text) {
+      return;
+    }
+    _loading = true;
+    _controller.text = widget.value;
+    _loading = false;
+  }
+
+  /// Disposes the expression controller.
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_emit)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Builds one expression field.
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTextField(
+      controller: _controller,
+      label: 'Expression',
+      monospace: true,
+    );
+  }
+
+  void _emit() {
+    if (_loading) {
+      return;
+    }
+    widget.onChanged(_controller.text.trim());
+  }
+}
+
+/// _StateMachineComparableValueEditor edits one JSON-like comparison value.
+class _StateMachineComparableValueEditor extends StatefulWidget {
+  /// Creates a comparison value editor.
+  const _StateMachineComparableValueEditor({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  /// Field label.
+  final String label;
+
+  /// Current comparison value.
+  final dynamic value;
+
+  /// Emits a replacement comparison value.
+  final ValueChanged<dynamic> onChanged;
+
+  /// Creates mutable comparison text state.
+  @override
+  State<_StateMachineComparableValueEditor> createState() =>
+      _StateMachineComparableValueEditorState();
+}
+
+class _StateMachineComparableValueEditorState
+    extends State<_StateMachineComparableValueEditor> {
+  late final TextEditingController _controller;
+  bool _loading = false;
+
+  /// Initializes the comparison-value controller.
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: _stateMachineComparableValueText(widget.value),
+    )..addListener(_emit);
+  }
+
+  /// Syncs comparison text when another control changes the value.
+  @override
+  void didUpdateWidget(covariant _StateMachineComparableValueEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final text = _stateMachineComparableValueText(widget.value);
+    if (text == _controller.text) {
+      return;
+    }
+    _loading = true;
+    _controller.text = text;
+    _loading = false;
+  }
+
+  /// Disposes the comparison-value controller.
+  @override
+  void dispose() {
+    _controller
+      ..removeListener(_emit)
+      ..dispose();
+    super.dispose();
+  }
+
+  /// Builds a JSON-like literal field.
+  @override
+  Widget build(BuildContext context) {
+    return _AutomationTextField(
+      controller: _controller,
+      label: widget.label,
+      maxLines: widget.value is Map || widget.value is List ? 3 : 1,
+      monospace: widget.value is Map || widget.value is List,
+    );
+  }
+
+  void _emit() {
+    if (_loading) {
+      return;
+    }
+    widget.onChanged(_parseStateMachineComparableValue(_controller.text));
+  }
+}
+
 /// _StateMachineActionArgumentsEditor renders action input mappings.
 class _StateMachineActionArgumentsEditor extends StatelessWidget {
   /// Creates a generic contract-to-binding editor.
   const _StateMachineActionArgumentsEditor({
     required this.value,
     required this.schema,
-    required this.states,
-    required this.currentStateId,
+    required this.sources,
     required this.onChanged,
   });
 
@@ -3259,11 +4484,8 @@ class _StateMachineActionArgumentsEditor extends StatelessWidget {
   /// JSON-schema-like input descriptor for the action contract.
   final Map<String, dynamic> schema;
 
-  /// Workflow states used to infer available binding sources.
-  final List<Map<String, dynamic>> states;
-
-  /// State currently being edited.
-  final String currentStateId;
+  /// Available workflow data sources.
+  final List<_StateMachineBindingSource> sources;
 
   /// Emits a complete replacement argument map.
   final ValueChanged<Map<String, dynamic>> onChanged;
@@ -3276,7 +4498,6 @@ class _StateMachineActionArgumentsEditor extends StatelessWidget {
     if (keys.isEmpty) {
       return const PanelEmptyBlock(label: 'No configurable inputs');
     }
-    final sources = _stateMachineBindingSources(states, currentStateId, value);
     final autoMapped = _autoMappedActionArguments(value, schema, sources);
     if (!_deepEquals(autoMapped, value)) {
       WidgetsBinding.instance.addPostFrameCallback(
@@ -3839,8 +5060,9 @@ class _StateMachineBindingSource {
 List<_StateMachineBindingSource> _stateMachineBindingSources(
   List<Map<String, dynamic>> states,
   String currentStateId,
-  Map<String, dynamic> currentValue,
-) {
+  Map<String, dynamic> currentValue, {
+  String currentActionId = '',
+}) {
   final byPath = <String, _StateMachineBindingSource>{};
   final currentStatePrefix = currentStateId.trim().isEmpty
       ? ''
@@ -3856,13 +5078,16 @@ List<_StateMachineBindingSource> _stateMachineBindingSources(
     );
   }
 
-  add('incoming.result.data', 'Incoming result / data');
-  add('incoming.result.status', 'Incoming result / status');
-  add('incoming.result.error.message', 'Incoming result / error');
-  add('incoming.trigger', 'Incoming trigger');
-  add('incoming.source_state', 'Incoming source');
+  add('workflow_input', 'Workflow input');
+  add('workflow_output', 'Workflow output');
   for (final field in _stateMachineWorkflowInputFields(states, currentValue)) {
     add('workflow_input.$field', 'Workflow input / $field');
+  }
+  for (final source in _stateMachineActionOutputSources(
+    states,
+    currentActionId: currentActionId,
+  )) {
+    add(source.path, source.label);
   }
   for (final path in _stateMachineReferencedBindingPaths(currentValue)) {
     final label =
@@ -3883,6 +5108,49 @@ List<_StateMachineBindingSource> _stateMachineBindingSources(
   });
 }
 
+/// Returns generic output paths produced by other state entry actions.
+List<_StateMachineBindingSource> _stateMachineActionOutputSources(
+  List<Map<String, dynamic>> states, {
+  String currentActionId = '',
+}) {
+  final outputSources = <_StateMachineBindingSource>[];
+  for (final state in states) {
+    final stateLabel = _stateMachineStateLabel(state);
+    final actions = _stateEntryActions(state).map(_map).toList();
+    for (final action in actions) {
+      final actionId = '${action['id'] ?? ''}'.trim();
+      if (actionId.isEmpty || actionId == currentActionId.trim()) {
+        continue;
+      }
+      final label = actions.length > 1 ? '$stateLabel / $actionId' : stateLabel;
+      outputSources.addAll(<_StateMachineBindingSource>[
+        _StateMachineBindingSource(path: actionId, label: '$label / result'),
+        _StateMachineBindingSource(
+          path: '$actionId.output',
+          label: '$label / structured output',
+        ),
+        _StateMachineBindingSource(
+          path: '$actionId.status',
+          label: '$label / status',
+        ),
+        _StateMachineBindingSource(
+          path: '$actionId.exit_code',
+          label: '$label / exit code',
+        ),
+        _StateMachineBindingSource(
+          path: '$actionId.stdout_tail',
+          label: '$label / stdout',
+        ),
+        _StateMachineBindingSource(
+          path: '$actionId.stderr_tail',
+          label: '$label / stderr',
+        ),
+      ]);
+    }
+  }
+  return outputSources;
+}
+
 /// Returns field-specific incoming data sources for object argument rows.
 List<_StateMachineBindingSource> _stateMachineObjectFieldSources(
   List<_StateMachineBindingSource> sources,
@@ -3892,17 +5160,15 @@ List<_StateMachineBindingSource> _stateMachineObjectFieldSources(
   if (normalized.isEmpty) {
     return sources;
   }
-  final path = 'incoming.result.data.$normalized';
-  if (sources.any((source) => source.path == path)) {
+  final fieldSources = sources.where((source) {
+    final lastSegment = source.path.split('.').last;
+    return _normalizeMappingKey(lastSegment) ==
+        _normalizeMappingKey(normalized);
+  }).toList();
+  if (fieldSources.isEmpty) {
     return sources;
   }
-  return <_StateMachineBindingSource>[
-    ...sources,
-    _StateMachineBindingSource(
-      path: path,
-      label: 'Incoming result / $normalized',
-    ),
-  ];
+  return <_StateMachineBindingSource>[...fieldSources, ...sources];
 }
 
 /// Returns only the binding choices that are useful for one input field.
@@ -3956,6 +5222,12 @@ bool _stateMachineCanonicalSourceMatchesField(
   String path,
   String normalizedKey,
 ) {
+  if (path == 'workflow_input') {
+    return normalizedKey == 'input' || normalizedKey == 'workflowinput';
+  }
+  if (path == 'workflow_output') {
+    return normalizedKey == 'output' || normalizedKey == 'workflowoutput';
+  }
   if (path == 'incoming.result.status') {
     return normalizedKey == 'status';
   }
@@ -3978,11 +5250,16 @@ bool _stateMachineCanonicalSourceMatchesField(
 /// Orders canonical incoming values before workflow input and explicit refs.
 int _stateMachineBindingSourceRank(String path) {
   final normalized = path.trim();
-  if (normalized.startsWith('incoming.')) {
+  if (normalized == 'workflow_input' ||
+      normalized.startsWith('workflow_input.')) {
     return 0;
   }
-  if (normalized.startsWith('workflow_input.')) {
+  if (normalized == 'workflow_output' ||
+      normalized.startsWith('workflow_output.')) {
     return 1;
+  }
+  if (normalized.startsWith('incoming.')) {
+    return 3;
   }
   return 2;
 }
@@ -4072,8 +5349,17 @@ Set<String> _stateMachineReferencedBindingPaths(dynamic value) {
 /// Returns a readable label for a runtime input-reference path.
 String _stateMachineBindingLabel(String path) {
   final normalized = path.trim();
+  if (normalized == 'workflow_input') {
+    return 'Workflow input';
+  }
   if (normalized.startsWith('workflow_input.')) {
     return 'Workflow input / ${normalized.substring('workflow_input.'.length)}';
+  }
+  if (normalized == 'workflow_output') {
+    return 'Workflow output';
+  }
+  if (normalized.startsWith('workflow_output.')) {
+    return 'Workflow output / ${normalized.substring('workflow_output.'.length)}';
   }
   if (normalized == 'incoming.result.data') {
     return 'Incoming result / data';
@@ -4097,6 +5383,9 @@ String _stateMachineBindingLabel(String path) {
   if (parts.length >= 2 && parts[1] == 'output') {
     final suffix = parts.length > 2 ? ' / ${parts.sublist(2).join('.')}' : '';
     return 'Output from ${parts.first}$suffix';
+  }
+  if (parts.length == 1 && parts.first.isNotEmpty) {
+    return 'Result from ${parts.first}';
   }
   return normalized;
 }
@@ -4249,6 +5538,186 @@ dynamic _parseLiteralInput(String text, dynamic previous) {
     return previous;
   }
   return text;
+}
+
+/// Returns normalized data.assert checks from either supported argument shape.
+List<Map<String, dynamic>> _stateMachineAssertionChecks(
+  Map<String, dynamic> value,
+) {
+  final checks = _list(value['checks']).map(_map).toList();
+  if (checks.isNotEmpty) {
+    return checks;
+  }
+  if ('${value['path'] ?? ''}'.trim().isEmpty &&
+      '${value['mode'] ?? ''}'.trim().isEmpty) {
+    return <Map<String, dynamic>>[];
+  }
+  return <Map<String, dynamic>>[
+    <String, dynamic>{
+      'path': '${value['path'] ?? ''}',
+      'mode': '${value['mode'] ?? 'exists'}',
+      if (value.containsKey('schema')) 'schema': value['schema'],
+      if (value.containsKey('value')) 'value': value['value'],
+    },
+  ];
+}
+
+/// Returns data.assert arguments using the list-based check shape.
+Map<String, dynamic> _stateMachineAssertionArgsWithChecks(
+  Map<String, dynamic> value,
+  List<Map<String, dynamic>> checks,
+) {
+  return <String, dynamic>{
+    for (final entry in value.entries)
+      if (!const <String>{
+        'path',
+        'mode',
+        'value',
+        'schema',
+        'checks',
+      }.contains(entry.key))
+        entry.key: entry.value,
+    'checks': checks,
+  };
+}
+
+/// Returns a valid data.assert mode with a stable fallback.
+String _stateMachineAssertionMode(Map<String, dynamic> check) {
+  final mode = '${check['mode'] ?? ''}'.trim();
+  if (const <String>{
+    'equals',
+    'not_equals',
+    'exists',
+    'schema',
+  }.contains(mode)) {
+    return mode;
+  }
+  return 'exists';
+}
+
+/// Returns a check updated for the selected assertion mode.
+Map<String, dynamic> _stateMachineCheckWithMode(
+  Map<String, dynamic> check,
+  String mode,
+) {
+  final normalized = _stateMachineAssertionMode(<String, dynamic>{
+    'mode': mode,
+  });
+  final next = <String, dynamic>{...check, 'mode': normalized};
+  switch (normalized) {
+    case 'exists':
+      next
+        ..remove('value')
+        ..remove('schema');
+    case 'schema':
+      next
+        ..remove('value')
+        ..putIfAbsent('schema', () => <String, dynamic>{'type': 'object'});
+    default:
+      next
+        ..remove('schema')
+        ..putIfAbsent('value', () => true);
+  }
+  return next;
+}
+
+/// Returns normalized decision.route rules.
+List<Map<String, dynamic>> _stateMachineDecisionRules(
+  Map<String, dynamic> value,
+) {
+  return _list(value['rules']).map(_map).toList();
+}
+
+/// Returns the decision.route default route with the usual failure fallback.
+String _stateMachineDecisionDefault(Map<String, dynamic> value) {
+  final route = '${value['default'] ?? ''}'.trim();
+  return route.isEmpty ? _stateMachineFailureConnectionTrigger : route;
+}
+
+/// Returns decision.route arguments with normalized rule/default structure.
+Map<String, dynamic> _stateMachineDecisionArgs(
+  Map<String, dynamic> value,
+  List<Map<String, dynamic>> rules,
+  String defaultRoute,
+) {
+  return <String, dynamic>{
+    for (final entry in value.entries)
+      if (!const <String>{'rules', 'default'}.contains(entry.key))
+        entry.key: entry.value,
+    'rules': rules,
+    'default': defaultRoute.trim().isEmpty
+        ? _stateMachineFailureConnectionTrigger
+        : defaultRoute.trim(),
+  };
+}
+
+/// Returns transition triggers that a decision route can select from this state.
+List<String> _stateMachineTransitionRouteValues(
+  List<Map<String, dynamic>> states,
+  String currentStateId,
+) {
+  final values = <String>{
+    _stateMachineSuccessConnectionTrigger,
+    _stateMachineFailureConnectionTrigger,
+  };
+  for (final state in states) {
+    if (_stateId(state) != currentStateId) {
+      continue;
+    }
+    for (final transition in _stateTransitions(state).map(_map)) {
+      final trigger = _transitionTrigger(transition);
+      if (trigger.isNotEmpty) {
+        values.add(trigger);
+      }
+    }
+    break;
+  }
+  return values.toList();
+}
+
+/// Returns the route used for newly added positive decision rules.
+String _stateMachinePreferredRoute(List<String> routeValues) {
+  if (routeValues.contains(_stateMachineSuccessConnectionTrigger)) {
+    return _stateMachineSuccessConnectionTrigger;
+  }
+  if (routeValues.isNotEmpty) {
+    return routeValues.first;
+  }
+  return _stateMachineSuccessConnectionTrigger;
+}
+
+/// Returns the best starter path for a new condition.
+String _stateMachineDefaultDataPath(List<_StateMachineBindingSource> sources) {
+  for (final source in sources) {
+    if (source.path == 'workflow_input') {
+      return source.path;
+    }
+  }
+  return sources.isEmpty ? '' : sources.first.path;
+}
+
+/// Formats a comparison value for editing.
+String _stateMachineComparableValueText(dynamic value) {
+  if (value is Map || value is List || value is bool || value is num) {
+    return const JsonEncoder.withIndent('  ').convert(value);
+  }
+  if (value == null) {
+    return '';
+  }
+  return '$value';
+}
+
+/// Parses a JSON-like comparison value while leaving plain strings untouched.
+dynamic _parseStateMachineComparableValue(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  try {
+    return jsonDecode(trimmed);
+  } catch (_) {
+    return text;
+  }
 }
 
 /// _StateMachineRawActionArgumentsEditor keeps raw JSON available for experts.
@@ -4626,17 +6095,162 @@ class _StateMachineEdgePlacement {
     required this.fromStateId,
     required this.toStateId,
     required this.trigger,
-    required this.from,
-    required this.to,
+    required this.fromAnchor,
+    required this.toAnchor,
     required this.backEdge,
+    required this.routeY,
   });
 
   final String fromStateId;
   final String toStateId;
   final String trigger;
-  final Offset from;
-  final Offset to;
+  final _StateMachineConnectionAnchor fromAnchor;
+  final _StateMachineConnectionAnchor toAnchor;
   final bool backEdge;
+  final double routeY;
+
+  /// Canvas coordinate where the transition leaves the source node.
+  Offset get from => fromAnchor.point;
+
+  /// Canvas coordinate where the transition enters the target node.
+  Offset get to => toAnchor.point;
+
+  /// Boundary side used by the source anchor.
+  _StateMachineAnchorSide get fromSide => fromAnchor.side;
+
+  /// Boundary side used by the target anchor.
+  _StateMachineAnchorSide get toSide => toAnchor.side;
+}
+
+/// _StateMachineAnchorSide identifies a node boundary used by an edge.
+enum _StateMachineAnchorSide {
+  /// Left boundary for incoming state transitions.
+  left,
+
+  /// Right boundary for outgoing state transitions.
+  right,
+
+  /// Top boundary for vertical state transitions.
+  top,
+
+  /// Bottom boundary for vertical state transitions.
+  bottom,
+}
+
+/// _StateMachineConnectionAnchor stores one edge endpoint on a node boundary.
+class _StateMachineConnectionAnchor {
+  /// Creates a node-boundary edge endpoint.
+  const _StateMachineConnectionAnchor({
+    required this.point,
+    required this.side,
+  });
+
+  /// Canvas coordinate for the endpoint.
+  final Offset point;
+
+  /// Node boundary side where the endpoint is attached.
+  final _StateMachineAnchorSide side;
+}
+
+/// _StateMachineEdgeRoute stores selected anchors and route metadata.
+class _StateMachineEdgeRoute {
+  /// Creates a route candidate selected for one transition.
+  const _StateMachineEdgeRoute({
+    required this.from,
+    required this.to,
+    required this.backEdge,
+    required this.routeY,
+  });
+
+  /// Source boundary anchor.
+  final _StateMachineConnectionAnchor from;
+
+  /// Target boundary anchor.
+  final _StateMachineConnectionAnchor to;
+
+  /// Whether the route uses the outside side lane.
+  final bool backEdge;
+
+  /// Outside side-lane y-coordinate for back edges.
+  final double routeY;
+}
+
+const _StateMachineNodeConnectedAnchors _stateMachineNoConnectedAnchors =
+    _StateMachineNodeConnectedAnchors();
+
+/// _StateMachineNodeConnectedAnchors stores visible ports for one node.
+class _StateMachineNodeConnectedAnchors {
+  /// Creates an immutable or mutable connected-anchor set.
+  const _StateMachineNodeConnectedAnchors({
+    this.inputSideKinds = const <_StateMachineTransitionKind>{},
+    this.outputSideKinds = const <_StateMachineTransitionKind>{},
+    this.inputBoundarySides = const <_StateMachineAnchorSide>{},
+    this.outputBoundarySides = const <_StateMachineAnchorSide>{},
+  });
+
+  /// Creates a mutable connected-anchor set while building a layout projection.
+  factory _StateMachineNodeConnectedAnchors.mutable() {
+    return _StateMachineNodeConnectedAnchors(
+      inputSideKinds: <_StateMachineTransitionKind>{},
+      outputSideKinds: <_StateMachineTransitionKind>{},
+      inputBoundarySides: <_StateMachineAnchorSide>{},
+      outputBoundarySides: <_StateMachineAnchorSide>{},
+    );
+  }
+
+  /// Transition kinds with a visible left-side input port.
+  final Set<_StateMachineTransitionKind> inputSideKinds;
+
+  /// Transition kinds with a visible right-side output port.
+  final Set<_StateMachineTransitionKind> outputSideKinds;
+
+  /// Top or bottom input boundaries currently used by visible edges.
+  final Set<_StateMachineAnchorSide> inputBoundarySides;
+
+  /// Top or bottom output boundaries currently used by visible edges.
+  final Set<_StateMachineAnchorSide> outputBoundarySides;
+
+  /// Records an incoming connected anchor.
+  void addInput(_StateMachineAnchorSide side, String trigger) {
+    if (side == _StateMachineAnchorSide.left) {
+      inputSideKinds.add(_stateMachineTransitionKind(trigger));
+      return;
+    }
+    if (_stateMachineAnchorIsVertical(side)) {
+      inputBoundarySides.add(side);
+    }
+  }
+
+  /// Records an outgoing connected anchor.
+  void addOutput(_StateMachineAnchorSide side, String trigger) {
+    if (side == _StateMachineAnchorSide.right) {
+      outputSideKinds.add(_stateMachineTransitionKind(trigger));
+      return;
+    }
+    if (_stateMachineAnchorIsVertical(side)) {
+      outputBoundarySides.add(side);
+    }
+  }
+
+  /// Reports whether a left-side input port should be visible.
+  bool hasInputSide(_StateMachineTransitionKind kind) {
+    return inputSideKinds.contains(kind);
+  }
+
+  /// Reports whether a right-side output port should be visible.
+  bool hasOutputSide(_StateMachineTransitionKind kind) {
+    return outputSideKinds.contains(kind);
+  }
+
+  /// Reports whether a top or bottom input boundary should be visible.
+  bool hasInputBoundary(_StateMachineAnchorSide side) {
+    return inputBoundarySides.contains(side);
+  }
+
+  /// Reports whether a top or bottom output boundary should be visible.
+  bool hasOutputBoundary(_StateMachineAnchorSide side) {
+    return outputBoundarySides.contains(side);
+  }
 }
 
 /// _StateMachineExitBadgePlacement stores one aggregated off-path exit badge.
@@ -4759,10 +6373,10 @@ class _StateMachineCanvasLayout {
       visibleStates,
       initialStateId,
     );
-    final resolvedPositions = _stateMachineResolvedReadablePositions(
+    final resolvedPositions = _stateMachineResolvedDynamicPositions(
       visibleStates,
-      savedPositions: positions,
       autoPositions: autoPositions,
+      savedPositions: positions,
     );
     final placements = <_StateMachineNodePlacement>[];
     for (var index = 0; index < visibleStates.length; index++) {
@@ -4847,40 +6461,41 @@ class _StateMachineCanvasLayout {
           visibleTargetStateId: targetInScope ? visibleTargetId : targetId,
           trigger: trigger,
         );
-        if (!targetInScope ||
-            _stateMachineTransitionUsesExitBadge(
+        final showsEdge = _stateMachineTransitionShowsEdge(
+          transitionView,
+          edgeViewMode,
+          selectedStateId,
+        );
+        final showBadge = _stateMachineTransitionShowsBadge(
+          transitionView,
+          edgeViewMode,
+          selectedStateId,
+          targetInScope: targetInScope,
+          showsEdge: showsEdge,
+        );
+        if (!targetInScope || !showsEdge) {
+          if (showBadge) {
+            final badgeSourceId = _stateMachineExitBadgeSourceId(
               transitionView,
-              edgeViewMode,
-              selectedStateId,
-            )) {
-          final badgeSourceId = _stateMachineExitBadgeSourceId(
-            transitionView,
-            visibleIds: visibleIds,
-            parents: parents,
-            childIdsByParent: childIdsByParent,
-          );
-          final key =
-              '$badgeSourceId|${transitionView.visibleTargetStateId}|${transitionView.trigger}';
-          exitBadgeGroups
-              .putIfAbsent(
-                key,
-                () => _StateMachineExitBadgeGroup(
-                  sourceStateId: badgeSourceId,
-                  targetStateId: targetId,
-                  visibleTargetStateId: transitionView.visibleTargetStateId,
-                  trigger: transitionView.trigger,
-                ),
-              )
-              .sourceStateIds
-              .add(sourceId);
-          continue;
-        }
-        if (!targetInScope ||
-            !_stateMachineTransitionShowsEdge(
-              transitionView,
-              edgeViewMode,
-              selectedStateId,
-            )) {
+              visibleIds: visibleIds,
+              parents: parents,
+              childIdsByParent: childIdsByParent,
+            );
+            final key =
+                '$badgeSourceId|${transitionView.visibleTargetStateId}|${transitionView.trigger}';
+            exitBadgeGroups
+                .putIfAbsent(
+                  key,
+                  () => _StateMachineExitBadgeGroup(
+                    sourceStateId: badgeSourceId,
+                    targetStateId: targetId,
+                    visibleTargetStateId: transitionView.visibleTargetStateId,
+                    trigger: transitionView.trigger,
+                  ),
+                )
+                .sourceStateIds
+                .add(sourceId);
+          }
           continue;
         }
         final edgeKey =
@@ -4893,14 +6508,20 @@ class _StateMachineCanvasLayout {
         if (source == null || target == null) {
           continue;
         }
+        final route = _stateMachineEdgeRoute(
+          source.rect,
+          target.rect,
+          transitionView.trigger,
+        );
         edges.add(
           _StateMachineEdgePlacement(
             fromStateId: visibleSourceId,
             toStateId: visibleTargetId,
             trigger: transitionView.trigger,
-            from: _stateMachineOutputPortCenter(source.rect),
-            to: _stateMachineInputPortCenter(target.rect),
-            backEdge: target.rect.left <= source.rect.left,
+            fromAnchor: route.from,
+            toAnchor: route.to,
+            backEdge: route.backEdge,
+            routeY: route.routeY,
           ),
         );
       }
@@ -4983,6 +6604,24 @@ double _stateMachineCanvasScrollMargin(double viewportExtent) {
   return (viewportExtent * 1.25).clamp(960.0, 1800.0).toDouble();
 }
 
+/// Returns visible connection anchors keyed by state id for rendered edges.
+Map<String, _StateMachineNodeConnectedAnchors>
+_stateMachineConnectedAnchorsByState(_StateMachineCanvasLayout layout) {
+  final anchorsByState = <String, _StateMachineNodeConnectedAnchors>{};
+  _StateMachineNodeConnectedAnchors anchorsFor(String stateId) {
+    return anchorsByState.putIfAbsent(
+      stateId,
+      _StateMachineNodeConnectedAnchors.mutable,
+    );
+  }
+
+  for (final edge in layout.edges) {
+    anchorsFor(edge.fromStateId).addOutput(edge.fromSide, edge.trigger);
+    anchorsFor(edge.toStateId).addInput(edge.toSide, edge.trigger);
+  }
+  return anchorsByState;
+}
+
 /// _StateMachineCanvasPainter paints process-state graph edges and grid.
 class _StateMachineCanvasPainter extends CustomPainter {
   /// Creates a painter for a computed state-machine layout.
@@ -4999,10 +6638,13 @@ class _StateMachineCanvasPainter extends CustomPainter {
   /// Paints the state-machine grid, transitions, labels, and arrows.
   @override
   void paint(Canvas canvas, Size size) {
+    canvas.save();
+    canvas.clipRect(Offset.zero & size);
     _paintGrid(canvas, size);
     _paintPhaseGroups(canvas);
     _paintEdges(canvas);
     _paintExitBadgeConnectors(canvas);
+    canvas.restore();
   }
 
   /// Paints the dotted builder grid behind nodes and edges.
@@ -5078,15 +6720,73 @@ class _StateMachineCanvasPainter extends CustomPainter {
     final edgePaint = Paint()
       ..color = colors.muted.withValues(alpha: 0.82)
       ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final selectedEdgePaint = Paint()
+      ..color = _stateMachineSelectedEdgeHighlightColor
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
     for (final edge in layout.edges) {
-      final path = _stateMachineEdgePath(edge.from, edge.to, edge.backEdge);
-      canvas.drawPath(path, edgePaint);
-      _paintArrow(canvas, path, edgePaint.color);
-      if (edge.fromStateId == selectedStateId ||
-          edge.toStateId == selectedStateId) {
-        _paintEdgeLabel(canvas, path, edge.trigger);
+      if (!_stateMachineEdgeTouchesSelected(edge)) {
+        _paintEdge(canvas, edge, edgePaint, showLabel: false);
       }
+    }
+    for (final edge in layout.edges) {
+      if (_stateMachineEdgeTouchesSelected(edge)) {
+        _paintEdge(canvas, edge, selectedEdgePaint, showLabel: true);
+      }
+    }
+  }
+
+  /// Paints one transition edge with the requested stroke.
+  void _paintEdge(
+    Canvas canvas,
+    _StateMachineEdgePlacement edge,
+    Paint paint, {
+    required bool showLabel,
+  }) {
+    final path = _stateMachineEdgePath(
+      edge.from,
+      edge.to,
+      edge.fromSide,
+      edge.toSide,
+      edge.backEdge,
+      edge.routeY,
+    );
+    canvas.save();
+    _clipUnconnectedNodeClearance(canvas, edge);
+    canvas.drawPath(path, paint);
+    _paintArrow(canvas, path, paint.color);
+    if (showLabel) {
+      _paintEdgeLabel(canvas, path, edge.trigger);
+    }
+    canvas.restore();
+  }
+
+  /// Reports whether an edge is immediately connected to the selected node.
+  bool _stateMachineEdgeTouchesSelected(_StateMachineEdgePlacement edge) {
+    return selectedStateId.isNotEmpty &&
+        (edge.fromStateId == selectedStateId ||
+            edge.toStateId == selectedStateId);
+  }
+
+  /// Clips edge drawing around unrelated nodes so lines do not look connected.
+  void _clipUnconnectedNodeClearance(
+    Canvas canvas,
+    _StateMachineEdgePlacement edge,
+  ) {
+    for (final placement in layout.placements) {
+      final stateId = _stateId(placement.state);
+      if (stateId == edge.fromStateId || stateId == edge.toStateId) {
+        continue;
+      }
+      canvas.clipRect(
+        _stateMachineEdgeNodeClearanceRect(placement.rect),
+        clipOp: ClipOp.difference,
+      );
     }
   }
 
@@ -5095,21 +6795,56 @@ class _StateMachineCanvasPainter extends CustomPainter {
     final badgePaint = Paint()
       ..color = colors.coral.withValues(alpha: 0.78)
       ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final selectedBadgePaint = Paint()
+      ..color = _stateMachineSelectedEdgeHighlightColor
+      ..strokeWidth = 2.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
     for (final badge in layout.exitBadges) {
-      final path = Path()
-        ..moveTo(badge.from.dx, badge.from.dy)
-        ..cubicTo(
-          badge.from.dx + 24,
-          badge.from.dy,
-          badge.to.dx - 18,
-          badge.to.dy,
-          badge.to.dx,
-          badge.to.dy,
-        );
-      canvas.drawPath(path, badgePaint);
-      _paintArrow(canvas, path, badgePaint.color);
+      if (!_stateMachineBadgeTouchesSelected(badge)) {
+        _paintExitBadgeConnector(canvas, badge, badgePaint);
+      }
     }
+    for (final badge in layout.exitBadges) {
+      if (_stateMachineBadgeTouchesSelected(badge)) {
+        _paintExitBadgeConnector(canvas, badge, selectedBadgePaint);
+      }
+    }
+  }
+
+  /// Paints one connector from a node to a hidden-transition badge.
+  void _paintExitBadgeConnector(
+    Canvas canvas,
+    _StateMachineExitBadgePlacement badge,
+    Paint paint,
+  ) {
+    final path = Path()
+      ..moveTo(badge.from.dx, badge.from.dy)
+      ..cubicTo(
+        badge.from.dx + 24,
+        badge.from.dy,
+        badge.to.dx - 18,
+        badge.to.dy,
+        badge.to.dx,
+        badge.to.dy,
+      );
+    canvas.drawPath(path, paint);
+    _paintArrow(canvas, path, paint.color);
+  }
+
+  /// Reports whether a hidden-transition badge belongs to the selected node.
+  bool _stateMachineBadgeTouchesSelected(
+    _StateMachineExitBadgePlacement badge,
+  ) {
+    return selectedStateId.isNotEmpty &&
+        (badge.sourceStateId == selectedStateId ||
+            badge.targetStateId == selectedStateId ||
+            badge.visibleTargetStateId == selectedStateId ||
+            badge.sourceStateIds.contains(selectedStateId));
   }
 
   /// Paints a transition arrowhead at the end of an edge path.
@@ -5247,6 +6982,8 @@ const String _terminalStatePaletteAction = '__terminal_state__';
 const double _stateMachineNodeWidth = 246;
 const double _stateMachineNodeHeight = 178;
 const double _stateMachineNodeCardHeight = 138;
+const double _stateMachineConnectionPortDiameter = 12;
+const double _stateMachineHorizontalAnchorInset = 42;
 const double _stateMachineExitBadgeWidth = 148;
 const double _stateMachineExitBadgeHeight = 28;
 const double _stateMachineExitBadgeXGap = 14;
@@ -5256,10 +6993,19 @@ const double _stateMachineLayoutNodeWidth =
     _stateMachineNodeWidth + _stateMachineExitBadgeWidth + 84;
 const double _stateMachineLayoutNodeHeight = _stateMachineNodeHeight + 48;
 const double _stateMachineLaneGap = _stateMachineNodeHeight + 54;
-const double _stateMachineMinimumNodeGap = 96;
-const double _stateMachineMinimumBadgeGap = 56;
-const double _stateMachineNodeClearance = 18;
-const double _stateMachineBadgeClearance = 8;
+const double _stateMachineMinimumManualPosition = 24;
+const double _stateMachineMaximumManualPosition = 10000;
+const double _stateMachineDynamicLayoutClearance = 18;
+const double _stateMachineDynamicLayoutStep = _stateMachineLayoutNodeHeight;
+const int _stateMachineDynamicLayoutMaxAttempts = 80;
+const double _stateMachineEdgeForwardClearance = 72;
+const double _stateMachineVerticalEdgeClearance = 18;
+const double _stateMachineEdgeLaneClearance = 44;
+const double _stateMachineEdgeLaneGap = 44;
+const double _stateMachineEdgeCanvasInset = 12;
+const double _stateMachineEdgeMinimumFinalSegment = 8;
+const double _stateMachineEdgeNodeClearance = 10;
+const Color _stateMachineSelectedEdgeHighlightColor = Color(0xffff9f1c);
 const double _stateMachineLayoutPadding = 84;
 const double _stateMachineCanvasControlBottomGap = 44;
 const double _stateMachineLayoutTopPadding =
@@ -5267,14 +7013,18 @@ const double _stateMachineLayoutTopPadding =
 
 /// _StateMachineEdgeViewMode selects which transition family the canvas emphasizes.
 enum _StateMachineEdgeViewMode {
-  /// Show success-like forward flow and aggregate failure exits.
-  success('success', 'Success', 'Show success flow with compact exit badges'),
+  /// Show success-like transition edges.
+  success('success', 'Success', 'Show success transitions'),
 
-  /// Show failure-like exits as compact local badges.
-  failures('failures', 'Failures', 'Show failure and recovery exits'),
+  /// Show failure-like transition edges.
+  failures('failures', 'Failures', 'Show failure and recovery transitions'),
 
   /// Show manual and custom signal transitions.
-  decisions('decisions', 'Decisions', 'Show manual and custom signal exits'),
+  decisions(
+    'decisions',
+    'Decisions',
+    'Show manual and custom signal transitions',
+  ),
 
   /// Show every transition as a literal edge.
   all('all', 'All', 'Show the full transition graph'),
@@ -5306,6 +7056,13 @@ enum _StateMachineTransitionKind {
   /// Manual or custom signal transitions.
   decision,
 }
+
+const List<_StateMachineTransitionKind> _stateMachinePortKinds =
+    <_StateMachineTransitionKind>[
+      _StateMachineTransitionKind.success,
+      _StateMachineTransitionKind.decision,
+      _StateMachineTransitionKind.failure,
+    ];
 
 /// _StateMachineLayoutLane groups states into stable workflow swimlanes.
 enum _StateMachineLayoutLane {
@@ -5910,43 +7667,56 @@ bool _stateMachineTransitionShowsEdge(
   _StateMachineEdgeViewMode mode,
   String selectedStateId,
 ) {
+  if (_stateMachineTransitionTouchesSelected(transition, selectedStateId)) {
+    return true;
+  }
   return switch (mode) {
     _StateMachineEdgeViewMode.success =>
       _stateMachineTransitionKind(transition.trigger) ==
           _StateMachineTransitionKind.success,
-    _StateMachineEdgeViewMode.failures => false,
-    _StateMachineEdgeViewMode.decisions => _stateMachineIsDecisionTrigger(
-      transition.trigger,
-    ),
+    _StateMachineEdgeViewMode.failures =>
+      _stateMachineTransitionKind(transition.trigger) ==
+          _StateMachineTransitionKind.failure,
+    _StateMachineEdgeViewMode.decisions =>
+      _stateMachineTransitionKind(transition.trigger) ==
+          _StateMachineTransitionKind.decision,
     _StateMachineEdgeViewMode.all => true,
     _StateMachineEdgeViewMode.selected =>
-      selectedStateId.isNotEmpty &&
-          (transition.sourceStateId == selectedStateId ||
-              transition.targetStateId == selectedStateId ||
-              transition.visibleSourceStateId == selectedStateId ||
-              transition.visibleTargetStateId == selectedStateId),
+      _stateMachineTransitionTouchesSelected(transition, selectedStateId),
   };
 }
 
-/// Returns whether one transition should become a compact local exit badge.
-bool _stateMachineTransitionUsesExitBadge(
+/// Reports whether one transition touches the currently selected state.
+bool _stateMachineTransitionTouchesSelected(
   _StateMachineTransitionView transition,
-  _StateMachineEdgeViewMode mode,
   String selectedStateId,
 ) {
-  final kind = _stateMachineTransitionKind(transition.trigger);
+  return selectedStateId.isNotEmpty &&
+      (transition.sourceStateId == selectedStateId ||
+          transition.targetStateId == selectedStateId ||
+          transition.visibleSourceStateId == selectedStateId ||
+          transition.visibleTargetStateId == selectedStateId);
+}
+
+/// Returns whether one hidden transition should be summarized as a badge.
+bool _stateMachineTransitionShowsBadge(
+  _StateMachineTransitionView transition,
+  _StateMachineEdgeViewMode mode,
+  String selectedStateId, {
+  required bool targetInScope,
+  required bool showsEdge,
+}) {
+  if (targetInScope && showsEdge) {
+    return false;
+  }
   return switch (mode) {
-    _StateMachineEdgeViewMode.success =>
-      kind == _StateMachineTransitionKind.failure,
-    _StateMachineEdgeViewMode.failures =>
-      kind == _StateMachineTransitionKind.failure,
-    _StateMachineEdgeViewMode.decisions => false,
-    _StateMachineEdgeViewMode.all => false,
+    _StateMachineEdgeViewMode.success ||
+    _StateMachineEdgeViewMode.failures ||
+    _StateMachineEdgeViewMode.decisions => true,
+    _StateMachineEdgeViewMode.all => !targetInScope,
     _StateMachineEdgeViewMode.selected =>
-      selectedStateId.isNotEmpty &&
-          kind == _StateMachineTransitionKind.failure &&
-          (transition.sourceStateId == selectedStateId ||
-              transition.visibleSourceStateId == selectedStateId),
+      !targetInScope &&
+          _stateMachineTransitionTouchesSelected(transition, selectedStateId),
   };
 }
 
@@ -5987,11 +7757,21 @@ const Set<String> _stateMachineFailureTriggers = <String>{
   'error',
 };
 
-/// Reports whether a trigger is a manual or custom signal in display terms.
-bool _stateMachineIsDecisionTrigger(String trigger) {
-  return trigger.trim().isNotEmpty &&
-      _stateMachineTransitionKind(trigger) ==
-          _StateMachineTransitionKind.decision;
+const String _stateMachineSuccessConnectionTrigger = 'succeeded';
+const String _stateMachineFailureConnectionTrigger = 'failed';
+
+/// Returns a canonical transition trigger for direct connection gestures.
+String _stateMachineConnectionTrigger(String trigger) {
+  final normalized = trigger.trim().toLowerCase();
+  if (_stateMachineFailureTriggers.contains(normalized)) {
+    return _stateMachineFailureConnectionTrigger;
+  }
+  if (_stateMachineSuccessTriggers.contains(normalized)) {
+    return _stateMachineSuccessConnectionTrigger;
+  }
+  return normalized.isEmpty
+      ? _stateMachineSuccessConnectionTrigger
+      : trigger.trim();
 }
 
 /// Returns the visible source that should own an aggregated exit badge.
@@ -6036,178 +7816,83 @@ bool _stateMachineIsDescendantOf(
   return false;
 }
 
-/// Returns saved positions that can be honored without damaging readability.
-Map<String, Offset> _stateMachineResolvedReadablePositions(
+/// Returns auto positions with manual pins preserved independently.
+Map<String, Offset> _stateMachineResolvedDynamicPositions(
   List<Map<String, dynamic>> states, {
-  required Map<String, Offset> savedPositions,
   required Map<String, Offset> autoPositions,
+  required Map<String, Offset> savedPositions,
 }) {
-  if (savedPositions.isEmpty) {
+  final ids = states.map(_stateId).where((id) => id.isNotEmpty).toSet();
+  if (ids.isEmpty) {
     return const <String, Offset>{};
   }
-  final ids = states.map(_stateId).where((id) => id.isNotEmpty).toSet();
-  final completeSavedLayout = ids.every((id) => savedPositions[id] != null);
-  if (completeSavedLayout) {
-    return _stateMachinePositionsAreReadable(
-          states,
-          positions: savedPositions,
-          autoPositions: autoPositions,
-        )
-        ? savedPositions
-        : const <String, Offset>{};
-  }
+  final pinnedPositions = <String, Offset>{
+    for (final entry in savedPositions.entries)
+      if (ids.contains(entry.key))
+        entry.key: _stateMachineClampedCanvasPosition(entry.value),
+  };
+  final orderedIds = ids.toList()
+    ..sort((a, b) {
+      final aPosition = autoPositions[a] ?? Offset.zero;
+      final bPosition = autoPositions[b] ?? Offset.zero;
+      final yCompare = aPosition.dy.compareTo(bPosition.dy);
+      if (yCompare != 0) {
+        return yCompare;
+      }
+      return aPosition.dx.compareTo(bPosition.dx);
+    });
+  final placedRects = <String, Rect>{};
   final resolved = <String, Offset>{};
-  for (final entry in savedPositions.entries) {
-    if (!ids.contains(entry.key)) {
-      continue;
-    }
-    final candidate = <String, Offset>{
-      ...autoPositions,
-      ...resolved,
-      entry.key: entry.value,
-    };
-    if (_stateMachinePositionsAreReadable(
-      states,
-      positions: candidate,
-      autoPositions: autoPositions,
-    )) {
-      resolved[entry.key] = entry.value;
-    }
+  for (final id in orderedIds.where(pinnedPositions.containsKey)) {
+    final position = pinnedPositions[id]!;
+    resolved[id] = position;
+    placedRects[id] = _stateMachineDynamicNodeRect(position);
+  }
+  for (final id in orderedIds.where((id) => !pinnedPositions.containsKey(id))) {
+    final position = _stateMachineResolveUnpinnedPosition(
+      autoPositions[id] ??
+          const Offset(
+            _stateMachineLayoutPadding,
+            _stateMachineLayoutTopPadding,
+          ),
+      placedRects.values,
+    );
+    resolved[id] = position;
+    placedRects[id] = _stateMachineDynamicNodeRect(position);
   }
   return resolved;
 }
 
-/// Reports whether positions leave enough room for nodes and exit badges.
-bool _stateMachinePositionsAreReadable(
-  List<Map<String, dynamic>> states, {
-  required Map<String, Offset> positions,
-  required Map<String, Offset> autoPositions,
-}) {
-  if (positions.isEmpty) {
-    return false;
-  }
-  final ids = states.map(_stateId).where((id) => id.isNotEmpty).toList();
-  if (ids.any((id) => positions[id] == null)) {
-    return false;
-  }
-  for (var index = 0; index < ids.length; index++) {
-    final leftId = ids[index];
-    final leftRect = _stateMachineReadableNodeRect(positions[leftId]!);
-    for (final rightId in ids.skip(index + 1)) {
-      final rightRect = _stateMachineReadableNodeRect(positions[rightId]!);
-      if (leftRect.overlaps(rightRect)) {
-        return false;
-      }
-      if (_stateMachineHorizontalBandIntersects(leftRect, rightRect)) {
-        final gap = (leftRect.left < rightRect.left)
-            ? rightRect.left - leftRect.right
-            : leftRect.left - rightRect.right;
-        if (gap < _stateMachineMinimumNodeGap) {
-          return false;
-        }
-      }
+/// Finds a nearby open slot for an unpinned auto-laid-out state.
+Offset _stateMachineResolveUnpinnedPosition(
+  Offset preferredPosition,
+  Iterable<Rect> occupiedRects,
+) {
+  var candidate = _stateMachineClampedCanvasPosition(preferredPosition);
+  for (
+    var attempts = 0;
+    attempts < _stateMachineDynamicLayoutMaxAttempts;
+    attempts++
+  ) {
+    final rect = _stateMachineDynamicNodeRect(candidate);
+    if (!occupiedRects.any(rect.overlaps)) {
+      return candidate;
     }
+    candidate = _stateMachineClampedCanvasPosition(
+      candidate.translate(0, _stateMachineDynamicLayoutStep),
+    );
   }
-  final badgeIndexBySource = <String, int>{};
-  for (final state in states) {
-    final sourceId = _stateId(state);
-    final sourcePosition = positions[sourceId];
-    if (sourcePosition == null) {
-      continue;
-    }
-    final sourceRect = _stateMachineReadableNodeRect(sourcePosition);
-    for (final transition in _stateTransitions(state).map(_map)) {
-      if (_stateMachineTransitionKind(_transitionTrigger(transition)) !=
-          _StateMachineTransitionKind.failure) {
-        continue;
-      }
-      final badgeIndex = badgeIndexBySource[sourceId] ?? 0;
-      badgeIndexBySource[sourceId] = badgeIndex + 1;
-      final badgeRect = _stateMachineReadableExitBadgeRect(
-        sourceRect,
-        badgeIndex,
-      );
-      for (final targetId in ids) {
-        if (targetId == sourceId) {
-          continue;
-        }
-        final targetPosition = positions[targetId];
-        if (targetPosition == null) {
-          continue;
-        }
-        final targetRect = _stateMachineReadableNodeRect(targetPosition);
-        if (badgeRect.overlaps(targetRect)) {
-          return false;
-        }
-        if (_stateMachineHorizontalBandIntersects(badgeRect, targetRect) &&
-            targetRect.left > sourceRect.right &&
-            targetRect.left - badgeRect.right < _stateMachineMinimumBadgeGap) {
-          return false;
-        }
-      }
-    }
-  }
-  return _stateMachineSavedPositionsRoughlyMatchLayoutDirection(
-    states,
-    positions: positions,
-    autoPositions: autoPositions,
-  );
+  return candidate;
 }
 
-/// Returns whether saved positions preserve the Sugiyama left-to-right flow.
-bool _stateMachineSavedPositionsRoughlyMatchLayoutDirection(
-  List<Map<String, dynamic>> states, {
-  required Map<String, Offset> positions,
-  required Map<String, Offset> autoPositions,
-}) {
-  if (autoPositions.isEmpty) {
-    return true;
-  }
-  for (final state in states) {
-    final sourceId = _stateId(state);
-    final sourceSaved = positions[sourceId];
-    final sourceAuto = autoPositions[sourceId];
-    if (sourceSaved == null || sourceAuto == null) {
-      continue;
-    }
-    for (final transition in _stateTransitions(state).map(_map)) {
-      if (_stateMachineTransitionKind(_transitionTrigger(transition)) !=
-          _StateMachineTransitionKind.success) {
-        continue;
-      }
-      final targetId = _transitionTarget(transition);
-      final targetSaved = positions[targetId];
-      final targetAuto = autoPositions[targetId];
-      if (targetSaved == null || targetAuto == null) {
-        continue;
-      }
-      final autoForward = targetAuto.dx > sourceAuto.dx;
-      final savedForward =
-          targetSaved.dx - sourceSaved.dx > _stateMachineMinimumNodeGap;
-      if (autoForward && !savedForward) {
-        return false;
-      }
-    }
-  }
-  return true;
-}
-
-/// Returns a node rectangle inflated to include nearby toolbar and breathing room.
-Rect _stateMachineReadableNodeRect(Offset position) {
+/// Returns the collision rectangle used for dynamic auto-layout slots.
+Rect _stateMachineDynamicNodeRect(Offset position) {
   return Rect.fromLTWH(
     position.dx,
     position.dy,
     _stateMachineNodeWidth,
     _stateMachineNodeHeight,
-  ).inflate(_stateMachineNodeClearance);
-}
-
-/// Returns the first exit-badge rectangle adjacent to a source node.
-Rect _stateMachineReadableExitBadgeRect(Rect sourceRect, int index) {
-  return _stateMachineExitBadgeRect(
-    sourceRect,
-    index,
-  ).inflate(_stateMachineBadgeClearance);
+  ).inflate(_stateMachineDynamicLayoutClearance);
 }
 
 /// Returns the visual exit-badge rectangle beside a state or phase.
@@ -6220,11 +7905,6 @@ Rect _stateMachineExitBadgeRect(Rect sourceRect, int index) {
     _stateMachineExitBadgeWidth,
     _stateMachineExitBadgeHeight,
   );
-}
-
-/// Reports whether two rectangles occupy the same horizontal flow band.
-bool _stateMachineHorizontalBandIntersects(Rect a, Rect b) {
-  return a.top < b.bottom && b.top < a.bottom;
 }
 
 /// Computes automatic positions with a domain-aware Sugiyama layout pipeline.
@@ -6741,6 +8421,10 @@ Map<String, dynamic> _defaultStateMachineActionArgs(String actionName) {
       'parameters': <String, dynamic>{},
     },
     'data.assert' => <String, dynamic>{'checks': <dynamic>[]},
+    'decision.route' => <String, dynamic>{
+      'rules': <dynamic>[],
+      'default': _stateMachineFailureConnectionTrigger,
+    },
     'data.defaults' => <String, dynamic>{
       'input': <String, dynamic>{},
       'defaults': <String, dynamic>{},
@@ -6786,13 +8470,25 @@ Map<String, dynamic>? _tryParseJsonObject(String value) {
 /// Returns the next transition trigger for a source state.
 String _nextTransitionTrigger(List<Map<String, dynamic>> transitions) {
   final existing = transitions.map(_transitionTrigger).toSet();
-  if (!existing.contains('succeeded')) {
-    return 'succeeded';
+  if (!existing.contains(_stateMachineSuccessConnectionTrigger)) {
+    return _stateMachineSuccessConnectionTrigger;
   }
-  if (!existing.contains('failed')) {
-    return 'failed';
+  if (!existing.contains(_stateMachineFailureConnectionTrigger)) {
+    return _stateMachineFailureConnectionTrigger;
   }
   var index = transitions.length + 1;
+  var trigger = 'signal_$index';
+  while (existing.contains(trigger)) {
+    index++;
+    trigger = 'signal_$index';
+  }
+  return trigger;
+}
+
+/// Returns the next custom route trigger for a decision transition.
+String _nextDecisionTransitionTrigger(List<Map<String, dynamic>> transitions) {
+  final existing = transitions.map(_transitionTrigger).toSet();
+  var index = 1;
   var trigger = 'signal_$index';
   while (existing.contains(trigger)) {
     index++;
@@ -6817,6 +8513,7 @@ Map<String, Offset> _stateMachinePositionsFromAuthoring(
 Map<String, dynamic> _stateMachineAuthoringWithPositions(
   Map<String, dynamic> authoring,
   Map<String, Offset> positions,
+  Set<String> pinnedStateIds,
   Set<String> collapsedPhaseIds,
   Map<String, Offset> focusOffsets,
 ) {
@@ -6826,6 +8523,7 @@ Map<String, dynamic> _stateMachineAuthoringWithPositions(
     for (final entry in positions.entries)
       entry.key: <String, double>{'x': entry.value.dx, 'y': entry.value.dy},
   };
+  builder['pinned_states'] = pinnedStateIds.toList()..sort();
   builder['collapsed_phases'] = collapsedPhaseIds.toList()..sort();
   builder['focus_offsets'] = <String, Map<String, double>>{
     for (final entry in focusOffsets.entries)
@@ -6833,6 +8531,17 @@ Map<String, dynamic> _stateMachineAuthoringWithPositions(
   };
   next['builder'] = builder;
   return next;
+}
+
+/// Returns only manual positions for states that are currently pinned.
+Map<String, Offset> _stateMachinePinnedPositions(
+  Map<String, Offset> positions,
+  Set<String> pinnedStateIds,
+) {
+  return <String, Offset>{
+    for (final entry in positions.entries)
+      if (pinnedStateIds.contains(entry.key)) entry.key: entry.value,
+  };
 }
 
 /// Reads per-focus canvas offsets from definition authoring metadata.
@@ -6847,6 +8556,17 @@ Map<String, Offset> _stateMachineFocusOffsetsFromAuthoring(
       if (_positionFromValue(entry.value) != null)
         entry.key: _positionFromValue(entry.value)!,
   };
+}
+
+/// Reads state ids that should act as dynamic layout pins.
+Set<String> _stateMachinePinnedStatesFromAuthoring(Map<String, dynamic> body) {
+  final values = _list(
+    _map(_map(body['authoring'])['builder'])['pinned_states'],
+  );
+  return values
+      .map((value) => '$value'.trim())
+      .where((id) => id.isNotEmpty)
+      .toSet();
 }
 
 /// Reads collapsed composite phase ids from definition authoring metadata.
@@ -6882,7 +8602,7 @@ Offset _stateMachinePositionForState(
 ) {
   final saved = positions[stateId];
   if (saved != null) {
-    return saved;
+    return _stateMachineClampedCanvasPosition(saved);
   }
   final layout = _StateMachineCanvasLayout.fromStates(
     states,
@@ -6894,38 +8614,51 @@ Offset _stateMachinePositionForState(
       const Offset(_stateMachineLayoutPadding, _stateMachineLayoutTopPadding);
 }
 
-/// Returns a reasonable canvas position for a newly added state.
-Offset _nextStateMachinePosition(Map<String, Offset> positions) {
-  if (positions.isEmpty) {
-    return const Offset(
-      _stateMachineLayoutPadding,
-      _stateMachineLayoutTopPadding,
-    );
-  }
-  final maxX = positions.values.fold<double>(
-    _stateMachineLayoutPadding,
-    (value, offset) => offset.dx > value ? offset.dx : value,
+/// Returns visible node positions so manual layout starts from current geometry.
+Map<String, Offset> _stateMachineVisibleLayoutPositions(
+  List<Map<String, dynamic>> states, {
+  required String initialStateId,
+  required String focusedPhaseId,
+  required Map<String, Offset> positions,
+  required Set<String> collapsedPhaseIds,
+}) {
+  final layout = _StateMachineCanvasLayout.fromStates(
+    states,
+    initialStateId: initialStateId,
+    focusedPhaseId: focusedPhaseId,
+    positions: positions,
+    collapsedPhaseIds: collapsedPhaseIds,
   );
-  final countAtRight = positions.values
-      .where((offset) => offset.dx == maxX)
-      .length;
-  return Offset(maxX + 160, _stateMachineLayoutTopPadding + countAtRight * 112);
+  return <String, Offset>{
+    for (final placement in layout.placements)
+      _stateId(placement.state): placement.rect.topLeft,
+  };
 }
 
-/// Returns saved positions for direct children of one focus scope.
-Map<String, Offset> _stateMachinePositionsForScope(
-  List<Map<String, dynamic>> states,
-  Map<String, Offset> positions,
-  String parentId,
-) {
-  final ids = <String>{
-    for (final state in states)
-      if (_stateParentId(state) == parentId) _stateId(state),
-  };
-  return <String, Offset>{
-    for (final entry in positions.entries)
-      if (ids.contains(entry.key)) entry.key: entry.value,
-  };
+/// Clamps saved manual positions inside a recoverable canvas range.
+Offset _stateMachineClampedCanvasPosition(Offset position) {
+  return Offset(
+    position.dx
+        .clamp(
+          _stateMachineMinimumManualPosition,
+          _stateMachineMaximumManualPosition,
+        )
+        .toDouble(),
+    position.dy
+        .clamp(
+          _stateMachineMinimumManualPosition,
+          _stateMachineMaximumManualPosition,
+        )
+        .toDouble(),
+  );
+}
+
+/// Converts physical pointer movement into unscaled canvas coordinates.
+Offset _stateMachineCanvasDelta(Offset delta, double zoom) {
+  if (zoom <= 0) {
+    return delta;
+  }
+  return delta / zoom;
 }
 
 /// Returns the persisted key for one focus scope offset.
@@ -7010,19 +8743,137 @@ Color _stateMachinePaletteColor(BuildContext context, String actionName) {
   };
 }
 
-/// Builds an orthogonal path for one process-state transition edge.
-Path _stateMachineEdgePath(Offset from, Offset to, bool backEdge) {
-  if (backEdge) {
-    final laneY = math.max(from.dy, to.dy) + 72;
+/// Selects the shortest legal boundary anchors for one transition.
+_StateMachineEdgeRoute _stateMachineEdgeRoute(
+  Rect source,
+  Rect target,
+  String trigger,
+) {
+  final candidates = <_StateMachineEdgeRoute>[
+    _stateMachineSideEdgeRoute(source, target, trigger),
+  ];
+  final verticalRoute = _stateMachineVerticalEdgeRoute(source, target);
+  if (verticalRoute != null) {
+    candidates.add(verticalRoute);
+  }
+  candidates.sort(
+    (left, right) => _stateMachineEdgeRouteScore(
+      left,
+    ).compareTo(_stateMachineEdgeRouteScore(right)),
+  );
+  return candidates.first;
+}
+
+/// Builds the standard side-to-side route for horizontally ordered states.
+_StateMachineEdgeRoute _stateMachineSideEdgeRoute(
+  Rect source,
+  Rect target,
+  String trigger,
+) {
+  final backEdge =
+      target.left <= source.right + _stateMachineEdgeForwardClearance;
+  return _StateMachineEdgeRoute(
+    from: _stateMachineOutputSideAnchor(source, trigger),
+    to: _stateMachineInputSideAnchor(target, trigger),
+    backEdge: backEdge,
+    routeY: backEdge
+        ? math.max(source.bottom, target.bottom) + _stateMachineEdgeLaneGap
+        : 0,
+  );
+}
+
+/// Builds a top/bottom route when stacked states can connect directly.
+_StateMachineEdgeRoute? _stateMachineVerticalEdgeRoute(
+  Rect source,
+  Rect target,
+) {
+  final sourceCard = _stateMachineNodeCardRect(source);
+  final targetCard = _stateMachineNodeCardRect(target);
+  if (sourceCard.bottom + _stateMachineVerticalEdgeClearance <=
+      targetCard.top) {
+    return _StateMachineEdgeRoute(
+      from: _stateMachineOutputBottomAnchor(source),
+      to: _stateMachineInputTopAnchor(target),
+      backEdge: false,
+      routeY: 0,
+    );
+  }
+  if (targetCard.bottom + _stateMachineVerticalEdgeClearance <=
+      sourceCard.top) {
+    return _StateMachineEdgeRoute(
+      from: _stateMachineOutputTopAnchor(source),
+      to: _stateMachineInputBottomAnchor(target),
+      backEdge: false,
+      routeY: 0,
+    );
+  }
+  return null;
+}
+
+/// Scores a route by visible length, lightly penalizing outside-lane loops.
+double _stateMachineEdgeRouteScore(_StateMachineEdgeRoute route) {
+  final path = _stateMachineEdgePath(
+    route.from.point,
+    route.to.point,
+    route.from.side,
+    route.to.side,
+    route.backEdge,
+    route.routeY,
+  );
+  final length = path.computeMetrics().fold<double>(
+    0,
+    (total, metric) => total + metric.length,
+  );
+  final lanePenalty = route.backEdge ? 180.0 : 0.0;
+  final directBonus = _stateMachineRouteUsesVerticalAnchors(route) ? 48.0 : 0.0;
+  return length + lanePenalty - directBonus;
+}
+
+/// Reports whether a route uses top and bottom anchors.
+bool _stateMachineRouteUsesVerticalAnchors(_StateMachineEdgeRoute route) {
+  return _stateMachineAnchorIsVertical(route.from.side) &&
+      _stateMachineAnchorIsVertical(route.to.side);
+}
+
+/// Reports whether an anchor side belongs to the top or bottom edge.
+bool _stateMachineAnchorIsVertical(_StateMachineAnchorSide side) {
+  return side == _StateMachineAnchorSide.top ||
+      side == _StateMachineAnchorSide.bottom;
+}
+
+/// Builds an orthogonal path between selected node-boundary anchors.
+Path _stateMachineEdgePath(
+  Offset from,
+  Offset to,
+  _StateMachineAnchorSide fromSide,
+  _StateMachineAnchorSide toSide,
+  bool backEdge,
+  double routeY,
+) {
+  if (_stateMachineAnchorIsVertical(fromSide) &&
+      _stateMachineAnchorIsVertical(toSide)) {
+    final midY = from.dy + (to.dy - from.dy) / 2;
     return Path()
       ..moveTo(from.dx, from.dy)
-      ..lineTo(from.dx + 38, from.dy)
-      ..lineTo(from.dx + 38, laneY)
-      ..lineTo(to.dx - 38, laneY)
-      ..lineTo(to.dx - 38, to.dy)
+      ..lineTo(from.dx, midY)
+      ..lineTo(to.dx, midY)
       ..lineTo(to.dx, to.dy);
   }
-  final midX = from.dx + math.max(42.0, (to.dx - from.dx) / 2);
+  if (backEdge) {
+    final laneY = routeY > 0
+        ? routeY
+        : math.max(from.dy, to.dy) + _stateMachineNodeHeight;
+    final sourceLaneX = _stateMachineSourceLaneX(from);
+    final targetLaneX = _stateMachineTargetLaneX(to);
+    return Path()
+      ..moveTo(from.dx, from.dy)
+      ..lineTo(sourceLaneX, from.dy)
+      ..lineTo(sourceLaneX, laneY)
+      ..lineTo(targetLaneX, laneY)
+      ..lineTo(targetLaneX, to.dy)
+      ..lineTo(to.dx, to.dy);
+  }
+  final midX = from.dx + (to.dx - from.dx) / 2;
   return Path()
     ..moveTo(from.dx, from.dy)
     ..lineTo(midX, from.dy)
@@ -7030,12 +8881,202 @@ Path _stateMachineEdgePath(Offset from, Offset to, bool backEdge) {
     ..lineTo(to.dx, to.dy);
 }
 
-/// Returns the visible input port center for a process-state placement.
-Offset _stateMachineInputPortCenter(Rect rect) {
-  return Offset(rect.left, rect.top + 62);
+/// Returns the card bounds used for visible edge anchors.
+Rect _stateMachineNodeCardRect(Rect rect) {
+  return Rect.fromLTWH(
+    rect.left,
+    rect.top,
+    rect.width,
+    _stateMachineNodeCardHeight,
+  );
 }
 
-/// Returns the visible output port center for a process-state placement.
-Offset _stateMachineOutputPortCenter(Rect rect) {
-  return Offset(rect.right, rect.top + 62);
+/// Returns the no-edge clearance clipped around unrelated nodes.
+Rect _stateMachineEdgeNodeClearanceRect(Rect rect) {
+  return _stateMachineNodeCardRect(
+    rect,
+  ).inflate(_stateMachineEdgeNodeClearance);
+}
+
+/// Returns the outside lane x-coordinate for a transition source.
+double _stateMachineSourceLaneX(Offset from) {
+  return math.max(
+    _stateMachineEdgeCanvasInset,
+    from.dx + _stateMachineEdgeLaneClearance,
+  );
+}
+
+/// Returns the outside lane x-coordinate for a transition target.
+double _stateMachineTargetLaneX(Offset to) {
+  final maximumLaneX = math.max(
+    0.0,
+    to.dx - _stateMachineEdgeMinimumFinalSegment,
+  );
+  final minimumLaneX = math.min(_stateMachineEdgeCanvasInset, maximumLaneX);
+  return (to.dx - _stateMachineEdgeLaneClearance)
+      .clamp(minimumLaneX, maximumLaneX)
+      .toDouble();
+}
+
+/// Returns the side input anchor for a process-state placement.
+_StateMachineConnectionAnchor _stateMachineInputSideAnchor(
+  Rect rect,
+  String trigger,
+) {
+  return _StateMachineConnectionAnchor(
+    point: Offset(rect.left, _stateMachinePortY(rect, trigger)),
+    side: _StateMachineAnchorSide.left,
+  );
+}
+
+/// Returns the side output anchor for a process-state placement.
+_StateMachineConnectionAnchor _stateMachineOutputSideAnchor(
+  Rect rect,
+  String trigger,
+) {
+  return _StateMachineConnectionAnchor(
+    point: Offset(rect.right, _stateMachinePortY(rect, trigger)),
+    side: _StateMachineAnchorSide.right,
+  );
+}
+
+/// Returns the top input anchor for a process-state placement.
+_StateMachineConnectionAnchor _stateMachineInputTopAnchor(Rect rect) {
+  final card = _stateMachineNodeCardRect(rect);
+  return _StateMachineConnectionAnchor(
+    point: Offset(_stateMachineInputHorizontalAnchorX(card), card.top),
+    side: _StateMachineAnchorSide.top,
+  );
+}
+
+/// Returns the bottom input anchor for a process-state placement.
+_StateMachineConnectionAnchor _stateMachineInputBottomAnchor(Rect rect) {
+  final card = _stateMachineNodeCardRect(rect);
+  return _StateMachineConnectionAnchor(
+    point: Offset(_stateMachineInputHorizontalAnchorX(card), card.bottom),
+    side: _StateMachineAnchorSide.bottom,
+  );
+}
+
+/// Returns the top output anchor for a process-state placement.
+_StateMachineConnectionAnchor _stateMachineOutputTopAnchor(Rect rect) {
+  final card = _stateMachineNodeCardRect(rect);
+  return _StateMachineConnectionAnchor(
+    point: Offset(_stateMachineOutputHorizontalAnchorX(card), card.top),
+    side: _StateMachineAnchorSide.top,
+  );
+}
+
+/// Returns the bottom output anchor for a process-state placement.
+_StateMachineConnectionAnchor _stateMachineOutputBottomAnchor(Rect rect) {
+  final card = _stateMachineNodeCardRect(rect);
+  return _StateMachineConnectionAnchor(
+    point: Offset(_stateMachineOutputHorizontalAnchorX(card), card.bottom),
+    side: _StateMachineAnchorSide.bottom,
+  );
+}
+
+/// Returns the local x-coordinate for top and bottom boundary anchors.
+double _stateMachineHorizontalAnchorLocalX(double width) {
+  return math.min(_stateMachineHorizontalAnchorInset, width / 3);
+}
+
+/// Returns the canvas x-coordinate for top and bottom input anchors.
+double _stateMachineInputHorizontalAnchorX(Rect rect) {
+  return rect.left + _stateMachineHorizontalAnchorLocalX(rect.width);
+}
+
+/// Returns the canvas x-coordinate for top and bottom output anchors.
+double _stateMachineOutputHorizontalAnchorX(Rect rect) {
+  return rect.right - _stateMachineHorizontalAnchorLocalX(rect.width);
+}
+
+/// Returns the widget left for top and bottom input route ports.
+double _stateMachineInputHorizontalPortWidgetLeft() {
+  return _stateMachineHorizontalAnchorLocalX(_stateMachineNodeWidth) -
+      _stateMachineConnectionPortDiameter / 2;
+}
+
+/// Returns the widget left for top and bottom output route ports.
+double _stateMachineOutputHorizontalPortWidgetLeft() {
+  return _stateMachineNodeWidth -
+      _stateMachineHorizontalAnchorLocalX(_stateMachineNodeWidth) -
+      _stateMachineConnectionPortDiameter / 2;
+}
+
+/// Returns the vertical anchor for success, decision, and failure edges.
+double _stateMachinePortY(Rect rect, String trigger) {
+  return rect.top +
+      _stateMachinePortCenterY(_stateMachineTransitionKind(trigger));
+}
+
+/// Returns the widget top for one visible connection port.
+double _stateMachinePortWidgetTop(_StateMachineTransitionKind kind) {
+  return _stateMachinePortCenterY(kind) -
+      _stateMachineConnectionPortDiameter / 2;
+}
+
+/// Returns the local vertical center for one semantic port.
+double _stateMachinePortCenterY(_StateMachineTransitionKind kind) {
+  return switch (kind) {
+    _StateMachineTransitionKind.success => 62,
+    _StateMachineTransitionKind.decision => _stateMachineNodeCardHeight / 2,
+    _StateMachineTransitionKind.failure => _stateMachineNodeCardHeight - 14,
+  };
+}
+
+/// Returns the quick-connect trigger represented by an output port.
+String _stateMachinePortTrigger(
+  _StateMachineTransitionKind kind,
+  String decisionTrigger,
+) {
+  return switch (kind) {
+    _StateMachineTransitionKind.success =>
+      _stateMachineSuccessConnectionTrigger,
+    _StateMachineTransitionKind.failure =>
+      _stateMachineFailureConnectionTrigger,
+    _StateMachineTransitionKind.decision => decisionTrigger,
+  };
+}
+
+/// Returns input-port tooltip copy for one transition kind.
+String _stateMachineInputPortTooltip(_StateMachineTransitionKind kind) {
+  return switch (kind) {
+    _StateMachineTransitionKind.success => 'Success input',
+    _StateMachineTransitionKind.decision => 'Decision input',
+    _StateMachineTransitionKind.failure => 'Failure input',
+  };
+}
+
+/// Returns tooltip copy for one visual top or bottom route anchor.
+String _stateMachineBoundaryPortTooltip(
+  _StateMachineConnectionDirection direction,
+  _StateMachineBoundaryPortPosition position,
+) {
+  final edge = switch (position) {
+    _StateMachineBoundaryPortPosition.top => 'Top',
+    _StateMachineBoundaryPortPosition.bottom => 'Bottom',
+  };
+  return switch (direction) {
+    _StateMachineConnectionDirection.input => '$edge input',
+    _StateMachineConnectionDirection.output => '$edge output',
+  };
+}
+
+/// Returns output-port tooltip copy for one transition kind.
+String _stateMachineOutputPortTooltip(_StateMachineTransitionKind kind) {
+  return switch (kind) {
+    _StateMachineTransitionKind.success => 'Connect success',
+    _StateMachineTransitionKind.failure => 'Connect failure',
+    _StateMachineTransitionKind.decision => 'Connect decision',
+  };
+}
+
+/// Returns active output-port cancellation tooltip copy.
+String _stateMachineCancelPortTooltip(_StateMachineTransitionKind kind) {
+  return switch (kind) {
+    _StateMachineTransitionKind.success => 'Cancel success connection',
+    _StateMachineTransitionKind.failure => 'Cancel failure connection',
+    _StateMachineTransitionKind.decision => 'Cancel decision connection',
+  };
 }

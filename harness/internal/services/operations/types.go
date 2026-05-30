@@ -116,7 +116,6 @@ type Codebase struct {
 	DefaultBranch      string   `json:"default_branch,omitempty"`
 	Provider           string   `json:"provider,omitempty"`
 	ProviderRepository string   `json:"provider_repository,omitempty"`
-	GoModulePath       string   `json:"go_module_path,omitempty"`
 	RuntimeTargetID    string   `json:"runtime_target_id,omitempty"`
 	AgentProfileID     string   `json:"agent_profile_id,omitempty"`
 }

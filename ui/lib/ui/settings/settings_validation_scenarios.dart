@@ -118,6 +118,15 @@ class SettingsValidationScenarioTable extends StatefulWidget {
     this.liveAvailable = true,
     this.extraActions = const <Widget>[],
     this.emptyLabel = 'No validations configured',
+    this.showControls = true,
+    this.showModeColumn = true,
+    this.showActions = true,
+    this.primaryColumnLabel = 'Validation',
+    this.descriptionColumnLabel = 'Description',
+    this.modeColumnLabel = 'Mode',
+    this.statusColumnLabel = 'Status',
+    this.actionsColumnLabel = 'Actions',
+    this.onScenarioExpanded,
   });
 
   /// Rows to render in the scenario table.
@@ -156,6 +165,33 @@ class SettingsValidationScenarioTable extends StatefulWidget {
   /// Empty-state label for tables without scenarios.
   final String emptyLabel;
 
+  /// Whether table-level run and add controls should be shown.
+  final bool showControls;
+
+  /// Whether the per-lane mode column should be shown.
+  final bool showModeColumn;
+
+  /// Whether per-row run and delete actions should be shown.
+  final bool showActions;
+
+  /// Header label for the primary row identity column.
+  final String primaryColumnLabel;
+
+  /// Header label for the row description column.
+  final String descriptionColumnLabel;
+
+  /// Header label for the mode column.
+  final String modeColumnLabel;
+
+  /// Header label for the status column.
+  final String statusColumnLabel;
+
+  /// Header label for the action column.
+  final String actionsColumnLabel;
+
+  /// Optional callback when a row is expanded.
+  final ValueChanged<SettingsValidationScenario>? onScenarioExpanded;
+
   /// Creates mutable expansion state for scenario evidence.
   @override
   State<SettingsValidationScenarioTable> createState() =>
@@ -174,32 +210,34 @@ class _SettingsValidationScenarioTableState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            SettingsValidationRunModeButton(
-              label: widget.runningAll ? 'Running' : 'Run all',
-              selectedMode: widget.selectedRunMode,
-              enabledModes: _enabledModesFor(widget.scenarios),
-              loading: widget.runningAll,
-              onRun: anyRunning ? null : _runAll,
-            ),
-            OutlinedButton.icon(
-              onPressed: anyRunning ? null : widget.onAddValidation,
-              icon: const Icon(Icons.add),
-              label: const Text('Add validation'),
-            ),
-            ...widget.extraActions,
-            if (anyRunning)
-              PanelBadge(
-                label:
-                    'Running ${_settingsValidationModeLabel(widget.runningMode)}',
+        if (widget.showControls) ...<Widget>[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              SettingsValidationRunModeButton(
+                label: widget.runningAll ? 'Running' : 'Run all',
+                selectedMode: widget.selectedRunMode,
+                enabledModes: _enabledModesFor(widget.scenarios),
+                loading: widget.runningAll,
+                onRun: anyRunning ? null : _runAll,
               ),
-          ],
-        ),
-        const SizedBox(height: SettingsFormMetrics.sectionGap),
+              OutlinedButton.icon(
+                onPressed: anyRunning ? null : widget.onAddValidation,
+                icon: const Icon(Icons.add),
+                label: const Text('Add validation'),
+              ),
+              ...widget.extraActions,
+              if (anyRunning)
+                PanelBadge(
+                  label:
+                      'Running ${_settingsValidationModeLabel(widget.runningMode)}',
+                ),
+            ],
+          ),
+          const SizedBox(height: SettingsFormMetrics.sectionGap),
+        ],
         if (widget.scenarios.isEmpty)
           PanelEmptyBlock(label: widget.emptyLabel)
         else
@@ -213,7 +251,15 @@ class _SettingsValidationScenarioTableState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const _SettingsValidationScenarioHeader(),
+        _SettingsValidationScenarioHeader(
+          primaryColumnLabel: widget.primaryColumnLabel,
+          descriptionColumnLabel: widget.descriptionColumnLabel,
+          modeColumnLabel: widget.modeColumnLabel,
+          statusColumnLabel: widget.statusColumnLabel,
+          actionsColumnLabel: widget.actionsColumnLabel,
+          showModeColumn: widget.showModeColumn,
+          showActions: widget.showActions,
+        ),
         const SizedBox(height: 6),
         for (var index = 0; index < widget.scenarios.length; index++)
           Padding(
@@ -227,6 +273,8 @@ class _SettingsValidationScenarioTableState
               runningMode: widget.runningMode,
               runningIds: widget.runningValidationIds,
               liveAvailable: widget.liveAvailable,
+              showModeColumn: widget.showModeColumn,
+              showActions: widget.showActions,
               onToggleExpanded: () => _toggleExpanded(widget.scenarios[index]),
               onRun: (request) {
                 widget.onRunScenario(request);
@@ -261,6 +309,7 @@ class _SettingsValidationScenarioTableState
     setState(() {
       if (!_expanded.remove(scenario.id)) {
         _expanded.add(scenario.id);
+        widget.onScenarioExpanded?.call(scenario);
       }
     });
   }
@@ -432,7 +481,29 @@ class SettingsValidationRunModeButton extends StatelessWidget {
 }
 
 class _SettingsValidationScenarioHeader extends StatelessWidget {
-  const _SettingsValidationScenarioHeader();
+  const _SettingsValidationScenarioHeader({
+    required this.primaryColumnLabel,
+    required this.descriptionColumnLabel,
+    required this.modeColumnLabel,
+    required this.statusColumnLabel,
+    required this.actionsColumnLabel,
+    required this.showModeColumn,
+    required this.showActions,
+  });
+
+  final String primaryColumnLabel;
+
+  final String descriptionColumnLabel;
+
+  final String modeColumnLabel;
+
+  final String statusColumnLabel;
+
+  final String actionsColumnLabel;
+
+  final bool showModeColumn;
+
+  final bool showActions;
 
   /// Builds table column headers for scenario rows.
   @override
@@ -449,18 +520,30 @@ class _SettingsValidationScenarioHeader extends StatelessWidget {
         children: <Widget>[
           _SettingsValidationCell(
             flex: 2,
-            child: Text('Validation', style: style),
+            child: Text(primaryColumnLabel, style: style),
           ),
           _SettingsValidationCell(
             flex: 3,
-            child: Text('Description', style: style),
+            child: Text(descriptionColumnLabel, style: style),
           ),
-          _SettingsValidationCell(flex: 2, child: Text('Mode', style: style)),
-          _SettingsValidationCell(flex: 2, child: Text('Status', style: style)),
-          SizedBox(
-            width: 124,
-            child: Text('Actions', style: style, textAlign: TextAlign.right),
+          if (showModeColumn)
+            _SettingsValidationCell(
+              flex: 2,
+              child: Text(modeColumnLabel, style: style),
+            ),
+          _SettingsValidationCell(
+            flex: 2,
+            child: Text(statusColumnLabel, style: style),
           ),
+          if (showActions)
+            SizedBox(
+              width: 124,
+              child: Text(
+                actionsColumnLabel,
+                style: style,
+                textAlign: TextAlign.right,
+              ),
+            ),
         ],
       ),
     );
@@ -475,6 +558,8 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
     required this.runningMode,
     required this.runningIds,
     required this.liveAvailable,
+    required this.showModeColumn,
+    required this.showActions,
     required this.onToggleExpanded,
     required this.onRun,
     required this.onDelete,
@@ -486,6 +571,8 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
   final String runningMode;
   final Set<String> runningIds;
   final bool liveAvailable;
+  final bool showModeColumn;
+  final bool showActions;
   final VoidCallback onToggleExpanded;
   final ValueChanged<SettingsValidationRunRequest> onRun;
   final VoidCallback onDelete;
@@ -506,15 +593,6 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
               : reportColors.rowBorder,
         ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
-        boxShadow: expanded
-            ? <BoxShadow>[
-                BoxShadow(
-                  color: reportColors.rowGlow,
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : const <BoxShadow>[],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -567,57 +645,59 @@ class _SettingsValidationScenarioRow extends StatelessWidget {
                       style: TextStyle(color: reportColors.textMuted),
                     ),
                   ),
-                  _SettingsValidationCell(
-                    flex: 2,
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: <Widget>[
-                        for (final mode in const <String>['mocked', 'live'])
-                          _SettingsValidationModePill(
-                            state:
-                                scenario.modeStates[mode] ??
-                                SettingsValidationModeState(
-                                  mode: mode,
-                                  validationIds: const <String>[],
-                                  status: '',
-                                  configured: false,
-                                ),
-                            running:
-                                running &&
-                                _settingsValidationModeValue(runningMode) ==
-                                    mode,
-                          ),
-                      ],
+                  if (showModeColumn)
+                    _SettingsValidationCell(
+                      flex: 2,
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: <Widget>[
+                          for (final mode in const <String>['mocked', 'live'])
+                            _SettingsValidationModePill(
+                              state:
+                                  scenario.modeStates[mode] ??
+                                  SettingsValidationModeState(
+                                    mode: mode,
+                                    validationIds: const <String>[],
+                                    status: '',
+                                    configured: false,
+                                  ),
+                              running:
+                                  running &&
+                                  _settingsValidationModeValue(runningMode) ==
+                                      mode,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
                   _SettingsValidationCell(
                     flex: 2,
                     child: _SettingsValidationStatusPill(
                       status: running ? 'running' : scenario.status,
                     ),
                   ),
-                  SizedBox(
-                    width: 124,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: <Widget>[
-                        SettingsValidationRunModeButton(
-                          label: '',
-                          selectedMode: selectedRunMode,
-                          enabledModes: _enabledModesForScenario(scenario),
-                          loading: running,
-                          onRun: running ? null : _runScenario,
-                        ),
-                        const SizedBox(width: 6),
-                        PanelInlineIconButton(
-                          icon: Icons.delete_outline,
-                          tooltip: 'Delete validation',
-                          onPressed: onDelete,
-                        ),
-                      ],
+                  if (showActions)
+                    SizedBox(
+                      width: 124,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          SettingsValidationRunModeButton(
+                            label: '',
+                            selectedMode: selectedRunMode,
+                            enabledModes: _enabledModesForScenario(scenario),
+                            loading: running,
+                            onRun: running ? null : _runScenario,
+                          ),
+                          const SizedBox(width: 6),
+                          PanelInlineIconButton(
+                            icon: Icons.delete_outline,
+                            tooltip: 'Delete validation',
+                            onPressed: onDelete,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -717,7 +797,10 @@ class _SettingsValidationModePill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
       decoration: BoxDecoration(
         color: fill,
-        border: Border.all(color: border),
+        border: Border.all(
+          color: border,
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Row(
@@ -796,7 +879,10 @@ class _SettingsValidationStatusPill extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
           color: fill,
-          border: Border.all(color: border),
+          border: Border.all(
+            color: border,
+            width: AgentAwesomeStrokeTokens.borderWidth,
+          ),
           borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
         ),
         child: Row(
@@ -915,7 +1001,6 @@ class _SettingsValidationReportPalette {
     required this.rowExpanded,
     required this.rowBorder,
     required this.rowBorderActive,
-    required this.rowGlow,
     required this.text,
     required this.textMuted,
     required this.textSubtle,
@@ -948,7 +1033,6 @@ class _SettingsValidationReportPalette {
   final Color rowExpanded;
   final Color rowBorder;
   final Color rowBorderActive;
-  final Color rowGlow;
   final Color text;
   final Color textMuted;
   final Color textSubtle;
@@ -986,7 +1070,6 @@ class _SettingsValidationReportPalette {
         rowExpanded: colors.greenSoft,
         rowBorder: colors.border,
         rowBorderActive: colors.borderStrong,
-        rowGlow: colors.shadow,
         text: colors.ink,
         textMuted: colors.muted,
         textSubtle: colors.subtle,
@@ -1020,7 +1103,6 @@ class _SettingsValidationReportPalette {
       rowExpanded: Color(0xff0f1a31),
       rowBorder: Color(0xff1f344f),
       rowBorderActive: Color(0xff4e82c7),
-      rowGlow: Color(0x55235d9d),
       text: Color(0xfff3f7ff),
       textMuted: Color(0xffaebbd0),
       textSubtle: Color(0xff74849b),

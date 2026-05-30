@@ -40,10 +40,13 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
   bool _loading = true;
   bool _validationRunning = false;
   bool _installVerifying = false;
+  bool _mcpServerStarting = false;
   String _validationRunningId = '';
   Set<String> _validationRunningIds = const <String>{};
   String _validationRunMode = 'mocked';
   String _validationRunningMode = '';
+  String _mcpServerStartingName = '';
+  String _mcpServerStatus = '';
   int _validationResultRevision = 0;
 
   /// Loads the selected tool config file.
@@ -66,6 +69,9 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
       _validationRunningId = '';
       _validationRunningIds = const <String>{};
       _validationRunningMode = '';
+      _mcpServerStarting = false;
+      _mcpServerStartingName = '';
+      _mcpServerStatus = '';
       _validationResultRevision++;
       _loading = true;
       unawaited(_load());
@@ -171,28 +177,13 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
         else
           _SettingsMcpToolsetsCard(
             config: document.mcp,
-            profileServers:
+            runtimeServers:
                 widget.controller.runtimeProfile?.mcpServers ??
                 const <McpServerRuntime>[],
-            onChanged: (mcp) {
-              unawaited(_save(document.copyWith(mcp: mcp)));
-            },
-            onAddServer: () => unawaited(_addMcpServer(document)),
-            onDeleteServer: (index) =>
-                unawaited(_deleteMcpServer(document, index)),
-            onServerChanged: (index, server) {
-              final servers = <McpServerToolConfig>[
-                for (var i = 0; i < document.mcp.servers.length; i++)
-                  i == index ? server : document.mcp.servers[i],
-              ];
-              unawaited(
-                _save(
-                  document.copyWith(
-                    mcp: document.mcp.copyWith(servers: servers),
-                  ),
-                ),
-              );
-            },
+            statusMessage: _mcpServerStatus,
+            starting: _mcpServerStarting,
+            startingServerName: _mcpServerStartingName,
+            onStartServer: _startMcpServer,
           ),
       ],
     );
@@ -594,62 +585,44 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
     );
   }
 
-  /// Adds an MCP server through a required-field dialog.
-  Future<void> _addMcpServer(ToolConfigDocument document) async {
-    final server = await showDialog<McpServerToolConfig>(
-      context: context,
-      builder: (context) {
-        return _McpServerDialog(seed: _suggestedProfileServer(document));
-      },
-    );
-    if (server == null) {
+  /// Starts or checks a server from the loaded MCP package file.
+  Future<void> _startMcpServer(McpServerToolConfig server) async {
+    if (_mcpServerStarting) {
       return;
     }
-    await _save(
-      document.copyWith(
-        mcp: document.mcp.copyWith(
-          enabled: true,
-          servers: <McpServerToolConfig>[...document.mcp.servers, server],
-        ),
-      ),
-    );
-  }
-
-  /// Deletes an MCP server and disables MCP if no servers remain.
-  Future<void> _deleteMcpServer(ToolConfigDocument document, int index) async {
-    final server = document.mcp.servers[index];
-    final confirmed = await _confirmSettingsDelete(context, label: server.name);
-    if (!confirmed) {
-      return;
-    }
-    final servers = <McpServerToolConfig>[
-      for (var i = 0; i < document.mcp.servers.length; i++)
-        if (i != index) document.mcp.servers[i],
-    ];
-    await _save(
-      document.copyWith(
-        mcp: document.mcp.copyWith(
-          enabled: servers.isNotEmpty && document.mcp.enabled,
-          servers: servers,
-        ),
-      ),
-    );
-  }
-
-  /// Returns a profile MCP server not already present in the tool config.
-  McpServerRuntime? _suggestedProfileServer(ToolConfigDocument document) {
-    final existingNames = document.mcp.servers.map((server) => server.name);
-    for (final server
-        in widget.controller.runtimeProfile?.mcpServers ??
-            const <McpServerRuntime>[]) {
-      final name = SettingsNameFactory.toolNameFromLabel(
-        server.kind.isEmpty ? server.id : server.kind,
+    final serverName = server.name.trim();
+    setState(() {
+      _mcpServerStarting = true;
+      _mcpServerStartingName = serverName;
+      _mcpServerStatus = '';
+      _validationError = '';
+    });
+    try {
+      final status = await widget.controller.startMcpServerFromConfig(
+        widget.entry.path,
+        serverName: serverName,
       );
-      if (!existingNames.contains(name)) {
-        return server;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _mcpServerStatus =
+            '${status.name}: ${status.message}'
+            '${status.url.trim().isEmpty ? '' : ' (${status.url})'}';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _validationError = error.toString());
+    } finally {
+      if (mounted) {
+        setState(() {
+          _mcpServerStarting = false;
+          _mcpServerStartingName = '';
+        });
       }
     }
-    return null;
   }
 }
 
@@ -1984,7 +1957,10 @@ class _SettingsToolEvidenceValueBox extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: colors.panel.withValues(alpha: 0.74),
-        border: Border.all(color: colors.border.withValues(alpha: 0.78)),
+        border: Border.all(
+          color: colors.border.withValues(alpha: 0.78),
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: SelectableText(
@@ -2013,7 +1989,10 @@ class _SettingsToolAssertionList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: colors.panel.withValues(alpha: 0.54),
-        border: Border.all(color: colors.border.withValues(alpha: 0.68)),
+        border: Border.all(
+          color: colors.border.withValues(alpha: 0.68),
+          width: AgentAwesomeStrokeTokens.borderWidth,
+        ),
         borderRadius: BorderRadius.circular(PanelStyleTokens.compactRadius),
       ),
       child: Column(
@@ -2277,71 +2256,92 @@ class _ToolValidationDraftDialogState
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               if (widget.choices.length > 1) ...<Widget>[
-                DropdownButtonFormField<int>(
-                  initialValue: _choiceIndex,
-                  decoration: SettingsInputDecoration.field(
-                    context,
-                    label: 'Target',
+                PanelLabeledFormControl(
+                  label: 'Target',
+                  child: DropdownButtonFormField<int>(
+                    initialValue: _choiceIndex,
+                    isDense: true,
+                    style: SettingsFormTextStyle.field(context),
+                    decoration: SettingsInputDecoration.field(
+                      context,
+                      label: 'Target',
+                    ),
+                    items: <DropdownMenuItem<int>>[
+                      for (
+                        var index = 0;
+                        index < widget.choices.length;
+                        index++
+                      )
+                        DropdownMenuItem<int>(
+                          value: index,
+                          child: Text(widget.choices[index].menuLabel),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null || value == _choiceIndex) {
+                        return;
+                      }
+                      setState(() {
+                        _choiceIndex = value;
+                        _applyChoice(widget.choices[value]);
+                      });
+                    },
                   ),
-                  items: <DropdownMenuItem<int>>[
-                    for (var index = 0; index < widget.choices.length; index++)
-                      DropdownMenuItem<int>(
-                        value: index,
-                        child: Text(widget.choices[index].menuLabel),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null || value == _choiceIndex) {
-                      return;
-                    }
-                    setState(() {
-                      _choiceIndex = value;
-                      _applyChoice(widget.choices[value]);
-                    });
-                  },
                 ),
                 const SizedBox(height: 10),
               ],
-              TextField(
-                controller: _scenario,
-                autofocus: true,
-                decoration: SettingsInputDecoration.field(
-                  context,
-                  label: 'Scenario',
+              PanelLabeledFormControl(
+                label: 'Scenario',
+                child: TextField(
+                  controller: _scenario,
+                  autofocus: true,
+                  decoration: SettingsInputDecoration.field(
+                    context,
+                    label: 'Scenario',
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: _input,
-                minLines: 2,
-                maxLines: 5,
-                decoration: SettingsInputDecoration.field(
-                  context,
-                  label: 'Input',
-                  hintText: 'name=value',
-                  alignLabelWithHint: true,
+              PanelLabeledFormControl(
+                label: 'Input',
+                child: TextField(
+                  controller: _input,
+                  minLines: 2,
+                  maxLines: 5,
+                  decoration: SettingsInputDecoration.field(
+                    context,
+                    label: 'Input',
+                    hintText: 'name=value',
+                    alignLabelWithHint: true,
+                    multiline: true,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: _expectedStatus,
-                decoration: SettingsInputDecoration.field(
-                  context,
-                  label: 'Expected status',
+              PanelLabeledFormControl(
+                label: 'Expected status',
+                child: DropdownButtonFormField<String>(
+                  initialValue: _expectedStatus,
+                  isDense: true,
+                  style: SettingsFormTextStyle.field(context),
+                  decoration: SettingsInputDecoration.field(
+                    context,
+                    label: 'Expected status',
+                  ),
+                  items: const <DropdownMenuItem<String>>[
+                    DropdownMenuItem<String>(
+                      value: 'succeeded',
+                      child: Text('Succeeded'),
+                    ),
+                    DropdownMenuItem<String>(
+                      value: 'failed',
+                      child: Text('Failed'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _expectedStatus = value ?? 'succeeded');
+                  },
                 ),
-                items: const <DropdownMenuItem<String>>[
-                  DropdownMenuItem<String>(
-                    value: 'succeeded',
-                    child: Text('Succeeded'),
-                  ),
-                  DropdownMenuItem<String>(
-                    value: 'failed',
-                    child: Text('Failed'),
-                  ),
-                ],
-                onChanged: (value) {
-                  setState(() => _expectedStatus = value ?? 'succeeded');
-                },
               ),
               const SizedBox(height: 10),
               _ToolValidationNumberCheckRow(
@@ -2471,37 +2471,48 @@ class _ToolValidationNumberCheckRow extends StatelessWidget {
       children: <Widget>[
         SizedBox(
           width: 240,
-          child: DropdownButtonFormField<String>(
-            initialValue: condition,
-            isExpanded: true,
-            decoration: SettingsInputDecoration.field(
-              context,
-              label: 'Condition',
+          child: PanelLabeledFormControl(
+            label: 'Condition',
+            child: DropdownButtonFormField<String>(
+              initialValue: condition,
+              isDense: true,
+              style: SettingsFormTextStyle.field(context),
+              isExpanded: true,
+              decoration: SettingsInputDecoration.field(
+                context,
+                label: 'Condition',
+              ),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem<String>(
+                  value: 'equals',
+                  child: Text('Equals'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'not-equals',
+                  child: Text('Not equals'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'greater-than',
+                  child: Text('Greater than'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'less-than',
+                  child: Text('Less than'),
+                ),
+              ],
+              onChanged: (value) => onConditionChanged(value ?? 'equals'),
             ),
-            items: const <DropdownMenuItem<String>>[
-              DropdownMenuItem<String>(value: 'equals', child: Text('Equals')),
-              DropdownMenuItem<String>(
-                value: 'not-equals',
-                child: Text('Not equals'),
-              ),
-              DropdownMenuItem<String>(
-                value: 'greater-than',
-                child: Text('Greater than'),
-              ),
-              DropdownMenuItem<String>(
-                value: 'less-than',
-                child: Text('Less than'),
-              ),
-            ],
-            onChanged: (value) => onConditionChanged(value ?? 'equals'),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            decoration: SettingsInputDecoration.field(context, label: label),
+          child: PanelLabeledFormControl(
+            label: label,
+            child: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: SettingsInputDecoration.field(context, label: label),
+            ),
           ),
         ),
       ],
@@ -2615,42 +2626,53 @@ class _ToolValidationCheckRow extends StatelessWidget {
       children: <Widget>[
         SizedBox(
           width: 240,
-          child: DropdownButtonFormField<String>(
-            initialValue: check.condition,
-            isExpanded: true,
-            decoration: SettingsInputDecoration.field(
-              context,
-              label: 'Condition',
+          child: PanelLabeledFormControl(
+            label: 'Condition',
+            child: DropdownButtonFormField<String>(
+              initialValue: check.condition,
+              isDense: true,
+              style: SettingsFormTextStyle.field(context),
+              isExpanded: true,
+              decoration: SettingsInputDecoration.field(
+                context,
+                label: 'Condition',
+              ),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem<String>(value: 'none', child: Text('None')),
+                DropdownMenuItem<String>(
+                  value: 'equals',
+                  child: Text('Equals'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'contains',
+                  child: Text('Contains'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'starts-with',
+                  child: Text('Starts with'),
+                ),
+                DropdownMenuItem<String>(
+                  value: 'ends-with',
+                  child: Text('Ends with'),
+                ),
+              ],
+              onChanged: (value) {
+                check.condition = value ?? 'none';
+                onChanged();
+              },
             ),
-            items: const <DropdownMenuItem<String>>[
-              DropdownMenuItem<String>(value: 'none', child: Text('None')),
-              DropdownMenuItem<String>(value: 'equals', child: Text('Equals')),
-              DropdownMenuItem<String>(
-                value: 'contains',
-                child: Text('Contains'),
-              ),
-              DropdownMenuItem<String>(
-                value: 'starts-with',
-                child: Text('Starts with'),
-              ),
-              DropdownMenuItem<String>(
-                value: 'ends-with',
-                child: Text('Ends with'),
-              ),
-            ],
-            onChanged: (value) {
-              check.condition = value ?? 'none';
-              onChanged();
-            },
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: TextField(
-            controller: check.value,
-            enabled: check.condition != 'none',
-            decoration: SettingsInputDecoration.field(context, label: 'Text'),
-            onChanged: (_) => onChanged(),
+          child: PanelLabeledFormControl(
+            label: 'Text',
+            child: TextField(
+              controller: check.value,
+              enabled: check.condition != 'none',
+              decoration: SettingsInputDecoration.field(context, label: 'Text'),
+              onChanged: (_) => onChanged(),
+            ),
           ),
         ),
         const SizedBox(width: 4),

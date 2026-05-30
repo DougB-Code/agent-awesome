@@ -282,7 +282,7 @@ WorkspaceTask _copyTask(
   );
 }
 
-/// Builds a runtime profile with one fake memory server.
+/// Builds a agent runtime topology with one fake memory server.
 RuntimeProfile _profile(String modelConfigPath) {
   return RuntimeProfile(
     id: 'personal',
@@ -295,7 +295,7 @@ RuntimeProfile _profile(String modelConfigPath) {
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: modelConfigPath,
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -308,7 +308,7 @@ RuntimeProfile _profile(String modelConfigPath) {
       apiBaseUrl: 'http://127.0.0.1:2/api',
       healthUrl: 'http://127.0.0.1:2/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:1/api',
       contextBaseUrl: 'http://127.0.0.1:8081/api/context',
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',
@@ -326,7 +326,7 @@ RuntimeProfile _profile(String modelConfigPath) {
         endpoint: _memoryEndpoint,
         healthUrl: 'http://127.0.0.1:1/healthz',
         workingDirectory: '/tmp/memory',
-        packagePath: './cmd/memoryd',
+        executablePath: '/tmp/bin/memoryd',
         dbPath: '/tmp/memory.db',
         dataDir: '/tmp/memory-files',
         arguments: <String>[],

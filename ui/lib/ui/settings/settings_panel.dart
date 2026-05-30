@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
-import '../../app/app_settings.dart';
 import '../../app/local_services.dart';
 import '../theme.dart';
 import '../../domain/agent_config.dart';
@@ -29,15 +28,12 @@ import 'settings_logic.dart';
 
 part 'settings_panel_shell.dart';
 part 'settings_panel_app.dart';
-part 'settings_panel_profiles.dart';
 part 'settings_panel_models.dart';
 part 'settings_panel_local_exec.dart';
 part 'settings_panel_local_exec_dialog.dart';
-part 'settings_panel_mcp_server_dialog.dart';
 part 'settings_panel_mcp_servers.dart';
 part 'settings_panel_tool_collection.dart';
 part 'settings_panel_tool_editor.dart';
-part 'settings_panel_tool_fields.dart';
 part 'settings_validation_scenarios.dart';
 part 'settings_panel_config_files.dart';
 part 'settings_panel_server.dart';

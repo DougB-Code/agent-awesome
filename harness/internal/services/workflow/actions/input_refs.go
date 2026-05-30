@@ -59,6 +59,28 @@ func resolveInputRefString(value string, input map[string]any) any {
 	}
 }
 
+// unresolvedInputRefPaths returns reference paths still present after resolution.
+func unresolvedInputRefPaths(value string) []string {
+	paths := []string{}
+	remaining := value
+	for {
+		start := strings.Index(remaining, "${")
+		if start < 0 {
+			return paths
+		}
+		end := strings.Index(remaining[start:], "}")
+		if end < 0 {
+			return paths
+		}
+		end += start
+		path := strings.TrimSpace(remaining[start+2 : end])
+		if path != "" {
+			paths = append(paths, path)
+		}
+		remaining = remaining[end+1:]
+	}
+}
+
 // resolveReferencePath looks up a dotted path in action input.
 func resolveReferencePath(input map[string]any, path string) (any, bool) {
 	return jsondata.Dotted(input, strings.TrimSpace(path))

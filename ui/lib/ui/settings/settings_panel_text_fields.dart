@@ -51,7 +51,7 @@ class _SettingsInlineFieldState extends State<_SettingsInlineField> {
   /// Cleans up field controllers.
   @override
   void dispose() {
-    _saveTimer?.cancel();
+    _save();
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     _controller.dispose();
@@ -62,15 +62,23 @@ class _SettingsInlineFieldState extends State<_SettingsInlineField> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextFormField(
-        focusNode: _focusNode,
-        controller: _controller,
-        minLines: widget.minLines,
-        maxLines: widget.maxLines,
-        onFieldSubmitted: (_) => _save(),
-        onChanged: (_) => _scheduleSave(),
-        decoration: SettingsInputDecoration.field(context, label: widget.label),
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: widget.label,
+        child: TextFormField(
+          focusNode: _focusNode,
+          controller: _controller,
+          minLines: widget.minLines,
+          maxLines: widget.maxLines,
+          onFieldSubmitted: (_) => _save(),
+          onChanged: (_) => _scheduleSave(),
+          style: SettingsFormTextStyle.field(context),
+          decoration: SettingsInputDecoration.field(
+            context,
+            label: widget.label,
+            multiline: widget.maxLines > 1 || widget.minLines > 1,
+          ),
+        ),
       ),
     );
   }
@@ -110,11 +118,15 @@ class _SettingsReadOnlyField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        initialValue: value,
-        readOnly: true,
-        decoration: SettingsInputDecoration.field(context, label: label),
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: label,
+        child: TextFormField(
+          initialValue: value,
+          readOnly: true,
+          style: SettingsFormTextStyle.field(context),
+          decoration: SettingsInputDecoration.field(context, label: label),
+        ),
       ),
     );
   }
@@ -169,7 +181,7 @@ class _SettingsAutoSaveTextFieldState
   /// Cleans up field focus state.
   @override
   void dispose() {
-    _saveTimer?.cancel();
+    _save();
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
     super.dispose();
@@ -179,15 +191,23 @@ class _SettingsAutoSaveTextFieldState
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextFormField(
-        focusNode: _focusNode,
-        controller: widget.controller,
-        minLines: widget.minLines,
-        maxLines: widget.maxLines,
-        onChanged: (_) => _scheduleSave(),
-        onFieldSubmitted: (_) => _save(),
-        decoration: SettingsInputDecoration.field(context, label: widget.label),
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: widget.label,
+        child: TextFormField(
+          focusNode: _focusNode,
+          controller: widget.controller,
+          minLines: widget.minLines,
+          maxLines: widget.maxLines,
+          onChanged: (_) => _scheduleSave(),
+          onFieldSubmitted: (_) => _save(),
+          style: SettingsFormTextStyle.field(context),
+          decoration: SettingsInputDecoration.field(
+            context,
+            label: widget.label,
+            multiline: widget.maxLines > 1 || widget.minLines > 1,
+          ),
+        ),
       ),
     );
   }

@@ -4,17 +4,6 @@ package contracts
 import "strings"
 
 const (
-	// CompatibilityDirect reports that no adapter is required.
-	CompatibilityDirect = "direct"
-	// CompatibilityAdapted reports that an adapter can make the edge valid.
-	CompatibilityAdapted = "adapted"
-	// CompatibilityNeedsUserChoice reports that deterministic choice is missing.
-	CompatibilityNeedsUserChoice = "needs_user_choice"
-	// CompatibilityBlocked reports that the connection is unsafe or impossible.
-	CompatibilityBlocked = "blocked"
-)
-
-const (
 	// ManifestSourceAA marks manifests owned by the AA runtime.
 	ManifestSourceAA = "aa"
 	// ManifestSourceInternal marks host-owned trusted manifests.
@@ -144,25 +133,6 @@ type ObservedField struct {
 	Type       string `json:"type" yaml:"type"`
 	Facet      string `json:"facet,omitempty" yaml:"facet,omitempty"`
 	Confidence string `json:"confidence,omitempty" yaml:"confidence,omitempty"`
-}
-
-// Compatibility reports edge compatibility and the required adapter action.
-type Compatibility struct {
-	Status      string                `json:"status" yaml:"status"`
-	Confidence  string                `json:"confidence,omitempty" yaml:"confidence,omitempty"`
-	AdapterRef  string                `json:"adapter_ref,omitempty" yaml:"adapter_ref,omitempty"`
-	Explanation string                `json:"explanation,omitempty" yaml:"explanation,omitempty"`
-	Choices     []CompatibilityChoice `json:"choices,omitempty" yaml:"choices,omitempty"`
-	Risks       []string              `json:"risks,omitempty" yaml:"risks,omitempty"`
-}
-
-// CompatibilityChoice describes one deterministic mapping option.
-type CompatibilityChoice struct {
-	ID          string `json:"id" yaml:"id"`
-	Label       string `json:"label" yaml:"label"`
-	SourcePath  string `json:"source_path" yaml:"source_path"`
-	TargetFacet string `json:"target_facet" yaml:"target_facet"`
-	Confidence  string `json:"confidence,omitempty" yaml:"confidence,omitempty"`
 }
 
 // Registry stores manifests by tool id.

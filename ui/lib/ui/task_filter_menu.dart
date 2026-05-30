@@ -273,7 +273,7 @@ class _TaskFilterSearchField extends StatelessWidget {
             vertical: 9,
           ),
           filled: true,
-          fillColor: colors.surface,
+          fillColor: colors.field,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
             borderSide: BorderSide(color: colors.border),

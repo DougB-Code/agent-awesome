@@ -63,12 +63,13 @@ func (r *Registry) ValidateDefinition(def definition.Definition) []Diagnostic {
 		return nil
 	}
 	diagnostics := []Diagnostic{}
-	for _, node := range allNodes(def) {
+	for _, ref := range allActionNodes(def) {
+		node := ref.Node
 		action := definition.NodeAction(node)
 		if action == "" {
 			continue
 		}
-		path := "nodes." + strings.TrimSpace(node.ID)
+		path := ref.Path
 		diagnostics = append(diagnostics, r.validateRequiredCapability(
 			workflowActionID(action),
 			path,
@@ -404,18 +405,28 @@ func (b *registryBuilder) registry() *Registry {
 	return &Registry{records: records, byID: b.byID}
 }
 
-// allNodes returns executable nodes from graph and state-machine definitions.
-func allNodes(def definition.Definition) []definition.NodeDefinition {
-	nodes := append([]definition.NodeDefinition(nil), def.Nodes...)
+// allActionNodes returns executable entry actions from state-machine definitions.
+func allActionNodes(def definition.Definition) []actionNodeRef {
+	nodes := []actionNodeRef{}
 	var walkStates func([]definition.StateDefinition)
 	walkStates = func(states []definition.StateDefinition) {
 		for _, state := range states {
-			nodes = append(nodes, state.OnEntry...)
+			stateID := strings.TrimSpace(state.ID)
+			for _, node := range state.OnEntry {
+				path := "states." + stateID + ".on_entry." + strings.TrimSpace(node.ID)
+				nodes = append(nodes, actionNodeRef{Node: node, Path: path})
+			}
 			walkStates(state.States)
 		}
 	}
 	walkStates(def.States)
 	return nodes
+}
+
+// actionNodeRef couples a state entry action with its diagnostic path.
+type actionNodeRef struct {
+	Node definition.NodeDefinition
+	Path string
 }
 
 // validateCommandNode checks a command.execute node against configured templates.

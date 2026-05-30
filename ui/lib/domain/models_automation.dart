@@ -356,7 +356,6 @@ class AutomationCodebase {
     this.defaultBranch = '',
     this.provider = '',
     this.providerRepository = '',
-    this.goModulePath = '',
     this.runtimeTargetId = '',
     this.agentProfileId = '',
     this.createdAt = '',
@@ -387,9 +386,6 @@ class AutomationCodebase {
   /// Provider repository in owner/name form.
   final String providerRepository;
 
-  /// Optional Go module path used by coding workflows.
-  final String goModulePath;
-
   /// Preferred runtime target id.
   final String runtimeTargetId;
 
@@ -412,7 +408,6 @@ class AutomationCodebase {
     String? defaultBranch,
     String? provider,
     String? providerRepository,
-    String? goModulePath,
     String? runtimeTargetId,
     String? agentProfileId,
     String? createdAt,
@@ -427,7 +422,6 @@ class AutomationCodebase {
       defaultBranch: defaultBranch ?? this.defaultBranch,
       provider: provider ?? this.provider,
       providerRepository: providerRepository ?? this.providerRepository,
-      goModulePath: goModulePath ?? this.goModulePath,
       runtimeTargetId: runtimeTargetId ?? this.runtimeTargetId,
       agentProfileId: agentProfileId ?? this.agentProfileId,
       createdAt: createdAt ?? this.createdAt,
@@ -446,7 +440,6 @@ class AutomationCodebase {
       'default_branch': defaultBranch,
       'provider': provider,
       'provider_repository': providerRepository,
-      'go_module_path': goModulePath,
       'runtime_target_id': runtimeTargetId,
       'agent_profile_id': agentProfileId,
     };
@@ -981,7 +974,6 @@ AutomationCodebase parseAutomationCodebase(dynamic value) {
     defaultBranch: _string(map['default_branch']),
     provider: _string(map['provider']),
     providerRepository: _string(map['provider_repository']),
-    goModulePath: _string(map['go_module_path']),
     runtimeTargetId: _string(map['runtime_target_id']),
     agentProfileId: _string(map['agent_profile_id']),
     createdAt: _string(map['created_at']),

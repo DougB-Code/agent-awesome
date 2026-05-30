@@ -20,7 +20,6 @@ const (
 	codebasePropertyDefaultBranch      = "default_branch"
 	codebasePropertyProvider           = "provider"
 	codebasePropertyProviderRepository = "provider_repository"
-	codebasePropertyGoModulePath       = "go_module_path"
 	codebasePropertyRuntimeTargetID    = "runtime_target_id"
 	codebasePropertyAgentProfileID     = "agent_profile_id"
 )
@@ -182,7 +181,6 @@ func (r *Repository) writeCodebaseProperties(ctx context.Context, nodeID graph.N
 		codebasePropertyDefaultBranch:      {Type: graph.ValueText, Text: codebase.DefaultBranch},
 		codebasePropertyProvider:           {Type: graph.ValueText, Text: codebase.Provider},
 		codebasePropertyProviderRepository: {Type: graph.ValueText, Text: codebase.ProviderRepository},
-		codebasePropertyGoModulePath:       {Type: graph.ValueText, Text: codebase.GoModulePath},
 		codebasePropertyRuntimeTargetID:    {Type: graph.ValueText, Text: codebase.RuntimeTargetID},
 		codebasePropertyAgentProfileID:     {Type: graph.ValueText, Text: codebase.AgentProfileID},
 	}
@@ -218,7 +216,6 @@ func (r *Repository) codebaseFromNode(ctx context.Context, node graph.Node) (dom
 		DefaultBranch:      codebaseTextProperty(values, codebasePropertyDefaultBranch),
 		Provider:           codebaseTextProperty(values, codebasePropertyProvider),
 		ProviderRepository: codebaseTextProperty(values, codebasePropertyProviderRepository),
-		GoModulePath:       codebaseTextProperty(values, codebasePropertyGoModulePath),
 		RuntimeTargetID:    codebaseTextProperty(values, codebasePropertyRuntimeTargetID),
 		AgentProfileID:     codebaseTextProperty(values, codebasePropertyAgentProfileID),
 		CreatedAt:          node.CreatedAt,

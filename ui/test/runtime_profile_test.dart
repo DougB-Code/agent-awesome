@@ -1,4 +1,4 @@
-/// Tests runtime profile parsing for harness and MCP topologies.
+/// Tests agent runtime topology parsing for harness and MCP topologies.
 library;
 
 import 'dart:convert';
@@ -8,7 +8,7 @@ import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Runs runtime profile tests.
+/// Runs agent runtime topology tests.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -26,24 +26,14 @@ void main() {
       'sourcecontrol',
     ]);
     final harnessArguments = harnessArgumentsForProfile(profile);
+    expect(harnessArguments, isNot(contains('--workflow-api-addr')));
     expect(
-      harnessArguments,
-      containsAllInOrder(<String>[
-        '--workflow-api-addr',
-        '127.0.0.1:8092',
-        '--workflow-definitions',
-        defaultWorkflowDefinitionsDirectoryPath(),
-        '--workflow-db',
-        defaultWorkflowDatabasePath(),
-        '--command-data-dir',
-        defaultCommandDataDirectoryPath(),
-        '--command-parser-dir',
-        defaultCommandParserDirectoryPath(),
-      ]),
+      defaultCommandAllowedWorkdirForProfile(profile),
+      isNot(Directory(profile.harness.workingDirectory).parent.path),
     );
     expect(
-      harnessArguments.indexOf('--workflow-api-addr'),
-      lessThan(harnessArguments.indexOf('--')),
+      defaultWorkspaceCommandAllowedWorkdirForProfile(profile),
+      Directory(profile.harness.workingDirectory).parent.parent.path,
     );
     expect(
       harnessArguments,
@@ -59,12 +49,38 @@ void main() {
     expect(profile.gateway.enabled, isTrue);
     expect(profile.gateway.apiBaseUrl, 'http://127.0.0.1:8070/api');
     expect(profile.workflow.enabled, isTrue);
-    expect(profile.workflow.hostedByHarness, isTrue);
-    expect(profile.workflow.autoStart, isFalse);
+    expect(profile.workflow.hostedByHarness, isFalse);
+    expect(profile.workflow.autoStart, isTrue);
     expect(profile.workflow.apiBaseUrl, 'http://127.0.0.1:8092/api/workflows');
     expect(profile.workflow.mcpUrl, 'http://127.0.0.1:8092/mcp');
     final workflowArguments = workflowArgumentsForProfile(profile);
-    expect(workflowArguments, isEmpty);
+    expect(
+      workflowArguments,
+      containsAllInOrder(<String>[
+        '--addr',
+        '127.0.0.1:8092',
+        '--definitions',
+        workflowDefinitionsDirectoryPathForProfile(profile),
+        '--db',
+        workflowDatabasePathForProfile(profile),
+        '--operations-db',
+        workflowOperationsDatabasePathForProfile(profile),
+        '--runtime-targets-db',
+        workflowRuntimeTargetsDatabasePathForProfile(profile),
+        '--harness-context-base-url',
+        'http://127.0.0.1:8081/api/context',
+        '--tool',
+        profile.harness.toolConfigPath,
+        '--command-data-dir',
+        commandDataDirectoryPathForProfile(profile),
+        '--command-parser-dir',
+        defaultCommandParserDirectoryPath(),
+        '--command-allow-workdir',
+        defaultCommandAllowedWorkdirForProfile(profile),
+        '--command-allow-workdir',
+        defaultWorkspaceCommandAllowedWorkdirForProfile(profile),
+      ]),
+    );
     expect(
       profile.gateway.effectiveStatusUrl,
       'http://127.0.0.1:8070/api/gateway/beta-status',
@@ -87,7 +103,7 @@ void main() {
     final gatewayArguments = gatewayArgumentsForProfile(profile);
     expect(gatewayArguments, contains('--workflow-base-url'));
     expect(gatewayArguments, contains('http://127.0.0.1:8092/api/workflows'));
-    expect(gatewayArguments, contains('--harness-embedded-services'));
+    expect(gatewayArguments, isNot(contains('--harness-embedded-services')));
     expect(gatewayArguments, contains('--memory-domains-json'));
     expect(gatewayArguments, contains('--memory-policy-json'));
     expect(gatewayArguments, contains('--agent-profiles-json'));
@@ -135,8 +151,80 @@ void main() {
     );
   });
 
+  test('uses separate workflow-owned runtime data per agent profile', () async {
+    final loaded = await RuntimeProfileLoader(_testConfig()).load();
+    final first = loaded.copyWith(id: 'agent-one');
+    final second = loaded.copyWith(id: 'agent-two');
+
+    final firstArguments = workflowArgumentsForProfile(first);
+    final secondArguments = workflowArgumentsForProfile(second);
+
+    expect(
+      firstArguments,
+      containsAllInOrder(<String>[
+        '--definitions',
+        agentWorkflowDefinitionsDirectoryPath('agent-one'),
+        '--db',
+        agentWorkflowDatabasePath('agent-one'),
+        '--command-data-dir',
+        agentCommandDataDirectoryPath('agent-one'),
+      ]),
+    );
+    expect(
+      secondArguments,
+      containsAllInOrder(<String>[
+        '--definitions',
+        agentWorkflowDefinitionsDirectoryPath('agent-two'),
+        '--db',
+        agentWorkflowDatabasePath('agent-two'),
+        '--command-data-dir',
+        agentCommandDataDirectoryPath('agent-two'),
+      ]),
+    );
+    expect(
+      commandDataDirectoryPathForProfile(first),
+      isNot(commandDataDirectoryPathForProfile(second)),
+    );
+    expect(
+      workflowDatabasePathForProfile(first),
+      isNot(workflowDatabasePathForProfile(second)),
+    );
+    expect(
+      workflowDefinitionsDirectoryPathForProfile(first),
+      isNot(workflowDefinitionsDirectoryPathForProfile(second)),
+    );
+  });
+
   test(
-    'loads bundled default profile template without source workspace',
+    'passes explicit command roots to standalone workflow service',
+    () async {
+      final loaded = await RuntimeProfileLoader(_testConfig()).load();
+      final profile = loaded.copyWith(
+        harness: loaded.harness.copyWith(
+          commandAllowedWorkdirs: const <String>['/work/a', '/work/b'],
+        ),
+      );
+
+      final workflowArguments = workflowArgumentsForProfile(profile);
+
+      expect(
+        workflowArguments,
+        containsAllInOrder(<String>[
+          '--command-allow-workdir',
+          '/work/a',
+          '--command-allow-workdir',
+          '/work/b',
+        ]),
+      );
+      expect(profile.harness.toJson()['command_allowed_workdirs'], <String>[
+        '/work/a',
+        '/work/b',
+      ]);
+    },
+  );
+
+  test(
+    'loads bundled default topology template without runtime root',
     () async {
       final root = await Directory.systemTemp.createTemp(
         'agentawesome-runtime-profile-',
@@ -183,7 +271,7 @@ void main() {
         'workflow': <String, dynamic>{
           ..._workflowJson(enabled: false),
           'working_directory': '',
-          'package_path': '',
+          'executable_path': '',
           'definitions_dir': '',
           'db_path': '',
         },
@@ -195,7 +283,7 @@ void main() {
             'endpoint': r'${AGENT_GATEWAY_MCP_URL}/shared',
             'health_url': r'${AGENT_GATEWAY_HEALTH_URL}',
             'working_directory': '',
-            'package_path': '',
+            'executable_path': '',
             'db_path': '',
             'data_dir': '',
             'arguments': <String>[],
@@ -244,7 +332,7 @@ void main() {
     );
   });
 
-  test('uses app-root package paths for tool and MCP configs', () {
+  test('uses app-root executable paths for tool and MCP configs', () {
     expect(
       toolConfigsDirectoryPath(),
       '${agentAwesomeAppConfigDirectoryPath()}/tools',
@@ -282,7 +370,7 @@ void main() {
             'endpoint': 'http://127.0.0.1:8090/mcp',
             'health_url': 'http://127.0.0.1:8090/healthz',
             'working_directory': '/tmp/memory',
-            'package_path': './cmd/memoryd',
+            'executable_path': '/tmp/bin/memoryd',
             'db_path': '/tmp/memory.db',
             'data_dir': '/tmp/memory-files',
             'arguments': <String>[],
@@ -382,7 +470,7 @@ void main() {
     );
   });
 
-  test('rejects managed memory domains without launch package data', () {
+  test('rejects managed memory domains without launch executable data', () {
     expect(
       () => RuntimeProfile.fromJson(<String, dynamic>{
         'id': 'missing-package',
@@ -391,7 +479,7 @@ void main() {
         'gateway': _gatewayJson(),
         'workflow': _workflowJson(),
         'memory_domains': <Map<String, dynamic>>[
-          _memoryDomainJson('memory', autoStart: true, packagePath: ''),
+          _memoryDomainJson('memory', autoStart: true, executablePath: ''),
         ],
         'agent_memory': <String, dynamic>{
           'actor': 'agent:test',
@@ -542,7 +630,7 @@ Map<String, dynamic> _harnessJson() {
     'app_name': 'agent_awesome',
     'user_id': 'doug',
     'working_directory': '/tmp/harness',
-    'package_path': './cmd/agent-awesome',
+    'executable_path': '/tmp/bin/agent-awesome',
     'model_config': '/tmp/model.yaml',
     'agent_config': '/tmp/agent.yaml',
     'tool_config': '/tmp/tool.yaml',
@@ -558,7 +646,7 @@ Map<String, dynamic> _memoryDomainJson(
   bool autoStart = false,
   bool enabled = true,
   String workingDirectory = '/tmp/memory',
-  String packagePath = './cmd/memoryd',
+  String executablePath = '/tmp/bin/memoryd',
   String dbPath = '/tmp/memory.db',
   String dataDir = '/tmp/memory-files',
 }) {
@@ -569,7 +657,7 @@ Map<String, dynamic> _memoryDomainJson(
     'endpoint': 'http://127.0.0.1:$port/mcp',
     'health_url': 'http://127.0.0.1:$port/healthz',
     'working_directory': workingDirectory,
-    'package_path': packagePath,
+    'executable_path': executablePath,
     'db_path': dbPath,
     'data_dir': dataDir,
     'arguments': <String>[],
@@ -585,7 +673,7 @@ Map<String, dynamic> _gatewayJson({bool enabled = true}) {
     'api_base_url': 'http://127.0.0.1:8070/api',
     'health_url': 'http://127.0.0.1:8070/healthz',
     'working_directory': '/tmp/gateway',
-    'package_path': './cmd/agent-gateway',
+    'executable_path': '/tmp/bin/agent-gateway',
     'harness_base_url': 'http://127.0.0.1:8080/api',
     'context_base_url': 'http://127.0.0.1:8081/api/context',
     'memory_mcp_url': 'http://127.0.0.1:8090/mcp',
@@ -597,7 +685,7 @@ Map<String, dynamic> _gatewayJson({bool enabled = true}) {
   };
 }
 
-/// Builds one workflow runtime profile JSON fixture.
+/// Builds one workflow agent runtime topology JSON fixture.
 Map<String, dynamic> _workflowJson({bool enabled = true}) {
   return <String, dynamic>{
     'id': 'workflow',
@@ -605,7 +693,7 @@ Map<String, dynamic> _workflowJson({bool enabled = true}) {
     'api_base_url': 'http://127.0.0.1:8092/api/workflows',
     'health_url': 'http://127.0.0.1:8092/healthz',
     'working_directory': '/tmp/workflow',
-    'package_path': './cmd/workflow-service',
+    'executable_path': '/tmp/bin/workflow-service',
     'definitions_dir': '/tmp/workflows',
     'db_path': '/tmp/workflow.db',
     'port': 8092,
@@ -614,7 +702,7 @@ Map<String, dynamic> _workflowJson({bool enabled = true}) {
   };
 }
 
-/// Builds app config for runtime profile loader tests.
+/// Builds app config for agent runtime topology loader tests.
 AppConfig _testConfig({
   String? workspaceRoot,
   String agentGatewayBaseUrl = 'http://127.0.0.1:8070/api',
@@ -633,6 +721,6 @@ AppConfig _testConfig({
     workspaceRoot: resolvedWorkspaceRoot,
     autoStartLocalServices: autoStartLocalServices,
     runtimeProfilePath:
-        runtimeProfilePath ?? '$uiRoot/runtime_profiles/agent_awesome.json',
+        runtimeProfilePath ?? '$uiRoot/runtime_topology/agent_awesome.json',
   );
 }

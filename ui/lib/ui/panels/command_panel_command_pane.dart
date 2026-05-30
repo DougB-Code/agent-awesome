@@ -18,6 +18,7 @@ class _CommandSubShellCommandPane extends StatelessWidget {
     required this.onAreaFilterSelected,
     required this.showAreaTabs,
     required this.showCollapseButton,
+    required this.highlightFilterField,
     required this.child,
   });
 
@@ -35,6 +36,7 @@ class _CommandSubShellCommandPane extends StatelessWidget {
   final ValueChanged<CommandPanelFilterOption> onAreaFilterSelected;
   final bool showAreaTabs;
   final bool showCollapseButton;
+  final bool highlightFilterField;
   final Widget child;
 
   /// Builds the command area column.
@@ -54,7 +56,12 @@ class _CommandSubShellCommandPane extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         gradient: context.agentAwesomeSurfaceGradient,
-        border: Border(right: BorderSide(color: colors.border)),
+        border: Border(
+          right: BorderSide(
+            color: colors.border,
+            width: AgentAwesomeStrokeTokens.dividerWidth,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -106,6 +113,7 @@ class _CommandSubShellCommandPane extends StatelessWidget {
                   controller: filterController,
                   hintText: filterHint,
                   onChanged: onFilterChanged,
+                  highlighted: highlightFilterField,
                 ),
                 if (areaFilters.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 12),
@@ -118,7 +126,11 @@ class _CommandSubShellCommandPane extends StatelessWidget {
               ],
             ),
           ),
-          Divider(height: 1, color: colors.border),
+          Divider(
+            height: AgentAwesomeStrokeTokens.dividerWidth,
+            thickness: AgentAwesomeStrokeTokens.dividerWidth,
+            color: colors.border,
+          ),
           Expanded(child: child),
         ],
       ),

@@ -2,10 +2,10 @@
 :description: How users start and configure the Agent Awesome desktop UI.
 
 The desktop UI is a Flutter application in `ui`.
-It starts with the default runtime profile and connects to the local gateway, harness, and memory services described by that profile.
+It starts with the default service topology and connects to the local gateway, harness, and memory services described by that topology.
 The default local harness hosts the workflow endpoint and attaches command tools directly to the ADK runtime.
 
-The default profile expects the checked-in Agent Awesome harness config under `harness`.
+The default topology expects the checked-in Agent Awesome harness config under `harness`.
 It also needs a model credential, such as `OPENAI_API_KEY`, available to the harness keyring or environment.
 
 == Start The UI
@@ -17,20 +17,8 @@ From `ui`:
 flutter run -d linux
 ----
 
-The default runtime profile is `runtime_profiles/agent_awesome.json`.
+The default runtime topology is `runtime_topology/agent_awesome.json`.
 When local service auto-start is enabled, the UI starts the services it owns and marks unavailable services as disconnected.
-
-== Runtime Profile Override
-
-Use `AGENTAWESOME_RUNTIME_PROFILE` when you need a different service topology:
-
-[source,sh]
-----
-flutter run -d linux --dart-define=AGENTAWESOME_RUNTIME_PROFILE=/path/to/profile.json
-----
-
-Profiles describe service URLs, managed service commands, working directories, and configuration files.
-They are user-facing only when the profile has already been prepared by a developer or operations maintainer.
 
 == Common Defines
 
@@ -48,5 +36,5 @@ They are user-facing only when the profile has already been prepared by a develo
 |Memory MCP endpoint used by the gateway as its upstream memory service.
 
 |`AUTO_START_LOCAL_SERVICES`
-|Whether the UI should start managed local services from the runtime profile.
+|Whether the UI should start managed local services from the runtime topology.
 |===

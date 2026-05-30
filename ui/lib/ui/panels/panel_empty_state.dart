@@ -11,12 +11,51 @@ class PanelEmptyState extends StatelessWidget {
   /// Builds a compact empty state for filtered command panel content.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Center(
-      child: Text(
-        'No results for "$query"',
-        style: TextStyle(color: colors.muted),
-      ),
+    return PanelEmptyBody(
+      icon: Icons.search_off_outlined,
+      label: 'No results for "$query"',
+      message: 'Try another search or adjust the current filters.',
+    );
+  }
+}
+
+/// PanelEmptyBody fills a pane body so no-content copy stays centered.
+class PanelEmptyBody extends StatelessWidget {
+  /// Creates a vertically centered empty state for a whole pane body.
+  const PanelEmptyBody({
+    super.key,
+    required this.label,
+    this.icon = Icons.inbox_outlined,
+    this.message = '',
+    this.padding = const EdgeInsets.fromLTRB(18, 16, 18, 24),
+  });
+
+  /// Empty-state title or combined title and instruction text.
+  final String label;
+
+  /// Icon representing the empty state.
+  final IconData icon;
+
+  /// Optional instruction text.
+  final String message;
+
+  /// Padding between pane edges and centered content.
+  final EdgeInsetsGeometry padding;
+
+  /// Builds a body-filling empty-state wrapper when height is bounded.
+  @override
+  Widget build(BuildContext context) {
+    final content = Padding(
+      padding: padding,
+      child: PanelEmptyBlock(icon: icon, label: label, message: message),
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.hasBoundedHeight && constraints.maxHeight.isFinite) {
+          return SizedBox.expand(child: content);
+        }
+        return content;
+      },
     );
   }
 }
@@ -43,40 +82,6 @@ class PanelGuidedEmptyBlock extends StatelessWidget {
   /// Builds one quiet guided empty-state block.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    final messageText = message.trim();
-    return PanelSectionBlock(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Icon(icon, color: colors.muted, size: 34),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: colors.ink,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            if (messageText.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Text(
-                  messageText,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.muted, height: 1.35),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
+    return PanelEmptyBody(icon: icon, label: title, message: message);
   }
 }

@@ -1,4 +1,4 @@
-/// Persists app-specific Agent Awesome settings that are not runtime profile concerns.
+/// Persists app-specific Agent Awesome settings outside service topology files.
 library;
 
 import 'dart:convert';
@@ -16,7 +16,8 @@ const List<String> _localMemoryPolicyActors = <String>[
 class AgentAwesomeAppSettings {
   /// Creates app settings for chat defaults and app-owned model work.
   const AgentAwesomeAppSettings({
-    this.defaultChatProfilePath = '',
+    this.defaultAgentConfigPath = '',
+    this.selectedMemoryDomainId = '',
     this.summaryModelConfigPath = '',
     this.summaryModelRef = '',
     this.chatTitleSummariesEnabled = true,
@@ -24,8 +25,11 @@ class AgentAwesomeAppSettings {
     this.memoryFirewalls = defaultMemoryFirewalls,
   });
 
-  /// Runtime profile used by fast-path new chat creation.
-  final String defaultChatProfilePath;
+  /// Agent config selected for chat and command routing.
+  final String defaultAgentConfigPath;
+
+  /// Memory domain selected for automatic reads and writes.
+  final String selectedMemoryDomainId;
 
   /// Model config used by app-owned chat title summarization.
   final String summaryModelConfigPath;
@@ -49,7 +53,8 @@ class AgentAwesomeAppSettings {
 
   /// Returns a copy with selected settings changed.
   AgentAwesomeAppSettings copyWith({
-    String? defaultChatProfilePath,
+    String? defaultAgentConfigPath,
+    String? selectedMemoryDomainId,
     String? summaryModelConfigPath,
     String? summaryModelRef,
     bool? chatTitleSummariesEnabled,
@@ -57,8 +62,10 @@ class AgentAwesomeAppSettings {
     List<MemoryFirewall>? memoryFirewalls,
   }) {
     return AgentAwesomeAppSettings(
-      defaultChatProfilePath:
-          defaultChatProfilePath ?? this.defaultChatProfilePath,
+      defaultAgentConfigPath:
+          defaultAgentConfigPath ?? this.defaultAgentConfigPath,
+      selectedMemoryDomainId:
+          selectedMemoryDomainId ?? this.selectedMemoryDomainId,
       summaryModelConfigPath:
           summaryModelConfigPath ?? this.summaryModelConfigPath,
       summaryModelRef: summaryModelRef ?? this.summaryModelRef,
@@ -73,7 +80,8 @@ class AgentAwesomeAppSettings {
   /// Encodes settings to stable JSON.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
-      'default_chat_profile': defaultChatProfilePath,
+      'default_agent_config': defaultAgentConfigPath,
+      'selected_memory_domain': selectedMemoryDomainId,
       'summary_model_config': summaryModelConfigPath,
       'summary_model_ref': summaryModelRef,
       'chat_title_summaries_enabled': chatTitleSummariesEnabled,
@@ -87,7 +95,8 @@ class AgentAwesomeAppSettings {
   /// Parses settings from decoded JSON.
   factory AgentAwesomeAppSettings.fromJson(Map<String, dynamic> json) {
     return AgentAwesomeAppSettings(
-      defaultChatProfilePath: stringValue(json['default_chat_profile']),
+      defaultAgentConfigPath: stringValue(json['default_agent_config']),
+      selectedMemoryDomainId: stringValue(json['selected_memory_domain']),
       summaryModelConfigPath: stringValue(json['summary_model_config']),
       summaryModelRef: stringValue(json['summary_model_ref']),
       chatTitleSummariesEnabled: boolValue(

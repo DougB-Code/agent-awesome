@@ -99,7 +99,7 @@ class _ApiKeySetup extends StatelessWidget {
             controller: apiKeyController,
             enabled: !busy,
             obscureText: !revealApiKey,
-            decoration: _setupInputDecoration('API key').copyWith(
+            decoration: _setupInputDecoration(context, 'API key').copyWith(
               suffixIcon: Wrap(
                 spacing: 2,
                 children: <Widget>[

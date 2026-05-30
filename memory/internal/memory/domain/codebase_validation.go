@@ -50,7 +50,6 @@ func NormalizeCodebase(value Codebase) (Codebase, error) {
 	value.DefaultBranch = strings.TrimSpace(value.DefaultBranch)
 	value.Provider = normalizeProvider(value.Provider)
 	value.ProviderRepository = strings.TrimSpace(value.ProviderRepository)
-	value.GoModulePath = strings.TrimSpace(value.GoModulePath)
 	value.RuntimeTargetID = strings.TrimSpace(value.RuntimeTargetID)
 	value.AgentProfileID = strings.TrimSpace(value.AgentProfileID)
 	if localProvider(value.Provider) && value.RepositoryPath == "" {

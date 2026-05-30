@@ -10,7 +10,6 @@ class CommandContext {
     required this.text,
     this.selectedTaskId = '',
     this.selectedMemoryId = '',
-    this.profilePath = '',
   });
 
   /// Top-level workspace section.
@@ -27,9 +26,6 @@ class CommandContext {
 
   /// Selected memory id, when the command is memory-scoped.
   final String selectedMemoryId;
-
-  /// Runtime profile selected for a potential new chat.
-  final String profilePath;
 
   /// Human-readable scope label for prompts and status text.
   String get scopeLabel {

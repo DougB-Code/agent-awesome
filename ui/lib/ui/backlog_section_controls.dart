@@ -257,12 +257,11 @@ class _TaskSelectionEmpty extends StatelessWidget {
   /// Builds the context inspector no-selection state.
   @override
   Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Center(
-      child: Text(
-        'Select a backlog item or list',
-        style: TextStyle(color: colors.muted),
-      ),
+    return const PanelEmptyBody(
+      icon: Icons.check_circle_outline,
+      label: 'No backlog item selected',
+      message: 'Select a backlog item or list to inspect its details.',
+      padding: EdgeInsets.fromLTRB(18, 18, 18, 28),
     );
   }
 }

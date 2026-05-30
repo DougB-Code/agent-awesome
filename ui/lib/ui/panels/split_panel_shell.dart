@@ -60,6 +60,7 @@ class SplitPanelShell extends StatefulWidget {
     required this.right,
     this.split = const PanelSplit(left: 0.5),
     this.gutterWidth = 0,
+    this.stackBelowWidth = 940,
   });
 
   /// Left panel widget.
@@ -73,6 +74,9 @@ class SplitPanelShell extends StatefulWidget {
 
   /// Horizontal space reserved between panes while preserving the drag handle.
   final double gutterWidth;
+
+  /// Width below which panes stack vertically.
+  final double stackBelowWidth;
 
   @override
   State<SplitPanelShell> createState() => _SplitPanelShellState();
@@ -105,7 +109,7 @@ class _SplitPanelShellState extends State<SplitPanelShell> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < 940) {
+        if (constraints.maxWidth < widget.stackBelowWidth) {
           return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

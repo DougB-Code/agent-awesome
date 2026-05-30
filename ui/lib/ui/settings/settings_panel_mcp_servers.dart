@@ -1,59 +1,51 @@
-/// Settings MCP toolset, profile assignment, and server editor widgets.
+/// Settings MCP toolset, runtime assignment, and server editor widgets.
 part of 'settings_panel.dart';
 
 class _SettingsMcpToolsetsCard extends StatelessWidget {
   const _SettingsMcpToolsetsCard({
     required this.config,
-    required this.profileServers,
-    required this.onChanged,
-    required this.onAddServer,
-    required this.onDeleteServer,
-    required this.onServerChanged,
+    required this.runtimeServers,
+    required this.statusMessage,
+    required this.starting,
+    required this.startingServerName,
+    required this.onStartServer,
   });
 
   final McpToolConfig config;
-  final List<McpServerRuntime> profileServers;
-  final ValueChanged<McpToolConfig> onChanged;
-  final VoidCallback onAddServer;
-  final ValueChanged<int> onDeleteServer;
-  final void Function(int index, McpServerToolConfig server) onServerChanged;
+  final List<McpServerRuntime> runtimeServers;
+  final String statusMessage;
+  final bool starting;
+  final String startingServerName;
+  final ValueChanged<McpServerToolConfig> onStartServer;
 
-  /// Builds MCP server toolset settings.
+  /// Builds loaded MCP server package details.
   @override
   Widget build(BuildContext context) {
     return FormPlainSection(
-      title: 'MCP toolsets',
+      title: 'Loaded MCP file',
       children: <Widget>[
-        SettingsToggleField(
-          title: 'Enabled',
-          subtitle: '${config.servers.length} configured servers',
-          value: config.enabled,
-          onChanged: (enabled) => onChanged(config.copyWith(enabled: enabled)),
+        _SettingsReadOnlyField(
+          label: 'Enabled',
+          value: config.enabled ? 'Yes' : 'No',
         ),
-        if (profileServers.isNotEmpty) ...<Widget>[
+        if (runtimeServers.isNotEmpty) ...<Widget>[
           const SizedBox(height: 4),
-          _SettingsProfileMcpList(servers: profileServers),
+          _SettingsRuntimeMcpList(servers: runtimeServers),
         ],
-        _SettingsActionRow(
-          children: <Widget>[
-            OutlinedButton.icon(
-              onPressed: onAddServer,
-              icon: const Icon(Icons.add),
-              label: const Text('Add MCP server'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
+        if (statusMessage.trim().isNotEmpty)
+          _SettingsReadOnlyField(label: 'Last check', value: statusMessage),
         if (config.servers.isEmpty)
-          const PanelEmptyBlock(label: 'No MCP toolsets configured')
+          const PanelEmptyBlock(label: 'No MCP servers loaded')
         else
           for (var index = 0; index < config.servers.length; index++) ...[
             if (index > 0)
               const SizedBox(height: SettingsFormMetrics.compactGap),
-            _SettingsMcpServerEditor(
+            _SettingsMcpServerSummary(
               server: config.servers[index],
-              onDelete: () => onDeleteServer(index),
-              onChanged: (server) => onServerChanged(index, server),
+              starting:
+                  starting &&
+                  startingServerName == config.servers[index].name.trim(),
+              onStart: () => onStartServer(config.servers[index]),
             ),
           ],
       ],
@@ -61,16 +53,16 @@ class _SettingsMcpToolsetsCard extends StatelessWidget {
   }
 }
 
-class _SettingsProfileMcpList extends StatelessWidget {
-  const _SettingsProfileMcpList({required this.servers});
+class _SettingsRuntimeMcpList extends StatelessWidget {
+  const _SettingsRuntimeMcpList({required this.servers});
 
   final List<McpServerRuntime> servers;
 
-  /// Builds profile MCP endpoints that can be bridged into harness tools.
+  /// Builds runtime MCP endpoints that can be bridged into harness tools.
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -88,21 +80,22 @@ class _SettingsProfileMcpList extends StatelessWidget {
   }
 }
 
-class _SettingsMcpServerEditor extends StatelessWidget {
-  const _SettingsMcpServerEditor({
+class _SettingsMcpServerSummary extends StatelessWidget {
+  const _SettingsMcpServerSummary({
     required this.server,
-    required this.onChanged,
-    required this.onDelete,
+    required this.starting,
+    required this.onStart,
   });
 
   final McpServerToolConfig server;
-  final ValueChanged<McpServerToolConfig> onChanged;
-  final VoidCallback onDelete;
+  final bool starting;
+  final VoidCallback onStart;
 
-  /// Builds one editable MCP server toolset.
+  /// Builds one loaded MCP server definition.
   @override
   Widget build(BuildContext context) {
     final transport = normalizedMcpTransport(server.transport);
+    final actionLabel = transport == 'stdio' ? 'Start' : 'Check';
     return Padding(
       padding: const EdgeInsets.only(top: 10, bottom: 4),
       child: Column(
@@ -117,82 +110,48 @@ class _SettingsMcpServerEditor extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
-              PanelInlineIconButton(
-                icon: Icons.delete_outline,
-                tooltip: 'Delete MCP server',
-                onPressed: onDelete,
+              OutlinedButton.icon(
+                onPressed: starting ? null : onStart,
+                icon: starting
+                    ? const SizedBox.square(
+                        dimension: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        transport == 'stdio'
+                            ? Icons.play_arrow
+                            : Icons.power_settings_new,
+                      ),
+                label: Text(actionLabel),
               ),
             ],
           ),
-          _SettingsInlineField(
-            label: 'Name',
-            value: server.name,
-            onChanged: (value) => onChanged(server.copyWith(name: value)),
-          ),
-          _SettingsMcpTransportDropdown(
-            value: transport,
-            onChanged: (value) => onChanged(
-              server.copyWith(
-                transport: value,
-                command: value == 'stdio' ? server.command : '',
-                args: value == 'stdio' ? server.args : const <String>[],
-                endpoint: value == 'stdio' ? '' : mcpServerEndpoint(server),
-                url: '',
-              ),
-            ),
-          ),
+          _SettingsReadOnlyField(label: 'Name', value: server.name),
+          _SettingsReadOnlyField(label: 'Transport', value: transport),
           if (transport == 'stdio') ...<Widget>[
-            _SettingsInlineField(
-              label: 'Command',
-              value: server.command,
-              onChanged: (value) => onChanged(server.copyWith(command: value)),
-            ),
-            _SettingsLineListField(
+            _SettingsReadOnlyField(label: 'Command', value: server.command),
+            _SettingsReadOnlyField(
               label: 'Args',
-              values: server.args,
-              onChanged: (values) => onChanged(server.copyWith(args: values)),
+              value: server.args.isEmpty ? 'None' : server.args.join(' '),
             ),
-            _SettingsKeyValueField(
+            _SettingsReadOnlyField(
               label: 'Env',
-              values: server.env,
-              onChanged: (values) => onChanged(server.copyWith(env: values)),
+              value: _sortedMcpKeys(server.env),
             ),
           ] else
-            _SettingsInlineField(
+            _SettingsReadOnlyField(
               label: 'Endpoint',
               value: mcpServerEndpoint(server),
-              onChanged: (value) =>
-                  onChanged(server.copyWith(endpoint: value, url: '')),
             ),
-          _SettingsLineListField(
+          _SettingsReadOnlyField(
             label: 'Allowed tools',
-            values: server.tools.allow,
-            onChanged: (values) => onChanged(
-              server.copyWith(tools: server.tools.copyWith(allow: values)),
-            ),
+            value: server.tools.allow.isEmpty
+                ? 'All server tools'
+                : server.tools.allow.join(', '),
           ),
-          SettingsToggleField(
-            title: 'Require confirmation',
-            subtitle: 'All tools on this server',
-            value: server.requireConfirmation,
-            onChanged: (value) => onChanged(
-              server.copyWith(
-                requireConfirmation: value,
-                requireConfirmationTools: value
-                    ? const <String>[]
-                    : server.requireConfirmationTools,
-              ),
-            ),
-          ),
-          _SettingsLineListField(
-            label: 'Require confirmation tools',
-            values: server.requireConfirmationTools,
-            onChanged: (values) => onChanged(
-              server.copyWith(
-                requireConfirmation: false,
-                requireConfirmationTools: values,
-              ),
-            ),
+          _SettingsReadOnlyField(
+            label: 'Confirmation',
+            value: _mcpConfirmationSummary(server),
           ),
         ],
       ),
@@ -200,42 +159,22 @@ class _SettingsMcpServerEditor extends StatelessWidget {
   }
 }
 
-class _SettingsMcpTransportDropdown extends StatelessWidget {
-  const _SettingsMcpTransportDropdown({
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  /// Builds an MCP transport selector.
-  @override
-  Widget build(BuildContext context) {
-    final selected = _mcpTransportOptions.contains(value)
-        ? value
-        : 'streamable-http';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: DropdownButtonFormField<String>(
-        initialValue: selected,
-        isExpanded: true,
-        items: const <DropdownMenuItem<String>>[
-          DropdownMenuItem<String>(
-            value: 'streamable-http',
-            child: Text('streamable-http'),
-          ),
-          DropdownMenuItem<String>(value: 'stdio', child: Text('stdio')),
-        ],
-        onChanged: (value) {
-          if (value != null) {
-            onChanged(value);
-          }
-        },
-        decoration: SettingsInputDecoration.field(context, label: 'Transport'),
-      ),
-    );
+/// Formats MCP confirmation policy loaded from the package file.
+String _mcpConfirmationSummary(McpServerToolConfig server) {
+  if (server.requireConfirmation) {
+    return 'All tools';
   }
+  if (server.requireConfirmationTools.isEmpty) {
+    return 'None';
+  }
+  return server.requireConfirmationTools.join(', ');
 }
 
-const List<String> _mcpTransportOptions = <String>['streamable-http', 'stdio'];
+/// Formats loaded MCP environment keys without exposing values.
+String _sortedMcpKeys(Map<String, String> values) {
+  if (values.isEmpty) {
+    return 'None';
+  }
+  final keys = values.keys.toList()..sort();
+  return keys.join(', ');
+}

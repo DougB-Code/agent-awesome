@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"strings"
 
-	"agentawesome/internal/services/workflow/adapters"
 	"agentawesome/internal/services/workflow/contracts"
 	"agentawesome/internal/services/workflow/definition"
 	"agentawesome/internal/services/workflow/envelope"
@@ -104,14 +103,6 @@ func (s *Service) validateDesignArtifact(kind string, body map[string]any) error
 		if err := contracts.VerifyManifest(manifest, s.cfg.TrustedSigners); err != nil {
 			return fmt.Errorf("tool manifest artifact is invalid: %w", err)
 		}
-	case "adapter":
-		var artifact AdapterArtifact
-		if err := json.Unmarshal(encoded, &artifact); err != nil {
-			return fmt.Errorf("decode adapter artifact: %w", err)
-		}
-		if err := validateAdapterArtifact(artifact); err != nil {
-			return err
-		}
 	case "facet_suggestion":
 		var artifact FacetSuggestionArtifact
 		if err := json.Unmarshal(encoded, &artifact); err != nil {
@@ -138,25 +129,6 @@ func (s *Service) validateDesignArtifact(kind string, body map[string]any) error
 		}
 	default:
 		return fmt.Errorf("design artifact kind %q is not supported", kind)
-	}
-	return nil
-}
-
-// validateAdapterArtifact checks reusable adapter artifacts.
-func validateAdapterArtifact(artifact AdapterArtifact) error {
-	if strings.TrimSpace(artifact.SourceTool) == "" {
-		return fmt.Errorf("adapter artifact source_tool is required")
-	}
-	if strings.TrimSpace(artifact.TargetTool) == "" {
-		return fmt.Errorf("adapter artifact target_tool is required")
-	}
-	if !adapters.Declared(artifact.Adapter) {
-		return fmt.Errorf("adapter artifact adapter is required")
-	}
-	if artifact.Adapter.Mapping != nil {
-		if diagnostics := mapping.Validate(*artifact.Adapter.Mapping); diagnosticsHaveErrors(diagnostics) {
-			return fmt.Errorf("adapter artifact mapping is invalid: %s", diagnosticsSummary(diagnostics))
-		}
 	}
 	return nil
 }

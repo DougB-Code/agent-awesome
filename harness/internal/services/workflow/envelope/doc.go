@@ -1,6 +1,6 @@
-// Package envelope defines the deterministic workflow carrier passed between nodes.
+// Package envelope defines deterministic workflow action input and output carriers.
 //
 // Use this package when workflow runtime code needs to normalize tool results,
-// persist node inputs or outputs, or expose semantic facets and artifacts for
-// adapter-driven composition.
+// persist action inputs or outputs, or expose semantic facets and artifacts for
+// policy, validation, and audit.
 package envelope

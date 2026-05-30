@@ -27,13 +27,6 @@ class _StreamFocusControls extends StatelessWidget {
         color: colors.surface.withValues(alpha: 0.94),
         border: Border.all(color: colors.border),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-            color: colors.shadow,
-          ),
-        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(4),

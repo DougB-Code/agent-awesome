@@ -723,9 +723,9 @@ void main() {
     test('parses Operation preview records', () {
       final preview = parseAutomationOperationPreview(<String, dynamic>{
         'operation': <String, dynamic>{
-          'id': 'codex_change',
-          'workflow_id': 'professional_coding_change',
-          'name': 'Codex Coding Change',
+          'id': 'source_change',
+          'workflow_id': 'source_change_workflow',
+          'name': 'Source Change',
           'codebase_id': 'agent_awesome',
           'runtime_target_id': 'local',
           'defaults': <String, dynamic>{'binary_package': '.'},
@@ -751,7 +751,7 @@ void main() {
         },
       });
 
-      expect(preview.operation.id, 'codex_change');
+      expect(preview.operation.id, 'source_change');
       expect(preview.operation.runtimeTargetId, 'local');
       expect(preview.operation.input['binary_package'], '.');
       expect(preview.operation.policy['source_control'], 'open_pr_only');
@@ -766,7 +766,7 @@ void main() {
         'run_id': 'run_1',
         'operation_id': 'setup_1',
         'operation_version': 2,
-        'workflow_id': 'professional_coding_change',
+        'workflow_id': 'source_change_workflow',
         'resolved_input': <String, dynamic>{'repository_path': '/repo/agent'},
         'target': <String, dynamic>{'runtime_target_id': 'local'},
         'policy': <String, dynamic>{'source_control': 'open_pr_only'},

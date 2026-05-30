@@ -105,7 +105,19 @@ class SettingsConfigLabels {
     required bool includeConfig,
   }) {
     final providerModel = choice.label;
-    return includeConfig ? '${entry.label} / $providerModel' : providerModel;
+    if (!includeConfig) {
+      return providerModel;
+    }
+    final configLabel = entry.label.trim();
+    final providerLabels = <String>{
+      choice.providerId.trim().toLowerCase(),
+      choice.providerName.trim().toLowerCase(),
+    }..remove('');
+    if (configLabel.isEmpty ||
+        providerLabels.contains(configLabel.toLowerCase())) {
+      return providerModel;
+    }
+    return '$configLabel / $providerModel';
   }
 }
 

@@ -3,6 +3,7 @@ library;
 
 import 'package:yaml/yaml.dart';
 
+import 'agent_config.dart';
 import 'json_value.dart';
 import 'config_yaml.dart';
 
@@ -19,6 +20,7 @@ class ModelConfigDocument {
   const ModelConfigDocument({
     required this.defaultRef,
     required this.providers,
+    this.validations = const <AgentValidationConfig>[],
     this.extra = const <String, dynamic>{},
   });
 
@@ -27,6 +29,9 @@ class ModelConfigDocument {
 
   /// Provider definitions keyed by provider id.
   final List<ModelProviderConfig> providers;
+
+  /// Model compatibility validations run through the active agent boundary.
+  final List<AgentValidationConfig> validations;
 
   /// Top-level fields preserved outside the known schema.
   final Map<String, dynamic> extra;
@@ -49,10 +54,14 @@ class ModelConfigDocument {
     }
     final extra = Map<String, dynamic>.from(decoded)
       ..remove('default')
-      ..remove('providers');
+      ..remove('providers')
+      ..remove('validations');
     return ModelConfigDocument(
       defaultRef: stringValue(decoded['default'], trim: true),
       providers: providers,
+      validations: jsonObjectList(
+        decoded['validations'],
+      ).map(AgentValidationConfig.fromMap).toList(),
       extra: extra,
     );
   }
@@ -61,11 +70,13 @@ class ModelConfigDocument {
   ModelConfigDocument copyWith({
     String? defaultRef,
     List<ModelProviderConfig>? providers,
+    List<AgentValidationConfig>? validations,
     Map<String, dynamic>? extra,
   }) {
     return ModelConfigDocument(
       defaultRef: defaultRef ?? this.defaultRef,
       providers: providers ?? this.providers,
+      validations: validations ?? this.validations,
       extra: extra ?? this.extra,
     );
   }
@@ -78,6 +89,10 @@ class ModelConfigDocument {
       'providers': <String, dynamic>{
         for (final provider in providers) provider.id: provider.toJson(),
       },
+      if (validations.isNotEmpty)
+        'validations': validations
+            .map((validation) => validation.toJson())
+            .toList(),
     };
   }
 
@@ -341,6 +356,46 @@ ModelProviderConfig newModelProviderConfig(String id) {
   );
 }
 
+/// Returns a model config document containing exactly one provider.
+ModelConfigDocument modelConfigDocumentForProvider(
+  ModelProviderConfig provider, {
+  List<AgentValidationConfig> validations = const <AgentValidationConfig>[],
+  Map<String, dynamic> extra = const <String, dynamic>{},
+}) {
+  return ModelConfigDocument(
+    defaultRef: modelProviderDefaultRef(provider),
+    providers: <ModelProviderConfig>[provider],
+    validations: validations,
+    extra: extra,
+  );
+}
+
+/// Returns a single-provider document scoped to the configured default.
+ModelConfigDocument modelConfigDocumentForDefaultProvider(
+  ModelConfigDocument document,
+) {
+  if (document.providers.length <= 1) {
+    return document;
+  }
+  final parsed = parseModelProviderRef(document.defaultRef);
+  final provider = parsed.providerId.isEmpty
+      ? document.providers.first
+      : document.providers.firstWhere(
+          (candidate) => candidate.id == parsed.providerId,
+          orElse: () => document.providers.first,
+        );
+  final defaultRef =
+      provider.models.any(
+        (model) => '${provider.id}:${model.id}' == document.defaultRef.trim(),
+      )
+      ? document.defaultRef.trim()
+      : modelProviderDefaultRef(provider);
+  return document.copyWith(
+    defaultRef: defaultRef,
+    providers: <ModelProviderConfig>[provider],
+  );
+}
+
 /// Returns an empty model config for first-run provider setup.
 ModelConfigDocument emptyModelConfigDocument() {
   return const ModelConfigDocument(defaultRef: '', providers: []);
@@ -415,6 +470,9 @@ String _newProviderName(String id) {
 
 /// Returns a validation error for invalid model config state.
 String modelConfigValidationError(ModelConfigDocument document) {
+  if (document.providers.length > 1) {
+    return 'Model config files can contain only one provider';
+  }
   final providerIds = <String>{};
   final defaultRefs = <String>{};
   for (final provider in document.providers) {

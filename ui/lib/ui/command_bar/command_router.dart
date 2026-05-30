@@ -145,6 +145,8 @@ class CommandRouter {
       'operations': AppSections.automationOperations,
       'workflow': AppSections.automationWorkflows,
       'workflows': AppSections.automationWorkflows,
+      'agent': AppSections.automationAgents,
+      'agents': AppSections.automationAgents,
       'mcp': AppSections.automationMcpServers,
       'server': AppSections.automationMcpServers,
       'servers': AppSections.automationMcpServers,
@@ -179,8 +181,6 @@ class CommandRouter {
     final normalized = _normalize(text);
     const sections = <String, String>{
       'app': 'App',
-      'profile': 'Profiles',
-      'profiles': 'Profiles',
       'model': 'Models',
       'models': 'Models',
       'provider': 'Models',

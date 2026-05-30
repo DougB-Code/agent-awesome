@@ -17,7 +17,7 @@ class _MemorySearchContent extends StatelessWidget {
         extra: _memoryFirewallSearchText(controller, record.firewall),
       );
     }).toList();
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -28,32 +28,39 @@ class _MemorySearchContent extends StatelessWidget {
           if (controller.memoryBusy || _memoryMessageIsError(controller))
             const SizedBox(height: 14),
           if (records.isEmpty)
-            PanelEmptyBlock(label: 'No memory records')
+            const Expanded(child: PanelEmptyBlock(label: 'No memory records'))
           else
-            for (final record in records)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _MemoryRecordTile(
-                  record: record,
-                  selected:
-                      controller.selectedMemory != null &&
-                      controller.memorySelectionKey(
-                            controller.selectedMemory!,
-                          ) ==
+            Expanded(
+              child: ListView.builder(
+                itemCount: records.length,
+                itemBuilder: (context, index) {
+                  final record = records[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _MemoryRecordTile(
+                      record: record,
+                      selected:
+                          controller.selectedMemory != null &&
+                          controller.memorySelectionKey(
+                                controller.selectedMemory!,
+                              ) ==
+                              controller.memorySelectionKey(record),
+                      firewallLabel: controller.memoryFirewallLabel(
+                        record.firewall,
+                      ),
+                      firewallAudience: controller.memoryFirewallAudienceLabel(
+                        record.firewall,
+                      ),
+                      onTap: () => unawaited(
+                        controller.selectMemory(
                           controller.memorySelectionKey(record),
-                  firewallLabel: controller.memoryFirewallLabel(
-                    record.firewall,
-                  ),
-                  firewallAudience: controller.memoryFirewallAudienceLabel(
-                    record.firewall,
-                  ),
-                  onTap: () => unawaited(
-                    controller.selectMemory(
-                      controller.memorySelectionKey(record),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
+            ),
         ],
       ),
     );

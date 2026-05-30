@@ -45,8 +45,12 @@ class PanelIconButton extends StatelessWidget {
               width: PanelStyleTokens.iconButtonSize,
               decoration: BoxDecoration(
                 color: selected ? colors.greenSoft : colors.panel,
+                gradient: selected
+                    ? context.agentAwesomeSelectedGradient
+                    : context.agentAwesomeControlGradient,
                 border: Border.all(
                   color: selected ? colors.borderStrong : colors.border,
+                  width: AgentAwesomeStrokeTokens.borderWidth,
                 ),
                 borderRadius: BorderRadius.circular(PanelStyleTokens.radius),
               ),
@@ -142,8 +146,12 @@ class PanelInlineIconButton extends StatelessWidget {
               width: 32,
               decoration: BoxDecoration(
                 color: selected ? colors.greenSoft : colors.panel,
+                gradient: selected
+                    ? context.agentAwesomeSelectedGradient
+                    : context.agentAwesomeControlGradient,
                 border: Border.all(
                   color: selected ? colors.borderStrong : colors.border,
+                  width: AgentAwesomeStrokeTokens.borderWidth,
                 ),
                 borderRadius: BorderRadius.circular(
                   PanelStyleTokens.compactRadius,

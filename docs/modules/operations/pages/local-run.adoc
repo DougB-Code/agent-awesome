@@ -32,9 +32,9 @@ go run ./cmd/agent-awesome models check \
 == UI-Managed Local Run
 
 This is the normal desktop app path.
-The default UI runtime profile starts memory, the harness, and the gateway.
+The default UI runtime topology starts memory, the harness, and the gateway.
 The harness owns the workflow listener and attaches command tools directly to
-the ADK runtime for the local profile.
+the ADK runtime for the local topology.
 
 [source,sh]
 ----
@@ -43,7 +43,7 @@ flutter run -d linux \
   --dart-define=AGENTAWESOME_WORKSPACE_ROOT=/home/doug/dev/agentawesome/agent
 ----
 
-The default profile uses:
+The default topology uses:
 
 [cols="1,2",options="header"]
 |===

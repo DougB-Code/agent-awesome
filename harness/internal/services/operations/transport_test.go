@@ -16,15 +16,15 @@ func TestOperationMCPToolsList(t *testing.T) {
 	body := postOperationRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
 	result := body["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 7 {
-		t.Fatalf("tool count = %d, want 7", len(tools))
+	if len(tools) != 6 {
+		t.Fatalf("tool count = %d, want 6", len(tools))
 	}
 }
 
 // TestOperationsHTTPPreview verifies preview route returns resolved input.
 func TestOperationsHTTPPreview(t *testing.T) {
 	service := newTestOperationsService(t)
-	op := createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 	server := NewHTTPServer(service)
 	payload, _ := json.Marshal(map[string]any{"input": map[string]any{"change_request": "Fix crash"}})
 	req := httptest.NewRequest(http.MethodPost, "/api/operations/"+op.ID+"/preview", bytes.NewReader(payload))
@@ -46,7 +46,7 @@ func TestOperationsHTTPPreview(t *testing.T) {
 // TestOperationsHTTPRunSnapshot verifies audit snapshot routing.
 func TestOperationsHTTPRunSnapshot(t *testing.T) {
 	service := newTestOperationsService(t)
-	op := createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 	started, err := service.StartOperation(context.Background(), op.ID, OperationRunRequest{Input: map[string]any{"change_request": "Fix crash"}})
 	if err != nil {
 		t.Fatalf("StartOperation() error = %v", err)
@@ -71,7 +71,7 @@ func TestOperationsHTTPRunSnapshot(t *testing.T) {
 // TestOperationsHTTPQueueRoutes verifies enqueue and target lease routes.
 func TestOperationsHTTPQueueRoutes(t *testing.T) {
 	service := newTestOperationsService(t)
-	op := createTestCodingOperation(t, service)
+	op := createTestSourceOperation(t, service)
 	server := NewHTTPServer(service)
 	payload, _ := json.Marshal(map[string]any{
 		"input":  map[string]any{"change_request": "Fix crash"},

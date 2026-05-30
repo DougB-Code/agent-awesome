@@ -1,7 +1,7 @@
 /// Chat composer input widget.
 part of 'agent_awesome_shell.dart';
 
-class _ChatComposer extends StatelessWidget {
+class _ChatComposer extends StatefulWidget {
   const _ChatComposer({
     required this.controller,
     required this.sending,
@@ -18,6 +18,40 @@ class _ChatComposer extends StatelessWidget {
   final ValueChanged<String> onModelSelected;
   final VoidCallback onSubmit;
 
+  @override
+  State<_ChatComposer> createState() => _ChatComposerState();
+}
+
+/// _ChatComposerState owns field focus so the prompt can clear on focus.
+class _ChatComposerState extends State<_ChatComposer> {
+  final FocusNode _focusNode = FocusNode();
+  bool _focused = false;
+
+  /// Starts listening for focus changes on the chat composer.
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocusChanged);
+  }
+
+  /// Releases the field focus resource.
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChanged);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  /// Updates placeholder visibility when the composer focus changes.
+  void _handleFocusChanged() {
+    if (_focused == _focusNode.hasFocus) {
+      return;
+    }
+    setState(() {
+      _focused = _focusNode.hasFocus;
+    });
+  }
+
   /// Builds the sticky same-thread composer for the chat timeline.
   @override
   Widget build(BuildContext context) {
@@ -30,22 +64,19 @@ class _ChatComposer extends StatelessWidget {
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 560;
             return Container(
+              key: const ValueKey<String>('chat-thread-composer-frame'),
               constraints: const BoxConstraints(minHeight: 58),
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? 12 : 16,
                 vertical: compact ? 10 : 0,
               ),
               decoration: BoxDecoration(
-                color: colors.surface,
-                border: Border.all(color: colors.border),
+                color: colors.field,
+                border: Border.all(
+                  color: colors.border,
+                  width: AgentAwesomeStrokeTokens.borderWidth,
+                ),
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: <BoxShadow>[
-                  BoxShadow(
-                    color: colors.softShadow,
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
               ),
               child: compact
                   ? _buildCompactComposer(context)
@@ -70,7 +101,7 @@ class _ChatComposer extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(child: _buildTextField(context)),
         const SizedBox(width: 12),
-        if (modelChoices.length > 1) ...<Widget>[
+        if (widget.modelChoices.length > 1) ...<Widget>[
           Padding(
             padding: const EdgeInsets.only(bottom: 9),
             child: _buildModelMenu(),
@@ -102,7 +133,7 @@ class _ChatComposer extends StatelessWidget {
             Expanded(child: _buildTextField(context)),
           ],
         ),
-        if (modelChoices.length > 1) ...<Widget>[
+        if (widget.modelChoices.length > 1) ...<Widget>[
           const SizedBox(height: 8),
           Row(
             children: <Widget>[
@@ -133,20 +164,30 @@ class _ChatComposer extends StatelessWidget {
     final colors = context.agentAwesomeColors;
     return TextField(
       key: const ValueKey<String>('chat-thread-composer'),
-      controller: controller,
-      enabled: !sending,
+      controller: widget.controller,
+      enabled: !widget.sending,
+      focusNode: _focusNode,
       minLines: 1,
       maxLines: 5,
       textInputAction: TextInputAction.send,
       style: TextStyle(color: colors.ink),
       decoration: InputDecoration(
+        filled: false,
+        fillColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         border: InputBorder.none,
-        hintText: 'Message Agent Awesome in this chat...',
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+        errorBorder: InputBorder.none,
+        focusedErrorBorder: InputBorder.none,
+        hintText: _focused ? null : 'Message Agent Awesome in this chat...',
         hintStyle: TextStyle(color: colors.muted),
       ),
       onSubmitted: (_) {
-        if (!sending) {
-          onSubmit();
+        if (!widget.sending) {
+          widget.onSubmit();
         }
       },
     );
@@ -155,10 +196,10 @@ class _ChatComposer extends StatelessWidget {
   /// Builds the shared chat model picker.
   Widget _buildModelMenu() {
     return _ChatModelMenuButton(
-      choices: modelChoices,
-      selectedRef: selectedModelRef,
-      sending: sending,
-      onSelected: onModelSelected,
+      choices: widget.modelChoices,
+      selectedRef: widget.selectedModelRef,
+      sending: widget.sending,
+      onSelected: widget.onModelSelected,
     );
   }
 
@@ -173,8 +214,8 @@ class _ChatComposer extends StatelessWidget {
         fixedSize: const Size(42, 42),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
-      onPressed: sending ? null : onSubmit,
-      icon: Icon(sending ? Icons.hourglass_top : Icons.arrow_upward),
+      onPressed: widget.sending ? null : widget.onSubmit,
+      icon: Icon(widget.sending ? Icons.hourglass_top : Icons.arrow_upward),
       tooltip: 'Send message',
     );
   }
@@ -190,7 +231,7 @@ class _ChatModelMenuButton extends StatelessWidget {
     required this.onSelected,
   });
 
-  /// Model choices available through the active runtime profile.
+  /// Model choices available through the active agent runtime topology.
   final List<ModelConfigChoice> choices;
 
   /// Provider:model ref selected for the next message.

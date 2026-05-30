@@ -166,6 +166,20 @@ func normalizeFacetPath(path string) string {
 	return strings.Trim(normalized, ".")
 }
 
+// semanticTokenSet splits a normalized path into lookup tokens.
+func semanticTokenSet(value string) map[string]bool {
+	tokens := map[string]bool{}
+	for _, token := range strings.FieldsFunc(value, func(r rune) bool {
+		return r == '.' || r == '_' || r == '-' || r == '/' || r == ' '
+	}) {
+		trimmed := strings.TrimSpace(token)
+		if trimmed != "" {
+			tokens[trimmed] = true
+		}
+	}
+	return tokens
+}
+
 // observedSchemaProperties converts flattened observations into object schema.
 func observedSchemaProperties(observed []ObservedField) map[string]any {
 	properties := map[string]any{}

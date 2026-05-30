@@ -69,43 +69,20 @@ void main() {
     expect(plan.arguments, const <String>['--flag']);
   });
 
-  test('go build arguments disable VCS stamping', () {
-    final arguments = buildGoBuildArguments(
-      outputPath: '/tmp/service-bin',
-      packagePath: './cmd/service',
-    );
+  test('managed service ids are scoped to the agent profile', () {
+    final first = _testProfile().copyWith(id: 'agent-one');
+    final second = _testProfile().copyWith(id: 'agent-two');
 
-    expect(arguments, const <String>[
-      'build',
-      '-buildvcs=false',
-      '-o',
-      '/tmp/service-bin',
-      './cmd/service',
-    ]);
-  });
-
-  test('managed service binary path matches release profile layout', () {
-    final path = managedServiceBinaryPath(
-      workspaceRoot: '/tmp/work',
-      profileId: 'Agent Awesome',
-      serviceName: 'Agent Awesome Gateway',
-    );
-    final marker = managedServicePrebuiltMarkerPath(
-      workspaceRoot: '/tmp/work',
-      profileId: 'Agent Awesome',
-    );
-
+    expect(agentRuntimeServiceId(first, 'harness'), 'agent-one-harness');
     expect(
-      path,
-      '/tmp/work/harness/build/profiles/agent-awesome/bin/agent-awesome-gateway',
+      agentRuntimeServiceId(first, 'harness'),
+      isNot(agentRuntimeServiceId(second, 'harness')),
     );
-    expect(marker, '/tmp/work/harness/build/profiles/agent-awesome/.prebuilt');
   });
 
   test('managed gateway environment disables ambient Slack ingress', () {
     final environment = buildManagedGatewayEnvironment(
       config: _testConfig(),
-      goCachePath: '/tmp/gocache',
       baseEnvironment: const <String, String>{
         'PATH': '/usr/bin',
         'SLACK_ENABLED': 'true',
@@ -120,7 +97,6 @@ void main() {
     );
 
     expect(environment['PATH'], '/usr/bin');
-    expect(environment['GOCACHE'], '/tmp/gocache');
     expect(environment['SLACK_ENABLED'], 'false');
     expect(environment['SLACK_SOCKET_MODE'], 'false');
     expect(environment['SLACK_SIGNING_SECRET'], '');
@@ -134,7 +110,6 @@ void main() {
   test('local service environment preserves non-gateway Slack config', () {
     final environment = buildLocalServiceEnvironment(
       config: _testConfig(),
-      goCachePath: '/tmp/gocache',
       baseEnvironment: const <String, String>{'SLACK_ENABLED': 'true'},
     );
 
@@ -286,7 +261,7 @@ AppConfig _testConfig() {
   );
 }
 
-/// Builds a minimal runtime profile for local service supervisor tests.
+/// Builds a minimal agent runtime topology for local service supervisor tests.
 RuntimeProfile _testProfile() {
   return const RuntimeProfile(
     id: 'test-profile',
@@ -299,7 +274,7 @@ RuntimeProfile _testProfile() {
       appName: 'test',
       userId: 'user',
       workingDirectory: '/tmp/harness',
-      packagePath: './cmd/agent-awesome',
+      executablePath: '/tmp/bin/agent-awesome',
       modelConfigPath: '/tmp/model.yaml',
       agentConfigPath: '/tmp/agent.yaml',
       toolConfigPath: '/tmp/tool.yaml',
@@ -312,7 +287,7 @@ RuntimeProfile _testProfile() {
       apiBaseUrl: 'http://127.0.0.1:2/api',
       healthUrl: 'http://127.0.0.1:2/healthz',
       workingDirectory: '/tmp/gateway',
-      packagePath: './cmd/agent-gateway',
+      executablePath: '/tmp/bin/agent-gateway',
       harnessBaseUrl: 'http://127.0.0.1:1/api',
       contextBaseUrl: 'http://127.0.0.1:1/api/context',
       memoryMcpUrl: 'http://127.0.0.1:1/mcp',

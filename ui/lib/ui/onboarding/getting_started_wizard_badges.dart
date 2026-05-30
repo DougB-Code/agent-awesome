@@ -79,22 +79,23 @@ class _SetupEyebrow extends StatelessWidget {
 }
 
 /// Returns the shared first-run setup input decoration.
-InputDecoration _setupInputDecoration(String label) {
+InputDecoration _setupInputDecoration(BuildContext context, String label) {
+  final colors = context.agentAwesomeColors;
   return InputDecoration(
     labelText: label,
     filled: true,
-    fillColor: AgentAwesomeColors.surface,
+    fillColor: colors.field,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AgentAwesomeColors.border),
+      borderSide: BorderSide(color: colors.border),
     ),
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AgentAwesomeColors.border),
+      borderSide: BorderSide(color: colors.border),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: AgentAwesomeColors.green),
+      borderSide: BorderSide(color: colors.searchBorder),
     ),
   );
 }

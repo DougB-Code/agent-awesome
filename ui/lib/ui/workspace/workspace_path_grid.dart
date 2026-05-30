@@ -21,7 +21,7 @@ class _PathGrid extends StatelessWidget {
       ),
       _PathCardData(
         title: 'Conversation Builder',
-        detail: 'Start or continue a run with a configured profile.',
+        detail: 'Start or continue a run with a selected agent.',
         icon: Icons.forum_outlined,
         section: AppSections.chat,
       ),

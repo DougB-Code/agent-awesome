@@ -63,17 +63,21 @@ class _SettingsTextFileEditorState extends State<_SettingsTextFileEditor> {
         if (_loading)
           const LinearProgressIndicator(minHeight: 2)
         else
-          TextFormField(
-            focusNode: _contentFocus,
-            controller: _content,
-            minLines: 14,
-            maxLines: 28,
-            onChanged: (_) => _scheduleSave(),
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            decoration: SettingsInputDecoration.field(
-              context,
-              alignLabelWithHint: true,
-              label: 'File content',
+          PanelLabeledFormControl(
+            label: 'File content',
+            child: TextFormField(
+              focusNode: _contentFocus,
+              controller: _content,
+              minLines: 14,
+              maxLines: 28,
+              onChanged: (_) => _scheduleSave(),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              decoration: SettingsInputDecoration.field(
+                context,
+                alignLabelWithHint: true,
+                label: 'File content',
+                multiline: true,
+              ),
             ),
           ),
         const SizedBox(height: 12),

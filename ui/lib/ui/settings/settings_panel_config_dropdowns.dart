@@ -1,4 +1,4 @@
-/// Settings config, MCP assignment, summary model, and profile dropdowns.
+/// Settings config, MCP assignment, and summary model dropdowns.
 part of 'settings_panel.dart';
 
 class _SettingsConfigDropdown extends StatelessWidget {
@@ -14,36 +14,98 @@ class _SettingsConfigDropdown extends StatelessWidget {
   final String selectedPath;
   final ValueChanged<ConfigFileEntry> onChanged;
 
-  /// Builds a profile assignment dropdown for config files.
+  /// Builds an assignment dropdown for managed config files.
   @override
   Widget build(BuildContext context) {
     final selected = entries.any((entry) => entry.path == selectedPath)
         ? selectedPath
         : null;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: DropdownButtonFormField<String>(
-        initialValue: selected,
-        isExpanded: true,
-        items: <DropdownMenuItem<String>>[
-          for (final entry in entries)
-            DropdownMenuItem<String>(
-              value: entry.path,
-              child: Text(entry.label, overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: (path) {
-          if (path == null) {
-            return;
-          }
-          for (final entry in entries) {
-            if (entry.path == path) {
-              onChanged(entry);
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: label,
+        child: DropdownButtonFormField<String>(
+          initialValue: selected,
+          isDense: true,
+          style: SettingsFormTextStyle.field(context),
+          isExpanded: true,
+          items: <DropdownMenuItem<String>>[
+            for (final entry in entries)
+              DropdownMenuItem<String>(
+                value: entry.path,
+                child: Text(entry.label, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (path) {
+            if (path == null) {
               return;
             }
-          }
-        },
-        decoration: SettingsInputDecoration.field(context, label: label),
+            for (final entry in entries) {
+              if (entry.path == path) {
+                onChanged(entry);
+                return;
+              }
+            }
+          },
+          decoration: SettingsInputDecoration.field(context, label: label),
+        ),
+      ),
+    );
+  }
+}
+
+/// _SettingsMemoryDomainDropdown selects the default memory domain.
+class _SettingsMemoryDomainDropdown extends StatelessWidget {
+  /// Creates a memory domain selector.
+  const _SettingsMemoryDomainDropdown({
+    required this.label,
+    required this.domains,
+    required this.selectedId,
+    required this.onChanged,
+  });
+
+  final String label;
+  final List<McpServerRuntime> domains;
+  final String selectedId;
+  final ValueChanged<McpServerRuntime> onChanged;
+
+  /// Builds a dropdown of configured memory domains.
+  @override
+  Widget build(BuildContext context) {
+    final selected = domains.any((domain) => domain.id == selectedId)
+        ? selectedId
+        : null;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: label,
+        child: DropdownButtonFormField<String>(
+          initialValue: selected,
+          isDense: true,
+          style: SettingsFormTextStyle.field(context),
+          isExpanded: true,
+          items: <DropdownMenuItem<String>>[
+            for (final domain in domains)
+              DropdownMenuItem<String>(
+                value: domain.id,
+                child: Text(domain.label, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: domains.isEmpty
+              ? null
+              : (domainId) {
+                  if (domainId == null) {
+                    return;
+                  }
+                  for (final domain in domains) {
+                    if (domain.id == domainId) {
+                      onChanged(domain);
+                      return;
+                    }
+                  }
+                },
+          decoration: SettingsInputDecoration.field(context, label: label),
+        ),
       ),
     );
   }
@@ -95,25 +157,30 @@ class _SettingsSummaryModelDropdown extends StatelessWidget {
     final options = _options();
     final selected = _selectedOption(options);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: DropdownButtonFormField<_SummaryModelOption>(
-        initialValue: selected,
-        isExpanded: true,
-        items: <DropdownMenuItem<_SummaryModelOption>>[
-          for (final option in options)
-            DropdownMenuItem<_SummaryModelOption>(
-              value: option,
-              child: Text(option.label, overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: options.isEmpty
-            ? null
-            : (option) {
-                if (option != null) {
-                  onChanged(option);
-                }
-              },
-        decoration: SettingsInputDecoration.field(context, label: label),
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: label,
+        child: DropdownButtonFormField<_SummaryModelOption>(
+          initialValue: selected,
+          isDense: true,
+          style: SettingsFormTextStyle.field(context),
+          isExpanded: true,
+          items: <DropdownMenuItem<_SummaryModelOption>>[
+            for (final option in options)
+              DropdownMenuItem<_SummaryModelOption>(
+                value: option,
+                child: Text(option.label, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: options.isEmpty
+              ? null
+              : (option) {
+                  if (option != null) {
+                    onChanged(option);
+                  }
+                },
+          decoration: SettingsInputDecoration.field(context, label: label),
+        ),
       ),
     );
   }
@@ -169,62 +236,5 @@ class _SettingsSummaryModelDropdown extends StatelessWidget {
       }
     }
     return options.first;
-  }
-}
-
-/// _SettingsProfileDropdown selects one configured runtime profile file.
-class _SettingsProfileDropdown extends StatelessWidget {
-  /// Creates a runtime profile dropdown for app settings.
-  const _SettingsProfileDropdown({
-    required this.label,
-    required this.entries,
-    required this.selectedPath,
-    required this.onChanged,
-  });
-
-  /// Field label shown above the dropdown.
-  final String label;
-
-  /// Runtime profiles available for selection.
-  final List<RuntimeProfileFileEntry> entries;
-
-  /// Currently selected profile path.
-  final String selectedPath;
-
-  /// Callback fired with the selected profile entry.
-  final ValueChanged<RuntimeProfileFileEntry> onChanged;
-
-  /// Builds an app setting dropdown for runtime profile files.
-  @override
-  Widget build(BuildContext context) {
-    final selected = entries.any((entry) => entry.path == selectedPath)
-        ? selectedPath
-        : null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: DropdownButtonFormField<String>(
-        initialValue: selected,
-        isExpanded: true,
-        items: <DropdownMenuItem<String>>[
-          for (final entry in entries)
-            DropdownMenuItem<String>(
-              value: entry.path,
-              child: Text(entry.label, overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: (path) {
-          if (path == null) {
-            return;
-          }
-          for (final entry in entries) {
-            if (entry.path == path) {
-              onChanged(entry);
-              return;
-            }
-          }
-        },
-        decoration: SettingsInputDecoration.field(context, label: label),
-      ),
-    );
   }
 }
