@@ -22,10 +22,6 @@ func NormalizeUpsertNodeRequest(req UpsertNodeRequest) (UpsertNodeRequest, error
 	if !ValidLifecycleStatus(req.Status) {
 		return req, fmt.Errorf("invalid node status %q", req.Status)
 	}
-	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
-	if !ValidFirewall(req.Firewall) {
-		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
-	}
 	req.Sensitivity = vocabulary.DefaultSensitivity(req.Sensitivity)
 	if !ValidSensitivity(req.Sensitivity) {
 		return req, fmt.Errorf("invalid sensitivity %q", req.Sensitivity)
@@ -151,15 +147,11 @@ func NormalizeAppendAuditRequest(req AppendAuditRequest) (AppendAuditRequest, er
 func NormalizeSearchNodesQuery(q SearchNodesQuery) (SearchNodesQuery, error) {
 	q.Text = strings.TrimSpace(q.Text)
 	policy, err := NormalizeAccessPolicy(AccessPolicy{
-		Firewall:             q.Firewall,
-		IncludeGlobal:        q.IncludeGlobal,
 		AllowedSensitivities: q.AllowedSensitivities,
 	})
 	if err != nil {
 		return q, err
 	}
-	q.Firewall = policy.Firewall
-	q.IncludeGlobal = policy.IncludeGlobal
 	q.AllowedSensitivities = policy.AllowedSensitivities
 	for _, kind := range q.Kinds {
 		if !ValidNodeKind(kind) {
@@ -175,10 +167,6 @@ func NormalizeSearchNodesQuery(q SearchNodesQuery) (SearchNodesQuery, error) {
 // NormalizeAccessPolicy validates and defaults shared graph boundary metadata.
 func NormalizeAccessPolicy(policy AccessPolicy) (AccessPolicy, error) {
 	policy.Actor = normalize.Default(policy.Actor, DefaultActor)
-	policy.Firewall = vocabulary.DefaultFirewall(policy.Firewall)
-	if !ValidFirewall(policy.Firewall) {
-		return policy, fmt.Errorf("invalid firewall %q", policy.Firewall)
-	}
 	if len(policy.AllowedSensitivities) == 0 {
 		policy.AllowedSensitivities = DefaultReadableSensitivities()
 	}
@@ -218,11 +206,6 @@ func ValidRelationType(relation RelationType) bool {
 // ValidLifecycleStatus reports whether status is in the controlled vocabulary.
 func ValidLifecycleStatus(status LifecycleStatus) bool {
 	return vocabulary.ValidLifecycleStatus(status)
-}
-
-// ValidFirewall reports whether firewall is a safe memory firewall id.
-func ValidFirewall(firewall Firewall) bool {
-	return vocabulary.ValidFirewall(firewall)
 }
 
 // ValidSensitivity reports whether sensitivity is in the controlled vocabulary.

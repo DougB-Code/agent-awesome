@@ -30,8 +30,8 @@ func TestCaptureProjectsGraphMemory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get memory: %v", err)
 	}
-	if record.Kind != domain.KindDocument || record.Firewall != domain.FirewallUser {
-		t.Fatalf("defaults kind/firewall = %q/%q", record.Kind, record.Firewall)
+	if record.Kind != domain.KindDocument {
+		t.Fatalf("default kind = %q, want document", record.Kind)
 	}
 	if record.TrustLevel != domain.TrustSourceOriginal || record.Sensitivity != domain.SensitivityPrivate {
 		t.Fatalf("defaults trust/sensitivity = %q/%q", record.TrustLevel, record.Sensitivity)
@@ -67,11 +67,11 @@ func TestCaptureIdempotencyReusesGraphNodes(t *testing.T) {
 	repo := openTestRepository(t)
 	defer repo.Close()
 
-	first, err := repo.Capture(ctx, domain.CaptureRequest{Content: "same source", Firewall: domain.FirewallUser, IdempotencyKey: " same-key "})
+	first, err := repo.Capture(ctx, domain.CaptureRequest{Content: "same source", IdempotencyKey: " same-key "})
 	if err != nil {
 		t.Fatalf("first capture: %v", err)
 	}
-	second, err := repo.Capture(ctx, domain.CaptureRequest{Content: "changed source", Firewall: domain.FirewallUser, IdempotencyKey: "same-key"})
+	second, err := repo.Capture(ctx, domain.CaptureRequest{Content: "changed source", IdempotencyKey: "same-key"})
 	if err != nil {
 		t.Fatalf("second capture: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		Content:     "planning alpha user source",
 		Title:       "User planning",
 		Kind:        domain.KindDocument,
-		Firewall:    domain.FirewallUser,
+		DomainID:    domain.DomainUser,
 		Topics:      []string{"Planning"},
 		EntityNames: []string{"Acme"},
 		EventTime:   &eventOne,
@@ -109,7 +109,7 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		Content:     "planning alpha global source",
 		Title:       "Global planning",
 		Kind:        domain.KindToolOutput,
-		Firewall:    domain.FirewallGlobal,
+		DomainID:    domain.DomainGlobal,
 		Topics:      []string{"planning"},
 		EntityNames: []string{"ACME"},
 		EventTime:   &eventTwo,
@@ -118,25 +118,15 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		Content:     "planning alpha artifact source",
 		Title:       "Artifact planning",
 		Kind:        domain.KindArtifact,
-		Firewall:    domain.FirewallUser,
+		DomainID:    domain.DomainUser,
 		Topics:      []string{"planning"},
 		EntityNames: []string{"acme"},
 		EventTime:   &eventThree,
 	})
-	_ = captureForSearch(t, repo, domain.CaptureRequest{
-		Content:     "planning alpha project-only source",
-		Title:       "Project planning",
-		Kind:        domain.KindDocument,
-		Firewall:    domain.FirewallProject,
-		Topics:      []string{"planning"},
-		EntityNames: []string{"acme"},
-		EventTime:   &eventOne,
-	})
-
 	from := eventOne.Add(-time.Hour)
 	to := eventTwo.Add(time.Hour)
 	records, err := repo.Search(ctx, domain.RetrievalQuery{
-		Firewall:  domain.FirewallUser,
+		DomainID:  domain.DomainUser,
 		Text:      "planning",
 		Kinds:     []domain.Kind{domain.KindDocument, domain.KindToolOutput},
 		Topics:    []string{" Planning "},
@@ -149,37 +139,11 @@ func TestSearchFiltersGraphMemory(t *testing.T) {
 		t.Fatalf("search: %v", err)
 	}
 	gotIDs := memoryIDs(records)
-	if !reflect.DeepEqual(gotIDs, []domain.MemoryID{userDoc.ID}) {
-		t.Fatalf("memory ids = %#v, want same-firewall record only", gotIDs)
-	}
-
-	records, err = repo.Search(ctx, domain.RetrievalQuery{
-		Firewall:      domain.FirewallUser,
-		IncludeGlobal: true,
-		Text:          "planning",
-		Kinds:         []domain.Kind{domain.KindDocument, domain.KindToolOutput},
-		Topics:        []string{" Planning "},
-		EntityIDs:     []domain.EntityID{userDoc.EntityIDs[0]},
-		TimeFrom:      &from,
-		TimeTo:        &to,
-		Limit:         10,
-	})
-	if err != nil {
-		t.Fatalf("global search: %v", err)
-	}
-	gotIDs = memoryIDs(records)
 	wantIDs := []domain.MemoryID{userDoc.ID, globalTool.ID}
 	sort.Slice(wantIDs, func(i, j int) bool { return wantIDs[i] < wantIDs[j] })
+	sort.Slice(gotIDs, func(i, j int) bool { return gotIDs[i] < gotIDs[j] })
 	if !reflect.DeepEqual(gotIDs, wantIDs) {
-		t.Fatalf("global memory ids = %#v, want %#v", gotIDs, wantIDs)
-	}
-
-	records, err = repo.Search(ctx, domain.RetrievalQuery{Firewall: domain.FirewallUser, Text: "project-only", Limit: 10})
-	if err != nil {
-		t.Fatalf("project search: %v", err)
-	}
-	if len(records) != 0 {
-		t.Fatalf("user search returned project-scoped records: %#v", records)
+		t.Fatalf("memory ids = %#v, want boundary-local records %#v", gotIDs, wantIDs)
 	}
 }
 

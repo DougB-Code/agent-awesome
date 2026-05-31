@@ -179,8 +179,8 @@ func TestFromFlagsParsesAgentProfilesJSON(t *testing.T) {
 			{"id":"family","label":"Family","endpoint":"http://127.0.0.1:8091/mcp","health_url":"http://127.0.0.1:8091/healthz"}
 		]`,
 		"--agent-profiles-json", `[
-			{"id":"doug","label":"Doug","app_name":"agent_awesome","user_id":"doug","harness_base_url":"http://127.0.0.1:8080/api","context_base_url":"http://127.0.0.1:8081/api/context","actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","private"]},
-			{"id":"family","label":"Family","app_name":"agent_awesome","user_id":"family","harness_base_url":"http://127.0.0.1:8082/api","context_base_url":"http://127.0.0.1:8083/api/context","actor":"agent:family","read_domains":["family"],"write_domains":["family"],"default_write_domain":"family","allowed_sensitivities":["public","private"]}
+			{"id":"doug","label":"Doug","app_name":"Agent Awesome","user_id":"doug","harness_base_url":"http://127.0.0.1:8080/api","context_base_url":"http://127.0.0.1:8081/api/context","actor":"agent:doug","read_domains":["doug"],"write_domains":["doug"],"default_write_domain":"doug","allowed_sensitivities":["public","private"]},
+			{"id":"family","label":"Family","app_name":"Agent Awesome","user_id":"family","harness_base_url":"http://127.0.0.1:8082/api","context_base_url":"http://127.0.0.1:8083/api/context","actor":"agent:family","read_domains":["family"],"write_domains":["family"],"default_write_domain":"family","allowed_sensitivities":["public","private"]}
 		]`,
 	})
 	if err != nil {
@@ -209,7 +209,7 @@ func TestFromFlagsRejectsAgentProfileUnknownDomain(t *testing.T) {
 	clearGatewayAuthEnv(t)
 	_, err := FromFlags([]string{
 		"--memory-domains-json", `[{"id":"memory","label":"Memory","endpoint":"http://127.0.0.1:8090/mcp"}]`,
-		"--agent-profiles-json", `[{"id":"bad","label":"Bad","app_name":"agent_awesome","user_id":"bad","actor":"agent:bad","read_domains":["other"],"write_domains":["memory"],"default_write_domain":"memory","allowed_sensitivities":["public"]}]`,
+		"--agent-profiles-json", `[{"id":"bad","label":"Bad","app_name":"Agent Awesome","user_id":"bad","actor":"agent:bad","read_domains":["other"],"write_domains":["memory"],"default_write_domain":"memory","allowed_sensitivities":["public"]}]`,
 	})
 	if err == nil {
 		t.Fatalf("FromFlags() error = nil, want unknown profile domain validation error")
@@ -591,7 +591,7 @@ func TestSlackAllowsProfileBindings(t *testing.T) {
 		"--agent-profiles-json", `[{
 			"id":"family",
 			"label":"Family",
-			"app_name":"agent_awesome",
+			"app_name":"Agent Awesome",
 			"user_id":"family",
 			"actor":"agent:family",
 			"read_domains":["memory"],

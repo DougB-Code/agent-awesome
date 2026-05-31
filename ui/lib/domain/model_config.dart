@@ -112,6 +112,7 @@ class ModelProviderConfig {
     required this.apiKey,
     required this.defaultModel,
     required this.url,
+    required this.endpoints,
     required this.models,
     this.executable = '',
     this.extra = const <String, dynamic>{},
@@ -141,6 +142,9 @@ class ModelProviderConfig {
   /// Provider endpoint URL.
   final String url;
 
+  /// Named provider endpoints for surfaces such as chat and images.
+  final Map<String, String> endpoints;
+
   /// Provider-local executable path or command.
   final String executable;
 
@@ -163,6 +167,7 @@ class ModelProviderConfig {
       ..remove('api_key')
       ..remove('default')
       ..remove('url')
+      ..remove('endpoints')
       ..remove('executable')
       ..remove('models');
     return ModelProviderConfig(
@@ -172,6 +177,7 @@ class ModelProviderConfig {
       apiKey: stringValue(map['api-key'] ?? map['api_key'], trim: true),
       defaultModel: stringValue(map['default'], trim: true),
       url: stringValue(map['url'], trim: true),
+      endpoints: _stringMapValue(map['endpoints']),
       executable: stringValue(map['executable'], trim: true),
       models: models,
       extra: extra,
@@ -186,6 +192,7 @@ class ModelProviderConfig {
     String? apiKey,
     String? defaultModel,
     String? url,
+    Map<String, String>? endpoints,
     String? executable,
     List<ModelConfigModel>? models,
     Map<String, dynamic>? extra,
@@ -197,6 +204,7 @@ class ModelProviderConfig {
       apiKey: apiKey ?? this.apiKey,
       defaultModel: defaultModel ?? this.defaultModel,
       url: url ?? this.url,
+      endpoints: endpoints ?? this.endpoints,
       executable: executable ?? this.executable,
       models: models ?? this.models,
       extra: extra ?? this.extra,
@@ -212,9 +220,19 @@ class ModelProviderConfig {
       if (apiKey.isNotEmpty) 'api-key': apiKey,
       'default': defaultModel,
       if (url.isNotEmpty) 'url': url,
+      if (endpoints.isNotEmpty) 'endpoints': endpoints,
       if (executable.isNotEmpty) 'executable': executable,
       'models': models.map((model) => model.toJson()).toList(),
     };
+  }
+
+  /// Returns the endpoint for a named provider surface.
+  String endpoint(String key) {
+    final normalized = key.trim();
+    if (normalized.isEmpty) {
+      return '';
+    }
+    return endpoints[normalized]?.trim() ?? '';
   }
 }
 
@@ -342,18 +360,40 @@ class ModelProviderRef {
 
 /// Returns a new provider with one starter model.
 ModelProviderConfig newModelProviderConfig(String id) {
+  final modelId = modelIdFromProviderModel(providerId: id, modelName: 'model');
   return ModelProviderConfig(
     id: id,
     name: _newProviderName(id),
     adapter: 'openai',
     apiKey: '',
-    defaultModel: 'model',
+    defaultModel: modelId,
     url: '',
+    endpoints: const <String, String>{},
     executable: '',
-    models: const <ModelConfigModel>[
-      ModelConfigModel(id: 'model', model: 'provider-model-name'),
-    ],
+    models: <ModelConfigModel>[ModelConfigModel(id: modelId, model: '')],
   );
+}
+
+/// Returns a stable hidden model id from provider id and wire model name.
+String modelIdFromProviderModel({
+  required String providerId,
+  required String modelName,
+}) {
+  final combined = '${providerId.trim()} ${modelName.trim()}';
+  final normalized = combined.toLowerCase().replaceAll(
+    RegExp(r'[^a-z0-9]+'),
+    '-',
+  );
+  final trimmed = normalized
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  if (trimmed.isEmpty) {
+    return 'model';
+  }
+  if (RegExp(r'^[a-z]').hasMatch(trimmed)) {
+    return trimmed;
+  }
+  return 'model-$trimmed';
 }
 
 /// Returns a model config document containing exactly one provider.
@@ -541,4 +581,15 @@ String modelConfigDisplayName(String content) {
   }
   final topLevelName = stringValue(document.extra['name'], trim: true);
   return topLevelName;
+}
+
+/// Converts a decoded map to a trimmed string map.
+Map<String, String> _stringMapValue(dynamic value) {
+  if (value is! Map) {
+    return const <String, String>{};
+  }
+  return <String, String>{
+    for (final entry in value.entries)
+      entry.key.toString().trim(): entry.value.toString().trim(),
+  }..removeWhere((key, value) => key.isEmpty || value.isEmpty);
 }

@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"memory/internal/memory/vocabulary"
 )
 
 // NormalizeExecutiveSummaryQuery validates and defaults a Today projection query.
 func NormalizeExecutiveSummaryQuery(q ExecutiveSummaryQuery) (ExecutiveSummaryQuery, error) {
-	q.Firewall = vocabulary.DefaultFirewall(q.Firewall)
-	if !ValidFirewall(q.Firewall) {
-		return q, fmt.Errorf("invalid firewall %q", q.Firewall)
+	domainID, err := NormalizeDomainID(q.DomainID, q.Firewall)
+	if err != nil {
+		return q, err
 	}
+	q.DomainID = domainID
+	q.Firewall = domainID
 	q.Horizon = strings.TrimSpace(q.Horizon)
 	if q.Horizon == "" {
 		q.Horizon = "today"

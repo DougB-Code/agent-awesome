@@ -32,6 +32,36 @@ func TestResolveProviderURLRejectsMissingEnvironment(t *testing.T) {
 	}
 }
 
+func TestResolveProviderEndpointPrefersNamedEndpoint(t *testing.T) {
+	provider := schema.Provider{
+		URL: "https://legacy.example.test/v1/chat/completions",
+		Endpoints: map[string]string{
+			"chat":   "${TEST_CHAT_URL}",
+			"images": "https://api.example.test/v1/images",
+		},
+	}
+	got, err := ResolveProviderEndpoint(provider, ProviderEndpointChat, staticEnvLookup(map[string]string{
+		"TEST_CHAT_URL": "https://chat.example.test/v1/chat/completions",
+	}))
+	if err != nil {
+		t.Fatalf("ResolveProviderEndpoint() error = %v", err)
+	}
+	if want := "https://chat.example.test/v1/chat/completions"; got != want {
+		t.Fatalf("ResolveProviderEndpoint() = %q, want %q", got, want)
+	}
+}
+
+func TestResolveProviderEndpointFallsBackToProviderURLForChat(t *testing.T) {
+	provider := schema.Provider{URL: "https://legacy.example.test/v1/chat/completions"}
+	got, err := ResolveProviderEndpoint(provider, ProviderEndpointChat, staticEnvLookup(nil))
+	if err != nil {
+		t.Fatalf("ResolveProviderEndpoint() error = %v", err)
+	}
+	if want := "https://legacy.example.test/v1/chat/completions"; got != want {
+		t.Fatalf("ResolveProviderEndpoint() = %q, want %q", got, want)
+	}
+}
+
 // staticEnvLookup adapts a map into an EnvLookup for tests.
 func staticEnvLookup(values map[string]string) EnvLookup {
 	return func(name string) (string, bool) {

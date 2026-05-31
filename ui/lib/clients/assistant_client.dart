@@ -91,7 +91,7 @@ class AssistantClient {
 
   /// Lists existing assistant sessions for the configured user.
   Future<List<ChatSession>> listSessions() async {
-    final uri = _uri('/apps/$appName/users/$userId/sessions');
+    final uri = _sessionCollectionUri();
     await _log('GET $uri');
     final response = await _http.get(uri, headers: _headers());
     await _log('GET $uri -> ${response.statusCode}');
@@ -110,7 +110,7 @@ class AssistantClient {
 
   /// Creates a new assistant session.
   Future<ChatSession> createSession() async {
-    final uri = _uri('/apps/$appName/users/$userId/sessions');
+    final uri = _sessionCollectionUri();
     await _log('POST $uri create session');
     final response = await _http.post(
       uri,
@@ -126,7 +126,7 @@ class AssistantClient {
 
   /// Deletes an assistant session.
   Future<void> deleteSession(String sessionId) async {
-    final uri = _uri('/apps/$appName/users/$userId/sessions/$sessionId');
+    final uri = _sessionUri(sessionId);
     await _log('DELETE $uri');
     final response = await _http.delete(uri, headers: _headers());
     await _log('DELETE $uri -> ${response.statusCode}');
@@ -139,7 +139,7 @@ class AssistantClient {
 
   /// Loads normalized events for one assistant session.
   Future<List<AssistantEvent>> loadSessionEvents(String sessionId) async {
-    final uri = _uri('/apps/$appName/users/$userId/sessions/$sessionId');
+    final uri = _sessionUri(sessionId);
     await _log('GET $uri load session events');
     final response = await _http.get(uri, headers: _headers());
     await _log('GET $uri -> ${response.statusCode}');
@@ -287,6 +287,21 @@ class AssistantClient {
       },
     };
   }
+
+  Uri _sessionCollectionUri() {
+    return _uri(
+      '/apps/${Uri.encodeComponent(appName.trim())}'
+      '/users/${Uri.encodeComponent(userId)}/sessions',
+    );
+  }
+
+  Uri _sessionUri(String sessionId) {
+    return _uri(
+      '/apps/${Uri.encodeComponent(appName.trim())}'
+      '/users/${Uri.encodeComponent(userId)}/sessions'
+      '/${Uri.encodeComponent(sessionId)}',
+    );
+  }
 }
 
 /// Parses one SSE data payload into a normalized assistant event.
@@ -426,6 +441,10 @@ ConfirmationRequest parseConfirmation(Map<String, dynamic> functionCall) {
   final originalCallMap = originalCall is Map<String, dynamic>
       ? originalCall
       : <String, dynamic>{};
+  final originalArgs = originalCallMap['args'];
+  final originalArgsMap = originalArgs is Map<String, dynamic>
+      ? originalArgs
+      : <String, dynamic>{};
   final payload = confirmation['payload'];
   final optionsSource = payload is Map<String, dynamic>
       ? payload['options']
@@ -449,7 +468,23 @@ ConfirmationRequest parseConfirmation(Map<String, dynamic> functionCall) {
     ),
     options: options,
     toolName: stringFrom(originalCallMap['name']),
+    mcpServerName: _confirmationMcpServerName(originalArgsMap),
+    mcpToolName: _confirmationMcpToolName(originalArgsMap),
   );
+}
+
+/// Returns the MCP server argument carried by a confirmation payload.
+String _confirmationMcpServerName(Map<String, dynamic> args) {
+  return stringFrom(
+    args['server_id'] ?? args['server'] ?? args['mcp_server'],
+  ).trim();
+}
+
+/// Returns the MCP tool argument carried by a confirmation payload.
+String _confirmationMcpToolName(Map<String, dynamic> args) {
+  return stringFrom(
+    args['tool'] ?? args['mcp_tool'] ?? args['tool_name'],
+  ).trim();
 }
 
 /// Internal confirmation function name used by the assistant runtime protocol.

@@ -20,6 +20,8 @@ import (
 	"agentawesome/internal/services/runbook/actions"
 	"agentawesome/internal/services/toolvalidation"
 	"agentawesome/internal/tools/mcpclient"
+	"agentawesome/internal/tools/openapiimporter"
+	"agentawesome/internal/tools/sourcecontrol"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
@@ -41,6 +43,24 @@ type toolValidationOptions struct {
 	RequireCoverage     bool
 	RequireInputSchemas bool
 	RequireAssertions   bool
+}
+
+// toolOpenAPIImportOptions stores OpenAPI import command options.
+type toolOpenAPIImportOptions struct {
+	SchemaPath string
+	OutputPath string
+	Name       string
+	BaseURL    string
+}
+
+// toolInstallOptions stores source-control package installation flags.
+type toolInstallOptions struct {
+	Source    string
+	PackageID string
+	ToolRoot  string
+	MCPRoot   string
+	AppRoot   string
+	JSON      bool
 }
 
 // toolValidationRunner executes validations for one package path.
@@ -84,6 +104,100 @@ func newToolsCommandWithValidator(
 		Short: "Validate configured tool packages",
 	}
 	cmd.AddCommand(newToolsValidateCommand(ctx, stdout, validator))
+	cmd.AddCommand(newToolsImportOpenAPICommand(stdout))
+	cmd.AddCommand(newToolsInstallCommand(ctx, stdout))
+	return cmd
+}
+
+// newToolsInstallCommand creates a source-control-backed package installer.
+func newToolsInstallCommand(ctx context.Context, stdout io.Writer) *cobra.Command {
+	opts := toolInstallOptions{
+		ToolRoot: config.DefaultToolConfigDir(),
+		MCPRoot:  config.DefaultMCPConfigDir(),
+		AppRoot:  config.DefaultAppPluginConfigDir(),
+	}
+	cmd := &cobra.Command{
+		Use:   "install SOURCE",
+		Short: "Install a tool or MCP package from source control",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 1 {
+				return fmt.Errorf("install requires exactly one SOURCE")
+			}
+			opts.Source = args[0]
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			result, err := sourcecontrol.Install(ctx, sourcecontrol.Options{
+				Source:    opts.Source,
+				PackageID: opts.PackageID,
+				ToolRoot:  opts.ToolRoot,
+				MCPRoot:   opts.MCPRoot,
+				AppRoot:   opts.AppRoot,
+			})
+			if err != nil {
+				return err
+			}
+			if opts.JSON {
+				return json.NewEncoder(stdout).Encode(result)
+			}
+			_, err = fmt.Fprintf(stdout, "installed %s package %q at %s\n", result.Kind, result.PackageID, result.ConfigPath)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&opts.PackageID, "name", opts.PackageID, "installed package directory name")
+	cmd.Flags().StringVar(&opts.ToolRoot, "tool-root", opts.ToolRoot, "installed tool package root")
+	cmd.Flags().StringVar(&opts.MCPRoot, "mcp-root", opts.MCPRoot, "installed MCP package root")
+	cmd.Flags().StringVar(&opts.AppRoot, "app-root", opts.AppRoot, "installed app plugin package root")
+	cmd.Flags().BoolVar(&opts.JSON, "json", opts.JSON, "write install result as JSON")
+	return cmd
+}
+
+// newToolsImportOpenAPICommand creates a REST schema importer command.
+func newToolsImportOpenAPICommand(stdout io.Writer) *cobra.Command {
+	opts := toolOpenAPIImportOptions{}
+	cmd := &cobra.Command{
+		Use:   "import-openapi",
+		Short: "Generate a command-backed REST API tool package from OpenAPI",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(opts.SchemaPath) == "" {
+				return fmt.Errorf("--schema is required")
+			}
+			content, err := os.ReadFile(opts.SchemaPath)
+			if err != nil {
+				return fmt.Errorf("read OpenAPI schema: %w", err)
+			}
+			tools, err := openapiimporter.Import(content, openapiimporter.Options{
+				Name:    opts.Name,
+				BaseURL: opts.BaseURL,
+			})
+			if err != nil {
+				return err
+			}
+			if err := tools.Validate(); err != nil {
+				return fmt.Errorf("generated tool package is invalid: %w", err)
+			}
+			encoded, err := openapiimporter.MarshalYAML(tools)
+			if err != nil {
+				return fmt.Errorf("encode tool package: %w", err)
+			}
+			if strings.TrimSpace(opts.OutputPath) == "" {
+				_, err = stdout.Write(encoded)
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(opts.OutputPath), 0o700); err != nil {
+				return fmt.Errorf("create output directory: %w", err)
+			}
+			if err := os.WriteFile(opts.OutputPath, encoded, 0o600); err != nil {
+				return fmt.Errorf("write tool package: %w", err)
+			}
+			_, err = fmt.Fprintf(stdout, "wrote %s\n", opts.OutputPath)
+			return err
+		},
+	}
+	cmd.Flags().StringVar(&opts.SchemaPath, "schema", opts.SchemaPath, "OpenAPI schema file path")
+	cmd.Flags().StringVar(&opts.OutputPath, "out", opts.OutputPath, "generated tool package output path; stdout when empty")
+	cmd.Flags().StringVar(&opts.Name, "name", opts.Name, "override generated tool package name")
+	cmd.Flags().StringVar(&opts.BaseURL, "base-url", opts.BaseURL, "override OpenAPI server base URL")
 	return cmd
 }
 

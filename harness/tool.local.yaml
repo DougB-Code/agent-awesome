@@ -130,6 +130,88 @@ local-exec:
           output:
             format: json
             source: stdout
+    - name: pdftotext
+      executable: pdftotext
+      description: Extract text from PDF documents.
+      surface:
+        global-flags:
+          - name: -layout
+            description: Preserve the original physical page layout where possible.
+          - name: "-"
+            description: Write extracted text to standard output.
+      operations:
+        - name: extract_text
+          description: Extract text from one PDF file and return it as plain text.
+          args:
+            - -layout
+            - "{{input_path}}"
+            - "-"
+          input-schema:
+            type: object
+            required:
+              - input_path
+            properties:
+              input_path:
+                type: string
+          output:
+            format: text
+            source: stdout
+    - name: libreoffice
+      executable: libreoffice
+      description: Convert office documents and spreadsheets through LibreOffice headless mode.
+      surface:
+        global-flags:
+          - name: --headless
+            description: Run without opening a desktop window.
+          - name: --convert-to
+            description: Select the output format.
+          - name: --outdir
+            description: Write converted files into the selected directory.
+      operations:
+        - name: document_to_text
+          description: Convert one Word-compatible document into a text file in the selected output directory.
+          args:
+            - --headless
+            - --convert-to
+            - txt:Text
+            - --outdir
+            - "{{output_dir}}"
+            - "{{input_path}}"
+          input-schema:
+            type: object
+            required:
+              - input_path
+              - output_dir
+            properties:
+              input_path:
+                type: string
+              output_dir:
+                type: string
+          output:
+            format: text
+            source: combined
+        - name: spreadsheet_to_csv
+          description: Convert one Excel-compatible spreadsheet into a CSV file in the selected output directory.
+          args:
+            - --headless
+            - --convert-to
+            - csv
+            - --outdir
+            - "{{output_dir}}"
+            - "{{input_path}}"
+          input-schema:
+            type: object
+            required:
+              - input_path
+              - output_dir
+            properties:
+              input_path:
+                type: string
+              output_dir:
+                type: string
+          output:
+            format: text
+            source: combined
     - name: rg
       executable: rg
       description: Search files recursively with ripgrep.
@@ -417,6 +499,7 @@ mcp:
       require-confirmation-tools:
         - remember
         - save_memory_candidate
+        - organize_memory
         - refresh_compiled_page
         - repair_memory_record
         - submit_memory_correction
@@ -438,6 +521,7 @@ mcp:
           - save_memory_candidate
           - search_memory
           - search_sources
+          - organize_memory
           - load_entity_page
           - load_timeline
           - refresh_compiled_page
@@ -619,6 +703,65 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
+  - id: pdftotext_extract_text_mocked
+    label: PDF text extraction
+    mode: mocked
+    target:
+      type: command-operation
+      command: pdftotext
+      operation: extract_text
+    input:
+      input_path: report.pdf
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: Quarterly report
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: Quarterly report
+  - id: libreoffice_document_to_text_mocked
+    label: Word document text conversion
+    mode: mocked
+    target:
+      type: command-operation
+      command: libreoffice
+      operation: document_to_text
+    input:
+      input_path: notes.docx
+      output_dir: build/text
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: notes.txt
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: notes.txt
+  - id: libreoffice_spreadsheet_to_csv_mocked
+    label: Excel spreadsheet CSV conversion
+    mode: mocked
+    target:
+      type: command-operation
+      command: libreoffice
+      operation: spreadsheet_to_csv
+    input:
+      input_path: budget.xlsx
+      output_dir: build/text
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: budget.csv
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: budget.csv
   - id: rg_search_text_mocked
     label: ripgrep search text
     mode: mocked
@@ -972,6 +1115,77 @@ validations:
       - type: json-path
         path: output.arguments.template_id
         equals: yq.read_file
+  - id: pdftotext_extract_text_agent_mocked
+    label: agent selects PDF text extraction
+    mode: mocked
+    prompt: Extract the text from report.pdf.
+    target:
+      type: agent-tool-call
+      command: pdftotext
+      operation: extract_text
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: pdftotext.extract_text
+            parameters:
+              input_path: report.pdf
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: pdftotext.extract_text
+  - id: libreoffice_document_to_text_agent_mocked
+    label: agent selects Word text conversion
+    mode: mocked
+    prompt: Convert notes.docx to a text file under build/text.
+    target:
+      type: agent-tool-call
+      command: libreoffice
+      operation: document_to_text
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: libreoffice.document_to_text
+            parameters:
+              input_path: notes.docx
+              output_dir: build/text
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: libreoffice.document_to_text
+  - id: libreoffice_spreadsheet_to_csv_agent_mocked
+    label: agent selects Excel CSV conversion
+    mode: mocked
+    prompt: Convert budget.xlsx to CSV under build/text.
+    target:
+      type: agent-tool-call
+      command: libreoffice
+      operation: spreadsheet_to_csv
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: command_execute
+          arguments:
+            template_id: libreoffice.spreadsheet_to_csv
+            parameters:
+              input_path: budget.xlsx
+              output_dir: build/text
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.template_id
+        equals: libreoffice.spreadsheet_to_csv
   - id: rg_search_text_agent_mocked
     label: agent selects ripgrep search text
     mode: mocked
@@ -1337,6 +1551,65 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
+  - id: pdftotext_extract_text_runbook_mocked
+    label: runbook invokes PDF text extraction
+    mode: mocked
+    target:
+      type: runbook-node
+      command: pdftotext
+      operation: extract_text
+    input:
+      input_path: report.pdf
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: Quarterly report
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: Quarterly report
+  - id: libreoffice_document_to_text_runbook_mocked
+    label: runbook invokes Word text conversion
+    mode: mocked
+    target:
+      type: runbook-node
+      command: libreoffice
+      operation: document_to_text
+    input:
+      input_path: notes.docx
+      output_dir: build/text
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: notes.txt
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: notes.txt
+  - id: libreoffice_spreadsheet_to_csv_runbook_mocked
+    label: runbook invokes Excel CSV conversion
+    mode: mocked
+    target:
+      type: runbook-node
+      command: libreoffice
+      operation: spreadsheet_to_csv
+    input:
+      input_path: budget.xlsx
+      output_dir: build/text
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: budget.csv
+    expected:
+      status: succeeded
+    assertions:
+      - type: stdout-contains
+        contains: budget.csv
   - id: rg_search_text_runbook_mocked
     label: runbook invokes ripgrep search text
     mode: mocked

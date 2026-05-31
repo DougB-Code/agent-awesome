@@ -122,6 +122,7 @@ func blockedModelVisibleTools(cfg *schema.Tools) map[string]struct{} {
 			"save_memory_candidate",
 			"search_memory",
 			"search_sources",
+			"organize_memory",
 			"load_entity_page",
 			"load_timeline",
 			"refresh_compiled_page",

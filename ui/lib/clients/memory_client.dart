@@ -15,6 +15,24 @@ class MemoryClient {
     return _rpc.listToolNames();
   }
 
+  /// Creates or opens the selected memory domain database in the live pool.
+  Future<dynamic> createMemoryDomain({String actor = 'agent_awesome_ui'}) {
+    return _rpc.callTool('create_memory_domain', <String, dynamic>{
+      'actor': actor,
+    });
+  }
+
+  /// Detaches the selected memory domain database from the live pool.
+  Future<dynamic> removeMemoryDomain({
+    String actor = 'agent_awesome_ui',
+    bool deleteFiles = false,
+  }) {
+    return _rpc.callTool('remove_memory_domain', <String, dynamic>{
+      'actor': actor,
+      'delete_files': deleteFiles,
+    });
+  }
+
   /// Lists typed codebase catalog records used by Launchpad.
   Future<List<AutomationCodebase>> listCodebases({
     String actor = 'agent_awesome_ui',
@@ -59,7 +77,7 @@ class MemoryClient {
   }) async {
     final content = await _rpc.callTool('search_memory', <String, dynamic>{
       'actor': actor,
-      'firewall': firewall,
+      'domain_id': firewall,
       'include_global': includeGlobal,
       'text': text,
       'kinds': kinds,
@@ -89,7 +107,7 @@ class MemoryClient {
   }) async {
     final content = await _rpc.callTool('search_sources', <String, dynamic>{
       'actor': actor,
-      'firewall': firewall,
+      'domain_id': firewall,
       'include_global': includeGlobal,
       'text': text,
       'kinds': kinds,
@@ -117,7 +135,7 @@ class MemoryClient {
         'id': draft.sourceId,
       },
       'kind': draft.kind,
-      'firewall': draft.firewall,
+      'domain_id': draft.firewall,
       'trust_level': draft.trustLevel,
       'sensitivity': draft.sensitivity,
       'subjects': draft.subjects,
@@ -145,7 +163,7 @@ class MemoryClient {
       'title': draft.title.trim().isEmpty ? source.title : draft.title,
       'content': draft.content,
       'kind': source.kind,
-      'firewall': draft.firewall.trim().isEmpty
+      'domain_id': draft.firewall.trim().isEmpty
           ? source.firewall
           : draft.firewall,
       'sensitivity': draft.sensitivity.trim().isEmpty
@@ -169,7 +187,7 @@ class MemoryClient {
   }) async {
     final content = await _rpc.callTool('load_entity_page', <String, dynamic>{
       'actor': actor,
-      'firewall': firewall,
+      'domain_id': firewall,
       'entity_id': entityId,
       'title': title,
     });
@@ -185,7 +203,7 @@ class MemoryClient {
   }) async {
     final content = await _rpc.callTool('load_timeline', <String, dynamic>{
       'actor': actor,
-      'firewall': firewall,
+      'domain_id': firewall,
       'topic': topic,
       'entity_id': entityId,
     });
@@ -205,7 +223,7 @@ class MemoryClient {
         .callTool('refresh_compiled_page', <String, dynamic>{
           'actor': actor,
           'kind': kind,
-          'firewall': firewall,
+          'domain_id': firewall,
           'title': title,
           'entity_id': entityId,
           'topic': topic,
@@ -260,7 +278,7 @@ class MemoryClient {
     return _rpc.callTool('submit_memory_correction', <String, dynamic>{
       'actor': actor,
       'memory_id': memoryId,
-      'firewall': firewall,
+      'domain_id': firewall,
       'text': text,
     });
   }

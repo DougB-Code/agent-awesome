@@ -5,6 +5,12 @@ class PanelSplit {
   /// Creates split ratio constraints for a two-panel workspace.
   const PanelSplit({required this.left, this.min = 0.2, this.max = 0.8});
 
+  /// Standard command-panel left width while the app menu is expanded.
+  static const double commandMenuExpandedLeft = 0.30;
+
+  /// Standard command-panel left width while the app menu is collapsed.
+  static const double commandMenuCollapsedLeft = 0.25;
+
   /// Initial fraction assigned to the left panel.
   final double left;
 
@@ -13,6 +19,60 @@ class PanelSplit {
 
   /// Maximum allowed left panel fraction while dragging.
   final double max;
+
+  /// Returns a copy with selected split constraints changed.
+  PanelSplit copyWith({double? left, double? min, double? max}) {
+    return PanelSplit(
+      left: left ?? this.left,
+      min: min ?? this.min,
+      max: max ?? this.max,
+    );
+  }
+}
+
+/// PanelMenuColumnScope exposes app-menu layout state to nested panels.
+class PanelMenuColumnScope extends InheritedWidget {
+  /// Creates layout context for command-panel split defaults.
+  const PanelMenuColumnScope({
+    super.key,
+    required this.expanded,
+    required super.child,
+  });
+
+  /// Whether the top-level app menu column is expanded.
+  final bool expanded;
+
+  /// Returns the nearest app-menu layout scope, if present.
+  static PanelMenuColumnScope? maybeOf(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<PanelMenuColumnScope>();
+  }
+
+  /// Applies the standard command-panel split for the current app-menu state.
+  static PanelSplit commandPanelSplitOf(
+    BuildContext context,
+    PanelSplit split,
+  ) {
+    final scope = maybeOf(context);
+    if (scope == null || !_usesCommandPanelDefault(split)) {
+      return split;
+    }
+    return split.copyWith(
+      left: scope.expanded
+          ? PanelSplit.commandMenuExpandedLeft
+          : PanelSplit.commandMenuCollapsedLeft,
+    );
+  }
+
+  /// Reports whether dependents should rebuild when the menu state changes.
+  @override
+  bool updateShouldNotify(covariant PanelMenuColumnScope oldWidget) {
+    return expanded != oldWidget.expanded;
+  }
+}
+
+/// Reports whether a split uses the standard command-panel starting width.
+bool _usesCommandPanelDefault(PanelSplit split) {
+  return (split.left - PanelSplit.commandMenuExpandedLeft).abs() < 0.0001;
 }
 
 /// PanelCollapseDirection identifies which edge a panel collapses toward.

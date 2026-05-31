@@ -30,6 +30,7 @@ const (
 type Config struct {
 	DBPath   string
 	DataRoot string
+	PoolRoot string
 }
 
 // Repository projects memory service operations onto graph storage.
@@ -74,8 +75,6 @@ func graphQueryRequest(req domain.GraphQueryRequest) graphquery.Request {
 		Actor:                req.Actor,
 		Query:                req.Query,
 		SourceNodeID:         req.SourceNodeID,
-		Firewall:             req.Firewall,
-		IncludeGlobal:        req.IncludeGlobal,
 		AllowedSensitivities: req.AllowedSensitivities,
 	}
 }
@@ -154,7 +153,6 @@ func (r *Repository) captureNormalized(ctx context.Context, req domain.CaptureRe
 		StableKey:   evidenceStableKey(req.IdempotencyKey),
 		Title:       req.Title,
 		Summary:     summary,
-		Firewall:    req.Firewall,
 		Sensitivity: req.Sensitivity,
 		TrustLevel:  graph.TrustSourceOriginal,
 		Actor:       req.Actor,
@@ -178,7 +176,6 @@ func (r *Repository) captureNormalized(ctx context.Context, req domain.CaptureRe
 		StableKey:   memoryStableKey(req.IdempotencyKey),
 		Title:       req.Title,
 		Summary:     summary,
-		Firewall:    req.Firewall,
 		Sensitivity: req.Sensitivity,
 		TrustLevel:  req.TrustLevel,
 		Actor:       req.Actor,
@@ -232,8 +229,6 @@ func (r *Repository) Search(ctx context.Context, q domain.RetrievalQuery) ([]dom
 	nodes, err := r.graph.SearchNodes(ctx, graph.SearchNodesQuery{
 		Text:                 q.Text,
 		Kinds:                []graph.NodeKind{graph.KindMemory},
-		Firewall:             q.Firewall,
-		IncludeGlobal:        q.IncludeGlobal,
 		AllowedSensitivities: q.AllowedSensitivities,
 		Limit:                searchCandidateLimit,
 	})
@@ -294,7 +289,6 @@ func (r *Repository) GetMemory(ctx context.Context, memoryID domain.MemoryID) (d
 		ID:          domain.MemoryID(node.ID),
 		EvidenceID:  domain.EvidenceID(evidence.ID),
 		Kind:        domain.Kind(propertyText(properties[propertyMemoryKind], string(domain.KindDocument))),
-		Firewall:    node.Firewall,
 		TrustLevel:  node.TrustLevel,
 		Sensitivity: node.Sensitivity,
 		Status:      fromGraphStatus(node.Status),
@@ -367,7 +361,6 @@ func (r *Repository) RepairMemory(ctx context.Context, req domain.RepairRequest)
 		Title:       title,
 		Summary:     summary,
 		Status:      status,
-		Firewall:    record.Firewall,
 		Sensitivity: sensitivity,
 		TrustLevel:  record.TrustLevel,
 		Actor:       req.Actor,
@@ -428,7 +421,8 @@ func (r *Repository) CreateCorrection(ctx context.Context, req domain.Correction
 		Title:          "Memory correction",
 		Source:         domain.SourceRef{System: "memory_correction", ID: string(req.MemoryID)},
 		Kind:           domain.KindDocument,
-		Firewall:       req.Firewall,
+		DomainID:       req.DomainID,
+		Firewall:       req.DomainID,
 		TrustLevel:     domain.TrustUserAsserted,
 		Sensitivity:    domain.SensitivityPrivate,
 		Topics:         []string{"correction"},
@@ -457,7 +451,7 @@ func (r *Repository) RefreshCompiledPage(ctx context.Context, req domain.Refresh
 		return domain.CompiledPage{}, err
 	}
 	title := req.Title
-	query := domain.RetrievalQuery{Actor: req.Actor, Firewall: req.Firewall, Limit: searchCandidateLimit}
+	query := domain.RetrievalQuery{Actor: req.Actor, DomainID: req.DomainID, Limit: searchCandidateLimit}
 	if req.Topic != "" {
 		query.Topics = []string{req.Topic}
 		if title == "" {
@@ -482,10 +476,9 @@ func (r *Repository) RefreshCompiledPage(ctx context.Context, req domain.Refresh
 	content, sourceIDs := buildCompiledPageContent(req.Kind, title, records)
 	pageNode, err := r.graph.UpsertNode(ctx, graph.UpsertNodeRequest{
 		Kind:      graph.KindArtifact,
-		StableKey: pageStableKey(req.Kind, req.Firewall, title),
+		StableKey: pageStableKey(req.Kind, title),
 		Title:     title,
 		Summary:   excerpt(content, 280),
-		Firewall:  req.Firewall,
 		Actor:     req.Actor,
 	})
 	if err != nil {
@@ -494,7 +487,8 @@ func (r *Repository) RefreshCompiledPage(ctx context.Context, req domain.Refresh
 	return domain.CompiledPage{
 		ID:        domain.PageID(pageNode.ID),
 		Kind:      req.Kind,
-		Firewall:  req.Firewall,
+		DomainID:  req.DomainID,
+		Firewall:  req.DomainID,
 		Title:     title,
 		Status:    domain.StatusActive,
 		SourceIDs: sourceIDs,
@@ -505,18 +499,18 @@ func (r *Repository) RefreshCompiledPage(ctx context.Context, req domain.Refresh
 }
 
 // LoadEntityPage returns a compiled entity page projection.
-func (r *Repository) LoadEntityPage(ctx context.Context, firewall domain.Firewall, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
+func (r *Repository) LoadEntityPage(ctx context.Context, domainID domain.DomainID, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
 	if title == "" {
 		if node, err := r.graph.GetNode(ctx, graph.NodeID(entityID)); err == nil {
 			title = node.Title
 		}
 	}
-	return r.RefreshCompiledPage(ctx, domain.RefreshPageRequest{Kind: domain.KindEntityPage, Firewall: firewall, EntityID: entityID, Title: title})
+	return r.RefreshCompiledPage(ctx, domain.RefreshPageRequest{Kind: domain.KindEntityPage, DomainID: domainID, EntityID: entityID, Title: title})
 }
 
 // LoadTimeline returns a compiled timeline projection.
-func (r *Repository) LoadTimeline(ctx context.Context, firewall domain.Firewall, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
-	return r.RefreshCompiledPage(ctx, domain.RefreshPageRequest{Kind: domain.KindTimeline, Firewall: firewall, Topic: topic, EntityID: entityID})
+func (r *Repository) LoadTimeline(ctx context.Context, domainID domain.DomainID, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
+	return r.RefreshCompiledPage(ctx, domain.RefreshPageRequest{Kind: domain.KindTimeline, DomainID: domainID, Topic: topic, EntityID: entityID})
 }
 
 // LeaseJob returns no work because graph-backed Phase 2 capture is synchronous.
@@ -645,7 +639,6 @@ func (r *Repository) replaceFacetEdges(ctx context.Context, memoryID graph.NodeI
 			Kind:      graph.KindTopic,
 			StableKey: stablePrefix + ":" + value,
 			Title:     value,
-			Firewall:  graph.FirewallUser,
 			Actor:     actor,
 		})
 		if err != nil {
@@ -675,7 +668,6 @@ func (r *Repository) replaceEntityEdges(ctx context.Context, memoryID graph.Node
 			Kind:      graph.KindEntity,
 			StableKey: "entity:" + name,
 			Title:     name,
-			Firewall:  graph.FirewallUser,
 			Actor:     actor,
 		})
 		if err != nil {
@@ -825,9 +817,6 @@ func (r *Repository) memoryRelationships(ctx context.Context, nodeID graph.NodeI
 
 // recordMatches applies filters not handled by graph FTS.
 func recordMatches(record domain.MemoryRecord, q domain.RetrievalQuery) bool {
-	if record.Firewall != q.Firewall && !(q.IncludeGlobal && record.Firewall == domain.FirewallGlobal) {
-		return false
-	}
 	if len(q.Kinds) > 0 && !slices.Contains(q.Kinds, record.Kind) {
 		return false
 	}
@@ -931,8 +920,8 @@ func idempotencyStableKey(prefix string, key string) string {
 }
 
 // pageStableKey returns a deterministic compiled page stable key.
-func pageStableKey(kind domain.Kind, firewall domain.Firewall, title string) string {
-	return fmt.Sprintf("page:%s:%s:%s", kind, firewall, strings.ToLower(strings.TrimSpace(title)))
+func pageStableKey(kind domain.Kind, title string) string {
+	return fmt.Sprintf("page:%s:%s", kind, strings.ToLower(strings.TrimSpace(title)))
 }
 
 // excerpt returns a compact deterministic summary.

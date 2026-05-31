@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../app/app_controller.dart';
 import 'theme.dart';
 import '../domain/date_formatting.dart';
+import '../domain/app_plugin.dart';
 import '../domain/model_config.dart';
 import '../domain/models.dart';
 import '../domain/runtime_profile.dart';
@@ -17,6 +18,7 @@ import '../features/today/today_screen.dart';
 import 'command_bar/command_context.dart';
 import 'command_bar/command_router.dart';
 import 'automations_section.dart';
+import 'app_plugins_section.dart';
 import 'backlog_section.dart';
 import 'files_section.dart';
 import 'panels/panels.dart';
@@ -121,6 +123,16 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
     if (_memoryMessageIsError(widget.controller) &&
         _memoryBackedSectionUnavailable(_section)) {
       return _MemoryUnavailableRoute(controller: widget.controller);
+    }
+    final pluginRoute = parseAppPluginRoute(_section);
+    if (pluginRoute != null) {
+      return _withAssistantChat(
+        AppPluginCommandPanel(
+          controller: widget.controller,
+          route: pluginRoute,
+          onAreaChanged: _rememberArea(_section),
+        ),
+      );
     }
     switch (_section) {
       case AppSections.today:
@@ -283,18 +295,37 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
 
   /// Selects a top-level app section from sidebar or command navigation.
   void _selectSection(String section) {
+    final nextSection = _sectionAllowedForInterfaceMode(section)
+        ? section
+        : AppSections.today;
     setState(() {
-      _section = section;
+      _section = nextSection;
       _todayRoute = '';
-      if (section == AppSections.chat) {
+      if (nextSection == AppSections.chat) {
         _chatDetailModeId = _chatConversationDetailId;
       }
     });
-    if (section == AppSections.chat) {
+    if (nextSection == AppSections.chat) {
       widget.controller.openHome();
-    } else if (section == AppSections.today) {
+    } else if (nextSection == AppSections.today) {
       widget.controller.openHome();
     }
+  }
+
+  /// Reports whether a section is reachable in the active UI mode.
+  bool _sectionAllowedForInterfaceMode(String section) {
+    if (parseAppPluginRoute(section) != null) {
+      return true;
+    }
+    if (widget.controller.advancedInterfaceEnabled) {
+      return true;
+    }
+    return !const <String>{
+      AppSections.automationRunbooks,
+      AppSections.automationAgents,
+      AppSections.automationMcpServers,
+      AppSections.automationTools,
+    }.contains(section);
   }
 
   /// Opens a reserved route emitted by a projection-backed Today card.
@@ -394,6 +425,18 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           route.assistantText,
           displayText: route.displayText,
         );
+      case CommandRouteKind.newChat:
+        setState(() {
+          _section = AppSections.chat;
+          _chatDetailModeId = _chatConversationDetailId;
+        });
+        final created = await widget.controller.createChat();
+        if (created && route.assistantText.trim().isNotEmpty) {
+          await widget.controller.sendUserMessage(
+            route.assistantText,
+            displayText: route.displayText,
+          );
+        }
     }
   }
 

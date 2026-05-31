@@ -60,21 +60,21 @@ func main() {
 		log.Info().Msg("restore memory snapshot complete")
 	}
 
-	repo, err := graphrepo.Open(ctx, graphrepo.Config{DBPath: cfg.DBPath, DataRoot: cfg.DataRoot})
+	repo, err := graphrepo.OpenPool(ctx, graphrepo.Config{DBPath: cfg.DBPath, DataRoot: cfg.DataRoot})
 	if err != nil {
-		log.Fatal().Err(err).Msg("open graph memory store")
+		log.Fatal().Err(err).Msg("open graph memory pool")
 	}
-	firewallPolicy, err := service.LoadFirewallPolicyFile(cfg.FirewallPolicy)
+	domainPolicy, err := service.LoadFirewallPolicyFile(cfg.DomainPolicy)
 	if err != nil {
-		log.Fatal().Err(err).Msg("load firewall policy")
+		log.Fatal().Err(err).Msg("load domain policy")
 	}
-	if firewallPolicy != nil {
-		log.Info().Str("path", cfg.FirewallPolicy).Msg("memory firewall policy loaded")
+	if domainPolicy != nil {
+		log.Info().Str("path", cfg.DomainPolicy).Msg("memory domain policy loaded")
 	}
 	memoryService := service.New(
 		service.RepositoriesFrom(repo),
 		nil,
-		service.Config{WorkerCount: cfg.WorkerCount, FirewallPolicy: firewallPolicy},
+		service.Config{WorkerCount: cfg.WorkerCount, FirewallPolicy: domainPolicy, FirewallPolicyPath: cfg.DomainPolicy},
 	)
 	memoryService.Start(ctx)
 	defer func() {

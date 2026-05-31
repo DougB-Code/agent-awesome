@@ -169,7 +169,9 @@ _ChatRuntimeSummary _chatSessionRuntimeSummary(
   AgentAwesomeAppController controller,
 ) {
   final profile = controller.runtimeProfile;
-  final label = controller.activeAgentLabel;
+  final label = profile?.label.trim().isNotEmpty == true
+      ? profile!.label
+      : controller.activeAgentLabel;
   final serviceLabel = profile?.gateway.label ?? '';
   final endpoint = _statusNamed(controller.endpointStatuses, 'Agent API');
   final process = _statusNamed(controller.localProcessStatuses, serviceLabel);
@@ -178,7 +180,7 @@ _ChatRuntimeSummary _chatSessionRuntimeSummary(
       ? endpoint!.message
       : process?.message ?? '';
   return _ChatRuntimeSummary(
-    title: 'Agent',
+    title: 'Profile',
     detail: label,
     state: state,
     icon: Icons.forum_outlined,

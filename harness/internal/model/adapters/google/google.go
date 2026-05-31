@@ -37,8 +37,8 @@ func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection)
 // does not consume provider URLs; endpoint selection is handled by genai, while
 // credentials are optional and may come from api-key or genai-supported defaults.
 func (Factory) ValidateProvider(name string, provider schema.Provider) error {
-	if strings.TrimSpace(provider.URL) != "" {
-		return fmt.Errorf("provider %q does not support url", name)
+	if strings.TrimSpace(provider.URL) != "" || len(provider.Endpoints) > 0 {
+		return fmt.Errorf("provider %q does not support url endpoints", name)
 	}
 	if provider.AuthMode() == schema.ProviderAuthOptional {
 		return fmt.Errorf("provider %q does not support auth: optional", name)

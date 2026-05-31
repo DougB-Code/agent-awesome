@@ -27,8 +27,11 @@ class _SettingsProviderDefaultModelDropdown extends StatelessWidget {
           style: SettingsFormTextStyle.field(context),
           isExpanded: true,
           items: <DropdownMenuItem<String>>[
-            for (final modelId in modelIds)
-              DropdownMenuItem<String>(value: modelId, child: Text(modelId)),
+            for (final model in provider.models)
+              DropdownMenuItem<String>(
+                value: model.id,
+                child: Text(_modelOptionLabel(model)),
+              ),
           ],
           onChanged: (value) {
             if (value != null) {
@@ -42,6 +45,15 @@ class _SettingsProviderDefaultModelDropdown extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// Returns the user-facing model label for default selection.
+  String _modelOptionLabel(ModelConfigModel model) {
+    final providerModel = model.model.trim();
+    if (providerModel.isNotEmpty) {
+      return providerModel;
+    }
+    return 'Unconfigured model';
   }
 }
 
@@ -65,19 +77,11 @@ class _SettingsModelRow extends StatelessWidget {
         tooltip: 'Delete model',
         onPressed: onDelete,
       ),
-      child: SettingsFieldGrid(
-        children: <Widget>[
-          _SettingsInlineField(
-            label: 'Model id',
-            value: model.id,
-            onChanged: (value) => onChanged(model.copyWith(id: value)),
-          ),
-          _SettingsInlineField(
-            label: 'Provider model',
-            value: model.model,
-            onChanged: (value) => onChanged(model.copyWith(model: value)),
-          ),
-        ],
+      child: _SettingsInlineField(
+        label: 'Provider model',
+        value: model.model,
+        hintText: 'Provider model name',
+        onChanged: (value) => onChanged(model.copyWith(model: value)),
       ),
     );
   }

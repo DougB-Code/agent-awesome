@@ -27,6 +27,9 @@ providers:
     api-key: CLOUDFLARE_API_KEY
     default: gemma
     url: \${CLOUDFLARE_GATEWAY_URL}
+    endpoints:
+      chat: \${CLOUDFLARE_GATEWAY_URL}/chat/completions
+      images: \${CLOUDFLARE_GATEWAY_URL}/images/generations
     models:
       - id: gemma
         model: workers-ai/@cf/google/gemma-4-26b-a4b-it
@@ -41,6 +44,10 @@ providers:
     ]);
     expect(document.providers.first.name, 'OpenAI');
     expect(document.providers.last.displayName, 'Cloudflare');
+    expect(
+      document.providers.last.endpoints['images'],
+      '\${CLOUDFLARE_GATEWAY_URL}/images/generations',
+    );
     expect(document.providers.first.models.last.model, 'gpt-5-nano');
     expect(document.providers.last.models.single.extra['capabilities'], {
       'streaming': true,
@@ -57,6 +64,9 @@ providers:
     api-key: OPENAI_API_KEY
     default: gpt-mini
     url: https://api.openai.com/v1/chat/completions
+    endpoints:
+      chat: https://api.openai.com/v1/chat/completions
+      images: https://api.openai.com/v1/images/generations
     models:
       - id: gpt-mini
         model: gpt-5-mini
@@ -80,6 +90,11 @@ providers:
     final encoded = next.toYaml();
     expect(encoded, contains('default: openai:gpt-nano'));
     expect(encoded, contains('name: OpenAI'));
+    expect(encoded, contains('endpoints:'));
+    expect(
+      encoded,
+      contains('images: https://api.openai.com/v1/images/generations'),
+    );
     expect(
       encoded,
       contains('      - id: gpt-mini\n        model: gpt-5-mini'),
@@ -180,7 +195,21 @@ providers:
 
     expect(provider.id, 'provider-2');
     expect(provider.name, 'Provider 2');
+    expect(provider.defaultModel, 'provider-2-model');
+    expect(provider.models.single.id, 'provider-2-model');
+    expect(provider.models.single.model, isEmpty);
     expect(provider.toJson()['name'], 'Provider 2');
+  });
+
+  test('derives hidden model ids from provider and model name', () {
+    expect(
+      modelIdFromProviderModel(providerId: 'openai', modelName: 'gpt-5 mini'),
+      'openai-gpt-5-mini',
+    );
+    expect(
+      modelIdFromProviderModel(providerId: '2026', modelName: '4o'),
+      'model-2026-4o',
+    );
   });
 
   test('scopes multi-provider documents to the default provider', () {

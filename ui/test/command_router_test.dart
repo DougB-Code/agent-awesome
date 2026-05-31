@@ -50,6 +50,61 @@ void main() {
     expect(route.assistantText, isEmpty);
   });
 
+  test('routes explicit new chat commands to a fresh chat', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.backlog,
+        area: 'Queue',
+        text: 'new chat about the launch plan',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.newChat);
+    expect(route.assistantText, 'the launch plan');
+    expect(route.displayText, 'the launch plan');
+  });
+
+  test('routes bare new chat commands to an empty fresh chat', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.backlog,
+        area: 'Queue',
+        text: 'new chat',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.newChat);
+    expect(route.assistantText, isEmpty);
+  });
+
+  test('routes explicit chat commands away from screen AI', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.backlog,
+        area: 'Queue',
+        text: 'ask agent what changed here?',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.assistant);
+    expect(route.assistantText, contains('Backlog / Queue'));
+    expect(route.displayText, 'what changed here?');
+  });
+
+  test('continues the active chat without adding screen context', () {
+    final route = _router().route(
+      const CommandContext(
+        section: AppSections.chat,
+        area: 'Conversation',
+        text: 'continue the chat with a shorter plan',
+      ),
+    );
+
+    expect(route.kind, CommandRouteKind.assistant);
+    expect(route.assistantText, 'with a shorter plan');
+    expect(route.displayText, 'with a shorter plan');
+  });
+
   test('routes official command panel commands through the task path', () {
     final route = _router().route(
       const CommandContext(

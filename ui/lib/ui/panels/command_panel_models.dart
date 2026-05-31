@@ -8,6 +8,7 @@ class SwitcherPanelArea {
     required this.icon,
     required this.builder,
     this.id = '',
+    this.showInQuickAccess = true,
   });
 
   /// Stable area id used by global command routing.
@@ -21,6 +22,9 @@ class SwitcherPanelArea {
 
   /// Builds filtered area content.
   final Widget Function(String query) builder;
+
+  /// Whether the area is selectable from the left quick-access row.
+  final bool showInQuickAccess;
 }
 
 /// CommandPanelDetailMode describes one selectable detail panel mode.

@@ -3,54 +3,85 @@ package service
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"memory/internal/memory/domain"
 )
 
-// authorizeRead verifies an actor can read one firewall.
+// authorizeRead verifies an actor can read one memory domain.
 func (s *Service) authorizeRead(actor string, firewall domain.Firewall) error {
-	if s.firewallPolicy == nil {
-		return nil
-	}
-	if s.firewallPolicy.AllowsRead(actor, firewall) {
-		return nil
-	}
-	return fmt.Errorf("actor %q cannot read memory firewall %q", actor, firewall)
-}
-
-// authorizeWrite verifies an actor can mutate one firewall.
-func (s *Service) authorizeWrite(actor string, firewall domain.Firewall) error {
-	if s.firewallPolicy == nil {
-		return nil
-	}
-	if s.firewallPolicy.AllowsWrite(actor, firewall) {
-		return nil
-	}
-	return fmt.Errorf("actor %q cannot write memory firewall %q", actor, firewall)
-}
-
-// authorizeRetrieval verifies a retrieval query can read every requested firewall.
-func (s *Service) authorizeRetrieval(q domain.RetrievalQuery) error {
-	if err := s.authorizeRead(q.Actor, q.Firewall); err != nil {
+	policy, err := s.firewallPolicyForAuthorization()
+	if err != nil {
 		return err
 	}
-	if q.IncludeGlobal && q.Firewall != domain.FirewallGlobal {
-		return s.authorizeRead(q.Actor, domain.FirewallGlobal)
+	if policy == nil {
+		return nil
+	}
+	if policy.AllowsRead(actor, firewall) {
+		return nil
+	}
+	return fmt.Errorf("actor %q cannot read memory domain %q", actor, firewall)
+}
+
+// authorizeWrite verifies an actor can mutate one memory domain.
+func (s *Service) authorizeWrite(actor string, firewall domain.Firewall) error {
+	policy, err := s.firewallPolicyForAuthorization()
+	if err != nil {
+		return err
+	}
+	if policy == nil {
+		return nil
+	}
+	if policy.AllowsWrite(actor, firewall) {
+		return nil
+	}
+	return fmt.Errorf("actor %q cannot write memory domain %q", actor, firewall)
+}
+
+// firewallPolicyForAuthorization reloads the domain policy when its file changes.
+func (s *Service) firewallPolicyForAuthorization() (*FirewallPolicy, error) {
+	if s.firewallPolicyPath == "" {
+		return s.firewallPolicy, nil
+	}
+	stat, err := os.Stat(s.firewallPolicyPath)
+	if err != nil {
+		return nil, fmt.Errorf("stat memory domain policy: %w", err)
+	}
+	if stat.IsDir() {
+		return nil, fmt.Errorf("memory domain policy path is a directory")
+	}
+	s.firewallPolicyMu.Lock()
+	defer s.firewallPolicyMu.Unlock()
+	policy, err := LoadFirewallPolicyFile(s.firewallPolicyPath)
+	if err != nil {
+		return nil, err
+	}
+	s.firewallPolicy = policy
+	return s.firewallPolicy, nil
+}
+
+// authorizeRetrieval verifies a retrieval query can read every requested domain.
+func (s *Service) authorizeRetrieval(q domain.RetrievalQuery) error {
+	if err := s.authorizeRead(q.Actor, q.DomainID); err != nil {
+		return err
+	}
+	if q.IncludeGlobal && q.DomainID != domain.DomainGlobal {
+		return s.authorizeRead(q.Actor, domain.DomainGlobal)
 	}
 	return nil
 }
 
-// authorizeGraphQuery verifies a graph query can read or write its firewall.
+// authorizeGraphQuery verifies a graph query can read or write its domain.
 func (s *Service) authorizeGraphQuery(req domain.GraphQueryRequest) error {
 	if graphQueryMutates(req.Query) {
-		return s.authorizeWrite(req.Actor, req.Firewall)
+		return s.authorizeWrite(req.Actor, req.DomainID)
 	}
-	if err := s.authorizeRead(req.Actor, req.Firewall); err != nil {
+	if err := s.authorizeRead(req.Actor, req.DomainID); err != nil {
 		return err
 	}
-	if req.IncludeGlobal && req.Firewall != domain.FirewallGlobal {
-		return s.authorizeRead(req.Actor, domain.FirewallGlobal)
+	if req.IncludeGlobal && req.DomainID != domain.DomainGlobal {
+		return s.authorizeRead(req.Actor, domain.DomainGlobal)
 	}
 	return nil
 }

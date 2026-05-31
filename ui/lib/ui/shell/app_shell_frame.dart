@@ -4,6 +4,8 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../app/app_controller.dart';
+import '../../app/app_settings.dart';
+import '../../domain/app_plugin.dart';
 import '../theme.dart';
 import '../command_bar/command_bar.dart';
 import '../command_bar/command_context.dart';

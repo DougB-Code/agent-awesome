@@ -71,7 +71,6 @@ func (r *Repository) ListCodebases(ctx context.Context, req domain.CodebaseQuery
 	nodes, err := r.graph.SearchNodes(ctx, graph.SearchNodesQuery{
 		Text:                 normalized.Text,
 		Kinds:                []graph.NodeKind{graph.KindCodebase},
-		Firewall:             graph.FirewallUser,
 		AllowedSensitivities: graph.DefaultReadableSensitivities(),
 		Limit:                normalized.Limit,
 	})
@@ -143,7 +142,6 @@ func (r *Repository) upsertCodebaseNormalized(ctx context.Context, req domain.Up
 		StableKey:   codebaseStableKey(req.Codebase.ID),
 		Title:       req.Codebase.Name,
 		Summary:     codebaseSummary(req.Codebase),
-		Firewall:    graph.FirewallUser,
 		Sensitivity: graph.SensitivityPrivate,
 		TrustLevel:  graph.TrustUserAsserted,
 		Actor:       req.Actor,

@@ -17,6 +17,8 @@ class _SettingsAppContentState extends State<_SettingsAppContent> {
       SettingsSaveFeedbackController();
   final SettingsSaveFeedbackController _memoryFeedback =
       SettingsSaveFeedbackController();
+  final SettingsSaveFeedbackController _interfaceModeFeedback =
+      SettingsSaveFeedbackController();
   final SettingsSaveFeedbackController _summaryToggleFeedback =
       SettingsSaveFeedbackController();
   final SettingsSaveFeedbackController _summaryModelFeedback =
@@ -27,6 +29,7 @@ class _SettingsAppContentState extends State<_SettingsAppContent> {
   void dispose() {
     _agentFeedback.dispose();
     _memoryFeedback.dispose();
+    _interfaceModeFeedback.dispose();
     _summaryToggleFeedback.dispose();
     _summaryModelFeedback.dispose();
     super.dispose();
@@ -57,6 +60,9 @@ class _SettingsAppContentState extends State<_SettingsAppContent> {
         domain.kind,
       ],
       'Application Models',
+      'Interface',
+      'Mode',
+      interfaceModeLabel(widget.controller.interfaceMode),
       'Generate chat titles',
       'Summary model',
       widget.controller.summaryModelConfigPath,
@@ -102,6 +108,19 @@ class _SettingsAppContentState extends State<_SettingsAppContent> {
           ],
         ),
         FormPlainSection(
+          title: 'Interface',
+          children: <Widget>[
+            SettingsSaveFeedback(
+              controller: _interfaceModeFeedback,
+              child: _SettingsInterfaceModeDropdown(
+                label: 'Mode',
+                selectedMode: widget.controller.interfaceMode,
+                onChanged: _setInterfaceMode,
+              ),
+            ),
+          ],
+        ),
+        FormPlainSection(
           title: 'Application models',
           children: <Widget>[
             SettingsToggleField(
@@ -137,6 +156,13 @@ class _SettingsAppContentState extends State<_SettingsAppContent> {
   Future<void> _setDefaultMemory(McpServerRuntime domain) async {
     await _memoryFeedback.run(() {
       return widget.controller.selectDefaultMemoryDomain(domain.id);
+    });
+  }
+
+  /// Persists the selected UI complexity mode.
+  Future<void> _setInterfaceMode(String mode) async {
+    await _interfaceModeFeedback.run(() {
+      return widget.controller.selectInterfaceMode(mode);
     });
   }
 

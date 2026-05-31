@@ -81,7 +81,7 @@ class AppConfig {
           defaultValue: '',
         ),
         runtimeName: 'AGENT_APP_NAME',
-        fallback: 'agent_awesome',
+        fallback: 'Agent Awesome',
       ),
       agentUserId: _environmentValue(
         compiled: const String.fromEnvironment(

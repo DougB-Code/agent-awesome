@@ -16,6 +16,12 @@ const defaultTaskFollowUpDelay = 7 * 24 * time.Hour
 // NormalizeCreateTaskRequest fills defaults and validates task creation.
 func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error) {
 	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	req.Title = strings.TrimSpace(req.Title)
 	if req.Title == "" {
 		return req, errors.New("title is required")
@@ -55,6 +61,12 @@ func NormalizeCreateTaskRequest(req CreateTaskRequest) (CreateTaskRequest, error
 // NormalizeUpdateTaskRequest fills defaults and validates task patches.
 func NormalizeUpdateTaskRequest(req UpdateTaskRequest) (UpdateTaskRequest, error) {
 	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	if req.TaskID == "" {
 		return req, errors.New("task_id is required")
 	}
@@ -93,6 +105,12 @@ func NormalizeUpdateTaskRequest(req UpdateTaskRequest) (UpdateTaskRequest, error
 
 // NormalizeTaskQuery fills safe defaults and validates task filters.
 func NormalizeTaskQuery(q TaskQuery) (TaskQuery, error) {
+	domainID, err := NormalizeDomainID(q.DomainID, q.Firewall)
+	if err != nil {
+		return q, err
+	}
+	q.DomainID = domainID
+	q.Firewall = domainID
 	for _, status := range q.Statuses {
 		if !ValidTaskStatus(status) {
 			return q, fmt.Errorf("invalid task status %q", status)
@@ -113,6 +131,12 @@ func NormalizeTaskQuery(q TaskQuery) (TaskQuery, error) {
 
 // NormalizeTaskRelationQuery fills safe defaults and validates edge filters.
 func NormalizeTaskRelationQuery(q TaskRelationQuery) (TaskRelationQuery, error) {
+	domainID, err := NormalizeDomainID(q.DomainID, q.Firewall)
+	if err != nil {
+		return q, err
+	}
+	q.DomainID = domainID
+	q.Firewall = domainID
 	q.Direction = normalize.Key(q.Direction)
 	if q.Direction == "" {
 		q.Direction = "outgoing"
@@ -133,6 +157,12 @@ func NormalizeTaskRelationQuery(q TaskRelationQuery) (TaskRelationQuery, error) 
 
 // NormalizeTaskRelationTraversalQuery validates bounded graph traversal input.
 func NormalizeTaskRelationTraversalQuery(q TaskRelationTraversalQuery) (TaskRelationTraversalQuery, error) {
+	domainID, err := NormalizeDomainID(q.DomainID, q.Firewall)
+	if err != nil {
+		return q, err
+	}
+	q.DomainID = domainID
+	q.Firewall = domainID
 	if q.RootTaskID == "" {
 		return q, errors.New("root_task_id is required")
 	}
@@ -160,6 +190,12 @@ func NormalizeTaskRelationTraversalQuery(q TaskRelationTraversalQuery) (TaskRela
 // NormalizeTaskIDRequest validates a request for one task.
 func NormalizeTaskIDRequest(req TaskIDRequest) (TaskIDRequest, error) {
 	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	if req.TaskID == "" {
 		return req, errors.New("task_id is required")
 	}
@@ -169,6 +205,12 @@ func NormalizeTaskIDRequest(req TaskIDRequest) (TaskIDRequest, error) {
 // NormalizeUpsertTaskRelationRequest validates one task relationship edge.
 func NormalizeUpsertTaskRelationRequest(req UpsertTaskRelationRequest) (UpsertTaskRelationRequest, error) {
 	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	req.Note = strings.TrimSpace(req.Note)
 	if req.FromTaskID == "" {
 		return req, errors.New("from_task_id is required")
@@ -197,6 +239,12 @@ func NormalizeUpsertTaskRelationRequest(req UpsertTaskRelationRequest) (UpsertTa
 // NormalizeDeleteTaskRelationRequest validates relation deletion.
 func NormalizeDeleteTaskRelationRequest(req DeleteTaskRelationRequest) (DeleteTaskRelationRequest, error) {
 	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultUserActor)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	if req.RelationID == "" {
 		return req, errors.New("relation_id is required")
 	}
@@ -205,6 +253,12 @@ func NormalizeDeleteTaskRelationRequest(req DeleteTaskRelationRequest) (DeleteTa
 
 // NormalizeLinkTaskMemoryRequest validates a task memory link request.
 func NormalizeLinkTaskMemoryRequest(req LinkTaskMemoryRequest) (LinkTaskMemoryRequest, error) {
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	if req.TaskID == "" {
 		return req, errors.New("task_id is required")
 	}

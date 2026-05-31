@@ -50,7 +50,7 @@ func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection)
 	if err := f.ValidateProvider(selection.Name, selection.Provider); err != nil {
 		return nil, err
 	}
-	url, err := adapter.ResolveProviderURL(selection.Provider, os.LookupEnv)
+	url, err := adapter.ResolveProviderEndpoint(selection.Provider, adapter.ProviderEndpointChat, os.LookupEnv)
 	if err != nil {
 		return nil, fmt.Errorf("provider %q url: %w", selection.Name, err)
 	}
@@ -78,7 +78,8 @@ func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection)
 
 // ValidateProvider checks OpenAI-compatible provider-specific schema.
 func (Factory) ValidateProvider(name string, provider schema.Provider) error {
-	if strings.TrimSpace(provider.URL) == "" {
+	chatURL := providerChatURL(provider)
+	if strings.TrimSpace(chatURL) == "" {
 		return fmt.Errorf("provider %q requires url", name)
 	}
 	if err := adapter.ValidateNoStreamingModels(name, provider, "OpenAI-compatible"); err != nil {
@@ -87,16 +88,26 @@ func (Factory) ValidateProvider(name string, provider schema.Provider) error {
 	if strings.TrimSpace(provider.APIKeyEnv) != "" {
 		return nil
 	}
-	if provider.AuthMode() == schema.ProviderAuthOptional && isLoopbackURL(provider.URL) {
+	if provider.AuthMode() == schema.ProviderAuthOptional && isLoopbackURL(chatURL) {
 		return nil
 	}
 	if provider.AuthMode() == schema.ProviderAuthRequired {
 		return fmt.Errorf("provider %q auth is required and requires api-key", name)
 	}
-	if isKnownHostedURL(provider.URL) || !isLoopbackURL(provider.URL) {
+	if isKnownHostedURL(chatURL) || !isLoopbackURL(chatURL) {
 		return fmt.Errorf("provider %q remote OpenAI-compatible endpoint requires api-key", name)
 	}
 	return fmt.Errorf("provider %q loopback OpenAI-compatible endpoint without api-key must set auth: optional", name)
+}
+
+// providerChatURL returns the chat endpoint configured for OpenAI-compatible calls.
+func providerChatURL(provider schema.Provider) string {
+	if provider.Endpoints != nil {
+		if value := strings.TrimSpace(provider.Endpoints[adapter.ProviderEndpointChat]); value != "" {
+			return value
+		}
+	}
+	return strings.TrimSpace(provider.URL)
 }
 
 // isLoopbackURL reports whether a provider URL is local-only.

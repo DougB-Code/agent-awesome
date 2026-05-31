@@ -258,6 +258,35 @@ Runbook nodes call those operations through `command.execute` with template ids 
 Runbook node presets are validated against the same configured command templates and MCP tool allowlists, so shared packages fail early when a preset points at an unknown `command.execute` template or `mcp.call` server/tool pair.
 Use `--require-input-schemas` with `tools validate`, or `--require-tool-input-schemas` with `library validate`, when shared package CI must reject command operations that cannot validate structured agent/runbook arguments.
 
+Tool packages can declare `version` and `extends`.
+`extends` is resolved relative to the current tool file, loads the previous package version first, and overlays the current package by stable command name, MCP server name, memory domain id, node preset id, and validation id.
+Use this for package releases where command contracts and validations should carry forward unchanged while the new version only adds or replaces deltas.
+
+OpenAPI schemas can be imported into a command-backed REST API tool package.
+The importer emits deterministic `curl` operations with input schemas for required path, query, header, and request-body values:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome tools import-openapi \
+  --schema ./openapi.yaml \
+  --out ./tools/contacts/tool.yaml \
+  --base-url https://api.example.test
+----
+
+Install an AA tool or MCP package from a source-control location with `tools install`.
+The installer accepts local package directories, `file://` paths, and GitHub or GitLab repository paths with an optional `@ref` selector and package subdirectory.
+It downloads repository archives through a dedicated source-control boundary and installs the selected directory under the configured `tools/` or `mcp/` package root:
+
+[source,sh]
+----
+go run ./cmd/agent-awesome tools install \
+  github.com/example/aa-tools/packages/curl@v1.2.0 \
+  --name curl
+----
+
+Go's module downloader is a useful comparison point, but AA does not route tool packages through `go.dev`.
+The Go command may download modules from a module proxy configured by `GOPROXY` or directly from version control systems in direct mode; AA tool packages are product packages with `tool.yaml` or `mcp.yaml`, so AA installs them from repository archives instead of treating them as Go modules.footnote:[See the Go Modules Reference, "Communicating with proxies" and "Version control systems": https://go.dev/ref/mod]
+
 == Tool Package Validations
 
 Tool packages may include portable `validations` beside their command or MCP metadata.

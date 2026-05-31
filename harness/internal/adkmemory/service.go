@@ -20,7 +20,6 @@ const (
 	searchMemoryToolName  = "search_memory"
 	searchSourcesToolName = "search_sources"
 	conversationKind      = "conversation"
-	userFirewall          = "user"
 	privateSensitivity    = "private"
 	sourceTrustLevel      = "source_original"
 	defaultSearchLimit    = 12
@@ -95,6 +94,7 @@ func (s *Service) AddSessionToMemory(ctx context.Context, curSession session.Ses
 			}
 			defer mcpSession.Close()
 		}
+		payload["domain_id"] = writeDomain.id
 		if _, err := callTool(ctx, mcpSession, saveMemoryToolName, payload); err != nil {
 			return err
 		}
@@ -154,7 +154,7 @@ func (s *Service) SearchMemory(ctx context.Context, req *adkmemory.SearchRequest
 			continue
 		}
 		defer mcpSession.Close()
-		content, err := callTool(ctx, mcpSession, domain.searchTool, s.searchPayload(query))
+		content, err := callTool(ctx, mcpSession, domain.searchTool, s.searchPayload(query, domain.id))
 		if err != nil {
 			log.Warn().Err(err).Str("domain", domain.id).Msg("search chat memory failed")
 		} else if bundle, err := decodeStructured[retrievalBundle](content); err != nil {
@@ -191,14 +191,14 @@ func appendMemoryEntries(entries []adkmemory.Entry, next ...adkmemory.Entry) []a
 }
 
 // searchPayload builds a memory search request for granted conversations.
-func (s *Service) searchPayload(query string) map[string]any {
+func (s *Service) searchPayload(query string, domainID string) map[string]any {
 	allowed := s.allowedSensitivities
 	if len(allowed) == 0 {
 		allowed = []string{"public", "internal", privateSensitivity}
 	}
 	return map[string]any{
 		"actor":                 s.actor,
-		"firewall":              userFirewall,
+		"domain_id":             domainID,
 		"text":                  query,
 		"kinds":                 []string{conversationKind},
 		"allowed_sensitivities": allowed,

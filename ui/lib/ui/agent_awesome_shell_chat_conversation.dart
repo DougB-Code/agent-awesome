@@ -83,9 +83,9 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
           for (final message in messages)
             ChatRow(message: message, compact: compact),
           if (widget.controller.sending)
-            const _ChatRuntimeNotice(
+            _ChatRuntimeNotice(
               icon: Icons.sync,
-              label: 'Agent Awesome is responding',
+              label: _chatRuntimeNoticeLabel(widget.controller),
             ),
         ];
         return Column(
@@ -151,6 +151,15 @@ class _ChatConversationContentState extends State<_ChatConversationContent> {
     _replyController.clear();
     await widget.controller.sendUserMessage(value);
   }
+}
+
+/// Returns the most relevant active chat runtime state for timeline feedback.
+String _chatRuntimeNoticeLabel(AgentAwesomeAppController controller) {
+  final message = controller.statusMessage.trim();
+  if (message.isNotEmpty && message != 'Run complete') {
+    return message;
+  }
+  return 'Agent Awesome is responding';
 }
 
 class _ChatSessionListContent extends StatelessWidget {

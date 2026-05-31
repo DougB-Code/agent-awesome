@@ -116,24 +116,6 @@ const (
 	StatusSuperseded = vocabulary.StatusSuperseded
 )
 
-// Firewall classifies the memory firewall boundary for graph facts.
-type Firewall = vocabulary.Firewall
-
-const (
-	// FirewallGlobal exposes graph facts globally within service policy.
-	FirewallGlobal = vocabulary.FirewallGlobal
-	// FirewallHousehold shares graph facts across a household.
-	FirewallHousehold = vocabulary.FirewallHousehold
-	// FirewallProject limits graph facts to a project.
-	FirewallProject = vocabulary.FirewallProject
-	// FirewallSession limits graph facts to one session.
-	FirewallSession = vocabulary.FirewallSession
-	// FirewallTenant limits graph facts to an organization tenant.
-	FirewallTenant = vocabulary.FirewallTenant
-	// FirewallUser limits graph facts to one user.
-	FirewallUser = vocabulary.FirewallUser
-)
-
 // Sensitivity controls whether a caller may see a graph fact.
 type Sensitivity = vocabulary.Sensitivity
 
@@ -191,7 +173,6 @@ type Node struct {
 	Title        string          `json:"title,omitempty"`
 	Summary      string          `json:"summary,omitempty"`
 	Status       LifecycleStatus `json:"status"`
-	Firewall     Firewall        `json:"firewall"`
 	Sensitivity  Sensitivity     `json:"sensitivity"`
 	TrustLevel   TrustLevel      `json:"trust_level"`
 	Confidence   float64         `json:"confidence"`
@@ -301,7 +282,6 @@ type UpsertNodeRequest struct {
 	Title        string
 	Summary      string
 	Status       LifecycleStatus
-	Firewall     Firewall
 	Sensitivity  Sensitivity
 	TrustLevel   TrustLevel
 	Confidence   float64
@@ -387,8 +367,6 @@ type AppendAuditRequest struct {
 type SearchNodesQuery struct {
 	Text                 string
 	Kinds                []NodeKind
-	Firewall             Firewall
-	IncludeGlobal        bool
 	AllowedSensitivities []Sensitivity
 	Limit                int
 }
@@ -396,7 +374,5 @@ type SearchNodesQuery struct {
 // AccessPolicy stores graph read/write boundary metadata shared by operations.
 type AccessPolicy struct {
 	Actor                string
-	Firewall             Firewall
-	IncludeGlobal        bool
 	AllowedSensitivities []Sensitivity
 }

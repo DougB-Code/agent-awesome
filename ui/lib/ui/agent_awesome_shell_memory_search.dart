@@ -92,10 +92,10 @@ class _MemoryFilterBar extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: PanelDropdownFormField<String>(
-                  label: 'Firewall',
+                  label: 'Domain',
                   value: filters.firewall,
                   values: controller.memoryFirewallIds,
-                  tooltip: 'Firewall',
+                  tooltip: 'Domain',
                   labelFor: controller.memoryFirewallPickerLabel,
                   onChanged: (value) {
                     unawaited(

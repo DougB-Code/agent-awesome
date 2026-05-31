@@ -34,7 +34,6 @@ func capturePayload(curSession session.Session, event *session.Event, actor stri
 		"title":           captureTitle(curSession, speaker),
 		"source":          map[string]any{"system": chatMemorySourceSystem, "id": eventID},
 		"kind":            conversationKind,
-		"firewall":        userFirewall,
 		"trust_level":     sourceTrustLevel,
 		"sensitivity":     privateSensitivity,
 		"subjects":        []string{speaker},

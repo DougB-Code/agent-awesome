@@ -16,9 +16,10 @@ import (
 
 // Config controls worker behavior for the memory service.
 type Config struct {
-	WorkerCount    int
-	PollInterval   time.Duration
-	FirewallPolicy *FirewallPolicy
+	WorkerCount        int
+	PollInterval       time.Duration
+	FirewallPolicy     *FirewallPolicy
+	FirewallPolicyPath string
 }
 
 // Repositories contains the storage ports required by service features.
@@ -27,6 +28,7 @@ type Repositories struct {
 	Tasks      ports.TaskRepository
 	GraphQuery ports.GraphQueryRepository
 	Codebases  ports.CodebaseRepository
+	DomainPool ports.DomainPoolRepository
 }
 
 // RepositoriesFrom adapts one composite repository at the process wiring edge.
@@ -34,23 +36,27 @@ func RepositoriesFrom(repo ports.Repository) Repositories {
 	tasks, _ := repo.(ports.TaskRepository)
 	graphQuery, _ := repo.(ports.GraphQueryRepository)
 	codebases, _ := repo.(ports.CodebaseRepository)
-	return Repositories{Memory: repo, Tasks: tasks, GraphQuery: graphQuery, Codebases: codebases}
+	domainPool, _ := repo.(ports.DomainPoolRepository)
+	return Repositories{Memory: repo, Tasks: tasks, GraphQuery: graphQuery, Codebases: codebases, DomainPool: domainPool}
 }
 
 // Service provides process-boundary-safe memory operations.
 type Service struct {
-	repo           ports.Repository
-	taskRepo       ports.TaskRepository
-	graphQueryRepo ports.GraphQueryRepository
-	codebaseRepo   ports.CodebaseRepository
-	steward        ports.Steward
-	firewallPolicy *FirewallPolicy
-	workerCount    int
-	pollInterval   time.Duration
-	cancel         context.CancelFunc
-	done           chan struct{}
-	startOnce      sync.Once
-	stopOnce       sync.Once
+	repo               ports.Repository
+	taskRepo           ports.TaskRepository
+	graphQueryRepo     ports.GraphQueryRepository
+	codebaseRepo       ports.CodebaseRepository
+	domainPoolRepo     ports.DomainPoolRepository
+	steward            ports.Steward
+	firewallPolicy     *FirewallPolicy
+	firewallPolicyPath string
+	firewallPolicyMu   sync.Mutex
+	workerCount        int
+	pollInterval       time.Duration
+	cancel             context.CancelFunc
+	done               chan struct{}
+	startOnce          sync.Once
+	stopOnce           sync.Once
 }
 
 // New creates a memory service backed by the given repository.
@@ -62,15 +68,17 @@ func New(repos Repositories, steward ports.Steward, cfg Config) *Service {
 		cfg.PollInterval = 250 * time.Millisecond
 	}
 	return &Service{
-		repo:           repos.Memory,
-		taskRepo:       repos.Tasks,
-		graphQueryRepo: repos.GraphQuery,
-		codebaseRepo:   repos.Codebases,
-		steward:        steward,
-		firewallPolicy: cfg.FirewallPolicy,
-		workerCount:    cfg.WorkerCount,
-		pollInterval:   cfg.PollInterval,
-		done:           make(chan struct{}),
+		repo:               repos.Memory,
+		taskRepo:           repos.Tasks,
+		graphQueryRepo:     repos.GraphQuery,
+		codebaseRepo:       repos.Codebases,
+		domainPoolRepo:     repos.DomainPool,
+		steward:            steward,
+		firewallPolicy:     cfg.FirewallPolicy,
+		firewallPolicyPath: strings.TrimSpace(cfg.FirewallPolicyPath),
+		workerCount:        cfg.WorkerCount,
+		pollInterval:       cfg.PollInterval,
+		done:               make(chan struct{}),
 	}
 }
 
@@ -116,7 +124,7 @@ func (s *Service) Capture(ctx context.Context, req domain.CaptureRequest) (domai
 	if err != nil {
 		return domain.CaptureResult{}, err
 	}
-	if err := s.authorizeWrite(normalized.Actor, normalized.Firewall); err != nil {
+	if err := s.authorizeWrite(normalized.Actor, normalized.DomainID); err != nil {
 		return domain.CaptureResult{}, err
 	}
 	req = normalized
@@ -172,37 +180,37 @@ func (s *Service) SearchSources(ctx context.Context, q domain.RetrievalQuery) (d
 }
 
 // LoadEntityPage returns a compiled entity page, creating it if necessary.
-func (s *Service) LoadEntityPage(ctx context.Context, firewall domain.Firewall, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
-	return s.LoadEntityPageForActor(ctx, "agent", firewall, entityID, title)
+func (s *Service) LoadEntityPage(ctx context.Context, domainID domain.DomainID, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
+	return s.LoadEntityPageForActor(ctx, "agent", domainID, entityID, title)
 }
 
-// LoadEntityPageForActor returns a compiled entity page after firewall authorization.
-func (s *Service) LoadEntityPageForActor(ctx context.Context, actor string, firewall domain.Firewall, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
-	req, err := domain.NormalizeRefreshPageRequest(domain.RefreshPageRequest{Actor: actor, Kind: domain.KindEntityPage, Firewall: firewall, EntityID: entityID, Title: title})
+// LoadEntityPageForActor returns a compiled entity page after domain authorization.
+func (s *Service) LoadEntityPageForActor(ctx context.Context, actor string, domainID domain.DomainID, entityID domain.EntityID, title string) (domain.CompiledPage, error) {
+	req, err := domain.NormalizeRefreshPageRequest(domain.RefreshPageRequest{Actor: actor, Kind: domain.KindEntityPage, DomainID: domainID, EntityID: entityID, Title: title})
 	if err != nil {
 		return domain.CompiledPage{}, err
 	}
-	if err := s.authorizeWrite(req.Actor, req.Firewall); err != nil {
+	if err := s.authorizeWrite(req.Actor, req.DomainID); err != nil {
 		return domain.CompiledPage{}, err
 	}
-	return s.repo.LoadEntityPage(ctx, req.Firewall, req.EntityID, req.Title)
+	return s.repo.LoadEntityPage(ctx, req.DomainID, req.EntityID, req.Title)
 }
 
 // LoadTimeline returns a compiled timeline, creating it if necessary.
-func (s *Service) LoadTimeline(ctx context.Context, firewall domain.Firewall, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
-	return s.LoadTimelineForActor(ctx, "agent", firewall, topic, entityID)
+func (s *Service) LoadTimeline(ctx context.Context, domainID domain.DomainID, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
+	return s.LoadTimelineForActor(ctx, "agent", domainID, topic, entityID)
 }
 
-// LoadTimelineForActor returns a compiled timeline after firewall authorization.
-func (s *Service) LoadTimelineForActor(ctx context.Context, actor string, firewall domain.Firewall, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
-	req, err := domain.NormalizeRefreshPageRequest(domain.RefreshPageRequest{Actor: actor, Kind: domain.KindTimeline, Firewall: firewall, Topic: topic, EntityID: entityID})
+// LoadTimelineForActor returns a compiled timeline after domain authorization.
+func (s *Service) LoadTimelineForActor(ctx context.Context, actor string, domainID domain.DomainID, topic string, entityID domain.EntityID) (domain.CompiledPage, error) {
+	req, err := domain.NormalizeRefreshPageRequest(domain.RefreshPageRequest{Actor: actor, Kind: domain.KindTimeline, DomainID: domainID, Topic: topic, EntityID: entityID})
 	if err != nil {
 		return domain.CompiledPage{}, err
 	}
-	if err := s.authorizeWrite(req.Actor, req.Firewall); err != nil {
+	if err := s.authorizeWrite(req.Actor, req.DomainID); err != nil {
 		return domain.CompiledPage{}, err
 	}
-	return s.repo.LoadTimeline(ctx, req.Firewall, req.Topic, req.EntityID)
+	return s.repo.LoadTimeline(ctx, req.DomainID, req.Topic, req.EntityID)
 }
 
 // RefreshCompiledPage rebuilds a compiled knowledge page.
@@ -211,7 +219,7 @@ func (s *Service) RefreshCompiledPage(ctx context.Context, req domain.RefreshPag
 	if err != nil {
 		return domain.CompiledPage{}, err
 	}
-	if err := s.authorizeWrite(normalized.Actor, normalized.Firewall); err != nil {
+	if err := s.authorizeWrite(normalized.Actor, normalized.DomainID); err != nil {
 		return domain.CompiledPage{}, err
 	}
 	req = normalized
@@ -228,9 +236,11 @@ func (s *Service) RepairMemoryRecord(ctx context.Context, req domain.RepairReque
 	if err != nil {
 		return domain.MemoryRecord{}, err
 	}
-	if err := s.authorizeWrite(normalized.Actor, record.Firewall); err != nil {
+	if err := s.authorizeWrite(normalized.Actor, record.DomainID); err != nil {
 		return domain.MemoryRecord{}, err
 	}
+	normalized.DomainID = record.DomainID
+	normalized.Firewall = record.DomainID
 	req = normalized
 	return s.repo.RepairMemory(ctx, req)
 }
@@ -241,11 +251,47 @@ func (s *Service) SubmitMemoryCorrection(ctx context.Context, req domain.Correct
 	if err != nil {
 		return domain.CaptureResult{}, err
 	}
-	if err := s.authorizeWrite(normalized.Actor, normalized.Firewall); err != nil {
+	if err := s.authorizeWrite(normalized.Actor, normalized.DomainID); err != nil {
 		return domain.CaptureResult{}, err
 	}
 	req = normalized
 	return s.repo.CreateCorrection(ctx, req)
+}
+
+// OrganizeMemory runs deterministic memory maintenance and creates follow-up tasks.
+func (s *Service) OrganizeMemory(ctx context.Context, req domain.OrganizeMemoryRequest) (domain.OrganizeMemoryResult, error) {
+	normalized, err := domain.NormalizeOrganizeMemoryRequest(req)
+	if err != nil {
+		return domain.OrganizeMemoryResult{}, err
+	}
+	bundle, err := s.SearchMemory(ctx, domain.RetrievalQuery{
+		Actor:                normalized.Actor,
+		DomainID:             normalized.DomainID,
+		IncludeGlobal:        normalized.IncludeGlobal,
+		AllowedSensitivities: normalized.AllowedSensitivities,
+		Limit:                normalized.Limit,
+	})
+	if err != nil {
+		return domain.OrganizeMemoryResult{}, err
+	}
+	result := domain.OrganizeMemoryResult{Reviewed: len(bundle.Primary)}
+	for _, record := range bundle.Primary {
+		item, task, repaired, err := s.organizeMemoryRecord(ctx, normalized, record)
+		if err != nil {
+			return domain.OrganizeMemoryResult{}, err
+		}
+		if len(item.Questions) == 0 && !item.SummaryUpdated {
+			continue
+		}
+		if repaired {
+			result.Repaired++
+		}
+		if task.ID != "" {
+			result.FollowUpTasks = append(result.FollowUpTasks, task)
+		}
+		result.Items = append(result.Items, item)
+	}
+	return result, nil
 }
 
 // QueryContextGraph executes one graph query or audited mutation.
@@ -499,6 +545,7 @@ func (s *Service) handleClassify(ctx context.Context, worker string, record doma
 	}
 	repair.Actor = worker
 	repair.MemoryID = record.ID
+	repair.DomainID = record.DomainID
 	_, err = s.repo.RepairMemory(ctx, repair)
 	return err
 }
@@ -512,7 +559,7 @@ func (s *Service) handleSummarize(ctx context.Context, worker string, record dom
 	if err != nil {
 		return err
 	}
-	repair := domain.RepairRequest{Actor: worker, MemoryID: record.ID, Summary: &summary}
+	repair := domain.RepairRequest{Actor: worker, MemoryID: record.ID, DomainID: record.DomainID, Summary: &summary}
 	_, err = s.repo.RepairMemory(ctx, repair)
 	return err
 }
@@ -530,6 +577,124 @@ func (s *Service) handleContradictions(ctx context.Context, worker string, recor
 		return s.auditRecord(ctx, worker, record, "steward found no contradictions")
 	}
 	return s.auditRecord(ctx, worker, record, fmt.Sprintf("steward flagged %d contradiction candidates for review", len(relationships)))
+}
+
+// organizeMemoryRecord repairs safe metadata and opens human follow-up tasks.
+func (s *Service) organizeMemoryRecord(ctx context.Context, req domain.OrganizeMemoryRequest, record domain.MemoryRecord) (domain.MemoryOrganizationItem, domain.Task, bool, error) {
+	content, err := s.repo.GetEvidenceContent(ctx, record.EvidenceID)
+	if err != nil {
+		return domain.MemoryOrganizationItem{}, domain.Task{}, false, err
+	}
+	item := domain.MemoryOrganizationItem{
+		MemoryID:  record.ID,
+		Title:     record.Title,
+		Questions: memoryFollowUpQuestions(record, content),
+	}
+	repaired := false
+	if strings.TrimSpace(record.Summary) == "" {
+		summary := memorySummaryFromContent(content)
+		if summary != "" && !req.DryRun {
+			_, err := s.RepairMemoryRecord(ctx, domain.RepairRequest{
+				Actor:    req.Actor,
+				MemoryID: record.ID,
+				DomainID: record.DomainID,
+				Summary:  &summary,
+			})
+			if err != nil {
+				return domain.MemoryOrganizationItem{}, domain.Task{}, false, err
+			}
+			item.SummaryUpdated = true
+			repaired = true
+		} else if summary != "" {
+			item.SummaryUpdated = true
+		}
+	}
+	if len(item.Questions) == 0 || req.DryRun {
+		return item, domain.Task{}, repaired, nil
+	}
+	task, err := s.createMemoryFollowUpTask(ctx, req.Actor, record, item.Questions)
+	if err != nil {
+		return domain.MemoryOrganizationItem{}, domain.Task{}, false, err
+	}
+	item.FollowUpTaskID = task.ID
+	return item, task, repaired, nil
+}
+
+// createMemoryFollowUpTask creates an idempotent clarification task.
+func (s *Service) createMemoryFollowUpTask(ctx context.Context, actor string, record domain.MemoryRecord, questions []string) (domain.Task, error) {
+	repo, err := s.taskRepository()
+	if err != nil {
+		return domain.Task{}, err
+	}
+	description := "Answer these questions so Agent Awesome can file this memory correctly:\n- " + strings.Join(questions, "\n- ")
+	return repo.CreateTask(ctx, domain.CreateTaskRequest{
+		Actor:       actor,
+		DomainID:    record.DomainID,
+		Title:       "Clarify memory: " + memoryRecordLabel(record),
+		Description: description,
+		Priority:    domain.TaskPriorityNormal,
+		Topics:      []string{"memory", "follow-up"},
+		MemoryLinks: []domain.MemoryLinkRequest{
+			{
+				MemoryID:     string(record.ID),
+				Relationship: domain.TaskMemoryOriginatedFrom,
+				Note:         "Created by memory organization batch maintenance.",
+			},
+		},
+		IdempotencyKey: "memory-organize-follow-up:" + string(record.ID),
+	})
+}
+
+// memoryFollowUpQuestions returns user-answerable gaps for one memory record.
+func memoryFollowUpQuestions(record domain.MemoryRecord, content string) []string {
+	label := memoryRecordLabel(record)
+	questions := []string{}
+	if strings.EqualFold(strings.TrimSpace(record.Title), "Untitled memory") || strings.TrimSpace(record.Title) == "" {
+		questions = append(questions, "What short title should identify this memory?")
+	}
+	if len(record.Topics) == 0 {
+		questions = append(questions, fmt.Sprintf("Which topic should %q belong to?", label))
+	}
+	if len(record.Subjects) == 0 && len(record.EntityNames) == 0 && len(record.EntityIDs) == 0 {
+		questions = append(questions, fmt.Sprintf("Who or what is %q about?", label))
+	}
+	if len(strings.Fields(content)) < 8 {
+		questions = append(questions, fmt.Sprintf("What additional detail should be preserved for %q?", label))
+	}
+	return questions
+}
+
+// memorySummaryFromContent returns a deterministic source-backed summary.
+func memorySummaryFromContent(content string) string {
+	content = strings.Join(strings.Fields(content), " ")
+	if content == "" {
+		return ""
+	}
+	for _, marker := range []string{". ", "! ", "? "} {
+		if index := strings.Index(content, marker); index >= 0 {
+			return content[:index+1]
+		}
+	}
+	if len(content) <= 180 {
+		return content
+	}
+	runes := []rune(content)
+	if len(runes) <= 180 {
+		return content
+	}
+	return strings.TrimSpace(string(runes[:177])) + "..."
+}
+
+// memoryRecordLabel returns a compact human label for a memory record.
+func memoryRecordLabel(record domain.MemoryRecord) string {
+	title := strings.TrimSpace(record.Title)
+	if title != "" && !strings.EqualFold(title, "Untitled memory") {
+		return title
+	}
+	if record.Source.System != "" && record.Source.ID != "" {
+		return record.Source.System + ":" + record.Source.ID
+	}
+	return string(record.ID)
 }
 
 // auditJob records successful deterministic worker behavior.

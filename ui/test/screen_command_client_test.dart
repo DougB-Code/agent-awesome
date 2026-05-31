@@ -58,7 +58,7 @@ MockClient _mockAdkClient({
   return MockClient((request) async {
     if (request.method == 'POST' &&
         request.url.toString() ==
-            '$_baseUrl/apps/$_appName/users/$_userId/sessions') {
+            '$_baseUrl/apps/$_encodedAppName/users/$_userId/sessions') {
       return http.Response(
         jsonEncode(<String, dynamic>{'id': _sessionId}),
         200,
@@ -71,7 +71,7 @@ MockClient _mockAdkClient({
     }
     if (request.method == 'DELETE' &&
         request.url.toString() ==
-            '$_baseUrl/apps/$_appName/users/$_userId/sessions/$_sessionId') {
+            '$_baseUrl/apps/$_encodedAppName/users/$_userId/sessions/$_sessionId') {
       return http.Response('', 204);
     }
     return http.Response(
@@ -94,7 +94,8 @@ String _sseText(String text) {
 }
 
 const String _baseUrl = 'http://127.0.0.1:8070/api';
-const String _appName = 'agent_awesome';
+const String _appName = 'Agent Awesome';
+final String _encodedAppName = Uri.encodeComponent(_appName);
 const String _userId = 'doug';
 const String _sessionId = 'utility-session';
 

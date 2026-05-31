@@ -346,7 +346,11 @@ void main() {
                 'args': <String, dynamic>{
                   'originalFunctionCall': <String, dynamic>{
                     'id': 'call-1',
-                    'name': 'create_task',
+                    'name': 'mcp.call',
+                    'args': <String, dynamic>{
+                      'server_id': 'memory',
+                      'tool': 'create_task',
+                    },
                   },
                   'toolConfirmation': <String, dynamic>{
                     'hint': 'Approve saving memory?',
@@ -370,7 +374,10 @@ void main() {
       expect(event.confirmation?.callId, 'confirm-1');
       expect(event.confirmation?.hint, 'Approve saving memory?');
       expect(event.confirmation?.options.length, 2);
-      expect(event.confirmation?.toolName, 'create_task');
+      expect(event.confirmation?.toolName, 'mcp.call');
+      expect(event.confirmation?.mcpServerName, 'memory');
+      expect(event.confirmation?.mcpToolName, 'create_task');
+      expect(event.confirmation?.durableMcpToolName, 'create_task');
     });
 
     test('keeps outbound text raw and hides persisted runtime policy text', () {
@@ -867,5 +874,57 @@ void main() {
 
       expect(content, <String, dynamic>{'tasks': <dynamic>[]});
     });
+
+    test(
+      'lifts legacy memory domain arguments into gateway selector',
+      () async {
+        final client = GatewayContextClient(
+          baseUrl: 'http://127.0.0.1:1/api/context',
+          httpClient: MockClient((request) async {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            expect(body['name'], 'search_memory');
+            expect(body['domain_id'], 'family');
+            expect(body['arguments'], <String, dynamic>{'text': 'hello'});
+            return http.Response(
+              '{"structuredContent":{"primary_memory":[]}}',
+              200,
+            );
+          }),
+        );
+
+        final content = await client.callTool(
+          'search_memory',
+          <String, dynamic>{'domain_id': 'family', 'text': 'hello'},
+        );
+
+        expect(content, <String, dynamic>{'primary_memory': <dynamic>[]});
+      },
+    );
+
+    test(
+      'strips memory domain arguments from route-scoped MCP calls',
+      () async {
+        final client = McpJsonRpcClient(
+          endpoint: 'http://127.0.0.1:1/mcp/memory',
+          httpClient: MockClient((request) async {
+            final body = jsonDecode(request.body) as Map<String, dynamic>;
+            final params = body['params'] as Map<String, dynamic>;
+            expect(params['name'], 'project_executive_summary');
+            expect(params['arguments'], <String, dynamic>{'horizon': 'today'});
+            return http.Response(
+              '{"result":{"structuredContent":{"ok":true}}}',
+              200,
+            );
+          }),
+        );
+
+        final content = await client.callTool(
+          'project_executive_summary',
+          <String, dynamic>{'domain_id': 'user', 'horizon': 'today'},
+        );
+
+        expect(content, <String, dynamic>{'ok': true});
+      },
+    );
   });
 }

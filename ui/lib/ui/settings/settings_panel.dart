@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/app_controller.dart';
+import '../../app/app_settings.dart';
 import '../../app/local_services.dart';
 import '../theme.dart';
 import '../../domain/agent_config.dart';

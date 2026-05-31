@@ -171,10 +171,91 @@ class _TaskQueueFilterStrip extends StatelessWidget {
       runSpacing: PanelFormMetrics.compactGap,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: <Widget>[
+        _TaskSavedFilterMenu(controller: controller),
         _TaskStatusFilterMenu(controller: controller),
         _TaskPriorityFilterMenu(controller: controller),
         _TaskTopicFilterMenu(controller: controller),
       ],
+    );
+  }
+}
+
+/// _TaskSavedFilterMenu renders saved task filter presets.
+class _TaskSavedFilterMenu extends StatelessWidget {
+  const _TaskSavedFilterMenu({required this.controller});
+
+  static const String _saveCurrentValue = '__save_current_filters';
+  static const String _deletePrefix = '__delete_filter__';
+
+  final AgentAwesomeAppController controller;
+
+  /// Builds the saved filter dropdown.
+  @override
+  Widget build(BuildContext context) {
+    final saved = controller.appSettings.savedTaskFilters;
+    final active = controller.activeSavedTaskFilter();
+    return PopupMenuButton<String>(
+      tooltip: 'Saved task filters',
+      onSelected: (value) {
+        if (value == _saveCurrentValue) {
+          unawaited(controller.saveCurrentTaskFilterPreset());
+          return;
+        }
+        if (value.startsWith(_deletePrefix)) {
+          unawaited(
+            controller.deleteSavedTaskFilterPreset(
+              value.substring(_deletePrefix.length),
+            ),
+          );
+          return;
+        }
+        unawaited(controller.applySavedTaskFilterPreset(value));
+      },
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        if (saved.isEmpty)
+          const PopupMenuItem<String>(
+            enabled: false,
+            child: _TaskFilterMenuItem(
+              icon: Icons.bookmark_border,
+              label: 'No saved filters',
+            ),
+          )
+        else
+          for (final preset in saved)
+            CheckedPopupMenuItem<String>(
+              value: preset.id,
+              checked: preset.id == active?.id,
+              child: _TaskFilterMenuItem(
+                icon: Icons.bookmark_outline,
+                label: preset.label,
+              ),
+            ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: _saveCurrentValue,
+          enabled: active == null,
+          child: const _TaskFilterMenuItem(
+            icon: Icons.bookmark_add_outlined,
+            label: 'Save current filters',
+          ),
+        ),
+        if (saved.isNotEmpty) ...<PopupMenuEntry<String>>[
+          const PopupMenuDivider(),
+          for (final preset in saved)
+            PopupMenuItem<String>(
+              value: '$_deletePrefix${preset.id}',
+              child: _TaskFilterMenuItem(
+                icon: Icons.bookmark_remove_outlined,
+                label: 'Remove ${preset.label}',
+              ),
+            ),
+        ],
+      ],
+      child: _TaskFilterMenuButton(
+        icon: Icons.bookmark_border,
+        label: active?.label ?? 'Saved filters',
+        selected: active != null,
+      ),
     );
   }
 }

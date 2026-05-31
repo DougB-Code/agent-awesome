@@ -87,7 +87,7 @@ func (r *Repository) CreateTask(ctx context.Context, req domain.CreateTaskReques
 		return domain.Task{}, err
 	}
 	for _, link := range req.MemoryLinks {
-		if _, err := r.LinkTaskMemory(ctx, domain.LinkTaskMemoryRequest{TaskID: domain.TaskID(node.ID), Link: link}); err != nil {
+		if _, err := r.LinkTaskMemory(ctx, domain.LinkTaskMemoryRequest{TaskID: domain.TaskID(node.ID), DomainID: req.DomainID, Link: link}); err != nil {
 			return domain.Task{}, err
 		}
 	}
@@ -125,10 +125,9 @@ func (r *Repository) ListTasks(ctx context.Context, q domain.TaskQuery) ([]domai
 		return nil, err
 	}
 	nodes, err := r.graph.SearchNodes(ctx, graph.SearchNodesQuery{
-		Text:     q.Search,
-		Kinds:    []graph.NodeKind{graph.KindTask},
-		Firewall: graph.FirewallUser,
-		Limit:    100,
+		Text:  q.Search,
+		Kinds: []graph.NodeKind{graph.KindTask},
+		Limit: 100,
 	})
 	if err != nil {
 		return nil, err
@@ -184,7 +183,6 @@ func (r *Repository) UpdateTask(ctx context.Context, req domain.UpdateTaskReques
 			Title:        title,
 			Summary:      summary,
 			Status:       node.Status,
-			Firewall:     node.Firewall,
 			Sensitivity:  node.Sensitivity,
 			TrustLevel:   node.TrustLevel,
 			Confidence:   node.Confidence,
@@ -212,7 +210,7 @@ func (r *Repository) UpdateTask(ctx context.Context, req domain.UpdateTaskReques
 	}); err != nil {
 		return domain.Task{}, err
 	}
-	return r.GetTask(ctx, domain.TaskIDRequest{TaskID: req.TaskID, Actor: req.Actor})
+	return r.GetTask(ctx, domain.TaskIDRequest{TaskID: req.TaskID, Actor: req.Actor, DomainID: req.DomainID})
 }
 
 // CompleteTask marks one graph-backed task done.
@@ -222,7 +220,7 @@ func (r *Repository) CompleteTask(ctx context.Context, req domain.TaskIDRequest)
 		return domain.Task{}, err
 	}
 	status := domain.TaskStatusDone
-	return r.UpdateTask(ctx, domain.UpdateTaskRequest{TaskID: req.TaskID, Actor: req.Actor, Status: &status})
+	return r.UpdateTask(ctx, domain.UpdateTaskRequest{TaskID: req.TaskID, Actor: req.Actor, DomainID: req.DomainID, Status: &status})
 }
 
 // CancelTask marks one graph-backed task canceled.
@@ -232,7 +230,7 @@ func (r *Repository) CancelTask(ctx context.Context, req domain.TaskIDRequest) (
 		return domain.Task{}, err
 	}
 	status := domain.TaskStatusCanceled
-	return r.UpdateTask(ctx, domain.UpdateTaskRequest{TaskID: req.TaskID, Actor: req.Actor, Status: &status})
+	return r.UpdateTask(ctx, domain.UpdateTaskRequest{TaskID: req.TaskID, Actor: req.Actor, DomainID: req.DomainID, Status: &status})
 }
 
 // DeleteTask lifecycle-deletes one graph-backed task node.

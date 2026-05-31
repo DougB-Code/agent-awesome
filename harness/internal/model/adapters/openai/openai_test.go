@@ -13,6 +13,7 @@ import (
 
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/model/adapter"
+	"github.com/google/jsonschema-go/jsonschema"
 	llmapi "google.golang.org/adk/model"
 	"google.golang.org/genai"
 )
@@ -342,6 +343,36 @@ func TestOpenAICompatibleNormalizesGenAISchemaTools(t *testing.T) {
 	}
 	if got, want := query["type"], "string"; got != want {
 		t.Fatalf("query type = %#v, want %q", got, want)
+	}
+}
+
+func TestOpenAIParametersSchemaNormalizesGoogleJSONSchema(t *testing.T) {
+	type commandExecuteRequest struct {
+		TemplateID string         `json:"template_id" jsonschema:"Configured command template id."`
+		Parameters map[string]any `json:"parameters,omitempty" jsonschema:"Template parameters."`
+	}
+
+	inputSchema, err := jsonschema.For[commandExecuteRequest](nil)
+	if err != nil {
+		t.Fatalf("jsonschema.For() error = %v", err)
+	}
+	parameters, err := openAIParametersSchema(inputSchema)
+	if err != nil {
+		t.Fatalf("openAIParametersSchema() error = %v", err)
+	}
+	if got, want := parameters["type"], "object"; got != want {
+		t.Fatalf("parameters type = %#v, want %q", got, want)
+	}
+	properties, ok := parameters["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %#v, want object", parameters["properties"])
+	}
+	templateID, ok := properties["template_id"].(map[string]any)
+	if !ok {
+		t.Fatalf("template_id property = %#v, want object", properties["template_id"])
+	}
+	if got, want := templateID["type"], "string"; got != want {
+		t.Fatalf("template_id type = %#v, want %q", got, want)
 	}
 }
 

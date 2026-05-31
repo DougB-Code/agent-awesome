@@ -205,6 +205,39 @@ class CredentialStore {
     );
   }
 
+  /// Stores a website login profile without exposing values to app config.
+  Future<List<CredentialMutationResult>> storeWebsiteLogin({
+    required String profileId,
+    required String username,
+    required String password,
+    String oneTimeCodeSeed = '',
+  }) async {
+    final refs = websiteLoginCredentialReferences(profileId);
+    final results = <CredentialMutationResult>[
+      await store(reference: refs.username, secret: username),
+      await store(reference: refs.password, secret: password),
+    ];
+    if (oneTimeCodeSeed.trim().isNotEmpty) {
+      results.add(
+        await store(reference: refs.oneTimeCodeSeed, secret: oneTimeCodeSeed),
+      );
+    }
+    return results;
+  }
+
+  /// Resolves a website login profile for a browser automation boundary.
+  Future<WebsiteLoginCredentialLookup> lookupWebsiteLogin(
+    String profileId,
+  ) async {
+    final refs = websiteLoginCredentialReferences(profileId);
+    return WebsiteLoginCredentialLookup(
+      profileId: refs.profileId,
+      username: await lookup(refs.username),
+      password: await lookup(refs.password),
+      oneTimeCodeSeed: await lookup(refs.oneTimeCodeSeed),
+    );
+  }
+
   /// Looks up a credential in the platform keyring when supported.
   Future<String?> _lookupKeyring(String reference) async {
     final os = _operatingSystem ?? Platform.operatingSystem;

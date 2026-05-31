@@ -16,6 +16,7 @@ void main() {
         apiKey: '',
         defaultModel: 'small',
         url: 'http://127.0.0.1:11666/v1/chat/completions',
+        endpoints: <String, String>{},
         extra: <String, dynamic>{'auth': 'optional', 'runtime': 'litert-lm'},
         models: <ModelConfigModel>[
           ModelConfigModel(id: 'small', model: 'gemma-3n'),
@@ -37,6 +38,7 @@ void main() {
         apiKey: 'env:OPENAI_API_KEY',
         defaultModel: 'main',
         url: '',
+        endpoints: <String, String>{},
         models: <ModelConfigModel>[
           ModelConfigModel(id: 'main', model: 'gpt-5-mini'),
         ],
@@ -58,6 +60,7 @@ void main() {
         apiKey: 'env:GOOGLE_API_KEY',
         defaultModel: 'main',
         url: '',
+        endpoints: <String, String>{},
         models: <ModelConfigModel>[
           ModelConfigModel(
             id: 'main',

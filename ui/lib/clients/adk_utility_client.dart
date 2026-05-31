@@ -74,7 +74,7 @@ class AdkUtilityClient {
   }
 
   Future<String> _createSession(String logName) async {
-    final uri = _uri('/apps/$appName/users/$userId/sessions');
+    final uri = _sessionCollectionUri();
     await _log(logName, 'POST $uri create utility session');
     final response = await _http.post(
       uri,
@@ -172,7 +172,7 @@ class AdkUtilityClient {
   }
 
   Future<void> _deleteSession(String sessionId, String logName) async {
-    final uri = _uri('/apps/$appName/users/$userId/sessions/$sessionId');
+    final uri = _sessionUri(sessionId);
     await _log(logName, 'DELETE $uri utility session');
     try {
       final response = await _http.delete(uri, headers: _headers());
@@ -211,6 +211,21 @@ class AdkUtilityClient {
         ? baseUrl.substring(0, baseUrl.length - 1)
         : baseUrl;
     return Uri.parse('$trimmedBase$path');
+  }
+
+  Uri _sessionCollectionUri() {
+    return _uri(
+      '/apps/${Uri.encodeComponent(appName.trim())}'
+      '/users/${Uri.encodeComponent(userId)}/sessions',
+    );
+  }
+
+  Uri _sessionUri(String sessionId) {
+    return _uri(
+      '/apps/${Uri.encodeComponent(appName.trim())}'
+      '/users/${Uri.encodeComponent(userId)}/sessions'
+      '/${Uri.encodeComponent(sessionId)}',
+    );
   }
 
   Map<String, String> _headers({bool contentTypeJson = false}) {

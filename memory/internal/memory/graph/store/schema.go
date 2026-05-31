@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS graph_nodes (
 	title TEXT NOT NULL DEFAULT '',
 	summary TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'active',
-	firewall TEXT NOT NULL DEFAULT 'user',
 	sensitivity TEXT NOT NULL DEFAULT 'private',
 	trust_level TEXT NOT NULL DEFAULT 'user_asserted',
 	confidence REAL NOT NULL DEFAULT 1.0,
@@ -118,7 +117,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS graph_text_fts USING fts5(
 );
 
 CREATE INDEX IF NOT EXISTS idx_graph_nodes_kind_status ON graph_nodes(kind, status);
-CREATE INDEX IF NOT EXISTS idx_graph_nodes_firewall_sensitivity ON graph_nodes(firewall, sensitivity, status);
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_sensitivity_status ON graph_nodes(sensitivity, status);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_graph_nodes_stable_key ON graph_nodes(kind, stable_key) WHERE stable_key IS NOT NULL AND stable_key != '';
 CREATE INDEX IF NOT EXISTS idx_graph_edges_from_type ON graph_edges(from_node_id, relation_type, status);
 CREATE INDEX IF NOT EXISTS idx_graph_edges_to_type ON graph_edges(to_node_id, relation_type, status);

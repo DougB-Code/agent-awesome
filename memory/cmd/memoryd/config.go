@@ -17,7 +17,7 @@ type Config struct {
 	DBPath          string
 	DataRoot        string
 	LogFile         string
-	FirewallPolicy  string
+	DomainPolicy    string
 	WorkerCount     int
 	SnapshotURL     string
 	SnapshotToken   string
@@ -42,7 +42,7 @@ func parseConfig(args []string) (Config, error) {
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database path")
 	fs.StringVar(&cfg.DataRoot, "data", cfg.DataRoot, "filesystem artifact root")
 	fs.StringVar(&cfg.LogFile, "log-file", cfg.LogFile, "log file path")
-	fs.StringVar(&cfg.FirewallPolicy, "firewall-policy", cfg.FirewallPolicy, "optional JSON memory firewall policy path")
+	fs.StringVar(&cfg.DomainPolicy, "domain-policy", cfg.DomainPolicy, "optional JSON memory domain policy path")
 	fs.IntVar(&cfg.WorkerCount, "workers", cfg.WorkerCount, "background worker count")
 	fs.StringVar(&cfg.SnapshotURL, "snapshot-url", cfg.SnapshotURL, "optional authenticated HTTP snapshot endpoint")
 	fs.StringVar(&cfg.SnapshotToken, "snapshot-token", cfg.SnapshotToken, "bearer token for the snapshot endpoint")

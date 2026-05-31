@@ -56,7 +56,7 @@ void main() {
       contains('AA_GATEWAY_PUBLIC_BASE_URL=https://agent.example.com/api'),
     );
     expect(bundle.runCommand, contains('AA_PROFILE_ID=personal'));
-    expect(bundle.runCommand, contains('AA_APP_NAME=agent_awesome'));
+    expect(bundle.runCommand, contains('AA_APP_NAME=Agent Awesome'));
     expect(bundle.runCommand, contains('AA_USER_ID=doug'));
 
     final profileJson =
@@ -159,7 +159,7 @@ void main() {
     await controller.saveRuntimeProfile(remoteProfile);
 
     expect(controller.assistantClient.baseUrl, 'https://agent.example.com/api');
-    expect(controller.assistantClient.appName, 'agent_awesome');
+    expect(controller.assistantClient.appName, 'Agent Awesome');
     expect(controller.assistantClient.userId, 'doug');
     expect(
       controller.assistantClient.headers['Authorization'],
@@ -471,7 +471,7 @@ AppConfig _testConfig(
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-    agentAppName: 'agent_awesome',
+    agentAppName: 'Agent Awesome',
     agentUserId: 'doug',
     workspaceRoot: root.path,
     autoStartLocalServices: false,
@@ -490,7 +490,7 @@ RuntimeProfile _testProfile(Directory root) {
       label: 'Harness',
       apiBaseUrl: 'http://127.0.0.1:8080/api',
       contextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
-      appName: 'agent_awesome',
+      appName: 'Agent Awesome',
       userId: 'doug',
       workingDirectory: '${root.path}/harness',
       executablePath: '${root.path}/harness/build/bin/agent-awesome',
@@ -510,7 +510,7 @@ RuntimeProfile _testProfile(Directory root) {
       harnessBaseUrl: 'http://127.0.0.1:8080/api',
       contextBaseUrl: 'http://127.0.0.1:8081/api/context',
       memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-      appName: 'agent_awesome',
+      appName: 'Agent Awesome',
       userId: 'doug',
       port: 8070,
       autoStart: false,

@@ -15,8 +15,8 @@ type Repository interface {
 	RepairMemory(ctx context.Context, req domain.RepairRequest) (domain.MemoryRecord, error)
 	CreateCorrection(ctx context.Context, req domain.CorrectionRequest) (domain.CaptureResult, error)
 	RefreshCompiledPage(ctx context.Context, req domain.RefreshPageRequest) (domain.CompiledPage, error)
-	LoadEntityPage(ctx context.Context, firewall domain.Firewall, entityID domain.EntityID, title string) (domain.CompiledPage, error)
-	LoadTimeline(ctx context.Context, firewall domain.Firewall, topic string, entityID domain.EntityID) (domain.CompiledPage, error)
+	LoadEntityPage(ctx context.Context, domainID domain.DomainID, entityID domain.EntityID, title string) (domain.CompiledPage, error)
+	LoadTimeline(ctx context.Context, domainID domain.DomainID, topic string, entityID domain.EntityID) (domain.CompiledPage, error)
 	LeaseJob(ctx context.Context, worker string) (domain.Job, bool, error)
 	CompleteJob(ctx context.Context, id domain.JobID, message string) error
 	FailJob(ctx context.Context, id domain.JobID, err error) error
@@ -55,6 +55,13 @@ type CodebaseRepository interface {
 	ListCodebases(context.Context, domain.CodebaseQuery) ([]domain.Codebase, error)
 	ResolveCodebase(context.Context, domain.ResolveCodebaseRequest) (domain.CodebaseResolution, error)
 	DeleteCodebase(context.Context, domain.CodebaseIDRequest) error
+}
+
+// DomainPoolRepository manages live memory domain database membership.
+type DomainPoolRepository interface {
+	ListMemoryDomains(context.Context) ([]domain.MemoryDomainInfo, error)
+	CreateMemoryDomain(context.Context, domain.DomainID) (domain.MemoryDomainInfo, error)
+	RemoveMemoryDomain(context.Context, domain.DomainID, bool) (domain.MemoryDomainInfo, error)
 }
 
 // Steward performs optional model-assisted memory enrichment and maintenance.

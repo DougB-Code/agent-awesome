@@ -6,6 +6,7 @@ class _SettingsInlineField extends StatefulWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    this.hintText,
     this.minLines = 1,
     this.maxLines = 1,
   });
@@ -13,6 +14,7 @@ class _SettingsInlineField extends StatefulWidget {
   final String label;
   final String value;
   final ValueChanged<String> onChanged;
+  final String? hintText;
   final int minLines;
   final int maxLines;
 
@@ -76,6 +78,7 @@ class _SettingsInlineFieldState extends State<_SettingsInlineField> {
           decoration: SettingsInputDecoration.field(
             context,
             label: widget.label,
+            hintText: widget.hintText,
             multiline: widget.maxLines > 1 || widget.minLines > 1,
           ),
         ),

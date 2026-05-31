@@ -74,6 +74,7 @@ mcp:
       require-confirmation-tools:
         - remember
         - save_memory_candidate
+        - organize_memory
         - refresh_compiled_page
         - repair_memory_record
         - submit_memory_correction
@@ -93,6 +94,7 @@ mcp:
           - save_memory_candidate
           - search_memory
           - search_sources
+          - organize_memory
           - load_entity_page
           - load_timeline
           - refresh_compiled_page

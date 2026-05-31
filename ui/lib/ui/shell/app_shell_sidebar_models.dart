@@ -11,6 +11,14 @@ class _SidebarGroup {
 
   /// Navigation items in this group.
   final List<_SidebarItem> items;
+
+  /// Returns a copy with selected values changed.
+  _SidebarGroup copyWith({String? title, List<_SidebarItem>? items}) {
+    return _SidebarGroup(
+      title: title ?? this.title,
+      items: items ?? this.items,
+    );
+  }
 }
 
 /// _SidebarItem stores one app route shown in the left rail.
@@ -20,6 +28,7 @@ class _SidebarItem {
     required this.label,
     required this.section,
     required this.icon,
+    this.advanced = false,
   });
 
   /// Display text.
@@ -30,4 +39,21 @@ class _SidebarItem {
 
   /// Material icon that matches the destination's command-panel purpose.
   final IconData icon;
+
+  /// Whether this route is visible only in Advanced mode.
+  final bool advanced;
+}
+
+/// Maps plugin manifest icon names onto approved Material symbols.
+IconData appPluginIconFor(String name) {
+  return switch (name.trim().toLowerCase()) {
+    'board' || 'kanban' || 'columns' => Icons.view_kanban_outlined,
+    'calendar' || 'schedule' => Icons.calendar_month_outlined,
+    'dashboard' => Icons.dashboard_outlined,
+    'form' => Icons.dynamic_form_outlined,
+    'list' || 'collection' => Icons.list_alt_outlined,
+    'tool' => Icons.handyman_outlined,
+    'integration' => Icons.extension_outlined,
+    _ => Icons.apps_outlined,
+  };
 }

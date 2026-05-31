@@ -134,19 +134,14 @@ void main() {
     expect(profilesJson.single['default_write_domain'], 'memory');
     expect(profile.memoryServers.single.label, 'Memory');
     expect(profile.memoryServers.single.endpoint, 'http://127.0.0.1:8090/mcp');
-    expect(
-      profile.memoryServers.single.dbPath,
-      '${agentAwesomeDataDirectoryPath()}/memory/memory.db',
-    );
+    expect(profile.memoryServers.single.dbPath, isEmpty);
     expect(
       profile.memoryServers.single.arguments,
       containsAllInOrder(<String>[
-        '--db',
-        '${agentAwesomeDataDirectoryPath()}/memory/memory.db',
         '--data',
-        '${agentAwesomeDataDirectoryPath()}/memory/files',
-        '--firewall-policy',
-        memoryFirewallPolicyPath(),
+        '${agentAwesomeDataDirectoryPath()}/memory',
+        '--domain-policy',
+        memoryDomainPolicyPath(),
       ]),
     );
   });
@@ -655,7 +650,7 @@ Map<String, dynamic> _harnessJson() {
     'label': 'Harness',
     'api_base_url': 'http://127.0.0.1:8080/api',
     'context_api_base_url': 'http://127.0.0.1:8081/api/context',
-    'app_name': 'agent_awesome',
+    'app_name': 'Agent Awesome',
     'user_id': 'doug',
     'working_directory': '/tmp/harness',
     'executable_path': '/tmp/bin/agent-awesome',
@@ -705,7 +700,7 @@ Map<String, dynamic> _gatewayJson({bool enabled = true}) {
     'harness_base_url': 'http://127.0.0.1:8080/api',
     'context_base_url': 'http://127.0.0.1:8081/api/context',
     'memory_mcp_url': 'http://127.0.0.1:8090/mcp',
-    'app_name': 'agent_awesome',
+    'app_name': 'Agent Awesome',
     'user_id': 'doug',
     'port': 8070,
     'auto_start': false,
@@ -744,7 +739,7 @@ AppConfig _testConfig({
     agentGatewayBaseUrl: agentGatewayBaseUrl,
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-    agentAppName: 'agent_awesome',
+    agentAppName: 'Agent Awesome',
     agentUserId: 'doug',
     workspaceRoot: resolvedWorkspaceRoot,
     autoStartLocalServices: autoStartLocalServices,

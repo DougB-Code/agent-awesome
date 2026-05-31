@@ -30,10 +30,8 @@ type Executor struct {
 	store Store
 }
 
-// graphQueryAccessPolicy stores node visibility rules for one query.
+// graphQueryAccessPolicy stores node visibility rules for one boundary-local query.
 type graphQueryAccessPolicy struct {
-	firewall              graph.Firewall
-	includeGlobal         bool
 	allowedSensitivities  []graph.Sensitivity
 	allowedSensitivitySet map[graph.Sensitivity]bool
 }
@@ -87,8 +85,6 @@ func graphQueryAccessPolicyFromRequest(req Request) graphQueryAccessPolicy {
 		allowedSet[sensitivity] = true
 	}
 	return graphQueryAccessPolicy{
-		firewall:              req.Firewall,
-		includeGlobal:         req.IncludeGlobal,
 		allowedSensitivities:  allowed,
 		allowedSensitivitySet: allowedSet,
 	}
@@ -97,9 +93,6 @@ func graphQueryAccessPolicyFromRequest(req Request) graphQueryAccessPolicy {
 // canReadNode reports whether a node is visible under the query read policy.
 func (p graphQueryAccessPolicy) canReadNode(node graph.Node) bool {
 	if node.Status != graph.StatusActive {
-		return false
-	}
-	if node.Firewall != p.firewall && !(p.includeGlobal && node.Firewall == graph.FirewallGlobal) {
 		return false
 	}
 	return p.allowedSensitivitySet[node.Sensitivity]
@@ -131,8 +124,6 @@ func (e *Executor) executeStatement(ctx context.Context, stmt Statement, policy 
 func (e *Executor) executeFind(ctx context.Context, stmt Statement, policy graphQueryAccessPolicy) (executionResult, error) {
 	nodes, err := e.store.SearchNodes(ctx, graph.SearchNodesQuery{
 		Kinds:                []graph.NodeKind{stmt.Kind},
-		Firewall:             policy.firewall,
-		IncludeGlobal:        policy.includeGlobal,
 		AllowedSensitivities: policy.allowedSensitivities,
 		Limit:                100,
 	})
@@ -218,8 +209,6 @@ func (e *Executor) executeMatch(ctx context.Context, stmt Statement, policy grap
 func (e *Executor) executeVariableMatch(ctx context.Context, stmt Statement, policy graphQueryAccessPolicy) (executionResult, error) {
 	roots, err := e.store.SearchNodes(ctx, graph.SearchNodesQuery{
 		Kinds:                []graph.NodeKind{stmt.FromKind},
-		Firewall:             policy.firewall,
-		IncludeGlobal:        policy.includeGlobal,
 		AllowedSensitivities: policy.allowedSensitivities,
 		Limit:                100,
 	})

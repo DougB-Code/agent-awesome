@@ -110,15 +110,15 @@ func TestRestoreRejectsCorruptArchiveWithoutDeletingExistingData(t *testing.T) {
 	assertExistingSnapshot(t, targetDB, targetData)
 }
 
-// TestRestoreRejectsMissingDBWithoutDeletingExistingData verifies required DB validation.
-func TestRestoreRejectsMissingDBWithoutDeletingExistingData(t *testing.T) {
+// TestRestoreRejectsMissingDBAndDomainDataWithoutDeletingExistingData verifies empty snapshots are inert.
+func TestRestoreRejectsMissingDBAndDomainDataWithoutDeletingExistingData(t *testing.T) {
 	targetDB, targetData := existingSnapshotTarget(t)
 	archive := testSnapshotArchive(t, map[string]string{
-		"data/sources/new.txt": "new source",
+		"ignored.txt": "not a recognized snapshot path",
 	}, nil)
 
 	if err := extractSnapshot(bytes.NewReader(archive), targetDB, targetData); err == nil {
-		t.Fatal("extractSnapshot() error = nil, want missing DB error")
+		t.Fatal("extractSnapshot() error = nil, want missing storage error")
 	}
 	assertExistingSnapshot(t, targetDB, targetData)
 }

@@ -13,8 +13,6 @@ type Request struct {
 	Actor                string
 	Query                string
 	SourceNodeID         string
-	Firewall             graph.Firewall
-	IncludeGlobal        bool
 	AllowedSensitivities []graph.Sensitivity
 }
 
@@ -194,16 +192,12 @@ func normalizeRequest(req Request) (Request, error) {
 	}
 	policy, err := graph.NormalizeAccessPolicy(graph.AccessPolicy{
 		Actor:                req.Actor,
-		Firewall:             req.Firewall,
-		IncludeGlobal:        req.IncludeGlobal,
 		AllowedSensitivities: req.AllowedSensitivities,
 	})
 	if err != nil {
 		return req, fmt.Errorf("normalize graph access policy: %w", err)
 	}
 	req.Actor = policy.Actor
-	req.Firewall = policy.Firewall
-	req.IncludeGlobal = policy.IncludeGlobal
 	req.AllowedSensitivities = policy.AllowedSensitivities
 	return req, nil
 }

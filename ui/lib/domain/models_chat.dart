@@ -207,6 +207,8 @@ class ConfirmationRequest {
     required this.hint,
     required this.options,
     this.toolName = '',
+    this.mcpServerName = '',
+    this.mcpToolName = '',
   });
 
   /// Runtime function-call id to echo in the response.
@@ -220,6 +222,18 @@ class ConfirmationRequest {
 
   /// Original tool name that requested confirmation, when supplied by the runtime.
   final String toolName;
+
+  /// MCP server name from generic MCP call arguments, when supplied.
+  final String mcpServerName;
+
+  /// MCP tool name from generic MCP call arguments, when supplied.
+  final String mcpToolName;
+
+  /// Tool name that should be stored in durable MCP config.
+  String get durableMcpToolName {
+    final mcpTool = mcpToolName.trim();
+    return mcpTool.isEmpty ? toolName.trim() : mcpTool;
+  }
 }
 
 /// ConfirmationOption describes one selectable confirmation action.

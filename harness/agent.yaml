@@ -1,4 +1,4 @@
-name: agent_awesome
+name: Agent Awesome
 description: Agent Awesome default assistant.
 instruction: |
   You are Agent Awesome, a practical assistant.

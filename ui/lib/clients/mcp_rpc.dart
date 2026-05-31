@@ -57,13 +57,14 @@ class McpJsonRpcClient implements ToolRpcClient {
     Map<String, dynamic>? arguments,
   ]) async {
     final id = _nextId++;
+    final effectiveArguments = _mcpEndpointArguments(endpoint, arguments);
     final payload = <String, dynamic>{
       'jsonrpc': '2.0',
       'id': id,
       'method': 'tools/call',
       'params': <String, dynamic>{
         'name': name,
-        'arguments': arguments ?? <String, dynamic>{},
+        'arguments': effectiveArguments,
       },
     };
     await _log('POST $endpoint tools/call id=$id name=$name');
@@ -156,14 +157,21 @@ class GatewayContextClient implements ToolRpcClient {
     Map<String, dynamic>? arguments,
   ]) async {
     final uri = _uri('/tools/call');
+    final effectiveArguments = Map<String, dynamic>.from(
+      arguments ?? const <String, dynamic>{},
+    );
+    final argumentDomain = _removeMemoryDomainSelector(effectiveArguments);
+    final selectedDomain = domainId.trim().isNotEmpty
+        ? domainId.trim()
+        : argumentDomain;
     await _log('POST $uri context tool name=$name');
     final response = await _http.post(
       uri,
       headers: _headers(contentTypeJson: true),
       body: jsonEncode(<String, dynamic>{
         'name': name,
-        if (domainId.trim().isNotEmpty) 'domain_id': domainId.trim(),
-        'arguments': arguments ?? <String, dynamic>{},
+        if (selectedDomain.isNotEmpty) 'domain_id': selectedDomain,
+        'arguments': effectiveArguments,
       }),
     );
     await _log('POST $uri context tool name=$name -> ${response.statusCode}');
@@ -224,6 +232,44 @@ class GatewayContextClient implements ToolRpcClient {
       if (contentTypeJson) 'Content-Type': 'application/json',
     };
   }
+}
+
+/// Returns MCP tool arguments safe for a route-scoped gateway memory endpoint.
+Map<String, dynamic> _mcpEndpointArguments(
+  String endpoint,
+  Map<String, dynamic>? arguments,
+) {
+  final effective = Map<String, dynamic>.from(
+    arguments ?? const <String, dynamic>{},
+  );
+  if (_gatewayMemoryPathDomain(endpoint).isNotEmpty) {
+    _removeMemoryDomainSelector(effective);
+  }
+  return effective;
+}
+
+/// Returns the memory domain selected by a gateway /mcp/{domain} endpoint.
+String _gatewayMemoryPathDomain(String endpoint) {
+  final uri = Uri.tryParse(endpoint);
+  if (uri == null || uri.pathSegments.length != 2) {
+    return '';
+  }
+  return uri.pathSegments[0] == 'mcp' ? uri.pathSegments[1].trim() : '';
+}
+
+/// Removes legacy in-argument memory selectors and returns the selected domain.
+String _removeMemoryDomainSelector(Map<String, dynamic> arguments) {
+  final selected = _stringArgument(arguments['domain_id']).isNotEmpty
+      ? _stringArgument(arguments['domain_id'])
+      : _stringArgument(arguments['firewall']);
+  arguments.remove('domain_id');
+  arguments.remove('firewall');
+  return selected;
+}
+
+/// Returns a trimmed string argument when the value is string-like.
+String _stringArgument(Object? value) {
+  return value is String ? value.trim() : '';
 }
 
 /// Extracts structuredContent from a MCP tools/call response.

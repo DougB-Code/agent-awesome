@@ -75,9 +75,17 @@ class _CommandBarState extends State<CommandBar> {
   bool _agentSwitching = false;
   bool _memorySwitching = false;
 
+  /// Starts listening to controller-driven chrome state.
+  @override
+  void initState() {
+    super.initState();
+    widget.appController.addListener(_handleAppControllerChanged);
+  }
+
   /// Cleans up quick-access overlay and text focus resources.
   @override
   void dispose() {
+    widget.appController.removeListener(_handleAppControllerChanged);
     _removeQuickAccess();
     _focusNode.dispose();
     super.dispose();
@@ -87,6 +95,19 @@ class _CommandBarState extends State<CommandBar> {
   @override
   void didUpdateWidget(covariant CommandBar oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.appController != widget.appController) {
+      oldWidget.appController.removeListener(_handleAppControllerChanged);
+      widget.appController.addListener(_handleAppControllerChanged);
+    }
+    _scheduleQuickAccessRebuild();
+  }
+
+  /// Refreshes top-bar state when app settings or chrome state change.
+  void _handleAppControllerChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
     _scheduleQuickAccessRebuild();
   }
 
@@ -138,9 +159,34 @@ class _CommandBarState extends State<CommandBar> {
               onManageMemory: _handleManageMemory,
               onOpen: _handleExternalControlOpened,
             ),
+            _CommandWorkspaceViewPicker(
+              activeView: widget.appController.activeWorkspaceView,
+              compact: actionCompact,
+              size: _buttonSize,
+              onChanged: (view) => unawaited(_handleWorkspaceViewChanged(view)),
+              onOpen: _handleExternalControlOpened,
+            ),
+            _CommandChromeButton(
+              icon: widget.appController.watchWorkspaceChangesEnabled
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+              label: '',
+              tooltip: widget.appController.watchWorkspaceChangesEnabled
+                  ? 'Watching AI changes'
+                  : 'AI changes stay in background',
+              size: _buttonSize,
+              onTap: () => unawaited(_handleWatchWorkspaceChangesToggle()),
+            ),
             if (!compact && !widget.appController.gettingStartedCompleted)
               _SetupStatusButton(onTap: _handleOpenSetup),
             if (roomy) const _ThemeBadge(),
+            _CommandChromeButton(
+              icon: Icons.help_outline,
+              label: '',
+              tooltip: 'Help',
+              size: _buttonSize,
+              onTap: _handleOpenHelp,
+            ),
             _CommandChromeButton(
               icon: Icons.chat_bubble_outline,
               label: '',
@@ -216,10 +262,69 @@ class _CommandBarState extends State<CommandBar> {
     widget.onToggleAssistantChat();
   }
 
+  /// Toggles whether screen AI opens side panels while applying changes.
+  Future<void> _handleWatchWorkspaceChangesToggle() async {
+    _removeQuickAccess();
+    await widget.appController.setWatchWorkspaceChangesEnabled(
+      !widget.appController.watchWorkspaceChangesEnabled,
+    );
+  }
+
   /// Opens the setup wizard from the app shell.
   void _handleOpenSetup() {
     _removeQuickAccess();
     widget.onOpenSetup();
+  }
+
+  /// Opens contextual help without leaving the app shell.
+  void _handleOpenHelp() {
+    _removeQuickAccess();
+    final contextSnapshot = widget.commandContext('');
+    final help = commandHelpContent(contextSnapshot);
+    final uri = commandHelpUri(
+      contextSnapshot,
+      widget.appController.config.workspaceRoot,
+    );
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final colors = dialogContext.agentAwesomeColors;
+        return AlertDialog(
+          backgroundColor: colors.surface,
+          title: Row(
+            children: <Widget>[
+              Icon(help.icon, color: colors.green),
+              const SizedBox(width: 10),
+              Flexible(child: Text(help.title)),
+            ],
+          ),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Text(help.message),
+          ),
+          actions: <Widget>[
+            TextButton.icon(
+              onPressed: () {
+                unawaited(Clipboard.setData(ClipboardData(text: '$uri')));
+                Navigator.of(dialogContext).pop();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Documentation link copied'),
+                    duration: Duration(milliseconds: 1200),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.link_outlined),
+              label: const Text('Copy docs link'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   /// Closes command-input affordances when another top-bar control opens.
@@ -270,6 +375,12 @@ class _CommandBarState extends State<CommandBar> {
         });
       }
     }
+  }
+
+  /// Switches the active workspace view from the top-bar picker.
+  Future<void> _handleWorkspaceViewChanged(String view) async {
+    _removeQuickAccess();
+    await widget.appController.selectWorkspaceView(view);
   }
 
   /// Opens agent authoring from point-of-use controls.
@@ -517,4 +628,127 @@ class _CommandBarState extends State<CommandBar> {
       },
     );
   }
+}
+
+const String _helpRepositoryBaseUrl =
+    'https://github.com/DougB-Code/agent-awesome/blob/main';
+
+/// Returns the documentation URI for the current command context.
+Uri commandHelpUri(CommandContext context, String workspaceRoot) {
+  final target = _commandHelpTarget(context);
+  final root = workspaceRoot.trim();
+  if (root.isEmpty) {
+    return _commandHelpWebUri(target);
+  }
+  final htmlPath = '$root/build/site/agent-awesome/0.1/${target.htmlPage}';
+  if (File(htmlPath).existsSync()) {
+    return Uri.file(htmlPath);
+  }
+  return _commandHelpWebUri(target);
+}
+
+/// Returns the repository-backed documentation URI for unbuilt local docs.
+Uri _commandHelpWebUri(_CommandHelpTarget target) {
+  return Uri.parse('$_helpRepositoryBaseUrl/${target.sourcePath}');
+}
+
+/// Returns concise in-app help for a command-bar context.
+CommandHelpContent commandHelpContent(CommandContext context) {
+  final section = context.section.trim();
+  if (section == AppSections.chat) {
+    return const CommandHelpContent(
+      title: 'Chat Help',
+      message:
+          'Start or continue a conversation, then use the right-side modes to inspect memory, tasks, files, people, and runtime details for the selected chat.',
+      icon: Icons.forum_outlined,
+    );
+  }
+  if (section == AppSections.automationLaunchpad ||
+      section == AppSections.automationRunbooks) {
+    return const CommandHelpContent(
+      title: 'Launchpad Help',
+      message:
+          'Use Launchpad to prepare, review, and run guided automations from configured runbooks.',
+      icon: Icons.rocket_launch_outlined,
+    );
+  }
+  if (section == AppSections.settings ||
+      section == AppSections.automationAgents ||
+      section == AppSections.automationMcpServers ||
+      section == AppSections.automationTools) {
+    return const CommandHelpContent(
+      title: 'Configuration Help',
+      message:
+          'Use Details for artifact metadata, then switch modes to edit runtime behavior, validations, credentials, and operational surfaces.',
+      icon: Icons.tune,
+    );
+  }
+  return const CommandHelpContent(
+    title: 'Agent Awesome Help',
+    message:
+        'Use the sidebar to choose a workspace, the command bar to act on the current screen, and chat when you want Agent Awesome to work through a conversation.',
+    icon: Icons.help_outline,
+  );
+}
+
+/// CommandHelpContent stores one contextual in-app help payload.
+class CommandHelpContent {
+  /// Creates command-bar help content.
+  const CommandHelpContent({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  /// Dialog title.
+  final String title;
+
+  /// Brief contextual guidance.
+  final String message;
+
+  /// Dialog icon.
+  final IconData icon;
+}
+
+/// Returns the section-specific docs page nearest to the current UI context.
+_CommandHelpTarget _commandHelpTarget(CommandContext context) {
+  final section = context.section.trim();
+  if (section == AppSections.chat) {
+    return const _CommandHelpTarget(
+      htmlPage: 'user/local-chat.html',
+      sourcePath: 'docs/modules/user/pages/local-chat.adoc',
+    );
+  }
+  if (section == AppSections.settings ||
+      section == AppSections.automationAgents ||
+      section == AppSections.automationMcpServers ||
+      section == AppSections.automationTools) {
+    return const _CommandHelpTarget(
+      htmlPage: 'user/desktop-ui.html',
+      sourcePath: 'docs/modules/user/pages/desktop-ui.adoc',
+    );
+  }
+  if (section == AppSections.automationLaunchpad ||
+      section == AppSections.automationRunbooks) {
+    return const _CommandHelpTarget(
+      htmlPage: 'launchpad/local-run.html',
+      sourcePath: 'docs/modules/launchpad/pages/local-run.adoc',
+    );
+  }
+  return const _CommandHelpTarget(
+    htmlPage: 'user/index.html',
+    sourcePath: 'docs/modules/user/pages/index.adoc',
+  );
+}
+
+/// _CommandHelpTarget stores paired built and source documentation paths.
+class _CommandHelpTarget {
+  /// Creates one local documentation target.
+  const _CommandHelpTarget({required this.htmlPage, required this.sourcePath});
+
+  /// Built Antora HTML path under `build/site/agent-awesome/0.1`.
+  final String htmlPage;
+
+  /// Source documentation path under the workspace root.
+  final String sourcePath;
 }

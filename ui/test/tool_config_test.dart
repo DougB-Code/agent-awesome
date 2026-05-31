@@ -88,17 +88,14 @@ validations:
       '-C',
     );
     expect(
-      document.localExec.commands.single.surface.subcommands.single.name,
+      document.localExec.commands.single.surface.subcommands
+          .firstWhere((item) => item.name == 'status')
+          .name,
       'status',
     );
     expect(
-      document
-          .localExec
-          .commands
-          .single
-          .surface
-          .subcommands
-          .single
+      document.localExec.commands.single.surface.subcommands
+          .firstWhere((item) => item.name == 'status')
           .flags
           .single
           .name,
@@ -135,6 +132,101 @@ validations:
     expect(document.validations.single.target.presetId, 'go_build_all');
   });
 
+  test('adds approved MCP tool to unambiguous server config', () {
+    final document = ToolConfigDocument.parse('''
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      require-confirmation-tools:
+        - remember
+      tools:
+        allow:
+          - remember
+          - search_memory
+''');
+
+    final update = toolConfigWithApprovedMcpTool(
+      document: document,
+      toolName: 'create_task',
+    );
+
+    expect(update.changed, isTrue);
+    expect(
+      update.document.mcp.servers.single.requireConfirmationTools,
+      <String>['remember', 'create_task'],
+    );
+    expect(update.document.mcp.servers.single.tools.allow, <String>[
+      'remember',
+      'search_memory',
+      'create_task',
+    ]);
+    expect(toolConfigValidationError(update.document), isEmpty);
+  });
+
+  test('skips approved MCP tool when the target server is ambiguous', () {
+    final document = ToolConfigDocument.parse('''
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      tools:
+        allow:
+          - remember
+    - name: project
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8091/mcp
+      tools:
+        allow:
+          - remember
+''');
+
+    final update = toolConfigWithApprovedMcpTool(
+      document: document,
+      toolName: 'remember',
+    );
+
+    expect(update.changed, isFalse);
+    expect(update.reason, 'mcp server is ambiguous');
+    expect(update.document, same(document));
+  });
+
+  test('adds approved MCP tool to explicit server when multiple match', () {
+    final document = ToolConfigDocument.parse('''
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      tools:
+        allow:
+          - remember
+    - name: project
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8091/mcp
+      tools:
+        allow:
+          - remember
+''');
+
+    final update = toolConfigWithApprovedMcpTool(
+      document: document,
+      toolName: 'create_task',
+      serverName: 'project',
+    );
+
+    expect(update.changed, isTrue);
+    expect(update.document.mcp.servers[0].requireConfirmationTools, isEmpty);
+    expect(update.document.mcp.servers[1].requireConfirmationTools, <String>[
+      'create_task',
+    ]);
+  });
+
   test('parses shipped Linux utility operations for UI editing', () {
     final file = File('${_repoRoot().path}/harness/tool.yaml');
     final document = ToolConfigDocument.parse(file.readAsStringSync());
@@ -146,6 +238,8 @@ validations:
       'curl',
       'jq',
       'yq',
+      'pdftotext',
+      'libreoffice',
       'rg',
       'find',
       'grep',
@@ -172,24 +266,24 @@ validations:
       contains('docker-registry'),
     );
     expect(commands.every((command) => command.operations.isNotEmpty), isTrue);
-    expect(document.validations.length, 48);
+    expect(document.validations.length, 60);
     expect(
       document.validations.where(
         (validation) => validation.target.type == 'command-operation',
       ),
-      hasLength(16),
+      hasLength(20),
     );
     expect(
       document.validations.where(
         (validation) => validation.target.type == 'agent-tool-call',
       ),
-      hasLength(16),
+      hasLength(20),
     );
     expect(
       document.validations.where(
         (validation) => validation.target.type == 'runbook-node',
       ),
-      hasLength(16),
+      hasLength(20),
     );
     expect(
       commands

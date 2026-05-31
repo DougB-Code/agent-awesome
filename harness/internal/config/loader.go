@@ -64,9 +64,23 @@ func LoadToolPackage(path string) (*schema.Tools, error) {
 
 // loadTools decodes a tool config with optional adjacent MCP package merging.
 func loadTools(path string, explicit bool, mergeMCPPackages bool) (*schema.Tools, error) {
+	return loadToolsWithVisited(path, explicit, mergeMCPPackages, map[string]struct{}{})
+}
+
+// loadToolsWithVisited decodes inherited tool packages and rejects cycles.
+func loadToolsWithVisited(path string, explicit bool, mergeMCPPackages bool, visited map[string]struct{}) (*schema.Tools, error) {
 	if strings.TrimSpace(path) == "" {
 		path = DefaultToolPath()
 	}
+	identity, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := visited[identity]; ok {
+		return nil, fmt.Errorf("tool config inheritance cycle at %s", path)
+	}
+	visited[identity] = struct{}{}
+	defer delete(visited, identity)
 
 	var cfg schema.Tools
 	if err := loadYAML(path, &cfg); err != nil {
@@ -75,6 +89,14 @@ func loadTools(path string, explicit bool, mergeMCPPackages bool) (*schema.Tools
 		} else {
 			return nil, fmt.Errorf("decode %s: %w", path, err)
 		}
+	}
+	if strings.TrimSpace(cfg.Extends) != "" {
+		basePath := toolExtendsPath(path, cfg.Extends)
+		base, err := loadToolsWithVisited(basePath, true, false, visited)
+		if err != nil {
+			return nil, fmt.Errorf("load inherited tool config %s: %w", basePath, err)
+		}
+		cfg = mergeInheritedTools(*base, cfg)
 	}
 	if mergeMCPPackages {
 		if err := loadMCPPackageConfigs(mcpConfigDirForToolPath(path), &cfg); err != nil {
@@ -85,6 +107,174 @@ func loadTools(path string, explicit bool, mergeMCPPackages bool) (*schema.Tools
 		return nil, fmt.Errorf("validate %s: %w", path, err)
 	}
 	return &cfg, nil
+}
+
+// toolExtendsPath resolves an inherited package path relative to the child.
+func toolExtendsPath(childPath string, extends string) string {
+	trimmed := strings.TrimSpace(extends)
+	if filepath.IsAbs(trimmed) {
+		return trimmed
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(childPath), trimmed))
+}
+
+// mergeInheritedTools overlays a package delta on an inherited tool package.
+func mergeInheritedTools(base schema.Tools, delta schema.Tools) schema.Tools {
+	merged := base
+	if strings.TrimSpace(delta.Name) != "" {
+		merged.Name = delta.Name
+	}
+	merged.Version = delta.Version
+	merged.Extends = delta.Extends
+	merged.LocalExec = mergeLocalExec(base.LocalExec, delta.LocalExec)
+	merged.MCP = mergeMCP(base.MCP, delta.MCP)
+	merged.Memory = mergeMemory(base.Memory, delta.Memory)
+	merged.NodePresets = mergeNodePresets(base.NodePresets, delta.NodePresets)
+	merged.Validations = mergeToolValidations(base.Validations, delta.Validations)
+	return merged
+}
+
+// mergeLocalExec overlays command operation deltas by command name.
+func mergeLocalExec(base schema.LocalExec, delta schema.LocalExec) schema.LocalExec {
+	merged := base
+	if delta.Enabled {
+		merged.Enabled = true
+	}
+	if strings.TrimSpace(delta.DefaultTimeout) != "" {
+		merged.DefaultTimeout = delta.DefaultTimeout
+	}
+	if delta.DefaultMaxOutputBytes > 0 {
+		merged.DefaultMaxOutputBytes = delta.DefaultMaxOutputBytes
+	}
+	merged.Commands = mergeByStringKey(base.Commands, delta.Commands, func(command schema.LocalExecCommand) string {
+		return strings.TrimSpace(command.Name)
+	})
+	return merged
+}
+
+// mergeMCP overlays MCP server deltas by server name.
+func mergeMCP(base schema.MCP, delta schema.MCP) schema.MCP {
+	merged := base
+	if delta.Enabled {
+		merged.Enabled = true
+	}
+	merged.Servers = mergeByStringKey(base.Servers, delta.Servers, func(server schema.MCPServer) string {
+		return strings.TrimSpace(server.Name)
+	})
+	return merged
+}
+
+// mergeMemory overlays memory-domain grants while preserving inherited grants.
+func mergeMemory(base schema.Memory, delta schema.Memory) schema.Memory {
+	merged := base
+	if strings.TrimSpace(delta.Actor) != "" {
+		merged.Actor = delta.Actor
+	}
+	merged.ReadDomains = mergeByStringKey(base.ReadDomains, delta.ReadDomains, func(domain schema.MemoryDomain) string {
+		return strings.TrimSpace(domain.ID)
+	})
+	merged.WriteDomains = appendUniqueStrings(base.WriteDomains, delta.WriteDomains)
+	if strings.TrimSpace(delta.DefaultWriteDomain) != "" {
+		merged.DefaultWriteDomain = delta.DefaultWriteDomain
+	}
+	merged.AllowedSensitivities = appendUniqueStrings(base.AllowedSensitivities, delta.AllowedSensitivities)
+	merged.AllowedFlows = mergeMemoryFlows(base.AllowedFlows, delta.AllowedFlows)
+	return merged
+}
+
+// mergeNodePresets overlays reusable runbook node presets by preset id.
+func mergeNodePresets(base []schema.NodePreset, delta []schema.NodePreset) []schema.NodePreset {
+	return mergeByStringKey(base, delta, func(preset schema.NodePreset) string {
+		return strings.TrimSpace(preset.ID)
+	})
+}
+
+// mergeToolValidations overlays portable validation cases by validation id.
+func mergeToolValidations(base []schema.ToolValidation, delta []schema.ToolValidation) []schema.ToolValidation {
+	return mergeByStringKey(base, delta, func(validation schema.ToolValidation) string {
+		return strings.TrimSpace(validation.ID)
+	})
+}
+
+// mergeMemoryFlows appends new domain flow grants by source and destination.
+func mergeMemoryFlows(base []schema.MemoryFlow, delta []schema.MemoryFlow) []schema.MemoryFlow {
+	merged := append([]schema.MemoryFlow{}, base...)
+	seen := map[string]struct{}{}
+	for _, flow := range merged {
+		seen[memoryFlowKey(flow)] = struct{}{}
+	}
+	for _, flow := range delta {
+		key := memoryFlowKey(flow)
+		if strings.TrimSpace(key) == "" {
+			merged = append(merged, flow)
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, flow)
+	}
+	return merged
+}
+
+// memoryFlowKey returns a stable identity for one memory information-flow grant.
+func memoryFlowKey(flow schema.MemoryFlow) string {
+	from := strings.TrimSpace(flow.From)
+	to := strings.TrimSpace(flow.To)
+	if from == "" || to == "" {
+		return ""
+	}
+	return from + "->" + to
+}
+
+// appendUniqueStrings appends non-empty strings while keeping inherited order.
+func appendUniqueStrings(base []string, delta []string) []string {
+	merged := append([]string{}, base...)
+	seen := map[string]struct{}{}
+	for _, value := range merged {
+		seen[strings.TrimSpace(value)] = struct{}{}
+	}
+	for _, value := range delta {
+		key := strings.TrimSpace(value)
+		if key == "" {
+			merged = append(merged, value)
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		merged = append(merged, value)
+	}
+	return merged
+}
+
+// mergeByStringKey appends keyed deltas and replaces inherited items with the same key.
+func mergeByStringKey[T any](base []T, delta []T, key func(T) string) []T {
+	merged := append([]T{}, base...)
+	indexByKey := make(map[string]int, len(merged))
+	for index, item := range merged {
+		itemKey := key(item)
+		if itemKey == "" {
+			continue
+		}
+		indexByKey[itemKey] = index
+	}
+	for _, item := range delta {
+		itemKey := key(item)
+		if itemKey == "" {
+			merged = append(merged, item)
+			continue
+		}
+		if index, ok := indexByKey[itemKey]; ok {
+			merged[index] = item
+			continue
+		}
+		indexByKey[itemKey] = len(merged)
+		merged = append(merged, item)
+	}
+	return merged
 }
 
 // loadYAML decodes a YAML file into the target and rejects unknown fields.

@@ -298,10 +298,10 @@ Future<MemoryExportDraft?> _showMemoryExportDialog(
                         children: <Widget>[
                           Expanded(
                             child: PanelDropdownFormField<String>(
-                              label: 'Firewall',
+                              label: 'Domain',
                               value: firewall,
                               values: controller.memoryFirewallIds,
-                              tooltip: 'Firewall',
+                              tooltip: 'Domain',
                               labelFor: controller.memoryFirewallPickerLabel,
                               onChanged: (value) {
                                 setState(() => firewall = value);

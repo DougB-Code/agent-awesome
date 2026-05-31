@@ -148,6 +148,18 @@ class SettingsConfigIds {
     }
     return candidate;
   }
+
+  /// Returns a hidden model id derived from provider and model name.
+  static String uniqueModelIdFromProviderModel(
+    ModelProviderConfig provider,
+    String modelName,
+  ) {
+    final prefix = modelIdFromProviderModel(
+      providerId: provider.id,
+      modelName: modelName,
+    );
+    return uniqueModelId(provider, prefix);
+  }
 }
 
 /// SettingsQuery matches settings content against filter text.

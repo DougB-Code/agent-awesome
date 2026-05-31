@@ -28,10 +28,12 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 	if !ValidKind(req.Kind) {
 		return req, fmt.Errorf("invalid kind %q", req.Kind)
 	}
-	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
-	if !ValidFirewall(req.Firewall) {
-		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
 	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	req.TrustLevel = vocabulary.DefaultTrustLevel(req.TrustLevel, TrustSourceOriginal)
 	if !ValidTrustLevel(req.TrustLevel) {
 		return req, fmt.Errorf("invalid trust level %q", req.TrustLevel)
@@ -49,10 +51,12 @@ func NormalizeCaptureRequest(req CaptureRequest) (CaptureRequest, error) {
 // NormalizeRetrievalQuery fills safe retrieval defaults and validates filters.
 func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
 	q.Actor = normalize.Default(q.Actor, vocabulary.DefaultAgentActor)
-	q.Firewall = vocabulary.DefaultFirewall(q.Firewall)
-	if !ValidFirewall(q.Firewall) {
-		return q, fmt.Errorf("invalid firewall %q", q.Firewall)
+	domainID, err := NormalizeDomainID(q.DomainID, q.Firewall)
+	if err != nil {
+		return q, err
 	}
+	q.DomainID = domainID
+	q.Firewall = domainID
 	for _, kind := range q.Kinds {
 		if !ValidKind(kind) {
 			return q, fmt.Errorf("invalid kind %q", kind)
@@ -73,9 +77,38 @@ func NormalizeRetrievalQuery(q RetrievalQuery) (RetrievalQuery, error) {
 	return q, nil
 }
 
+// NormalizeOrganizeMemoryRequest fills safe defaults for memory maintenance.
+func NormalizeOrganizeMemoryRequest(req OrganizeMemoryRequest) (OrganizeMemoryRequest, error) {
+	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultAgentActor)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
+	if len(req.AllowedSensitivities) == 0 {
+		req.AllowedSensitivities = vocabulary.DefaultReadableSensitivities()
+	}
+	for _, sensitivity := range req.AllowedSensitivities {
+		if !ValidSensitivity(sensitivity) {
+			return req, fmt.Errorf("invalid sensitivity %q", sensitivity)
+		}
+	}
+	if req.Limit <= 0 || req.Limit > 100 {
+		req.Limit = 50
+	}
+	return req, nil
+}
+
 // NormalizeRepairRequest validates a memory repair request.
 func NormalizeRepairRequest(req RepairRequest) (RepairRequest, error) {
 	req.Actor = normalize.Default(req.Actor, vocabulary.DefaultAgentActor)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
+	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	if req.MemoryID == "" {
 		return req, errors.New("memory_id is required")
 	}
@@ -104,10 +137,12 @@ func NormalizeCorrectionRequest(req CorrectionRequest) (CorrectionRequest, error
 	if req.Text == "" {
 		return req, errors.New("correction text is required")
 	}
-	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
-	if !ValidFirewall(req.Firewall) {
-		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
 	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	return req, nil
 }
 
@@ -120,10 +155,12 @@ func NormalizeRefreshPageRequest(req RefreshPageRequest) (RefreshPageRequest, er
 	if req.Kind != KindEntityPage && req.Kind != KindTimeline {
 		return req, fmt.Errorf("unsupported page kind %q", req.Kind)
 	}
-	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
-	if !ValidFirewall(req.Firewall) {
-		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
 	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	req.Title = strings.TrimSpace(req.Title)
 	req.Topic = strings.TrimSpace(req.Topic)
 	if req.Title == "" && req.EntityID == "" && req.Topic == "" {
@@ -142,9 +179,27 @@ func ValidKind(kind Kind) bool {
 	return containsVocabularyValue(Kinds(), kind)
 }
 
+// NormalizeDomainID resolves the canonical routing domain from new and legacy fields.
+func NormalizeDomainID(domainID DomainID, legacy Firewall) (DomainID, error) {
+	candidate := DomainID(strings.TrimSpace(string(domainID)))
+	if candidate == "" {
+		candidate = DomainID(strings.TrimSpace(string(legacy)))
+	}
+	candidate = vocabulary.DefaultFirewall(candidate)
+	if !ValidDomainID(candidate) {
+		return candidate, fmt.Errorf("invalid memory domain %q", candidate)
+	}
+	return candidate, nil
+}
+
+// ValidDomainID reports whether a memory domain id is safe for routing and storage.
+func ValidDomainID(domainID DomainID) bool {
+	return vocabulary.ValidFirewall(domainID)
+}
+
 // ValidFirewall reports whether firewall is a safe memory firewall id.
 func ValidFirewall(firewall Firewall) bool {
-	return vocabulary.ValidFirewall(firewall)
+	return ValidDomainID(DomainID(firewall))
 }
 
 // ValidTrustLevel reports whether level is in the controlled vocabulary.

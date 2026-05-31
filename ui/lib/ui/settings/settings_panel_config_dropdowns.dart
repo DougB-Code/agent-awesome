@@ -111,6 +111,51 @@ class _SettingsMemoryDomainDropdown extends StatelessWidget {
   }
 }
 
+/// _SettingsInterfaceModeDropdown selects Basic or Advanced UI mode.
+class _SettingsInterfaceModeDropdown extends StatelessWidget {
+  /// Creates an interface mode selector.
+  const _SettingsInterfaceModeDropdown({
+    required this.label,
+    required this.selectedMode,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String selectedMode;
+  final ValueChanged<String> onChanged;
+
+  /// Builds a dropdown of supported interface modes.
+  @override
+  Widget build(BuildContext context) {
+    final selected = normalizeInterfaceMode(selectedMode);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: PanelLabeledFormControl(
+        label: label,
+        child: DropdownButtonFormField<String>(
+          initialValue: selected,
+          isDense: true,
+          style: SettingsFormTextStyle.field(context),
+          isExpanded: true,
+          items: <DropdownMenuItem<String>>[
+            for (final mode in interfaceModeIds)
+              DropdownMenuItem<String>(
+                value: mode,
+                child: Text(interfaceModeLabel(mode)),
+              ),
+          ],
+          onChanged: (mode) {
+            if (mode != null) {
+              onChanged(mode);
+            }
+          },
+          decoration: SettingsInputDecoration.field(context, label: label),
+        ),
+      ),
+    );
+  }
+}
+
 /// _SummaryModelOption describes one exact model available for app summaries.
 class _SummaryModelOption {
   /// Creates an app summary model dropdown option.

@@ -25,7 +25,7 @@ void main() {
           'http://127.0.0.1:18070/api';
       final gatewayToken =
           Platform.environment['AGENTAWESOME_GATEWAY_TOKEN'] ?? 'smoke-token';
-      final appName = Platform.environment['AGENT_APP_NAME'] ?? 'agent_awesome';
+      final appName = Platform.environment['AGENT_APP_NAME'] ?? 'Agent Awesome';
       final userId = Platform.environment['AGENT_USER_ID'] ?? 'doug';
       final workspace = await Directory.systemTemp.createTemp(
         'agentawesome-remote-live-ui-',

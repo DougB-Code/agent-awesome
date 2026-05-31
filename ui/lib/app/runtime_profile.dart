@@ -437,9 +437,8 @@ class RuntimeProfileLoader {
       'AGENT_USER_ID': config.agentUserId,
       'MEMORY_MCP_URL': config.memoryMcpUrl,
       'MEMORY_MCP_ADDR': memoryMcp.authority,
-      'MEMORY_DB_PATH': defaultMemoryDatabasePath(),
       'MEMORY_DATA_DIR': defaultMemoryDataDirectoryPath(),
-      'MEMORY_FIREWALL_POLICY_PATH': memoryFirewallPolicyPath(),
+      'MEMORY_DOMAIN_POLICY_PATH': memoryDomainPolicyPath(),
       'MEMORY_HEALTH_URL': _healthUrl(config.memoryMcpUrl),
       'SOURCECONTROL_MCP_URL': config.sourceControlMcpUrl,
       'SOURCECONTROL_MCP_ADDR': sourceControlMcp.authority,
@@ -530,14 +529,14 @@ String memoryDomainConfigsDirectoryPath() {
   return '${agentAwesomeConfigDirectoryPath()}/memory-domains';
 }
 
-/// Returns the default SQLite database path for local memory.
+/// Returns the default SQLite database path for the local user memory domain.
 String defaultMemoryDatabasePath() {
-  return '${agentAwesomeDataDirectoryPath()}/memory/memory.db';
+  return memoryDomainDatabasePath('user');
 }
 
-/// Returns the default sidecar data directory for local memory.
+/// Returns the default data root for the local pooled memory service.
 String defaultMemoryDataDirectoryPath() {
-  return '${agentAwesomeDataDirectoryPath()}/memory/files';
+  return '${agentAwesomeDataDirectoryPath()}/memory';
 }
 
 /// Returns the directory where user-authored runbook YAML files live.
@@ -654,17 +653,17 @@ String defaultCommandParserDirectoryPath() {
 
 /// Returns the SQLite database path for one local memory domain.
 String memoryDomainDatabasePath(String domainId) {
-  return '${agentAwesomeDataDirectoryPath()}/memory/$domainId/memory.db';
+  return '${defaultMemoryDataDirectoryPath()}/domains/$domainId/memory.db';
 }
 
 /// Returns the sidecar data directory for one local memory domain.
 String memoryDomainDataDirectoryPath(String domainId) {
-  return '${agentAwesomeDataDirectoryPath()}/memory/$domainId/files';
+  return '${defaultMemoryDataDirectoryPath()}/domains/$domainId/data';
 }
 
-/// Returns the app-owned memory firewall policy path consumed by memoryd.
-String memoryFirewallPolicyPath() {
-  return '${agentAwesomeAppConfigDirectoryPath()}/memory_firewall_policy.json';
+/// Returns the app-owned memory domain policy path consumed by memoryd.
+String memoryDomainPolicyPath() {
+  return '${agentAwesomeAppConfigDirectoryPath()}/memory_domain_policy.json';
 }
 
 /// Returns a filesystem-safe config package id.

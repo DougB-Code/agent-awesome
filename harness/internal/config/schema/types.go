@@ -20,10 +20,16 @@ const (
 	// DefaultMCPFilename is the MCP server config filename under one MCP
 	// package directory.
 	DefaultMCPFilename = "mcp.yaml"
+	// DefaultAppPluginFilename is the app plugin manifest filename under one
+	// app plugin package directory.
+	DefaultAppPluginFilename = "app.yaml"
 	// DefaultToolConfigDirName is the package directory for installed tools.
 	DefaultToolConfigDirName = "tools"
 	// DefaultMCPConfigDirName is the package directory for installed MCP servers.
 	DefaultMCPConfigDirName = "mcp"
+	// DefaultAppPluginConfigDirName is the package directory for installed app
+	// plugins.
+	DefaultAppPluginConfigDirName = "app-plugins"
 
 	defaultLocalExecTimeout        = 10 * time.Second
 	defaultLocalExecMaxOutputBytes = 65536
@@ -69,6 +75,8 @@ type AgentValidation struct {
 // Tools describes all configured external tool integrations.
 type Tools struct {
 	Name        string           `koanf:"name"`
+	Version     string           `koanf:"version"`
+	Extends     string           `koanf:"extends"`
 	LocalExec   LocalExec        `koanf:"local-exec"`
 	MCP         MCP              `koanf:"mcp"`
 	Memory      Memory           `koanf:"memory"`
@@ -257,11 +265,12 @@ type Provider struct {
 	Adapter string `koanf:"adapter"`
 	Auth    string `koanf:"auth"`
 	// Runtime stores UI-owned local model runtime metadata ignored by adapters.
-	Runtime    string `koanf:"runtime"`
-	APIKeyEnv  string `koanf:"api-key"`
-	Default    string `koanf:"default"`
-	URL        string `koanf:"url"`
-	Executable string `koanf:"executable"`
+	Runtime    string            `koanf:"runtime"`
+	APIKeyEnv  string            `koanf:"api-key"`
+	Default    string            `koanf:"default"`
+	URL        string            `koanf:"url"`
+	Endpoints  map[string]string `koanf:"endpoints"`
+	Executable string            `koanf:"executable"`
 	// HFRepo stores UI-owned local model source metadata ignored by adapters.
 	HFRepo string  `koanf:"hf-repo"`
 	Models []Model `koanf:"models"`

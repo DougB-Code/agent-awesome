@@ -113,6 +113,48 @@ func TestBetaMemoryFlowRemembersSearchesAndLoadsContext(t *testing.T) {
 	}
 }
 
+// TestOrganizeMemoryCreatesIdempotentFollowUpTasks verifies maintenance follow-ups.
+func TestOrganizeMemoryCreatesIdempotentFollowUpTasks(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	captured, err := service.Capture(ctx, domain.CaptureRequest{
+		Content:        "Met Jordan",
+		Title:          "Untitled memory",
+		Firewall:       domain.FirewallUser,
+		IdempotencyKey: "needs-clarification",
+	})
+	if err != nil {
+		t.Fatalf("capture unclear memory: %v", err)
+	}
+	result, err := service.OrganizeMemory(ctx, domain.OrganizeMemoryRequest{
+		Actor:    "agent:organizer",
+		Firewall: domain.FirewallUser,
+		Limit:    10,
+	})
+	if err != nil {
+		t.Fatalf("organize memory: %v", err)
+	}
+	if result.Reviewed != 1 || len(result.Items) != 1 || len(result.FollowUpTasks) != 1 {
+		t.Fatalf("organization result = %#v, want one reviewed follow-up", result)
+	}
+	item := result.Items[0]
+	if item.MemoryID != captured.MemoryID || len(item.Questions) < 3 {
+		t.Fatalf("organization item = %#v, want detailed questions for %s", item, captured.MemoryID)
+	}
+	task := result.FollowUpTasks[0]
+	if task.ID == "" || task.MemoryLinks[0].MemoryID != string(captured.MemoryID) {
+		t.Fatalf("follow-up task = %#v, want linked memory task", task)
+	}
+
+	again, err := service.OrganizeMemory(ctx, domain.OrganizeMemoryRequest{Firewall: domain.FirewallUser})
+	if err != nil {
+		t.Fatalf("organize memory again: %v", err)
+	}
+	if len(again.FollowUpTasks) != 1 || again.FollowUpTasks[0].ID != task.ID {
+		t.Fatalf("second organization = %#v, want idempotent task %s", again.FollowUpTasks, task.ID)
+	}
+}
+
 // TestCodebaseCatalogServiceRoundTrip verifies service-level codebase methods.
 func TestCodebaseCatalogServiceRoundTrip(t *testing.T) {
 	ctx := context.Background()
@@ -141,7 +183,7 @@ func TestStewardDisabledWorkersComplete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	root := t.TempDir()
-	repo, err := graphrepo.Open(ctx, graphrepo.Config{
+	repo, err := graphrepo.OpenPool(ctx, graphrepo.Config{
 		DBPath:   filepath.Join(root, "graph.db"),
 		DataRoot: filepath.Join(root, "data"),
 	})
@@ -314,7 +356,7 @@ func TestProjectExecutiveSummaryClassifiesTaskGraph(t *testing.T) {
 func newTestService(t *testing.T) *Service {
 	t.Helper()
 	root := t.TempDir()
-	repo, err := graphrepo.Open(context.Background(), graphrepo.Config{
+	repo, err := graphrepo.OpenPool(context.Background(), graphrepo.Config{
 		DBPath:   filepath.Join(root, "graph.db"),
 		DataRoot: filepath.Join(root, "data"),
 	})

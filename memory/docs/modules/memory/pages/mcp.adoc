@@ -35,6 +35,12 @@ Local micro models should use `remember` when the user asks the assistant to rem
 The transport maps that small payload into the richer graph-backed memory model as user-asserted private memory by default.
 Use `create_task` only for operational todos, not for facts or preferences.
 
+== Memory Maintenance
+
+Use `organize_memory` for bounded maintenance passes over a memory domain.
+The tool reviews existing records, fills deterministic source-backed summaries when that is safe, and creates idempotent clarification tasks for records that need a better title, topics, subjects, or additional detail.
+Pass `dry_run: true` to preview the questions and safe summary repairs without writing memory or task changes.
+
 == Low-Friction Tasks
 
 Local micro models should use `create_task` when the user asks for an operational todo, even if the user only provides a short phrase such as "buy milk".

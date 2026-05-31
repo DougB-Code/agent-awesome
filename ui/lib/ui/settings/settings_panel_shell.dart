@@ -54,7 +54,6 @@ class SettingsCommandSubShell extends StatefulWidget {
 class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
   String? _selectedModelConfigPath;
   String? _selectedMemoryDomainId;
-  String _remoteDockerHost = '';
   final Map<String, String> _selectedDetailModeIds = <String, String>{};
 
   /// Builds the settings command panel and selected editor.
@@ -62,6 +61,7 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
   Widget build(BuildContext context) {
     return CommandPanelSubShell(
       areas: _settingsAreas(),
+      selectedAreaId: widget.selectedSection,
       detailTitle: 'Settings',
       detailModes: const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
@@ -179,141 +179,10 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     CommandPanelDetailMode mode,
   ) {
     return switch (area.id) {
-      'App' => _appActions(context, area, mode),
       'Models' => _modelConfigActions(context, area, mode),
       'Memory' => _memoryDomainActions(context, area, mode, null),
       _ => null,
     };
-  }
-
-  /// Builds app-level runtime bundle controls in the right header.
-  Widget _appActions(
-    BuildContext context,
-    SwitcherPanelArea area,
-    CommandPanelDetailMode mode,
-  ) {
-    return Wrap(
-      spacing: 8,
-      children: <Widget>[
-        PanelIconButton(
-          icon: Icons.inventory_2_outlined,
-          tooltip: 'Export remote Docker bundle',
-          onPressed: () => unawaited(_exportRemoteDockerBundle()),
-        ),
-        PanelIconButton(
-          icon: Icons.build_outlined,
-          tooltip: 'Build remote Docker image',
-          onPressed: () => unawaited(_buildRemoteDockerImage()),
-        ),
-        PanelIconButton(
-          icon: Icons.play_arrow_outlined,
-          tooltip: 'Start remote Docker runtime',
-          onPressed: () => unawaited(_startRemoteDockerRuntime()),
-        ),
-        PanelIconButton(
-          icon: Icons.cloud_upload_outlined,
-          tooltip: 'Deploy remote Docker runtime',
-          onPressed: () => unawaited(_deployRemoteDockerRuntime()),
-        ),
-      ],
-    );
-  }
-
-  /// Exports the current runtime as a configured remote Docker bundle.
-  Future<void> _exportRemoteDockerBundle() async {
-    await widget.controller.exportRemoteDockerBundle(
-      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
-      localModelServerExecutablePath: await widget.controller
-          .activeLocalLlamaServerExecutablePath(),
-    );
-  }
-
-  /// Exports the current runtime and builds its Docker image.
-  Future<void> _buildRemoteDockerImage() async {
-    final bundle = await widget.controller.exportRemoteDockerBundle(
-      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
-      localModelServerExecutablePath: await widget.controller
-          .activeLocalLlamaServerExecutablePath(),
-    );
-    await widget.controller.buildRemoteDockerBundleImage(bundle);
-  }
-
-  /// Exports the current runtime, builds the image, and starts it locally.
-  Future<void> _startRemoteDockerRuntime() async {
-    final bundle = await widget.controller.exportRemoteDockerBundle(
-      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
-      localModelServerExecutablePath: await widget.controller
-          .activeLocalLlamaServerExecutablePath(),
-    );
-    await widget.controller.buildRemoteDockerBundleImage(bundle);
-    await widget.controller.startRemoteDockerBundleContainer(
-      bundle,
-      gatewayToken: widget.controller.config.gatewayBearerToken,
-    );
-  }
-
-  /// Exports, builds, and deploys the current runtime to an SSH Docker host.
-  Future<void> _deployRemoteDockerRuntime() async {
-    final host = await _promptRemoteDockerHost();
-    if (host == null || host.trim().isEmpty) {
-      return;
-    }
-    setState(() => _remoteDockerHost = host.trim());
-    final bundle = await widget.controller.exportRemoteDockerBundle(
-      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
-      localModelServerExecutablePath: await widget.controller
-          .activeLocalLlamaServerExecutablePath(),
-    );
-    await widget.controller.buildRemoteDockerBundleImage(bundle);
-    await widget.controller.deployRemoteDockerBundle(
-      bundle,
-      remoteHost: host,
-      gatewayToken: widget.controller.config.gatewayBearerToken,
-    );
-  }
-
-  /// Prompts for the SSH target used by generated remote deploy scripts.
-  Future<String?> _promptRemoteDockerHost() async {
-    final controller = TextEditingController(text: _remoteDockerHost);
-    try {
-      return showDialog<String>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Deploy runtime'),
-            content: SizedBox(
-              width: 420,
-              child: PanelLabeledFormControl(
-                label: 'SSH host',
-                child: TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: SettingsInputDecoration.field(
-                    dialogContext,
-                    label: 'user@host',
-                  ),
-                  onSubmitted: (_) =>
-                      Navigator.of(dialogContext).pop(controller.text.trim()),
-                ),
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () =>
-                    Navigator.of(dialogContext).pop(controller.text.trim()),
-                child: const Text('Deploy'),
-              ),
-            ],
-          );
-        },
-      );
-    } finally {
-      controller.dispose();
-    }
   }
 
   /// Builds collection-level settings actions in the left header.
@@ -328,7 +197,7 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
       return PanelIconButton(
         icon: Icons.add,
         tooltip: 'Add memory domain',
-        onPressed: () => unawaited(_createMemoryDomain()),
+        onPressed: () => unawaited(_showMemoryDomainCreateMenu(context)),
       );
     }
     return null;
@@ -527,6 +396,161 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     } catch (_) {}
   }
 
+  /// Lets the user choose whether to add a local or cloud memory domain.
+  Future<void> _showMemoryDomainCreateMenu(BuildContext context) async {
+    final choice = await showDialog<_MemoryDomainCreateChoice>(
+      context: context,
+      builder: (dialogContext) {
+        return SimpleDialog(
+          title: const Text('Add memory domain'),
+          children: <Widget>[
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(_MemoryDomainCreateChoice.local),
+              child: const ListTile(
+                leading: Icon(Icons.storage_outlined),
+                title: Text('Local memory'),
+                subtitle: Text('Add a domain in the local memory pool.'),
+              ),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(
+                dialogContext,
+              ).pop(_MemoryDomainCreateChoice.cloud),
+              child: const ListTile(
+                leading: Icon(Icons.cloud_outlined),
+                title: Text('Cloud memory'),
+                subtitle: Text('Connect an external MCP endpoint.'),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted || choice == null) {
+      return;
+    }
+    switch (choice) {
+      case _MemoryDomainCreateChoice.local:
+        await _createMemoryDomain();
+      case _MemoryDomainCreateChoice.cloud:
+        await _createExternalMemoryDomain();
+    }
+  }
+
+  /// Creates an externally hosted memory domain from typed dialog fields.
+  Future<void> _createExternalMemoryDomain() async {
+    final request = await _promptExternalMemoryDomain();
+    if (request == null) {
+      return;
+    }
+    try {
+      final domain = await widget.controller.createExternalMemoryDomainRuntime(
+        label: request.label,
+        endpoint: request.endpoint,
+        healthUrl: request.healthUrl,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _selectedMemoryDomainId = domain.id);
+    } catch (_) {}
+  }
+
+  /// Prompts for the display name and URLs used by an external memory domain.
+  Future<_ExternalMemoryDomainRequest?> _promptExternalMemoryDomain() async {
+    final name = TextEditingController(text: 'Cloud Memory');
+    final endpoint = TextEditingController(text: 'https://example.com/mcp');
+    final health = TextEditingController();
+    try {
+      return await showDialog<_ExternalMemoryDomainRequest>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Cloud memory'),
+            content: SizedBox(
+              width: 460,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    PanelLabeledFormControl(
+                      label: 'Name',
+                      child: TextField(
+                        controller: name,
+                        autofocus: true,
+                        style: SettingsFormTextStyle.field(dialogContext),
+                        decoration: SettingsInputDecoration.field(
+                          dialogContext,
+                          label: 'Name',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: SettingsFormMetrics.fieldGap),
+                    PanelLabeledFormControl(
+                      label: 'MCP endpoint',
+                      child: TextField(
+                        controller: endpoint,
+                        keyboardType: TextInputType.url,
+                        style: SettingsFormTextStyle.field(dialogContext),
+                        decoration: SettingsInputDecoration.field(
+                          dialogContext,
+                          label: 'MCP endpoint',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: SettingsFormMetrics.fieldGap),
+                    PanelLabeledFormControl(
+                      label: 'Health URL',
+                      child: TextField(
+                        controller: health,
+                        keyboardType: TextInputType.url,
+                        style: SettingsFormTextStyle.field(dialogContext),
+                        decoration: SettingsInputDecoration.field(
+                          dialogContext,
+                          label: 'Health URL',
+                          hintText: 'Optional',
+                        ),
+                        onSubmitted: (_) => Navigator.of(dialogContext).pop(
+                          _ExternalMemoryDomainRequest(
+                            label: name.text.trim(),
+                            endpoint: endpoint.text.trim(),
+                            healthUrl: health.text.trim(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(
+                  _ExternalMemoryDomainRequest(
+                    label: name.text.trim(),
+                    endpoint: endpoint.text.trim(),
+                    healthUrl: health.text.trim(),
+                  ),
+                ),
+                child: const Text('Connect'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      name.dispose();
+      endpoint.dispose();
+      health.dispose();
+    }
+  }
+
   /// Duplicates a memory domain and selects the duplicate.
   Future<void> _duplicateMemoryDomain(String domainId) async {
     try {
@@ -584,6 +608,33 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
 /// Builds an empty placeholder for const shell-area references.
 Widget _emptySettingsAreaBuilder(String query) {
   return const SizedBox.shrink();
+}
+
+/// _MemoryDomainCreateChoice identifies the memory domain setup path.
+enum _MemoryDomainCreateChoice {
+  /// Create and manage a local graph-backed memory server.
+  local,
+
+  /// Connect an externally hosted MCP memory endpoint.
+  cloud,
+}
+
+/// _ExternalMemoryDomainRequest stores typed external memory setup input.
+class _ExternalMemoryDomainRequest {
+  const _ExternalMemoryDomainRequest({
+    required this.label,
+    required this.endpoint,
+    required this.healthUrl,
+  });
+
+  /// User-facing memory domain label.
+  final String label;
+
+  /// Streamable HTTP MCP endpoint.
+  final String endpoint;
+
+  /// Optional HTTP health-check URL.
+  final String healthUrl;
 }
 
 /// _SettingsAreaContent renders the selected settings area context list.

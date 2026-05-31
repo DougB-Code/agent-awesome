@@ -23,16 +23,16 @@ func TestRunAllPassesLinuxToolMockedValidations(t *testing.T) {
 	}
 
 	result := NewRunner(nil).RunAll(context.Background(), *tools)
-	if result.Total != 51 || result.Passed != 51 || result.Failed != 0 || result.Unsupported != 0 {
-		t.Fatalf("RunAll() = %#v, want fifty-one passing mocked validations", result)
+	if result.Total != 60 || result.Passed != 60 || result.Failed != 0 || result.Unsupported != 0 {
+		t.Fatalf("RunAll() = %#v, want sixty passing mocked validations", result)
 	}
-	if result.Coverage.Required != 34 || result.Coverage.Covered != 34 || len(result.Coverage.Missing) != 0 {
+	if result.Coverage.Required != 40 || result.Coverage.Covered != 40 || len(result.Coverage.Missing) != 0 {
 		t.Fatalf("Coverage = %#v, want full command-operation and runbook envelope coverage", result.Coverage)
 	}
-	if result.InputSchemaCoverage.Required != 17 || result.InputSchemaCoverage.Covered != 17 || len(result.InputSchemaCoverage.Missing) != 0 {
+	if result.InputSchemaCoverage.Required != 20 || result.InputSchemaCoverage.Covered != 20 || len(result.InputSchemaCoverage.Missing) != 0 {
 		t.Fatalf("InputSchemaCoverage = %#v, want schemas for all command operations", result.InputSchemaCoverage)
 	}
-	if len(result.AgentToolCalls) != 17 {
+	if len(result.AgentToolCalls) != 20 {
 		t.Fatalf("AgentToolCalls = %#v, want one id per command operation", result.AgentToolCalls)
 	}
 }

@@ -714,6 +714,36 @@ func TestContextAPIInjectsSingleAllowedDomain(t *testing.T) {
 	}
 }
 
+// TestContextAPILiftsLegacyArgumentDomain verifies UI clients can send old argument selectors.
+func TestContextAPILiftsLegacyArgumentDomain(t *testing.T) {
+	contextAPI := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var decoded map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&decoded); err != nil {
+			t.Fatalf("decode context body: %v", err)
+		}
+		if decoded["domain_id"] != "memory" {
+			t.Fatalf("domain_id = %#v, want memory", decoded["domain_id"])
+		}
+		arguments := decoded["arguments"].(map[string]any)
+		if _, ok := arguments["domain_id"]; ok {
+			t.Fatalf("domain_id leaked in arguments: %#v", arguments)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer contextAPI.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.ContextBaseURL = contextAPI.URL + "/api/context"
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/context/tools/call", strings.NewReader(`{"name":"search_memory","arguments":{"domain_id":"memory","query":"hello"}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %q", recorder.Code, recorder.Body.String())
+	}
+}
+
 // TestContextAPIBlocksUnauthorizedReadDomain verifies UI calls cannot bypass grants.
 func TestContextAPIBlocksUnauthorizedReadDomain(t *testing.T) {
 	upstreamCalled := false
@@ -869,6 +899,9 @@ func TestMCPRoutesDomainPathToConfiguredMemoryServer(t *testing.T) {
 		if r.Header.Get(memoryDomainHeader) != "" {
 			t.Fatalf("gateway memory-domain header leaked upstream")
 		}
+		if r.Header.Get(upstreamMemoryDomainHeader) != "project" {
+			t.Fatalf("upstream memory-domain header = %q, want project", r.Header.Get(upstreamMemoryDomainHeader))
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer project.Close()
@@ -903,6 +936,42 @@ func TestMCPRoutesDomainPathToConfiguredMemoryServer(t *testing.T) {
 	}
 }
 
+// TestMCPAllowsMatchingArgumentDomain verifies route-owned domain selection tolerates tool schemas.
+func TestMCPAllowsMatchingArgumentDomain(t *testing.T) {
+	projectCalled := false
+	project := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		projectCalled = true
+		if r.Header.Get(upstreamMemoryDomainHeader) != "project" {
+			t.Fatalf("upstream memory-domain header = %q, want project", r.Header.Get(upstreamMemoryDomainHeader))
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer project.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.MemoryDomains = []config.MemoryDomain{
+			{ID: "project", Label: "Project", Endpoint: project.URL + "/mcp"},
+		}
+		cfg.MemoryPolicy = config.MemoryPolicy{
+			Actor:                "agent:test",
+			ReadDomains:          []string{"project"},
+			WriteDomains:         []string{"project"},
+			DefaultWriteDomain:   "project",
+			AllowedSensitivities: []string{"public"},
+		}
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp/project", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_memory","arguments":{"domain_id":"project","query":"hello"}}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body = %q", recorder.Code, recorder.Body.String())
+	}
+	if !projectCalled {
+		t.Fatalf("project memory upstream was not called")
+	}
+}
+
 // TestMCPBlocksModelSuppliedDomainOverrides keeps model output below policy.
 func TestMCPBlocksModelSuppliedDomainOverrides(t *testing.T) {
 	upstreamCalled := false
@@ -924,6 +993,30 @@ func TestMCPBlocksModelSuppliedDomainOverrides(t *testing.T) {
 	}
 	if upstreamCalled {
 		t.Fatalf("memory upstream was called for model domain override")
+	}
+}
+
+// TestMCPBlocksLegacyFirewallOverrides keeps compatibility fields below policy.
+func TestMCPBlocksLegacyFirewallOverrides(t *testing.T) {
+	upstreamCalled := false
+	memory := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer memory.Close()
+	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
+		cfg.MemoryMCPURL = memory.URL + "/mcp"
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search_memory","arguments":{"query":"hello","firewall":"project"}}}`))
+	recorder := httptest.NewRecorder()
+	server.routes().ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", recorder.Code)
+	}
+	if upstreamCalled {
+		t.Fatalf("memory upstream was called for legacy firewall override")
 	}
 }
 

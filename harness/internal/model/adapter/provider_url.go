@@ -13,9 +13,30 @@ import (
 // EnvLookup resolves one environment variable name.
 type EnvLookup func(string) (string, bool)
 
+const (
+	// ProviderEndpointChat is the provider endpoint used for chat generation.
+	ProviderEndpointChat = "chat"
+)
+
 // ResolveProviderURL expands a provider URL through the supplied lookup.
 func ResolveProviderURL(provider schema.Provider, lookup EnvLookup) (string, error) {
 	return expandEnv(strings.TrimSpace(provider.URL), lookup)
+}
+
+// ResolveProviderEndpoint expands a named provider endpoint through the lookup.
+func ResolveProviderEndpoint(provider schema.Provider, endpoint string, lookup EnvLookup) (string, error) {
+	key := strings.TrimSpace(endpoint)
+	if key == "" {
+		key = ProviderEndpointChat
+	}
+	raw := ""
+	if provider.Endpoints != nil {
+		raw = strings.TrimSpace(provider.Endpoints[key])
+	}
+	if raw == "" && key == ProviderEndpointChat {
+		raw = strings.TrimSpace(provider.URL)
+	}
+	return expandEnv(raw, lookup)
 }
 
 // expandEnv expands environment variables and reports the first missing value.

@@ -30,6 +30,7 @@ func (e Engine) Project(q domain.ExecutiveSummaryQuery, graph domain.TaskGraphPr
 	return domain.ExecutiveSummaryProjection{
 		SchemaVersion:    domain.ExecutiveSummarySchemaVersion,
 		GeneratedAt:      *q.Now,
+		DomainID:         q.DomainID,
 		Firewall:         domain.ProjectionFirewall{Kind: string(q.Firewall), ID: "doug", Label: "Doug"},
 		Horizon:          q.Horizon,
 		Title:            "Today",

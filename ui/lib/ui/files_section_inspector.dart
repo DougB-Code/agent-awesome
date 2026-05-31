@@ -176,7 +176,7 @@ class _FileAccessDetails extends StatelessWidget {
           child: Column(
             children: <Widget>[
               _InspectorRow(
-                label: 'Firewall',
+                label: 'Domain',
                 value: controller.memoryFirewallLabel(file.firewall),
               ),
               if (audience.isNotEmpty)

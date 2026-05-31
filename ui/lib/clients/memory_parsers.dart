@@ -34,17 +34,18 @@ MemoryRecord parseMemoryRecord(dynamic content) {
   final metadataMap = metadata is Map<String, dynamic>
       ? metadata
       : <String, dynamic>{};
+  final domainId = stringValue(
+    record['domain_id'],
+    fallback: stringValue(metadataMap['domain_id']),
+  );
   return MemoryRecord(
     id: stringValue(record['id']),
-    domainId: stringValue(
-      record['domain_id'],
-      fallback: stringValue(metadataMap['domain_id']),
-    ),
+    domainId: domainId,
     evidenceId: stringValue(record['evidence_id']),
     title: stringValue(record['title'], fallback: 'Untitled memory'),
     summary: stringValue(record['summary']),
     kind: stringValue(record['kind'], fallback: 'memory'),
-    firewall: stringValue(record['firewall'], fallback: 'user'),
+    firewall: stringValue(record['firewall'], fallback: domainId),
     trustLevel: stringValue(record['trust_level'], fallback: 'source_original'),
     sensitivity: stringValue(record['sensitivity'], fallback: 'private'),
     status: stringValue(record['status'], fallback: 'active'),
@@ -159,11 +160,12 @@ MemorySafetyEvent? parseMemorySafetyEvent(dynamic content) {
 /// Parses a compiled page returned by the memory service.
 CompiledMemoryPage parseCompiledMemoryPage(dynamic content) {
   final page = content is Map<String, dynamic> ? content : <String, dynamic>{};
+  final domainId = stringValue(page['domain_id']);
   return CompiledMemoryPage(
     id: stringValue(page['id']),
-    domainId: stringValue(page['domain_id']),
+    domainId: domainId,
     kind: stringValue(page['kind'], fallback: 'entity_page'),
-    firewall: stringValue(page['firewall'], fallback: 'user'),
+    firewall: stringValue(page['firewall'], fallback: domainId),
     title: stringValue(page['title'], fallback: 'Untitled page'),
     path: stringValue(page['path']),
     status: stringValue(page['status'], fallback: 'active'),

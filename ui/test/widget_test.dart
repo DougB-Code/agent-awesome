@@ -17,6 +17,7 @@ import 'package:agentawesome_ui/clients/assistant_client.dart';
 import 'package:agentawesome_ui/clients/executive_summary_client.dart';
 import 'package:agentawesome_ui/clients/mcp_client.dart';
 import 'package:agentawesome_ui/domain/agent_validation_result.dart';
+import 'package:agentawesome_ui/domain/app_plugin.dart';
 import 'package:agentawesome_ui/domain/automation_contracts.dart';
 import 'package:agentawesome_ui/domain/date_formatting.dart';
 import 'package:agentawesome_ui/domain/tool_config.dart';
@@ -31,6 +32,7 @@ import 'package:agentawesome_ui/domain/screen_command.dart';
 import 'package:agentawesome_ui/domain/today_state.dart';
 import 'package:agentawesome_ui/features/today/widgets/today_schedule_card.dart';
 import 'package:agentawesome_ui/ui/agent_awesome_shell.dart';
+import 'package:agentawesome_ui/ui/automations_section.dart';
 import 'package:agentawesome_ui/ui/onboarding/setup_wizard_shell.dart';
 import 'package:agentawesome_ui/ui/panels/panels.dart';
 import 'package:agentawesome_ui/ui/settings/settings_panel.dart';
@@ -77,6 +79,52 @@ void main() {
       gatewayMemoryMcpEndpointFor(profile, profile.memoryServers.single),
       'http://127.0.0.1:2/mcp/memory',
     );
+  });
+
+  testWidgets('adjusts command panel default split for collapsed app menu', (
+    tester,
+  ) async {
+    late PanelSplit expandedSplit;
+    late PanelSplit collapsedSplit;
+    late PanelSplit customSplit;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PanelMenuColumnScope(
+          expanded: true,
+          child: Builder(
+            builder: (context) {
+              expandedSplit = PanelMenuColumnScope.commandPanelSplitOf(
+                context,
+                const PanelSplit(left: PanelSplit.commandMenuExpandedLeft),
+              );
+              return PanelMenuColumnScope(
+                expanded: false,
+                child: Builder(
+                  builder: (context) {
+                    collapsedSplit = PanelMenuColumnScope.commandPanelSplitOf(
+                      context,
+                      const PanelSplit(
+                        left: PanelSplit.commandMenuExpandedLeft,
+                      ),
+                    );
+                    customSplit = PanelMenuColumnScope.commandPanelSplitOf(
+                      context,
+                      const PanelSplit(left: 0.42),
+                    );
+                    return const SizedBox.shrink();
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    expect(expandedSplit.left, PanelSplit.commandMenuExpandedLeft);
+    expect(collapsedSplit.left, PanelSplit.commandMenuCollapsedLeft);
+    expect(customSplit.left, 0.42);
   });
 
   testWidgets('renders populated Today lower sections without overflow', (
@@ -504,6 +552,10 @@ void main() {
     await tester.tap(find.byTooltip('Computers'));
     await tester.pumpAndSettle();
     expect(find.text('This computer'), findsWidgets);
+    expect(find.byTooltip('Export remote Docker bundle'), findsOneWidget);
+    expect(find.byTooltip('Build remote Docker image'), findsOneWidget);
+    expect(find.byTooltip('Start remote Docker runtime'), findsOneWidget);
+    expect(find.byTooltip('Deploy remote Docker runtime'), findsOneWidget);
     expect(find.text('Allowed codebases: Agent Awesome'), findsOneWidget);
     expect(find.byTooltip('Capabilities'), findsOneWidget);
     expect(find.byTooltip('Secrets'), findsOneWidget);
@@ -550,17 +602,19 @@ void main() {
     expect(find.text('RUNBOOKS'), findsWidgets);
     expect(find.text('Filter runbooks...'), findsOneWidget);
     expect(find.text('Review Flow'), findsWidgets);
+    expect(find.byTooltip('Actions'), findsNothing);
 
-    await tester.tap(find.byTooltip('Actions'));
+    await tester.tap(find.byTooltip('Builder'));
     await tester.pumpAndSettle();
 
+    expect(find.byTooltip('Actions'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('state-machine-palette')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey<String>('state-machine-canvas')),
-      findsNothing,
+      findsOneWidget,
     );
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-MCP Servers')));
@@ -576,6 +630,63 @@ void main() {
     expect(find.text('TOOLS'), findsWidgets);
     expect(find.text('DETAILS'), findsWidgets);
     expect(find.text('No tool files configured'), findsWidgets);
+  });
+
+  testWidgets('places remote Docker actions on Launchpad computers', (
+    tester,
+  ) async {
+    final controller = _readyController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(
+          body: AutomationLaunchpadCommandPanel(controller: controller),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Export remote Docker bundle'), findsNothing);
+
+    await tester.tap(find.byTooltip('Computers'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Export remote Docker bundle'), findsOneWidget);
+    expect(find.byTooltip('Build remote Docker image'), findsOneWidget);
+    expect(find.byTooltip('Start remote Docker runtime'), findsOneWidget);
+    expect(find.byTooltip('Deploy remote Docker runtime'), findsOneWidget);
+  });
+
+  testWidgets('keeps remote Docker actions out of app settings', (
+    tester,
+  ) async {
+    final controller = _readyController();
+    var selectedSection = 'App';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return SettingsCommandSubShell(
+                controller: controller,
+                selectedSection: selectedSection,
+                onSectionSelected: (section) =>
+                    setState(() => selectedSection = section),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('Export remote Docker bundle'), findsNothing);
+    expect(find.byTooltip('Build remote Docker image'), findsNothing);
+    expect(find.byTooltip('Start remote Docker runtime'), findsNothing);
+    expect(find.byTooltip('Deploy remote Docker runtime'), findsNothing);
   });
 
   testWidgets('renders Launchpad detail empty state with shared guidance', (
@@ -3005,6 +3116,10 @@ void main() {
     expect(find.text('Summarize titles with a model.'), findsOneWidget);
     expect(find.text('Summary model'), findsOneWidget);
     expect(find.text('openai / gpt-mini'), findsOneWidget);
+    expect(find.byTooltip('Export remote Docker bundle'), findsNothing);
+    expect(find.byTooltip('Build remote Docker image'), findsNothing);
+    expect(find.byTooltip('Start remote Docker runtime'), findsNothing);
+    expect(find.byTooltip('Deploy remote Docker runtime'), findsNothing);
 
     expect(find.text('OS Tools'), findsNothing);
     expect(find.text('MCP Server'), findsNothing);
@@ -3018,6 +3133,7 @@ void main() {
     expect(find.byTooltip('Duplicate model config'), findsOneWidget);
     expect(find.byTooltip('Delete model config'), findsOneWidget);
     expect(find.byTooltip('Validations'), findsOneWidget);
+    expect(find.text('Model id'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey<String>('sidebar-Agents')));
     await tester.pump();
@@ -3490,6 +3606,66 @@ local-exec:
       find.byType(SettingsValidationRunModeButton).first,
     );
     expect(runAll.onRun, isNotNull);
+  });
+
+  testWidgets('tools screen indexes installed packages as available tools', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const toolPath = '/tmp/tool.yaml';
+    const toolConfig = '''
+name: test-tools
+local-exec:
+  enabled: true
+  commands:
+    - name: rg
+      executable: rg
+      description: Search text.
+      operations:
+        - name: search_text
+          description: Search text.
+''';
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      configFiles: _MemoryConfigFileStore(<String, String>{
+        toolPath: toolConfig,
+      }),
+    );
+    controller.runtimeProfile = _settingsProfile().copyWith(
+      harness: _settingsProfile().harness.copyWith(toolConfigPath: toolPath),
+    );
+    controller.availableToolConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: toolPath,
+        kind: ConfigFileKind.tool,
+        assigned: true,
+        displayName: 'test-tools',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAgentAwesomeTheme(),
+        home: Scaffold(body: ToolsCommandPanel(controller: controller)),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('INSTALLED TOOLS'), findsOneWidget);
+    await tester.tap(find.byTooltip('Available Tools'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(find.text('AVAILABLE TOOLS'), findsOneWidget);
+    expect(find.text('rg'), findsOneWidget);
+    expect(find.text('rg.search_text'), findsOneWidget);
+    expect(find.text('Commands 1'), findsOneWidget);
+    expect(find.text('Operations 1'), findsOneWidget);
   });
 
   testWidgets('adds one authored command validation from tools screen', (
@@ -4450,6 +4626,14 @@ validations:
         ],
       ),
     ];
+    controller.availableAgentConfigs = const <ConfigFileEntry>[
+      ConfigFileEntry(
+        path: '/tmp/agent.yaml',
+        kind: ConfigFileKind.agent,
+        assigned: true,
+        displayName: 'Personal',
+      ),
+    ];
     controller.sessions = <ChatSession>[
       ChatSession(
         id: 'session-live',
@@ -4727,6 +4911,37 @@ validations:
     expect(find.text('Unrelated chat task'), findsNothing);
     expect(find.byTooltip('Delete chat'), findsNothing);
     expect(find.text('Alternate planning chat'), findsOneWidget);
+  });
+
+  testWidgets('shows chat runtime feedback while a reply starts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController();
+    controller
+      ..runtimeProfile = _chatRuntimeProfile()
+      ..runtimeProfilePath = '/tmp/personal.json'
+      ..selectedSessionId = 'session-live'
+      ..sessions = <ChatSession>[
+        ChatSession(
+          id: 'session-live',
+          title: 'Live chat',
+          updatedAt: DateTime(2026, 5, 31, 8, 45),
+        ),
+      ]
+      ..sending = true
+      ..statusMessage = 'Preparing managed chat runtime';
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.tap(find.text('Chat'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Preparing managed chat runtime'), findsOneWidget);
   });
 
   testWidgets('opens chat timeline at the latest message', (tester) async {
@@ -5445,6 +5660,95 @@ validations:
     expect(tester.takeException(), isNull);
     expect(find.text('AGENT'), findsOneWidget);
     expect(find.text('AWESOME'), findsOneWidget);
+  });
+
+  testWidgets('basic interface mode hides advanced sidebar routes', (
+    tester,
+  ) async {
+    final controller = _readyController()
+      ..appSettings = const AgentAwesomeAppSettings(
+        gettingStartedCompleted: true,
+        interfaceMode: interfaceModeBasic,
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('sidebar-Launchpad')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('sidebar-Runbooks')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('sidebar-Agents')), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('sidebar-MCP Servers')),
+      findsNothing,
+    );
+    expect(find.byKey(const ValueKey<String>('sidebar-Tools')), findsNothing);
+  });
+
+  testWidgets('opens manifest-backed app plugin sections from the sidebar', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final controller = _readyController()
+      ..appPlugins = const <AppPluginManifest>[
+        AppPluginManifest(
+          id: 'workflow-board',
+          name: 'Workflow Board',
+          description: 'Board app supplied by a plugin package',
+          starlarkEntrypoint: 'main.star',
+          panels: <AppPluginPanel>[
+            AppPluginPanel(
+              id: 'board',
+              title: 'Board',
+              description: 'Tracks cards across configurable lanes',
+              kind: AppPluginPanelKind.board,
+              actions: <AppPluginAction>[
+                AppPluginAction(
+                  id: 'create-card',
+                  title: 'Create card',
+                  kind: 'workflow',
+                ),
+              ],
+              blocks: <AppPluginPanelBlock>[
+                AppPluginPanelBlock(
+                  title: 'Lanes',
+                  text: 'Plugin-defined board content',
+                  badges: <String>['todo', 'doing', 'done'],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: AgentAwesomeShell(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey<String>('sidebar-app-plugin:workflow-board:board'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('APPS'), findsOneWidget);
+    expect(find.text('Workflow Board'), findsOneWidget);
+    expect(find.text('Board tools'), findsOneWidget);
+    expect(find.text('Create card'), findsOneWidget);
+    expect(find.text('Plugin-defined board content'), findsOneWidget);
+    expect(find.text('Kanban Lite'), findsNothing);
   });
 }
 

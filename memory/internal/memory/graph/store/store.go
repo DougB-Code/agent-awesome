@@ -72,6 +72,10 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("apply graph schema: %w", err)
 	}
+	if err := store.migrate(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return store, nil
 }
 
@@ -139,4 +143,49 @@ func (s *Store) configure(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// migrate removes legacy graph storage columns that moved to repository routing.
+func (s *Store) migrate(ctx context.Context) error {
+	if _, err := s.runner.ExecContext(ctx, "DROP INDEX IF EXISTS idx_graph_nodes_firewall_sensitivity"); err != nil {
+		return fmt.Errorf("drop legacy graph firewall index: %w", err)
+	}
+	hasFirewall, err := s.hasColumn(ctx, "graph_nodes", "firewall")
+	if err != nil {
+		return err
+	}
+	if !hasFirewall {
+		return nil
+	}
+	if _, err := s.runner.ExecContext(ctx, "ALTER TABLE graph_nodes DROP COLUMN firewall"); err != nil {
+		return fmt.Errorf("drop legacy graph firewall column: %w", err)
+	}
+	return nil
+}
+
+// hasColumn reports whether a known graph table still has a column.
+func (s *Store) hasColumn(ctx context.Context, table string, column string) (bool, error) {
+	rows, err := s.runner.QueryContext(ctx, "PRAGMA table_info("+table+")")
+	if err != nil {
+		return false, fmt.Errorf("inspect graph table %s: %w", table, err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name string
+		var columnType string
+		var notNull int
+		var defaultValue any
+		var primaryKey int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return false, fmt.Errorf("scan graph table %s columns: %w", table, err)
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("inspect graph table %s columns: %w", table, err)
+	}
+	return false, nil
 }

@@ -16,6 +16,7 @@ import '../clients/mcp_client.dart';
 import '../clients/screen_command_client.dart';
 import '../domain/agent_config.dart';
 import '../domain/agent_validation_result.dart';
+import '../domain/app_plugin.dart';
 import '../domain/automation_contracts.dart';
 import '../domain/config_yaml.dart';
 import '../domain/credentials.dart';
@@ -40,6 +41,7 @@ import '../domain/today_state.dart';
 import '../domain/user_message_text.dart';
 import 'app_config.dart';
 import 'app_logger.dart';
+import 'app_plugin_store.dart';
 import 'app_settings.dart';
 import 'chat_history.dart';
 import 'config_files.dart';
@@ -112,6 +114,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     LocalModelRuntime? localModels,
     ConfigFileStore? configFiles,
     AgentAwesomeAppSettingsStore? appSettingsStore,
+    AppPluginStore? appPluginStore,
     ChatHistoryStore? chatHistoryStore,
     CredentialStore? credentialStore,
     ChatTitleClient? titleClient,
@@ -192,6 +195,13 @@ class AgentAwesomeAppController extends ChangeNotifier {
       configFiles: configFiles ?? const ConfigFileStore(),
       appSettingsStore:
           appSettingsStore ?? const AgentAwesomeAppSettingsStore(),
+      appPluginStore:
+          appPluginStore ??
+          AppPluginStore(
+            renderer: CommandRunnerAppPluginRenderer(
+              commandRunner: commandRunner,
+            ),
+          ),
       chatHistoryStore: chatHistoryStore ?? const ChatHistoryStore(),
       credentialStore:
           credentialStore ?? CredentialStore(commandRunner: commandRunner),
@@ -237,6 +247,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     required this.localModels,
     required this.configFiles,
     required this.appSettingsStore,
+    required this.appPluginStore,
     required this.chatHistoryStore,
     required this.credentialStore,
     required this.titleClient,
@@ -291,6 +302,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Store for app-owned settings.
   final AgentAwesomeAppSettingsStore appSettingsStore;
 
+  /// Store for installed app plugin manifests.
+  final AppPluginStore appPluginStore;
+
   /// Store for local chat metadata across selected agents.
   final ChatHistoryStore chatHistoryStore;
 
@@ -330,6 +344,9 @@ class AgentAwesomeAppController extends ChangeNotifier {
 
   /// MCP config packages available in the app config directory.
   List<ConfigFileEntry> availableMcpConfigs = const <ConfigFileEntry>[];
+
+  /// Installed app plugins that can contribute shell sections.
+  List<AppPluginManifest> appPlugins = const <AppPluginManifest>[];
 
   /// App-specific settings outside agent runtime topology ownership.
   AgentAwesomeAppSettings appSettings = const AgentAwesomeAppSettings();
@@ -638,6 +655,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       runtimeProfile = await _loadInitialRuntimeProfile(loader, profileFile);
       runtimeProfile = await _migrateDefaultProfileConfigs(runtimeProfile!);
       runtimeProfile = await _withAppRuntimeSelections(runtimeProfile!);
+      await _refreshAppPlugins();
       if (config.autoStartLocalServices) {
         await _saveMemoryFirewallPolicyForActiveProfile();
       }
@@ -1107,12 +1125,18 @@ class AgentAwesomeAppController extends ChangeNotifier {
       assignedPath: profile?.harness.toolConfigPath ?? '',
     );
     availableMcpConfigs = await configFiles.list(kind: ConfigFileKind.mcp);
+    await _refreshAppPlugins();
   }
 
   /// Refreshes file-backed profile, model, and agent collections.
   Future<void> refreshConfigurationCollections() async {
     await _refreshConfigCollections();
     notifyListeners();
+  }
+
+  /// Reloads installed app plugin manifests.
+  Future<void> _refreshAppPlugins() async {
+    appPlugins = await appPluginStore.list();
   }
 
   /// Returns the agent config selected for new chat and command traffic.
@@ -1171,6 +1195,26 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Returns whether the first-launch setup guide should stay hidden.
   bool get gettingStartedCompleted {
     return appSettings.gettingStartedCompleted;
+  }
+
+  /// Returns the active top-bar workspace view id.
+  String get activeWorkspaceView {
+    return normalizeWorkspaceView(appSettings.activeWorkspaceView);
+  }
+
+  /// Returns the active UI complexity mode.
+  String get interfaceMode {
+    return normalizeInterfaceMode(appSettings.interfaceMode);
+  }
+
+  /// Whether advanced controls should be visible.
+  bool get advancedInterfaceEnabled {
+    return interfaceMode == interfaceModeAdvanced;
+  }
+
+  /// Returns whether screen AI may open side panels while applying changes.
+  bool get watchWorkspaceChangesEnabled {
+    return appSettings.watchWorkspaceChangesEnabled;
   }
 
   /// Returns configured memory firewall choices.
@@ -1318,19 +1362,49 @@ class AgentAwesomeAppController extends ChangeNotifier {
   Future<void> saveAppSettings(AgentAwesomeAppSettings settings) async {
     appSettings = settings;
     await appSettingsStore.save(
-      settings,
+      settings.copyWith(
+        memoryFirewalls: _memoryPolicyDomainsForActiveProfile(settings),
+      ),
       extraPolicyActors: _activeMemoryPolicyActors(),
     );
     statusMessage = 'App settings saved';
     notifyListeners();
   }
 
-  /// Saves memory firewall policy with active runtime actor grants.
+  /// Saves memory domain policy with active runtime actor grants.
   Future<void> _saveMemoryFirewallPolicyForActiveProfile() async {
     await appSettingsStore.saveMemoryFirewallPolicy(
-      appSettings,
+      appSettings.copyWith(
+        memoryFirewalls: _memoryPolicyDomainsForActiveProfile(appSettings),
+      ),
       extraPolicyActors: _activeMemoryPolicyActors(),
     );
+  }
+
+  /// Returns policy domains that include runtime-routed databases.
+  List<MemoryFirewall> _memoryPolicyDomainsForActiveProfile(
+    AgentAwesomeAppSettings settings,
+  ) {
+    final domains = <MemoryFirewall>[...settings.effectiveMemoryFirewalls];
+    final profile = runtimeProfile;
+    if (profile == null) {
+      return domains;
+    }
+    final existing = domains.map((domain) => domain.id).toSet();
+    for (final domain in profile.memoryDomains) {
+      final id = domain.id.trim();
+      if (!domain.enabled || id.isEmpty || existing.contains(id)) {
+        continue;
+      }
+      existing.add(id);
+      domains.add(
+        MemoryFirewall(
+          id: id,
+          label: domain.label.trim().isEmpty ? id : domain.label,
+        ),
+      );
+    }
+    return domains;
   }
 
   /// Returns active agent principals that local memory services must trust.
@@ -1369,6 +1443,23 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
   }
 
+  /// Enables or disables side-panel previews for AI-driven screen changes.
+  Future<void> setWatchWorkspaceChangesEnabled(bool enabled) async {
+    if (enabled == watchWorkspaceChangesEnabled) {
+      return;
+    }
+    await saveAppSettings(
+      appSettings.copyWith(watchWorkspaceChangesEnabled: enabled),
+    );
+    if (!enabled) {
+      assistantChatPanelOpen = false;
+      backlogChatPanelOpen = false;
+      automationsChatPanelOpen = false;
+      backlogReviewPanelOpen = false;
+      notifyListeners();
+    }
+  }
+
   /// Shows or hides the first-launch setup guide.
   Future<void> setGettingStartedCompleted(bool completed) async {
     final wasCompleted = appSettings.gettingStartedCompleted;
@@ -1380,6 +1471,26 @@ class AgentAwesomeAppController extends ChangeNotifier {
       notifyListeners();
       await _startRuntimeServicesAndLoadData();
     }
+  }
+
+  /// Selects the app-wide workspace view filter.
+  Future<void> selectWorkspaceView(String view) async {
+    final normalized = normalizeWorkspaceView(view);
+    if (normalized == activeWorkspaceView) {
+      return;
+    }
+    await saveAppSettings(
+      appSettings.copyWith(activeWorkspaceView: normalized),
+    );
+  }
+
+  /// Selects the UI complexity mode.
+  Future<void> selectInterfaceMode(String mode) async {
+    final normalized = normalizeInterfaceMode(mode);
+    if (normalized == interfaceMode) {
+      return;
+    }
+    await saveAppSettings(appSettings.copyWith(interfaceMode: normalized));
   }
 
   /// Saves user-configured memory firewalls.
@@ -1412,13 +1523,13 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
   }
 
-  /// Restarts managed memory services after the firewall policy file changes.
+  /// Restarts managed memory services after the domain policy file changes.
   Future<void> _restartMemoryServicesForFirewallPolicy() async {
     final profile = runtimeProfile;
     if (profile == null || !config.autoStartLocalServices || _isClosing) {
       return;
     }
-    statusMessage = 'Memory firewall policy saved; restarting memory service';
+    statusMessage = 'Memory domain policy saved; restarting memory service';
     notifyListeners();
     localProcessStatuses = await localServices.restartMemoryServices(profile);
     for (final status in localProcessStatuses) {

@@ -281,7 +281,10 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
         ),
         child: widget.showDetailPane
             ? SplitPanelShell(
-                split: widget.split,
+                split: PanelMenuColumnScope.commandPanelSplitOf(
+                  context,
+                  widget.split,
+                ),
                 gutterWidth: widget.gutterWidth,
                 stackBelowWidth: widget.stackBelowWidth,
                 left: commandPane,
@@ -360,7 +363,18 @@ class _CommandPanelSubShellState extends State<CommandPanelSubShell> {
     if (widget.areas.isEmpty) {
       return;
     }
-    _selectArea((_selectedAreaIndex + 1) % widget.areas.length);
+    final selectableIndexes = <int>[
+      for (var index = 0; index < widget.areas.length; index++)
+        if (widget.areas[index].showInQuickAccess) index,
+    ];
+    if (selectableIndexes.isEmpty) {
+      return;
+    }
+    final currentPosition = selectableIndexes.indexOf(_selectedAreaIndex);
+    final nextPosition = currentPosition < 0
+        ? 0
+        : (currentPosition + 1) % selectableIndexes.length;
+    _selectArea(selectableIndexes[nextPosition]);
   }
 
   /// Selects the next detail mode from the title interaction.

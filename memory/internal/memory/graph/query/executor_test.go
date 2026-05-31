@@ -271,39 +271,24 @@ func TestExecuteMatchGroupsByEndpointCount(t *testing.T) {
 	}
 }
 
-// TestExecuteFindEnforcesFirewallAndSensitivity verifies node scans honor read policy.
-func TestExecuteFindEnforcesFirewallAndSensitivity(t *testing.T) {
+// TestExecuteFindEnforcesSensitivity verifies node scans honor sensitivity policy.
+func TestExecuteFindEnforcesSensitivity(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
 	defer store.Close()
 
-	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:visible:user", "User visible", graph.FirewallUser, graph.SensitivityPrivate)
-	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:visible:global", "Global visible", graph.FirewallGlobal, graph.SensitivityInternal)
-	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:hidden:restricted", "Restricted hidden", graph.FirewallUser, graph.SensitivityRestricted)
-	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:hidden:project", "Project hidden", graph.FirewallProject, graph.SensitivityPrivate)
+	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:visible:private", "Private visible", graph.SensitivityPrivate)
+	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:visible:internal", "Internal visible", graph.SensitivityInternal)
+	_ = mustNodeWithAccess(t, store, graph.KindTask, "task:hidden:restricted", "Restricted hidden", graph.SensitivityRestricted)
 
 	result, err := NewExecutor(store).Execute(ctx, Request{
-		Query: `FIND task RETURN title, sensitivity, firewall ORDER BY title ASC LIMIT 10`,
+		Query: `FIND task RETURN title, sensitivity ORDER BY title ASC LIMIT 10`,
 	})
 	if err != nil {
 		t.Fatalf("execute policy query: %v", err)
 	}
-	if len(result.Rows) != 1 || result.Rows[0]["title"] != "User visible" {
-		t.Fatalf("rows = %#v, want same-firewall visible node only", result.Rows)
-	}
-
-	withGlobal, err := NewExecutor(store).Execute(ctx, Request{
-		Query:         `FIND task RETURN title, sensitivity, firewall ORDER BY title ASC LIMIT 10`,
-		IncludeGlobal: true,
-	})
-	if err != nil {
-		t.Fatalf("execute global policy query: %v", err)
-	}
-	if len(withGlobal.Rows) != 2 {
-		t.Fatalf("global rows = %#v, want visible user and global nodes", withGlobal.Rows)
-	}
-	if withGlobal.Rows[0]["title"] != "Global visible" || withGlobal.Rows[1]["title"] != "User visible" {
-		t.Fatalf("global rows = %#v, want opt-in global visibility", withGlobal.Rows)
+	if len(result.Rows) != 2 || result.Rows[0]["title"] != "Internal visible" || result.Rows[1]["title"] != "Private visible" {
+		t.Fatalf("rows = %#v, want non-restricted visible nodes", result.Rows)
 	}
 
 	restricted, err := NewExecutor(store).Execute(ctx, Request{
@@ -324,10 +309,10 @@ func TestExecuteMatchEnforcesEndpointAccess(t *testing.T) {
 	store := openTestStore(t)
 	defer store.Close()
 
-	work := mustNodeWithAccess(t, store, graph.KindTask, "task:policy:work", "Policy work", graph.FirewallUser, graph.SensitivityPrivate)
-	visible := mustNodeWithAccess(t, store, graph.KindPerson, "person:policy:visible", "Visible Owner", graph.FirewallUser, graph.SensitivityPrivate)
-	restricted := mustNodeWithAccess(t, store, graph.KindPerson, "person:policy:restricted", "Restricted Owner", graph.FirewallUser, graph.SensitivityRestricted)
-	project := mustNodeWithAccess(t, store, graph.KindPerson, "person:policy:project", "Project Owner", graph.FirewallProject, graph.SensitivityPrivate)
+	work := mustNodeWithAccess(t, store, graph.KindTask, "task:policy:work", "Policy work", graph.SensitivityPrivate)
+	visible := mustNodeWithAccess(t, store, graph.KindPerson, "person:policy:visible", "Visible Owner", graph.SensitivityPrivate)
+	restricted := mustNodeWithAccess(t, store, graph.KindPerson, "person:policy:restricted", "Restricted Owner", graph.SensitivityRestricted)
+	project := mustNodeWithAccess(t, store, graph.KindPerson, "person:policy:project", "Project Owner", graph.SensitivityPrivate)
 	upsertEdge(t, store, work.ID, graph.RelationAssignedTo, visible.ID)
 	upsertEdge(t, store, work.ID, graph.RelationAssignedTo, restricted.ID)
 	upsertEdge(t, store, work.ID, graph.RelationAssignedTo, project.ID)
@@ -338,8 +323,8 @@ func TestExecuteMatchEnforcesEndpointAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute endpoint policy query: %v", err)
 	}
-	if len(result.Rows) != 1 || result.Rows[0]["to.title"] != "Visible Owner" {
-		t.Fatalf("rows = %#v, want only default-visible endpoint", result.Rows)
+	if len(result.Rows) != 2 || result.Rows[0]["to.title"] != "Project Owner" || result.Rows[1]["to.title"] != "Visible Owner" {
+		t.Fatalf("rows = %#v, want non-restricted endpoints", result.Rows)
 	}
 
 	granted, err := NewExecutor(store).Execute(ctx, Request{
@@ -349,7 +334,7 @@ func TestExecuteMatchEnforcesEndpointAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute granted endpoint policy query: %v", err)
 	}
-	if len(granted.Rows) != 2 || granted.Rows[0]["to.title"] != "Restricted Owner" || granted.Rows[1]["to.title"] != "Visible Owner" {
+	if len(granted.Rows) != 3 || granted.Rows[0]["to.title"] != "Project Owner" || granted.Rows[1]["to.title"] != "Restricted Owner" || granted.Rows[2]["to.title"] != "Visible Owner" {
 		t.Fatalf("granted rows = %#v, want private and restricted endpoints", granted.Rows)
 	}
 }
@@ -598,13 +583,12 @@ func mustNode(t *testing.T, store *graphstore.Store, kind graph.NodeKind, stable
 }
 
 // mustNodeWithAccess writes one graph node with explicit read-policy metadata.
-func mustNodeWithAccess(t *testing.T, store *graphstore.Store, kind graph.NodeKind, stableKey string, title string, firewall graph.Firewall, sensitivity graph.Sensitivity) graph.Node {
+func mustNodeWithAccess(t *testing.T, store *graphstore.Store, kind graph.NodeKind, stableKey string, title string, sensitivity graph.Sensitivity) graph.Node {
 	t.Helper()
 	node, err := store.UpsertNode(context.Background(), graph.UpsertNodeRequest{
 		Kind:        kind,
 		StableKey:   stableKey,
 		Title:       title,
-		Firewall:    firewall,
 		Sensitivity: sensitivity,
 		Actor:       "test",
 	})

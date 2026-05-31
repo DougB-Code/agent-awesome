@@ -232,6 +232,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       'send user message requested length=${trimmed.length} modelRef=$runModelRef',
     );
     statusMessage = 'Preparing managed chat runtime';
+    sending = true;
     _notifyControllerListeners();
     final runtimeReady = await _ensureChatRuntimeReady();
     final ready = runtimeReady && await _ensureLiveSession();
@@ -262,6 +263,7 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       _notifyControllerListeners();
       return;
     }
+    statusMessage = 'Agent Awesome is responding';
     sending = true;
     _notifyControllerListeners();
     await _log('streaming run for session $sessionId');
@@ -302,6 +304,79 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
         action: option.action,
       ),
     );
+    if (option.action != 'deny') {
+      await _persistApprovedToolConfig(confirmation);
+    }
+  }
+
+  /// Persists an approved confirmed MCP tool to the active managed config.
+  Future<void> _persistApprovedToolConfig(
+    ConfirmationRequest confirmation,
+  ) async {
+    final toolName = confirmation.durableMcpToolName;
+    final profile = runtimeProfile;
+    if (toolName.isEmpty || profile == null) {
+      return;
+    }
+    for (final path in _approvedToolConfigCandidatePaths(profile)) {
+      final changed = await _tryPersistApprovedToolConfig(
+        path,
+        toolName,
+        confirmation.mcpServerName,
+      );
+      if (changed) {
+        await _refreshConfigCollections();
+        _notifyControllerListeners();
+        return;
+      }
+    }
+  }
+
+  /// Returns config files that can carry durable MCP tool approval metadata.
+  List<String> _approvedToolConfigCandidatePaths(RuntimeProfile profile) {
+    final paths = <String>[];
+    final toolPath = profile.harness.toolConfigPath.trim();
+    if (toolPath.isNotEmpty) {
+      paths.add(toolPath);
+    }
+    final mcpPath = mcpPackageConfigPath(profile.id).trim();
+    if (mcpPath.isNotEmpty && !paths.contains(mcpPath)) {
+      paths.add(mcpPath);
+    }
+    return paths;
+  }
+
+  /// Attempts one managed config-file update for an approved MCP tool.
+  Future<bool> _tryPersistApprovedToolConfig(
+    String path,
+    String toolName,
+    String serverName,
+  ) async {
+    try {
+      final document = ToolConfigDocument.parse(await configFiles.read(path));
+      final update = toolConfigWithApprovedMcpTool(
+        document: document,
+        toolName: toolName,
+        serverName: serverName,
+      );
+      if (!update.changed) {
+        await _log(
+          'approved tool config unchanged for $toolName: ${update.reason}',
+        );
+        return false;
+      }
+      final error = toolConfigValidationError(update.document);
+      if (error.isNotEmpty) {
+        await _log('approved tool config rejected for $toolName: $error');
+        return false;
+      }
+      await configFiles.write(path, update.document.toYaml());
+      await _log('approved tool config updated $path for $toolName');
+      return true;
+    } catch (error) {
+      await _log('approved tool config skipped $path for $toolName: $error');
+      return false;
+    }
   }
 
   /// Returns the best non-denial option for an auto-approved task operation.
@@ -759,6 +834,16 @@ extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {
       }
     } catch (error) {
       await _log('stream run failed session=$sessionId: $error');
+      messages = <ChatMessage>[
+        ...messages,
+        ChatMessage(
+          id: 'runtime-${DateTime.now().microsecondsSinceEpoch}',
+          role: ChatRole.tool,
+          author: 'Runtime',
+          text: 'Agent Awesome could not complete the run: $error',
+          createdAt: DateTime.now(),
+        ),
+      ];
       _setEndpoint(
         'Agent API',
         ConnectionStateKind.disconnected,

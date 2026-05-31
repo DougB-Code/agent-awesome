@@ -145,7 +145,7 @@ class _ContactProfileDetails extends StatelessWidget {
                 value: contact.contexts.length.toString(),
               ),
               _ContactInspectorRow(
-                label: 'Firewalls',
+                label: 'Domains',
                 value: _contactFirewallLabels(controller, contact).join(', '),
               ),
               _ContactInspectorRow(

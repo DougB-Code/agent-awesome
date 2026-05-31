@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:agentawesome_ui/app/app_config.dart';
 import 'package:agentawesome_ui/app/app_controller.dart';
+import 'package:agentawesome_ui/app/app_settings.dart';
 import 'package:agentawesome_ui/app/runtime_profile.dart';
 import 'package:agentawesome_ui/clients/mcp_client.dart';
 import 'package:agentawesome_ui/clients/screen_command_client.dart';
@@ -121,6 +122,52 @@ void main() {
     expect(change.safety, ScreenChangeSafety.needsReview);
     expect(controller.workspace.tasks.single.id, 'task-1');
     expect(controller.backlogReviewPanelOpen, isTrue);
+  });
+
+  test('static chat mode keeps screen command review panels closed', () async {
+    final fakeTasks = _FakeTasksClient(
+      endpoint: _memoryEndpoint,
+      tasks: <WorkspaceTask>[_task(id: 'task-1', title: 'Draft schema')],
+    );
+    final controller = _controller(
+      planner: _FakePlanner(
+        run: _run(
+          changes: <ScreenChange>[
+            _change(
+              operation: ScreenChangeOperation.deleteTask,
+              taskId: 'task-1',
+              confidence: 0.99,
+            ),
+          ],
+        ),
+      ),
+      tasksClient: fakeTasks,
+    );
+    controller.appSettings = const AgentAwesomeAppSettings(
+      watchWorkspaceChangesEnabled: false,
+    );
+    controller.workspace = ProjectWorkspace(
+      title: 'Workspace',
+      subtitle: 'Live',
+      tasks: fakeTasks.tasks,
+      sources: const <SourceItem>[],
+      memoryRecords: const <MemoryRecord>[],
+    );
+    controller.primaryMemoryToolNames = const <String>{
+      'delete_task',
+      'task_graph_projection',
+    };
+
+    await controller.runBacklogScreenCommand(
+      text: 'delete the schema task',
+      scopeLabel: 'Backlog / Queue',
+    );
+
+    final change = controller.activeScreenCommandRun!.changes.single;
+    expect(change.status, ScreenChangeStatus.proposed);
+    expect(controller.backlogReviewPanelOpen, isFalse);
+    expect(controller.backlogChatPanelOpen, isFalse);
+    expect(controller.assistantChatPanelOpen, isFalse);
   });
 
   test('undo restores an applied task edit from before values', () async {

@@ -95,7 +95,6 @@ func (e *Executor) executeSetNode(ctx context.Context, stmt Statement, mutationC
 		Title:        node.Title,
 		Summary:      node.Summary,
 		Status:       node.Status,
-		Firewall:     node.Firewall,
 		Sensitivity:  node.Sensitivity,
 		TrustLevel:   node.TrustLevel,
 		Confidence:   node.Confidence,
@@ -195,12 +194,8 @@ func applyNodeAssignments(request *graph.UpsertNodeRequest, properties *[]Assign
 				return fmt.Errorf("invalid node lifecycle status %q", assignment.Value.Value)
 			}
 			request.Status = status
-		case "firewall":
-			firewall := graph.Firewall(strings.ToLower(assignment.Value.Value))
-			if !graph.ValidFirewall(firewall) {
-				return fmt.Errorf("invalid node firewall %q", assignment.Value.Value)
-			}
-			request.Firewall = firewall
+		case "domain_id", "firewall":
+			return fmt.Errorf("field %s is request routing metadata, not graph node data", assignment.Field)
 		case "sensitivity":
 			sensitivity := graph.Sensitivity(strings.ToLower(assignment.Value.Value))
 			if !graph.ValidSensitivity(sensitivity) {

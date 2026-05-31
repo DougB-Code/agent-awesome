@@ -181,6 +181,9 @@ func (s *Server) callTool(ctx context.Context, name string, domainID string, arg
 		}
 		return s.exportMemoryCopy(ctx, arguments)
 	}
+	if hasMemoryDomainOverride(arguments) {
+		return nil, fmt.Errorf("memory domain overrides must use the domain_id field")
+	}
 	server, err := s.serverForControlTool(ctx, name, domainID)
 	if err != nil {
 		return nil, err
@@ -192,7 +195,7 @@ func (s *Server) callTool(ctx context.Context, name string, domainID string, arg
 	defer session.Close()
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name:      name,
-		Arguments: arguments,
+		Arguments: argumentsWithMemoryDomain(arguments, domainID),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%s call %s: %w", server.Name, name, err)
@@ -204,6 +207,34 @@ func (s *Server) callTool(ctx context.Context, name string, domainID string, arg
 		return result.StructuredContent, nil
 	}
 	return map[string]any{"content": result.Content}, nil
+}
+
+// hasMemoryDomainOverride reports whether tool arguments try to select storage.
+func hasMemoryDomainOverride(arguments map[string]any) bool {
+	if len(arguments) == 0 {
+		return false
+	}
+	if _, ok := arguments["domain_id"]; ok {
+		return true
+	}
+	_, ok := arguments["firewall"]
+	return ok
+}
+
+// argumentsWithMemoryDomain adds routing metadata for memory domain calls.
+func argumentsWithMemoryDomain(arguments map[string]any, domainID string) map[string]any {
+	domainID = strings.TrimSpace(domainID)
+	if domainID == "" {
+		return arguments
+	}
+	next := make(map[string]any, len(arguments)+1)
+	for key, value := range arguments {
+		next[key] = value
+	}
+	if _, ok := next["domain_id"]; !ok {
+		next["domain_id"] = domainID
+	}
+	return next
 }
 
 // memoryExportAvailable reports whether harness memory policy can evaluate exports.
@@ -355,6 +386,7 @@ func contextReadOnlyMemoryTools() map[string]bool {
 	return map[string]bool{
 		"search_memory":                  true,
 		"search_sources":                 true,
+		"list_memory_domains":            true,
 		"load_entity_page":               true,
 		"load_timeline":                  true,
 		"query_context_graph":            true,

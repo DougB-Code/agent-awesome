@@ -4,6 +4,7 @@ library;
 import 'dart:io';
 
 import 'package:agentawesome_ui/app/credential_store.dart';
+import 'package:agentawesome_ui/domain/credentials.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runs credential store tests.
@@ -134,5 +135,66 @@ void main() {
       'OPENAI_API_KEY',
     ]);
     expect(calls.single.stdin, isNull);
+  });
+
+  test('builds stable website login credential references', () {
+    final refs = websiteLoginCredentialReferences('D2L Downloads');
+
+    expect(refs.profileId, 'D2L_DOWNLOADS');
+    expect(refs.username, 'AA_WEB_LOGIN_D2L_DOWNLOADS_USERNAME');
+    expect(refs.password, 'AA_WEB_LOGIN_D2L_DOWNLOADS_PASSWORD');
+    expect(refs.oneTimeCodeSeed, 'AA_WEB_LOGIN_D2L_DOWNLOADS_OTP_SEED');
+  });
+
+  test('stores website login credentials under scoped references', () async {
+    final calls =
+        <({String executable, List<String> arguments, String? stdin})>[];
+    final store = CredentialStore(
+      operatingSystem: 'linux',
+      secretProcessRunner: (executable, arguments, stdin) async {
+        calls.add((executable: executable, arguments: arguments, stdin: stdin));
+        return ProcessResult(1, 0, '', '');
+      },
+    );
+
+    final results = await store.storeWebsiteLogin(
+      profileId: 'D2L Downloads',
+      username: 'learner@example.test',
+      password: 'browser-login-secret',
+    );
+
+    expect(results.every((result) => result.success), isTrue);
+    expect(calls, hasLength(2));
+    expect(calls[0].arguments.last, 'AA_WEB_LOGIN_D2L_DOWNLOADS_USERNAME');
+    expect(calls[0].stdin, 'learner@example.test');
+    expect(calls[1].arguments.last, 'AA_WEB_LOGIN_D2L_DOWNLOADS_PASSWORD');
+    expect(calls[1].stdin, 'browser-login-secret');
+  });
+
+  test('looks up website login credentials without requiring otp', () async {
+    final store = CredentialStore(
+      operatingSystem: 'linux',
+      environment: const <String, String>{
+        'AA_WEB_LOGIN_D2L_DOWNLOADS_USERNAME': 'learner@example.test',
+        'AA_WEB_LOGIN_D2L_DOWNLOADS_PASSWORD': 'browser-login-secret',
+      },
+      processRunner: (_, _) async => ProcessResult(1, 1, '', 'not found'),
+    );
+
+    final lookup = await store.lookupWebsiteLogin('D2L Downloads');
+
+    expect(lookup.profileId, 'D2L_DOWNLOADS');
+    expect(lookup.ready, isTrue);
+    expect(lookup.username.secretValue, 'learner@example.test');
+    expect(lookup.password.displayValue, '••••••••cret');
+    expect(lookup.oneTimeCodeSeed.found, isFalse);
+  });
+
+  test('builds stable Apple Calendar credential references', () {
+    final refs = appleCalendarCredentialReferences('Personal');
+
+    expect(refs.profileId, 'PERSONAL');
+    expect(refs.appleId, 'AA_APPLE_CALENDAR_PERSONAL_APPLE_ID');
+    expect(refs.appPassword, 'AA_APPLE_CALENDAR_PERSONAL_APP_PASSWORD');
   });
 }

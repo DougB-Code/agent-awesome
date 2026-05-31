@@ -22,8 +22,8 @@ func TestMCPToolsList(t *testing.T) {
 	body := postRPC(t, server, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
 	result := body["result"].(map[string]any)
 	tools := result["tools"].([]any)
-	if len(tools) != 31 {
-		t.Fatalf("tool count = %d, want 31", len(tools))
+	if len(tools) != 35 {
+		t.Fatalf("tool count = %d, want 35", len(tools))
 	}
 }
 
@@ -118,7 +118,7 @@ func TestMCPSaveAndSearch(t *testing.T) {
 			"name": "save_memory_candidate",
 			"arguments": map[string]any{
 				"content":         "MCP reporting source",
-				"firewall":        "acme-client",
+				"domain_id":       "acme-client",
 				"title":           "MCP source",
 				"idempotency_key": "mcp-save",
 			},
@@ -135,8 +135,8 @@ func TestMCPSaveAndSearch(t *testing.T) {
 		"params": map[string]any{
 			"name": "search_memory",
 			"arguments": map[string]any{
-				"firewall": "acme-client",
-				"text":     "reporting",
+				"domain_id": "acme-client",
+				"text":      "reporting",
 			},
 		},
 	})
@@ -148,6 +148,71 @@ func TestMCPSaveAndSearch(t *testing.T) {
 	primary := structured["primary_memory"].([]any)
 	if len(primary) != 1 {
 		t.Fatalf("primary evidence count = %d, want 1", len(primary))
+	}
+}
+
+// TestMCPMemoryDomainPoolToolsManageLiveDatabases verifies live pool operations.
+func TestMCPMemoryDomainPoolToolsManageLiveDatabases(t *testing.T) {
+	server := newTestMCPServer(t)
+	create := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "create_memory_domain",
+			"arguments": map[string]any{
+				"domain_id": "client-a",
+				"actor":     "transport-test",
+			},
+		},
+	})
+	createResult := create["result"].(map[string]any)
+	if createResult["isError"].(bool) {
+		t.Fatalf("create returned tool error: %#v", createResult)
+	}
+	created := createResult["structuredContent"].(map[string]any)
+	if created["domain_id"] != "client-a" || created["open"] != true || created["exists"] != true {
+		t.Fatalf("created = %#v, want open client-a database", created)
+	}
+	list := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "list_memory_domains",
+			"arguments": map[string]any{
+				"domain_id": "client-a",
+				"actor":     "transport-test",
+			},
+		},
+	})
+	listResult := list["result"].(map[string]any)
+	if listResult["isError"].(bool) {
+		t.Fatalf("list returned tool error: %#v", listResult)
+	}
+	listed := listResult["structuredContent"].([]any)
+	if len(listed) != 1 || listed[0].(map[string]any)["domain_id"] != "client-a" {
+		t.Fatalf("listed = %#v, want only client-a", listed)
+	}
+	remove := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      3,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "remove_memory_domain",
+			"arguments": map[string]any{
+				"domain_id": "client-a",
+				"actor":     "transport-test",
+			},
+		},
+	})
+	removeResult := remove["result"].(map[string]any)
+	if removeResult["isError"].(bool) {
+		t.Fatalf("remove returned tool error: %#v", removeResult)
+	}
+	removed := removeResult["structuredContent"].(map[string]any)
+	if removed["domain_id"] != "client-a" || removed["open"] != false || removed["exists"] != true {
+		t.Fatalf("removed = %#v, want detached client-a database still on disk", removed)
 	}
 }
 
@@ -179,8 +244,8 @@ func TestMCPRememberStoresMemoryNugget(t *testing.T) {
 		"params": map[string]any{
 			"name": "search_memory",
 			"arguments": map[string]any{
-				"firewall": "user",
-				"text":     "connected nuggets",
+				"domain_id": "user",
+				"text":      "connected nuggets",
 			},
 		},
 	})
@@ -195,6 +260,52 @@ func TestMCPRememberStoresMemoryNugget(t *testing.T) {
 	record := primary[0].(map[string]any)
 	if record["kind"] != "profile_fact" || record["trust_level"] != "user_asserted" {
 		t.Fatalf("record = %#v, want user-asserted profile fact", record)
+	}
+}
+
+// TestMCPOrganizeMemoryCreatesFollowUpTask verifies the batch maintenance tool.
+func TestMCPOrganizeMemoryCreatesFollowUpTask(t *testing.T) {
+	server := newTestMCPServer(t)
+	save := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "save_memory_candidate",
+			"arguments": map[string]any{
+				"content":         "Met Casey",
+				"title":           "Untitled memory",
+				"idempotency_key": "mcp-organize",
+			},
+		},
+	})
+	if save["result"].(map[string]any)["isError"].(bool) {
+		t.Fatalf("save returned tool error: %#v", save)
+	}
+	organize := postRPC(t, server, map[string]any{
+		"jsonrpc": "2.0",
+		"id":      2,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name": "organize_memory",
+			"arguments": map[string]any{
+				"domain_id": "user",
+				"limit":     10,
+			},
+		},
+	})
+	result := organize["result"].(map[string]any)
+	if result["isError"].(bool) {
+		t.Fatalf("organize returned tool error: %#v", result)
+	}
+	structured := result["structuredContent"].(map[string]any)
+	tasks := structured["follow_up_tasks"].([]any)
+	if len(tasks) != 1 {
+		t.Fatalf("follow_up_tasks = %#v, want one task", tasks)
+	}
+	task := tasks[0].(map[string]any)
+	if !strings.Contains(task["title"].(string), "Clarify memory") {
+		t.Fatalf("task = %#v, want clarification title", task)
 	}
 }
 
@@ -524,7 +635,7 @@ func mcpToolDefinition(t *testing.T, body map[string]any, name string) map[strin
 func newTestMCPServer(t *testing.T) *MCPServer {
 	t.Helper()
 	root := t.TempDir()
-	repo, err := graphrepo.Open(context.Background(), graphrepo.Config{
+	repo, err := graphrepo.OpenPool(context.Background(), graphrepo.Config{
 		DBPath:   filepath.Join(root, "graph.db"),
 		DataRoot: filepath.Join(root, "data"),
 	})

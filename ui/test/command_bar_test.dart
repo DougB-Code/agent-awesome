@@ -124,6 +124,38 @@ void main() {
     expect(setupOpenCount, 1);
   });
 
+  testWidgets('watch changes button toggles static and side-panel modes', (
+    tester,
+  ) async {
+    final controller = AgentAwesomeAppController(
+      config: _testConfig(),
+      appSettingsStore: _MemoryAppSettingsStore(),
+    );
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: TextEditingController(),
+        appController: controller,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+      ),
+    );
+
+    expect(find.byTooltip('Watching AI changes'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Watching AI changes'));
+    await tester.pumpAndSettle();
+
+    expect(controller.watchWorkspaceChangesEnabled, isFalse);
+    expect(find.byTooltip('AI changes stay in background'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('AI changes stay in background'));
+    await tester.pumpAndSettle();
+
+    expect(controller.watchWorkspaceChangesEnabled, isTrue);
+    expect(find.byTooltip('Watching AI changes'), findsOneWidget);
+  });
+
   testWidgets('hides setup badge for external gateway model metadata', (
     tester,
   ) async {
@@ -211,6 +243,7 @@ void main() {
     expect(find.byTooltip('Active agent'), findsOneWidget);
     expect(find.text('Personal'), findsOneWidget);
     expect(find.byTooltip('Active memory'), findsOneWidget);
+    expect(find.byTooltip('Views'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Active agent'));
     await tester.pumpAndSettle();
@@ -260,17 +293,53 @@ void main() {
     final memoryRect = tester.getRect(
       find.byKey(const ValueKey<String>('command-memory-picker')),
     );
+    final viewRect = tester.getRect(
+      find.byKey(const ValueKey<String>('command-workspace-view-picker')),
+    );
+    final watchRect = tester.getRect(find.byTooltip('Watching AI changes'));
     final themeRect = tester.getRect(
       find.byKey(const ValueKey<String>('command-theme-badge')),
     );
+    final helpRect = tester.getRect(find.byTooltip('Help'));
     final chatRect = tester.getRect(find.byTooltip('AI chat'));
     final agentMemoryGap = memoryRect.left - agentRect.right;
-    final memoryThemeGap = themeRect.left - memoryRect.right;
-    final themeChatGap = chatRect.left - themeRect.right;
+    final memoryViewGap = viewRect.left - memoryRect.right;
+    final viewWatchGap = watchRect.left - viewRect.right;
+    final watchThemeGap = themeRect.left - watchRect.right;
+    final themeHelpGap = helpRect.left - themeRect.right;
+    final helpChatGap = chatRect.left - helpRect.right;
 
     expect(agentMemoryGap, closeTo(10, 0.1));
-    expect(memoryThemeGap, closeTo(agentMemoryGap, 0.1));
-    expect(themeChatGap, closeTo(agentMemoryGap, 0.1));
+    expect(memoryViewGap, closeTo(agentMemoryGap, 0.1));
+    expect(viewWatchGap, closeTo(agentMemoryGap, 0.1));
+    expect(watchThemeGap, closeTo(agentMemoryGap, 0.1));
+    expect(themeHelpGap, closeTo(agentMemoryGap, 0.1));
+    expect(helpChatGap, closeTo(agentMemoryGap, 0.1));
+  });
+
+  testWidgets('help opens in-app dialog instead of external handler', (
+    tester,
+  ) async {
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.appSettings = const AgentAwesomeAppSettings(
+      gettingStartedCompleted: true,
+    );
+
+    await tester.pumpWidget(
+      _CommandBarHarness(
+        commandController: TextEditingController(),
+        appController: controller,
+        onScreenCommand: (_) {},
+        onNewChatSubmit: () {},
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Help'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Agent Awesome Help'), findsOneWidget);
+    expect(find.text('Copy docs link'), findsOneWidget);
+    expect(find.text('Done'), findsOneWidget);
   });
 
   testWidgets('quick access links agent management and all chats', (
@@ -436,12 +505,14 @@ void main() {
       _ThemeCommandBarHarness(commandController: TextEditingController()),
     );
 
-    expect(find.text('Light'), findsOneWidget);
+    expect(find.byIcon(Icons.wb_sunny_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.dark_mode_outlined), findsNothing);
 
     await tester.tap(find.byTooltip('Switch to dark theme'));
     await tester.pump();
 
-    expect(find.text('Dark'), findsOneWidget);
+    expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.wb_sunny_outlined), findsNothing);
   });
 }
 
@@ -553,6 +624,27 @@ class _ThemeCommandBarHarnessState extends State<_ThemeCommandBarHarness> {
   }
 }
 
+class _MemoryAppSettingsStore extends AgentAwesomeAppSettingsStore {
+  _MemoryAppSettingsStore();
+
+  AgentAwesomeAppSettings saved = const AgentAwesomeAppSettings();
+
+  /// Loads in-memory settings for command-bar tests.
+  @override
+  Future<AgentAwesomeAppSettings> load() async {
+    return saved;
+  }
+
+  /// Persists in-memory settings for command-bar tests.
+  @override
+  Future<void> save(
+    AgentAwesomeAppSettings settings, {
+    Iterable<String> extraPolicyActors = const <String>[],
+  }) async {
+    saved = settings;
+  }
+}
+
 /// Returns a local-only controller configuration for command bar tests.
 AppConfig _testConfig() {
   return const AppConfig(
@@ -578,7 +670,7 @@ RuntimeProfile _externalGatewayProfile() {
       label: 'External Harness',
       apiBaseUrl: 'http://127.0.0.1:18070/api',
       contextApiBaseUrl: 'http://127.0.0.1:18070/api/context',
-      appName: 'agent_awesome',
+      appName: 'Agent Awesome',
       userId: 'doug',
       workingDirectory: '/tmp/harness',
       executablePath: '/tmp/bin/agent-awesome',
@@ -598,7 +690,7 @@ RuntimeProfile _externalGatewayProfile() {
       harnessBaseUrl: 'http://127.0.0.1:18070/api',
       contextBaseUrl: 'http://127.0.0.1:18070/api/context',
       memoryMcpUrl: 'http://127.0.0.1:18070/mcp',
-      appName: 'agent_awesome',
+      appName: 'Agent Awesome',
       userId: 'doug',
       profileId: 'doug',
       modelProviderId: 'openai',
@@ -643,7 +735,7 @@ RuntimeProfile _personalProfile() {
       label: 'Personal Harness',
       apiBaseUrl: 'http://127.0.0.1:8080/api',
       contextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
-      appName: 'agent_awesome',
+      appName: 'Agent Awesome',
       userId: 'doug',
       workingDirectory: '/tmp/harness',
       executablePath: '/tmp/bin/agent-awesome',
@@ -663,7 +755,7 @@ RuntimeProfile _personalProfile() {
       harnessBaseUrl: 'http://127.0.0.1:8080/api',
       contextBaseUrl: 'http://127.0.0.1:8081/api/context',
       memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-      appName: 'agent_awesome',
+      appName: 'Agent Awesome',
       userId: 'doug',
       port: 8070,
       autoStart: true,

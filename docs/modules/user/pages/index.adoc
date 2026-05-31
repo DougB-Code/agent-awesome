@@ -8,6 +8,7 @@ Use these pages when you need to:
 
 * Run the desktop app.
 * Understand local chat behavior.
+* Use runbooks as guided training for repeatable processes.
 * Recognize whether memory, gateway, or harness services are connected.
 
 Internal development procedures live in xref:development:contributor-setup.adoc[].

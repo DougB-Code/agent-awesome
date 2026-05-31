@@ -127,6 +127,9 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
   /// Returns tasks after applying local queue filters.
   List<WorkspaceTask> get filteredTasks {
     return workspace.tasks.where((task) {
+      if (!_taskMatchesWorkspaceView(task, activeWorkspaceView)) {
+        return false;
+      }
       final terminal = task.status == 'done' || task.status == 'canceled';
       if (!taskFilters.includeDone && terminal) {
         return false;
@@ -192,6 +195,55 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
   Future<void> applyTaskFilters(TaskFilterState filters) async {
     taskFilters = filters;
     _notifyControllerListeners();
+  }
+
+  /// Returns the saved Backlog task filter matching the active filters.
+  SavedTaskFilter? activeSavedTaskFilter() {
+    for (final preset in appSettings.savedTaskFilters) {
+      if (preset.filters.sameAs(taskFilters)) {
+        return preset;
+      }
+    }
+    return null;
+  }
+
+  /// Saves the current Backlog filters as a reusable preset.
+  Future<void> saveCurrentTaskFilterPreset() async {
+    final preset = SavedTaskFilter(
+      id: taskFilterPresetId(taskFilters),
+      label: taskFilterPresetLabel(taskFilters),
+      filters: taskFilters,
+    );
+    final next = <SavedTaskFilter>[
+      preset,
+      for (final existing in appSettings.savedTaskFilters)
+        if (existing.id != preset.id) existing,
+    ];
+    await saveAppSettings(appSettings.copyWith(savedTaskFilters: next));
+  }
+
+  /// Applies one saved Backlog task filter preset.
+  Future<void> applySavedTaskFilterPreset(String presetId) async {
+    final trimmed = presetId.trim();
+    for (final preset in appSettings.savedTaskFilters) {
+      if (preset.id == trimmed) {
+        await applyTaskFilters(preset.filters);
+        return;
+      }
+    }
+  }
+
+  /// Deletes one saved Backlog task filter preset.
+  Future<void> deleteSavedTaskFilterPreset(String presetId) async {
+    final trimmed = presetId.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final next = <SavedTaskFilter>[
+      for (final preset in appSettings.savedTaskFilters)
+        if (preset.id != trimmed) preset,
+    ];
+    await saveAppSettings(appSettings.copyWith(savedTaskFilters: next));
   }
 
   /// Refreshes graph-backed task state from memory graph servers.
@@ -813,4 +865,21 @@ extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {
       ),
     ];
   }
+}
+
+/// Reports whether a task belongs in the active workspace view.
+bool _taskMatchesWorkspaceView(WorkspaceTask task, String view) {
+  final normalized = normalizeWorkspaceView(view);
+  if (normalized == workspaceViewAll) {
+    return true;
+  }
+  if (normalized == workspaceViewProject) {
+    return task.project.trim().isNotEmpty ||
+        task.topics.any((topic) => topic.trim().toLowerCase() == 'project');
+  }
+  final project = task.project.trim().toLowerCase();
+  if (project == normalized) {
+    return true;
+  }
+  return task.topics.any((topic) => topic.trim().toLowerCase() == normalized);
 }

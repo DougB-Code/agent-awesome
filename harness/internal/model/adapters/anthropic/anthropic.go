@@ -42,7 +42,7 @@ func (f Factory) Create(ctx context.Context, selection schema.ProviderSelection)
 		return nil, fmt.Errorf("provider %q API key %q: %w", selection.Name, apiKeyEnv, err)
 	}
 
-	endpoint, err := adapter.ResolveProviderURL(selection.Provider, os.LookupEnv)
+	endpoint, err := adapter.ResolveProviderEndpoint(selection.Provider, adapter.ProviderEndpointChat, os.LookupEnv)
 	if err != nil {
 		return nil, fmt.Errorf("provider %q url: %w", selection.Name, err)
 	}
@@ -67,13 +67,23 @@ func (Factory) ValidateProvider(name string, provider schema.Provider) error {
 	if strings.TrimSpace(provider.APIKeyEnv) == "" {
 		return fmt.Errorf("provider %q requires api-key", name)
 	}
-	if strings.TrimSpace(provider.URL) == "" {
+	if strings.TrimSpace(anthropicChatURL(provider)) == "" {
 		return fmt.Errorf("provider %q requires url", name)
 	}
 	if err := adapter.ValidateNoStreamingModels(name, provider, "Anthropic"); err != nil {
 		return err
 	}
 	return nil
+}
+
+// anthropicChatURL returns the chat endpoint configured for Anthropic calls.
+func anthropicChatURL(provider schema.Provider) string {
+	if provider.Endpoints != nil {
+		if value := strings.TrimSpace(provider.Endpoints[adapter.ProviderEndpointChat]); value != "" {
+			return value
+		}
+	}
+	return strings.TrimSpace(provider.URL)
 }
 
 type anthropicModel struct {

@@ -232,6 +232,66 @@ class _CommandMemoryPicker extends StatelessWidget {
   }
 }
 
+/// _CommandWorkspaceViewPicker switches app-wide workspace views.
+class _CommandWorkspaceViewPicker extends StatelessWidget {
+  /// Creates a top-bar view picker.
+  const _CommandWorkspaceViewPicker({
+    required this.activeView,
+    required this.compact,
+    required this.size,
+    required this.onChanged,
+    required this.onOpen,
+  });
+
+  /// Currently selected workspace view id.
+  final String activeView;
+
+  /// Whether the control should render as an icon-only button.
+  final bool compact;
+
+  /// Control height.
+  final double size;
+
+  /// Callback invoked with the selected workspace view id.
+  final ValueChanged<String> onChanged;
+
+  /// Callback invoked before the picker menu is shown.
+  final VoidCallback onOpen;
+
+  /// Builds the workspace view picker.
+  @override
+  Widget build(BuildContext context) {
+    final active = normalizeWorkspaceView(activeView);
+    return PopupMenuButton<String>(
+      tooltip: 'Views',
+      offset: Offset(0, size + 8),
+      onOpened: onOpen,
+      onSelected: onChanged,
+      itemBuilder: (context) => <PopupMenuEntry<String>>[
+        for (final view in workspaceViewIds)
+          PopupMenuItem<String>(
+            value: view,
+            enabled: view != active,
+            child: _CommandWorkspaceViewMenuItem(
+              view: view,
+              activeView: active,
+            ),
+          ),
+      ],
+      child: _CommandPickerFrame(
+        key: const ValueKey<String>('command-workspace-view-picker'),
+        size: size,
+        width: 118,
+        compact: compact,
+        enabled: true,
+        switching: false,
+        icon: Icons.view_quilt_outlined,
+        label: workspaceViewLabel(active),
+      ),
+    );
+  }
+}
+
 /// _CommandPickerFrame renders a compact top-bar selector body.
 class _CommandPickerFrame extends StatelessWidget {
   /// Creates a shared top-bar picker frame.
@@ -311,6 +371,48 @@ class _CommandPickerFrame extends StatelessWidget {
             const SizedBox(width: 4),
             Icon(Icons.expand_more, size: 18, color: colors.muted),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// _CommandWorkspaceViewMenuItem renders one workspace view option.
+class _CommandWorkspaceViewMenuItem extends StatelessWidget {
+  /// Creates one workspace view picker row.
+  const _CommandWorkspaceViewMenuItem({
+    required this.view,
+    required this.activeView,
+  });
+
+  /// Workspace view represented by this row.
+  final String view;
+
+  /// Active workspace view id.
+  final String activeView;
+
+  /// Builds the menu row.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    final active = view == activeView;
+    return SizedBox(
+      width: 220,
+      child: Row(
+        children: <Widget>[
+          Icon(
+            active ? Icons.check_circle_outline : Icons.view_quilt_outlined,
+            color: active ? colors.green : colors.muted,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              workspaceViewLabel(view),
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: colors.ink, fontWeight: FontWeight.w800),
+            ),
+          ),
         ],
       ),
     );
@@ -556,8 +658,8 @@ class _ThemeBadge extends StatelessWidget {
         child: Container(
           key: const ValueKey<String>('command-theme-badge'),
           height: 42,
-          width: 118,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          width: 42,
+          padding: EdgeInsets.zero,
           decoration: BoxDecoration(
             color: colors.surface,
             gradient: context.agentAwesomeControlGradient,
@@ -571,22 +673,9 @@ class _ThemeBadge extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
               Icon(
-                dark ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                dark ? Icons.dark_mode_outlined : Icons.wb_sunny_outlined,
                 color: colors.ink,
                 size: 19,
-              ),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  dark ? 'Dark' : 'Light',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colors.ink,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0,
-                  ),
-                ),
               ),
             ],
           ),

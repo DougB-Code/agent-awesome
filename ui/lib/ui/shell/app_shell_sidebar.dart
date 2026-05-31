@@ -8,6 +8,8 @@ class _AppSidebarColumn extends StatelessWidget {
     required this.width,
     required this.expanded,
     required this.selected,
+    required this.interfaceMode,
+    required this.appPlugins,
     required this.onSelected,
     required this.onToggleExpanded,
   });
@@ -20,6 +22,12 @@ class _AppSidebarColumn extends StatelessWidget {
 
   /// Currently selected section id.
   final String selected;
+
+  /// Active UI complexity mode.
+  final String interfaceMode;
+
+  /// Installed app plugins that contribute app shell entries.
+  final List<AppPluginManifest> appPlugins;
 
   /// Emits section ids when a navigation item is selected.
   final ValueChanged<String> onSelected;
@@ -54,6 +62,8 @@ class _AppSidebarColumn extends StatelessWidget {
             child: _AppSidebar(
               selected: selected,
               expanded: expanded,
+              interfaceMode: interfaceMode,
+              appPlugins: appPlugins,
               onSelected: onSelected,
             ),
           ),
@@ -69,17 +79,21 @@ class _AppSidebar extends StatelessWidget {
   const _AppSidebar({
     required this.selected,
     required this.expanded,
+    required this.interfaceMode,
+    required this.appPlugins,
     required this.onSelected,
   });
 
   /// Width used by the documentation-style expanded navigation.
-  static const double expandedWidth = 352;
+  static const double expandedWidth = 317;
 
   /// Width used by collapsed icon-only navigation.
-  static const double compactWidth = 84;
+  static const double compactWidth = 76;
 
   final String selected;
   final bool expanded;
+  final String interfaceMode;
+  final List<AppPluginManifest> appPlugins;
   final ValueChanged<String> onSelected;
 
   static const List<_SidebarGroup> _groups = <_SidebarGroup>[
@@ -115,21 +129,25 @@ class _AppSidebar extends StatelessWidget {
           label: AppSections.automationRunbooks,
           section: AppSections.automationRunbooks,
           icon: Icons.route_outlined,
+          advanced: true,
         ),
         _SidebarItem(
           label: AppSections.automationAgents,
           section: AppSections.automationAgents,
           icon: Icons.psychology_outlined,
+          advanced: true,
         ),
         _SidebarItem(
           label: AppSections.automationMcpServers,
           section: AppSections.automationMcpServers,
           icon: Icons.hub_outlined,
+          advanced: true,
         ),
         _SidebarItem(
           label: AppSections.automationTools,
           section: AppSections.automationTools,
           icon: Icons.terminal,
+          advanced: true,
         ),
       ],
     ),
@@ -170,6 +188,7 @@ class _AppSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final compact = !expanded;
     final colors = context.agentAwesomeColors;
+    final groups = _visibleGroups(interfaceMode, appPlugins);
     return Container(
       decoration: BoxDecoration(
         color: colors.sidebar,
@@ -183,7 +202,7 @@ class _AppSidebar extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: <Widget>[
-                for (final group in _groups)
+                for (final group in groups)
                   _SidebarGroupView(
                     group: group,
                     selected: selected,
@@ -196,5 +215,48 @@ class _AppSidebar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Returns the sidebar groups visible for the selected interface mode.
+  List<_SidebarGroup> _visibleGroups(
+    String mode,
+    List<AppPluginManifest> appPlugins,
+  ) {
+    final groups = <_SidebarGroup>[..._groups, ..._pluginGroups(appPlugins)];
+    if (normalizeInterfaceMode(mode) == interfaceModeAdvanced) {
+      return groups;
+    }
+    return <_SidebarGroup>[
+      for (final group in groups)
+        group.copyWith(
+          items: <_SidebarItem>[
+            for (final item in group.items)
+              if (!item.advanced) item,
+          ],
+        ),
+    ].where((group) => group.items.isNotEmpty).toList(growable: false);
+  }
+
+  /// Converts installed plugin manifests to sidebar groups.
+  List<_SidebarGroup> _pluginGroups(List<AppPluginManifest> plugins) {
+    final items = <_SidebarItem>[];
+    for (final plugin in plugins) {
+      final panel = plugin.defaultPanel;
+      if (panel == null || !panel.showInSidebar) {
+        continue;
+      }
+      items.add(
+        _SidebarItem(
+          label: plugin.name,
+          section: appPluginRoute(plugin.id, panel.id),
+          icon: appPluginIconFor(panel.icon.isEmpty ? plugin.icon : panel.icon),
+          advanced: false,
+        ),
+      );
+    }
+    if (items.isEmpty) {
+      return const <_SidebarGroup>[];
+    }
+    return <_SidebarGroup>[_SidebarGroup(title: 'APPS', items: items)];
   }
 }

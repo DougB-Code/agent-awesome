@@ -34,6 +34,9 @@ enum CommandRouteKind {
 
   /// Send a screen-scoped instruction to Agent Awesome.
   assistant,
+
+  /// Create a new chat and send the command text there.
+  newChat,
 }
 
 /// CommandRoute stores one deterministic command-bar routing decision.
@@ -102,6 +105,10 @@ class CommandRouter {
     if (navigation != null) {
       return navigation;
     }
+    final explicitChat = _explicitChatRoute(context, text);
+    if (explicitChat != null) {
+      return explicitChat;
+    }
     if (_isSettingsContext(context)) {
       final settings = _settingsRoute(text);
       if (settings != null) {
@@ -123,11 +130,45 @@ class CommandRouter {
     if (_isTaskContext(context)) {
       return const CommandRoute(kind: CommandRouteKind.screenAi);
     }
+    if (_isChatContext(context)) {
+      return CommandRoute(
+        kind: CommandRouteKind.assistant,
+        assistantText: text,
+      );
+    }
     return CommandRoute(
       kind: CommandRouteKind.assistant,
       assistantText: _screenInstruction(context),
       displayText: context.text.trim(),
     );
+  }
+
+  /// Routes explicit chat instructions before screen-local command fallback.
+  CommandRoute? _explicitChatRoute(CommandContext context, String text) {
+    final normalized = _normalize(text);
+    final newChatText = _newChatText(text, normalized);
+    if (newChatText != null) {
+      return CommandRoute(
+        kind: CommandRouteKind.newChat,
+        assistantText: newChatText,
+        displayText: newChatText,
+      );
+    }
+    if (_looksLikeExistingChat(normalized)) {
+      final chatText = _existingChatText(text, normalized);
+      return CommandRoute(
+        kind: CommandRouteKind.assistant,
+        assistantText: _isChatContext(context)
+            ? chatText
+            : buildScreenCommandPrompt(
+                scopeLabel: context.scopeLabel,
+                userText: chatText,
+                relevantIds: '',
+              ),
+        displayText: chatText,
+      );
+    }
+    return null;
   }
 
   /// Routes short navigation commands to top-level workspaces.
@@ -294,6 +335,11 @@ class CommandRouter {
     return context.section == AppSections.backlog;
   }
 
+  /// Reports whether the command is running in the chat workspace.
+  bool _isChatContext(CommandContext context) {
+    return context.section == AppSections.chat;
+  }
+
   /// Reports whether the command is running in a memory-backed workspace.
   bool _isMemoryContext(CommandContext context) {
     return const <String>{
@@ -404,6 +450,53 @@ class CommandRouter {
   /// Returns raw text after a known command prefix.
   String _tail(String text, String prefix) {
     return text.trim().substring(prefix.length).trim();
+  }
+
+  /// Extracts text for a command that should create a fresh chat.
+  String? _newChatText(String text, String normalized) {
+    if (normalized == 'new chat' || normalized == 'start new chat') {
+      return '';
+    }
+    for (final prefix in const <String>[
+      'new chat about ',
+      'new chat ',
+      'start a new chat about ',
+      'start a new chat ',
+      'start new chat about ',
+      'start new chat ',
+    ]) {
+      if (normalized.startsWith(prefix)) {
+        return text.trim().substring(prefix.length).trim();
+      }
+    }
+    return null;
+  }
+
+  /// Reports whether normalized text explicitly asks for chat handling.
+  bool _looksLikeExistingChat(String normalized) {
+    return normalized.startsWith('chat about ') ||
+        normalized.startsWith('chat ') ||
+        normalized.startsWith('ask agent ') ||
+        normalized.startsWith('ask the agent ') ||
+        normalized.startsWith('continue chat ') ||
+        normalized.startsWith('continue the chat ');
+  }
+
+  /// Removes explicit chat prefixes from text sent to the active chat.
+  String _existingChatText(String text, String normalized) {
+    for (final prefix in const <String>[
+      'chat about ',
+      'chat ',
+      'ask agent ',
+      'ask the agent ',
+      'continue chat ',
+      'continue the chat ',
+    ]) {
+      if (normalized.startsWith(prefix)) {
+        return text.trim().substring(prefix.length).trim();
+      }
+    }
+    return text.trim();
   }
 
   /// Normalizes command text for deterministic routing.

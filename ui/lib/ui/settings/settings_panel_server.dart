@@ -95,6 +95,12 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
   late final TextEditingController _name = TextEditingController(
     text: widget.server.label,
   );
+  late final TextEditingController _endpoint = TextEditingController(
+    text: widget.server.endpoint,
+  );
+  late final TextEditingController _healthUrl = TextEditingController(
+    text: widget.server.healthUrl,
+  );
   late bool _enabled = widget.server.enabled;
   late bool _autoStart = widget.server.autoStart;
 
@@ -102,6 +108,8 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
   @override
   void dispose() {
     _name.dispose();
+    _endpoint.dispose();
+    _healthUrl.dispose();
     super.dispose();
   }
 
@@ -114,6 +122,8 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
       return;
     }
     _name.text = widget.server.label;
+    _endpoint.text = widget.server.endpoint;
+    _healthUrl.text = widget.server.healthUrl;
     _enabled = widget.server.enabled;
     _autoStart = widget.server.autoStart;
   }
@@ -124,14 +134,15 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
     return FormPlainSection(
       title: _memoryDomainDisplayName(widget.server),
       children: <Widget>[
-        SettingsToggleField(
-          title: 'Auto-start server',
-          value: _autoStart,
-          onChanged: (value) {
-            setState(() => _autoStart = value);
-            unawaited(_save());
-          },
-        ),
+        if (_hasLaunchConfiguration)
+          SettingsToggleField(
+            title: 'Auto-start server',
+            value: _autoStart,
+            onChanged: (value) {
+              setState(() => _autoStart = value);
+              unawaited(_save());
+            },
+          ),
         _SettingsServerOperations(
           controller: widget.controller,
           server: widget.server,
@@ -150,13 +161,35 @@ class _SettingsServerTileState extends State<_SettingsServerTile> {
           initialSavedValue: widget.server.label,
           onSave: (_) => _save(),
         ),
+        if (!_autoStart) ...<Widget>[
+          _SettingsAutoSaveTextField(
+            label: 'MCP endpoint',
+            controller: _endpoint,
+            initialSavedValue: widget.server.endpoint,
+            onSave: (_) => _save(),
+          ),
+          _SettingsAutoSaveTextField(
+            label: 'Health URL',
+            controller: _healthUrl,
+            initialSavedValue: widget.server.healthUrl,
+            onSave: (_) => _save(),
+          ),
+        ],
       ],
     );
+  }
+
+  /// Whether this memory domain has enough local launch data to be managed.
+  bool get _hasLaunchConfiguration {
+    return widget.server.workingDirectory.trim().isNotEmpty &&
+        widget.server.executablePath.trim().isNotEmpty;
   }
 
   Future<void> _save() async {
     final replacement = widget.server.copyWith(
       label: _name.text.trim(),
+      endpoint: _endpoint.text.trim(),
+      healthUrl: _healthUrl.text.trim(),
       autoStart: _autoStart,
       enabled: _enabled,
     );

@@ -211,7 +211,7 @@ AppConfig _testConfig() {
     agentGatewayBaseUrl: 'http://127.0.0.1:8070/api',
     agentContextApiBaseUrl: 'http://127.0.0.1:8081/api/context',
     memoryMcpUrl: 'http://127.0.0.1:8090/mcp',
-    agentAppName: 'agent_awesome',
+    agentAppName: 'Agent Awesome',
     agentUserId: 'doug',
     workspaceRoot: '/tmp/agentawesome-ui-test',
     autoStartLocalServices: false,

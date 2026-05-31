@@ -2,9 +2,11 @@
 package openai
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/openai/openai-go/shared"
 	"google.golang.org/genai"
 )
@@ -17,6 +19,15 @@ func openAIParametersSchema(value any) (shared.FunctionParameters, error) {
 		return nil, err
 	}
 	if normalized == nil {
+		return shared.FunctionParameters{
+			"type":       "object",
+			"properties": map[string]any{},
+		}, nil
+	}
+	if schemaBool, ok := normalized.(bool); ok {
+		if !schemaBool {
+			return nil, fmt.Errorf("parameters schema must allow an object")
+		}
 		return shared.FunctionParameters{
 			"type":       "object",
 			"properties": map[string]any{},
@@ -47,6 +58,10 @@ func openAIJSONSchema(value any) (any, error) {
 	switch typed := value.(type) {
 	case nil:
 		return nil, nil
+	case *jsonschema.Schema:
+		return openAIGoogleJSONSchema(typed)
+	case jsonschema.Schema:
+		return openAIGoogleJSONSchema(&typed)
 	case *genai.Schema:
 		return openAIGenAISchema(typed)
 	case genai.Schema:
@@ -68,6 +83,22 @@ func openAIJSONSchema(value any) (any, error) {
 	default:
 		return nil, fmt.Errorf("unsupported schema value %T", value)
 	}
+}
+
+// openAIGoogleJSONSchema converts an ADK JSON schema into plain JSON values.
+func openAIGoogleJSONSchema(schema *jsonschema.Schema) (any, error) {
+	if schema == nil {
+		return nil, nil
+	}
+	raw, err := json.Marshal(schema)
+	if err != nil {
+		return nil, fmt.Errorf("marshal json schema: %w", err)
+	}
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("decode json schema: %w", err)
+	}
+	return openAIJSONSchema(decoded)
 }
 
 // openAIGenAISchema converts a Google GenAI schema into OpenAI-compatible JSON

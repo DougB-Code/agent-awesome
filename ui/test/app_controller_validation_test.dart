@@ -163,6 +163,47 @@ void main() {
     ]);
   });
 
+  test('builds model provider check command arguments', () {
+    final arguments = buildModelCheckCommandArguments(
+      modelPath: '/tmp/model.yaml',
+      providerId: ' openai ',
+      modelId: ' gpt-mini ',
+      prompt: ' Reply with OK. ',
+    );
+
+    expect(arguments, <String>[
+      'models',
+      'check',
+      '--model',
+      '/tmp/model.yaml',
+      '--provider',
+      'openai',
+      '--model-id',
+      'gpt-mini',
+      '--prompt',
+      'Reply with OK.',
+    ]);
+  });
+
+  test('parses successful model provider check output', () {
+    final result = parseModelProviderVerificationProcessResult(
+      const ManagedProcessResult(
+        id: 'model-check',
+        pid: 12,
+        exitCode: 0,
+        stdout:
+            'Model check passed: provider=openai model_id=gpt-mini model=gpt-5-mini response="OK"\n',
+        stderr: '',
+        timedOut: false,
+      ),
+    );
+
+    expect(result.providerId, 'openai');
+    expect(result.modelId, 'gpt-mini');
+    expect(result.modelName, 'gpt-5-mini');
+    expect(result.responseText, 'OK');
+  });
+
   test('builds strict library validation command arguments', () {
     final arguments = buildLibraryValidationCommandArguments(
       rootPath: '.',

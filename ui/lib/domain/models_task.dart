@@ -364,6 +364,174 @@ class TaskFilterState {
       limit: limit ?? this.limit,
     );
   }
+
+  /// Encodes the task filters to JSON-compatible data.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'statuses': statuses,
+      'priorities': priorities,
+      'topics': topics,
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+      'overdue_only': overdueOnly,
+      'include_done': includeDone,
+      'limit': limit,
+    };
+  }
+
+  /// Parses task filters from JSON-compatible data.
+  factory TaskFilterState.fromJson(Map<String, dynamic> json) {
+    return TaskFilterState(
+      statuses: stringList(json['statuses'], trim: true),
+      priorities: stringList(json['priorities'], trim: true),
+      topics: stringList(json['topics'], trim: true),
+      search: stringValue(json['search'], trim: true),
+      overdueOnly: boolValue(json['overdue_only']),
+      includeDone: boolValue(json['include_done'], fallback: true),
+      limit: intValue(json['limit'], fallback: 100),
+    );
+  }
+
+  /// Reports whether this filter has the same configured values as [other].
+  bool sameAs(TaskFilterState other) {
+    return _sameTaskFilterValues(statuses, other.statuses) &&
+        _sameTaskFilterValues(priorities, other.priorities) &&
+        _sameTaskFilterValues(topics, other.topics) &&
+        search.trim() == other.search.trim() &&
+        overdueOnly == other.overdueOnly &&
+        includeDone == other.includeDone &&
+        limit == other.limit;
+  }
+}
+
+/// SavedTaskFilter stores one user-named task filter preset.
+class SavedTaskFilter {
+  /// Creates a saved task filter preset.
+  const SavedTaskFilter({
+    required this.id,
+    required this.label,
+    required this.filters,
+  });
+
+  /// Stable preset id.
+  final String id;
+
+  /// User-facing preset label.
+  final String label;
+
+  /// Task filters applied by the preset.
+  final TaskFilterState filters;
+
+  /// Encodes the preset to JSON-compatible data.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'id': id,
+      'label': label,
+      'filters': filters.toJson(),
+    };
+  }
+
+  /// Parses a saved task filter preset from JSON-compatible data.
+  factory SavedTaskFilter.fromJson(Map<String, dynamic> json) {
+    final filters = jsonObject(json['filters']);
+    return SavedTaskFilter(
+      id: stringValue(json['id'], trim: true),
+      label: stringValue(json['label'], trim: true),
+      filters: TaskFilterState.fromJson(filters),
+    );
+  }
+}
+
+/// Returns a readable label for a task filter preset.
+String taskFilterPresetLabel(TaskFilterState filters) {
+  final parts = <String>[];
+  if (filters.statuses.isEmpty) {
+    parts.add('Any status');
+  } else {
+    parts.add(_taskFilterJoined(filters.statuses));
+  }
+  if (filters.priorities.isNotEmpty) {
+    parts.add(_taskFilterJoined(filters.priorities));
+  }
+  if (filters.topics.isNotEmpty) {
+    parts.add(_taskFilterJoined(filters.topics));
+  }
+  if (filters.overdueOnly) {
+    parts.add('Overdue');
+  }
+  if (parts.isEmpty) {
+    return 'Task filter';
+  }
+  return parts.join(' / ');
+}
+
+/// Returns a stable id for a saved task filter preset.
+String taskFilterPresetId(TaskFilterState filters) {
+  final raw = <String>[
+    ...filters.statuses,
+    '|',
+    ...filters.priorities,
+    '|',
+    ...filters.topics,
+    '|',
+    filters.search.trim(),
+    '|',
+    filters.overdueOnly ? 'overdue' : '',
+    '|',
+    filters.includeDone ? 'include-done' : '',
+    '|',
+    filters.limit.toString(),
+  ].join('-');
+  final normalized = raw.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
+  final trimmed = normalized
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  return trimmed.isEmpty ? 'task-filter' : 'task-filter-$trimmed';
+}
+
+/// Parses saved task filter presets from decoded JSON.
+List<SavedTaskFilter> parseSavedTaskFilters(dynamic value) {
+  final presets = <SavedTaskFilter>[];
+  final seen = <String>{};
+  for (final json in jsonObjectList(value)) {
+    final preset = SavedTaskFilter.fromJson(json);
+    if (preset.id.isEmpty || preset.label.isEmpty || seen.contains(preset.id)) {
+      continue;
+    }
+    seen.add(preset.id);
+    presets.add(preset);
+  }
+  return presets;
+}
+
+/// Reports whether two task filter lists contain the same ordered values.
+bool _sameTaskFilterValues(List<String> left, List<String> right) {
+  if (left.length != right.length) {
+    return false;
+  }
+  for (var index = 0; index < left.length; index++) {
+    if (left[index] != right[index]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Returns comma-joined title case labels for filter values.
+String _taskFilterJoined(List<String> values) {
+  return values.map(_taskFilterLabel).join(', ');
+}
+
+/// Returns a readable label for one filter value.
+String _taskFilterLabel(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return trimmed
+      .split(RegExp(r'[_\-\s]+'))
+      .where((part) => part.isNotEmpty)
+      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+      .join(' ');
 }
 
 /// TaskRelationRecord stores one explicit or inferred relation edge.

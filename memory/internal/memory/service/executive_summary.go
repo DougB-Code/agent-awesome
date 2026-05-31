@@ -19,6 +19,7 @@ func (s *Service) ProjectExecutiveSummary(ctx context.Context, q domain.Executiv
 	}
 	graph, err := repo.TaskGraphProjection(ctx, domain.TaskGraphProjectionQuery{
 		Tasks: domain.TaskQuery{
+			DomainID:     q.DomainID,
 			IncludeDone:  true,
 			IncludeLinks: q.IncludeEvidenceEnabled(),
 			Limit:        100,
@@ -39,7 +40,7 @@ func (s *Service) ExplainExecutiveSummaryItem(ctx context.Context, q domain.Expl
 	}
 	includeSources := q.IncludeSourcesEnabled()
 	summary, err := s.ProjectExecutiveSummary(ctx, domain.ExecutiveSummaryQuery{
-		Firewall:        domain.FirewallUser,
+		DomainID:        domain.DomainUser,
 		Horizon:         "today",
 		MaxItems:        50,
 		IncludeEvidence: &includeSources,

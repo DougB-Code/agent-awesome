@@ -375,7 +375,13 @@ func (s *snapshotStaging) cleanup() {
 func (s *snapshotStaging) validate() error {
 	info, err := os.Stat(s.dbPath)
 	if errors.Is(err, os.ErrNotExist) {
-		return errors.New("snapshot missing memory database")
+		if ok, err := directoryHasEntries(s.dataRoot); err != nil || !ok {
+			if err != nil {
+				return err
+			}
+			return errors.New("snapshot missing memory database or domain data")
+		}
+		return nil
 	}
 	if err != nil {
 		return err
@@ -386,10 +392,19 @@ func (s *snapshotStaging) validate() error {
 	return nil
 }
 
+// directoryHasEntries reports whether a staged snapshot directory contains data.
+func directoryHasEntries(root string) (bool, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return false, err
+	}
+	return len(entries) > 0, nil
+}
+
 // promoteSnapshot replaces live snapshot paths and rolls back on failure.
 func promoteSnapshot(staging *snapshotStaging, dbPath string, dataRoot string) error {
 	moves := []restoreMove{
-		{source: staging.dbPath, target: dbPath, required: true},
+		{source: staging.dbPath, target: dbPath},
 		{source: staging.walPath, target: dbPath + "-wal"},
 		{source: staging.shmPath, target: dbPath + "-shm"},
 		{source: staging.dataRoot, target: dataRoot, required: true},

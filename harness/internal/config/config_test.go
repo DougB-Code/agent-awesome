@@ -31,6 +31,9 @@ func TestDefaultConfigPathsUseOSConfigDir(t *testing.T) {
 	if got, want := DefaultMCPConfigDir(), filepath.Join(configHome, "agent-awesome", "mcp"); got != want {
 		t.Fatalf("DefaultMCPConfigDir() = %q, want %q", got, want)
 	}
+	if got, want := DefaultAppPluginConfigDir(), filepath.Join(configHome, "agent-awesome", "app-plugins"); got != want {
+		t.Fatalf("DefaultAppPluginConfigDir() = %q, want %q", got, want)
+	}
 }
 
 func TestExpandKnownEnvironmentPreservesRunbookReferences(t *testing.T) {
@@ -486,6 +489,126 @@ local-exec:
 	}
 }
 
+// TestLoadToolsExtendsPreviousVersion verifies package deltas inherit
+// commands and validations from an earlier package version.
+func TestLoadToolsExtendsPreviousVersion(t *testing.T) {
+	dir := t.TempDir()
+	basePath := filepath.Join(dir, "tool.v1.yaml")
+	childPath := filepath.Join(dir, "tool.yaml")
+	writeFile(t, basePath, `
+name: Office Tools
+version: 1.0.0
+local-exec:
+  enabled: true
+  commands:
+    - name: pdftotext
+      executable: pdftotext
+      description: Extract PDF text.
+      operations:
+        - name: extract_text
+          description: Extract text from a PDF.
+          args:
+            - -layout
+            - "{{input_path}}"
+            - "-"
+          input-schema:
+            type: object
+            required:
+              - input_path
+            properties:
+              input_path:
+                type: string
+          output:
+            format: text
+            source: stdout
+validations:
+  - id: pdftotext_extract_text_mocked
+    mode: mocked
+    target:
+      type: command-operation
+      command: pdftotext
+      operation: extract_text
+    input:
+      input_path: report.pdf
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: report
+    assertions:
+      - type: stdout-contains
+        contains: report
+`)
+	writeFile(t, childPath, `
+name: Office Tools
+version: 1.1.0
+extends: tool.v1.yaml
+local-exec:
+  commands:
+    - name: libreoffice
+      executable: libreoffice
+      description: Convert office files.
+      operations:
+        - name: document_to_text
+          description: Convert a document to text.
+          args:
+            - --headless
+            - --convert-to
+            - txt:Text
+            - --outdir
+            - "{{output_dir}}"
+            - "{{input_path}}"
+          input-schema:
+            type: object
+            required:
+              - input_path
+              - output_dir
+            properties:
+              input_path:
+                type: string
+              output_dir:
+                type: string
+          output:
+            format: text
+            source: combined
+validations:
+  - id: libreoffice_document_to_text_mocked
+    mode: mocked
+    target:
+      type: command-operation
+      command: libreoffice
+      operation: document_to_text
+    input:
+      input_path: notes.docx
+      output_dir: build/text
+    mocks:
+      command.execute:
+        status: succeeded
+        exit_code: 0
+        stdout: notes.txt
+    assertions:
+      - type: stdout-contains
+        contains: notes.txt
+`)
+
+	cfg, err := LoadTools(childPath, true)
+	if err != nil {
+		t.Fatalf("LoadTools() error = %v", err)
+	}
+	if got, want := cfg.Version, "1.1.0"; got != want {
+		t.Fatalf("Version = %q, want %q", got, want)
+	}
+	if !cfg.LocalExec.Enabled {
+		t.Fatalf("LocalExec.Enabled = false, want inherited true")
+	}
+	if got, want := commandNames(cfg.LocalExec.Commands), []string{"pdftotext", "libreoffice"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("command names = %#v, want %#v", got, want)
+	}
+	if got, want := len(cfg.Validations), 2; got != want {
+		t.Fatalf("len(Validations) = %d, want %d", got, want)
+	}
+}
+
 func TestLoadToolsMergesMCPPackageConfigs(t *testing.T) {
 	root := t.TempDir()
 	toolPath := filepath.Join(root, "tools", "agent-awesome", "tool.yaml")
@@ -715,6 +838,7 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 		"save_memory_candidate",
 		"search_memory",
 		"search_sources",
+		"organize_memory",
 		"load_entity_page",
 		"load_timeline",
 		"refresh_compiled_page",
@@ -746,6 +870,7 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 	expectedConfirmations := []string{
 		"remember",
 		"save_memory_candidate",
+		"organize_memory",
 		"refresh_compiled_page",
 		"repair_memory_record",
 		"submit_memory_correction",
@@ -806,10 +931,10 @@ func TestStaticLinuxToolsExposeOperations(t *testing.T) {
 	if got, want := strings.TrimSpace(cfg.Name), "Linux Tools"; got != want {
 		t.Fatalf("Tools.Name = %q, want %q", got, want)
 	}
-	if got, want := len(cfg.LocalExec.Commands), 12; got != want {
+	if got, want := len(cfg.LocalExec.Commands), 14; got != want {
 		t.Fatalf("len(LocalExec.Commands) = %d, want %d", got, want)
 	}
-	if got, want := len(cfg.Validations), 51; got != want {
+	if got, want := len(cfg.Validations), 60; got != want {
 		t.Fatalf("len(Validations) = %d, want %d", got, want)
 	}
 	for _, command := range cfg.LocalExec.Commands {
@@ -1677,6 +1802,15 @@ func mcpServerByName(servers []schema.MCPServer, name string) (schema.MCPServer,
 		}
 	}
 	return schema.MCPServer{}, false
+}
+
+// commandNames returns local-exec command names in configured order.
+func commandNames(commands []schema.LocalExecCommand) []string {
+	names := make([]string, 0, len(commands))
+	for _, command := range commands {
+		names = append(names, command.Name)
+	}
+	return names
 }
 
 // allowsTool reports whether an MCP server allowlist includes a tool.

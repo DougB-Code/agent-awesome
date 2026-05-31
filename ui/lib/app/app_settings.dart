@@ -5,12 +5,75 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain/json_value.dart';
+import '../domain/models.dart';
 import 'runtime_profile.dart';
 
 const List<String> _localMemoryPolicyActors = <String>[
   'agent',
   'agent_awesome_ui',
 ];
+
+/// All items workspace view id.
+const String workspaceViewAll = 'all';
+
+/// Work-oriented workspace view id.
+const String workspaceViewWork = 'work';
+
+/// Life-oriented workspace view id.
+const String workspaceViewLife = 'life';
+
+/// Project-oriented workspace view id.
+const String workspaceViewProject = 'project';
+
+/// Basic interface mode id.
+const String interfaceModeBasic = 'basic';
+
+/// Advanced interface mode id.
+const String interfaceModeAdvanced = 'advanced';
+
+/// Workspace view ids shown in the top-bar view picker.
+const List<String> workspaceViewIds = <String>[
+  workspaceViewAll,
+  workspaceViewWork,
+  workspaceViewLife,
+  workspaceViewProject,
+];
+
+/// Interface mode ids shown in app settings.
+const List<String> interfaceModeIds = <String>[
+  interfaceModeBasic,
+  interfaceModeAdvanced,
+];
+
+/// Normalizes a workspace view id to a supported value.
+String normalizeWorkspaceView(dynamic value) {
+  final view = stringValue(value, trim: true).toLowerCase();
+  return workspaceViewIds.contains(view) ? view : workspaceViewAll;
+}
+
+/// Returns the user-facing workspace view label.
+String workspaceViewLabel(String view) {
+  return switch (normalizeWorkspaceView(view)) {
+    workspaceViewWork => 'Work',
+    workspaceViewLife => 'Life',
+    workspaceViewProject => 'Project',
+    _ => 'All',
+  };
+}
+
+/// Normalizes an interface mode id to a supported value.
+String normalizeInterfaceMode(dynamic value) {
+  final mode = stringValue(value, trim: true).toLowerCase();
+  return interfaceModeIds.contains(mode) ? mode : interfaceModeAdvanced;
+}
+
+/// Returns the user-facing interface mode label.
+String interfaceModeLabel(String mode) {
+  return switch (normalizeInterfaceMode(mode)) {
+    interfaceModeBasic => 'Basic',
+    _ => 'Advanced',
+  };
+}
 
 /// AgentAwesomeAppSettings stores UI-owned defaults and app model choices.
 class AgentAwesomeAppSettings {
@@ -20,9 +83,13 @@ class AgentAwesomeAppSettings {
     this.selectedMemoryDomainId = '',
     this.summaryModelConfigPath = '',
     this.summaryModelRef = '',
+    this.activeWorkspaceView = workspaceViewAll,
+    this.interfaceMode = interfaceModeAdvanced,
     this.chatTitleSummariesEnabled = true,
+    this.watchWorkspaceChangesEnabled = true,
     this.gettingStartedCompleted = false,
     this.memoryFirewalls = defaultMemoryFirewalls,
+    this.savedTaskFilters = const <SavedTaskFilter>[],
   });
 
   /// Agent config selected for chat and command routing.
@@ -37,14 +104,26 @@ class AgentAwesomeAppSettings {
   /// Provider:model reference used by app-owned chat title summarization.
   final String summaryModelRef;
 
+  /// Active top-bar workspace view filter.
+  final String activeWorkspaceView;
+
+  /// Active UI complexity mode.
+  final String interfaceMode;
+
   /// Whether the app should generate compact chat titles.
   final bool chatTitleSummariesEnabled;
+
+  /// Whether AI screen commands may open side panels to show live changes.
+  final bool watchWorkspaceChangesEnabled;
 
   /// Whether the first-launch setup guide has been completed or hidden.
   final bool gettingStartedCompleted;
 
   /// User-visible memory firewalls available for capture and retrieval.
   final List<MemoryFirewall> memoryFirewalls;
+
+  /// User-saved Backlog task filter presets.
+  final List<SavedTaskFilter> savedTaskFilters;
 
   /// Returns configured firewalls or the safe defaults.
   List<MemoryFirewall> get effectiveMemoryFirewalls {
@@ -57,9 +136,13 @@ class AgentAwesomeAppSettings {
     String? selectedMemoryDomainId,
     String? summaryModelConfigPath,
     String? summaryModelRef,
+    String? activeWorkspaceView,
+    String? interfaceMode,
     bool? chatTitleSummariesEnabled,
+    bool? watchWorkspaceChangesEnabled,
     bool? gettingStartedCompleted,
     List<MemoryFirewall>? memoryFirewalls,
+    List<SavedTaskFilter>? savedTaskFilters,
   }) {
     return AgentAwesomeAppSettings(
       defaultAgentConfigPath:
@@ -69,11 +152,20 @@ class AgentAwesomeAppSettings {
       summaryModelConfigPath:
           summaryModelConfigPath ?? this.summaryModelConfigPath,
       summaryModelRef: summaryModelRef ?? this.summaryModelRef,
+      activeWorkspaceView: normalizeWorkspaceView(
+        activeWorkspaceView ?? this.activeWorkspaceView,
+      ),
+      interfaceMode: normalizeInterfaceMode(
+        interfaceMode ?? this.interfaceMode,
+      ),
       chatTitleSummariesEnabled:
           chatTitleSummariesEnabled ?? this.chatTitleSummariesEnabled,
+      watchWorkspaceChangesEnabled:
+          watchWorkspaceChangesEnabled ?? this.watchWorkspaceChangesEnabled,
       gettingStartedCompleted:
           gettingStartedCompleted ?? this.gettingStartedCompleted,
       memoryFirewalls: memoryFirewalls ?? this.memoryFirewalls,
+      savedTaskFilters: savedTaskFilters ?? this.savedTaskFilters,
     );
   }
 
@@ -84,10 +176,16 @@ class AgentAwesomeAppSettings {
       'selected_memory_domain': selectedMemoryDomainId,
       'summary_model_config': summaryModelConfigPath,
       'summary_model_ref': summaryModelRef,
+      'active_workspace_view': normalizeWorkspaceView(activeWorkspaceView),
+      'interface_mode': normalizeInterfaceMode(interfaceMode),
       'chat_title_summaries_enabled': chatTitleSummariesEnabled,
+      'watch_workspace_changes_enabled': watchWorkspaceChangesEnabled,
       'getting_started_completed': gettingStartedCompleted,
       'memory_firewalls': <Map<String, dynamic>>[
         for (final firewall in effectiveMemoryFirewalls) firewall.toJson(),
+      ],
+      'saved_task_filters': <Map<String, dynamic>>[
+        for (final preset in savedTaskFilters) preset.toJson(),
       ],
     };
   }
@@ -99,8 +197,16 @@ class AgentAwesomeAppSettings {
       selectedMemoryDomainId: stringValue(json['selected_memory_domain']),
       summaryModelConfigPath: stringValue(json['summary_model_config']),
       summaryModelRef: stringValue(json['summary_model_ref']),
+      activeWorkspaceView: normalizeWorkspaceView(
+        json['active_workspace_view'],
+      ),
+      interfaceMode: normalizeInterfaceMode(json['interface_mode']),
       chatTitleSummariesEnabled: boolValue(
         json['chat_title_summaries_enabled'],
+        fallback: true,
+      ),
+      watchWorkspaceChangesEnabled: boolValue(
+        json['watch_workspace_changes_enabled'],
         fallback: true,
       ),
       gettingStartedCompleted: boolValue(
@@ -108,6 +214,7 @@ class AgentAwesomeAppSettings {
         fallback: false,
       ),
       memoryFirewalls: parseMemoryFirewalls(json['memory_firewalls']),
+      savedTaskFilters: parseSavedTaskFilters(json['saved_task_filters']),
     );
   }
 }
@@ -518,12 +625,12 @@ class AgentAwesomeAppSettingsStore {
     );
   }
 
-  /// Saves the memory daemon policy derived from app firewall settings.
+  /// Saves the memory daemon policy derived from app memory domain settings.
   Future<void> saveMemoryFirewallPolicy(
     AgentAwesomeAppSettings settings, {
     Iterable<String> extraPolicyActors = const <String>[],
   }) async {
-    final file = File(memoryFirewallPolicyPath());
+    final file = File(memoryDomainPolicyPath());
     await file.parent.create(recursive: true);
     const encoder = JsonEncoder.withIndent('  ');
     await file.writeAsString(

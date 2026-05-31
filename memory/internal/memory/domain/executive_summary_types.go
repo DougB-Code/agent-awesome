@@ -7,6 +7,7 @@ const ExecutiveSummarySchemaVersion = "agent-awesome/executive-summary/v1"
 
 // ExecutiveSummaryQuery asks the memory service for a read-only Today projection.
 type ExecutiveSummaryQuery struct {
+	DomainID        DomainID   `json:"domain_id,omitempty"`
 	Firewall        Firewall   `json:"firewall,omitempty"`
 	Horizon         string     `json:"horizon,omitempty"`
 	Now             *time.Time `json:"now,omitempty"`
@@ -20,6 +21,7 @@ type ExecutiveSummaryQuery struct {
 type ExecutiveSummaryProjection struct {
 	SchemaVersion    string                   `json:"schema_version"`
 	GeneratedAt      time.Time                `json:"generated_at"`
+	DomainID         DomainID                 `json:"domain_id,omitempty"`
 	Firewall         ProjectionFirewall       `json:"firewall"`
 	Horizon          string                   `json:"horizon"`
 	Title            string                   `json:"title"`

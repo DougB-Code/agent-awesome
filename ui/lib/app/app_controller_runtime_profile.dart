@@ -368,6 +368,64 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     _notifyControllerListeners();
   }
 
+  /// Verifies one model provider by running the harness model smoke check.
+  Future<ModelProviderVerificationResult> verifyModelProviderConnection({
+    required String modelPath,
+    required ModelProviderConfig provider,
+  }) async {
+    final selectedModel = modelConfigModelForProvider(
+      provider,
+      provider.defaultModel,
+    );
+    if (selectedModel == null) {
+      throw StateError(
+        'Provider ${provider.id} has no default model to verify.',
+      );
+    }
+    final harness = runtimeProfile?.harness;
+    final workingDirectory = harness?.workingDirectory.trim().isNotEmpty == true
+        ? harness!.workingDirectory
+        : '${config.workspaceRoot}/harness';
+    final executablePath = harness?.executablePath.trim().isNotEmpty == true
+        ? harness!.executablePath
+        : 'agent-awesome';
+    final result = await processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'model-check-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'Model provider check',
+        executable: executablePath,
+        arguments: buildModelCheckCommandArguments(
+          modelPath: modelPath,
+          providerId: provider.id,
+          modelId: selectedModel.id,
+          prompt: 'Reply with OK.',
+        ),
+        workingDirectory: workingDirectory,
+        environment: await _modelProviderVerificationEnvironment(provider),
+        kind: ManagedProcessKind.oneShotCommand,
+        shutdownMode: ManagedProcessShutdownMode.processOnly,
+        timeout: const Duration(minutes: 2),
+        scope: 'model-checks',
+      ),
+    );
+    return parseModelProviderVerificationProcessResult(result);
+  }
+
+  /// Returns child-process environment for credential-backed model checks.
+  Future<Map<String, String>> _modelProviderVerificationEnvironment(
+    ModelProviderConfig provider,
+  ) async {
+    final reference = provider.apiKey.trim();
+    if (!_isEnvironmentCredentialReference(reference)) {
+      return const <String, String>{};
+    }
+    final lookup = await credentialStore.lookup(reference);
+    if (!lookup.found || lookup.secretValue.trim().isEmpty) {
+      return const <String, String>{};
+    }
+    return <String, String>{reference: lookup.secretValue.trim()};
+  }
+
   /// Runs portable validations for one agent package through the harness CLI.
   Future<AgentValidationResult> runAgentPackageValidations(
     String agentPath, {
@@ -835,28 +893,60 @@ extension AgentAwesomeAppControllerRuntimeProfiles
   Future<McpServerRuntime> createMemoryDomainRuntime() async {
     final profile = _activeRuntimeProfile();
     final id = _uniqueMemoryDomainId(profile, 'memory');
-    final port = _nextMemoryDomainPort(profile);
+    final memoryService = _primaryMemoryService(profile);
     final domain = McpServerRuntime(
       id: id,
       label: _memoryDomainLabel(id),
       kind: 'memory',
-      endpoint: 'http://127.0.0.1:$port/mcp',
-      healthUrl: 'http://127.0.0.1:$port/healthz',
-      workingDirectory: '${config.workspaceRoot}/memory',
-      executablePath: '${config.workspaceRoot}/memory/build/bin/memoryd',
-      dbPath: memoryDomainDatabasePath(id),
-      dataDir: memoryDomainDataDirectoryPath(id),
-      arguments: _memoryStorageArguments(
-        <String>[
-          '--addr',
-          '127.0.0.1:$port',
-          '--firewall-policy',
-          memoryFirewallPolicyPath(),
-        ],
-        dbPath: memoryDomainDatabasePath(id),
-        dataDir: memoryDomainDataDirectoryPath(id),
-      ),
-      autoStart: true,
+      endpoint: memoryService.endpoint,
+      healthUrl: memoryService.healthUrl,
+      workingDirectory: '',
+      executablePath: '',
+      dbPath: '',
+      dataDir: '',
+      arguments: const <String>[],
+      autoStart: false,
+      enabled: true,
+    );
+    await _upsertMemoryDomainPolicy(domain);
+    final next = profile.copyWith(
+      memoryDomains: <McpServerRuntime>[...profile.memoryDomains, domain],
+    );
+    await _saveRuntimeProfileAndGeneratedToolConfig(_validatedProfile(next));
+    await _reloadControlPlaneForMemoryTopology(_activeRuntimeProfile());
+    await _withMemoryClientForServer(
+      domain,
+      (client) => client.createMemoryDomain(actor: _memoryActor()),
+    );
+    statusMessage = '${domain.label} domain created';
+    _notifyControllerListeners();
+    return domain;
+  }
+
+  /// Creates an externally hosted memory domain from a user-provided MCP URL.
+  Future<McpServerRuntime> createExternalMemoryDomainRuntime({
+    required String label,
+    required String endpoint,
+    String healthUrl = '',
+  }) async {
+    final profile = _activeRuntimeProfile();
+    final parsedEndpoint = _validatedHttpURL(endpoint, 'memory MCP endpoint');
+    final id = _uniqueMemoryDomainId(profile, _safeMemoryDomainPrefix(label));
+    final resolvedHealthUrl = healthUrl.trim().isEmpty
+        ? _externalMemoryHealthUrl(parsedEndpoint)
+        : _validatedHttpURL(healthUrl, 'memory health URL').toString();
+    final domain = McpServerRuntime(
+      id: id,
+      label: label.trim().isEmpty ? _memoryDomainLabel(id) : label.trim(),
+      kind: 'memory',
+      endpoint: parsedEndpoint.toString(),
+      healthUrl: resolvedHealthUrl,
+      workingDirectory: '',
+      executablePath: '',
+      dbPath: '',
+      dataDir: '',
+      arguments: const <String>[],
+      autoStart: false,
       enabled: true,
     );
     final next = profile.copyWith(
@@ -879,26 +969,18 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       ),
     );
     final id = _uniqueMemoryDomainId(profile, source.id);
-    final port = _nextMemoryDomainPort(profile);
-    final dbPath = memoryDomainDatabasePath(id);
-    final dataDir = memoryDomainDataDirectoryPath(id);
+    final memoryService = _primaryMemoryService(profile);
     final domain = source.copyWith(
       id: id,
       label: '${source.label.trim().isEmpty ? source.id : source.label} Copy',
-      endpoint: 'http://127.0.0.1:$port/mcp',
-      healthUrl: 'http://127.0.0.1:$port/healthz',
-      dbPath: dbPath,
-      dataDir: dataDir,
-      arguments: _memoryStorageArguments(
-        <String>[
-          '--addr',
-          '127.0.0.1:$port',
-          '--firewall-policy',
-          memoryFirewallPolicyPath(),
-        ],
-        dbPath: dbPath,
-        dataDir: dataDir,
-      ),
+      endpoint: memoryService.endpoint,
+      healthUrl: memoryService.healthUrl,
+      workingDirectory: '',
+      executablePath: '',
+      dbPath: '',
+      dataDir: '',
+      arguments: const <String>[],
+      autoStart: false,
     );
     final next = profile.copyWith(
       memoryDomains: <McpServerRuntime>[...profile.memoryDomains, domain],
@@ -918,6 +1000,23 @@ extension AgentAwesomeAppControllerRuntimeProfiles
         domainId,
       );
     }
+    final source = profile.memoryDomains.firstWhere(
+      (domain) => domain.id == domainId,
+      orElse: () => throw FileSystemException(
+        'Memory domain is not referenced',
+        domainId,
+      ),
+    );
+    if (source.autoStart) {
+      throw FileSystemException(
+        'Cannot delete the managed memory service domain',
+        domainId,
+      );
+    }
+    await _withMemoryClientForServer(
+      source,
+      (client) => client.removeMemoryDomain(actor: _memoryActor()),
+    );
     final remaining = profile.memoryDomains
         .where((domain) => domain.id != domainId)
         .toList();
@@ -928,7 +1027,9 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       profile.copyWith(memoryDomains: remaining),
       removedId: domainId,
     );
+    await _removeMemoryDomainPolicy(domainId);
     await _saveRuntimeProfileAndGeneratedToolConfig(_validatedProfile(next));
+    await _reloadControlPlaneForMemoryTopology(_activeRuntimeProfile());
     statusMessage = 'Memory domain deleted';
     _notifyControllerListeners();
   }
@@ -1105,18 +1206,14 @@ extension AgentAwesomeAppControllerRuntimeProfiles
         if (server.kind != 'memory' || !server.autoStart) {
           return server;
         }
-        final dbPath = server.dbPath.trim().isEmpty
-            ? memoryDomainDatabasePath(server.id)
-            : server.dbPath;
         final dataDir = server.dataDir.trim().isEmpty
-            ? memoryDomainDataDirectoryPath(server.id)
+            ? defaultMemoryDataDirectoryPath()
             : server.dataDir;
         return server.copyWith(
-          dbPath: dbPath,
+          dbPath: '',
           dataDir: dataDir,
           arguments: _memoryStorageArguments(
             server.arguments,
-            dbPath: dbPath,
             dataDir: dataDir,
           ),
         );
@@ -1222,19 +1319,27 @@ extension AgentAwesomeAppControllerRuntimeProfiles
   /// Rewrites memory daemon storage arguments while preserving other flags.
   List<String> _memoryStorageArguments(
     List<String> arguments, {
-    required String dbPath,
     required String dataDir,
   }) {
     final withoutStorageFlags = <String>[];
     for (var index = 0; index < arguments.length; index++) {
       final value = arguments[index];
-      if (value == '--db' || value == '--data') {
+      if (value == '--db' ||
+          value == '--data' ||
+          value == '--firewall-policy' ||
+          value == '--domain-policy') {
         index++;
         continue;
       }
       withoutStorageFlags.add(value);
     }
-    return <String>[...withoutStorageFlags, '--db', dbPath, '--data', dataDir];
+    return <String>[
+      ...withoutStorageFlags,
+      '--data',
+      dataDir,
+      '--domain-policy',
+      memoryDomainPolicyPath(),
+    ];
   }
 
   /// Writes the target graph-backed MCP tool config before harness startup.
@@ -1495,20 +1600,66 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     return candidate;
   }
 
-  /// Returns the next conventional loopback memory port.
-  int _nextMemoryDomainPort(RuntimeProfile profile) {
-    final used = <int>{};
+  /// Returns the managed memory service that owns the pooled domain database root.
+  McpServerRuntime _primaryMemoryService(RuntimeProfile profile) {
     for (final domain in profile.memoryDomains) {
-      final uri = Uri.tryParse(domain.endpoint);
-      if (uri != null && uri.hasPort) {
-        used.add(uri.port);
+      if (domain.kind == 'memory' && domain.autoStart) {
+        return domain;
       }
     }
-    var port = 8090;
-    while (used.contains(port)) {
-      port++;
+    for (final domain in profile.memoryDomains) {
+      if (domain.kind == 'memory') {
+        return domain;
+      }
     }
-    return port;
+    throw StateError('Memory service is not configured');
+  }
+
+  /// Adds or refreshes the daemon policy entry for one memory domain.
+  Future<void> _upsertMemoryDomainPolicy(McpServerRuntime domain) async {
+    final current = appSettings.effectiveMemoryFirewalls;
+    final replacement = MemoryFirewall(
+      id: domain.id,
+      label: domain.label.trim().isEmpty
+          ? _memoryDomainLabel(domain.id)
+          : domain.label,
+    );
+    final next = <MemoryFirewall>[
+      for (final firewall in current)
+        if (firewall.id == domain.id) replacement else firewall,
+      if (!current.any((firewall) => firewall.id == domain.id)) replacement,
+    ];
+    await saveAppSettings(appSettings.copyWith(memoryFirewalls: next));
+  }
+
+  /// Removes the daemon policy entry for a deleted memory domain.
+  Future<void> _removeMemoryDomainPolicy(String domainId) async {
+    final id = domainId.trim();
+    if (id.isEmpty) {
+      return;
+    }
+    final next = appSettings.effectiveMemoryFirewalls
+        .where((firewall) => firewall.id != id)
+        .toList();
+    await saveAppSettings(appSettings.copyWith(memoryFirewalls: next));
+  }
+
+  /// Restarts gateway and harness routing without touching the memory pool.
+  Future<void> _reloadControlPlaneForMemoryTopology(
+    RuntimeProfile profile,
+  ) async {
+    if (!config.autoStartLocalServices || _isClosing) {
+      return;
+    }
+    localProcessStatuses = await _startRequiredRuntimeServices(
+      profile,
+      includeMcpServers: false,
+    );
+    for (final status in localProcessStatuses) {
+      await _log(
+        'memory topology reload ${status.name} ${status.state.name}: ${status.message}',
+      );
+    }
   }
 
   /// Formats a generated label for a domain id.
@@ -1518,6 +1669,34 @@ extension AgentAwesomeAppControllerRuntimeProfiles
         .where((part) => part.isNotEmpty)
         .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
         .join(' ');
+  }
+
+  /// Returns a safe id prefix derived from a user-facing memory domain label.
+  String _safeMemoryDomainPrefix(String label) {
+    final normalized = label
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    return normalized.isEmpty ? 'memory' : normalized;
+  }
+
+  /// Parses and validates an absolute HTTP URL for runtime profile storage.
+  Uri _validatedHttpURL(String value, String label) {
+    final trimmed = value.trim();
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null ||
+        !uri.hasScheme ||
+        !uri.hasAuthority ||
+        (uri.scheme != 'http' && uri.scheme != 'https')) {
+      throw FormatException('$label must be an absolute HTTP URL');
+    }
+    return uri;
+  }
+
+  /// Returns the conventional health-check URL beside an external MCP route.
+  String _externalMemoryHealthUrl(Uri endpoint) {
+    return endpoint.replace(path: '/healthz', query: null).toString();
   }
 
   /// Rebuilds owned service clients from the active agent runtime topology.
@@ -1600,6 +1779,96 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     }
     return headers;
   }
+}
+
+/// ModelProviderVerificationResult summarizes one provider smoke-check run.
+class ModelProviderVerificationResult {
+  /// Creates an immutable model provider verification result.
+  const ModelProviderVerificationResult({
+    required this.providerId,
+    required this.modelId,
+    required this.modelName,
+    required this.responseText,
+  });
+
+  /// Provider id reported by the harness model check.
+  final String providerId;
+
+  /// Model alias reported by the harness model check.
+  final String modelId;
+
+  /// Provider-specific model name sent to the runtime.
+  final String modelName;
+
+  /// First non-empty smoke-check response text.
+  final String responseText;
+}
+
+/// Builds harness CLI arguments for one model provider smoke check.
+List<String> buildModelCheckCommandArguments({
+  required String modelPath,
+  required String providerId,
+  required String modelId,
+  String prompt = '',
+}) {
+  return <String>[
+    'models',
+    'check',
+    '--model',
+    modelPath,
+    '--provider',
+    providerId.trim(),
+    '--model-id',
+    modelId.trim(),
+    if (prompt.trim().isNotEmpty) ...<String>['--prompt', prompt.trim()],
+  ];
+}
+
+/// Parses the harness CLI output from a successful model provider check.
+ModelProviderVerificationResult parseModelProviderVerificationProcessResult(
+  ManagedProcessResult result,
+) {
+  if (result.exitCode != 0) {
+    final detail = _processFailureDetail(result);
+    throw StateError(
+      detail.isEmpty ? 'Model provider verification failed' : detail,
+    );
+  }
+  final output = result.stdout.trim();
+  final match = RegExp(
+    r'Model check passed: provider=(.*?) model_id=(.*?) model=(.*?) response=(.*)$',
+  ).firstMatch(output);
+  if (match == null) {
+    throw StateError('Model provider verification returned unexpected output');
+  }
+  return ModelProviderVerificationResult(
+    providerId: match.group(1)!.trim(),
+    modelId: match.group(2)!.trim(),
+    modelName: match.group(3)!.trim(),
+    responseText: _unquoteModelCheckResponse(match.group(4)!.trim()),
+  );
+}
+
+/// Reports whether a credential reference can be injected as an env var.
+bool _isEnvironmentCredentialReference(String reference) {
+  return RegExp(r'^[A-Za-z_][A-Za-z0-9_]*$').hasMatch(reference.trim());
+}
+
+/// Returns a concise failure detail from a completed model-check process.
+String _processFailureDetail(ManagedProcessResult result) {
+  final stderr = result.stderr.trim();
+  if (stderr.isNotEmpty) {
+    return stderr;
+  }
+  return result.stdout.trim();
+}
+
+/// Decodes the CLI's quoted smoke-check response enough for UI display.
+String _unquoteModelCheckResponse(String value) {
+  if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+    return value.substring(1, value.length - 1);
+  }
+  return value;
 }
 
 /// Builds CLI arguments for one tool-package validation run.
@@ -2052,7 +2321,7 @@ $modelServerCopy
 COPY deploy/docker/entrypoint.sh /usr/local/bin/agent-awesome-container
 
 RUN chmod +x /usr/local/bin/agent-awesome-container \\
-${modelServerChmod}    && mkdir -p /var/lib/agent-awesome /var/log/agent-awesome
+$modelServerChmod    && mkdir -p /var/lib/agent-awesome /var/log/agent-awesome
 
 EXPOSE 8070
 

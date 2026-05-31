@@ -42,7 +42,7 @@ The UI reads these optional `--dart-define` values:
 - `AGENT_API_BASE_URL`, default `http://127.0.0.1:8080/api`
 - `AGENT_GATEWAY_BASE_URL`, default `http://127.0.0.1:8070/api`
 - `MEMORY_MCP_URL`, default `http://127.0.0.1:8090/mcp`
-- `AGENT_APP_NAME`, default `agent_awesome`
+- `AGENT_APP_NAME`, default `Agent Awesome`
 - `AGENT_USER_ID`, default `doug`
 - `AGENTAWESOME_WORKSPACE_ROOT`, default `/home/doug/dev/agentawesome/agent`
 - `AUTO_START_LOCAL_SERVICES`, default `true`

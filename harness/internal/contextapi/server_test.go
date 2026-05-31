@@ -90,6 +90,19 @@ func TestMemoryExportCapturePayloadUsesHarnessProvenance(t *testing.T) {
 	}
 }
 
+// TestHasMemoryDomainOverrideCatchesLegacyFirewall blocks old routing aliases.
+func TestHasMemoryDomainOverrideCatchesLegacyFirewall(t *testing.T) {
+	if !hasMemoryDomainOverride(map[string]any{"firewall": "project"}) {
+		t.Fatalf("hasMemoryDomainOverride() = false, want true for firewall")
+	}
+	if !hasMemoryDomainOverride(map[string]any{"domain_id": "project"}) {
+		t.Fatalf("hasMemoryDomainOverride() = false, want true for domain_id")
+	}
+	if hasMemoryDomainOverride(map[string]any{"query": "project"}) {
+		t.Fatalf("hasMemoryDomainOverride() = true, want false for ordinary args")
+	}
+}
+
 // TestStartRejectsPublicBindWithoutToken verifies direct exposure needs auth.
 func TestStartRejectsPublicBindWithoutToken(t *testing.T) {
 	_, err := StartWithConfig(context.Background(), Config{Addr: "0.0.0.0:0"}, nil)

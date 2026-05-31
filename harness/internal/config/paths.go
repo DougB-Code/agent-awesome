@@ -41,6 +41,11 @@ func DefaultMCPConfigDir() string {
 	return filepath.Join(DefaultConfigDir(), schema.DefaultMCPConfigDirName)
 }
 
+// DefaultAppPluginConfigDir returns the package directory for installed app plugins.
+func DefaultAppPluginConfigDir() string {
+	return filepath.Join(DefaultConfigDir(), schema.DefaultAppPluginConfigDirName)
+}
+
 // DefaultDataDir returns the user data directory for Agent Awesome.
 func DefaultDataDir() string {
 	return filepath.Join(DefaultConfigDir(), "data")

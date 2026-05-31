@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	platformmcp "agentawesome.dev/platform/mcptransport"
 
@@ -47,6 +48,9 @@ func NewMCPServer(memoryService *service.Service) *MCPServer {
 
 // ServeHTTP handles JSON-RPC MCP requests over HTTP.
 func (s *MCPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if domainID := requestDomainID(r); domainID != "" {
+		r = r.WithContext(context.WithValue(r.Context(), requestDomainIDKey{}, domainID))
+	}
 	s.mcp.ServeHTTP(w, r)
 }
 
@@ -68,6 +72,7 @@ func validateToolCall(call platformmcp.ToolCall) *platformmcp.RPCError {
 
 // callTool decodes tool arguments and calls the memory service.
 func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMessage) (any, error) {
+	args = argsWithRequestDomain(ctx, args)
 	switch name {
 	case "remember":
 		return decodeAndCall(ctx, args, func(ctx context.Context, req toolargs.RememberArgs) (any, error) {
@@ -79,13 +84,29 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 		return decodeAndCall(ctx, args, s.service.SearchMemory)
 	case "search_sources":
 		return decodeAndCall(ctx, args, s.service.SearchSources)
+	case "organize_memory":
+		return decodeAndCall(ctx, args, s.service.OrganizeMemory)
+	case "list_memory_domains":
+		return decodeAndCall(ctx, args, s.service.ListMemoryDomains)
+	case "create_memory_domain":
+		return decodeAndCall(ctx, args, s.service.CreateMemoryDomain)
+	case "remove_memory_domain":
+		return decodeAndCall(ctx, args, s.service.RemoveMemoryDomain)
 	case "load_entity_page":
 		return decodeAndCall(ctx, args, func(ctx context.Context, req loadEntityPageArgs) (any, error) {
-			return s.service.LoadEntityPageForActor(ctx, req.Actor, req.Firewall, req.EntityID, req.Title)
+			domainID, err := domain.NormalizeDomainID(req.DomainID, req.Firewall)
+			if err != nil {
+				return nil, err
+			}
+			return s.service.LoadEntityPageForActor(ctx, req.Actor, domainID, req.EntityID, req.Title)
 		})
 	case "load_timeline":
 		return decodeAndCall(ctx, args, func(ctx context.Context, req loadTimelineArgs) (any, error) {
-			return s.service.LoadTimelineForActor(ctx, req.Actor, req.Firewall, req.Topic, req.EntityID)
+			domainID, err := domain.NormalizeDomainID(req.DomainID, req.Firewall)
+			if err != nil {
+				return nil, err
+			}
+			return s.service.LoadTimelineForActor(ctx, req.Actor, domainID, req.Topic, req.EntityID)
 		})
 	case "refresh_compiled_page":
 		return decodeAndCall(ctx, args, s.service.RefreshCompiledPage)
@@ -167,6 +188,44 @@ func (s *MCPServer) callTool(ctx context.Context, name string, args json.RawMess
 	}
 }
 
+// requestDomainIDKey stores HTTP-level routing metadata for downstream tool calls.
+type requestDomainIDKey struct{}
+
+// requestDomainID extracts optional routing metadata from gateway and harness calls.
+func requestDomainID(r *http.Request) string {
+	if r == nil {
+		return ""
+	}
+	if value := strings.TrimSpace(r.URL.Query().Get("domain_id")); value != "" {
+		return value
+	}
+	return strings.TrimSpace(r.Header.Get("X-Memory-Domain"))
+}
+
+// argsWithRequestDomain injects request routing metadata when tool arguments omit it.
+func argsWithRequestDomain(ctx context.Context, args json.RawMessage) json.RawMessage {
+	domainID, _ := ctx.Value(requestDomainIDKey{}).(string)
+	domainID = strings.TrimSpace(domainID)
+	if domainID == "" {
+		return args
+	}
+	if len(args) == 0 || string(args) == "null" {
+		args = []byte("{}")
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(args, &payload); err != nil {
+		return args
+	}
+	if _, ok := payload["domain_id"]; !ok {
+		payload["domain_id"] = domainID
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return args
+	}
+	return encoded
+}
+
 // decodeAndCall decodes arguments before calling a typed service method.
 func decodeAndCall[T any, R any](ctx context.Context, args json.RawMessage, call func(context.Context, T) (R, error)) (any, error) {
 	var req T
@@ -198,7 +257,7 @@ func toolDefinitions() []map[string]any {
 			"media_type":      stringSchema("Media type for the source content."),
 			"source":          objectSchema(map[string]any{"system": stringSchema("Source system."), "id": stringSchema("Source record id.")}, []string{}),
 			"kind":            enumSchema("Memory kind.", domain.KindStrings()),
-			"firewall":        stringSchema("Memory firewall id."),
+			"domain_id":       stringSchema("Memory domain id."),
 			"trust_level":     enumSchema("Trust level.", domain.TrustLevelStrings()),
 			"sensitivity":     enumSchema("Sensitivity level.", domain.SensitivityStrings()),
 			"subjects":        arraySchema("Primary subjects.", stringSchema("Subject.")),
@@ -209,22 +268,26 @@ func toolDefinitions() []map[string]any {
 		}, []string{"content"}),
 		tool("search_memory", "Search memory metadata and compiled retrieval context.", retrievalSchema(), []string{}),
 		tool("search_sources", "Search and return matching source content text.", retrievalSchema(), []string{}),
+		tool("organize_memory", "Run bounded memory maintenance, fill safe summaries, and create follow-up tasks for records that need human detail.", organizeMemorySchema(), []string{}),
+		tool("list_memory_domains", "List SQLite databases currently known to the memory pool.", memoryDomainListSchema(), []string{}),
+		tool("create_memory_domain", "Create or open one SQLite database in the live memory pool.", memoryDomainPoolSchema(false), []string{}),
+		tool("remove_memory_domain", "Detach one SQLite database from the live memory pool, optionally deleting files.", memoryDomainPoolSchema(true), []string{}),
 		tool("load_entity_page", "Load or build a compiled entity page.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
-			"firewall":  stringSchema("Memory firewall id."),
+			"domain_id": stringSchema("Memory domain id."),
 			"entity_id": stringSchema("Canonical entity id."),
 			"title":     stringSchema("Entity page title."),
 		}, []string{}),
 		tool("load_timeline", "Load or build a source-backed timeline.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
-			"firewall":  stringSchema("Memory firewall id."),
+			"domain_id": stringSchema("Memory domain id."),
 			"topic":     stringSchema("Timeline topic."),
 			"entity_id": stringSchema("Optional entity id."),
 		}, []string{}),
 		tool("refresh_compiled_page", "Rebuild an entity page or timeline from source-backed memory records.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
 			"kind":      enumSchema("Compiled page kind.", domain.CompiledPageKindStrings()),
-			"firewall":  stringSchema("Memory firewall id."),
+			"domain_id": stringSchema("Memory domain id."),
 			"title":     stringSchema("Page title."),
 			"entity_id": stringSchema("Optional entity id."),
 			"topic":     stringSchema("Optional topic."),
@@ -232,6 +295,7 @@ func toolDefinitions() []map[string]any {
 		tool("repair_memory_record", "Apply explicit memory metadata corrections.", map[string]any{
 			"actor":        stringSchema("Calling agent or user."),
 			"memory_id":    stringSchema("Memory record id."),
+			"domain_id":    stringSchema("Memory domain id."),
 			"kind":         enumSchema("Memory kind.", domain.KindStrings()),
 			"sensitivity":  enumSchema("Sensitivity level.", domain.SensitivityStrings()),
 			"status":       enumSchema("Lifecycle status.", domain.StatusStrings()),
@@ -244,13 +308,13 @@ func toolDefinitions() []map[string]any {
 		tool("submit_memory_correction", "Store a user correction as first-class source content.", map[string]any{
 			"actor":     stringSchema("Calling agent or user."),
 			"memory_id": stringSchema("Memory record id being corrected."),
-			"firewall":  stringSchema("Memory firewall id."),
+			"domain_id": stringSchema("Memory domain id."),
 			"text":      stringSchema("Correction text."),
 		}, []string{"memory_id", "text"}),
 		tool("query_context_graph", "Execute a read-only SQL-like graph query.", graphQuerySchema("Read-only graph query, such as FIND task WHERE status != \"done\" RETURN id, title, due_at LIMIT 10, FIND task GROUP BY status RETURN status, count ORDER BY count DESC LIMIT 10, MATCH task -[depends_on]-> task RETURN from.title, edge.type, to.title LIMIT 10, or MATCH task -[depends_on*1..3]-> task WHERE path.depth >= 2 RETURN from.title, path.depth, to.title LIMIT 10."), []string{"query"}),
 		tool("mutate_context_graph", "Execute an audited SQL-like graph mutation.", graphQuerySchema("Graph mutation, such as INSERT NODE task SET title = \"New task\" RETURN id, title, SET NODE node_1 SET title = \"Updated\" RETURN id, title, DELETE EDGE edge_1 RETURN edge.id, or INSERT EDGE node_1 -[depends_on]-> node_2 SET note = \"blocked\" RETURN edge.id, note."), []string{"query"}),
 		tool("create_task", "Create a graph-backed operational task or todo. Do not use for user facts, preferences, or notes to remember.", taskCreateSchema(), []string{"title"}),
-		tool("get_task", "Load one graph-backed task by id.", map[string]any{"task_id": stringSchema("Task id.")}, []string{"task_id"}),
+		tool("get_task", "Load one graph-backed task by id.", map[string]any{"task_id": stringSchema("Task id."), "domain_id": stringSchema("Memory domain id.")}, []string{"task_id"}),
 		tool("list_tasks", "List graph-backed tasks.", taskQuerySchema(), []string{}),
 		tool("task_graph_projection", "Read a graph-backed task node and edge projection.", taskGraphProjectionSchema(), []string{}),
 		tool("project_executive_summary", "Read the canonical Today executive summary projection.", executiveSummarySchema(), []string{}),
@@ -271,14 +335,14 @@ func toolDefinitions() []map[string]any {
 		}, []string{"query"}),
 		tool("delete_codebase", "Lifecycle-delete one durable codebase catalog entry.", map[string]any{"id": stringSchema("Codebase id."), "actor": stringSchema("Calling agent or user.")}, []string{"id"}),
 		tool("update_task", "Patch a graph-backed operational task.", taskUpdateSchema(), []string{"task_id"}),
-		tool("complete_task", "Mark a graph-backed task done.", map[string]any{"task_id": stringSchema("Task id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
-		tool("cancel_task", "Mark a graph-backed task canceled.", map[string]any{"task_id": stringSchema("Task id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
-		tool("delete_task", "Lifecycle-delete a graph-backed task.", map[string]any{"task_id": stringSchema("Task id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
-		tool("link_task_memory", "Attach contextual memory to a graph-backed task.", map[string]any{"task_id": stringSchema("Task id."), "link": memoryLinkSchema()}, []string{"task_id", "link"}),
+		tool("complete_task", "Mark a graph-backed task done.", map[string]any{"task_id": stringSchema("Task id."), "domain_id": stringSchema("Memory domain id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
+		tool("cancel_task", "Mark a graph-backed task canceled.", map[string]any{"task_id": stringSchema("Task id."), "domain_id": stringSchema("Memory domain id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
+		tool("delete_task", "Lifecycle-delete a graph-backed task.", map[string]any{"task_id": stringSchema("Task id."), "domain_id": stringSchema("Memory domain id."), "actor": stringSchema("Calling agent or user.")}, []string{"task_id"}),
+		tool("link_task_memory", "Attach contextual memory to a graph-backed task.", map[string]any{"task_id": stringSchema("Task id."), "domain_id": stringSchema("Memory domain id."), "link": memoryLinkSchema()}, []string{"task_id", "link"}),
 		tool("list_task_relations", "List directed task-to-task graph relations.", taskRelationQuerySchema(), []string{}),
 		tool("traverse_task_relations", "Traverse bounded paths through directed task-to-task graph relations.", taskRelationTraversalSchema(), []string{"root_task_id"}),
 		tool("upsert_task_relation", "Create or update a directed task-to-task graph relation.", taskRelationUpsertSchema(), []string{"from_task_id", "to_task_id"}),
-		tool("delete_task_relation", "Lifecycle-delete a directed task-to-task graph relation.", map[string]any{"relation_id": stringSchema("Task relation id."), "actor": stringSchema("Calling agent or user.")}, []string{"relation_id"}),
+		tool("delete_task_relation", "Lifecycle-delete a directed task-to-task graph relation.", map[string]any{"relation_id": stringSchema("Task relation id."), "domain_id": stringSchema("Memory domain id."), "actor": stringSchema("Calling agent or user.")}, []string{"relation_id"}),
 	}
 }
 
@@ -288,7 +352,7 @@ func graphQuerySchema(queryDescription string) map[string]any {
 		"actor":                 stringSchema("Calling agent or user."),
 		"source_node_id":        stringSchema("Source graph node id required for mutations."),
 		"query":                 stringSchema(queryDescription),
-		"firewall":              stringSchema("Memory firewall id."),
+		"domain_id":             stringSchema("Memory domain id."),
 		"include_global":        boolSchema("When true, also include globally shared records. Default false."),
 		"allowed_sensitivities": arraySchema("Allowed sensitivity levels; restricted must be requested explicitly.", enumSchema("Sensitivity.", domain.SensitivityStrings())),
 	}
@@ -301,7 +365,7 @@ func rememberSchema() map[string]any {
 		"title":           stringSchema("Optional short display title."),
 		"topics":          arraySchema("Optional connective topic tags.", stringSchema("Topic.")),
 		"entities":        arraySchema("Optional people, projects, places, or things this memory mentions.", stringSchema("Entity name.")),
-		"firewall":        stringSchema("Optional memory firewall id; default is user."),
+		"domain_id":       stringSchema("Optional memory domain id; default is user."),
 		"sensitivity":     enumSchema("Optional sensitivity; default is private.", domain.SensitivityStrings()),
 		"idempotency_key": stringSchema("Optional stable key to avoid duplicate nuggets."),
 		"actor":           stringSchema("Optional calling agent or user."),
@@ -312,6 +376,7 @@ func rememberSchema() map[string]any {
 func taskCreateSchema() map[string]any {
 	return map[string]any{
 		"actor":           stringSchema("Optional calling agent or user."),
+		"domain_id":       stringSchema("Optional memory domain id; default is user."),
 		"title":           stringSchema("Short task title, such as buy milk."),
 		"description":     stringSchema("Optional note only when the user provides one."),
 		"priority":        enumSchema("Optional task priority; default is normal.", domain.TaskPriorityStrings()),
@@ -326,6 +391,7 @@ func taskCreateSchema() map[string]any {
 func taskAdvancedSchema() map[string]any {
 	return map[string]any{
 		"actor":            stringSchema("Calling agent or user."),
+		"domain_id":        stringSchema("Memory domain id."),
 		"title":            stringSchema("Task title."),
 		"description":      stringSchema("Task notes."),
 		"status":           enumSchema("Task status.", domain.TaskStatusStrings()),
@@ -376,6 +442,7 @@ func taskResourceRequirementSchema() map[string]any {
 // taskQuerySchema returns graph-backed list_tasks input properties.
 func taskQuerySchema() map[string]any {
 	return map[string]any{
+		"domain_id":     stringSchema("Memory domain id."),
 		"statuses":      arraySchema("Statuses to include.", enumSchema("Task status.", domain.TaskStatusStrings())),
 		"priorities":    arraySchema("Priorities to include.", enumSchema("Task priority.", domain.TaskPriorityStrings())),
 		"topics":        arraySchema("Topics to include.", stringSchema("Topic.")),
@@ -399,7 +466,7 @@ func taskGraphProjectionSchema() map[string]any {
 // executiveSummarySchema returns project_executive_summary input properties.
 func executiveSummarySchema() map[string]any {
 	return map[string]any{
-		"firewall":         stringSchema("Memory firewall id."),
+		"domain_id":        stringSchema("Memory domain id."),
 		"horizon":          enumSchema("Projection horizon.", domain.ExecutiveSummaryHorizonStrings()),
 		"now":              stringSchema("Optional RFC3339 clock override."),
 		"max_items":        map[string]any{"type": "integer", "description": "Maximum visible items across primary sections."},
@@ -432,6 +499,7 @@ func taskUpdateSchema() map[string]any {
 // taskRelationQuerySchema returns list_task_relations input properties.
 func taskRelationQuerySchema() map[string]any {
 	return map[string]any{
+		"domain_id": stringSchema("Memory domain id."),
 		"task_id":   stringSchema("Optional task id."),
 		"types":     arraySchema("Relation types to include.", enumSchema("Task relation type.", domain.TaskRelationTypeStrings())),
 		"direction": enumSchema("Relation direction when task_id is set.", domain.TaskRelationDirectionStrings()),
@@ -454,6 +522,7 @@ func taskRelationTraversalSchema() map[string]any {
 func taskRelationUpsertSchema() map[string]any {
 	return map[string]any{
 		"actor":        stringSchema("Calling agent or user."),
+		"domain_id":    stringSchema("Memory domain id."),
 		"from_task_id": stringSchema("Source task id."),
 		"type":         enumSchema("Task relation type.", domain.TaskRelationTypeStrings()),
 		"to_task_id":   stringSchema("Target task id."),
@@ -477,7 +546,7 @@ func memoryLinkSchema() map[string]any {
 func retrievalSchema() map[string]any {
 	return map[string]any{
 		"actor":                 stringSchema("Calling agent or user."),
-		"firewall":              stringSchema("Memory firewall id."),
+		"domain_id":             stringSchema("Memory domain id."),
 		"include_global":        boolSchema("When true, also include globally shared records. Default false."),
 		"text":                  stringSchema("Search text."),
 		"kinds":                 arraySchema("Kinds to include.", enumSchema("Memory kind.", domain.KindStrings())),
@@ -485,6 +554,38 @@ func retrievalSchema() map[string]any {
 		"entity_ids":            arraySchema("Entity ids to include.", stringSchema("Entity id.")),
 		"allowed_sensitivities": arraySchema("Allowed sensitivity levels.", enumSchema("Sensitivity.", domain.SensitivityStrings())),
 		"limit":                 map[string]any{"type": "integer", "description": "Maximum records to return."},
+	}
+}
+
+// organizeMemorySchema returns the maintenance batch input schema.
+func organizeMemorySchema() map[string]any {
+	return map[string]any{
+		"actor":                 stringSchema("Calling agent or user."),
+		"domain_id":             stringSchema("Memory domain id."),
+		"include_global":        boolSchema("When true, also include globally shared records. Default false."),
+		"allowed_sensitivities": arraySchema("Allowed sensitivity levels.", enumSchema("Sensitivity.", domain.SensitivityStrings())),
+		"limit":                 map[string]any{"type": "integer", "description": "Maximum records to review."},
+		"dry_run":               boolSchema("Preview summary repairs and follow-up questions without writing tasks or memory changes."),
+	}
+}
+
+// memoryDomainPoolSchema returns live pool management input properties.
+func memoryDomainPoolSchema(includeDeleteFiles bool) map[string]any {
+	schema := map[string]any{
+		"actor":     stringSchema("Calling agent or user."),
+		"domain_id": stringSchema("Memory domain id."),
+	}
+	if includeDeleteFiles {
+		schema["delete_files"] = boolSchema("When true, delete the domain database directory from disk. Default false.")
+	}
+	return schema
+}
+
+// memoryDomainListSchema returns live pool list input properties.
+func memoryDomainListSchema() map[string]any {
+	return map[string]any{
+		"actor":     stringSchema("Calling agent or user."),
+		"domain_id": stringSchema("Optional memory domain id used to scope the listing."),
 	}
 }
 
@@ -561,7 +662,8 @@ func decodeArgs(args json.RawMessage, dest any) error {
 // loadEntityPageArgs contains load_entity_page arguments.
 type loadEntityPageArgs struct {
 	Actor    string          `json:"actor"`
-	Firewall domain.Firewall `json:"firewall"`
+	DomainID domain.DomainID `json:"domain_id,omitempty"`
+	Firewall domain.Firewall `json:"firewall,omitempty"`
 	EntityID domain.EntityID `json:"entity_id"`
 	Title    string          `json:"title"`
 }
@@ -569,7 +671,8 @@ type loadEntityPageArgs struct {
 // loadTimelineArgs contains load_timeline arguments.
 type loadTimelineArgs struct {
 	Actor    string          `json:"actor"`
-	Firewall domain.Firewall `json:"firewall"`
+	DomainID domain.DomainID `json:"domain_id,omitempty"`
+	Firewall domain.Firewall `json:"firewall,omitempty"`
 	Topic    string          `json:"topic"`
 	EntityID domain.EntityID `json:"entity_id"`
 }

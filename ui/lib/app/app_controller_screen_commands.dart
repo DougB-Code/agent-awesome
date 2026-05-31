@@ -29,8 +29,10 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       );
       if (planned.intent != ScreenCommandIntent.change) {
         activeScreenCommandRun = planned;
-        assistantChatPanelOpen = true;
-        backlogChatPanelOpen = true;
+        if (watchWorkspaceChangesEnabled) {
+          assistantChatPanelOpen = true;
+          backlogChatPanelOpen = true;
+        }
         backlogReviewPanelOpen = false;
         screenCommandMessage = planned.message.trim().isEmpty
             ? 'Opening chat for this screen'
@@ -48,7 +50,12 @@ extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {
       }
       final prepared = _preparedBacklogScreenRun(planned);
       activeScreenCommandRun = prepared;
-      backlogReviewPanelOpen = prepared.changes.isNotEmpty;
+      backlogReviewPanelOpen =
+          watchWorkspaceChangesEnabled && prepared.changes.isNotEmpty;
+      if (watchWorkspaceChangesEnabled && prepared.changes.isNotEmpty) {
+        assistantChatPanelOpen = true;
+        backlogChatPanelOpen = true;
+      }
       screenCommandMessage = _screenRunSummary(prepared);
       _notifyControllerListeners();
       await _applyAutoScreenChanges(prepared);

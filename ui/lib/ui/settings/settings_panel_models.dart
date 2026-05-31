@@ -35,8 +35,12 @@ class _SettingsModelProviderCollectionState
   ModelConfigDocument? _document;
   AgentValidationSuiteResult? _validationResult;
   AgentValidationFileResult? _validationFileResult;
+  final Map<String, ModelProviderVerificationResult> _verificationResults =
+      <String, ModelProviderVerificationResult>{};
+  final Map<String, String> _verificationErrors = <String, String>{};
   String _validationError = '';
   String _validationRunningId = '';
+  String _verificationRunningProviderId = '';
   bool _loading = true;
   bool _validationRunning = false;
 
@@ -129,6 +133,11 @@ class _SettingsModelProviderCollectionState
             _SettingsModelProviderCard(
               controller: widget.controller,
               provider: provider,
+              verificationResult: _verificationResults[provider.id],
+              verificationError: _verificationErrors[provider.id] ?? '',
+              verificationRunning:
+                  _verificationRunningProviderId == provider.id,
+              onVerify: () => unawaited(_verifyProvider(entry, provider)),
               onChanged: (next) =>
                   _replaceProvider(document, provider.id, next),
             ),
@@ -177,6 +186,10 @@ class _SettingsModelProviderCollectionState
       provider.adapter,
       provider.apiKey,
       provider.url,
+      for (final endpoint in provider.endpoints.entries) ...<String>[
+        endpoint.key,
+        endpoint.value,
+      ],
       for (final model in provider.models) ...<String>[model.id, model.model],
     ];
   }
@@ -305,6 +318,42 @@ class _SettingsModelProviderCollectionState
         extra: document.extra,
       ),
     );
+  }
+
+  /// Runs one provider smoke check through the harness model CLI.
+  Future<void> _verifyProvider(
+    ConfigFileEntry entry,
+    ModelProviderConfig provider,
+  ) async {
+    if (_verificationRunningProviderId.isNotEmpty) {
+      return;
+    }
+    setState(() {
+      _verificationRunningProviderId = provider.id;
+      _verificationErrors.remove(provider.id);
+      _verificationResults.remove(provider.id);
+    });
+    try {
+      final result = await widget.controller.verifyModelProviderConnection(
+        modelPath: entry.path,
+        provider: provider,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _verificationResults[provider.id] = result;
+        _verificationRunningProviderId = '';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _verificationErrors[provider.id] = error.toString();
+        _verificationRunningProviderId = '';
+      });
+    }
   }
 
   /// Adds one model-owned compatibility validation case.

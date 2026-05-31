@@ -17,10 +17,12 @@ func NormalizeGraphQueryRequest(req GraphQueryRequest) (GraphQueryRequest, error
 	if req.Query == "" {
 		return req, errors.New("query is required")
 	}
-	req.Firewall = vocabulary.DefaultFirewall(req.Firewall)
-	if !ValidFirewall(req.Firewall) {
-		return req, fmt.Errorf("invalid firewall %q", req.Firewall)
+	domainID, err := NormalizeDomainID(req.DomainID, req.Firewall)
+	if err != nil {
+		return req, err
 	}
+	req.DomainID = domainID
+	req.Firewall = domainID
 	if len(req.AllowedSensitivities) == 0 {
 		req.AllowedSensitivities = vocabulary.DefaultReadableSensitivities()
 	}

@@ -46,22 +46,40 @@ const (
 	KindProfileFact Kind = "profile_fact"
 )
 
-// Firewall classifies the memory firewall boundary for records.
-type Firewall = vocabulary.Firewall
+// DomainID identifies one memory boundary handled by a dedicated SQLite file.
+type DomainID = vocabulary.Firewall
 
 const (
-	// FirewallSession limits memory to one session.
-	FirewallSession = vocabulary.FirewallSession
-	// FirewallUser limits memory to one user.
-	FirewallUser = vocabulary.FirewallUser
-	// FirewallHousehold shares memory across a household.
-	FirewallHousehold = vocabulary.FirewallHousehold
-	// FirewallTenant limits memory to an organization tenant.
-	FirewallTenant = vocabulary.FirewallTenant
-	// FirewallProject limits memory to a project.
-	FirewallProject = vocabulary.FirewallProject
-	// FirewallGlobal exposes memory globally within the service policy.
-	FirewallGlobal = vocabulary.FirewallGlobal
+	// DomainSession limits memory to one session.
+	DomainSession = vocabulary.FirewallSession
+	// DomainUser limits memory to one user.
+	DomainUser = vocabulary.FirewallUser
+	// DomainHousehold shares memory across a household.
+	DomainHousehold = vocabulary.FirewallHousehold
+	// DomainTenant limits memory to an organization tenant.
+	DomainTenant = vocabulary.FirewallTenant
+	// DomainProject limits memory to a project.
+	DomainProject = vocabulary.FirewallProject
+	// DomainGlobal exposes memory globally within the service policy.
+	DomainGlobal = vocabulary.FirewallGlobal
+)
+
+// Firewall is a deprecated routing alias kept for older callers during the domain migration.
+type Firewall = DomainID
+
+const (
+	// FirewallSession is a deprecated alias for DomainSession.
+	FirewallSession = DomainSession
+	// FirewallUser is a deprecated alias for DomainUser.
+	FirewallUser = DomainUser
+	// FirewallHousehold is a deprecated alias for DomainHousehold.
+	FirewallHousehold = DomainHousehold
+	// FirewallTenant is a deprecated alias for DomainTenant.
+	FirewallTenant = DomainTenant
+	// FirewallProject is a deprecated alias for DomainProject.
+	FirewallProject = DomainProject
+	// FirewallGlobal is a deprecated alias for DomainGlobal.
+	FirewallGlobal = DomainGlobal
 )
 
 // TrustLevel describes where a fact or artifact came from.
@@ -187,7 +205,8 @@ type MemoryRecord struct {
 	ID            MemoryID       `json:"id"`
 	EvidenceID    EvidenceID     `json:"evidence_id"`
 	Kind          Kind           `json:"kind"`
-	Firewall      Firewall       `json:"firewall"`
+	DomainID      DomainID       `json:"domain_id,omitempty"`
+	Firewall      Firewall       `json:"firewall,omitempty"`
 	TrustLevel    TrustLevel     `json:"trust_level"`
 	Sensitivity   Sensitivity    `json:"sensitivity"`
 	Status        Status         `json:"status"`
@@ -230,7 +249,8 @@ type Relationship struct {
 type CompiledPage struct {
 	ID          PageID       `json:"id"`
 	Kind        Kind         `json:"kind"`
-	Firewall    Firewall     `json:"firewall"`
+	DomainID    DomainID     `json:"domain_id,omitempty"`
+	Firewall    Firewall     `json:"firewall,omitempty"`
 	Title       string       `json:"title"`
 	Path        string       `json:"path"`
 	Status      Status       `json:"status"`
@@ -280,7 +300,8 @@ type CaptureRequest struct {
 	Title          string      `json:"title"`
 	Source         SourceRef   `json:"source"`
 	Kind           Kind        `json:"kind"`
-	Firewall       Firewall    `json:"firewall"`
+	DomainID       DomainID    `json:"domain_id,omitempty"`
+	Firewall       Firewall    `json:"firewall,omitempty"`
 	TrustLevel     TrustLevel  `json:"trust_level"`
 	Sensitivity    Sensitivity `json:"sensitivity"`
 	Subjects       []string    `json:"subjects"`
@@ -301,7 +322,8 @@ type CaptureResult struct {
 // RetrievalQuery asks the service to search memory.
 type RetrievalQuery struct {
 	Actor                string        `json:"actor"`
-	Firewall             Firewall      `json:"firewall"`
+	DomainID             DomainID      `json:"domain_id,omitempty"`
+	Firewall             Firewall      `json:"firewall,omitempty"`
 	IncludeGlobal        bool          `json:"include_global,omitempty"`
 	Text                 string        `json:"text"`
 	Kinds                []Kind        `json:"kinds"`
@@ -323,10 +345,40 @@ type RetrievalBundle struct {
 	Contradictions []Relationship `json:"contradictions"`
 }
 
+// OrganizeMemoryRequest asks the service to maintain a bounded memory slice.
+type OrganizeMemoryRequest struct {
+	Actor                string        `json:"actor"`
+	DomainID             DomainID      `json:"domain_id,omitempty"`
+	Firewall             Firewall      `json:"firewall,omitempty"`
+	IncludeGlobal        bool          `json:"include_global,omitempty"`
+	AllowedSensitivities []Sensitivity `json:"allowed_sensitivities,omitempty"`
+	Limit                int           `json:"limit,omitempty"`
+	DryRun               bool          `json:"dry_run,omitempty"`
+}
+
+// MemoryOrganizationItem describes one memory record that needed maintenance.
+type MemoryOrganizationItem struct {
+	MemoryID       MemoryID `json:"memory_id"`
+	Title          string   `json:"title"`
+	Questions      []string `json:"questions,omitempty"`
+	SummaryUpdated bool     `json:"summary_updated,omitempty"`
+	FollowUpTaskID TaskID   `json:"follow_up_task_id,omitempty"`
+}
+
+// OrganizeMemoryResult reports deterministic memory maintenance work.
+type OrganizeMemoryResult struct {
+	Reviewed      int                      `json:"reviewed"`
+	Repaired      int                      `json:"repaired"`
+	FollowUpTasks []Task                   `json:"follow_up_tasks,omitempty"`
+	Items         []MemoryOrganizationItem `json:"items,omitempty"`
+}
+
 // RepairRequest asks the service to correct memory metadata.
 type RepairRequest struct {
 	Actor       string       `json:"actor"`
 	MemoryID    MemoryID     `json:"memory_id"`
+	DomainID    DomainID     `json:"domain_id,omitempty"`
+	Firewall    Firewall     `json:"firewall,omitempty"`
 	Kind        *Kind        `json:"kind,omitempty"`
 	Sensitivity *Sensitivity `json:"sensitivity,omitempty"`
 	Status      *Status      `json:"status,omitempty"`
@@ -341,7 +393,8 @@ type RepairRequest struct {
 type CorrectionRequest struct {
 	Actor    string   `json:"actor"`
 	MemoryID MemoryID `json:"memory_id"`
-	Firewall Firewall `json:"firewall"`
+	DomainID DomainID `json:"domain_id,omitempty"`
+	Firewall Firewall `json:"firewall,omitempty"`
 	Text     string   `json:"text"`
 }
 
@@ -349,7 +402,8 @@ type CorrectionRequest struct {
 type RefreshPageRequest struct {
 	Actor    string   `json:"actor"`
 	Kind     Kind     `json:"kind"`
-	Firewall Firewall `json:"firewall"`
+	DomainID DomainID `json:"domain_id,omitempty"`
+	Firewall Firewall `json:"firewall,omitempty"`
 	Title    string   `json:"title"`
 	EntityID EntityID `json:"entity_id,omitempty"`
 	Topic    string   `json:"topic,omitempty"`

@@ -73,8 +73,8 @@ func TestAddSessionToMemoryCapturesSanitizedChatEvents(t *testing.T) {
 	if got := calls[0].arguments["kind"]; got != conversationKind {
 		t.Fatalf("kind = %q, want conversation", got)
 	}
-	if got := calls[0].arguments["firewall"]; got != userFirewall {
-		t.Fatalf("firewall = %q, want user", got)
+	if got := calls[0].arguments["domain_id"]; got != "memory" {
+		t.Fatalf("domain_id = %q, want memory", got)
 	}
 	if got := calls[0].arguments["idempotency_key"]; got != "agent_awesome_chat:agent_awesome:doug:session-1234567890:event-user" {
 		t.Fatalf("idempotency = %q, want chat event key", got)

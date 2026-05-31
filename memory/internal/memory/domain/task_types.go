@@ -71,6 +71,8 @@ const (
 // Task stores an operational todo projected from the context graph.
 type Task struct {
 	ID              TaskID            `json:"id"`
+	DomainID        DomainID          `json:"domain_id,omitempty"`
+	Firewall        Firewall          `json:"firewall,omitempty"`
 	Title           string            `json:"title"`
 	Description     string            `json:"description,omitempty"`
 	Status          TaskStatus        `json:"status"`
@@ -123,6 +125,8 @@ type TaskResourceRequirement struct {
 // TaskRelation stores a directed relationship between two graph-backed tasks.
 type TaskRelation struct {
 	ID         TaskRelationID   `json:"id"`
+	DomainID   DomainID         `json:"domain_id,omitempty"`
+	Firewall   Firewall         `json:"firewall,omitempty"`
 	FromTaskID TaskID           `json:"from_task_id"`
 	FromTitle  string           `json:"from_title,omitempty"`
 	Type       TaskRelationType `json:"type"`
@@ -159,6 +163,8 @@ type TaskRelationTraversal struct {
 // CreateTaskRequest asks the service to create a graph-backed task.
 type CreateTaskRequest struct {
 	Actor           string              `json:"actor"`
+	DomainID        DomainID            `json:"domain_id,omitempty"`
+	Firewall        Firewall            `json:"firewall,omitempty"`
 	Title           string              `json:"title"`
 	Description     string              `json:"description,omitempty"`
 	Status          TaskStatus          `json:"status,omitempty"`
@@ -181,6 +187,8 @@ type CreateTaskRequest struct {
 type UpdateTaskRequest struct {
 	TaskID           TaskID             `json:"task_id"`
 	Actor            string             `json:"actor,omitempty"`
+	DomainID         DomainID           `json:"domain_id,omitempty"`
+	Firewall         Firewall           `json:"firewall,omitempty"`
 	Title            *string            `json:"title,omitempty"`
 	Description      *string            `json:"description,omitempty"`
 	Status           *TaskStatus        `json:"status,omitempty"`
@@ -202,6 +210,8 @@ type UpdateTaskRequest struct {
 
 // TaskQuery filters graph-backed tasks.
 type TaskQuery struct {
+	DomainID     DomainID       `json:"domain_id,omitempty"`
+	Firewall     Firewall       `json:"firewall,omitempty"`
 	Statuses     []TaskStatus   `json:"statuses,omitempty"`
 	Priorities   []TaskPriority `json:"priorities,omitempty"`
 	Topics       []string       `json:"topics,omitempty"`
@@ -214,6 +224,8 @@ type TaskQuery struct {
 
 // TaskRelationQuery filters task-to-task relationships.
 type TaskRelationQuery struct {
+	DomainID  DomainID           `json:"domain_id,omitempty"`
+	Firewall  Firewall           `json:"firewall,omitempty"`
 	TaskID    TaskID             `json:"task_id,omitempty"`
 	Types     []TaskRelationType `json:"types,omitempty"`
 	Direction string             `json:"direction,omitempty"`
@@ -222,6 +234,8 @@ type TaskRelationQuery struct {
 
 // TaskRelationTraversalQuery asks for bounded graph traversal from a root task.
 type TaskRelationTraversalQuery struct {
+	DomainID     DomainID           `json:"domain_id,omitempty"`
+	Firewall     Firewall           `json:"firewall,omitempty"`
 	RootTaskID   TaskID             `json:"root_task_id"`
 	Types        []TaskRelationType `json:"types,omitempty"`
 	Direction    string             `json:"direction,omitempty"`
@@ -233,13 +247,17 @@ type TaskRelationTraversalQuery struct {
 
 // TaskIDRequest asks for one task by id.
 type TaskIDRequest struct {
-	TaskID TaskID `json:"task_id"`
-	Actor  string `json:"actor,omitempty"`
+	TaskID   TaskID   `json:"task_id"`
+	Actor    string   `json:"actor,omitempty"`
+	DomainID DomainID `json:"domain_id,omitempty"`
+	Firewall Firewall `json:"firewall,omitempty"`
 }
 
 // UpsertTaskRelationRequest asks the service to create or update a task edge.
 type UpsertTaskRelationRequest struct {
 	Actor      string           `json:"actor,omitempty"`
+	DomainID   DomainID         `json:"domain_id,omitempty"`
+	Firewall   Firewall         `json:"firewall,omitempty"`
 	FromTaskID TaskID           `json:"from_task_id"`
 	Type       TaskRelationType `json:"type"`
 	ToTaskID   TaskID           `json:"to_task_id"`
@@ -251,13 +269,17 @@ type UpsertTaskRelationRequest struct {
 // DeleteTaskRelationRequest asks the service to lifecycle-delete a task edge.
 type DeleteTaskRelationRequest struct {
 	Actor      string         `json:"actor,omitempty"`
+	DomainID   DomainID       `json:"domain_id,omitempty"`
+	Firewall   Firewall       `json:"firewall,omitempty"`
 	RelationID TaskRelationID `json:"relation_id"`
 }
 
 // LinkTaskMemoryRequest asks the system to attach contextual memory to a task.
 type LinkTaskMemoryRequest struct {
-	TaskID TaskID            `json:"task_id"`
-	Link   MemoryLinkRequest `json:"link"`
+	TaskID   TaskID            `json:"task_id"`
+	DomainID DomainID          `json:"domain_id,omitempty"`
+	Firewall Firewall          `json:"firewall,omitempty"`
+	Link     MemoryLinkRequest `json:"link"`
 }
 
 // MemoryLinkRequest asks the system to attach contextual memory.

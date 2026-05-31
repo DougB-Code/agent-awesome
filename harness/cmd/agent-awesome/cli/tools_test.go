@@ -68,6 +68,108 @@ func TestToolsValidateModePassesFilter(t *testing.T) {
 	}
 }
 
+// TestToolsImportOpenAPIWritesToolPackage verifies the CLI imports REST schemas
+// into loadable command-backed tool packages.
+func TestToolsImportOpenAPIWritesToolPackage(t *testing.T) {
+	dir := t.TempDir()
+	schemaPath := filepath.Join(dir, "openapi.yaml")
+	outPath := filepath.Join(dir, "tool.yaml")
+	if err := os.WriteFile(schemaPath, []byte(`
+openapi: 3.0.0
+info:
+  title: Contacts API
+servers:
+  - url: https://api.example.test
+paths:
+  /contacts/{contactId}:
+    get:
+      operationId: getContact
+      parameters:
+        - name: contactId
+          in: path
+          required: true
+          schema:
+            type: string
+`), 0o600); err != nil {
+		t.Fatalf("WriteFile(openapi) error = %v", err)
+	}
+	var stdout bytes.Buffer
+	cmd := newToolsCommandWithValidator(context.Background(), &stdout, func(context.Context, string, []string, string) (toolvalidation.SuiteResult, error) {
+		return toolvalidation.SuiteResult{}, nil
+	})
+	cmd.SetArgs([]string{"import-openapi", "--schema", schemaPath, "--out", outPath})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), "wrote "+outPath) {
+		t.Fatalf("stdout = %q, want written path", stdout.String())
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("ReadFile(out) error = %v", err)
+	}
+	if !strings.Contains(string(data), "local-exec:") || !strings.Contains(string(data), "getContact") {
+		t.Fatalf("generated YAML = %s, want AA tool package", data)
+	}
+}
+
+// TestToolsInstallCopiesLocalPackage verifies source-control install wiring.
+func TestToolsInstallCopiesLocalPackage(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source", "package")
+	if err := os.MkdirAll(source, 0o700); err != nil {
+		t.Fatalf("MkdirAll(source) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, schema.DefaultToolFilename), []byte("name: Local\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(tool) error = %v", err)
+	}
+	var stdout bytes.Buffer
+	cmd := newToolsCommandWithValidator(context.Background(), &stdout, func(context.Context, string, []string, string) (toolvalidation.SuiteResult, error) {
+		return toolvalidation.SuiteResult{}, nil
+	})
+	toolRoot := filepath.Join(root, "tools")
+	cmd.SetArgs([]string{"install", source, "--tool-root", toolRoot, "--mcp-root", filepath.Join(root, "mcp"), "--name", "local-tool"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), `installed tool package "local-tool"`) {
+		t.Fatalf("stdout = %q, want install summary", stdout.String())
+	}
+	if got, err := os.ReadFile(filepath.Join(toolRoot, "local-tool", schema.DefaultToolFilename)); err != nil || string(got) != "name: Local\n" {
+		t.Fatalf("installed tool = %q, %v", got, err)
+	}
+}
+
+// TestToolsInstallCopiesLocalAppPluginPackage verifies app plugin install flags.
+func TestToolsInstallCopiesLocalAppPluginPackage(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source", "calendar")
+	if err := os.MkdirAll(source, 0o700); err != nil {
+		t.Fatalf("MkdirAll(source) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(source, schema.DefaultAppPluginFilename), []byte("name: Calendar\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile(app) error = %v", err)
+	}
+	var stdout bytes.Buffer
+	cmd := newToolsCommandWithValidator(context.Background(), &stdout, func(context.Context, string, []string, string) (toolvalidation.SuiteResult, error) {
+		return toolvalidation.SuiteResult{}, nil
+	})
+	appRoot := filepath.Join(root, "app-plugins")
+	cmd.SetArgs([]string{"install", source, "--tool-root", filepath.Join(root, "tools"), "--mcp-root", filepath.Join(root, "mcp"), "--app-root", appRoot, "--name", "apple-calendar"})
+
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), `installed app package "apple-calendar"`) {
+		t.Fatalf("stdout = %q, want install summary", stdout.String())
+	}
+	if got, err := os.ReadFile(filepath.Join(appRoot, "apple-calendar", schema.DefaultAppPluginFilename)); err != nil || string(got) != "name: Calendar\n" {
+		t.Fatalf("installed app = %q, %v", got, err)
+	}
+}
+
 // TestToolsValidateRequireCoverageFailsMissingTargets verifies CI coverage gates.
 func TestToolsValidateRequireCoverageFailsMissingTargets(t *testing.T) {
 	cmd := newToolsCommandWithValidator(context.Background(), &bytes.Buffer{}, func(context.Context, string, []string, string) (toolvalidation.SuiteResult, error) {

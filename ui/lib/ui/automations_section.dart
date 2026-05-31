@@ -746,6 +746,7 @@ class _AutomationFocusedCommandPanelState
           id: _automationRunbookAreaActions,
           title: 'Actions',
           icon: Icons.extension_outlined,
+          showInQuickAccess: false,
           builder: (query) => _AutomationRunbookStatePaletteContent(
             controller: widget.controller,
             query: query,
@@ -923,6 +924,10 @@ class _AutomationPanelActions extends StatelessWidget {
         ],
       );
     }
+    if (panelId == _automationPanelLaunchpad &&
+        areaId == _automationLaunchpadAreaTargets) {
+      return _RemoteDockerRuntimeActions(controller: controller);
+    }
     if (panelId == _automationPanelRunbooks ||
         areaId == _automationRunbookAreaDrafts) {
       return Row(
@@ -960,6 +965,187 @@ class _AutomationPanelActions extends StatelessWidget {
       return;
     }
     _showAutomationErrorSnack(context, controller);
+  }
+}
+
+/// _RemoteDockerRuntimeActions exposes Docker runtime operations in Launchpad.
+class _RemoteDockerRuntimeActions extends StatefulWidget {
+  /// Creates Docker runtime action controls for the operational target area.
+  const _RemoteDockerRuntimeActions({required this.controller});
+
+  /// Shared app controller that owns runtime bundle operations.
+  final AgentAwesomeAppController controller;
+
+  @override
+  State<_RemoteDockerRuntimeActions> createState() =>
+      _RemoteDockerRuntimeActionsState();
+}
+
+class _RemoteDockerRuntimeActionsState
+    extends State<_RemoteDockerRuntimeActions> {
+  String _remoteDockerHost = '';
+
+  /// Builds remote runtime operation controls for the Computers header.
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      children: <Widget>[
+        PanelIconButton(
+          icon: Icons.inventory_2_outlined,
+          tooltip: 'Export remote Docker bundle',
+          onPressed: () =>
+              unawaited(_runDockerAction(context, _exportRemoteDockerBundle)),
+        ),
+        PanelIconButton(
+          icon: Icons.build_outlined,
+          tooltip: 'Build remote Docker image',
+          onPressed: () =>
+              unawaited(_runDockerAction(context, _buildRemoteDockerImage)),
+        ),
+        PanelIconButton(
+          icon: Icons.play_arrow_outlined,
+          tooltip: 'Start remote Docker runtime',
+          onPressed: () =>
+              unawaited(_runDockerAction(context, _startRemoteDockerRuntime)),
+        ),
+        PanelIconButton(
+          icon: Icons.cloud_upload_outlined,
+          tooltip: 'Deploy remote Docker runtime',
+          onPressed: () =>
+              unawaited(_runDockerAction(context, _deployRemoteDockerRuntime)),
+        ),
+      ],
+    );
+  }
+
+  /// Runs one Docker operation and reports its status from the UI boundary.
+  Future<void> _runDockerAction(
+    BuildContext context,
+    Future<bool> Function() action,
+  ) async {
+    try {
+      final completed = await action();
+      if (!context.mounted) {
+        return;
+      }
+      if (!completed) {
+        return;
+      }
+      final message = widget.controller.statusMessage.trim();
+      if (message.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Remote Docker operation failed: $error'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
+  }
+
+  /// Exports the current runtime as a configured remote Docker bundle.
+  Future<bool> _exportRemoteDockerBundle() async {
+    await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+    return true;
+  }
+
+  /// Exports the current runtime and builds its Docker image.
+  Future<bool> _buildRemoteDockerImage() async {
+    final bundle = await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+    await widget.controller.buildRemoteDockerBundleImage(bundle);
+    return true;
+  }
+
+  /// Exports the current runtime, builds the image, and starts it locally.
+  Future<bool> _startRemoteDockerRuntime() async {
+    final bundle = await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+    await widget.controller.buildRemoteDockerBundleImage(bundle);
+    await widget.controller.startRemoteDockerBundleContainer(
+      bundle,
+      gatewayToken: widget.controller.config.gatewayBearerToken,
+    );
+    return true;
+  }
+
+  /// Exports, builds, and deploys the current runtime to an SSH Docker host.
+  Future<bool> _deployRemoteDockerRuntime() async {
+    final host = await _promptRemoteDockerHost();
+    if (host == null || host.trim().isEmpty) {
+      return false;
+    }
+    setState(() => _remoteDockerHost = host.trim());
+    final bundle = await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+    await widget.controller.buildRemoteDockerBundleImage(bundle);
+    await widget.controller.deployRemoteDockerBundle(
+      bundle,
+      remoteHost: host,
+      gatewayToken: widget.controller.config.gatewayBearerToken,
+    );
+    return true;
+  }
+
+  /// Prompts for the SSH target used by generated remote deploy scripts.
+  Future<String?> _promptRemoteDockerHost() async {
+    final controller = TextEditingController(text: _remoteDockerHost);
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Deploy runtime'),
+            content: SizedBox(
+              width: 420,
+              child: PanelTextFormField(
+                label: 'SSH host',
+                controller: controller,
+                onSubmitted: (_) =>
+                    Navigator.of(dialogContext).pop(controller.text.trim()),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text.trim()),
+                child: const Text('Deploy'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 }
 
@@ -2720,8 +2906,7 @@ class _RunbookMetadataEditor extends StatefulWidget {
   final Future<void> Function(String name, String description) onSave;
 
   @override
-  State<_RunbookMetadataEditor> createState() =>
-      _RunbookMetadataEditorState();
+  State<_RunbookMetadataEditor> createState() => _RunbookMetadataEditorState();
 }
 
 class _RunbookMetadataEditorState extends State<_RunbookMetadataEditor> {
@@ -2789,9 +2974,7 @@ class _RunbookMetadataEditorState extends State<_RunbookMetadataEditor> {
                   ),
                   const SizedBox(height: 12),
                   PanelTextFormField(
-                    key: const ValueKey<String>(
-                      'runbook-metadata-description',
-                    ),
+                    key: const ValueKey<String>('runbook-metadata-description'),
                     label: 'Description',
                     controller: _description,
                     enabled: widget.editable,
@@ -2924,11 +3107,7 @@ class _LaunchpadPublishedOverview extends StatelessWidget {
         if (setup != null && setup.runtimeTargetId.isNotEmpty)
           'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
         if (setup != null)
-          ..._launchSafetyRows(
-            setup,
-            codebases: codebases,
-            targets: targets,
-          ),
+          ..._launchSafetyRows(setup, codebases: codebases, targets: targets),
         if (setup != null && setup.updatedAt.isNotEmpty)
           'Updated: ${setup.updatedAt}',
       ],
@@ -3074,9 +3253,7 @@ class _LaunchpadRunSetupEditorState extends State<_LaunchpadRunSetupEditor> {
             ),
             const SizedBox(height: 12),
             _AutomationTextField(
-              key: const ValueKey<String>(
-                'automation-launch-edit-description',
-              ),
+              key: const ValueKey<String>('automation-launch-edit-description'),
               controller: _description,
               label: 'Description',
               minLines: 3,
@@ -3272,11 +3449,7 @@ class _LaunchpadRunSetupsOverview extends StatelessWidget {
         if (setup != null && setup.runtimeTargetId.isNotEmpty)
           'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
         if (setup != null)
-          ..._launchSafetyRows(
-            setup,
-            codebases: codebases,
-            targets: targets,
-          ),
+          ..._launchSafetyRows(setup, codebases: codebases, targets: targets),
         if (setup != null && setup.updatedAt.isNotEmpty)
           'Updated: ${setup.updatedAt}',
       ],
@@ -3349,8 +3522,7 @@ class _LaunchpadSchedulesWorkspace extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheduled = setups.where(_launchHasSchedule).toList();
-    final selected =
-        selectedSetup != null && _launchHasSchedule(selectedSetup!)
+    final selected = selectedSetup != null && _launchHasSchedule(selectedSetup!)
         ? selectedSetup
         : scheduled.isEmpty
         ? null
@@ -3565,8 +3737,7 @@ class _LaunchpadSchedulesOverview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheduled = setups.where(_launchHasSchedule).toList();
-    final selected =
-        selectedSetup != null && _launchHasSchedule(selectedSetup!)
+    final selected = selectedSetup != null && _launchHasSchedule(selectedSetup!)
         ? selectedSetup
         : scheduled.isEmpty
         ? null
@@ -4973,9 +5144,7 @@ List<_LaunchArtifactItem> _launchArtifactsForRuns(
   final artifacts = <_LaunchArtifactItem>[];
   for (final run in runs) {
     final runbookLabel = _runDefinitionLabel(definitions, run);
-    artifacts.addAll(
-      _launchArtifactsForRun(run, runbookLabel: runbookLabel),
-    );
+    artifacts.addAll(_launchArtifactsForRun(run, runbookLabel: runbookLabel));
   }
   return artifacts;
 }

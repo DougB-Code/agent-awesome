@@ -841,10 +841,9 @@ void _validateMemoryDomains(List<McpServerRuntime> domains) {
         'Memory domain "${domain.id}" must have kind "memory"',
       );
     }
-    if (domain.autoStart &&
-        (domain.dbPath.trim().isEmpty || domain.dataDir.trim().isEmpty)) {
+    if (domain.autoStart && domain.dataDir.trim().isEmpty) {
       throw FormatException(
-        'Managed memory domain "${domain.id}" requires db_path and data_dir',
+        'Managed memory domain "${domain.id}" requires data_dir',
       );
     }
     if (domain.autoStart &&
@@ -867,12 +866,14 @@ void _validateMemoryDomains(List<McpServerRuntime> domains) {
         domain.id,
         'Managed memory domain health URLs',
       );
-      _rememberUnique(
-        managedDatabasePaths,
-        domain.dbPath,
-        domain.id,
-        'Managed memory domain database paths',
-      );
+      if (domain.dbPath.trim().isNotEmpty) {
+        _rememberUnique(
+          managedDatabasePaths,
+          domain.dbPath,
+          domain.id,
+          'Managed memory domain database paths',
+        );
+      }
       _rememberUnique(
         managedDataDirectories,
         domain.dataDir,

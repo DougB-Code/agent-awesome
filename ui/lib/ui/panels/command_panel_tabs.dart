@@ -23,12 +23,13 @@ class _CommandSubShellAreaTabs extends StatelessWidget {
         runSpacing: 8,
         children: <Widget>[
           for (var index = 0; index < areas.length; index++)
-            _CommandSubShellIconTab(
-              icon: areas[index].icon,
-              selected: selectedIndex == index,
-              tooltip: areas[index].title,
-              onTap: () => onSelected(index),
-            ),
+            if (areas[index].showInQuickAccess || selectedIndex == index)
+              _CommandSubShellIconTab(
+                icon: areas[index].icon,
+                selected: selectedIndex == index,
+                tooltip: areas[index].title,
+                onTap: () => onSelected(index),
+              ),
         ],
       ),
     );

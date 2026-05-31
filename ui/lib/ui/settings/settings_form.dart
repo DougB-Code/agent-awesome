@@ -368,6 +368,49 @@ class SettingsFormSubsection extends StatelessWidget {
   }
 }
 
+/// SettingsFormNote renders a compact actionable note inside settings forms.
+class SettingsFormNote extends StatelessWidget {
+  /// Creates a reusable note for form-specific warnings or recovery guidance.
+  const SettingsFormNote({
+    super.key,
+    required this.text,
+    this.icon = Icons.info_outline,
+  });
+
+  /// Note text.
+  final String text;
+
+  /// Leading note icon.
+  final IconData icon;
+
+  /// Builds a quiet inline note using shared settings form spacing.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: SettingsFormMetrics.fieldGap),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Icon(icon, size: 16, color: colors.muted),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: colors.muted,
+                fontSize: 12,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// SettingsFieldGrid lays out fields in one or two responsive columns.
 class SettingsFieldGrid extends PanelFieldGrid {
   /// Creates a reusable responsive settings field grid.

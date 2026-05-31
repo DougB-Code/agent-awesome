@@ -33,6 +33,8 @@ func DecodeCreateTaskRequest(args json.RawMessage) (domain.CreateTaskRequest, er
 	}
 	req := domain.CreateTaskRequest{
 		Actor:          stringArg(raw["actor"]),
+		DomainID:       domain.DomainID(stringArg(raw["domain_id"])),
+		Firewall:       domain.Firewall(stringArg(raw["firewall"])),
 		Title:          stringArg(raw["title"]),
 		Description:    stringArg(raw["description"]),
 		Priority:       taskPriorityArg(raw["priority"]),

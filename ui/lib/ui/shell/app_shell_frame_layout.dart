@@ -89,36 +89,41 @@ class AppShellFrame extends StatelessWidget {
           width: sidebarWidth,
           expanded: sidebarExpanded,
           selected: selectedSection,
+          interfaceMode: controller.interfaceMode,
+          appPlugins: controller.appPlugins,
           onSelected: onSelected,
           onToggleExpanded: onToggleSidebar,
         ),
         Expanded(
-          child: Column(
-            children: <Widget>[
-              CommandBar(
-                commandController: commandController,
-                appController: controller,
-                commandContext: commandContext,
-                onSubmitScreenCommand: onSubmitScreenCommand,
-                onSubmit: onSubmit,
-                onToggleAssistantChat: onToggleAssistantChat,
-                onSelectHistoryChat: onSelectHistoryChat,
-                onOpenSection: onOpenSection,
-                onOpenSettingsSection: onOpenSettingsSection,
-                onOpenSettings: onOpenSettings,
-                onOpenSetup: onOpenSetup,
-                assistantChatEnabled: assistantChatEnabled,
-              ),
-              Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.page,
-                    gradient: context.agentAwesomeWorkspaceGradient,
-                  ),
-                  child: content,
+          child: PanelMenuColumnScope(
+            expanded: sidebarExpanded,
+            child: Column(
+              children: <Widget>[
+                CommandBar(
+                  commandController: commandController,
+                  appController: controller,
+                  commandContext: commandContext,
+                  onSubmitScreenCommand: onSubmitScreenCommand,
+                  onSubmit: onSubmit,
+                  onToggleAssistantChat: onToggleAssistantChat,
+                  onSelectHistoryChat: onSelectHistoryChat,
+                  onOpenSection: onOpenSection,
+                  onOpenSettingsSection: onOpenSettingsSection,
+                  onOpenSettings: onOpenSettings,
+                  onOpenSetup: onOpenSetup,
+                  assistantChatEnabled: assistantChatEnabled,
                 ),
-              ),
-            ],
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.page,
+                      gradient: context.agentAwesomeWorkspaceGradient,
+                    ),
+                    child: content,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

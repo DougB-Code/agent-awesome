@@ -23,6 +23,7 @@ type memoryExportRequest struct {
 	Title          string   `json:"title"`
 	Content        string   `json:"content"`
 	Kind           string   `json:"kind"`
+	DomainID       string   `json:"domain_id"`
 	Firewall       string   `json:"firewall"`
 	Sensitivity    string   `json:"sensitivity"`
 	Subjects       []string `json:"subjects"`
@@ -116,6 +117,7 @@ func decodeMemoryExportRequest(arguments map[string]any) (memoryExportRequest, e
 	req.Title = strings.TrimSpace(req.Title)
 	req.Content = strings.TrimSpace(req.Content)
 	req.Kind = strings.TrimSpace(req.Kind)
+	req.DomainID = strings.TrimSpace(req.DomainID)
 	req.Firewall = strings.TrimSpace(req.Firewall)
 	req.Sensitivity = strings.TrimSpace(req.Sensitivity)
 	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
@@ -153,9 +155,12 @@ func memoryExportCapturePayload(actor string, req memoryExportRequest) map[strin
 	if kind == "" {
 		kind = "summary"
 	}
-	firewall := req.Firewall
-	if firewall == "" {
-		firewall = "user"
+	domainID := req.DomainID
+	if domainID == "" {
+		domainID = req.Firewall
+	}
+	if domainID == "" {
+		domainID = req.TargetDomain
 	}
 	sensitivity := req.Sensitivity
 	if sensitivity == "" {
@@ -171,7 +176,7 @@ func memoryExportCapturePayload(actor string, req memoryExportRequest) map[strin
 		"title":        title,
 		"media_type":   "text/plain",
 		"kind":         kind,
-		"firewall":     firewall,
+		"domain_id":    domainID,
 		"trust_level":  "user_asserted",
 		"sensitivity":  sensitivity,
 		"subjects":     req.Subjects,

@@ -13,6 +13,10 @@ const List<String> graphBackedMcpToolNames = <String>[
   'save_memory_candidate',
   'search_memory',
   'search_sources',
+  'organize_memory',
+  'list_memory_domains',
+  'create_memory_domain',
+  'remove_memory_domain',
   'load_entity_page',
   'load_timeline',
   'refresh_compiled_page',
@@ -41,6 +45,9 @@ const List<String> graphBackedMcpToolNames = <String>[
 const List<String> graphBackedMcpConfirmationToolNames = <String>[
   'remember',
   'save_memory_candidate',
+  'organize_memory',
+  'create_memory_domain',
+  'remove_memory_domain',
   'refresh_compiled_page',
   'repair_memory_record',
   'submit_memory_correction',
@@ -60,6 +67,7 @@ const List<String> graphBackedMcpConfirmationToolNames = <String>[
 const List<String> graphBackedMcpReadOnlyToolNames = <String>[
   'search_memory',
   'search_sources',
+  'list_memory_domains',
   'load_entity_page',
   'load_timeline',
   'query_context_graph',
@@ -189,6 +197,134 @@ class ToolConfigDocument {
   String toYaml() {
     return encodeYamlMap(toJson());
   }
+}
+
+/// ApprovedMcpToolConfigUpdate reports a durable approved-tool config change.
+class ApprovedMcpToolConfigUpdate {
+  /// Creates an immutable approved MCP tool update result.
+  const ApprovedMcpToolConfigUpdate({
+    required this.document,
+    required this.changed,
+    required this.reason,
+  });
+
+  /// Updated tool config document, or the original document when unchanged.
+  final ToolConfigDocument document;
+
+  /// Whether the document now contains a new durable approved-tool entry.
+  final bool changed;
+
+  /// Short diagnostic explaining the update or why it was skipped.
+  final String reason;
+}
+
+/// Adds one approved MCP tool to an unambiguous server config.
+ApprovedMcpToolConfigUpdate toolConfigWithApprovedMcpTool({
+  required ToolConfigDocument document,
+  required String toolName,
+  String serverName = '',
+}) {
+  final tool = toolName.trim();
+  if (tool.isEmpty) {
+    return ApprovedMcpToolConfigUpdate(
+      document: document,
+      changed: false,
+      reason: 'tool name is empty',
+    );
+  }
+  final servers = document.mcp.servers;
+  if (servers.isEmpty) {
+    return ApprovedMcpToolConfigUpdate(
+      document: document,
+      changed: false,
+      reason: 'mcp servers are empty',
+    );
+  }
+  final serverIndex = _approvedMcpToolServerIndex(
+    servers,
+    tool,
+    serverName.trim(),
+  );
+  if (serverIndex == null) {
+    return ApprovedMcpToolConfigUpdate(
+      document: document,
+      changed: false,
+      reason: 'mcp server is ambiguous',
+    );
+  }
+  final server = servers[serverIndex];
+  final nextServer = _mcpServerWithApprovedTool(server, tool);
+  if (identical(nextServer, server)) {
+    return ApprovedMcpToolConfigUpdate(
+      document: document,
+      changed: false,
+      reason: 'tool is already durable',
+    );
+  }
+  final nextServers = <McpServerToolConfig>[
+    for (var index = 0; index < servers.length; index++)
+      index == serverIndex ? nextServer : servers[index],
+  ];
+  return ApprovedMcpToolConfigUpdate(
+    document: document.copyWith(
+      mcp: document.mcp.copyWith(servers: nextServers),
+    ),
+    changed: true,
+    reason: 'updated ${server.name}',
+  );
+}
+
+/// Resolves the single MCP server that should own an approved tool.
+int? _approvedMcpToolServerIndex(
+  List<McpServerToolConfig> servers,
+  String tool,
+  String serverName,
+) {
+  if (serverName.isNotEmpty) {
+    for (var index = 0; index < servers.length; index++) {
+      if (servers[index].name == serverName) {
+        return index;
+      }
+    }
+    return null;
+  }
+  final matches = <int>[];
+  for (var index = 0; index < servers.length; index++) {
+    final server = servers[index];
+    if (server.requireConfirmation ||
+        server.requireConfirmationTools.contains(tool) ||
+        server.tools.allow.contains(tool)) {
+      matches.add(index);
+    }
+  }
+  if (matches.length == 1) {
+    return matches.single;
+  }
+  if (matches.isEmpty && servers.length == 1) {
+    return 0;
+  }
+  return null;
+}
+
+/// Returns a server config with the approved tool made durable.
+McpServerToolConfig _mcpServerWithApprovedTool(
+  McpServerToolConfig server,
+  String tool,
+) {
+  final nextConfirmationTools = server.requireConfirmation
+      ? server.requireConfirmationTools
+      : _appendUnique(server.requireConfirmationTools, tool);
+  final nextAllow = server.tools.allow.isEmpty
+      ? server.tools.allow
+      : _appendUnique(server.tools.allow, tool);
+  if (nextConfirmationTools == server.requireConfirmationTools &&
+      nextAllow == server.tools.allow) {
+    return server;
+  }
+  return server.copyWith(
+    requireConfirmationTools: nextConfirmationTools,
+    tools: server.tools.copyWith(allow: nextAllow),
+  );
 }
 
 /// LocalExecToolConfig describes configured local command execution tools.
@@ -2223,6 +2359,15 @@ String mcpServerEndpoint(McpServerToolConfig server) {
     return endpoint;
   }
   return server.url.trim();
+}
+
+/// Appends a trimmed value when it is not already present.
+List<String> _appendUnique(List<String> values, String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty || values.contains(trimmed)) {
+    return values;
+  }
+  return <String>[...values, trimmed];
 }
 
 /// Converts a decoded map to a trimmed string map.

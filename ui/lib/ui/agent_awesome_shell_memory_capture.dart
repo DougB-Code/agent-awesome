@@ -97,10 +97,10 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
                   onChanged: (value) => setState(() => _kind = value),
                 ),
                 PanelDropdownFormField<String>(
-                  label: 'Firewall',
+                  label: 'Domain',
                   value: _firewall,
                   values: widget.controller.memoryFirewallIds,
-                  tooltip: 'Firewall',
+                  tooltip: 'Domain',
                   labelFor: widget.controller.memoryFirewallPickerLabel,
                   onChanged: (value) => setState(() => _firewall = value),
                 ),

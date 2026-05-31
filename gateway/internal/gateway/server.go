@@ -122,6 +122,7 @@ type memorySnapshotOperationView struct {
 const maxGatewayContextRequestBytes int64 = 1 << 20
 
 const memoryDomainHeader = "X-Agent-Awesome-Memory-Domain"
+const upstreamMemoryDomainHeader = "X-Memory-Domain"
 const profileHeader = "X-Agent-Awesome-Profile"
 const actorHeader = "X-Agent-Awesome-Actor"
 
@@ -468,19 +469,25 @@ func (s *Server) contextAPIHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "context tool name is required"})
 		return
 	}
-	if hasDomainOverride(call.Arguments) {
-		writePolicyError(w, policyError{status: http.StatusForbidden, message: "memory domain overrides must use the gateway domain_id field"})
+	argumentDomain, err := domainSelectorFromArguments(call.Arguments)
+	if err != nil {
+		writePolicyError(w, err)
 		return
 	}
 	if strings.TrimSpace(call.Name) == "export_memory_copy" {
-		if strings.TrimSpace(call.DomainID) != "" {
+		if strings.TrimSpace(call.DomainID) != "" || argumentDomain != "" {
 			writePolicyError(w, policyError{status: http.StatusBadRequest, message: "export_memory_copy must not include a gateway domain_id"})
 			return
 		}
 		contextProxy.ServeHTTP(w, requestWithExecutionContext(requestWithBody(r, r.URL.Path, body), exec))
 		return
 	}
-	domainID, err := s.authorizeMemoryTool(exec.Policy, call.Name, call.DomainID)
+	requestedDomain, err := selectedDomain(call.DomainID, argumentDomain)
+	if err != nil {
+		writePolicyError(w, err)
+		return
+	}
+	domainID, err := s.authorizeMemoryTool(exec.Policy, call.Name, requestedDomain)
 	if err != nil {
 		writePolicyError(w, err)
 		return
@@ -489,6 +496,7 @@ func (s *Server) contextAPIHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	call.DomainID = domainID
+	call.Arguments = argumentsWithoutDomainSelectors(call.Arguments)
 	nextBody, err := json.Marshal(call)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "encode context tool call"})
@@ -514,12 +522,12 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 		writeBodyReadError(w, err)
 		return
 	}
-	access, err := memoryAccessFromMCPBody(body)
+	access, selectedDomain, err := memoryAccessFromMCPBody(body, requestedDomain)
 	if err != nil {
 		writePolicyError(w, err)
 		return
 	}
-	domainID, err := s.authorizeMemoryAccess(exec.Policy, access, requestedDomain)
+	domainID, err := s.authorizeMemoryAccess(exec.Policy, access, selectedDomain)
 	if err != nil {
 		writePolicyError(w, err)
 		return
@@ -532,7 +540,7 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "memory domain " + domainID + " is not routable"})
 		return
 	}
-	memoryProxy.ServeHTTP(w, requestWithBody(r, "/mcp", body))
+	memoryProxy.ServeHTTP(w, requestWithMemoryDomain(r, "/mcp", body, domainID))
 }
 
 // runbookHandler proxies user-channel runbook requests to the configured runbook service.
@@ -939,29 +947,34 @@ func memoryDomainFromPath(path string) (string, error) {
 	return domain, nil
 }
 
-// memoryAccessFromMCPBody returns the most restrictive access in an MCP payload.
-func memoryAccessFromMCPBody(body []byte) (memoryAccessKind, error) {
+// memoryAccessFromMCPBody returns the most restrictive access and selected domain in an MCP payload.
+func memoryAccessFromMCPBody(body []byte, requestedDomain string) (memoryAccessKind, string, error) {
+	selected := strings.TrimSpace(requestedDomain)
 	if len(bytes.TrimSpace(body)) == 0 {
-		return memoryReadAccess, nil
+		return memoryReadAccess, selected, nil
 	}
 	requests, err := decodeMCPRequests(body)
 	if err != nil {
-		return memoryReadAccess, err
+		return memoryReadAccess, selected, err
 	}
 	access := memoryReadAccess
 	for _, request := range requests {
 		if strings.TrimSpace(request.Method) != "tools/call" {
 			continue
 		}
-		callAccess, err := memoryAccessFromCallToolParams(request.Params)
+		callAccess, callDomain, err := memoryAccessFromCallToolParams(request.Params)
 		if err != nil {
-			return memoryReadAccess, err
+			return memoryReadAccess, selected, err
+		}
+		selected, err = selectedDomain(selected, callDomain)
+		if err != nil {
+			return memoryReadAccess, selected, err
 		}
 		if callAccess == memoryWriteAccess {
 			access = memoryWriteAccess
 		}
 	}
-	return access, nil
+	return access, selected, nil
 }
 
 // decodeMCPRequests decodes one JSON-RPC request or a batch request.
@@ -981,31 +994,81 @@ func decodeMCPRequests(body []byte) ([]mcpRPCRequest, error) {
 }
 
 // memoryAccessFromCallToolParams validates a memory tools/call parameter object.
-func memoryAccessFromCallToolParams(params json.RawMessage) (memoryAccessKind, error) {
+func memoryAccessFromCallToolParams(params json.RawMessage) (memoryAccessKind, string, error) {
 	var call mcpCallToolParams
 	if len(bytes.TrimSpace(params)) == 0 {
-		return memoryReadAccess, policyError{status: http.StatusBadRequest, message: "MCP tools/call params are required"}
+		return memoryReadAccess, "", policyError{status: http.StatusBadRequest, message: "MCP tools/call params are required"}
 	}
 	if err := json.Unmarshal(params, &call); err != nil {
-		return memoryReadAccess, policyError{status: http.StatusBadRequest, message: "decode MCP tools/call params: " + err.Error()}
+		return memoryReadAccess, "", policyError{status: http.StatusBadRequest, message: "decode MCP tools/call params: " + err.Error()}
 	}
-	if strings.TrimSpace(call.DomainID) != "" || hasDomainOverride(call.Arguments) {
-		return memoryReadAccess, policyError{status: http.StatusForbidden, message: "model-supplied memory domain overrides are not allowed"}
+	callDomain, err := memoryCallDomainSelector(call)
+	if err != nil {
+		return memoryReadAccess, "", err
 	}
 	access, ok := memoryToolAccessFor(call.Name)
 	if !ok {
-		return memoryReadAccess, policyError{status: http.StatusForbidden, message: "memory tool " + strings.TrimSpace(call.Name) + " is not allowed by gateway policy"}
+		return memoryReadAccess, "", policyError{status: http.StatusForbidden, message: "memory tool " + strings.TrimSpace(call.Name) + " is not allowed by gateway policy"}
 	}
-	return access, nil
+	return access, callDomain, nil
 }
 
-// hasDomainOverride reports whether tool arguments try to select a domain.
-func hasDomainOverride(arguments map[string]any) bool {
-	if len(arguments) == 0 {
-		return false
+// memoryCallDomainSelector extracts a consistent domain selector from one MCP call.
+func memoryCallDomainSelector(call mcpCallToolParams) (string, error) {
+	argumentDomain, err := domainSelectorFromArguments(call.Arguments)
+	if err != nil {
+		return "", err
 	}
-	_, ok := arguments["domain_id"]
-	return ok
+	return selectedDomain(call.DomainID, argumentDomain)
+}
+
+// domainSelectorFromArguments extracts a legacy in-argument memory domain selector.
+func domainSelectorFromArguments(arguments map[string]any) (string, error) {
+	if len(arguments) == 0 {
+		return "", nil
+	}
+	return selectedDomain(domainSelectorValue(arguments, "domain_id"), domainSelectorValue(arguments, "firewall"))
+}
+
+// domainSelectorValue returns one string domain selector from tool arguments.
+func domainSelectorValue(arguments map[string]any, key string) string {
+	value, ok := arguments[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+// selectedDomain combines two domain selectors and rejects conflicts.
+func selectedDomain(first string, second string) (string, error) {
+	first = strings.TrimSpace(first)
+	second = strings.TrimSpace(second)
+	if first == "" {
+		return second, nil
+	}
+	if second == "" || second == first {
+		return first, nil
+	}
+	return "", policyError{status: http.StatusForbidden, message: "conflicting memory domain selectors"}
+}
+
+// argumentsWithoutDomainSelectors removes legacy selectors before proxying to harness.
+func argumentsWithoutDomainSelectors(arguments map[string]any) map[string]any {
+	if len(arguments) == 0 {
+		return arguments
+	}
+	next := make(map[string]any, len(arguments))
+	for key, value := range arguments {
+		if key == "domain_id" || key == "firewall" {
+			continue
+		}
+		next[key] = value
+	}
+	return next
 }
 
 // memoryToolAccessFor classifies known memory tools by required grant type.
@@ -1025,6 +1088,7 @@ func memoryReadOnlyTools() map[string]bool {
 	return map[string]bool{
 		"search_memory":                  true,
 		"search_sources":                 true,
+		"list_memory_domains":            true,
 		"load_entity_page":               true,
 		"load_timeline":                  true,
 		"query_context_graph":            true,
@@ -1043,6 +1107,8 @@ func memoryWriteTools() map[string]bool {
 	return map[string]bool{
 		"remember":                 true,
 		"save_memory_candidate":    true,
+		"create_memory_domain":     true,
+		"remove_memory_domain":     true,
 		"refresh_compiled_page":    true,
 		"repair_memory_record":     true,
 		"submit_memory_correction": true,
@@ -1138,6 +1204,16 @@ func requestWithBody(r *http.Request, path string, body []byte) *http.Request {
 	}
 	next.Header = r.Header.Clone()
 	next.Header.Del(memoryDomainHeader)
+	next.Header.Del(upstreamMemoryDomainHeader)
+	return next
+}
+
+// requestWithMemoryDomain forwards a gateway-authorized memory domain to memoryd.
+func requestWithMemoryDomain(r *http.Request, path string, body []byte, domainID string) *http.Request {
+	next := requestWithBody(r, path, body)
+	if trimmed := strings.TrimSpace(domainID); trimmed != "" {
+		next.Header.Set(upstreamMemoryDomainHeader, trimmed)
+	}
 	return next
 }
 

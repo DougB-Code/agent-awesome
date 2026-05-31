@@ -3,6 +3,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -111,11 +113,76 @@ func TestGraphMutationRequiresExplicitActor(t *testing.T) {
 	}
 }
 
+// TestFirewallPolicyFileReloadsWithoutRestart verifies domain grants update live.
+func TestFirewallPolicyFileReloadsWithoutRestart(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	policyPath := filepath.Join(root, "memory_domain_policy.json")
+	writeTestFirewallPolicy(t, policyPath, FirewallPolicy{
+		Firewalls: []FirewallRule{
+			{Firewall: domain.FirewallUser, Readers: []string{"agent"}, Writers: []string{"agent"}},
+		},
+	})
+	repo, err := graphrepo.OpenPool(ctx, graphrepo.Config{DataRoot: filepath.Join(root, "data")})
+	if err != nil {
+		t.Fatalf("open pool: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	service := New(RepositoriesFrom(repo), nil, Config{FirewallPolicyPath: policyPath})
+
+	if _, err := service.Capture(ctx, domain.CaptureRequest{Actor: "agent", DomainID: domain.DomainID("client-a"), Content: "before reload"}); err == nil {
+		t.Fatalf("capture before policy rewrite error = nil, want denied")
+	}
+	writeTestFirewallPolicy(t, policyPath, FirewallPolicy{
+		Firewalls: []FirewallRule{
+			{Firewall: domain.FirewallUser, Readers: []string{"agent"}, Writers: []string{"agent"}},
+			{Firewall: domain.Firewall("client-a"), Readers: []string{"agent"}, Writers: []string{"agent"}},
+		},
+	})
+	if _, err := service.Capture(ctx, domain.CaptureRequest{Actor: "agent", DomainID: domain.DomainID("client-a"), Content: "after reload"}); err != nil {
+		t.Fatalf("capture after policy rewrite: %v", err)
+	}
+}
+
+// TestMemoryDomainListHonorsDomainPolicy verifies pool metadata stays domain-scoped.
+func TestMemoryDomainListHonorsDomainPolicy(t *testing.T) {
+	ctx := context.Background()
+	service := newTestServiceWithFirewallPolicy(t, FirewallPolicy{
+		Firewalls: []FirewallRule{
+			{Firewall: domain.Firewall("client-a"), Readers: []string{"reader"}, Writers: []string{"manager"}},
+			{Firewall: domain.Firewall("client-b"), Readers: []string{"other"}, Writers: []string{"manager"}},
+		},
+	})
+	for _, domainID := range []domain.DomainID{"client-a", "client-b"} {
+		if _, err := service.CreateMemoryDomain(ctx, domain.MemoryDomainRequest{Actor: "manager", DomainID: domainID}); err != nil {
+			t.Fatalf("create %s: %v", domainID, err)
+		}
+	}
+
+	infos, err := service.ListMemoryDomains(ctx, domain.MemoryDomainListRequest{Actor: "reader"})
+	if err != nil {
+		t.Fatalf("reader list: %v", err)
+	}
+	if len(infos) != 1 || infos[0].DomainID != domain.DomainID("client-a") {
+		t.Fatalf("reader infos = %#v, want only client-a", infos)
+	}
+	infos, err = service.ListMemoryDomains(ctx, domain.MemoryDomainListRequest{Actor: "reader", DomainID: domain.DomainID("client-a")})
+	if err != nil {
+		t.Fatalf("reader scoped list: %v", err)
+	}
+	if len(infos) != 1 || infos[0].DomainID != domain.DomainID("client-a") {
+		t.Fatalf("reader scoped infos = %#v, want client-a", infos)
+	}
+	if _, err := service.ListMemoryDomains(ctx, domain.MemoryDomainListRequest{Actor: "reader", DomainID: domain.DomainID("client-b")}); err == nil {
+		t.Fatal("reader client-b list should be denied")
+	}
+}
+
 // newTestServiceWithFirewallPolicy creates an isolated service with a normalized policy.
 func newTestServiceWithFirewallPolicy(t *testing.T, policy FirewallPolicy) *Service {
 	t.Helper()
 	root := t.TempDir()
-	repo, err := graphrepo.Open(context.Background(), graphrepo.Config{
+	repo, err := graphrepo.OpenPool(context.Background(), graphrepo.Config{
 		DBPath:   filepath.Join(root, "graph.db"),
 		DataRoot: filepath.Join(root, "data"),
 	})
@@ -128,4 +195,16 @@ func newTestServiceWithFirewallPolicy(t *testing.T, policy FirewallPolicy) *Serv
 		t.Fatalf("normalize policy: %v", err)
 	}
 	return New(RepositoriesFrom(repo), nil, Config{FirewallPolicy: &normalized})
+}
+
+// writeTestFirewallPolicy writes a normalized firewall policy fixture.
+func writeTestFirewallPolicy(t *testing.T, path string, policy FirewallPolicy) {
+	t.Helper()
+	content, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatalf("marshal policy: %v", err)
+	}
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("write policy: %v", err)
+	}
 }

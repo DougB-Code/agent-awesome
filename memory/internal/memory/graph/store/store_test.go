@@ -42,8 +42,60 @@ func TestUpsertNodeReusesStableIdentity(t *testing.T) {
 	if second.Title != "Clean forecast input data" {
 		t.Fatalf("node title = %q, want update", second.Title)
 	}
-	if second.Status != graph.StatusActive || second.Firewall != graph.FirewallUser || second.Sensitivity != graph.SensitivityPrivate {
+	if second.Status != graph.StatusActive || second.Sensitivity != graph.SensitivityPrivate {
 		t.Fatalf("node defaults = %#v", second)
+	}
+}
+
+// TestOpenDropsLegacyFirewallColumn verifies routing metadata leaves graph storage.
+func TestOpenDropsLegacyFirewallColumn(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	dbPath := filepath.Join(root, "graph.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open seed db: %v", err)
+	}
+	_, err = db.ExecContext(ctx, `
+CREATE TABLE graph_nodes (
+	id TEXT PRIMARY KEY,
+	kind TEXT NOT NULL,
+	stable_key TEXT,
+	title TEXT NOT NULL DEFAULT '',
+	summary TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'active',
+	firewall TEXT NOT NULL DEFAULT 'user',
+	sensitivity TEXT NOT NULL DEFAULT 'private',
+	trust_level TEXT NOT NULL DEFAULT 'user_asserted',
+	confidence REAL NOT NULL DEFAULT 1.0,
+	source_node_id TEXT REFERENCES graph_nodes(id),
+	actor TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+CREATE INDEX idx_graph_nodes_firewall_sensitivity ON graph_nodes(firewall, sensitivity, status);
+`)
+	if err != nil {
+		t.Fatalf("seed legacy schema: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close seed db: %v", err)
+	}
+	store, err := Open(ctx, Config{DBPath: dbPath, DataRoot: filepath.Join(root, "data")})
+	if err != nil {
+		t.Fatalf("open migrated store: %v", err)
+	}
+	defer store.Close()
+	hasFirewall, err := store.hasColumn(ctx, "graph_nodes", "firewall")
+	if err != nil {
+		t.Fatalf("inspect migrated schema: %v", err)
+	}
+	if hasFirewall {
+		t.Fatalf("legacy firewall column still exists")
+	}
+	var indexName sql.NullString
+	if err := store.db.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_graph_nodes_firewall_sensitivity'`).Scan(&indexName); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("legacy firewall index query err = %v, name = %q; want no rows", err, indexName.String)
 	}
 }
 
@@ -163,7 +215,7 @@ func TestLifecycleDeletionExcludesSearch(t *testing.T) {
 	if err := store.ReindexNode(ctx, node.ID); err != nil {
 		t.Fatalf("reindex node: %v", err)
 	}
-	before, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth", Firewall: graph.FirewallUser})
+	before, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth"})
 	if err != nil {
 		t.Fatalf("search before delete: %v", err)
 	}
@@ -177,7 +229,7 @@ func TestLifecycleDeletionExcludesSearch(t *testing.T) {
 	if deleted.Status != graph.StatusDeleted {
 		t.Fatalf("deleted node status = %q", deleted.Status)
 	}
-	after, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth", Firewall: graph.FirewallUser})
+	after, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "OAuth"})
 	if err != nil {
 		t.Fatalf("search after delete: %v", err)
 	}
@@ -243,7 +295,7 @@ func TestEvidenceBlobAuditAndFTSSearch(t *testing.T) {
 	if err := store.ReindexNode(ctx, evidence.ID); err != nil {
 		t.Fatalf("reindex evidence: %v", err)
 	}
-	results, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "automation", Firewall: graph.FirewallUser, Kinds: []graph.NodeKind{graph.KindEvidence}})
+	results, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "automation", Kinds: []graph.NodeKind{graph.KindEvidence}})
 	if err != nil {
 		t.Fatalf("search evidence: %v", err)
 	}
@@ -355,7 +407,7 @@ func TestSearchEnforcesSensitivity(t *testing.T) {
 	if err := store.ReindexNode(ctx, restricted.ID); err != nil {
 		t.Fatalf("reindex restricted node: %v", err)
 	}
-	defaultResults, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "Payroll", Firewall: graph.FirewallUser})
+	defaultResults, err := store.SearchNodes(ctx, graph.SearchNodesQuery{Text: "Payroll"})
 	if err != nil {
 		t.Fatalf("default search: %v", err)
 	}
@@ -364,7 +416,6 @@ func TestSearchEnforcesSensitivity(t *testing.T) {
 	}
 	restrictedResults, err := store.SearchNodes(ctx, graph.SearchNodesQuery{
 		Text:                 "Payroll",
-		Firewall:             graph.FirewallUser,
 		AllowedSensitivities: []graph.Sensitivity{graph.SensitivityRestricted},
 	})
 	if err != nil {

@@ -67,6 +67,9 @@ class OnboardingProviderOption {
       apiKey: credentialReference,
       defaultModel: selectedModel.id,
       url: url,
+      endpoints: url.trim().isEmpty
+          ? const <String, String>{}
+          : <String, String>{'chat': url.trim()},
       models: <ModelConfigModel>[
         ModelConfigModel(id: selectedModel.id, model: selectedModel.model),
       ],
@@ -272,6 +275,9 @@ ModelProviderConfig onboardingLocalProviderConfig({
     apiKey: '',
     defaultModel: selected.id,
     url: url,
+    endpoints: url.trim().isEmpty
+        ? const <String, String>{}
+        : <String, String>{'chat': url.trim()},
     executable: executable,
     models: <ModelConfigModel>[
       ModelConfigModel(id: selected.id, model: selected.model, path: modelPath),

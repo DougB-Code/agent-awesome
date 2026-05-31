@@ -1,0 +1,77 @@
+= Runbook Training
+:description: How to use Agent Awesome runbooks as guided employee training.
+
+Runbooks can be used for training when the goal is to teach a repeatable process, not only to automate it.
+The same state-machine runbook that guides production work can also guide a learner through the process with checkpoints, evidence capture, and review steps.
+
+== When It Fits
+
+Use a training runbook for work that has a known flow:
+
+* onboarding a teammate to an internal process;
+* practicing an approval or review path before doing live work;
+* teaching how to use AI assistance inside a role;
+* collecting proof that required steps were understood.
+
+Do not use a runbook as a replacement for open-ended coaching.
+If the learner needs judgment, discussion, or policy interpretation, make that a review or question step instead of hiding the decision inside automation.
+
+== Training Pattern
+
+Model the training as a normal state-machine definition.
+Keep the workflow generic and invoke external systems through the existing command, MCP, HTTP, or human-review boundaries.
+
+Recommended state types:
+
+* `intro`: explain the role, expected outcome, and completion criteria;
+* `demonstrate`: show the learner an example or ask the agent to summarize one;
+* `practice`: ask the learner to perform one bounded task;
+* `check`: validate an artifact, answer, tool result, or uploaded evidence;
+* `review`: route uncertain or failed checks to a human reviewer;
+* `complete`: record the outcome and next recommended runbook.
+
+Each step should have one clear responsibility.
+For AI-assisted roles, include explicit tool boundaries so learners see what the agent can do, what it cannot do, and when human approval is required.
+
+== Evidence
+
+Training runbooks should collect evidence only when it supports a real decision:
+
+* answers to short scenario questions;
+* links to generated artifacts;
+* command or validation output;
+* reviewer approval or requested corrections.
+
+Avoid passive status blocks or ornamental summaries.
+The useful record is whether the learner completed the required state, what evidence was produced, and what follow-up is needed.
+
+== Example Flow
+
+[source,yaml]
+----
+states:
+  - id: intro
+    type: task
+    next: demonstrate
+  - id: demonstrate
+    type: task
+    next: practice
+  - id: practice
+    type: task
+    next: check
+  - id: check
+    type: task
+    transitions:
+      - trigger: passed
+        to: complete
+      - trigger: needs_review
+        to: review
+  - id: review
+    type: task
+    next: practice
+  - id: complete
+    type: final
+----
+
+This keeps training inside the same durable orchestration model as production runbooks.
+The difference is the runbook's content: it teaches, checks, and routes evidence instead of only completing operational work.

@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Runs memory settings widget tests.
 void main() {
-  testWidgets('memory settings expose structured domain access controls', (
+  testWidgets('memory settings expose structured domain controls', (
     tester,
   ) async {
     final controller = AgentAwesomeAppController(config: _testConfig());
@@ -33,17 +33,53 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('EFFECTIVE ACCESS'), findsOneWidget);
+    expect(find.text('Project Memory'), findsOneWidget);
+    expect(find.text('Auto-start server'), findsOneWidget);
+    expect(find.text('Memory domain enabled'), findsOneWidget);
+    expect(find.text('MCP endpoint'), findsWidgets);
+    expect(find.text('Health URL'), findsWidgets);
+    expect(find.text('Name'), findsOneWidget);
+    expect(find.text('EFFECTIVE ACCESS'), findsNothing);
+    expect(find.text('Readable domains'), findsNothing);
+  });
 
-    await tester.drag(find.byType(ListView).last, const Offset(0, -700));
+  testWidgets('memory settings offer local and cloud domain creation paths', (
+    tester,
+  ) async {
+    final controller = AgentAwesomeAppController(config: _testConfig());
+    controller.runtimeProfile = _multiMemoryProfile();
+    controller.runtimeProfilePath = '/tmp/runtime-profile.json';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 1200,
+            height: 900,
+            child: SettingsCommandSubShell(
+              controller: controller,
+              selectedSection: 'Memory',
+              onSectionSelected: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('Readable domains'), findsOneWidget);
-    expect(find.text('Writable domains'), findsOneWidget);
-    expect(find.text('Allowed sensitivities'), findsOneWidget);
-    expect(find.text('Allowed flows'), findsOneWidget);
-    expect(find.text('Default write domain'), findsOneWidget);
-    expect(find.text('Personal Memory -> Project Memory'), findsOneWidget);
+    await tester.tap(find.byTooltip('Add memory domain'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Local memory'), findsOneWidget);
+    expect(find.text('Cloud memory'), findsOneWidget);
+
+    await tester.tap(find.text('Cloud memory'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Cloud memory'), findsOneWidget);
+    expect(find.text('MCP endpoint'), findsWidgets);
+    expect(find.text('Health URL'), findsWidgets);
+    expect(find.text('Connect'), findsOneWidget);
   });
 }
 
