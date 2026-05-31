@@ -22,7 +22,7 @@ import (
 const maxSlackRequestBytes = 1 << 20
 const defaultMaxConcurrentDispatches = 4
 const slackFailurePostTimeout = 10 * time.Second
-const slackRuntimePolicyText = "Slack can use configured memory tools for shared memory and task operations when the authorized Slack user asks for them. When the user asks for a codebase change, use Operations tools such as coding_change_start or operation_start instead of direct source-control write tools. Resolve the codebase by name or ask one concise clarifying question when the match is ambiguous. Slack cannot present interactive tool confirmation prompts; if the runtime unexpectedly requests confirmation, deny that confirmation and tell the user no changes were made."
+const slackRuntimePolicyText = "Slack can use configured memory tools for shared memory and task launchpad when the authorized Slack user asks for them. When the user asks for a codebase change, use Launchpad tools such as coding_change_start or launchpad_start instead of direct source-control write tools. Resolve the codebase by name or ask one concise clarifying question when the match is ambiguous. Slack cannot present interactive tool confirmation prompts; if the runtime unexpectedly requests confirmation, deny that confirmation and tell the user no changes were made."
 
 var errSlackDispatchThrottled = errors.New("slack dispatch throttled")
 

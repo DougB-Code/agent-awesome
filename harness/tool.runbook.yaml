@@ -1,0 +1,3704 @@
+# This file configures runbook control tools for Agent Awesome.
+local-exec:
+  enabled: false
+  default-timeout: 10s
+  default-max-output-bytes: 65536
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8090/mcp
+      require-confirmation-tools:
+        - remember
+        - save_memory_candidate
+        - refresh_compiled_page
+        - repair_memory_record
+        - submit_memory_correction
+        - query_context_graph
+        - mutate_context_graph
+        - create_task
+        - update_task
+        - upsert_codebase
+        - complete_task
+        - cancel_task
+        - delete_task
+        - delete_codebase
+        - link_task_memory
+        - upsert_task_relation
+        - delete_task_relation
+      tools:
+        allow:
+          - remember
+          - save_memory_candidate
+          - search_memory
+          - search_sources
+          - load_entity_page
+          - load_timeline
+          - refresh_compiled_page
+          - repair_memory_record
+          - submit_memory_correction
+          - query_context_graph
+          - mutate_context_graph
+          - create_task
+          - get_task
+          - list_tasks
+          - task_graph_projection
+          - project_executive_summary
+          - explain_executive_summary_item
+          - upsert_codebase
+          - get_codebase
+          - list_codebases
+          - resolve_codebase
+          - delete_codebase
+          - update_task
+          - complete_task
+          - cancel_task
+          - delete_task
+          - link_task_memory
+          - list_task_relations
+          - traverse_task_relations
+          - upsert_task_relation
+          - delete_task_relation
+    - name: runbook
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8092/mcp
+      tools:
+        allow:
+          - runbook_list
+          - runbook_describe
+          - runbook_start
+          - runbook_status
+          - runbook_signal
+          - runbook_cancel
+          - runbook_history
+          - runbook_action_types
+          - runbook_draft_create
+          - runbook_draft_update
+          - runbook_draft_validate
+          - runbook_draft_publish
+    - name: launchpad
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8092/api/launchpad/mcp
+      tools:
+        allow:
+          - launchpad_list
+          - launchpad_get
+          - launchpad_start
+          - coding_change_start
+    - name: sourcecontrol
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8095/mcp
+      require-confirmation-tools:
+        - sourcecontrol.commit
+        - sourcecontrol.push
+        - sourcecontrol.open_pull_request
+        - sourcecontrol.restore
+        - sourcecontrol.cleanup_worktree
+      tools:
+        allow:
+          - sourcecontrol.inspect_repository
+          - sourcecontrol.validate_repository
+          - sourcecontrol.prepare_worktree
+          - sourcecontrol.status
+          - sourcecontrol.commit
+          - sourcecontrol.push
+          - sourcecontrol.open_pull_request
+          - sourcecontrol.backup
+          - sourcecontrol.restore
+          - sourcecontrol.cleanup_worktree
+memory:
+  actor: agent:agent-awesome
+  read-domains:
+    - id: memory
+      label: Memory
+      endpoint: http://127.0.0.1:8090/mcp
+  write-domains:
+    - memory
+  default-write-domain: memory
+  allowed-sensitivities:
+    - public
+    - internal
+    - private
+node-presets:
+  - id: sourcecontrol_prepare_worktree
+    label: Prepare worktree
+    surface: mcp
+    action: mcp.call
+    description: Prepare a source-control-managed Git worktree.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_commit
+    label: Commit worktree
+    surface: mcp
+    action: mcp.call
+    description: Commit changes in a prepared source-control worktree.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.commit
+  - id: sourcecontrol_push
+    label: Push branch
+    surface: mcp
+    action: mcp.call
+    description: Push the prepared worktree branch to a configured remote.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.push
+  - id: sourcecontrol_open_pull_request
+    label: Open pull request
+    surface: mcp
+    action: mcp.call
+    description: Open a pull request for a prepared source-control branch.
+    arguments:
+      server_id: sourcecontrol
+      tool: sourcecontrol.open_pull_request
+validations:
+  - id: sourcecontrol_prepare_success
+    label: Prepare success
+    mode: mocked
+    target:
+      type: runbook-node
+      preset-id: sourcecontrol_prepare_worktree
+    description: Source-control boundary returns prepared branch metadata.
+    input:
+      repository_path: /tmp/repository
+      branch_summary: example change
+    mocks:
+      mcp.call:
+        status: succeeded
+        body:
+          value:
+            branch: aa-example-change
+            worktree_path: /tmp/worktree
+    expected:
+      status: succeeded
+
+  - id: sourcecontrol_commit_runbook_mocked
+    label: runbook invokes sourcecontrol commit
+    mode: mocked
+    target:
+      type: runbook-node
+      preset-id: sourcecontrol_commit
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          preset: sourcecontrol_commit
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.preset
+        equals: sourcecontrol_commit
+  - id: sourcecontrol_push_runbook_mocked
+    label: runbook invokes sourcecontrol push
+    mode: mocked
+    target:
+      type: runbook-node
+      preset-id: sourcecontrol_push
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          preset: sourcecontrol_push
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.preset
+        equals: sourcecontrol_push
+  - id: sourcecontrol_open_pull_request_runbook_mocked
+    label: runbook invokes sourcecontrol open pull request
+    mode: mocked
+    target:
+      type: runbook-node
+      preset-id: sourcecontrol_open_pull_request
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          preset: sourcecontrol_open_pull_request
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.preset
+        equals: sourcecontrol_open_pull_request
+  - id: memory_remember_mcp_mocked
+    label: memory remember MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: remember
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: remember
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: remember
+  - id: memory_remember_agent_mocked
+    label: agent selects memory remember
+    mode: mocked
+    prompt: Use memory.remember.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: remember
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.remember
+          arguments:
+            server_id: memory
+            tool: remember
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: remember
+  - id: memory_remember_runbook_mocked
+    label: runbook invokes memory remember
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: remember
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: remember
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: remember
+  - id: memory_save_memory_candidate_mcp_mocked
+    label: memory save memory candidate MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: save_memory_candidate
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: save_memory_candidate
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: save_memory_candidate
+  - id: memory_save_memory_candidate_agent_mocked
+    label: agent selects memory save memory candidate
+    mode: mocked
+    prompt: Use memory.save_memory_candidate.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: save_memory_candidate
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.save_memory_candidate
+          arguments:
+            server_id: memory
+            tool: save_memory_candidate
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: save_memory_candidate
+  - id: memory_save_memory_candidate_runbook_mocked
+    label: runbook invokes memory save memory candidate
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: save_memory_candidate
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: save_memory_candidate
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: save_memory_candidate
+  - id: memory_search_memory_mcp_mocked
+    label: memory search memory MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_memory
+  - id: memory_search_memory_agent_mocked
+    label: agent selects memory search memory
+    mode: mocked
+    prompt: Use memory.search_memory.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.search_memory
+          arguments:
+            server_id: memory
+            tool: search_memory
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: search_memory
+  - id: memory_search_memory_runbook_mocked
+    label: runbook invokes memory search memory
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: search_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_memory
+  - id: memory_search_sources_mcp_mocked
+    label: memory search sources MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: search_sources
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_sources
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_sources
+  - id: memory_search_sources_agent_mocked
+    label: agent selects memory search sources
+    mode: mocked
+    prompt: Use memory.search_sources.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: search_sources
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.search_sources
+          arguments:
+            server_id: memory
+            tool: search_sources
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: search_sources
+  - id: memory_search_sources_runbook_mocked
+    label: runbook invokes memory search sources
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: search_sources
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: search_sources
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: search_sources
+  - id: memory_load_entity_page_mcp_mocked
+    label: memory load entity page MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: load_entity_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_entity_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_entity_page
+  - id: memory_load_entity_page_agent_mocked
+    label: agent selects memory load entity page
+    mode: mocked
+    prompt: Use memory.load_entity_page.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: load_entity_page
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.load_entity_page
+          arguments:
+            server_id: memory
+            tool: load_entity_page
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: load_entity_page
+  - id: memory_load_entity_page_runbook_mocked
+    label: runbook invokes memory load entity page
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: load_entity_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_entity_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_entity_page
+  - id: memory_load_timeline_mcp_mocked
+    label: memory load timeline MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: load_timeline
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_timeline
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_timeline
+  - id: memory_load_timeline_agent_mocked
+    label: agent selects memory load timeline
+    mode: mocked
+    prompt: Use memory.load_timeline.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: load_timeline
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.load_timeline
+          arguments:
+            server_id: memory
+            tool: load_timeline
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: load_timeline
+  - id: memory_load_timeline_runbook_mocked
+    label: runbook invokes memory load timeline
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: load_timeline
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: load_timeline
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: load_timeline
+  - id: memory_refresh_compiled_page_mcp_mocked
+    label: memory refresh compiled page MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: refresh_compiled_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: refresh_compiled_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: refresh_compiled_page
+  - id: memory_refresh_compiled_page_agent_mocked
+    label: agent selects memory refresh compiled page
+    mode: mocked
+    prompt: Use memory.refresh_compiled_page.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: refresh_compiled_page
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.refresh_compiled_page
+          arguments:
+            server_id: memory
+            tool: refresh_compiled_page
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: refresh_compiled_page
+  - id: memory_refresh_compiled_page_runbook_mocked
+    label: runbook invokes memory refresh compiled page
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: refresh_compiled_page
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: refresh_compiled_page
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: refresh_compiled_page
+  - id: memory_repair_memory_record_mcp_mocked
+    label: memory repair memory record MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: repair_memory_record
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: repair_memory_record
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: repair_memory_record
+  - id: memory_repair_memory_record_agent_mocked
+    label: agent selects memory repair memory record
+    mode: mocked
+    prompt: Use memory.repair_memory_record.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: repair_memory_record
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.repair_memory_record
+          arguments:
+            server_id: memory
+            tool: repair_memory_record
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: repair_memory_record
+  - id: memory_repair_memory_record_runbook_mocked
+    label: runbook invokes memory repair memory record
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: repair_memory_record
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: repair_memory_record
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: repair_memory_record
+  - id: memory_submit_memory_correction_mcp_mocked
+    label: memory submit memory correction MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: submit_memory_correction
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: submit_memory_correction
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: submit_memory_correction
+  - id: memory_submit_memory_correction_agent_mocked
+    label: agent selects memory submit memory correction
+    mode: mocked
+    prompt: Use memory.submit_memory_correction.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: submit_memory_correction
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.submit_memory_correction
+          arguments:
+            server_id: memory
+            tool: submit_memory_correction
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: submit_memory_correction
+  - id: memory_submit_memory_correction_runbook_mocked
+    label: runbook invokes memory submit memory correction
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: submit_memory_correction
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: submit_memory_correction
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: submit_memory_correction
+  - id: memory_query_context_graph_mcp_mocked
+    label: memory query context graph MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: query_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: query_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: query_context_graph
+  - id: memory_query_context_graph_agent_mocked
+    label: agent selects memory query context graph
+    mode: mocked
+    prompt: Use memory.query_context_graph.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: query_context_graph
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.query_context_graph
+          arguments:
+            server_id: memory
+            tool: query_context_graph
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: query_context_graph
+  - id: memory_query_context_graph_runbook_mocked
+    label: runbook invokes memory query context graph
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: query_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: query_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: query_context_graph
+  - id: memory_mutate_context_graph_mcp_mocked
+    label: memory mutate context graph MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: mutate_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: mutate_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: mutate_context_graph
+  - id: memory_mutate_context_graph_agent_mocked
+    label: agent selects memory mutate context graph
+    mode: mocked
+    prompt: Use memory.mutate_context_graph.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: mutate_context_graph
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.mutate_context_graph
+          arguments:
+            server_id: memory
+            tool: mutate_context_graph
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: mutate_context_graph
+  - id: memory_mutate_context_graph_runbook_mocked
+    label: runbook invokes memory mutate context graph
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: mutate_context_graph
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: mutate_context_graph
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: mutate_context_graph
+  - id: memory_create_task_mcp_mocked
+    label: memory create task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: create_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: create_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: create_task
+  - id: memory_create_task_agent_mocked
+    label: agent selects memory create task
+    mode: mocked
+    prompt: Use memory.create_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: create_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.create_task
+          arguments:
+            server_id: memory
+            tool: create_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: create_task
+  - id: memory_create_task_runbook_mocked
+    label: runbook invokes memory create task
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: create_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: create_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: create_task
+  - id: memory_get_task_mcp_mocked
+    label: memory get task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: get_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: get_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: get_task
+  - id: memory_get_task_agent_mocked
+    label: agent selects memory get task
+    mode: mocked
+    prompt: Use memory.get_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: get_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.get_task
+          arguments:
+            server_id: memory
+            tool: get_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: get_task
+  - id: memory_get_task_runbook_mocked
+    label: runbook invokes memory get task
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: get_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: get_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: get_task
+  - id: memory_list_tasks_mcp_mocked
+    label: memory list tasks MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: list_tasks
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_tasks
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_tasks
+  - id: memory_list_tasks_agent_mocked
+    label: agent selects memory list tasks
+    mode: mocked
+    prompt: Use memory.list_tasks.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: list_tasks
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.list_tasks
+          arguments:
+            server_id: memory
+            tool: list_tasks
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: list_tasks
+  - id: memory_list_tasks_runbook_mocked
+    label: runbook invokes memory list tasks
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: list_tasks
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_tasks
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_tasks
+  - id: memory_task_graph_projection_mcp_mocked
+    label: memory task graph projection MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: task_graph_projection
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: task_graph_projection
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: task_graph_projection
+  - id: memory_task_graph_projection_agent_mocked
+    label: agent selects memory task graph projection
+    mode: mocked
+    prompt: Use memory.task_graph_projection.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: task_graph_projection
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.task_graph_projection
+          arguments:
+            server_id: memory
+            tool: task_graph_projection
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: task_graph_projection
+  - id: memory_task_graph_projection_runbook_mocked
+    label: runbook invokes memory task graph projection
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: task_graph_projection
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: task_graph_projection
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: task_graph_projection
+  - id: memory_project_executive_summary_mcp_mocked
+    label: memory project executive summary MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: project_executive_summary
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: project_executive_summary
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: project_executive_summary
+  - id: memory_project_executive_summary_agent_mocked
+    label: agent selects memory project executive summary
+    mode: mocked
+    prompt: Use memory.project_executive_summary.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: project_executive_summary
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.project_executive_summary
+          arguments:
+            server_id: memory
+            tool: project_executive_summary
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: project_executive_summary
+  - id: memory_project_executive_summary_runbook_mocked
+    label: runbook invokes memory project executive summary
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: project_executive_summary
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: project_executive_summary
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: project_executive_summary
+  - id: memory_explain_executive_summary_item_mcp_mocked
+    label: memory explain executive summary item MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: explain_executive_summary_item
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: explain_executive_summary_item
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: explain_executive_summary_item
+  - id: memory_explain_executive_summary_item_agent_mocked
+    label: agent selects memory explain executive summary item
+    mode: mocked
+    prompt: Use memory.explain_executive_summary_item.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: explain_executive_summary_item
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.explain_executive_summary_item
+          arguments:
+            server_id: memory
+            tool: explain_executive_summary_item
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: explain_executive_summary_item
+  - id: memory_explain_executive_summary_item_runbook_mocked
+    label: runbook invokes memory explain executive summary item
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: explain_executive_summary_item
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: explain_executive_summary_item
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: explain_executive_summary_item
+  - id: memory_upsert_codebase_mcp_mocked
+    label: memory upsert codebase MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: upsert_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: upsert_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: upsert_codebase
+  - id: memory_upsert_codebase_agent_mocked
+    label: agent selects memory upsert codebase
+    mode: mocked
+    prompt: Use memory.upsert_codebase.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: upsert_codebase
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.upsert_codebase
+          arguments:
+            server_id: memory
+            tool: upsert_codebase
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: upsert_codebase
+  - id: memory_upsert_codebase_runbook_mocked
+    label: runbook invokes memory upsert codebase
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: upsert_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: upsert_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: upsert_codebase
+  - id: memory_get_codebase_mcp_mocked
+    label: memory get codebase MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: get_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: get_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: get_codebase
+  - id: memory_get_codebase_agent_mocked
+    label: agent selects memory get codebase
+    mode: mocked
+    prompt: Use memory.get_codebase.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: get_codebase
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.get_codebase
+          arguments:
+            server_id: memory
+            tool: get_codebase
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: get_codebase
+  - id: memory_get_codebase_runbook_mocked
+    label: runbook invokes memory get codebase
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: get_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: get_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: get_codebase
+  - id: memory_list_codebases_mcp_mocked
+    label: memory list codebases MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: list_codebases
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_codebases
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_codebases
+  - id: memory_list_codebases_agent_mocked
+    label: agent selects memory list codebases
+    mode: mocked
+    prompt: Use memory.list_codebases.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: list_codebases
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.list_codebases
+          arguments:
+            server_id: memory
+            tool: list_codebases
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: list_codebases
+  - id: memory_list_codebases_runbook_mocked
+    label: runbook invokes memory list codebases
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: list_codebases
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_codebases
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_codebases
+  - id: memory_resolve_codebase_mcp_mocked
+    label: memory resolve codebase MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: resolve_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: resolve_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: resolve_codebase
+  - id: memory_resolve_codebase_agent_mocked
+    label: agent selects memory resolve codebase
+    mode: mocked
+    prompt: Use memory.resolve_codebase.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: resolve_codebase
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.resolve_codebase
+          arguments:
+            server_id: memory
+            tool: resolve_codebase
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: resolve_codebase
+  - id: memory_resolve_codebase_runbook_mocked
+    label: runbook invokes memory resolve codebase
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: resolve_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: resolve_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: resolve_codebase
+  - id: memory_delete_codebase_mcp_mocked
+    label: memory delete codebase MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: delete_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_codebase
+  - id: memory_delete_codebase_agent_mocked
+    label: agent selects memory delete codebase
+    mode: mocked
+    prompt: Use memory.delete_codebase.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: delete_codebase
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.delete_codebase
+          arguments:
+            server_id: memory
+            tool: delete_codebase
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: delete_codebase
+  - id: memory_delete_codebase_runbook_mocked
+    label: runbook invokes memory delete codebase
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: delete_codebase
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_codebase
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_codebase
+  - id: memory_update_task_mcp_mocked
+    label: memory update task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: update_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: update_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: update_task
+  - id: memory_update_task_agent_mocked
+    label: agent selects memory update task
+    mode: mocked
+    prompt: Use memory.update_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: update_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.update_task
+          arguments:
+            server_id: memory
+            tool: update_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: update_task
+  - id: memory_update_task_runbook_mocked
+    label: runbook invokes memory update task
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: update_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: update_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: update_task
+  - id: memory_complete_task_mcp_mocked
+    label: memory complete task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: complete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: complete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: complete_task
+  - id: memory_complete_task_agent_mocked
+    label: agent selects memory complete task
+    mode: mocked
+    prompt: Use memory.complete_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: complete_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.complete_task
+          arguments:
+            server_id: memory
+            tool: complete_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: complete_task
+  - id: memory_complete_task_runbook_mocked
+    label: runbook invokes memory complete task
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: complete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: complete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: complete_task
+  - id: memory_cancel_task_mcp_mocked
+    label: memory cancel task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: cancel_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: cancel_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: cancel_task
+  - id: memory_cancel_task_agent_mocked
+    label: agent selects memory cancel task
+    mode: mocked
+    prompt: Use memory.cancel_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: cancel_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.cancel_task
+          arguments:
+            server_id: memory
+            tool: cancel_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: cancel_task
+  - id: memory_cancel_task_runbook_mocked
+    label: runbook invokes memory cancel task
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: cancel_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: cancel_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: cancel_task
+  - id: memory_delete_task_mcp_mocked
+    label: memory delete task MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: delete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task
+  - id: memory_delete_task_agent_mocked
+    label: agent selects memory delete task
+    mode: mocked
+    prompt: Use memory.delete_task.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: delete_task
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.delete_task
+          arguments:
+            server_id: memory
+            tool: delete_task
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: delete_task
+  - id: memory_delete_task_runbook_mocked
+    label: runbook invokes memory delete task
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: delete_task
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task
+  - id: memory_link_task_memory_mcp_mocked
+    label: memory link task memory MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: link_task_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: link_task_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: link_task_memory
+  - id: memory_link_task_memory_agent_mocked
+    label: agent selects memory link task memory
+    mode: mocked
+    prompt: Use memory.link_task_memory.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: link_task_memory
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.link_task_memory
+          arguments:
+            server_id: memory
+            tool: link_task_memory
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: link_task_memory
+  - id: memory_link_task_memory_runbook_mocked
+    label: runbook invokes memory link task memory
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: link_task_memory
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: link_task_memory
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: link_task_memory
+  - id: memory_list_task_relations_mcp_mocked
+    label: memory list task relations MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: list_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_task_relations
+  - id: memory_list_task_relations_agent_mocked
+    label: agent selects memory list task relations
+    mode: mocked
+    prompt: Use memory.list_task_relations.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: list_task_relations
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.list_task_relations
+          arguments:
+            server_id: memory
+            tool: list_task_relations
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: list_task_relations
+  - id: memory_list_task_relations_runbook_mocked
+    label: runbook invokes memory list task relations
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: list_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: list_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: list_task_relations
+  - id: memory_traverse_task_relations_mcp_mocked
+    label: memory traverse task relations MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: traverse_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: traverse_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: traverse_task_relations
+  - id: memory_traverse_task_relations_agent_mocked
+    label: agent selects memory traverse task relations
+    mode: mocked
+    prompt: Use memory.traverse_task_relations.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: traverse_task_relations
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.traverse_task_relations
+          arguments:
+            server_id: memory
+            tool: traverse_task_relations
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: traverse_task_relations
+  - id: memory_traverse_task_relations_runbook_mocked
+    label: runbook invokes memory traverse task relations
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: traverse_task_relations
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: traverse_task_relations
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: traverse_task_relations
+  - id: memory_upsert_task_relation_mcp_mocked
+    label: memory upsert task relation MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: upsert_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: upsert_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: upsert_task_relation
+  - id: memory_upsert_task_relation_agent_mocked
+    label: agent selects memory upsert task relation
+    mode: mocked
+    prompt: Use memory.upsert_task_relation.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: upsert_task_relation
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.upsert_task_relation
+          arguments:
+            server_id: memory
+            tool: upsert_task_relation
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: upsert_task_relation
+  - id: memory_upsert_task_relation_runbook_mocked
+    label: runbook invokes memory upsert task relation
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: upsert_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: upsert_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: upsert_task_relation
+  - id: memory_delete_task_relation_mcp_mocked
+    label: memory delete task relation MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: memory
+      mcp-tool: delete_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task_relation
+  - id: memory_delete_task_relation_agent_mocked
+    label: agent selects memory delete task relation
+    mode: mocked
+    prompt: Use memory.delete_task_relation.
+    target:
+      type: agent-tool-call
+      mcp-server: memory
+      mcp-tool: delete_task_relation
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: memory.delete_task_relation
+          arguments:
+            server_id: memory
+            tool: delete_task_relation
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: delete_task_relation
+  - id: memory_delete_task_relation_runbook_mocked
+    label: runbook invokes memory delete task relation
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: memory
+      mcp-tool: delete_task_relation
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: memory
+          tool: delete_task_relation
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: delete_task_relation
+  - id: runbook_runbook_list_mcp_mocked
+    label: runbook runbook list MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_list
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_list
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_list
+  - id: runbook_runbook_list_agent_mocked
+    label: agent selects runbook runbook list
+    mode: mocked
+    prompt: Use runbook.runbook_list.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_list
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_list
+          arguments:
+            server_id: runbook
+            tool: runbook_list
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_list
+  - id: runbook_runbook_list_runbook_mocked
+    label: runbook invokes runbook runbook list
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_list
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_list
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_list
+  - id: runbook_runbook_describe_mcp_mocked
+    label: runbook runbook describe MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_describe
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_describe
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_describe
+  - id: runbook_runbook_describe_agent_mocked
+    label: agent selects runbook runbook describe
+    mode: mocked
+    prompt: Use runbook.runbook_describe.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_describe
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_describe
+          arguments:
+            server_id: runbook
+            tool: runbook_describe
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_describe
+  - id: runbook_runbook_describe_runbook_mocked
+    label: runbook invokes runbook runbook describe
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_describe
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_describe
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_describe
+  - id: runbook_runbook_start_mcp_mocked
+    label: runbook runbook start MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_start
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_start
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_start
+  - id: runbook_runbook_start_agent_mocked
+    label: agent selects runbook runbook start
+    mode: mocked
+    prompt: Use runbook.runbook_start.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_start
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_start
+          arguments:
+            server_id: runbook
+            tool: runbook_start
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_start
+  - id: runbook_runbook_start_runbook_mocked
+    label: runbook invokes runbook runbook start
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_start
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_start
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_start
+  - id: runbook_runbook_status_mcp_mocked
+    label: runbook runbook status MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_status
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_status
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_status
+  - id: runbook_runbook_status_agent_mocked
+    label: agent selects runbook runbook status
+    mode: mocked
+    prompt: Use runbook.runbook_status.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_status
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_status
+          arguments:
+            server_id: runbook
+            tool: runbook_status
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_status
+  - id: runbook_runbook_status_runbook_mocked
+    label: runbook invokes runbook runbook status
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_status
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_status
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_status
+  - id: runbook_runbook_signal_mcp_mocked
+    label: runbook runbook signal MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_signal
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_signal
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_signal
+  - id: runbook_runbook_signal_agent_mocked
+    label: agent selects runbook runbook signal
+    mode: mocked
+    prompt: Use runbook.runbook_signal.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_signal
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_signal
+          arguments:
+            server_id: runbook
+            tool: runbook_signal
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_signal
+  - id: runbook_runbook_signal_runbook_mocked
+    label: runbook invokes runbook runbook signal
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_signal
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_signal
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_signal
+  - id: runbook_runbook_cancel_mcp_mocked
+    label: runbook runbook cancel MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_cancel
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_cancel
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_cancel
+  - id: runbook_runbook_cancel_agent_mocked
+    label: agent selects runbook runbook cancel
+    mode: mocked
+    prompt: Use runbook.runbook_cancel.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_cancel
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_cancel
+          arguments:
+            server_id: runbook
+            tool: runbook_cancel
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_cancel
+  - id: runbook_runbook_cancel_runbook_mocked
+    label: runbook invokes runbook runbook cancel
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_cancel
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_cancel
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_cancel
+  - id: runbook_runbook_history_mcp_mocked
+    label: runbook runbook history MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_history
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_history
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_history
+  - id: runbook_runbook_history_agent_mocked
+    label: agent selects runbook runbook history
+    mode: mocked
+    prompt: Use runbook.runbook_history.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_history
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_history
+          arguments:
+            server_id: runbook
+            tool: runbook_history
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_history
+  - id: runbook_runbook_history_runbook_mocked
+    label: runbook invokes runbook runbook history
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_history
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_history
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_history
+  - id: runbook_runbook_action_types_mcp_mocked
+    label: runbook runbook action types MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_action_types
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_action_types
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_action_types
+  - id: runbook_runbook_action_types_agent_mocked
+    label: agent selects runbook runbook action types
+    mode: mocked
+    prompt: Use runbook.runbook_action_types.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_action_types
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_action_types
+          arguments:
+            server_id: runbook
+            tool: runbook_action_types
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_action_types
+  - id: runbook_runbook_action_types_runbook_mocked
+    label: runbook invokes runbook runbook action types
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_action_types
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_action_types
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_action_types
+  - id: runbook_runbook_draft_create_mcp_mocked
+    label: runbook runbook draft create MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_draft_create
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_create
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_create
+  - id: runbook_runbook_draft_create_agent_mocked
+    label: agent selects runbook runbook draft create
+    mode: mocked
+    prompt: Use runbook.runbook_draft_create.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_draft_create
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_draft_create
+          arguments:
+            server_id: runbook
+            tool: runbook_draft_create
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_draft_create
+  - id: runbook_runbook_draft_create_runbook_mocked
+    label: runbook invokes runbook runbook draft create
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_draft_create
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_create
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_create
+  - id: runbook_runbook_draft_update_mcp_mocked
+    label: runbook runbook draft update MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_draft_update
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_update
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_update
+  - id: runbook_runbook_draft_update_agent_mocked
+    label: agent selects runbook runbook draft update
+    mode: mocked
+    prompt: Use runbook.runbook_draft_update.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_draft_update
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_draft_update
+          arguments:
+            server_id: runbook
+            tool: runbook_draft_update
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_draft_update
+  - id: runbook_runbook_draft_update_runbook_mocked
+    label: runbook invokes runbook runbook draft update
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_draft_update
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_update
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_update
+  - id: runbook_runbook_draft_validate_mcp_mocked
+    label: runbook runbook draft validate MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_draft_validate
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_validate
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_validate
+  - id: runbook_runbook_draft_validate_agent_mocked
+    label: agent selects runbook runbook draft validate
+    mode: mocked
+    prompt: Use runbook.runbook_draft_validate.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_draft_validate
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_draft_validate
+          arguments:
+            server_id: runbook
+            tool: runbook_draft_validate
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_draft_validate
+  - id: runbook_runbook_draft_validate_runbook_mocked
+    label: runbook invokes runbook runbook draft validate
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_draft_validate
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_validate
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_validate
+  - id: runbook_runbook_draft_publish_mcp_mocked
+    label: runbook runbook draft publish MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: runbook
+      mcp-tool: runbook_draft_publish
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_publish
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_publish
+  - id: runbook_runbook_draft_publish_agent_mocked
+    label: agent selects runbook runbook draft publish
+    mode: mocked
+    prompt: Use runbook.runbook_draft_publish.
+    target:
+      type: agent-tool-call
+      mcp-server: runbook
+      mcp-tool: runbook_draft_publish
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: runbook.runbook_draft_publish
+          arguments:
+            server_id: runbook
+            tool: runbook_draft_publish
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: runbook_draft_publish
+  - id: runbook_runbook_draft_publish_runbook_mocked
+    label: runbook invokes runbook runbook draft publish
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: runbook
+      mcp-tool: runbook_draft_publish
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: runbook
+          tool: runbook_draft_publish
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: runbook_draft_publish
+  - id: launchpad_launchpad_list_mcp_mocked
+    label: launchpad launch list MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: launchpad
+      mcp-tool: launchpad_list
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: launchpad_list
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: launchpad_list
+  - id: launchpad_launchpad_list_agent_mocked
+    label: agent selects launchpad launch list
+    mode: mocked
+    prompt: Use launchpad.launchpad_list.
+    target:
+      type: agent-tool-call
+      mcp-server: launchpad
+      mcp-tool: launchpad_list
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: launchpad.launchpad_list
+          arguments:
+            server_id: launchpad
+            tool: launchpad_list
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: launchpad_list
+  - id: launchpad_launchpad_list_runbook_mocked
+    label: runbook invokes launchpad launch list
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: launchpad
+      mcp-tool: launchpad_list
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: launchpad_list
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: launchpad_list
+  - id: launchpad_launchpad_get_mcp_mocked
+    label: launchpad launch get MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: launchpad
+      mcp-tool: launchpad_get
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: launchpad_get
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: launchpad_get
+  - id: launchpad_launchpad_get_agent_mocked
+    label: agent selects launchpad launch get
+    mode: mocked
+    prompt: Use launchpad.launchpad_get.
+    target:
+      type: agent-tool-call
+      mcp-server: launchpad
+      mcp-tool: launchpad_get
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: launchpad.launchpad_get
+          arguments:
+            server_id: launchpad
+            tool: launchpad_get
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: launchpad_get
+  - id: launchpad_launchpad_get_runbook_mocked
+    label: runbook invokes launchpad launch get
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: launchpad
+      mcp-tool: launchpad_get
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: launchpad_get
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: launchpad_get
+  - id: launchpad_launchpad_start_mcp_mocked
+    label: launchpad launch start MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: launchpad
+      mcp-tool: launchpad_start
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: launchpad_start
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: launchpad_start
+  - id: launchpad_launchpad_start_agent_mocked
+    label: agent selects launchpad launch start
+    mode: mocked
+    prompt: Use launchpad.launchpad_start.
+    target:
+      type: agent-tool-call
+      mcp-server: launchpad
+      mcp-tool: launchpad_start
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: launchpad.launchpad_start
+          arguments:
+            server_id: launchpad
+            tool: launchpad_start
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: launchpad_start
+  - id: launchpad_launchpad_start_runbook_mocked
+    label: runbook invokes launchpad launch start
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: launchpad
+      mcp-tool: launchpad_start
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: launchpad_start
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: launchpad_start
+  - id: launchpad_coding_change_start_mcp_mocked
+    label: operations coding change start MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: launchpad
+      mcp-tool: coding_change_start
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: coding_change_start
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: coding_change_start
+  - id: launchpad_coding_change_start_agent_mocked
+    label: agent selects launchpad coding change start
+    mode: mocked
+    prompt: Use launchpad.coding_change_start.
+    target:
+      type: agent-tool-call
+      mcp-server: launchpad
+      mcp-tool: coding_change_start
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: launchpad.coding_change_start
+          arguments:
+            server_id: launchpad
+            tool: coding_change_start
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: coding_change_start
+  - id: launchpad_coding_change_start_runbook_mocked
+    label: runbook invokes launchpad coding change start
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: launchpad
+      mcp-tool: coding_change_start
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: launchpad
+          tool: coding_change_start
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: coding_change_start
+  - id: sourcecontrol_sourcecontrol_inspect_repository_mcp_mocked
+    label: sourcecontrol sourcecontrol.inspect repository MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.inspect_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.inspect_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.inspect_repository
+  - id: sourcecontrol_sourcecontrol_inspect_repository_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.inspect repository
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.inspect_repository.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.inspect_repository
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.inspect_repository
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.inspect_repository
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.inspect_repository
+  - id: sourcecontrol_sourcecontrol_inspect_repository_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.inspect repository
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.inspect_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.inspect_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.inspect_repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_mcp_mocked
+    label: sourcecontrol sourcecontrol.validate repository MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.validate_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.validate_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.validate_repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.validate repository
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.validate_repository.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.validate_repository
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.validate_repository
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.validate_repository
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.validate_repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.validate repository
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.validate_repository
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.validate_repository
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.validate_repository
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_mcp_mocked
+    label: sourcecontrol sourcecontrol.prepare worktree MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.prepare_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.prepare_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.prepare worktree
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.prepare_worktree.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.prepare_worktree
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.prepare_worktree
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.prepare_worktree
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.prepare worktree
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.prepare_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.prepare_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.prepare_worktree
+  - id: sourcecontrol_sourcecontrol_status_mcp_mocked
+    label: sourcecontrol sourcecontrol.status MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.status
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.status
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_status_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.status
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.status.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.status
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.status
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.status
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_status_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.status
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.status
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.status
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_commit_mcp_mocked
+    label: sourcecontrol sourcecontrol.commit MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.commit
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.commit
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_commit_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.commit
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.commit.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.commit
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.commit
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.commit
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_commit_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.commit
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.commit
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.commit
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_push_mcp_mocked
+    label: sourcecontrol sourcecontrol.push MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.push
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.push
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_push_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.push
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.push.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.push
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.push
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.push
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_push_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.push
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.push
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.push
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_open_pull_request_mcp_mocked
+    label: sourcecontrol sourcecontrol.open pull request MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.open_pull_request
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.open_pull_request
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.open_pull_request
+  - id: sourcecontrol_sourcecontrol_open_pull_request_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.open pull request
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.open_pull_request.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.open_pull_request
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.open_pull_request
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.open_pull_request
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.open_pull_request
+  - id: sourcecontrol_sourcecontrol_open_pull_request_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.open pull request
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.open_pull_request
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.open_pull_request
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.open_pull_request
+  - id: sourcecontrol_sourcecontrol_backup_mcp_mocked
+    label: sourcecontrol sourcecontrol.backup MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.backup
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.backup
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_backup_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.backup
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.backup.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.backup
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.backup
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.backup
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_backup_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.backup
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.backup
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.backup
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_restore_mcp_mocked
+    label: sourcecontrol sourcecontrol.restore MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.restore
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.restore
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_restore_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.restore
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.restore.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.restore
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.restore
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.restore
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_restore_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.restore
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.restore
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.restore
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_mcp_mocked
+    label: sourcecontrol sourcecontrol.cleanup worktree MCP call
+    mode: mocked
+    target:
+      type: mcp-tool
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.cleanup_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.cleanup_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.cleanup_worktree
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_agent_mocked
+    label: agent selects sourcecontrol sourcecontrol.cleanup worktree
+    mode: mocked
+    prompt: Use sourcecontrol.sourcecontrol.cleanup_worktree.
+    target:
+      type: agent-tool-call
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.cleanup_worktree
+    mocks:
+      agent.tool_call:
+        status: succeeded
+        output:
+          tool_name: sourcecontrol.sourcecontrol.cleanup_worktree
+          arguments:
+            server_id: sourcecontrol
+            tool: sourcecontrol.cleanup_worktree
+            parameters: {}
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.arguments.tool
+        equals: sourcecontrol.cleanup_worktree
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.cleanup worktree
+    mode: mocked
+    target:
+      type: runbook-node
+      mcp-server: sourcecontrol
+      mcp-tool: sourcecontrol.cleanup_worktree
+    mocks:
+      mcp.call:
+        status: succeeded
+        output:
+          server: sourcecontrol
+          tool: sourcecontrol.cleanup_worktree
+    expected:
+      status: succeeded
+    assertions:
+      - type: json-path
+        path: output.tool
+        equals: sourcecontrol.cleanup_worktree

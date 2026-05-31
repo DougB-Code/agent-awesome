@@ -77,7 +77,7 @@ func TestToolsValidateRequireCoverageFailsMissingTargets(t *testing.T) {
 			Coverage: toolvalidation.Coverage{
 				Required: 1,
 				Missing: []toolvalidation.CoverageItem{{
-					Type: "workflow-node",
+					Type: "runbook-node",
 					ID:   "rg_search",
 				}},
 			},
@@ -393,7 +393,7 @@ func TestToolsValidateDirectoryRequireCoverageMarksPackageFailed(t *testing.T) {
 			Coverage: toolvalidation.Coverage{
 				Required: 1,
 				Missing: []toolvalidation.CoverageItem{{
-					Type: "workflow-node",
+					Type: "runbook-node",
 					ID:   "rg.search_text",
 				}},
 			},
@@ -482,16 +482,16 @@ func TestToolValidationsNeedLiveMCPHostDetectsPreset(t *testing.T) {
 			Action: "mcp.call",
 		}},
 		Validations: []schema.ToolValidation{{
-			ID:   "memory_workflow_live",
+			ID:   "memory_runbook_live",
 			Mode: "live",
 			Target: schema.ToolValidationTarget{
-				Type:     "workflow-node",
+				Type:     "runbook-node",
 				PresetID: "memory_remember",
 			},
 		}},
 	}
 
-	if !toolValidationsNeedLiveMCPHost(tools, []string{"memory_workflow_live"}, "") {
+	if !toolValidationsNeedLiveMCPHost(tools, []string{"memory_runbook_live"}, "") {
 		t.Fatalf("toolValidationsNeedLiveMCPHost() = false, want true")
 	}
 	if toolValidationsNeedLiveMCPHost(tools, []string{"other"}, "") {
@@ -524,7 +524,7 @@ func TestToolsValidateWritesJUnitReport(t *testing.T) {
 			Coverage: toolvalidation.Coverage{
 				Required: 1,
 				Missing: []toolvalidation.CoverageItem{{
-					Type: "workflow-node",
+					Type: "runbook-node",
 					ID:   "rg.search_text",
 				}},
 			},
@@ -624,8 +624,8 @@ validations:
 	}
 }
 
-// TestRunToolValidationSuiteRunsLiveWorkflowNode verifies preset validation.
-func TestRunToolValidationSuiteRunsLiveWorkflowNode(t *testing.T) {
+// TestRunToolValidationSuiteRunsLiveRunbookNode verifies preset validation.
+func TestRunToolValidationSuiteRunsLiveRunbookNode(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "tool.yaml")
 	if err := os.WriteFile(path, []byte(`
 local-exec:
@@ -648,31 +648,31 @@ node-presets:
       parameters:
         path: '${path}'
 validations:
-  - id: cat_workflow_live
-    label: Cat workflow
+  - id: cat_runbook_live
+    label: Cat runbook
     mode: live
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: cat_read
     input:
       path: input.txt
     fixtures:
       files:
         - path: input.txt
-          content: workflow fixture text
+          content: runbook fixture text
     assertions:
       - type: stdout-contains
-        contains: workflow fixture text
+        contains: runbook fixture text
 `), 0o600); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 
-	result, err := runToolValidationSuite(context.Background(), path, []string{"cat_workflow_live"}, "")
+	result, err := runToolValidationSuite(context.Background(), path, []string{"cat_runbook_live"}, "")
 	if err != nil {
 		t.Fatalf("runToolValidationSuite() error = %v", err)
 	}
 	if result.Total != 1 || result.Passed != 1 {
-		t.Fatalf("runToolValidationSuite() = %#v, want one live workflow pass", result)
+		t.Fatalf("runToolValidationSuite() = %#v, want one live runbook pass", result)
 	}
 }
 

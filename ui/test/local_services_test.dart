@@ -218,7 +218,7 @@ void main() {
         '127.0.0.1:8070',
         '--context-api-addr',
         '[::1]:8081',
-        '--workflow-api-addr',
+        '--runbook-api-addr',
         '127.0.0.1:8092',
         '--',
         'web',

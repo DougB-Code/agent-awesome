@@ -1,3 +1,0 @@
-* Operations Docs
-** xref:operations:index.adoc[Overview]
-** xref:operations:local-run.adoc[Local Run]

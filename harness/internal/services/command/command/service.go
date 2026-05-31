@@ -120,7 +120,7 @@ type StatusResult struct {
 	Validation  ValidationResult `json:"validation,omitempty"`
 }
 
-// ExecuteRequest stores one workflow-friendly command execution request.
+// ExecuteRequest stores one runbook-friendly command execution request.
 type ExecuteRequest struct {
 	TemplateID string         `json:"template_id"`
 	Parameters map[string]any `json:"parameters,omitempty"`
@@ -241,7 +241,7 @@ func (s *Service) Execute(ctx context.Context, req ExecuteRequest) (StatusResult
 	return status, commandExecuteResultError(status)
 }
 
-// commandExecuteResultError converts unsuccessful workflow command results into errors.
+// commandExecuteResultError converts unsuccessful runbook command results into errors.
 func commandExecuteResultError(status StatusResult) error {
 	if status.Status != statusSucceeded {
 		return commandExecuteTerminalError(status)
@@ -257,7 +257,7 @@ func commandExecuteResultError(status StatusResult) error {
 	return nil
 }
 
-// commandExecuteTerminalError converts unsuccessful terminal jobs into workflow errors.
+// commandExecuteTerminalError converts unsuccessful terminal jobs into runbook errors.
 func commandExecuteTerminalError(status StatusResult) error {
 	detail := strings.TrimSpace(status.Error)
 	if detail == "" && status.ExitCode >= 0 {

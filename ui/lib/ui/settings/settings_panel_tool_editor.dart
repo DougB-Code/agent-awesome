@@ -487,7 +487,7 @@ class _SettingsToolConfigEditorState extends State<_SettingsToolConfigEditor> {
     }
   }
 
-  /// Opens validation authoring and saves direct plus workflow-envelope cases.
+  /// Opens validation authoring and saves direct plus runbook-envelope cases.
   Future<void> _addValidation(ToolConfigDocument document) async {
     final choices = _toolValidationAuthoringChoices(
       document,
@@ -1170,7 +1170,7 @@ String _toolValidationResultDescription(ToolValidationRunResult result) {
   final callable = _toolTargetCallableLabel(result.target);
   return switch (result.target.type) {
     'agent-tool-call' => 'Agent selects $callable.',
-    'workflow-node' => 'Workflow envelope for $callable.',
+    'runbook-node' => 'Runbook envelope for $callable.',
     'mcp-tool' => 'MCP call for $callable.',
     'command-operation' => 'Command operation for $callable.',
     _ => callable,
@@ -1218,7 +1218,7 @@ String _toolValidationScenarioDescription(ToolValidationConfig validation) {
   final callable = _validationTargetLabel(target);
   return switch (target.type) {
     'agent-tool-call' => 'Agent selects $callable.',
-    'workflow-node' => 'Workflow envelope for $callable.',
+    'runbook-node' => 'Runbook envelope for $callable.',
     'mcp-tool' => 'MCP call for $callable.',
     'command-operation' => 'Command operation for $callable.',
     _ => callable,
@@ -1741,7 +1741,7 @@ class SettingsToolValidationEvidenceView extends StatelessWidget {
   /// User-facing command or tool preview for the selected target.
   final String targetLabel;
 
-  /// Builds run evidence for command, agent-call, and workflow-node checks.
+  /// Builds run evidence for command, agent-call, and runbook-node checks.
   @override
   Widget build(BuildContext context) {
     final command = result.command;
@@ -2066,9 +2066,9 @@ class _ToolValidationAuthoringChoice {
     required this.target,
     required this.boundary,
     required this.input,
-    this.workflowTarget,
-    this.workflowBoundary = '',
-    this.workflowIdBase = '',
+    this.runbookTarget,
+    this.runbookBoundary = '',
+    this.runbookIdBase = '',
   });
 
   /// Short user-facing label shown in the target selector.
@@ -2089,14 +2089,14 @@ class _ToolValidationAuthoringChoice {
   /// Suggested input map for the selected target.
   final Map<String, dynamic> input;
 
-  /// Optional workflow envelope companion target created from the same fields.
-  final ToolValidationTargetConfig? workflowTarget;
+  /// Optional runbook envelope companion target created from the same fields.
+  final ToolValidationTargetConfig? runbookTarget;
 
-  /// Runtime boundary used by the companion workflow envelope validation.
-  final String workflowBoundary;
+  /// Runtime boundary used by the companion runbook envelope validation.
+  final String runbookBoundary;
 
-  /// Base id used for the companion workflow envelope validation.
-  final String workflowIdBase;
+  /// Base id used for the companion runbook envelope validation.
+  final String runbookIdBase;
 }
 
 /// _ToolValidationExpectedDraft stores user-authored result expectations.
@@ -2162,9 +2162,9 @@ class _ToolValidationDraft {
     required this.boundary,
     required this.input,
     required this.expected,
-    this.workflowTarget,
-    this.workflowBoundary = '',
-    this.workflowIdBase = '',
+    this.runbookTarget,
+    this.runbookBoundary = '',
+    this.runbookIdBase = '',
   });
 
   /// Base id used when creating the validation record.
@@ -2185,14 +2185,14 @@ class _ToolValidationDraft {
   /// Expected result checks configured by the user.
   final _ToolValidationExpectedDraft expected;
 
-  /// Optional workflow envelope target created from the same authored fields.
-  final ToolValidationTargetConfig? workflowTarget;
+  /// Optional runbook envelope target created from the same authored fields.
+  final ToolValidationTargetConfig? runbookTarget;
 
-  /// Runtime boundary used by the companion workflow envelope validation.
-  final String workflowBoundary;
+  /// Runtime boundary used by the companion runbook envelope validation.
+  final String runbookBoundary;
 
-  /// Base id used for the companion workflow envelope validation.
-  final String workflowIdBase;
+  /// Base id used for the companion runbook envelope validation.
+  final String runbookIdBase;
 }
 
 /// _ToolValidationDraftDialog collects one validation case from the user.
@@ -2433,9 +2433,9 @@ class _ToolValidationDraftDialogState
           outputChecks: _checksFromEditors(_outputChecks),
           errorChecks: _checksFromEditors(_errorChecks),
         ),
-        workflowTarget: choice.workflowTarget,
-        workflowBoundary: choice.workflowBoundary,
-        workflowIdBase: choice.workflowIdBase,
+        runbookTarget: choice.runbookTarget,
+        runbookBoundary: choice.runbookBoundary,
+        runbookIdBase: choice.runbookIdBase,
       ),
     );
   }
@@ -2754,18 +2754,18 @@ List<_ToolValidationAuthoringChoice> _commandValidationAuthoringChoices(
     target.command,
     target.operation,
   );
-  final workflowTarget = _toolValidationTargetWithType(target, 'workflow-node');
+  final runbookTarget = _toolValidationTargetWithType(target, 'runbook-node');
   return <_ToolValidationAuthoringChoice>[
     _ToolValidationAuthoringChoice(
-      menuLabel: 'Command operation and workflow envelope',
+      menuLabel: 'Command operation and runbook envelope',
       idBase: '${target.command}_${target.operation}_command',
       defaultLabel: id,
       target: target,
       boundary: 'command.execute',
       input: input,
-      workflowTarget: workflowTarget,
-      workflowBoundary: 'command.execute',
-      workflowIdBase: '${target.command}_${target.operation}_workflow',
+      runbookTarget: runbookTarget,
+      runbookBoundary: 'command.execute',
+      runbookIdBase: '${target.command}_${target.operation}_runbook',
     ),
   ];
 }
@@ -2780,18 +2780,18 @@ List<_ToolValidationAuthoringChoice> _mcpValidationAuthoringChoices(
     return const <_ToolValidationAuthoringChoice>[];
   }
   final id = '${target.mcpServer}.${target.mcpTool}';
-  final workflowTarget = _toolValidationTargetWithType(target, 'workflow-node');
+  final runbookTarget = _toolValidationTargetWithType(target, 'runbook-node');
   return <_ToolValidationAuthoringChoice>[
     _ToolValidationAuthoringChoice(
-      menuLabel: 'MCP tool call and workflow envelope',
+      menuLabel: 'MCP tool call and runbook envelope',
       idBase: '${target.mcpServer}_${target.mcpTool}_mcp',
       defaultLabel: id,
       target: target,
       boundary: 'mcp.call',
       input: const <String, dynamic>{},
-      workflowTarget: workflowTarget,
-      workflowBoundary: 'mcp.call',
-      workflowIdBase: '${target.mcpServer}_${target.mcpTool}_workflow',
+      runbookTarget: runbookTarget,
+      runbookBoundary: 'mcp.call',
+      runbookIdBase: '${target.mcpServer}_${target.mcpTool}_runbook',
     ),
   ];
 }
@@ -3051,7 +3051,7 @@ Set<String> _templateParameterNames(List<String> args) {
   return names;
 }
 
-/// Creates the direct validation and optional workflow envelope companion.
+/// Creates the direct validation and optional runbook envelope companion.
 List<ToolValidationConfig> _toolValidationsForDraft(
   Set<String> existingIds,
   _ToolValidationDraft draft,
@@ -3068,19 +3068,19 @@ List<ToolValidationConfig> _toolValidationsForDraft(
       expected: draft.expected,
     ),
   ];
-  final workflowTarget = draft.workflowTarget;
-  if (workflowTarget != null && draft.workflowBoundary.trim().isNotEmpty) {
+  final runbookTarget = draft.runbookTarget;
+  if (runbookTarget != null && draft.runbookBoundary.trim().isNotEmpty) {
     validations.add(
       _toolValidation(
         id: _uniqueToolValidationId(
           existingIds,
-          '${draft.workflowIdBase}_mocked',
+          '${draft.runbookIdBase}_mocked',
         ),
-        label: '${draft.scenario} workflow envelope',
+        label: '${draft.scenario} runbook envelope',
         description: '',
         mode: 'mocked',
-        target: workflowTarget,
-        boundary: draft.workflowBoundary,
+        target: runbookTarget,
+        boundary: draft.runbookBoundary,
         input: draft.input,
         expected: draft.expected,
       ),
@@ -3234,7 +3234,7 @@ List<ToolValidationAssertionConfig> _toolValidationAssertions(
       ),
     );
   }
-  if (target.type == 'workflow-node' &&
+  if (target.type == 'runbook-node' &&
       target.command.isNotEmpty &&
       target.operation.isNotEmpty) {
     assertions.add(
@@ -3279,7 +3279,7 @@ List<ToolValidationAssertionConfig> _toolValidationAssertions(
       ),
     );
   }
-  if (target.type == 'workflow-node' &&
+  if (target.type == 'runbook-node' &&
       target.mcpServer.isNotEmpty &&
       target.mcpTool.isNotEmpty) {
     assertions.addAll(<ToolValidationAssertionConfig>[
@@ -3469,7 +3469,7 @@ String _toolTargetEvidenceFromConfig(ToolValidationTargetConfig target) {
   final callable = _validationTargetLabel(target);
   return switch (target.type) {
     'agent-tool-call' => 'Agent selection: $callable',
-    'workflow-node' => 'Workflow envelope: $callable',
+    'runbook-node' => 'Runbook envelope: $callable',
     'mcp-tool' => 'MCP tool: $callable',
     'command-operation' => 'Command operation: $callable',
     _ => callable,
@@ -3481,7 +3481,7 @@ String _toolTargetEvidence(ToolValidationTargetResult target) {
   final callable = _toolTargetCallableLabel(target);
   return switch (target.type) {
     'agent-tool-call' => 'Agent selection: $callable',
-    'workflow-node' => 'Workflow envelope: $callable',
+    'runbook-node' => 'Runbook envelope: $callable',
     'mcp-tool' => 'MCP tool: $callable',
     'command-operation' => 'Command operation: $callable',
     _ => callable,

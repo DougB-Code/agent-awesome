@@ -172,7 +172,7 @@ func validateCommandSubcommands(commandName string, parentPath string, subcomman
 	return nil
 }
 
-// validateCommandOperations checks deterministic workflow-callable operations.
+// validateCommandOperations checks deterministic runbook-callable launchpad.
 func validateCommandOperations(commandName string, operations []CommandOperation) error {
 	seen := make(map[string]struct{}, len(operations))
 	for _, operation := range operations {
@@ -394,20 +394,20 @@ func validateToolValidation(
 	}
 	target := validation.Target
 	switch strings.TrimSpace(target.Type) {
-	case "workflow-node":
+	case "runbook-node":
 		presetID := strings.TrimSpace(target.PresetID)
 		hasPreset := presetID != ""
 		hasCommand := strings.TrimSpace(target.Command) != "" || strings.TrimSpace(target.Operation) != ""
 		hasMCP := strings.TrimSpace(target.MCPServer) != "" || strings.TrimSpace(target.MCPTool) != ""
 		selected := boolCount(hasPreset, hasCommand, hasMCP)
 		if selected > 1 {
-			return fmt.Errorf("validation %q workflow-node target must choose preset-id, command-operation, or mcp-tool", id)
+			return fmt.Errorf("validation %q runbook-node target must choose preset-id, command-operation, or mcp-tool", id)
 		}
 		if hasCommand {
-			return validateCommandOperationTarget(id, target, operations, "workflow-node")
+			return validateCommandOperationTarget(id, target, operations, "runbook-node")
 		}
 		if hasMCP {
-			return validateMCPToolTarget(id, target, mcpTools, "workflow-node")
+			return validateMCPToolTarget(id, target, mcpTools, "runbook-node")
 		}
 		if _, ok := presetIDs[presetID]; !ok {
 			return fmt.Errorf("validation %q references unknown preset %q", id, presetID)
@@ -430,7 +430,7 @@ func validateToolValidation(
 	case "":
 		return fmt.Errorf("validation %q target type must not be empty", id)
 	default:
-		return fmt.Errorf("validation %q target type must be workflow-node, command-operation, mcp-tool, or agent-tool-call", id)
+		return fmt.Errorf("validation %q target type must be runbook-node, command-operation, mcp-tool, or agent-tool-call", id)
 	}
 	if err := validateToolValidationExpected(id, validation.Expected); err != nil {
 		return err

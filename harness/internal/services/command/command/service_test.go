@@ -134,7 +134,7 @@ func TestTemplateExecutableCanUseParameters(t *testing.T) {
 	}
 }
 
-// TestExecuteReturnsStructuredJSONValidationAndArtifacts verifies workflow-friendly execution contracts.
+// TestExecuteReturnsStructuredJSONValidationAndArtifacts verifies runbook-friendly execution contracts.
 func TestExecuteReturnsStructuredJSONValidationAndArtifacts(t *testing.T) {
 	workdir := t.TempDir()
 	service, err := Open(Config{
@@ -176,7 +176,7 @@ func TestExecuteReturnsStructuredJSONValidationAndArtifacts(t *testing.T) {
 	}
 }
 
-// TestExecuteReturnsErrorForFailedCommand verifies workflow calls fail on CLI failure.
+// TestExecuteReturnsErrorForFailedCommand verifies runbook calls fail on CLI failure.
 func TestExecuteReturnsErrorForFailedCommand(t *testing.T) {
 	service, err := Open(Config{
 		DataDir:          t.TempDir(),

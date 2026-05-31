@@ -1055,26 +1055,26 @@ th {
   line-height: 1.25;
 }
 
-.workflow-grid .aa-card {
+.runbook-grid .aa-card {
   min-height: 7.5rem;
   padding-left: 4rem;
 }
 
-.workflow-grid .card-icon {
+.runbook-grid .card-icon {
   position: absolute;
   left: 1rem;
   top: 1rem;
   border-radius: 0.45rem;
 }
 
-.workflow-tags {
+.runbook-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
   margin-top: 0.75rem;
 }
 
-.workflow-tags span {
+.runbook-tags span {
   padding: 0.12rem 0.45rem;
   border: 1px solid var(--border);
   border-radius: 0.35rem;

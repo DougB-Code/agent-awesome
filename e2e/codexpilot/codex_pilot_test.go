@@ -1,4 +1,4 @@
-// This file drives the Codex CLI pilot workflow through harness-hosted service boundaries.
+// This file drives the Codex CLI pilot runbook through harness-hosted service boundaries.
 package codexpilot
 
 import (
@@ -44,18 +44,18 @@ printf '{"url":"https://example.test/pull/1"}'
 	runCmd(t, repo, "git", "remote", "add", "origin", remote)
 	worktree := filepath.Join(tempRoot, "build", "sourcecontrol", "worktrees", "feature-codex-pilot")
 
-	workflowAddr := freeAddr(t)
+	runbookAddr := freeAddr(t)
 	webAddr := freeAddr(t)
 	sourcecontrol := startSourceControlMCP(t)
 	defer sourcecontrol.Close()
 	sourcecontrolURL := sourcecontrol.URL + "/mcp"
-	workflowURL := "http://" + workflowAddr
+	runbookURL := "http://" + runbookAddr
 
-	definitionsDir := filepath.Join(tempRoot, "workflows")
+	definitionsDir := filepath.Join(tempRoot, "runbooks")
 	if err := os.MkdirAll(definitionsDir, 0o700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	writeWorkflowDefinition(t, filepath.Join(definitionsDir, "codex-pilot.yaml"), sourcecontrolURL)
+	writeRunbookDefinition(t, filepath.Join(definitionsDir, "codex-pilot.yaml"), sourcecontrolURL)
 
 	templatesJSON := commandTemplatesJSON(t, fakeCodex, fakeTest, fakeGH)
 	harnessCmd := startHarness(ctx, t, filepath.Join(root, "harness"), tempRoot,
@@ -63,16 +63,16 @@ printf '{"url":"https://example.test/pull/1"}'
 		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
 		"--command-allow-workdir", tempRoot,
 		"--command-templates-json", templatesJSON,
-		"--workflow-api-addr", workflowAddr,
-		"--workflow-definitions", definitionsDir,
-		"--workflow-db", filepath.Join(tempRoot, "workflow.db"),
+		"--runbook-api-addr", runbookAddr,
+		"--runbook-definitions", definitionsDir,
+		"--runbook-db", filepath.Join(tempRoot, "runbook.db"),
 		"--session-db", filepath.Join(tempRoot, "sessions.db"),
 		"--", "web", "--port", portFromAddr(t, webAddr), "api", "--webui_address", webAddr,
 	)
 	defer stopDaemon(harnessCmd)
-	waitHealth(t, workflowURL+"/healthz")
+	waitHealth(t, runbookURL+"/healthz")
 
-	runID := startWorkflow(t, workflowURL, map[string]any{
+	runID := startRunbook(t, runbookURL, map[string]any{
 		"definition_id": "codex_cli_pilot",
 		"input": map[string]any{
 			"repository_path": repo,
@@ -83,10 +83,10 @@ printf '{"url":"https://example.test/pull/1"}'
 			"commit_message":  "Codex CLI pilot changes",
 		},
 	})
-	run := waitWorkflow(t, workflowURL, runID)
+	run := waitRunbook(t, runbookURL, runID)
 	if run["status"] != "succeeded" {
-		history := getJSON(t, workflowURL+"/api/workflows/runs/"+runID+"/history")
-		t.Fatalf("workflow run = %#v, history = %#v", run, history)
+		history := getJSON(t, runbookURL+"/api/runbooks/runs/"+runID+"/history")
+		t.Fatalf("runbook run = %#v, history = %#v", run, history)
 	}
 	runCmd(t, "", "git", "--git-dir", remote, "rev-parse", "feature/codex-pilot")
 }
@@ -104,36 +104,36 @@ func TestRealCodexCLICommandBoundarySmoke(t *testing.T) {
 	if codexExecutable == "" {
 		codexExecutable = "codex"
 	}
-	workflowAddr := freeAddr(t)
+	runbookAddr := freeAddr(t)
 	webAddr := freeAddr(t)
-	workflowURL := "http://" + workflowAddr
-	definitionsDir := filepath.Join(tempRoot, "workflows")
+	runbookURL := "http://" + runbookAddr
+	definitionsDir := filepath.Join(tempRoot, "runbooks")
 	if err := os.MkdirAll(definitionsDir, 0o700); err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	writeCommandSmokeWorkflowDefinition(t, filepath.Join(definitionsDir, "codex-smoke.yaml"))
+	writeCommandSmokeRunbookDefinition(t, filepath.Join(definitionsDir, "codex-smoke.yaml"))
 	templatesJSON := realCodexSmokeTemplatesJSON(t, codexExecutable)
 	harnessCmd := startHarness(ctx, t, filepath.Join(root, "harness"), tempRoot,
 		"--command-data-dir", filepath.Join(tempRoot, "command-data"),
 		"--command-parser-dir", filepath.Join(tempRoot, "command-parsers"),
 		"--command-allow-workdir", tempRoot,
 		"--command-templates-json", templatesJSON,
-		"--workflow-api-addr", workflowAddr,
-		"--workflow-definitions", definitionsDir,
-		"--workflow-db", filepath.Join(tempRoot, "workflow.db"),
+		"--runbook-api-addr", runbookAddr,
+		"--runbook-definitions", definitionsDir,
+		"--runbook-db", filepath.Join(tempRoot, "runbook.db"),
 		"--session-db", filepath.Join(tempRoot, "sessions.db"),
 		"--", "web", "--port", portFromAddr(t, webAddr), "api", "--webui_address", webAddr,
 	)
 	defer stopDaemon(harnessCmd)
-	waitHealth(t, workflowURL+"/healthz")
-	runID := startWorkflow(t, workflowURL, map[string]any{
+	waitHealth(t, runbookURL+"/healthz")
+	runID := startRunbook(t, runbookURL, map[string]any{
 		"definition_id": "codex_version_smoke",
 		"input":         map[string]any{"cwd": tempRoot},
 	})
-	run := waitWorkflow(t, workflowURL, runID)
+	run := waitRunbook(t, runbookURL, runID)
 	if run["status"] != "succeeded" {
-		history := getJSON(t, workflowURL+"/api/workflows/runs/"+runID+"/history")
-		t.Fatalf("real Codex workflow run = %#v, history = %#v", run, history)
+		history := getJSON(t, runbookURL+"/api/runbooks/runs/"+runID+"/history")
+		t.Fatalf("real Codex runbook run = %#v, history = %#v", run, history)
 	}
 }
 
@@ -185,8 +185,8 @@ func commandTemplate(id string, executable string, args []string) map[string]any
 	}
 }
 
-// writeWorkflowDefinition writes the Codex pilot workflow used by the integration test.
-func writeWorkflowDefinition(t *testing.T, path string, sourcecontrolURL string) {
+// writeRunbookDefinition writes the Codex pilot runbook used by the integration test.
+func writeRunbookDefinition(t *testing.T, path string, sourcecontrolURL string) {
 	t.Helper()
 	body := fmt.Sprintf(`
 kind: state_machine
@@ -364,7 +364,7 @@ states:
       tool: sourcecontrol.commit
       arguments:
         worktree_path: ${prepare.worktree_path}
-        message: ${workflow_input.commit_message}
+        message: ${runbook_input.commit_message}
   - id: push
     type: task
     uses: mcp.call
@@ -374,8 +374,8 @@ states:
       tool: sourcecontrol.push
       arguments:
         worktree_path: ${prepare.worktree_path}
-        remote: ${workflow_input.remote}
-        branch: ${workflow_input.branch}
+        remote: ${runbook_input.remote}
+        branch: ${runbook_input.branch}
   - id: open_pr
     type: task
     uses: command.execute
@@ -398,8 +398,8 @@ states:
 	}
 }
 
-// writeCommandSmokeWorkflowDefinition writes a minimal command execution workflow.
-func writeCommandSmokeWorkflowDefinition(t *testing.T, path string) {
+// writeCommandSmokeRunbookDefinition writes a minimal command execution runbook.
+func writeCommandSmokeRunbookDefinition(t *testing.T, path string) {
 	t.Helper()
 	body := `
 kind: state_machine
@@ -532,7 +532,7 @@ memory: {}
 	return path
 }
 
-// startSourceControlMCP serves the source-control tools needed by the pilot workflow.
+// startSourceControlMCP serves the source-control tools needed by the pilot runbook.
 func startSourceControlMCP(t *testing.T) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -577,7 +577,7 @@ func handleSourceControlToolCall(w http.ResponseWriter, req sourceControlRPCRequ
 	writeSourceControlRPCResult(w, req.ID, sourceControlToolResult(result, false))
 }
 
-// callSourceControlTool performs the Git side effects used by the workflow.
+// callSourceControlTool performs the Git side effects used by the runbook.
 func callSourceControlTool(name string, args map[string]any) (map[string]any, error) {
 	switch name {
 	case "sourcecontrol.prepare_worktree":
@@ -625,7 +625,7 @@ func sourceControlPrepareWorktree(args map[string]any) (map[string]any, error) {
 	}, nil
 }
 
-// sourceControlCommit commits workflow-produced changes in the worktree.
+// sourceControlCommit commits runbook-produced changes in the worktree.
 func sourceControlCommit(args map[string]any) (map[string]any, error) {
 	worktree, err := requiredStringArg(args, "worktree_path")
 	if err != nil {
@@ -759,25 +759,25 @@ type sourceControlToolCall struct {
 	Arguments map[string]any `json:"arguments"`
 }
 
-// startWorkflow posts one workflow run request and returns the run id.
-func startWorkflow(t *testing.T, baseURL string, payload map[string]any) string {
+// startRunbook posts one runbook run request and returns the run id.
+func startRunbook(t *testing.T, baseURL string, payload map[string]any) string {
 	t.Helper()
 	var decoded map[string]any
-	postJSON(t, baseURL+"/api/workflows/runs", payload, &decoded)
+	postJSON(t, baseURL+"/api/runbooks/runs", payload, &decoded)
 	run, _ := decoded["run"].(map[string]any)
 	runID, _ := run["id"].(string)
 	if runID == "" {
-		t.Fatalf("start workflow response = %#v, want run id", decoded)
+		t.Fatalf("start runbook response = %#v, want run id", decoded)
 	}
 	return runID
 }
 
-// waitWorkflow waits for one workflow run to finish.
-func waitWorkflow(t *testing.T, baseURL string, runID string) map[string]any {
+// waitRunbook waits for one runbook run to finish.
+func waitRunbook(t *testing.T, baseURL string, runID string) map[string]any {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		decoded := getJSON(t, baseURL+"/api/workflows/runs/"+runID)
+		decoded := getJSON(t, baseURL+"/api/runbooks/runs/"+runID)
 		run, _ := decoded["run"].(map[string]any)
 		status, _ := run["status"].(string)
 		if status != "running" && status != "waiting" && status != "" {
@@ -785,7 +785,7 @@ func waitWorkflow(t *testing.T, baseURL string, runID string) map[string]any {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatalf("workflow run %s did not finish", runID)
+	t.Fatalf("runbook run %s did not finish", runID)
 	return nil
 }
 

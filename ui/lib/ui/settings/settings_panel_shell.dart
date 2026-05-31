@@ -54,6 +54,7 @@ class SettingsCommandSubShell extends StatefulWidget {
 class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
   String? _selectedModelConfigPath;
   String? _selectedMemoryDomainId;
+  String _remoteDockerHost = '';
   final Map<String, String> _selectedDetailModeIds = <String, String>{};
 
   /// Builds the settings command panel and selected editor.
@@ -178,10 +179,141 @@ class _SettingsCommandSubShellState extends State<SettingsCommandSubShell> {
     CommandPanelDetailMode mode,
   ) {
     return switch (area.id) {
+      'App' => _appActions(context, area, mode),
       'Models' => _modelConfigActions(context, area, mode),
       'Memory' => _memoryDomainActions(context, area, mode, null),
       _ => null,
     };
+  }
+
+  /// Builds app-level runtime bundle controls in the right header.
+  Widget _appActions(
+    BuildContext context,
+    SwitcherPanelArea area,
+    CommandPanelDetailMode mode,
+  ) {
+    return Wrap(
+      spacing: 8,
+      children: <Widget>[
+        PanelIconButton(
+          icon: Icons.inventory_2_outlined,
+          tooltip: 'Export remote Docker bundle',
+          onPressed: () => unawaited(_exportRemoteDockerBundle()),
+        ),
+        PanelIconButton(
+          icon: Icons.build_outlined,
+          tooltip: 'Build remote Docker image',
+          onPressed: () => unawaited(_buildRemoteDockerImage()),
+        ),
+        PanelIconButton(
+          icon: Icons.play_arrow_outlined,
+          tooltip: 'Start remote Docker runtime',
+          onPressed: () => unawaited(_startRemoteDockerRuntime()),
+        ),
+        PanelIconButton(
+          icon: Icons.cloud_upload_outlined,
+          tooltip: 'Deploy remote Docker runtime',
+          onPressed: () => unawaited(_deployRemoteDockerRuntime()),
+        ),
+      ],
+    );
+  }
+
+  /// Exports the current runtime as a configured remote Docker bundle.
+  Future<void> _exportRemoteDockerBundle() async {
+    await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+  }
+
+  /// Exports the current runtime and builds its Docker image.
+  Future<void> _buildRemoteDockerImage() async {
+    final bundle = await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+    await widget.controller.buildRemoteDockerBundleImage(bundle);
+  }
+
+  /// Exports the current runtime, builds the image, and starts it locally.
+  Future<void> _startRemoteDockerRuntime() async {
+    final bundle = await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+    await widget.controller.buildRemoteDockerBundleImage(bundle);
+    await widget.controller.startRemoteDockerBundleContainer(
+      bundle,
+      gatewayToken: widget.controller.config.gatewayBearerToken,
+    );
+  }
+
+  /// Exports, builds, and deploys the current runtime to an SSH Docker host.
+  Future<void> _deployRemoteDockerRuntime() async {
+    final host = await _promptRemoteDockerHost();
+    if (host == null || host.trim().isEmpty) {
+      return;
+    }
+    setState(() => _remoteDockerHost = host.trim());
+    final bundle = await widget.controller.exportRemoteDockerBundle(
+      localModelPath: await widget.controller.activeLocalModelArtifactPath(),
+      localModelServerExecutablePath: await widget.controller
+          .activeLocalLlamaServerExecutablePath(),
+    );
+    await widget.controller.buildRemoteDockerBundleImage(bundle);
+    await widget.controller.deployRemoteDockerBundle(
+      bundle,
+      remoteHost: host,
+      gatewayToken: widget.controller.config.gatewayBearerToken,
+    );
+  }
+
+  /// Prompts for the SSH target used by generated remote deploy scripts.
+  Future<String?> _promptRemoteDockerHost() async {
+    final controller = TextEditingController(text: _remoteDockerHost);
+    try {
+      return showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Deploy runtime'),
+            content: SizedBox(
+              width: 420,
+              child: PanelLabeledFormControl(
+                label: 'SSH host',
+                child: TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: SettingsInputDecoration.field(
+                    dialogContext,
+                    label: 'user@host',
+                  ),
+                  onSubmitted: (_) =>
+                      Navigator.of(dialogContext).pop(controller.text.trim()),
+                ),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.of(dialogContext).pop(controller.text.trim()),
+                child: const Text('Deploy'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   /// Builds collection-level settings actions in the left header.
@@ -498,7 +630,7 @@ class _SettingsAreaContent extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
-        _SettingsSelectorTile(
+        PanelSelectorTile(
           label: 'App settings',
           icon: Icons.dashboard_customize_outlined,
           detail: detail,
@@ -528,7 +660,7 @@ class _SettingsAreaContent extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: <Widget>[
         for (final entry in matches)
-          _SettingsSelectorTile(
+          PanelSelectorTile(
             label: entry.label,
             icon: Icons.memory_outlined,
             detail: entry.path,
@@ -560,7 +692,7 @@ class _SettingsAreaContent extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: <Widget>[
         for (final domain in matches)
-          _SettingsSelectorTile(
+          PanelSelectorTile(
             label: _memoryDomainDisplayName(domain),
             icon: Icons.hub_outlined,
             detail: _memoryDomainStateLabel(domain),
@@ -568,87 +700,6 @@ class _SettingsAreaContent extends StatelessWidget {
             onTap: () => onMemoryDomainSelected(domain.id),
           ),
       ],
-    );
-  }
-}
-
-/// _SettingsSelectorTile renders one concept-aligned left-pane selector card.
-class _SettingsSelectorTile extends StatelessWidget {
-  const _SettingsSelectorTile({
-    required this.label,
-    required this.icon,
-    required this.detail,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final String detail;
-  final bool selected;
-  final VoidCallback onTap;
-
-  /// Builds a quiet selector card with a thin active accent.
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.agentAwesomeColors;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: onTap,
-          child: PanelSurface(
-            fillWidth: true,
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-            style: PanelSurfaceStyle.card,
-            selected: selected,
-            clipBehavior: Clip.antiAlias,
-            borderRadius: BorderRadius.circular(4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Icon(
-                  icon,
-                  color: selected ? colors.cardAccent : colors.muted,
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.ink,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          height: 1.3,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        detail,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colors.muted,
-                          fontSize: 15,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

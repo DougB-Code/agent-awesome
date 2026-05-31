@@ -61,7 +61,7 @@ build_go_binary() {
 print_paths() {
   printf '%s\n' \
     "$ROOT_DIR/harness/build/bin/agent-awesome" \
-    "$ROOT_DIR/harness/build/bin/workflow-service" \
+    "$ROOT_DIR/harness/build/bin/runbook-service" \
     "$ROOT_DIR/gateway/build/agent-gateway" \
     "$ROOT_DIR/memory/build/bin/memoryd"
   if [ "$BUILD_SOURCECONTROL" -eq 1 ]; then
@@ -74,8 +74,8 @@ build_services() {
   require_command go
   build_go_binary "$ROOT_DIR/harness" ./cmd/agent-awesome \
     "$ROOT_DIR/harness/build/bin/agent-awesome"
-  build_go_binary "$ROOT_DIR/harness" ./cmd/workflow-service \
-    "$ROOT_DIR/harness/build/bin/workflow-service"
+  build_go_binary "$ROOT_DIR/harness" ./cmd/runbook-service \
+    "$ROOT_DIR/harness/build/bin/runbook-service"
   build_go_binary "$ROOT_DIR/gateway" ./cmd/agent-gateway \
     "$ROOT_DIR/gateway/build/agent-gateway"
   build_go_binary "$ROOT_DIR/memory" ./cmd/memoryd \

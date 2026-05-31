@@ -1,4 +1,4 @@
-/// Memory stewardship and file-source workflows for AgentAwesomeAppController.
+/// Memory stewardship and file-source runbooks for AgentAwesomeAppController.
 part of 'app_controller.dart';
 
 extension AgentAwesomeAppControllerMemory on AgentAwesomeAppController {

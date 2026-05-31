@@ -486,14 +486,14 @@ mcp:
           - sourcecontrol.backup
           - sourcecontrol.restore
           - sourcecontrol.cleanup_worktree
-    - name: operations
+    - name: launchpad
       transport: streamable-http
-      endpoint: http://127.0.0.1:8092/api/operations/mcp
+      endpoint: http://127.0.0.1:8092/api/launchpad/mcp
       tools:
         allow:
-          - operation_list
-          - operation_get
-          - operation_start
+          - launchpad_list
+          - launchpad_get
+          - launchpad_start
           - coding_change_start
 memory:
   actor: agent:agent-awesome
@@ -1227,11 +1227,11 @@ validations:
       - type: json-path
         path: output.arguments.template_id
         equals: netstat.listening_ports
-  - id: curl_http_get_workflow_mocked
-    label: workflow invokes curl HTTP GET
+  - id: curl_http_get_runbook_mocked
+    label: runbook invokes curl HTTP GET
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: curl
       operation: http_get
     input:
@@ -1246,11 +1246,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
-  - id: curl_download_file_workflow_mocked
-    label: workflow invokes curl download file
+  - id: curl_download_file_runbook_mocked
+    label: runbook invokes curl download file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: curl
       operation: download_file
     input:
@@ -1266,11 +1266,11 @@ validations:
     assertions:
       - type: stderr-contains
         contains: report.txt
-  - id: jq_query_file_workflow_mocked
-    label: workflow invokes jq query file
+  - id: jq_query_file_runbook_mocked
+    label: runbook invokes jq query file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: jq
       operation: query_file
     input:
@@ -1290,11 +1290,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
-  - id: jq_validate_file_workflow_mocked
-    label: workflow invokes jq validate file
+  - id: jq_validate_file_runbook_mocked
+    label: runbook invokes jq validate file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: jq
       operation: validate_file
     input:
@@ -1313,11 +1313,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: valid
-  - id: yq_read_file_workflow_mocked
-    label: workflow invokes yq read file
+  - id: yq_read_file_runbook_mocked
+    label: runbook invokes yq read file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: yq
       operation: read_file
     input:
@@ -1337,11 +1337,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
-  - id: rg_search_text_workflow_mocked
-    label: workflow invokes ripgrep search text
+  - id: rg_search_text_runbook_mocked
+    label: runbook invokes ripgrep search text
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: rg
       operation: search_text
     input:
@@ -1361,11 +1361,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: TODO
-  - id: rg_list_files_workflow_mocked
-    label: workflow invokes ripgrep list files
+  - id: rg_list_files_runbook_mocked
+    label: runbook invokes ripgrep list files
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: rg
       operation: list_files
     input:
@@ -1384,11 +1384,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: notes.txt
-  - id: find_by_name_workflow_mocked
-    label: workflow invokes find by name
+  - id: find_by_name_runbook_mocked
+    label: runbook invokes find by name
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: find
       operation: by_name
     input:
@@ -1408,11 +1408,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: README.md
-  - id: find_files_by_name_workflow_mocked
-    label: workflow invokes find files by name
+  - id: find_files_by_name_runbook_mocked
+    label: runbook invokes find files by name
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: find
       operation: files_by_name
     input:
@@ -1432,11 +1432,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: README.md
-  - id: grep_recursive_search_workflow_mocked
-    label: workflow invokes grep recursive search
+  - id: grep_recursive_search_runbook_mocked
+    label: runbook invokes grep recursive search
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: grep
       operation: recursive_search
     input:
@@ -1456,11 +1456,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: needle
-  - id: tar_list_archive_workflow_mocked
-    label: workflow invokes tar list archive
+  - id: tar_list_archive_runbook_mocked
+    label: runbook invokes tar list archive
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: tar
       operation: list_archive
     input:
@@ -1475,11 +1475,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: README.md
-  - id: tar_create_archive_workflow_mocked
-    label: workflow invokes tar create archive
+  - id: tar_create_archive_runbook_mocked
+    label: runbook invokes tar create archive
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: tar
       operation: create_archive
     input:
@@ -1500,11 +1500,11 @@ validations:
     assertions:
       - type: stderr-contains
         contains: bundle.tar
-  - id: du_summarize_path_workflow_mocked
-    label: workflow invokes du summarize path
+  - id: du_summarize_path_runbook_mocked
+    label: runbook invokes du summarize path
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: du
       operation: summarize_path
     input:
@@ -1519,11 +1519,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: .
-  - id: df_filesystem_usage_workflow_mocked
-    label: workflow invokes df filesystem usage
+  - id: df_filesystem_usage_runbook_mocked
+    label: runbook invokes df filesystem usage
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: df
       operation: filesystem_usage
     input:
@@ -1538,11 +1538,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: Filesystem
-  - id: ps_list_processes_workflow_mocked
-    label: workflow invokes ps list processes
+  - id: ps_list_processes_runbook_mocked
+    label: runbook invokes ps list processes
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: ps
       operation: list_processes
     mocks:
@@ -1555,11 +1555,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: PID
-  - id: netstat_listening_ports_workflow_mocked
-    label: workflow invokes netstat listening ports
+  - id: netstat_listening_ports_runbook_mocked
+    label: runbook invokes netstat listening ports
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: netstat
       operation: listening_ports
     mocks:
@@ -1617,11 +1617,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: remember
-  - id: memory_remember_workflow_mocked
-    label: workflow invokes memory remember
+  - id: memory_remember_runbook_mocked
+    label: runbook invokes memory remember
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: remember
     input:
@@ -1684,11 +1684,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: search_memory
-  - id: memory_search_memory_workflow_mocked
-    label: workflow invokes memory search
+  - id: memory_search_memory_runbook_mocked
+    label: runbook invokes memory search
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: search_memory
     input:
@@ -1754,11 +1754,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: create_task
-  - id: memory_create_task_workflow_mocked
-    label: workflow invokes memory create task
+  - id: memory_create_task_runbook_mocked
+    label: runbook invokes memory create task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: create_task
     input:
@@ -1820,11 +1820,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: save_memory_candidate
-  - id: memory_save_memory_candidate_workflow_mocked
-    label: workflow invokes memory save memory candidate
+  - id: memory_save_memory_candidate_runbook_mocked
+    label: runbook invokes memory save memory candidate
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: save_memory_candidate
     mocks:
@@ -1881,11 +1881,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: search_sources
-  - id: memory_search_sources_workflow_mocked
-    label: workflow invokes memory search sources
+  - id: memory_search_sources_runbook_mocked
+    label: runbook invokes memory search sources
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: search_sources
     mocks:
@@ -1942,11 +1942,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: load_entity_page
-  - id: memory_load_entity_page_workflow_mocked
-    label: workflow invokes memory load entity page
+  - id: memory_load_entity_page_runbook_mocked
+    label: runbook invokes memory load entity page
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: load_entity_page
     mocks:
@@ -2003,11 +2003,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: load_timeline
-  - id: memory_load_timeline_workflow_mocked
-    label: workflow invokes memory load timeline
+  - id: memory_load_timeline_runbook_mocked
+    label: runbook invokes memory load timeline
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: load_timeline
     mocks:
@@ -2064,11 +2064,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: refresh_compiled_page
-  - id: memory_refresh_compiled_page_workflow_mocked
-    label: workflow invokes memory refresh compiled page
+  - id: memory_refresh_compiled_page_runbook_mocked
+    label: runbook invokes memory refresh compiled page
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: refresh_compiled_page
     mocks:
@@ -2125,11 +2125,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: repair_memory_record
-  - id: memory_repair_memory_record_workflow_mocked
-    label: workflow invokes memory repair memory record
+  - id: memory_repair_memory_record_runbook_mocked
+    label: runbook invokes memory repair memory record
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: repair_memory_record
     mocks:
@@ -2186,11 +2186,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: submit_memory_correction
-  - id: memory_submit_memory_correction_workflow_mocked
-    label: workflow invokes memory submit memory correction
+  - id: memory_submit_memory_correction_runbook_mocked
+    label: runbook invokes memory submit memory correction
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: submit_memory_correction
     mocks:
@@ -2247,11 +2247,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: query_context_graph
-  - id: memory_query_context_graph_workflow_mocked
-    label: workflow invokes memory query context graph
+  - id: memory_query_context_graph_runbook_mocked
+    label: runbook invokes memory query context graph
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: query_context_graph
     mocks:
@@ -2308,11 +2308,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: mutate_context_graph
-  - id: memory_mutate_context_graph_workflow_mocked
-    label: workflow invokes memory mutate context graph
+  - id: memory_mutate_context_graph_runbook_mocked
+    label: runbook invokes memory mutate context graph
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: mutate_context_graph
     mocks:
@@ -2369,11 +2369,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: get_task
-  - id: memory_get_task_workflow_mocked
-    label: workflow invokes memory get task
+  - id: memory_get_task_runbook_mocked
+    label: runbook invokes memory get task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: get_task
     mocks:
@@ -2430,11 +2430,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: list_tasks
-  - id: memory_list_tasks_workflow_mocked
-    label: workflow invokes memory list tasks
+  - id: memory_list_tasks_runbook_mocked
+    label: runbook invokes memory list tasks
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: list_tasks
     mocks:
@@ -2491,11 +2491,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: task_graph_projection
-  - id: memory_task_graph_projection_workflow_mocked
-    label: workflow invokes memory task graph projection
+  - id: memory_task_graph_projection_runbook_mocked
+    label: runbook invokes memory task graph projection
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: task_graph_projection
     mocks:
@@ -2552,11 +2552,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: project_executive_summary
-  - id: memory_project_executive_summary_workflow_mocked
-    label: workflow invokes memory project executive summary
+  - id: memory_project_executive_summary_runbook_mocked
+    label: runbook invokes memory project executive summary
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: project_executive_summary
     mocks:
@@ -2613,11 +2613,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: explain_executive_summary_item
-  - id: memory_explain_executive_summary_item_workflow_mocked
-    label: workflow invokes memory explain executive summary item
+  - id: memory_explain_executive_summary_item_runbook_mocked
+    label: runbook invokes memory explain executive summary item
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: explain_executive_summary_item
     mocks:
@@ -2674,11 +2674,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: upsert_codebase
-  - id: memory_upsert_codebase_workflow_mocked
-    label: workflow invokes memory upsert codebase
+  - id: memory_upsert_codebase_runbook_mocked
+    label: runbook invokes memory upsert codebase
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: upsert_codebase
     mocks:
@@ -2735,11 +2735,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: get_codebase
-  - id: memory_get_codebase_workflow_mocked
-    label: workflow invokes memory get codebase
+  - id: memory_get_codebase_runbook_mocked
+    label: runbook invokes memory get codebase
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: get_codebase
     mocks:
@@ -2796,11 +2796,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: list_codebases
-  - id: memory_list_codebases_workflow_mocked
-    label: workflow invokes memory list codebases
+  - id: memory_list_codebases_runbook_mocked
+    label: runbook invokes memory list codebases
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: list_codebases
     mocks:
@@ -2857,11 +2857,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: resolve_codebase
-  - id: memory_resolve_codebase_workflow_mocked
-    label: workflow invokes memory resolve codebase
+  - id: memory_resolve_codebase_runbook_mocked
+    label: runbook invokes memory resolve codebase
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: resolve_codebase
     mocks:
@@ -2918,11 +2918,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: delete_codebase
-  - id: memory_delete_codebase_workflow_mocked
-    label: workflow invokes memory delete codebase
+  - id: memory_delete_codebase_runbook_mocked
+    label: runbook invokes memory delete codebase
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: delete_codebase
     mocks:
@@ -2979,11 +2979,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: update_task
-  - id: memory_update_task_workflow_mocked
-    label: workflow invokes memory update task
+  - id: memory_update_task_runbook_mocked
+    label: runbook invokes memory update task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: update_task
     mocks:
@@ -3040,11 +3040,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: complete_task
-  - id: memory_complete_task_workflow_mocked
-    label: workflow invokes memory complete task
+  - id: memory_complete_task_runbook_mocked
+    label: runbook invokes memory complete task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: complete_task
     mocks:
@@ -3101,11 +3101,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: cancel_task
-  - id: memory_cancel_task_workflow_mocked
-    label: workflow invokes memory cancel task
+  - id: memory_cancel_task_runbook_mocked
+    label: runbook invokes memory cancel task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: cancel_task
     mocks:
@@ -3162,11 +3162,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: delete_task
-  - id: memory_delete_task_workflow_mocked
-    label: workflow invokes memory delete task
+  - id: memory_delete_task_runbook_mocked
+    label: runbook invokes memory delete task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: delete_task
     mocks:
@@ -3223,11 +3223,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: link_task_memory
-  - id: memory_link_task_memory_workflow_mocked
-    label: workflow invokes memory link task memory
+  - id: memory_link_task_memory_runbook_mocked
+    label: runbook invokes memory link task memory
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: link_task_memory
     mocks:
@@ -3284,11 +3284,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: list_task_relations
-  - id: memory_list_task_relations_workflow_mocked
-    label: workflow invokes memory list task relations
+  - id: memory_list_task_relations_runbook_mocked
+    label: runbook invokes memory list task relations
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: list_task_relations
     mocks:
@@ -3345,11 +3345,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: traverse_task_relations
-  - id: memory_traverse_task_relations_workflow_mocked
-    label: workflow invokes memory traverse task relations
+  - id: memory_traverse_task_relations_runbook_mocked
+    label: runbook invokes memory traverse task relations
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: traverse_task_relations
     mocks:
@@ -3406,11 +3406,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: upsert_task_relation
-  - id: memory_upsert_task_relation_workflow_mocked
-    label: workflow invokes memory upsert task relation
+  - id: memory_upsert_task_relation_runbook_mocked
+    label: runbook invokes memory upsert task relation
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: upsert_task_relation
     mocks:
@@ -3467,11 +3467,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: delete_task_relation
-  - id: memory_delete_task_relation_workflow_mocked
-    label: workflow invokes memory delete task relation
+  - id: memory_delete_task_relation_runbook_mocked
+    label: runbook invokes memory delete task relation
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: delete_task_relation
     mocks:
@@ -3528,11 +3528,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.inspect_repository
-  - id: sourcecontrol_sourcecontrol_inspect_repository_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.inspect repository
+  - id: sourcecontrol_sourcecontrol_inspect_repository_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.inspect repository
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.inspect_repository
     mocks:
@@ -3589,11 +3589,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.validate_repository
-  - id: sourcecontrol_sourcecontrol_validate_repository_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.validate repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.validate repository
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.validate_repository
     mocks:
@@ -3650,11 +3650,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.prepare_worktree
-  - id: sourcecontrol_sourcecontrol_prepare_worktree_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.prepare worktree
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.prepare worktree
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.prepare_worktree
     mocks:
@@ -3711,11 +3711,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.status
-  - id: sourcecontrol_sourcecontrol_status_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_status_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.status
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.status
     mocks:
@@ -3772,11 +3772,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.commit
-  - id: sourcecontrol_sourcecontrol_commit_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_commit_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.commit
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.commit
     mocks:
@@ -3833,11 +3833,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.push
-  - id: sourcecontrol_sourcecontrol_push_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_push_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.push
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.push
     mocks:
@@ -3894,11 +3894,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.open_pull_request
-  - id: sourcecontrol_sourcecontrol_open_pull_request_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.open pull request
+  - id: sourcecontrol_sourcecontrol_open_pull_request_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.open pull request
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.open_pull_request
     mocks:
@@ -3955,11 +3955,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.backup
-  - id: sourcecontrol_sourcecontrol_backup_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_backup_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.backup
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.backup
     mocks:
@@ -4016,11 +4016,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.restore
-  - id: sourcecontrol_sourcecontrol_restore_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_restore_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.restore
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.restore
     mocks:
@@ -4077,11 +4077,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.cleanup_worktree
-  - id: sourcecontrol_sourcecontrol_cleanup_worktree_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.cleanup worktree
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.cleanup worktree
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.cleanup_worktree
     mocks:
@@ -4096,201 +4096,201 @@ validations:
       - type: json-path
         path: output.tool
         equals: sourcecontrol.cleanup_worktree
-  - id: operations_operation_list_mcp_mocked
-    label: operations operation list MCP call
+  - id: launchpad_launchpad_list_mcp_mocked
+    label: launchpad launch list MCP call
     mode: mocked
     target:
       type: mcp-tool
-      mcp-server: operations
-      mcp-tool: operation_list
+      mcp-server: launchpad
+      mcp-tool: launchpad_list
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
-          tool: operation_list
+          server: launchpad
+          tool: launchpad_list
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.tool
-        equals: operation_list
-  - id: operations_operation_list_agent_mocked
-    label: agent selects operations operation list
+        equals: launchpad_list
+  - id: launchpad_launchpad_list_agent_mocked
+    label: agent selects launchpad launch list
     mode: mocked
-    prompt: Use operations.operation_list.
+    prompt: Use launchpad.launchpad_list.
     target:
       type: agent-tool-call
-      mcp-server: operations
-      mcp-tool: operation_list
+      mcp-server: launchpad
+      mcp-tool: launchpad_list
     mocks:
       agent.tool_call:
         status: succeeded
         output:
-          tool_name: operations.operation_list
+          tool_name: launchpad.launchpad_list
           arguments:
-            server_id: operations
-            tool: operation_list
+            server_id: launchpad
+            tool: launchpad_list
             parameters: {}
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.arguments.tool
-        equals: operation_list
-  - id: operations_operation_list_workflow_mocked
-    label: workflow invokes operations operation list
+        equals: launchpad_list
+  - id: launchpad_launchpad_list_runbook_mocked
+    label: runbook invokes launchpad launch list
     mode: mocked
     target:
-      type: workflow-node
-      mcp-server: operations
-      mcp-tool: operation_list
+      type: runbook-node
+      mcp-server: launchpad
+      mcp-tool: launchpad_list
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
-          tool: operation_list
+          server: launchpad
+          tool: launchpad_list
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.tool
-        equals: operation_list
-  - id: operations_operation_get_mcp_mocked
-    label: operations operation get MCP call
+        equals: launchpad_list
+  - id: launchpad_launchpad_get_mcp_mocked
+    label: launchpad launch get MCP call
     mode: mocked
     target:
       type: mcp-tool
-      mcp-server: operations
-      mcp-tool: operation_get
+      mcp-server: launchpad
+      mcp-tool: launchpad_get
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
-          tool: operation_get
+          server: launchpad
+          tool: launchpad_get
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.tool
-        equals: operation_get
-  - id: operations_operation_get_agent_mocked
-    label: agent selects operations operation get
+        equals: launchpad_get
+  - id: launchpad_launchpad_get_agent_mocked
+    label: agent selects launchpad launch get
     mode: mocked
-    prompt: Use operations.operation_get.
+    prompt: Use launchpad.launchpad_get.
     target:
       type: agent-tool-call
-      mcp-server: operations
-      mcp-tool: operation_get
+      mcp-server: launchpad
+      mcp-tool: launchpad_get
     mocks:
       agent.tool_call:
         status: succeeded
         output:
-          tool_name: operations.operation_get
+          tool_name: launchpad.launchpad_get
           arguments:
-            server_id: operations
-            tool: operation_get
+            server_id: launchpad
+            tool: launchpad_get
             parameters: {}
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.arguments.tool
-        equals: operation_get
-  - id: operations_operation_get_workflow_mocked
-    label: workflow invokes operations operation get
+        equals: launchpad_get
+  - id: launchpad_launchpad_get_runbook_mocked
+    label: runbook invokes launchpad launch get
     mode: mocked
     target:
-      type: workflow-node
-      mcp-server: operations
-      mcp-tool: operation_get
+      type: runbook-node
+      mcp-server: launchpad
+      mcp-tool: launchpad_get
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
-          tool: operation_get
+          server: launchpad
+          tool: launchpad_get
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.tool
-        equals: operation_get
-  - id: operations_operation_start_mcp_mocked
-    label: operations operation start MCP call
+        equals: launchpad_get
+  - id: launchpad_launchpad_start_mcp_mocked
+    label: launchpad launch start MCP call
     mode: mocked
     target:
       type: mcp-tool
-      mcp-server: operations
-      mcp-tool: operation_start
+      mcp-server: launchpad
+      mcp-tool: launchpad_start
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
-          tool: operation_start
+          server: launchpad
+          tool: launchpad_start
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.tool
-        equals: operation_start
-  - id: operations_operation_start_agent_mocked
-    label: agent selects operations operation start
+        equals: launchpad_start
+  - id: launchpad_launchpad_start_agent_mocked
+    label: agent selects launchpad launch start
     mode: mocked
-    prompt: Use operations.operation_start.
+    prompt: Use launchpad.launchpad_start.
     target:
       type: agent-tool-call
-      mcp-server: operations
-      mcp-tool: operation_start
+      mcp-server: launchpad
+      mcp-tool: launchpad_start
     mocks:
       agent.tool_call:
         status: succeeded
         output:
-          tool_name: operations.operation_start
+          tool_name: launchpad.launchpad_start
           arguments:
-            server_id: operations
-            tool: operation_start
+            server_id: launchpad
+            tool: launchpad_start
             parameters: {}
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.arguments.tool
-        equals: operation_start
-  - id: operations_operation_start_workflow_mocked
-    label: workflow invokes operations operation start
+        equals: launchpad_start
+  - id: launchpad_launchpad_start_runbook_mocked
+    label: runbook invokes launchpad launch start
     mode: mocked
     target:
-      type: workflow-node
-      mcp-server: operations
-      mcp-tool: operation_start
+      type: runbook-node
+      mcp-server: launchpad
+      mcp-tool: launchpad_start
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
-          tool: operation_start
+          server: launchpad
+          tool: launchpad_start
     expected:
       status: succeeded
     assertions:
       - type: json-path
         path: output.tool
-        equals: operation_start
-  - id: operations_coding_change_start_mcp_mocked
+        equals: launchpad_start
+  - id: launchpad_coding_change_start_mcp_mocked
     label: operations coding change start MCP call
     mode: mocked
     target:
       type: mcp-tool
-      mcp-server: operations
+      mcp-server: launchpad
       mcp-tool: coding_change_start
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
+          server: launchpad
           tool: coding_change_start
     expected:
       status: succeeded
@@ -4298,21 +4298,21 @@ validations:
       - type: json-path
         path: output.tool
         equals: coding_change_start
-  - id: operations_coding_change_start_agent_mocked
-    label: agent selects operations coding change start
+  - id: launchpad_coding_change_start_agent_mocked
+    label: agent selects launchpad coding change start
     mode: mocked
-    prompt: Use operations.coding_change_start.
+    prompt: Use launchpad.coding_change_start.
     target:
       type: agent-tool-call
-      mcp-server: operations
+      mcp-server: launchpad
       mcp-tool: coding_change_start
     mocks:
       agent.tool_call:
         status: succeeded
         output:
-          tool_name: operations.coding_change_start
+          tool_name: launchpad.coding_change_start
           arguments:
-            server_id: operations
+            server_id: launchpad
             tool: coding_change_start
             parameters: {}
     expected:
@@ -4321,18 +4321,18 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: coding_change_start
-  - id: operations_coding_change_start_workflow_mocked
-    label: workflow invokes operations coding change start
+  - id: launchpad_coding_change_start_runbook_mocked
+    label: runbook invokes launchpad coding change start
     mode: mocked
     target:
-      type: workflow-node
-      mcp-server: operations
+      type: runbook-node
+      mcp-server: launchpad
       mcp-tool: coding_change_start
     mocks:
       mcp.call:
         status: succeeded
         output:
-          server: operations
+          server: launchpad
           tool: coding_change_start
     expected:
       status: succeeded

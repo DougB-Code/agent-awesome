@@ -155,7 +155,7 @@ func TestRestoreFailureLeavesPreviousDataReadable(t *testing.T) {
 	assertExistingSnapshot(t, targetDB, targetData)
 }
 
-// TestHTTPStoreSnapshotDrillRestoresMemoryAndTasks verifies the beta snapshot workflow.
+// TestHTTPStoreSnapshotDrillRestoresMemoryAndTasks verifies the beta snapshot runbook.
 func TestHTTPStoreSnapshotDrillRestoresMemoryAndTasks(t *testing.T) {
 	ctx := context.Background()
 	token := "snapshot-token"

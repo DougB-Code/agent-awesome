@@ -16,7 +16,7 @@ const (
 	mcpClientVersion = "v1.0.0"
 )
 
-// connect opens one MCP client session for memory operations.
+// connect opens one MCP client session for memory launchpad.
 func (s *Service) connect(ctx context.Context, server schema.MCPServer) (*mcp.ClientSession, error) {
 	return mcpclient.Connect(ctx, server, mcpClientName, mcpClientVersion)
 }

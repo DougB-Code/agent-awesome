@@ -100,7 +100,14 @@ class AppConfig {
         runtimeName: 'AUTO_START_LOCAL_SERVICES',
         fallback: true,
       ),
-      runtimeProfilePath: '',
+      runtimeProfilePath: _environmentValue(
+        compiled: const String.fromEnvironment(
+          'AGENTAWESOME_RUNTIME_PROFILE',
+          defaultValue: '',
+        ),
+        runtimeName: 'AGENTAWESOME_RUNTIME_PROFILE',
+        fallback: '',
+      ),
       litertLmExecutable: _environmentValue(
         compiled: const String.fromEnvironment(
           'AGENTAWESOME_LITERT_LM',
@@ -161,7 +168,7 @@ class AppConfig {
   /// Direct memory MCP JSON-RPC endpoint used as the gateway upstream.
   final String memoryMcpUrl;
 
-  /// Direct source-control MCP JSON-RPC endpoint used by workflows.
+  /// Direct source-control MCP JSON-RPC endpoint used by runbooks.
   final String sourceControlMcpUrl;
 
   /// Assistant app name that hosts the configured agent.
@@ -342,7 +349,7 @@ bool _isAgentAwesomeWorkspace(Directory directory) {
   final hasRuntimeBinaries =
       File('${directory.path}/harness/build/bin/agent-awesome').existsSync() &&
       File(
-        '${directory.path}/harness/build/bin/workflow-service',
+        '${directory.path}/harness/build/bin/runbook-service',
       ).existsSync() &&
       File('${directory.path}/gateway/build/agent-gateway').existsSync() &&
       File('${directory.path}/memory/build/bin/memoryd').existsSync();

@@ -46,19 +46,19 @@ func DefaultDataDir() string {
 	return filepath.Join(DefaultConfigDir(), "data")
 }
 
-// DefaultWorkflowDefinitionsDir returns the editable workflow definition path.
-func DefaultWorkflowDefinitionsDir() string {
-	return filepath.Join(DefaultConfigDir(), "workflows")
+// DefaultRunbookDefinitionsDir returns the editable runbook definition path.
+func DefaultRunbookDefinitionsDir() string {
+	return filepath.Join(DefaultConfigDir(), "runbooks")
 }
 
-// DefaultWorkflowDatabasePath returns the embedded workflow SQLite path.
-func DefaultWorkflowDatabasePath() string {
-	return filepath.Join(DefaultDataDir(), "workflow", "workflow.db")
+// DefaultRunbookDatabasePath returns the embedded runbook SQLite path.
+func DefaultRunbookDatabasePath() string {
+	return filepath.Join(DefaultDataDir(), "runbook", "runbook.db")
 }
 
-// DefaultOperationsDatabasePath returns the embedded operations SQLite path.
-func DefaultOperationsDatabasePath() string {
-	return filepath.Join(DefaultDataDir(), "operations", "operations.db")
+// DefaultLaunchpadDatabasePath returns the embedded launchpad SQLite path.
+func DefaultLaunchpadDatabasePath() string {
+	return filepath.Join(DefaultDataDir(), "launchpad", "launchpad.db")
 }
 
 // DefaultRuntimeTargetsDatabasePath returns the runtime target SQLite path.

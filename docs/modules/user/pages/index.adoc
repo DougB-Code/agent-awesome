@@ -2,7 +2,7 @@
 :description: User-facing Agent Awesome documentation.
 
 This module is for people using Agent Awesome as an assistant.
-It avoids infrastructure setup, hosting secrets, and operations-only controls.
+It avoids infrastructure setup, hosting secrets, and launchpad-only controls.
 
 Use these pages when you need to:
 
@@ -11,5 +11,5 @@ Use these pages when you need to:
 * Recognize whether memory, gateway, or harness services are connected.
 
 Internal development procedures live in xref:development:contributor-setup.adoc[].
-Internal operations procedures live in xref:operations:index.adoc[].
+Internal launchpad procedures live in xref:launchpad:index.adoc[].
 Implementation details live in the subsystem modules.

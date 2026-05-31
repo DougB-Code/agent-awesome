@@ -1,4 +1,4 @@
-/// Provides the gateway-backed Automations workflow client.
+/// Provides the gateway-backed Automations runbook client.
 library;
 
 import 'dart:convert';
@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import '../domain/models_automation.dart';
 import 'client_logger.dart';
 
-/// AutomationsClientException reports workflow API failures.
+/// AutomationsClientException reports runbook API failures.
 class AutomationsClientException implements Exception {
   /// Creates an automation client exception.
   const AutomationsClientException(this.message);
@@ -20,9 +20,9 @@ class AutomationsClientException implements Exception {
   String toString() => 'AutomationsClientException: $message';
 }
 
-/// AutomationsClient calls gateway-routed workflow APIs.
+/// AutomationsClient calls gateway-routed runbook APIs.
 class AutomationsClient {
-  /// Creates a workflow client that only talks to gateway routes.
+  /// Creates a runbook client that only talks to gateway routes.
   AutomationsClient({
     required this.baseUrl,
     http.Client? httpClient,
@@ -31,7 +31,7 @@ class AutomationsClient {
   }) : headers = Map<String, String>.unmodifiable(headers),
        _http = httpClient ?? http.Client();
 
-  /// Gateway `/api/workflows` base URL.
+  /// Gateway `/api/runbooks` base URL.
   final String baseUrl;
 
   /// Headers applied to protected gateway requests.
@@ -48,7 +48,7 @@ class AutomationsClient {
     ).map(parseAutomationActionType).toList();
   }
 
-  /// Lists installed workflow definitions.
+  /// Lists installed runbook definitions.
   Future<List<AutomationDefinition>> listDefinitions() async {
     final decoded = await _get('/definitions');
     return _list(
@@ -56,13 +56,13 @@ class AutomationsClient {
     ).map(parseAutomationDefinition).toList();
   }
 
-  /// Lists editable workflow drafts.
+  /// Lists editable runbook drafts.
   Future<List<AutomationDraft>> listDrafts() async {
     final decoded = await _get('/drafts');
     return _list(decoded['drafts']).map(parseAutomationDraft).toList();
   }
 
-  /// Creates one editable workflow draft.
+  /// Creates one editable runbook draft.
   Future<AutomationDraft> createDraft({
     required String kind,
     required String name,
@@ -78,7 +78,7 @@ class AutomationsClient {
     return parseAutomationDraft(decoded['draft']);
   }
 
-  /// Updates one editable workflow draft.
+  /// Updates one editable runbook draft.
   Future<AutomationDraft> updateDraft(AutomationDraft draft) async {
     final decoded = await _put('/drafts/${draft.id}', <String, dynamic>{
       'kind': draft.kind,
@@ -89,12 +89,12 @@ class AutomationsClient {
     return parseAutomationDraft(decoded['draft']);
   }
 
-  /// Deletes one editable workflow draft.
+  /// Deletes one editable runbook draft.
   Future<void> deleteDraft(String draftId) async {
     await _delete('/drafts/$draftId');
   }
 
-  /// Validates one workflow draft.
+  /// Validates one runbook draft.
   Future<AutomationValidationResult> validateDraft(String draftId) async {
     final decoded = await _post(
       '/drafts/$draftId/validate',
@@ -103,7 +103,7 @@ class AutomationsClient {
     return parseAutomationValidationResult(decoded['validation']);
   }
 
-  /// Publishes one workflow draft.
+  /// Publishes one runbook draft.
   Future<AutomationDefinition> publishDraft(String draftId) async {
     final decoded = await _post(
       '/drafts/$draftId/publish',
@@ -122,13 +122,13 @@ class AutomationsClient {
   Future<List<AutomationCapability>> listCapabilities({
     String kind = '',
     bool? usableInChat,
-    bool? usableInWorkflows,
+    bool? usableInRunbooks,
   }) async {
     final query = <String, String>{
       if (kind.trim().isNotEmpty) 'kind': kind.trim(),
       if (usableInChat != null) 'usable_in_chat': '$usableInChat',
-      if (usableInWorkflows != null)
-        'usable_in_workflows': '$usableInWorkflows',
+      if (usableInRunbooks != null)
+        'usable_in_runbooks': '$usableInRunbooks',
     };
     final decoded = await _capabilitiesGet('', query: query);
     return _list(
@@ -179,7 +179,7 @@ class AutomationsClient {
     return parseAutomationTargetSecretMetadata(decoded['secrets']);
   }
 
-  /// Lists workflow runs for operations.
+  /// Lists runbook runs for launchpad.
   Future<List<AutomationRun>> listRuns({
     String status = '',
     String definitionId = '',
@@ -194,18 +194,18 @@ class AutomationsClient {
     return _list(decoded['runs']).map(parseAutomationRun).toList();
   }
 
-  /// Lists saved Operations.
+  /// Lists saved Launchpad.
   Future<List<AutomationRunSetup>> listRunSetups({
     String definitionId = '',
   }) async {
     final query = <String, String>{
-      if (definitionId.trim().isNotEmpty) 'workflow_id': definitionId.trim(),
+      if (definitionId.trim().isNotEmpty) 'runbook_id': definitionId.trim(),
     };
-    final decoded = await _operationsGet('', query: query);
-    return _list(decoded['operations']).map(parseAutomationRunSetup).toList();
+    final decoded = await _launchpadGet('', query: query);
+    return _list(decoded['launchpad']).map(parseAutomationRunSetup).toList();
   }
 
-  /// Creates one saved Operation.
+  /// Creates one saved Launch.
   Future<AutomationRunSetup> createRunSetup({
     required String definitionId,
     required String name,
@@ -217,8 +217,8 @@ class AutomationsClient {
     Map<String, dynamic> policy = const <String, dynamic>{},
     Map<String, dynamic> schedule = const <String, dynamic>{},
   }) async {
-    final decoded = await _operationsPost('', <String, dynamic>{
-      'workflow_id': definitionId,
+    final decoded = await _launchpadPost('', <String, dynamic>{
+      'runbook_id': definitionId,
       'name': name,
       'description': description,
       if (codebaseId.trim().isNotEmpty) 'codebase_id': codebaseId.trim(),
@@ -230,13 +230,13 @@ class AutomationsClient {
       if (policy.isNotEmpty) 'policy': policy,
       if (schedule.isNotEmpty) 'schedule': schedule,
     });
-    return parseAutomationRunSetup(decoded['operation']);
+    return parseAutomationRunSetup(decoded['launch']);
   }
 
-  /// Updates one saved Operation.
+  /// Updates one saved Launch.
   Future<AutomationRunSetup> updateRunSetup(AutomationRunSetup setup) async {
-    final decoded = await _operationsPut('/${setup.id}', <String, dynamic>{
-      'workflow_id': setup.definitionId,
+    final decoded = await _launchpadPut('/${setup.id}', <String, dynamic>{
+      'runbook_id': setup.definitionId,
       'name': setup.name,
       'description': setup.description,
       if (setup.codebaseId.trim().isNotEmpty)
@@ -249,47 +249,47 @@ class AutomationsClient {
       if (setup.policy.isNotEmpty) 'policy': setup.policy,
       if (setup.schedule.isNotEmpty) 'schedule': setup.schedule,
     });
-    return parseAutomationRunSetup(decoded['operation']);
+    return parseAutomationRunSetup(decoded['launch']);
   }
 
-  /// Deletes one saved Operation.
+  /// Deletes one saved Launch.
   Future<void> deleteRunSetup(String setupId) async {
-    await _operationsDelete('/$setupId');
+    await _launchpadDelete('/$setupId');
   }
 
-  /// Previews one saved Operation without starting a run.
-  Future<AutomationOperationPreview> previewRunSetup(
+  /// Previews one saved Launch without starting a run.
+  Future<AutomationLaunchPreview> previewRunSetup(
     String setupId, {
     Map<String, dynamic> input = const <String, dynamic>{},
   }) async {
-    final decoded = await _operationsPost(
+    final decoded = await _launchpadPost(
       '/$setupId/preview',
       <String, dynamic>{'input': input},
     );
-    return parseAutomationOperationPreview(decoded['preview']);
+    return parseAutomationLaunchPreview(decoded['preview']);
   }
 
-  /// Starts one saved Operation.
+  /// Starts one saved Launch.
   Future<AutomationRun> startRunSetup(
     String setupId, {
     Map<String, dynamic> input = const <String, dynamic>{},
   }) async {
-    final decoded = await _operationsPost('/$setupId/start', <String, dynamic>{
+    final decoded = await _launchpadPost('/$setupId/start', <String, dynamic>{
       'input': input,
     });
-    final operationRun = _clientMap(decoded['operation_run']);
-    return parseAutomationRun(operationRun['run']);
+    final launchRun = _clientMap(decoded['launch_run']);
+    return parseAutomationRun(launchRun['run']);
   }
 
-  /// Loads immutable Operation audit data for one workflow run.
-  Future<AutomationOperationRunSnapshot> operationRunSnapshot(
+  /// Loads immutable Launch audit data for one runbook run.
+  Future<AutomationLaunchRunSnapshot> launchRunSnapshot(
     String runId,
   ) async {
-    final decoded = await _operationsGet('/runs/$runId/snapshot');
-    return parseAutomationOperationRunSnapshot(decoded['snapshot']);
+    final decoded = await _launchpadGet('/runs/$runId/snapshot');
+    return parseAutomationLaunchRunSnapshot(decoded['snapshot']);
   }
 
-  /// Starts one workflow definition.
+  /// Starts one runbook definition.
   Future<AutomationRun> startRun(
     String definitionId, {
     Map<String, dynamic> input = const <String, dynamic>{},
@@ -307,13 +307,13 @@ class AutomationsClient {
     return _list(decoded['events']).map(parseAutomationEvent).toList();
   }
 
-  /// Lists pending user-facing workflow inbox items.
+  /// Lists pending user-facing runbook inbox items.
   Future<List<AutomationPendingItem>> inbox() async {
     final decoded = await _get('/inbox');
     return _list(decoded['items']).map(parseAutomationPendingItem).toList();
   }
 
-  /// Sends one signal to a workflow run.
+  /// Sends one signal to a runbook run.
   Future<AutomationRun> signal(
     String runId,
     String signal, {
@@ -326,7 +326,7 @@ class AutomationsClient {
     return parseAutomationRun(decoded['run']);
   }
 
-  /// Cancels one workflow run.
+  /// Cancels one runbook run.
   Future<AutomationRun> cancel(String runId) async {
     final decoded = await _post('/runs/$runId/cancel', <String, dynamic>{});
     return parseAutomationRun(decoded['run']);
@@ -386,22 +386,22 @@ class AutomationsClient {
     return _decode(response, 'DELETE $path');
   }
 
-  Future<Map<String, dynamic>> _operationsGet(
+  Future<Map<String, dynamic>> _launchpadGet(
     String path, {
     Map<String, String> query = const <String, String>{},
   }) async {
-    final uri = _operationsUri(path, query: query);
+    final uri = _launchpadUri(path, query: query);
     await _log('GET $uri');
     final response = await _http.get(uri, headers: _headers());
     await _log('GET $uri -> ${response.statusCode}');
     return _decode(response, 'GET $path');
   }
 
-  Future<Map<String, dynamic>> _operationsPost(
+  Future<Map<String, dynamic>> _launchpadPost(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final uri = _operationsUri(path);
+    final uri = _launchpadUri(path);
     await _log('POST $uri');
     final response = await _http.post(
       uri,
@@ -412,11 +412,11 @@ class AutomationsClient {
     return _decode(response, 'POST $path');
   }
 
-  Future<Map<String, dynamic>> _operationsPut(
+  Future<Map<String, dynamic>> _launchpadPut(
     String path,
     Map<String, dynamic> body,
   ) async {
-    final uri = _operationsUri(path);
+    final uri = _launchpadUri(path);
     await _log('PUT $uri');
     final response = await _http.put(
       uri,
@@ -427,8 +427,8 @@ class AutomationsClient {
     return _decode(response, 'PUT $path');
   }
 
-  Future<Map<String, dynamic>> _operationsDelete(String path) async {
-    final uri = _operationsUri(path);
+  Future<Map<String, dynamic>> _launchpadDelete(String path) async {
+    final uri = _launchpadUri(path);
     await _log('DELETE $uri');
     final response = await _http.delete(uri, headers: _headers());
     await _log('DELETE $uri -> ${response.statusCode}');
@@ -472,10 +472,10 @@ class AutomationsClient {
     return _decode(response, 'PUT $path');
   }
 
-  Map<String, dynamic> _decode(http.Response response, String operation) {
+  Map<String, dynamic> _decode(http.Response response, String launch) {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw AutomationsClientException(
-        '$operation failed with HTTP ${response.statusCode}: ${response.body}',
+        '$launch failed with HTTP ${response.statusCode}: ${response.body}',
       );
     }
     if (response.body.trim().isEmpty) {
@@ -505,18 +505,18 @@ class AutomationsClient {
     return uri.replace(queryParameters: query);
   }
 
-  Uri _operationsUri(
+  Uri _launchpadUri(
     String path, {
     Map<String, String> query = const <String, String>{},
   }) {
-    final workflow = Uri.parse(baseUrl);
-    final operationsBase = workflow.replace(path: '/api/operations');
-    final trimmed = operationsBase.toString().endsWith('/')
-        ? operationsBase.toString().substring(
+    final runbook = Uri.parse(baseUrl);
+    final launchpadBase = runbook.replace(path: '/api/launchpad');
+    final trimmed = launchpadBase.toString().endsWith('/')
+        ? launchpadBase.toString().substring(
             0,
-            operationsBase.toString().length - 1,
+            launchpadBase.toString().length - 1,
           )
-        : operationsBase.toString();
+        : launchpadBase.toString();
     final uri = Uri.parse('$trimmed$path');
     if (query.isEmpty) {
       return uri;
@@ -528,8 +528,8 @@ class AutomationsClient {
     String path, {
     Map<String, String> query = const <String, String>{},
   }) {
-    final workflow = Uri.parse(baseUrl);
-    final capabilitiesBase = workflow.replace(path: '/api/capabilities');
+    final runbook = Uri.parse(baseUrl);
+    final capabilitiesBase = runbook.replace(path: '/api/capabilities');
     final trimmed = capabilitiesBase.toString().endsWith('/')
         ? capabilitiesBase.toString().substring(
             0,
@@ -547,8 +547,8 @@ class AutomationsClient {
     String path, {
     Map<String, String> query = const <String, String>{},
   }) {
-    final workflow = Uri.parse(baseUrl);
-    final targetsBase = workflow.replace(path: '/api/runtime-targets');
+    final runbook = Uri.parse(baseUrl);
+    final targetsBase = runbook.replace(path: '/api/runtime-targets');
     final trimmed = targetsBase.toString().endsWith('/')
         ? targetsBase.toString().substring(0, targetsBase.toString().length - 1)
         : targetsBase.toString();

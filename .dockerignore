@@ -10,10 +10,15 @@
 !harness/**
 !memory/
 !memory/**
+!platform/
+!platform/**
 !workflow/
 !workflow/**
 !command/
 !command/**
+!build/
+!build/remote-runtime/
+!build/remote-runtime/**
 
 !deploy/
 !deploy/cloudflare/
@@ -21,9 +26,12 @@
 !deploy/cloudflare/config/**
 !deploy/cloudflare/scripts/
 !deploy/cloudflare/scripts/**
+!deploy/docker/
+!deploy/docker/**
 
 gateway/build/
 harness/build/
 memory/build/
+platform/build/
 workflow/build/
 command/build/

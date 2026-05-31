@@ -68,143 +68,104 @@ class _MemoryCaptureContentState extends State<_MemoryCaptureContent> {
         })
         .take(4)
         .toList();
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          PanelSectionBlock(
-            child: Column(
+    return PanelFormView(
+      children: <Widget>[
+        PanelFormSection(
+          title: 'Record',
+          children: <Widget>[
+            PanelTextFormField(controller: _title, label: 'Title'),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            PanelTextFormField(
+              controller: _content,
+              label: 'Source content',
+              maxLines: 8,
+            ),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            PanelFieldGrid(
               children: <Widget>[
-                PanelTextFormField(controller: _title, label: 'Title'),
-                const SizedBox(height: 10),
                 PanelTextFormField(
-                  controller: _content,
-                  label: 'Source content',
-                  maxLines: 8,
+                  controller: _sourceSystem,
+                  label: 'Source system',
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: PanelTextFormField(
-                        controller: _sourceSystem,
-                        label: 'Source system',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: PanelTextFormField(
-                        controller: _sourceId,
-                        label: 'Source id',
-                      ),
-                    ),
-                  ],
+                PanelTextFormField(controller: _sourceId, label: 'Source id'),
+                PanelDropdownFormField<String>(
+                  label: 'Kind',
+                  value: _kind,
+                  values: _memoryKinds,
+                  tooltip: 'Kind',
+                  labelFor: _memoryLabel,
+                  onChanged: (value) => setState(() => _kind = value),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: PanelDropdownFormField<String>(
-                        label: 'Kind',
-                        value: _kind,
-                        values: _memoryKinds,
-                        tooltip: 'Kind',
-                        labelFor: _memoryLabel,
-                        onChanged: (value) => setState(() => _kind = value),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: PanelDropdownFormField<String>(
-                        label: 'Firewall',
-                        value: _firewall,
-                        values: widget.controller.memoryFirewallIds,
-                        tooltip: 'Firewall',
-                        labelFor: widget.controller.memoryFirewallPickerLabel,
-                        onChanged: (value) => setState(() => _firewall = value),
-                      ),
-                    ),
-                  ],
+                PanelDropdownFormField<String>(
+                  label: 'Firewall',
+                  value: _firewall,
+                  values: widget.controller.memoryFirewallIds,
+                  tooltip: 'Firewall',
+                  labelFor: widget.controller.memoryFirewallPickerLabel,
+                  onChanged: (value) => setState(() => _firewall = value),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: PanelDropdownFormField<String>(
-                        label: 'Trust',
-                        value: _trust,
-                        values: _memoryTrustLevels,
-                        tooltip: 'Trust',
-                        labelFor: _memoryLabel,
-                        onChanged: (value) => setState(() => _trust = value),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: PanelDropdownFormField<String>(
-                        label: 'Sensitivity',
-                        value: _sensitivity,
-                        values: _memorySensitivities,
-                        tooltip: 'Sensitivity',
-                        labelFor: _memoryLabel,
-                        onChanged: (value) =>
-                            setState(() => _sensitivity = value),
-                      ),
-                    ),
-                  ],
+                PanelDropdownFormField<String>(
+                  label: 'Trust',
+                  value: _trust,
+                  values: _memoryTrustLevels,
+                  tooltip: 'Trust',
+                  labelFor: _memoryLabel,
+                  onChanged: (value) => setState(() => _trust = value),
                 ),
-                const SizedBox(height: 10),
-                PanelTextFormField(controller: _subjects, label: 'Subjects'),
-                const SizedBox(height: 10),
-                PanelTextFormField(controller: _topics, label: 'Topics'),
-                const SizedBox(height: 10),
-                PanelTextFormField(controller: _entities, label: 'Entities'),
+                PanelDropdownFormField<String>(
+                  label: 'Sensitivity',
+                  value: _sensitivity,
+                  values: _memorySensitivities,
+                  tooltip: 'Sensitivity',
+                  labelFor: _memoryLabel,
+                  onChanged: (value) => setState(() => _sensitivity = value),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 14),
-          PanelSectionBlock(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _MemoryPanelLabel('Nearby Records'),
-                const SizedBox(height: 10),
-                if (duplicates.isEmpty)
-                  Text(
-                    'No nearby records',
-                    style: TextStyle(color: context.agentAwesomeColors.muted),
-                  )
-                else
-                  for (final record in duplicates)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _MemoryRecordTile(
-                        record: record,
-                        selected: false,
-                        firewallLabel: widget.controller.memoryFirewallLabel(
-                          record.firewall,
-                        ),
-                        firewallAudience: widget.controller
-                            .memoryFirewallAudienceLabel(record.firewall),
-                        onTap: () => unawaited(
-                          widget.controller.selectMemory(
-                            widget.controller.memorySelectionKey(record),
-                          ),
-                        ),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            PanelTextFormField(controller: _subjects, label: 'Subjects'),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            PanelTextFormField(controller: _topics, label: 'Topics'),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            PanelTextFormField(controller: _entities, label: 'Entities'),
+            const SizedBox(height: PanelFormMetrics.compactGap),
+            FilledButton.icon(
+              onPressed: widget.controller.memoryBusy ? null : _save,
+              icon: const Icon(Icons.library_add_check_outlined),
+              label: const Text('Save Reviewed Memory'),
+            ),
+          ],
+        ),
+        PanelFormSection(
+          title: 'Nearby Records',
+          children: <Widget>[
+            if (duplicates.isEmpty)
+              Text(
+                'No nearby records',
+                style: TextStyle(color: context.agentAwesomeColors.muted),
+              )
+            else
+              for (final record in duplicates)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _MemoryRecordTile(
+                    record: record,
+                    selected: false,
+                    firewallLabel: widget.controller.memoryFirewallLabel(
+                      record.firewall,
+                    ),
+                    firewallAudience: widget.controller
+                        .memoryFirewallAudienceLabel(record.firewall),
+                    onTap: () => unawaited(
+                      widget.controller.selectMemory(
+                        widget.controller.memorySelectionKey(record),
                       ),
                     ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: widget.controller.memoryBusy ? null : _save,
-            icon: const Icon(Icons.library_add_check_outlined),
-            label: const Text('Save Reviewed Memory'),
-          ),
-        ],
-      ),
+                  ),
+                ),
+          ],
+        ),
+      ],
     );
   }
 

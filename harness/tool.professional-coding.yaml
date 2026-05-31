@@ -1,4 +1,4 @@
-# This file configures the professional coding workflow pilot tool package.
+# This file configures the professional coding runbook pilot tool package.
 local-exec:
   enabled: true
   default-timeout: 20m
@@ -151,7 +151,7 @@ validations:
     label: Codex implement success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: codex_implement
     description: Command boundary returns a successful Codex implementation result.
     input:
@@ -167,7 +167,7 @@ validations:
     label: Go build success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: go_build_all
     description: Command boundary returns a successful Go build result.
     input:
@@ -182,7 +182,7 @@ validations:
     label: Go test failure
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: go_test_all
     description: Command boundary returns a failed Go test result.
     input:
@@ -197,7 +197,7 @@ validations:
     label: Go binary build success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: go_build_binary
     description: Command boundary returns a successful binary build result.
     input:
@@ -213,7 +213,7 @@ validations:
     label: Binary invoke success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: binary_execute_two_args
     description: Command boundary returns a successful binary invocation result.
     input:
@@ -227,11 +227,11 @@ validations:
     expected:
       status: succeeded
 
-  - id: sourcecontrol_prepare_worktree_workflow_mocked
-    label: workflow invokes sourcecontrol prepare worktree
+  - id: sourcecontrol_prepare_worktree_runbook_mocked
+    label: runbook invokes sourcecontrol prepare worktree
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: sourcecontrol_prepare_worktree
     mocks:
       mcp.call:
@@ -244,11 +244,11 @@ validations:
       - type: json-path
         path: output.preset
         equals: sourcecontrol_prepare_worktree
-  - id: sourcecontrol_commit_workflow_mocked
-    label: workflow invokes sourcecontrol commit
+  - id: sourcecontrol_commit_runbook_mocked
+    label: runbook invokes sourcecontrol commit
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: sourcecontrol_commit
     mocks:
       mcp.call:
@@ -261,11 +261,11 @@ validations:
       - type: json-path
         path: output.preset
         equals: sourcecontrol_commit
-  - id: sourcecontrol_push_workflow_mocked
-    label: workflow invokes sourcecontrol push
+  - id: sourcecontrol_push_runbook_mocked
+    label: runbook invokes sourcecontrol push
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: sourcecontrol_push
     mocks:
       mcp.call:
@@ -278,11 +278,11 @@ validations:
       - type: json-path
         path: output.preset
         equals: sourcecontrol_push
-  - id: sourcecontrol_open_pull_request_workflow_mocked
-    label: workflow invokes sourcecontrol open pull request
+  - id: sourcecontrol_open_pull_request_runbook_mocked
+    label: runbook invokes sourcecontrol open pull request
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: sourcecontrol_open_pull_request
     mocks:
       mcp.call:
@@ -337,11 +337,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.inspect_repository
-  - id: sourcecontrol_sourcecontrol_inspect_repository_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.inspect repository
+  - id: sourcecontrol_sourcecontrol_inspect_repository_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.inspect repository
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.inspect_repository
     mocks:
@@ -398,11 +398,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.validate_repository
-  - id: sourcecontrol_sourcecontrol_validate_repository_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.validate repository
+  - id: sourcecontrol_sourcecontrol_validate_repository_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.validate repository
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.validate_repository
     mocks:
@@ -459,11 +459,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.prepare_worktree
-  - id: sourcecontrol_sourcecontrol_prepare_worktree_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.prepare worktree
+  - id: sourcecontrol_sourcecontrol_prepare_worktree_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.prepare worktree
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.prepare_worktree
     mocks:
@@ -520,11 +520,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.status
-  - id: sourcecontrol_sourcecontrol_status_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.status
+  - id: sourcecontrol_sourcecontrol_status_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.status
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.status
     mocks:
@@ -581,11 +581,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.commit
-  - id: sourcecontrol_sourcecontrol_commit_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.commit
+  - id: sourcecontrol_sourcecontrol_commit_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.commit
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.commit
     mocks:
@@ -642,11 +642,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.push
-  - id: sourcecontrol_sourcecontrol_push_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.push
+  - id: sourcecontrol_sourcecontrol_push_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.push
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.push
     mocks:
@@ -703,11 +703,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.open_pull_request
-  - id: sourcecontrol_sourcecontrol_open_pull_request_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.open pull request
+  - id: sourcecontrol_sourcecontrol_open_pull_request_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.open pull request
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.open_pull_request
     mocks:
@@ -764,11 +764,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.backup
-  - id: sourcecontrol_sourcecontrol_backup_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.backup
+  - id: sourcecontrol_sourcecontrol_backup_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.backup
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.backup
     mocks:
@@ -825,11 +825,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.restore
-  - id: sourcecontrol_sourcecontrol_restore_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.restore
+  - id: sourcecontrol_sourcecontrol_restore_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.restore
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.restore
     mocks:
@@ -886,11 +886,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: sourcecontrol.cleanup_worktree
-  - id: sourcecontrol_sourcecontrol_cleanup_worktree_workflow_mocked
-    label: workflow invokes sourcecontrol sourcecontrol.cleanup worktree
+  - id: sourcecontrol_sourcecontrol_cleanup_worktree_runbook_mocked
+    label: runbook invokes sourcecontrol sourcecontrol.cleanup worktree
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: sourcecontrol
       mcp-tool: sourcecontrol.cleanup_worktree
     mocks:

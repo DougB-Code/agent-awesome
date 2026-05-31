@@ -1,0 +1,16 @@
+= Launchpad Overview
+:description: Launchpad-facing Agent Awesome documentation.
+
+This module is for people running, supporting, and repairing local Agent Awesome environments.
+Release and hosting runbooks live outside this repository.
+
+Do not place end-user guidance or code contribution guidance here unless it is part of an launchpad-run procedure.
+User runbooks belong in xref:user:index.adoc[].
+Development runbooks belong in xref:development:contributor-setup.adoc[].
+
+== Local Launch
+
+Use this order for a local workstation run:
+
+1. xref:development:build-package.adoc[] when the local binaries or package archive are missing or stale.
+2. xref:launchpad:local-run.adoc[].

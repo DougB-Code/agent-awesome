@@ -42,119 +42,89 @@ class _TaskCaptureContentState extends State<_TaskCaptureContent> {
               _matchesTask(task, '${_title.text} ${widget.query}');
         })
         .take(4);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          PanelSectionBlock(
-            title: 'Task',
-            child: Column(
+    return PanelFormView(
+      children: <Widget>[
+        PanelFormSection(
+          title: 'Task',
+          children: <Widget>[
+            _TaskTextField(controller: _title, label: 'Title'),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            _TaskTextField(
+              controller: _description,
+              label: 'Description',
+              maxLines: 4,
+            ),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            PanelFieldGrid(
               children: <Widget>[
-                _TaskTextField(controller: _title, label: 'Title'),
-                const SizedBox(height: 10),
-                _TaskTextField(
-                  controller: _description,
-                  label: 'Description',
-                  maxLines: 4,
+                _TaskDropdown(
+                  value: _status,
+                  values: _taskStatuses,
+                  tooltip: 'Status',
+                  onChanged: (value) => setState(() => _status = value),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: _TaskDropdown(
-                        value: _status,
-                        values: _taskStatuses,
-                        tooltip: 'Status',
-                        onChanged: (value) => setState(() => _status = value),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _TaskDropdown(
-                        value: _priority,
-                        values: _taskPriorities,
-                        tooltip: 'Priority',
-                        onChanged: (value) => setState(() => _priority = value),
-                      ),
-                    ),
-                  ],
+                _TaskDropdown(
+                  value: _priority,
+                  values: _taskPriorities,
+                  tooltip: 'Priority',
+                  onChanged: (value) => setState(() => _priority = value),
                 ),
-                const SizedBox(height: 10),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: _TaskDatePickerField(
-                        controller: _dueAt,
-                        label: 'Due date',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _TaskDatePickerField(
-                        controller: _scheduledAt,
-                        label: 'Scheduled date',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                _TaskTextField(controller: _topics, label: 'Topics'),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Link selected memory'),
-                  value: _linkMemory,
-                  onChanged: widget.controller.selectedMemory == null
-                      ? null
-                      : (value) => setState(() => _linkMemory = value ?? false),
+                _TaskDatePickerField(controller: _dueAt, label: 'Due date'),
+                _TaskDatePickerField(
+                  controller: _scheduledAt,
+                  label: 'Scheduled date',
                 ),
               ],
             ),
-          ),
-          if (_message.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 10),
-            Text(
-              _message,
-              style: const TextStyle(color: AgentAwesomeColors.coral),
+            const SizedBox(height: PanelFormMetrics.fieldGap),
+            _TaskTextField(controller: _topics, label: 'Topics'),
+            const SizedBox(height: PanelFormMetrics.compactGap),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              controlAffinity: ListTileControlAffinity.trailing,
+              title: const Text('Link selected memory'),
+              value: _linkMemory,
+              onChanged: widget.controller.selectedMemory == null
+                  ? null
+                  : (value) => setState(() => _linkMemory = value ?? false),
+            ),
+            if (_message.isNotEmpty) ...<Widget>[
+              const SizedBox(height: PanelFormMetrics.compactGap),
+              Text(
+                _message,
+                style: const TextStyle(color: AgentAwesomeColors.coral),
+              ),
+            ],
+            const SizedBox(height: PanelFormMetrics.compactGap),
+            FilledButton.icon(
+              onPressed: widget.controller.tasksBusy ? null : _save,
+              icon: const Icon(Icons.add_task),
+              label: const Text('Create Backlog Item'),
             ),
           ],
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: widget.controller.tasksBusy ? null : _save,
-            icon: const Icon(Icons.add_task),
-            label: const Text('Create Backlog Item'),
-          ),
-          const SizedBox(height: 14),
-          PanelSectionBlock(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                _TaskPanelLabel('Nearby Backlog'),
-                const SizedBox(height: 10),
-                if (matches.isEmpty)
-                  Text(
-                    'No nearby context',
-                    style: TextStyle(color: context.agentAwesomeColors.muted),
-                  )
-                else
-                  for (final task in matches)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _TaskQueueTile(
-                        controller: widget.controller,
-                        task: task,
-                        selected: widget.controller.selectedTask?.id == task.id,
-                        focused: false,
-                        changes: const <ScreenChange>[],
-                        onTap: () =>
-                            widget.controller.inspectBacklogTask(task.id),
-                      ),
-                    ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+        PanelFormSection(
+          title: 'Nearby Backlog',
+          children: <Widget>[
+            if (matches.isEmpty)
+              Text(
+                'No nearby context',
+                style: TextStyle(color: context.agentAwesomeColors.muted),
+              )
+            else
+              for (final task in matches)
+                _TaskQueueTile(
+                  controller: widget.controller,
+                  task: task,
+                  selected: widget.controller.selectedTask?.id == task.id,
+                  focused: false,
+                  changes: const <ScreenChange>[],
+                  onTap: () => widget.controller.inspectBacklogTask(task.id),
+                ),
+          ],
+        ),
+      ],
     );
   }
 

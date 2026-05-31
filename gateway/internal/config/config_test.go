@@ -21,11 +21,11 @@ func TestFromFlagsDerivesDefaultHealthURLs(t *testing.T) {
 	if cfg.MemoryService.HealthURL != "http://127.0.0.1:8090/healthz" {
 		t.Fatalf("memory health = %q", cfg.MemoryService.HealthURL)
 	}
-	if cfg.WorkflowBaseURL != "http://127.0.0.1:8092/api/workflows" {
-		t.Fatalf("workflow base URL = %q", cfg.WorkflowBaseURL)
+	if cfg.RunbookBaseURL != "http://127.0.0.1:8092/api/runbooks" {
+		t.Fatalf("runbook base URL = %q", cfg.RunbookBaseURL)
 	}
-	if cfg.WorkflowService.HealthURL != "http://127.0.0.1:8092/healthz" {
-		t.Fatalf("workflow health = %q", cfg.WorkflowService.HealthURL)
+	if cfg.RunbookService.HealthURL != "http://127.0.0.1:8092/healthz" {
+		t.Fatalf("runbook health = %q", cfg.RunbookService.HealthURL)
 	}
 	if len(cfg.MemoryDomains) != 1 || cfg.MemoryDomains[0].ID != "memory" || cfg.MemoryDomains[0].Endpoint != "http://127.0.0.1:8090/mcp" {
 		t.Fatalf("memory domains = %#v, want default memory endpoint", cfg.MemoryDomains)
@@ -56,7 +56,7 @@ func TestFromFlagsConfiguresHarnessEmbeddedServices(t *testing.T) {
 		"--harness-arg", "--port",
 		"--harness-arg", "8080",
 		"--context-base-url", "http://127.0.0.1:8081/api/context",
-		"--workflow-base-url", "http://127.0.0.1:8092/api/workflows",
+		"--runbook-base-url", "http://127.0.0.1:8092/api/runbooks",
 	})
 	if err != nil {
 		t.Fatalf("FromFlags() error = %v", err)
@@ -67,7 +67,7 @@ func TestFromFlagsConfiguresHarnessEmbeddedServices(t *testing.T) {
 		"model.yaml",
 		"--context-api-addr",
 		"127.0.0.1:8081",
-		"--workflow-api-addr",
+		"--runbook-api-addr",
 		"127.0.0.1:8092",
 		"--",
 		"web",
@@ -90,9 +90,9 @@ func TestFromFlagsRejectsDuplicateControlServiceLaunchers(t *testing.T) {
 	clearGatewayAuthEnv(t)
 	_, err := FromFlags([]string{
 		"--harness-embedded-services",
-		"--workflow-auto-start",
-		"--workflow-command",
-		"/usr/local/bin/workflow-service",
+		"--runbook-auto-start",
+		"--runbook-command",
+		"/usr/local/bin/runbook-service",
 	})
 	if err == nil {
 		t.Fatalf("FromFlags() error = nil, want duplicate launcher validation")
@@ -107,7 +107,7 @@ func TestFromFlagsRejectsRemoteHarnessEmbeddedServiceURLs(t *testing.T) {
 		"--harness-auto-start",
 		"--harness-command", "/usr/local/bin/agent-awesome",
 		"--harness-arg", "run",
-		"--workflow-base-url", "https://agent-awesome.com/api/workflows",
+		"--runbook-base-url", "https://agent-awesome.com/api/runbooks",
 	})
 	if err == nil {
 		t.Fatalf("FromFlags() error = nil, want loopback validation")
@@ -474,12 +474,12 @@ func clearGatewayAuthEnv(t *testing.T) {
 	t.Setenv("AGENTAWESOME_HARNESS_ARGS", "")
 	t.Setenv("AGENTAWESOME_HARNESS_WORKDIR", "")
 	t.Setenv("AGENTAWESOME_HARNESS_AUTO_START", "")
-	t.Setenv("AGENTAWESOME_WORKFLOW_BASE_URL", "")
-	t.Setenv("AGENTAWESOME_WORKFLOW_HEALTH_URL", "")
-	t.Setenv("AGENTAWESOME_WORKFLOW_COMMAND", "")
-	t.Setenv("AGENTAWESOME_WORKFLOW_ARGS", "")
-	t.Setenv("AGENTAWESOME_WORKFLOW_WORKDIR", "")
-	t.Setenv("AGENTAWESOME_WORKFLOW_AUTO_START", "")
+	t.Setenv("AGENTAWESOME_RUNBOOK_BASE_URL", "")
+	t.Setenv("AGENTAWESOME_RUNBOOK_HEALTH_URL", "")
+	t.Setenv("AGENTAWESOME_RUNBOOK_COMMAND", "")
+	t.Setenv("AGENTAWESOME_RUNBOOK_ARGS", "")
+	t.Setenv("AGENTAWESOME_RUNBOOK_WORKDIR", "")
+	t.Setenv("AGENTAWESOME_RUNBOOK_AUTO_START", "")
 	t.Setenv("AGENTAWESOME_HARNESS_EMBEDDED_SERVICES", "")
 	t.Setenv("AGENTAWESOME_AGENT_PROFILES_JSON", "")
 	t.Setenv("AGENTAWESOME_ALLOWED_ORIGIN", "")

@@ -312,20 +312,20 @@ func TestAPIProxyWaitsForHarnessReadiness(t *testing.T) {
 	}
 }
 
-// TestWorkflowProxyRoutesThroughGateway verifies user-channel workflow calls stay gateway-routed.
-func TestWorkflowProxyRoutesThroughGateway(t *testing.T) {
+// TestRunbookProxyRoutesThroughGateway verifies user-channel runbook calls stay gateway-routed.
+func TestRunbookProxyRoutesThroughGateway(t *testing.T) {
 	var upstreamPaths []string
-	workflowService := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	runbookService := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		upstreamPaths = append(upstreamPaths, r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[]}`))
 	}))
-	defer workflowService.Close()
+	defer runbookService.Close()
 	server := newTestServer(t, supervisor.New(0), func(cfg *config.Config) {
-		cfg.WorkflowBaseURL = workflowService.URL + "/api/workflows"
+		cfg.RunbookBaseURL = runbookService.URL + "/api/runbooks"
 	})
 
-	paths := []string{"/api/workflows/inbox", "/api/workflows/drafts", "/api/workflows/action-types", "/api/capabilities", "/api/runtime-targets"}
+	paths := []string{"/api/runbooks/inbox", "/api/runbooks/drafts", "/api/runbooks/action-types", "/api/capabilities", "/api/runtime-targets"}
 	for _, path := range paths {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		recorder := httptest.NewRecorder()
@@ -336,7 +336,7 @@ func TestWorkflowProxyRoutesThroughGateway(t *testing.T) {
 	}
 	for index, path := range paths {
 		if upstreamPaths[index] != path {
-			t.Fatalf("workflow upstream path[%d] = %q, want %q", index, upstreamPaths[index], path)
+			t.Fatalf("runbook upstream path[%d] = %q, want %q", index, upstreamPaths[index], path)
 		}
 	}
 }

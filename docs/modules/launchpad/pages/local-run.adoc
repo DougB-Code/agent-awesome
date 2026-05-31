@@ -1,0 +1,182 @@
+= Local Run
+:description: Step-by-step local Agent Awesome runtime startup.
+
+This page starts Agent Awesome locally without relying on external release or hosting assets.
+Use it to prove the memory service, harness-hosted control services, gateway, and UI can run on the workstation.
+
+== Credential
+
+The default local Agent Awesome assistant uses OpenAI.
+Store the credential in the harness keyring:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/harness
+go run ./cmd/agent-awesome credentials set OPENAI_API_KEY
+----
+
+You may also export `OPENAI_API_KEY` in the shell that starts the harness.
+Keyring values take precedence over environment variables.
+
+Verify the configured model ID and credential before starting Agent Awesome:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/harness
+go run ./cmd/agent-awesome models check \
+  --model model.yaml \
+  --provider openai \
+  --model-id gpt-mini
+----
+
+== UI-Managed Local Run
+
+This is the normal desktop app path.
+The default UI runtime topology starts memory, the harness, and the gateway.
+The harness owns the runbook listener and attaches command tools directly to
+the ADK runtime for the local topology.
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/ui
+flutter run -d linux \
+  --dart-define=AGENTAWESOME_WORKSPACE_ROOT=/home/doug/dev/agentawesome/agent
+----
+
+The default topology uses:
+
+[cols="1,2",options="header"]
+|===
+|Service |Endpoint
+
+|Memory
+|`http://127.0.0.1:8090/mcp`
+
+|Harness API
+|`http://127.0.0.1:8080/api`
+
+|Harness context API
+|`http://127.0.0.1:8081/api/context`
+
+|Runbook API
+|`http://127.0.0.1:8092/api/runbooks`
+
+|Gateway API
+|`http://127.0.0.1:8070/api`
+|===
+
+The harness context API is a gateway dependency, not a browser-facing service.
+Keep it on loopback for local runs. If you intentionally bind it to a
+non-loopback address, set `AGENTAWESOME_CONTEXT_API_TOKEN` on both the harness
+and gateway, or pass the matching `--context-api-token` flag to each process.
+
+Verify the managed services from another terminal:
+
+[source,sh]
+----
+curl -fsS http://127.0.0.1:8090/healthz
+curl -fsS http://127.0.0.1:8081/api/context/healthz
+curl -fsS http://127.0.0.1:8092/healthz
+curl -fsS http://127.0.0.1:8070/healthz
+curl -fsS http://127.0.0.1:8070/api/gateway/status
+----
+
+If any service fails to start, inspect logs under:
+
+[source,text]
+----
+/home/doug/dev/agentawesome/agent/logs
+----
+
+== Manual Local Run
+
+Manual mode is useful when you want each service in a separate terminal.
+Build the binaries first with xref:development:build-package.adoc[].
+
+Terminal 1, memory:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+APP_DATA_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-awesome/data"
+mkdir -p "$APP_DATA_DIR/memory" build/local/logs
+./build/package/bin/memoryd \
+  --addr 127.0.0.1:8090 \
+  --db "$APP_DATA_DIR/memory/memory.db" \
+  --data "$APP_DATA_DIR/memory/files" \
+  --log-file build/local/logs/memory.log
+----
+
+Memory binds to loopback by default. A non-loopback memory bind requires the
+explicit `--allow-public-bind` flag and should only be used behind an
+authenticated gateway or another trusted network boundary.
+
+Terminal 2, harness:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+APP_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-awesome/config"
+APP_DATA_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent-awesome/data"
+mkdir -p "$APP_CONFIG_DIR/runbooks" "$APP_CONFIG_DIR/command/parsers" "$APP_DATA_DIR/runbook" "$APP_DATA_DIR/command" build/local/logs
+./build/package/bin/agent-awesome run \
+  --model harness/model.yaml \
+  --agent harness/agent.yaml \
+  --tool harness/tool.local.yaml \
+  --context-api-addr 127.0.0.1:8081 \
+  --runbook-api-addr 127.0.0.1:8092 \
+  --runbook-definitions "$APP_CONFIG_DIR/runbooks" \
+  --runbook-db "$APP_DATA_DIR/runbook/runbook.db" \
+  --command-data-dir "$APP_DATA_DIR/command" \
+  --command-parser-dir "$APP_CONFIG_DIR/command/parsers" \
+  --command-allow-workdir "$PWD" \
+  --log-file build/local/logs/harness.log \
+  -- web --port 8080 api --webui_address 127.0.0.1:8080
+----
+
+Terminal 3, gateway:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent
+./build/package/bin/agent-gateway \
+  --addr 127.0.0.1:8070 \
+  --harness-base-url http://127.0.0.1:8080/api \
+  --context-base-url http://127.0.0.1:8081/api/context \
+  --runbook-base-url http://127.0.0.1:8092/api/runbooks \
+  --harness-embedded-services \
+  --memory-mcp-url http://127.0.0.1:8090/mcp \
+  --app-name agent_awesome \
+  --user-id doug
+----
+
+The gateway can omit `--auth-token` only for loopback binds such as
+`127.0.0.1:8070`. Set `--auth-token` or `AGENTAWESOME_GATEWAY_TOKEN` before
+using a non-loopback bind or non-local CORS origin. Add
+`--allow-unauthenticated-loopback-only=false` when you want to require bearer
+auth even on loopback.
+
+Beta users should reach context tools through `/api/context/*` on the gateway.
+Direct harness context API access is limited to loopback unless protected by
+`--context-api-token` / `AGENTAWESOME_CONTEXT_API_TOKEN`.
+
+Terminal 4, UI against the already running services:
+
+[source,sh]
+----
+cd /home/doug/dev/agentawesome/agent/ui
+flutter run -d linux \
+  --dart-define=AGENTAWESOME_WORKSPACE_ROOT=/home/doug/dev/agentawesome/agent \
+  --dart-define=AUTO_START_LOCAL_SERVICES=false
+----
+
+== Local Shutdown
+
+Stop foreground services with `Ctrl+C`.
+If the UI managed the services, close the UI normally.
+On Linux, check for leftover local listeners with:
+
+[source,sh]
+----
+ss -ltnp '( sport = :8070 or sport = :8080 or sport = :8081 or sport = :8090 or sport = :8092 )'
+----

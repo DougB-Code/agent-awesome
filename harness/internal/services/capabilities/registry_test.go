@@ -1,4 +1,4 @@
-// This file tests Capability Registry normalization and workflow gating.
+// This file tests Capability Registry normalization and runbook gating.
 package capabilities
 
 import (
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"agentawesome/internal/config/schema"
-	"agentawesome/internal/services/workflow/definition"
+	"agentawesome/internal/services/runbook/definition"
 )
 
 // TestRegistryLoadsConfiguredCapabilities verifies each configured boundary is normalized.
@@ -21,11 +21,11 @@ func TestRegistryLoadsConfiguredCapabilities(t *testing.T) {
 	if !ok {
 		t.Fatalf("command:lint not found")
 	}
-	if !command.UsableInChat || !command.UsableInWorkflows {
-		t.Fatalf("command usability = chat %v workflow %v, want both true", command.UsableInChat, command.UsableInWorkflows)
+	if !command.UsableInChat || !command.UsableInRunbooks {
+		t.Fatalf("command usability = chat %v runbook %v, want both true", command.UsableInChat, command.UsableInRunbooks)
 	}
-	if command.Invocation.DirectToolName != "command_execute" || command.Invocation.WorkflowAction != "command.execute" {
-		t.Fatalf("command invocation = %#v, want distinct direct and workflow calls", command.Invocation)
+	if command.Invocation.DirectToolName != "command_execute" || command.Invocation.RunbookAction != "command.execute" {
+		t.Fatalf("command invocation = %#v, want distinct direct and runbook calls", command.Invocation)
 	}
 	if command.Invocation.CommandTemplate != "lint" {
 		t.Fatalf("command template = %q, want lint", command.Invocation.CommandTemplate)
@@ -39,15 +39,15 @@ func TestRegistryLoadsConfiguredCapabilities(t *testing.T) {
 		t.Fatalf("MCP push confirmation metadata = %#v / %#v, want required", mcpTool.Contract, mcpTool.Risk)
 	}
 
-	expectCapability(t, registry, "workflow_action:data.assert", KindWorkflowAction)
+	expectCapability(t, registry, "runbook_action:data.assert", KindRunbookAction)
 	expectCapability(t, registry, "agent_profile:default", KindAgentProfile)
 	expectCapability(t, registry, "node_preset:lint", KindNodePreset)
 	validation := expectCapability(t, registry, "tool_validation:lint_success", KindToolValidation)
 	if validation.TestResults[0].Type != TestMockedValidation {
 		t.Fatalf("validation test type = %q, want %q", validation.TestResults[0].Type, TestMockedValidation)
 	}
-	if validation.Invocation.ValidationTarget["type"] != "workflow-node" {
-		t.Fatalf("validation target = %#v, want workflow-node", validation.Invocation.ValidationTarget)
+	if validation.Invocation.ValidationTarget["type"] != "runbook-node" {
+		t.Fatalf("validation target = %#v, want runbook-node", validation.Invocation.ValidationTarget)
 	}
 }
 
@@ -170,7 +170,7 @@ func testToolsConfig(localExecEnabled bool) *schema.Tools {
 			Label: "Lint success",
 			Mode:  "mocked",
 			Target: schema.ToolValidationTarget{
-				Type:     "workflow-node",
+				Type:     "runbook-node",
 				PresetID: "lint",
 			},
 			Expected: map[string]any{"status": "succeeded"},

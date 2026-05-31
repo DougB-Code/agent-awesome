@@ -50,7 +50,7 @@ void main() {
               'covered': 1,
               'missing': <Map<String, dynamic>>[
                 <String, dynamic>{
-                  'type': 'workflow-node',
+                  'type': 'runbook-node',
                   'id': 'curl_http_get',
                   'label': 'curl HTTP GET',
                 },
@@ -151,7 +151,7 @@ void main() {
         'covered': 1,
         'missing': <Map<String, dynamic>>[
           <String, dynamic>{
-            'type': 'workflow-node',
+            'type': 'runbook-node',
             'id': 'curl_http_get',
             'label': 'curl HTTP GET',
           },
@@ -245,7 +245,7 @@ void main() {
         'required': 3,
         'covered': 2,
         'missing': <Map<String, dynamic>>[
-          <String, dynamic>{'type': 'workflow-node', 'id': 'curl.http_get'},
+          <String, dynamic>{'type': 'runbook-node', 'id': 'curl.http_get'},
         ],
       },
       'input_schema_coverage': <String, dynamic>{
@@ -260,7 +260,7 @@ void main() {
       },
       'results': <Map<String, dynamic>>[
         _toolValidationJson('curl_http_get_agent', 'failed'),
-        _toolValidationJson('curl_http_get_workflow', 'passed'),
+        _toolValidationJson('curl_http_get_runbook', 'passed'),
       ],
     });
     final next = ToolValidationSuiteResult.fromJson(<String, dynamic>{

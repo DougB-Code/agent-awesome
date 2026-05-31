@@ -1,8 +1,8 @@
 = Local Chat
-:description: User-facing local chat workflow.
+:description: User-facing local chat runbook.
 
 Local chat uses the Flutter UI, the gateway, the harness, and memory.
-For the default local topology, the workflow endpoint runs inside the harness process, and command tools are attached directly to the ADK runtime.
+For the default local topology, the runbook endpoint runs inside the harness process, and command tools are attached directly to the ADK runtime.
 The UI sends assistant traffic through the configured gateway endpoint; the gateway forwards agent calls to the harness and memory calls to the memory service.
 
 == Before You Chat

@@ -77,17 +77,17 @@ void main() {
     expect(route.section, AppSections.backlog);
   });
 
-  test('routes workflow authoring aliases to Workflows', () {
+  test('routes runbook authoring aliases to Runbooks', () {
     final route = _router().route(
       const CommandContext(
         section: AppSections.memory,
         area: 'Library',
-        text: 'open workflows',
+        text: 'open runbooks',
       ),
     );
 
     expect(route.kind, CommandRouteKind.navigateSection);
-    expect(route.section, AppSections.automationWorkflows);
+    expect(route.section, AppSections.automationRunbooks);
   });
 
   test('routes agent authoring aliases to Automations Agents', () {

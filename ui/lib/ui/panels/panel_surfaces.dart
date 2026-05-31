@@ -161,6 +161,120 @@ class PanelSurface extends StatelessWidget {
   }
 }
 
+/// PanelSelectorTile renders a shared selectable item-picker row.
+class PanelSelectorTile extends StatelessWidget {
+  /// Creates a reusable command-panel selector tile.
+  const PanelSelectorTile({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.detail,
+    required this.selected,
+    required this.onTap,
+    this.trailing,
+    this.footer,
+    this.detailMaxLines = 2,
+  });
+
+  /// Primary item label.
+  final String label;
+
+  /// Leading icon that identifies the item type.
+  final IconData icon;
+
+  /// Secondary item detail text.
+  final String detail;
+
+  /// Whether this tile is the active selection.
+  final bool selected;
+
+  /// Selects this item.
+  final VoidCallback onTap;
+
+  /// Optional trailing item controls or status.
+  final Widget? trailing;
+
+  /// Optional metadata shown under the label and detail.
+  final Widget? footer;
+
+  /// Maximum number of lines used by the detail text.
+  final int detailMaxLines;
+
+  /// Builds a quiet selector card with shared active styling.
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.agentAwesomeColors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(4),
+          onTap: onTap,
+          child: PanelSurface(
+            fillWidth: true,
+            padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+            style: PanelSurfaceStyle.card,
+            selected: selected,
+            clipBehavior: Clip.antiAlias,
+            borderRadius: BorderRadius.circular(4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(
+                  icon,
+                  color: selected ? colors.cardAccent : colors.muted,
+                  size: 22,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.ink,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          height: 1.3,
+                        ),
+                      ),
+                      if (detail.isNotEmpty) ...<Widget>[
+                        const SizedBox(height: 5),
+                        Text(
+                          detail,
+                          maxLines: detailMaxLines,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.muted,
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                      if (footer != null) ...<Widget>[
+                        const SizedBox(height: 12),
+                        footer!,
+                      ],
+                    ],
+                  ),
+                ),
+                if (trailing != null) ...<Widget>[
+                  const SizedBox(width: 12),
+                  trailing!,
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// PanelBodySurface paints a shared background behind pane body content.
 class PanelBodySurface extends StatelessWidget {
   /// Creates a reusable panel body background.

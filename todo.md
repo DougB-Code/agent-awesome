@@ -1,38 +1,14 @@
 # TODO
 
-## Current
-
-- Build and run runbooks.
-- Rename 'Workflows' to 'Runbooks' and 'Operations' to 'Launchpad'.
-- Are any of the automations tied to the Flutter UI? Can they be run via Slack chat?
-
-
-## Next
-
-- Run agent and Codex CLI remotely on Cloud provider.
-- Open PR and publish to protected GitHub repo. 
-- Enable remote via Slack.
-- Enable overnight coding via CRON job.
-- Run cleanup passes to eliminate excess logic and duplicate implementations.
-- I can run UI from my computer, and it does all work on remote server, like remote control over an SSH tunnel. Will help when working with a poor connection.
+## Quick Cleanups
 
 
 
-## Parking Lot
+## Automated Task Queue Work
 
-
-### Agents
-
-- The settings show an Assigned button, but it doesn't tell me where it's assigned. This is useless info.
-
-
-### Chat
-
-- Add support for ingesting files.
-- Add support for invoking new model modalities:
-  - Image gen
-  - Audio/music gen
-  - Video gen
+- Enable overnight tasks via CRON job.
+- Agent wakes periodically to check if there's a task it can work in (ie: can delegate to agent).
+- Agent works on the task. 
 
 
 ### Features
@@ -60,8 +36,6 @@
 
 - Remove Model Id from the new model form. The ID can be composed from the provider id and model name, and kept constant once set. 
 
-- There's no reason to show the provider yaml at all. 
-
 - Add API key verification to model providers. 
 
 - Add pill to show if it's saved in web credential of as env var
@@ -75,7 +49,7 @@
 
 ### Products
 
-- Can the workflow engine itself be used to provide training to employees on how to do processes? For example, can it be used to show people how to use AI to perform a role? 
+- Can the runbook engine itself be used to provide training to employees on how to do processes? For example, can it be used to show people how to use AI to perform a role? 
 
 - See how we can clone Kanban Lite, possibly using a plugin architecture, not first class. 
 
@@ -115,15 +89,9 @@
 
 - Reduce width of side menu by 10%.
 
-- Pressing the side chat button isn't adding a third column, it's replacing the second column.
-
-### Workflows
+### Runbooks
 
 - There's no need to show the left side 'Actions' button unless the Builder canvas is active. It should only be enabled for that screen.
-
-- Default opening the workflow to the workflow picker. 
-
-- Move the copy/delete buttons to the right on each right panel. 
 
 
 ## Misc
@@ -131,6 +99,4 @@
 > The repo’s dart shim tried to touch a read-only Flutter stamp, so I’m switching to the SDK Dart binary directly. Same formatter, less drama from the Flutter cache.
 
 Can I create multiple Codex config profiles so I can separate live pilot from code updates which  need flutter?
-
-
 

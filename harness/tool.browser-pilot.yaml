@@ -172,11 +172,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: remember
-  - id: memory_remember_workflow_mocked
-    label: workflow invokes memory remember
+  - id: memory_remember_runbook_mocked
+    label: runbook invokes memory remember
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: remember
     mocks:
@@ -233,11 +233,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: save_memory_candidate
-  - id: memory_save_memory_candidate_workflow_mocked
-    label: workflow invokes memory save memory candidate
+  - id: memory_save_memory_candidate_runbook_mocked
+    label: runbook invokes memory save memory candidate
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: save_memory_candidate
     mocks:
@@ -294,11 +294,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: search_memory
-  - id: memory_search_memory_workflow_mocked
-    label: workflow invokes memory search memory
+  - id: memory_search_memory_runbook_mocked
+    label: runbook invokes memory search memory
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: search_memory
     mocks:
@@ -355,11 +355,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: search_sources
-  - id: memory_search_sources_workflow_mocked
-    label: workflow invokes memory search sources
+  - id: memory_search_sources_runbook_mocked
+    label: runbook invokes memory search sources
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: search_sources
     mocks:
@@ -416,11 +416,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: load_entity_page
-  - id: memory_load_entity_page_workflow_mocked
-    label: workflow invokes memory load entity page
+  - id: memory_load_entity_page_runbook_mocked
+    label: runbook invokes memory load entity page
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: load_entity_page
     mocks:
@@ -477,11 +477,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: load_timeline
-  - id: memory_load_timeline_workflow_mocked
-    label: workflow invokes memory load timeline
+  - id: memory_load_timeline_runbook_mocked
+    label: runbook invokes memory load timeline
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: load_timeline
     mocks:
@@ -538,11 +538,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: refresh_compiled_page
-  - id: memory_refresh_compiled_page_workflow_mocked
-    label: workflow invokes memory refresh compiled page
+  - id: memory_refresh_compiled_page_runbook_mocked
+    label: runbook invokes memory refresh compiled page
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: refresh_compiled_page
     mocks:
@@ -599,11 +599,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: repair_memory_record
-  - id: memory_repair_memory_record_workflow_mocked
-    label: workflow invokes memory repair memory record
+  - id: memory_repair_memory_record_runbook_mocked
+    label: runbook invokes memory repair memory record
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: repair_memory_record
     mocks:
@@ -660,11 +660,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: submit_memory_correction
-  - id: memory_submit_memory_correction_workflow_mocked
-    label: workflow invokes memory submit memory correction
+  - id: memory_submit_memory_correction_runbook_mocked
+    label: runbook invokes memory submit memory correction
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: submit_memory_correction
     mocks:
@@ -721,11 +721,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: query_context_graph
-  - id: memory_query_context_graph_workflow_mocked
-    label: workflow invokes memory query context graph
+  - id: memory_query_context_graph_runbook_mocked
+    label: runbook invokes memory query context graph
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: query_context_graph
     mocks:
@@ -782,11 +782,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: mutate_context_graph
-  - id: memory_mutate_context_graph_workflow_mocked
-    label: workflow invokes memory mutate context graph
+  - id: memory_mutate_context_graph_runbook_mocked
+    label: runbook invokes memory mutate context graph
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: mutate_context_graph
     mocks:
@@ -843,11 +843,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: create_task
-  - id: memory_create_task_workflow_mocked
-    label: workflow invokes memory create task
+  - id: memory_create_task_runbook_mocked
+    label: runbook invokes memory create task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: create_task
     mocks:
@@ -904,11 +904,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: get_task
-  - id: memory_get_task_workflow_mocked
-    label: workflow invokes memory get task
+  - id: memory_get_task_runbook_mocked
+    label: runbook invokes memory get task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: get_task
     mocks:
@@ -965,11 +965,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: list_tasks
-  - id: memory_list_tasks_workflow_mocked
-    label: workflow invokes memory list tasks
+  - id: memory_list_tasks_runbook_mocked
+    label: runbook invokes memory list tasks
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: list_tasks
     mocks:
@@ -1026,11 +1026,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: task_graph_projection
-  - id: memory_task_graph_projection_workflow_mocked
-    label: workflow invokes memory task graph projection
+  - id: memory_task_graph_projection_runbook_mocked
+    label: runbook invokes memory task graph projection
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: task_graph_projection
     mocks:
@@ -1087,11 +1087,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: project_executive_summary
-  - id: memory_project_executive_summary_workflow_mocked
-    label: workflow invokes memory project executive summary
+  - id: memory_project_executive_summary_runbook_mocked
+    label: runbook invokes memory project executive summary
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: project_executive_summary
     mocks:
@@ -1148,11 +1148,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: explain_executive_summary_item
-  - id: memory_explain_executive_summary_item_workflow_mocked
-    label: workflow invokes memory explain executive summary item
+  - id: memory_explain_executive_summary_item_runbook_mocked
+    label: runbook invokes memory explain executive summary item
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: explain_executive_summary_item
     mocks:
@@ -1209,11 +1209,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: update_task
-  - id: memory_update_task_workflow_mocked
-    label: workflow invokes memory update task
+  - id: memory_update_task_runbook_mocked
+    label: runbook invokes memory update task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: update_task
     mocks:
@@ -1270,11 +1270,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: complete_task
-  - id: memory_complete_task_workflow_mocked
-    label: workflow invokes memory complete task
+  - id: memory_complete_task_runbook_mocked
+    label: runbook invokes memory complete task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: complete_task
     mocks:
@@ -1331,11 +1331,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: cancel_task
-  - id: memory_cancel_task_workflow_mocked
-    label: workflow invokes memory cancel task
+  - id: memory_cancel_task_runbook_mocked
+    label: runbook invokes memory cancel task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: cancel_task
     mocks:
@@ -1392,11 +1392,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: delete_task
-  - id: memory_delete_task_workflow_mocked
-    label: workflow invokes memory delete task
+  - id: memory_delete_task_runbook_mocked
+    label: runbook invokes memory delete task
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: delete_task
     mocks:
@@ -1453,11 +1453,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: link_task_memory
-  - id: memory_link_task_memory_workflow_mocked
-    label: workflow invokes memory link task memory
+  - id: memory_link_task_memory_runbook_mocked
+    label: runbook invokes memory link task memory
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: link_task_memory
     mocks:
@@ -1514,11 +1514,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: list_task_relations
-  - id: memory_list_task_relations_workflow_mocked
-    label: workflow invokes memory list task relations
+  - id: memory_list_task_relations_runbook_mocked
+    label: runbook invokes memory list task relations
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: list_task_relations
     mocks:
@@ -1575,11 +1575,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: traverse_task_relations
-  - id: memory_traverse_task_relations_workflow_mocked
-    label: workflow invokes memory traverse task relations
+  - id: memory_traverse_task_relations_runbook_mocked
+    label: runbook invokes memory traverse task relations
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: traverse_task_relations
     mocks:
@@ -1636,11 +1636,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: upsert_task_relation
-  - id: memory_upsert_task_relation_workflow_mocked
-    label: workflow invokes memory upsert task relation
+  - id: memory_upsert_task_relation_runbook_mocked
+    label: runbook invokes memory upsert task relation
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: upsert_task_relation
     mocks:
@@ -1697,11 +1697,11 @@ validations:
       - type: json-path
         path: output.arguments.tool
         equals: delete_task_relation
-  - id: memory_delete_task_relation_workflow_mocked
-    label: workflow invokes memory delete task relation
+  - id: memory_delete_task_relation_runbook_mocked
+    label: runbook invokes memory delete task relation
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: delete_task_relation
     mocks:

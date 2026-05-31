@@ -359,7 +359,7 @@ class ToolValidationCoverageItem {
     required this.label,
   });
 
-  /// Target type, such as command-operation, agent-tool-call, workflow-node, or mcp-tool.
+  /// Target type, such as command-operation, agent-tool-call, runbook-node, or mcp-tool.
   final String type;
 
   /// Stable target id.
@@ -478,10 +478,10 @@ class ToolValidationTargetResult {
     required this.boundary,
   });
 
-  /// Target type, such as command-operation or workflow-node.
+  /// Target type, such as command-operation or runbook-node.
   final String type;
 
-  /// Workflow node preset id, when used.
+  /// Runbook node preset id, when used.
   final String presetId;
 
   /// Command tool id, when used.

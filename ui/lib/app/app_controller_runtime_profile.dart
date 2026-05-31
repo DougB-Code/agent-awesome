@@ -1,4 +1,4 @@
-/// Agent runtime and config-file workflows for AgentAwesomeAppController.
+/// Agent runtime and config-file runbooks for AgentAwesomeAppController.
 part of 'app_controller.dart';
 
 extension AgentAwesomeAppControllerRuntimeProfiles
@@ -28,6 +28,304 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     _refreshEndpointSkeleton(profile);
     statusMessage = 'Agent runtime saved';
     _notifyControllerListeners();
+  }
+
+  /// Exports the active runtime configuration as a remote Docker bundle.
+  Future<RemoteRuntimeDockerBundle> exportRemoteDockerBundle({
+    String outputDirectory = '',
+    String imageTag = 'agent-awesome/remote-runtime:latest',
+    String gatewayBaseUrl = '',
+    String localModelPath = '',
+    String localModelServerExecutablePath = '',
+  }) async {
+    final profile = runtimeProfile;
+    if (profile == null) {
+      throw StateError('No runtime profile is loaded');
+    }
+    final bundleRoot = outputDirectory.trim().isEmpty
+        ? '${config.workspaceRoot}/${remoteDockerBundleDirectoryPath(profile.id)}'
+        : outputDirectory.trim();
+    final bundleDirectory = Directory(bundleRoot);
+    final configDirectory = Directory('${bundleDirectory.path}/config');
+    final runbookDirectory = Directory('${configDirectory.path}/runbooks');
+    final scriptsDirectory = Directory('${bundleDirectory.path}/scripts');
+    final binDirectory = Directory('${configDirectory.path}/bin');
+    await configDirectory.create(recursive: true);
+    await runbookDirectory.create(recursive: true);
+    await scriptsDirectory.create(recursive: true);
+    final bundledModelServerPath = await _copyLocalModelServerExecutable(
+      localModelServerExecutablePath,
+      binDirectory,
+    );
+
+    await _copyBundleFile(
+      profile.harness.agentConfigPath,
+      '${configDirectory.path}/agent.yaml',
+      'agent config',
+    );
+    await _copyBundleFile(
+      profile.harness.toolConfigPath,
+      '${configDirectory.path}/tool.yaml',
+      'tool config',
+    );
+    await _copyRemoteModelConfig('${configDirectory.path}/model.yaml');
+    await _copyRunbookDefinitionsForRemoteBundle(profile, runbookDirectory);
+
+    final remoteProfilePath = '${bundleDirectory.path}/runtime-profile.json';
+    final remoteProfile = _remoteGatewayProfile(
+      profile,
+      gatewayBaseUrl: gatewayBaseUrl.trim().isEmpty
+          ? profile.gateway.apiBaseUrl
+          : gatewayBaseUrl.trim(),
+    );
+    await File(
+      remoteProfilePath,
+    ).writeAsString(encodeRuntimeProfileJson(remoteProfile));
+
+    final dockerfilePath = '${bundleDirectory.path}/Dockerfile';
+    final relativeBundle = _workspaceRelativePath(bundleDirectory.path);
+    await File(dockerfilePath).writeAsString(
+      _remoteDockerfileForBundle(
+        relativeBundle,
+        hasModelServerExecutable: bundledModelServerPath.isNotEmpty,
+      ),
+    );
+
+    final tag = imageTag.trim().isEmpty
+        ? 'agent-awesome/remote-runtime:latest'
+        : imageTag.trim();
+    final buildCommand = <String>[
+      'docker',
+      'build',
+      '-f',
+      dockerfilePath,
+      '-t',
+      tag,
+      config.workspaceRoot,
+    ];
+    final runCommand = _remoteDockerRunCommand(
+      tag,
+      gatewayBaseUrl: remoteProfile.gateway.apiBaseUrl,
+      profileId: remoteProfile.gateway.profileId,
+      appName: remoteProfile.harness.appName,
+      userId: remoteProfile.harness.userId,
+      localModelPath: localModelPath,
+      modelServerExecutablePath: _containerModelServerExecutablePath(
+        bundledModelServerPath,
+      ),
+    );
+    final buildScriptPath = '${scriptsDirectory.path}/build-image.sh';
+    final runScriptPath = '${scriptsDirectory.path}/run-container.sh';
+    final deployScriptPath = '${scriptsDirectory.path}/deploy-remote.sh';
+    await _writeExecutableScript(
+      buildScriptPath,
+      _shellScriptForCommand(buildCommand),
+    );
+    await _writeExecutableScript(
+      runScriptPath,
+      _shellScriptForCommand(runCommand),
+    );
+    await _writeExecutableScript(
+      deployScriptPath,
+      _remoteDeployScript(
+        imageTag: tag,
+        runCommand: runCommand,
+        localModelPath: localModelPath,
+      ),
+    );
+    statusMessage = 'Remote Docker bundle ready';
+    _notifyControllerListeners();
+    return RemoteRuntimeDockerBundle(
+      rootPath: bundleDirectory.path,
+      dockerfilePath: dockerfilePath,
+      runtimeProfilePath: remoteProfilePath,
+      buildScriptPath: buildScriptPath,
+      runScriptPath: runScriptPath,
+      remoteDeployScriptPath: deployScriptPath,
+      imageTag: tag,
+      buildCommand: buildCommand,
+      runCommand: runCommand,
+      remoteDeployCommand: <String>['bash', deployScriptPath],
+      localModelPath: localModelPath.trim(),
+      remoteModelPath: _containerModelPath(localModelPath),
+      localModelServerExecutablePath: localModelServerExecutablePath.trim(),
+      remoteModelServerExecutablePath: _containerModelServerExecutablePath(
+        bundledModelServerPath,
+      ),
+    );
+  }
+
+  /// Returns the active app-managed local model artifact path for bundle mounts.
+  Future<String> activeLocalModelArtifactPath() async {
+    final provider = await _activeLocalProviderConfig();
+    if (provider == null) {
+      return '';
+    }
+    return _configuredLocalModelPath(provider);
+  }
+
+  /// Returns the active llama.cpp server executable path for Docker bundles.
+  Future<String> activeLocalLlamaServerExecutablePath() async {
+    final provider = await _activeLocalProviderConfig();
+    if (provider == null) {
+      return '';
+    }
+    final descriptor = _localModelDescriptorForProvider(provider);
+    if (descriptor.runtimeKind != LocalModelRuntimeKind.llamaCpp) {
+      return '';
+    }
+    final configured = provider.executable.trim();
+    if (configured.isNotEmpty && await File(configured).exists()) {
+      return configured;
+    }
+    return await _localModelExecutableForConfig(descriptor) ?? '';
+  }
+
+  /// Builds a generated remote Docker runtime image through the UI process boundary.
+  Future<ManagedProcessResult> buildRemoteDockerBundleImage(
+    RemoteRuntimeDockerBundle bundle, {
+    String dockerExecutable = 'docker',
+  }) async {
+    final result = await processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'remote-docker-build-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'Remote Docker build',
+        executable: dockerExecutable,
+        arguments: _commandArgumentsForExecutable(
+          bundle.buildCommand,
+          dockerExecutable,
+        ),
+        workingDirectory: config.workspaceRoot,
+        kind: ManagedProcessKind.oneShotCommand,
+        shutdownMode: ManagedProcessShutdownMode.processOnly,
+        timeout: const Duration(minutes: 30),
+        scope: 'remote-runtime',
+      ),
+    );
+    _throwIfRemoteDockerCommandFailed(result, 'Remote Docker image build');
+    statusMessage = 'Remote Docker image built';
+    _notifyControllerListeners();
+    return result;
+  }
+
+  /// Starts a generated remote Docker runtime container under UI supervision.
+  Future<ManagedProcessHandle> startRemoteDockerBundleContainer(
+    RemoteRuntimeDockerBundle bundle, {
+    String dockerExecutable = 'docker',
+    String gatewayToken = '',
+  }) async {
+    final arguments = _dockerRunArgumentsForUI(
+      bundle.runCommand,
+      dockerExecutable: dockerExecutable,
+      gatewayToken: gatewayToken,
+    );
+    final handle = await processSupervisor.start(
+      ManagedProcessSpec(
+        id: 'remote-docker-container',
+        name: 'Remote Docker runtime',
+        executable: dockerExecutable,
+        arguments: arguments,
+        workingDirectory: config.workspaceRoot,
+        kind: ManagedProcessKind.longRunningService,
+        shutdownMode: ManagedProcessShutdownMode.processGroup,
+        persistence: ManagedProcessPersistence.pidRecord,
+        scope: 'remote-runtime',
+        outputLogPath: '${config.serviceLogDirectory}/remote-docker.log',
+      ),
+    );
+    statusMessage = 'Remote Docker runtime started';
+    _notifyControllerListeners();
+    return handle;
+  }
+
+  /// Transfers a built Docker image and optional model to a remote Docker host.
+  Future<ManagedProcessResult> deployRemoteDockerBundle(
+    RemoteRuntimeDockerBundle bundle, {
+    required String remoteHost,
+    String gatewayToken = '',
+    String bashExecutable = 'bash',
+  }) async {
+    final host = remoteHost.trim();
+    if (host.isEmpty) {
+      throw ArgumentError.value(
+        remoteHost,
+        'remoteHost',
+        'Remote host is required',
+      );
+    }
+    final environment = <String, String>{
+      'AA_REMOTE_HOST': host,
+      if (gatewayToken.trim().isNotEmpty)
+        'AGENTAWESOME_GATEWAY_TOKEN': gatewayToken.trim(),
+    };
+    final result = await processSupervisor.run(
+      ManagedProcessSpec(
+        id: 'remote-docker-deploy-${DateTime.now().microsecondsSinceEpoch}',
+        name: 'Remote Docker deploy',
+        executable: bashExecutable,
+        arguments: <String>[bundle.remoteDeployScriptPath],
+        workingDirectory: config.workspaceRoot,
+        environment: environment,
+        kind: ManagedProcessKind.oneShotCommand,
+        shutdownMode: ManagedProcessShutdownMode.processOnly,
+        timeout: const Duration(minutes: 30),
+        scope: 'remote-runtime',
+      ),
+    );
+    _throwIfRemoteDockerCommandFailed(result, 'Remote Docker deploy');
+    statusMessage = 'Remote Docker runtime deployed';
+    _notifyControllerListeners();
+    return result;
+  }
+
+  /// Copies the remote-model template used by generated Docker bundles.
+  Future<void> _copyRemoteModelConfig(String targetPath) async {
+    final source = File(
+      '${config.workspaceRoot}/deploy/docker/config/model.local-gemma.yaml',
+    );
+    final target = File(targetPath);
+    await target.parent.create(recursive: true);
+    if (await source.exists()) {
+      await source.copy(target.path);
+      return;
+    }
+    await target.writeAsString(_defaultRemoteGemmaModelConfig());
+  }
+
+  /// Copies a configured local model-server executable into the bundle.
+  Future<String> _copyLocalModelServerExecutable(
+    String executablePath,
+    Directory binDirectory,
+  ) async {
+    final sourcePath = executablePath.trim();
+    if (sourcePath.isEmpty) {
+      return '';
+    }
+    final source = File(sourcePath);
+    if (!await source.exists()) {
+      return '';
+    }
+    await binDirectory.create(recursive: true);
+    final fileName = source.uri.pathSegments.last;
+    final target = File('${binDirectory.path}/$fileName');
+    await source.copy(target.path);
+    return target.path;
+  }
+
+  /// Returns a path that Docker can COPY from the workspace build context.
+  String _workspaceRelativePath(String path) {
+    final root = Directory(
+      config.workspaceRoot,
+    ).absolute.path.replaceAll('\\', '/');
+    final absolute = Directory(path).absolute.path.replaceAll('\\', '/');
+    if (absolute == root) {
+      return '.';
+    }
+    final prefix = '$root/';
+    if (!absolute.startsWith(prefix)) {
+      throw StateError('Remote Docker bundle output must be inside workspace');
+    }
+    return absolute.substring(prefix.length);
   }
 
   /// Starts required services and consumes pending runtime restart requests.
@@ -745,9 +1043,9 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     }
     final topologyProfile = await _withCurrentDefaultServiceTopology(profile);
     final storageProfile = _withDefaultMemoryStorage(topologyProfile);
-    final workflowProfile = _withAgentOwnedWorkflowDefinitions(storageProfile);
-    await _copyWorkflowDefinitionsForRuntimeAgent(profile, workflowProfile);
-    final harness = workflowProfile.harness;
+    final runbookProfile = _withAgentOwnedRunbookDefinitions(storageProfile);
+    await _copyRunbookDefinitionsForRuntimeAgent(profile, runbookProfile);
+    final harness = runbookProfile.harness;
     final modelPath = await _ensureSharedModelConfig(
       sourcePath: harness.modelConfigPath,
     );
@@ -762,11 +1060,11 @@ extension AgentAwesomeAppControllerRuntimeProfiles
       targetName: aaToolPackageConfigFilename,
     );
     final graphToolPath = await _writeDefaultGraphToolConfig(
-      profile: workflowProfile,
+      profile: runbookProfile,
       requestedPath: toolPath ?? harness.toolConfigPath,
       targetName: aaToolPackageConfigFilename,
     );
-    final next = workflowProfile.copyWith(
+    final next = runbookProfile.copyWith(
       harness: harness.copyWith(
         modelConfigPath: modelPath,
         agentConfigPath: agentPath ?? harness.agentConfigPath,
@@ -972,7 +1270,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     final target = graphBackedMemoryToolConfigForDomains(
       memoryDomains: graphServers,
       agentMemory: profile.agentMemory,
-      workflow: profile.workflow,
+      runbook: profile.runbook,
       mcpServers: profile.serviceMcpServers,
       localExec: document.localExec,
       extra: document.extra,
@@ -1271,7 +1569,7 @@ extension AgentAwesomeAppControllerRuntimeProfiles
     if (!_automationsClientInjected) {
       automationsClient.close();
       automationsClient = AutomationsClient(
-        baseUrl: _workflowBaseUrl(profile.gateway.apiBaseUrl),
+        baseUrl: _runbookBaseUrl(profile.gateway.apiBaseUrl),
         headers: headers,
         logger: logger,
       );
@@ -1538,22 +1836,22 @@ String _validationProcessFailureDetail(ManagedProcessResult result) {
       : result.stderr.trim();
 }
 
-/// Returns a profile whose workflow files belong to this runtime agent bundle.
-RuntimeProfile _withAgentOwnedWorkflowDefinitions(RuntimeProfile profile) {
+/// Returns a profile whose runbook files belong to this runtime agent bundle.
+RuntimeProfile _withAgentOwnedRunbookDefinitions(RuntimeProfile profile) {
   return profile.copyWith(
-    workflow: profile.workflow.copyWith(
-      definitionsDir: agentWorkflowDefinitionsDirectoryPath(profile.id),
+    runbook: profile.runbook.copyWith(
+      definitionsDir: agentRunbookDefinitionsDirectoryPath(profile.id),
     ),
   );
 }
 
-/// Copies workflow definition files into a newly created runtime agent bundle.
-Future<void> _copyWorkflowDefinitionsForRuntimeAgent(
+/// Copies runbook definition files into a newly created runtime agent bundle.
+Future<void> _copyRunbookDefinitionsForRuntimeAgent(
   RuntimeProfile source,
   RuntimeProfile target,
 ) async {
-  final sourcePath = _workflowDefinitionsCopySourcePath(source);
-  final targetPath = workflowDefinitionsDirectoryPathForProfile(target);
+  final sourcePath = _runbookDefinitionsCopySourcePath(source);
+  final targetPath = runbookDefinitionsDirectoryPathForProfile(target);
   if (_normalizedFileSystemPath(sourcePath) ==
       _normalizedFileSystemPath(targetPath)) {
     await Directory(targetPath).create(recursive: true);
@@ -1568,19 +1866,471 @@ Future<void> _copyWorkflowDefinitionsForRuntimeAgent(
   await _copyDirectoryContents(sourceDirectory, targetDirectory);
 }
 
-/// Returns the source workflow folder to copy when bundling a runtime agent.
-String _workflowDefinitionsCopySourcePath(RuntimeProfile source) {
-  final configured = source.workflow.definitionsDir.trim();
+/// Copies runbook definitions into a generated remote Docker bundle.
+Future<void> _copyRunbookDefinitionsForRemoteBundle(
+  RuntimeProfile source,
+  Directory targetDirectory,
+) async {
+  final sourceDirectory = Directory(_runbookDefinitionsCopySourcePath(source));
+  if (!await sourceDirectory.exists()) {
+    await targetDirectory.create(recursive: true);
+    return;
+  }
+  await _copyDirectoryContents(
+    sourceDirectory,
+    targetDirectory,
+    overwriteExisting: true,
+  );
+}
+
+/// Copies one required bundle config file while rejecting symlink sources.
+Future<void> _copyBundleFile(
+  String sourcePath,
+  String targetPath,
+  String label,
+) async {
+  final source = File(sourcePath.trim());
+  if (source.path.trim().isEmpty || !await source.exists()) {
+    throw StateError('Remote Docker bundle requires $label');
+  }
+  final sourceType = await FileSystemEntity.type(
+    source.path,
+    followLinks: false,
+  );
+  if (sourceType == FileSystemEntityType.link) {
+    throw FileSystemException(
+      'Remote Docker bundle files cannot include symbolic links',
+      source.path,
+    );
+  }
+  final target = File(targetPath);
+  await target.parent.create(recursive: true);
+  await source.copy(target.path);
+}
+
+/// Returns the source runbook folder to copy when bundling a runtime agent.
+String _runbookDefinitionsCopySourcePath(RuntimeProfile source) {
+  final configured = source.runbook.definitionsDir.trim();
   if (configured.isEmpty) {
-    return workflowDefinitionsDirectoryPathForProfile(source);
+    return runbookDefinitionsDirectoryPathForProfile(source);
   }
   final normalized = configured.replaceAll('\\', '/');
   final agentRoot =
       '${agentRuntimeConfigRootDirectoryPath().replaceAll('\\', '/')}/';
-  if (normalized.startsWith(agentRoot) && normalized.endsWith('/workflows')) {
-    return workflowDefinitionsDirectoryPathForProfile(source);
+  if (normalized.startsWith(agentRoot) && normalized.endsWith('/runbooks')) {
+    return runbookDefinitionsDirectoryPathForProfile(source);
   }
   return configured;
+}
+
+/// Returns a remote-gateway UI profile for a generated Docker runtime.
+RuntimeProfile _remoteGatewayProfile(
+  RuntimeProfile source, {
+  required String gatewayBaseUrl,
+}) {
+  final gatewayApi = _normalizeAPIBaseUrl(gatewayBaseUrl);
+  final gatewayHealth = _gatewayHealthUrl(gatewayApi);
+  final gatewayContext = _gatewayContextBaseUrl(gatewayApi);
+  final gatewayMcp = _gatewayMcpUrl(gatewayApi);
+  return source.copyWith(
+    id: '${source.id}-remote',
+    label: '${source.label} Remote',
+    harness: source.harness.copyWith(
+      id: '${source.harness.id}-remote',
+      label: 'Remote Harness',
+      apiBaseUrl: gatewayApi,
+      contextApiBaseUrl: gatewayContext,
+      workingDirectory: '/opt/agent-awesome',
+      executablePath: '/usr/local/bin/agent-awesome',
+      modelConfigPath: '/opt/agent-awesome/config/model.yaml',
+      agentConfigPath: '/opt/agent-awesome/config/agent.yaml',
+      toolConfigPath: '/opt/agent-awesome/config/tool.yaml',
+      autoStart: false,
+    ),
+    gateway: source.gateway.copyWith(
+      id: '${source.gateway.id}-remote',
+      label: 'Remote Gateway',
+      apiBaseUrl: gatewayApi,
+      healthUrl: gatewayHealth,
+      statusUrl: _gatewayStatusUrl(gatewayApi),
+      workingDirectory: '/opt/agent-awesome',
+      executablePath: '/usr/local/bin/agent-gateway',
+      harnessBaseUrl: gatewayApi,
+      contextBaseUrl: gatewayContext,
+      memoryMcpUrl: gatewayMcp,
+      profileId: source.gateway.profileId.trim().isEmpty
+          ? source.id
+          : source.gateway.profileId,
+      authCredential: source.gateway.authCredential.trim().isEmpty
+          ? 'AGENTAWESOME_GATEWAY_TOKEN'
+          : source.gateway.authCredential,
+      modelProviderId: 'local-gemma',
+      modelId: 'gemma',
+      autoStart: false,
+      enabled: true,
+    ),
+    runbook: source.runbook.copyWith(
+      id: '${source.runbook.id}-remote',
+      label: 'Remote Runbook',
+      apiBaseUrl: _gatewayRunbookBaseUrl(gatewayApi),
+      healthUrl: gatewayHealth,
+      hostedByHarness: false,
+      workingDirectory: '',
+      executablePath: '',
+      definitionsDir: '',
+      dbPath: '',
+      autoStart: false,
+      enabled: source.runbook.enabled,
+    ),
+    memoryDomains: source.memoryDomains.map((domain) {
+      return domain.copyWith(
+        label: domain.label.trim().isEmpty
+            ? 'Remote Memory'
+            : '${domain.label} Remote',
+        endpoint: _gatewayMcpDomainUrl(gatewayApi, domain.id),
+        healthUrl: gatewayHealth,
+        workingDirectory: '',
+        executablePath: '',
+        dbPath: '',
+        dataDir: '',
+        arguments: const <String>[],
+        autoStart: false,
+      );
+    }).toList(),
+  );
+}
+
+/// Returns Dockerfile text for a generated configured remote runtime image.
+String _remoteDockerfileForBundle(
+  String relativeBundle, {
+  required bool hasModelServerExecutable,
+}) {
+  final bundle = relativeBundle.replaceAll('\\', '/');
+  final modelServerCopy = hasModelServerExecutable
+      ? '''
+COPY $bundle/config/bin /opt/agent-awesome/bin
+'''
+      : '';
+  final modelServerChmod = hasModelServerExecutable
+      ? '''
+    && find /opt/agent-awesome/bin -type f -exec chmod +x {} \\; \\
+'''
+      : '';
+  return '''
+# Builds a configured Agent Awesome remote runtime image.
+FROM golang:1.26-bookworm AS build
+
+WORKDIR /src
+
+COPY platform ./platform
+COPY harness ./harness
+COPY gateway ./gateway
+COPY memory ./memory
+
+RUN cd harness && go build -trimpath -buildvcs=false -o /out/agent-awesome ./cmd/agent-awesome
+RUN cd harness && go build -trimpath -buildvcs=false -o /out/runbook-service ./cmd/runbook-service
+RUN cd gateway && go build -trimpath -buildvcs=false -o /out/agent-gateway ./cmd/agent-gateway
+RUN cd memory && go build -trimpath -buildvcs=false -o /out/memoryd ./cmd/memoryd
+
+FROM debian:bookworm-slim
+
+RUN apt-get update \\
+    && apt-get install -y --no-install-recommends ca-certificates curl tini \\
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/agent-awesome
+
+COPY --from=build /out/agent-awesome /usr/local/bin/agent-awesome
+COPY --from=build /out/runbook-service /usr/local/bin/runbook-service
+COPY --from=build /out/agent-gateway /usr/local/bin/agent-gateway
+COPY --from=build /out/memoryd /usr/local/bin/memoryd
+COPY $bundle/config/agent.yaml /opt/agent-awesome/config/agent.yaml
+COPY $bundle/config/tool.yaml /opt/agent-awesome/config/tool.yaml
+COPY $bundle/config/model.yaml /opt/agent-awesome/config/model.yaml
+COPY $bundle/config/runbooks /opt/agent-awesome/config/runbooks
+$modelServerCopy
+COPY deploy/docker/entrypoint.sh /usr/local/bin/agent-awesome-container
+
+RUN chmod +x /usr/local/bin/agent-awesome-container \\
+${modelServerChmod}    && mkdir -p /var/lib/agent-awesome /var/log/agent-awesome
+
+EXPOSE 8070
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \\
+  CMD curl -fsS "http://127.0.0.1:8070/healthz" >/dev/null || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/agent-awesome-container"]
+''';
+}
+
+/// Returns a fallback OpenAI-compatible Gemma model config.
+String _defaultRemoteGemmaModelConfig() {
+  return '''
+# This model config routes the remote container to an OpenAI-compatible Gemma server.
+default: local-gemma:gemma
+providers:
+  local-gemma:
+    adapter: openai
+    auth: optional
+    default: gemma
+    url: \${AA_LOCAL_MODEL_CHAT_URL}
+    models:
+      - id: gemma
+        model: \${AA_LOCAL_MODEL_NAME}
+''';
+}
+
+/// Builds a local Docker run command for one generated remote runtime image.
+List<String> _remoteDockerRunCommand(
+  String imageTag, {
+  required String gatewayBaseUrl,
+  required String profileId,
+  required String appName,
+  required String userId,
+  required String localModelPath,
+  required String modelServerExecutablePath,
+}) {
+  final modelPath = localModelPath.trim();
+  final modelDirectory = modelPath.isEmpty ? '' : File(modelPath).parent.path;
+  final containerModelPath = _containerModelPath(modelPath);
+  return <String>[
+    'docker',
+    'run',
+    '--rm',
+    '--name',
+    'agent-awesome',
+    '-p',
+    '8070:8070',
+    '-e',
+    'AGENTAWESOME_GATEWAY_TOKEN',
+    '-e',
+    'AA_GATEWAY_PUBLIC_BASE_URL=$gatewayBaseUrl',
+    '-e',
+    'AA_PROFILE_ID=$profileId',
+    '-e',
+    'AA_APP_NAME=$appName',
+    '-e',
+    'AA_USER_ID=$userId',
+    if (containerModelPath.isNotEmpty) ...<String>[
+      '-e',
+      'AA_LOCAL_MODEL_PATH=$containerModelPath',
+    ],
+    if (modelServerExecutablePath.trim().isNotEmpty) ...<String>[
+      '-e',
+      'AA_LLAMA_SERVER=${modelServerExecutablePath.trim()}',
+    ],
+    '-e',
+    'AA_LOCAL_MODEL_CHAT_URL=http://127.0.0.1:11667/v1/chat/completions',
+    '-e',
+    'AA_LOCAL_MODEL_NAME=gemma',
+    '-v',
+    '/srv/agent-awesome/data:/var/lib/agent-awesome',
+    '-v',
+    '/srv/agent-awesome/logs:/var/log/agent-awesome',
+    if (modelDirectory.isNotEmpty) ...<String>[
+      '-v',
+      '$modelDirectory:/models:ro',
+    ],
+    imageTag,
+  ];
+}
+
+/// Returns the in-container model path for a selected local model artifact.
+String _containerModelPath(String localModelPath) {
+  final trimmed = localModelPath.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return '/models/${File(trimmed).uri.pathSegments.last}';
+}
+
+/// Returns the in-container executable path for a bundled model server.
+String _containerModelServerExecutablePath(String bundledExecutablePath) {
+  final trimmed = bundledExecutablePath.trim();
+  if (trimmed.isEmpty) {
+    return '';
+  }
+  return '/opt/agent-awesome/bin/${File(trimmed).uri.pathSegments.last}';
+}
+
+/// Writes a shell script and makes it executable on Unix hosts.
+Future<void> _writeExecutableScript(String path, String content) async {
+  final file = File(path);
+  await file.parent.create(recursive: true);
+  await file.writeAsString(content);
+  if (!Platform.isWindows) {
+    await Process.run('chmod', <String>['+x', file.path]);
+  }
+}
+
+/// Builds a strict shell script for a generated command.
+String _shellScriptForCommand(List<String> command) {
+  final escaped = command.map(_shellQuote).join(' \\\n  ');
+  return '''
+#!/usr/bin/env bash
+# Runs a generated Agent Awesome remote Docker command.
+set -euo pipefail
+
+$escaped
+''';
+}
+
+/// Builds a deploy script that loads the image and optional model on a remote host.
+String _remoteDeployScript({
+  required String imageTag,
+  required List<String> runCommand,
+  required String localModelPath,
+}) {
+  final remoteRun = _remoteHostRunCommand(
+    runCommand,
+  ).map(_shellQuote).join(' \\\n  ');
+  final modelPath = localModelPath.trim();
+  final modelCopy = modelPath.isEmpty
+      ? ''
+      : '''
+scp ${_shellQuote(modelPath)} "\$AA_REMOTE_HOST:\$AA_REMOTE_ROOT/models/"
+''';
+  return '''
+#!/usr/bin/env bash
+# Deploys the generated Agent Awesome runtime image to a remote Docker host.
+set -euo pipefail
+
+: "\${AA_REMOTE_HOST:?Set AA_REMOTE_HOST to user@host before deploying.}"
+AA_REMOTE_ROOT="\${AA_REMOTE_ROOT:-/srv/agent-awesome}"
+
+ssh "\$AA_REMOTE_HOST" "mkdir -p '\$AA_REMOTE_ROOT/data' '\$AA_REMOTE_ROOT/logs' '\$AA_REMOTE_ROOT/models'"
+docker save ${_shellQuote(imageTag)} | ssh "\$AA_REMOTE_HOST" docker load
+$modelCopy
+ssh "\$AA_REMOTE_HOST" ${_shellQuote('docker rm -f agent-awesome >/dev/null 2>&1 || true')}
+ssh "\$AA_REMOTE_HOST" $remoteRun
+''';
+}
+
+/// Converts local run arguments to remote-host mount paths.
+List<String> _remoteHostRunCommand(List<String> command) {
+  final args = <String>[];
+  for (final arg in command) {
+    if (arg.endsWith(':/models:ro')) {
+      args.add('/srv/agent-awesome/models:/models:ro');
+    } else {
+      args.add(arg);
+    }
+  }
+  return args;
+}
+
+/// Quotes one shell argument.
+String _shellQuote(String value) {
+  if (value.isEmpty) {
+    return "''";
+  }
+  return "'${value.replaceAll("'", "'\"'\"'")}'";
+}
+
+/// Returns command arguments after replacing the executable if requested.
+List<String> _commandArgumentsForExecutable(
+  List<String> command,
+  String executable,
+) {
+  if (command.isEmpty) {
+    return const <String>[];
+  }
+  final first = command.first.trim();
+  if (first == executable.trim() || first == 'docker') {
+    return command.sublist(1);
+  }
+  return command;
+}
+
+/// Converts the generated Docker run command into UI process arguments.
+List<String> _dockerRunArgumentsForUI(
+  List<String> command, {
+  required String dockerExecutable,
+  required String gatewayToken,
+}) {
+  final args = _commandArgumentsForExecutable(command, dockerExecutable);
+  final token = gatewayToken.trim();
+  if (token.isEmpty) {
+    return args;
+  }
+  final next = <String>[];
+  for (final arg in args) {
+    if (arg == 'AGENTAWESOME_GATEWAY_TOKEN' ||
+        arg.startsWith('AGENTAWESOME_GATEWAY_TOKEN=')) {
+      next.add('AGENTAWESOME_GATEWAY_TOKEN=$token');
+    } else {
+      next.add(arg);
+    }
+  }
+  return next;
+}
+
+/// Reports failed Docker build or run commands with captured diagnostics.
+void _throwIfRemoteDockerCommandFailed(
+  ManagedProcessResult result,
+  String label,
+) {
+  if (!result.timedOut && result.exitCode == 0) {
+    return;
+  }
+  final detail = result.stderr.trim().isEmpty
+      ? result.stdout.trim()
+      : result.stderr.trim();
+  if (result.timedOut) {
+    throw StateError('$label timed out${detail.isEmpty ? '' : ': $detail'}');
+  }
+  throw StateError(
+    '$label failed with exit ${result.exitCode}${detail.isEmpty ? '' : ': $detail'}',
+  );
+}
+
+/// Normalizes a gateway URL to the API base path.
+String _normalizeAPIBaseUrl(String value) {
+  final trimmed = value.trim().isEmpty ? 'http://127.0.0.1:8070/api' : value;
+  final uri = Uri.parse(trimmed);
+  if (uri.path == '/api') {
+    return uri.toString();
+  }
+  return uri.replace(path: '/api', query: null).toString();
+}
+
+/// Returns the gateway health URL for an API base URL.
+String _gatewayHealthUrl(String gatewayApi) {
+  final uri = Uri.parse(gatewayApi);
+  return uri.replace(path: '/healthz', query: null).toString();
+}
+
+/// Returns the gateway beta status URL for an API base URL.
+String _gatewayStatusUrl(String gatewayApi) {
+  final uri = Uri.parse(gatewayApi);
+  return uri.replace(path: '/api/gateway/beta-status', query: null).toString();
+}
+
+/// Returns the gateway context API URL for an API base URL.
+String _gatewayContextBaseUrl(String gatewayApi) {
+  final uri = Uri.parse(gatewayApi);
+  return uri.replace(path: '/api/context', query: null).toString();
+}
+
+/// Returns the gateway memory MCP URL for an API base URL.
+String _gatewayMcpUrl(String gatewayApi) {
+  final uri = Uri.parse(gatewayApi);
+  return uri.replace(path: '/mcp', query: null).toString();
+}
+
+/// Returns the gateway-routed runbook API URL.
+String _gatewayRunbookBaseUrl(String gatewayApi) {
+  final uri = Uri.parse(gatewayApi);
+  return uri.replace(path: '/api/runbooks', query: null).toString();
+}
+
+/// Returns the gateway-routed MCP URL for one memory domain.
+String _gatewayMcpDomainUrl(String gatewayApi, String domainId) {
+  final uri = Uri.parse(_gatewayMcpUrl(gatewayApi));
+  final base = uri.path.endsWith('/')
+      ? uri.path.substring(0, uri.path.length - 1)
+      : uri.path;
+  return uri.replace(path: '$base/${domainId.trim()}').toString();
 }
 
 /// Copies ordinary files and directories while rejecting symbolic links.
@@ -1633,7 +2383,7 @@ List<String> _runtimeLaunchSignature(RuntimeProfile profile) {
   return <String>[
     'profile:${profile.id}',
     ..._harnessLaunchSignature(profile),
-    ..._workflowLaunchSignature(profile),
+    ..._runbookLaunchSignature(profile),
     ..._gatewayLaunchSignature(profile),
     for (final server in profile.mcpServers.where((server) => server.enabled))
       ..._mcpServerLaunchSignature(profile, server),
@@ -1654,20 +2404,18 @@ List<String> _harnessLaunchSignature(RuntimeProfile profile) {
   ];
 }
 
-/// Returns launch-affecting workflow values.
-List<String> _workflowLaunchSignature(RuntimeProfile profile) {
-  final workflow = profile.workflow;
+/// Returns launch-affecting runbook values.
+List<String> _runbookLaunchSignature(RuntimeProfile profile) {
+  final runbook = profile.runbook;
   return <String>[
-    'workflow:${agentRuntimeServiceId(profile, workflow.id)}',
-    'workflow.enabled:${workflow.enabled}',
-    'workflow.hosted:${workflow.hostedByHarness}',
-    'workflow.auto:${workflow.autoStart}',
-    'workflow.workdir:${workflow.workingDirectory}',
-    'workflow.executable:${workflow.executablePath}',
-    'workflow.health:${workflow.healthUrl}',
-    ...workflowArgumentsForProfile(
-      profile,
-    ).map((value) => 'workflow.arg:$value'),
+    'runbook:${agentRuntimeServiceId(profile, runbook.id)}',
+    'runbook.enabled:${runbook.enabled}',
+    'runbook.hosted:${runbook.hostedByHarness}',
+    'runbook.auto:${runbook.autoStart}',
+    'runbook.workdir:${runbook.workingDirectory}',
+    'runbook.executable:${runbook.executablePath}',
+    'runbook.health:${runbook.healthUrl}',
+    ...runbookArgumentsForProfile(profile).map((value) => 'runbook.arg:$value'),
   ];
 }
 

@@ -3,7 +3,7 @@
 
 The desktop UI is a Flutter application in `ui`.
 It starts with the default service topology and connects to the local gateway, harness, and memory services described by that topology.
-The default local harness hosts the workflow endpoint and attaches command tools directly to the ADK runtime.
+The default local harness hosts the runbook endpoint and attaches command tools directly to the ADK runtime.
 
 The default topology expects the checked-in Agent Awesome harness config under `harness`.
 It also needs a model credential, such as `OPENAI_API_KEY`, available to the harness keyring or environment.

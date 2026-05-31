@@ -3,7 +3,7 @@ package domain
 
 import "time"
 
-// Codebase stores durable repository metadata for workflow operations.
+// Codebase stores durable repository metadata for runbook operations.
 type Codebase struct {
 	ID                 string    `json:"id"`
 	Name               string    `json:"name"`

@@ -17,8 +17,8 @@ import (
 	"agentawesome/internal/config"
 	"agentawesome/internal/config/schema"
 	commandservice "agentawesome/internal/services/command/command"
+	"agentawesome/internal/services/runbook/actions"
 	"agentawesome/internal/services/toolvalidation"
-	"agentawesome/internal/services/workflow/actions"
 	"agentawesome/internal/tools/mcpclient"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
@@ -204,7 +204,7 @@ func newToolsValidateCommand(
 	cmd.Flags().StringVar(&opts.Runtime.CommandParserDir, "command-parser-dir", opts.Runtime.CommandParserDir, "Starlark command parser directory for live agent-tool-call validations")
 	cmd.Flags().DurationVar(&opts.Runtime.CommandDefaultTimeout, "command-timeout", opts.Runtime.CommandDefaultTimeout, "default command timeout for live agent-tool-call validations")
 	cmd.Flags().Int64Var(&opts.Runtime.CommandMaxOutputBytes, "command-max-output-bytes", opts.Runtime.CommandMaxOutputBytes, "default command output tail byte limit for live agent-tool-call validations")
-	cmd.Flags().BoolVar(&opts.RequireCoverage, "require-coverage", opts.RequireCoverage, "fail when configured operations, agent calls, workflow nodes, or MCP tools lack validations")
+	cmd.Flags().BoolVar(&opts.RequireCoverage, "require-coverage", opts.RequireCoverage, "fail when configured operations, agent calls, runbook nodes, or MCP tools lack validations")
 	cmd.Flags().BoolVar(&opts.RequireInputSchemas, "require-input-schemas", opts.RequireInputSchemas, "fail when command operations lack input schemas")
 	cmd.Flags().BoolVar(&opts.RequireAssertions, "require-assertions", opts.RequireAssertions, "fail when tool validations have no real assertions")
 	cmd.Flags().StringVar(&opts.JUnitPath, "junit", opts.JUnitPath, "write JUnit XML validation results to this path")
@@ -416,11 +416,11 @@ func toolValidationsNeedLiveMCPHost(tools schema.Tools, validationIDs []string, 
 		if strings.TrimSpace(target.Type) == "mcp-tool" {
 			return true
 		}
-		if strings.TrimSpace(target.Type) == "workflow-node" &&
+		if strings.TrimSpace(target.Type) == "runbook-node" &&
 			(strings.TrimSpace(target.MCPServer) != "" || strings.TrimSpace(target.MCPTool) != "") {
 			return true
 		}
-		if strings.TrimSpace(target.Type) == "workflow-node" &&
+		if strings.TrimSpace(target.Type) == "runbook-node" &&
 			toolValidationPresetUsesMCP(tools.NodePresets, target.PresetID) {
 			return true
 		}

@@ -1275,11 +1275,11 @@ validations:
       - type: json-path
         path: output.arguments.template_id
         equals: kubectl.version_client
-  - id: curl_http_get_workflow_mocked
-    label: workflow invokes curl HTTP GET
+  - id: curl_http_get_runbook_mocked
+    label: runbook invokes curl HTTP GET
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: curl
       operation: http_get
     input:
@@ -1294,11 +1294,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
-  - id: curl_download_file_workflow_mocked
-    label: workflow invokes curl download file
+  - id: curl_download_file_runbook_mocked
+    label: runbook invokes curl download file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: curl
       operation: download_file
     input:
@@ -1314,11 +1314,11 @@ validations:
     assertions:
       - type: stderr-contains
         contains: report.txt
-  - id: jq_query_file_workflow_mocked
-    label: workflow invokes jq query file
+  - id: jq_query_file_runbook_mocked
+    label: runbook invokes jq query file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: jq
       operation: query_file
     input:
@@ -1338,11 +1338,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
-  - id: jq_validate_file_workflow_mocked
-    label: workflow invokes jq validate file
+  - id: jq_validate_file_runbook_mocked
+    label: runbook invokes jq validate file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: jq
       operation: validate_file
     input:
@@ -1361,11 +1361,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: valid
-  - id: yq_read_file_workflow_mocked
-    label: workflow invokes yq read file
+  - id: yq_read_file_runbook_mocked
+    label: runbook invokes yq read file
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: yq
       operation: read_file
     input:
@@ -1385,11 +1385,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: ok
-  - id: rg_search_text_workflow_mocked
-    label: workflow invokes ripgrep search text
+  - id: rg_search_text_runbook_mocked
+    label: runbook invokes ripgrep search text
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: rg
       operation: search_text
     input:
@@ -1409,11 +1409,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: TODO
-  - id: rg_list_files_workflow_mocked
-    label: workflow invokes ripgrep list files
+  - id: rg_list_files_runbook_mocked
+    label: runbook invokes ripgrep list files
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: rg
       operation: list_files
     input:
@@ -1432,11 +1432,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: notes.txt
-  - id: find_by_name_workflow_mocked
-    label: workflow invokes find by name
+  - id: find_by_name_runbook_mocked
+    label: runbook invokes find by name
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: find
       operation: by_name
     input:
@@ -1456,11 +1456,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: README.md
-  - id: find_files_by_name_workflow_mocked
-    label: workflow invokes find files by name
+  - id: find_files_by_name_runbook_mocked
+    label: runbook invokes find files by name
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: find
       operation: files_by_name
     input:
@@ -1480,11 +1480,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: README.md
-  - id: grep_recursive_search_workflow_mocked
-    label: grep workflow envelope
+  - id: grep_recursive_search_runbook_mocked
+    label: grep runbook envelope
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: grep
       operation: recursive_search
     input:
@@ -1513,11 +1513,11 @@ validations:
         equals: .
       - type: stdout-contains
         contains: needle
-  - id: tar_list_archive_workflow_mocked
-    label: workflow invokes tar list archive
+  - id: tar_list_archive_runbook_mocked
+    label: runbook invokes tar list archive
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: tar
       operation: list_archive
     input:
@@ -1532,11 +1532,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: README.md
-  - id: tar_create_archive_workflow_mocked
-    label: workflow invokes tar create archive
+  - id: tar_create_archive_runbook_mocked
+    label: runbook invokes tar create archive
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: tar
       operation: create_archive
     input:
@@ -1557,11 +1557,11 @@ validations:
     assertions:
       - type: stderr-contains
         contains: bundle.tar
-  - id: du_summarize_path_workflow_mocked
-    label: workflow invokes du summarize path
+  - id: du_summarize_path_runbook_mocked
+    label: runbook invokes du summarize path
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: du
       operation: summarize_path
     input:
@@ -1576,11 +1576,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: .
-  - id: df_filesystem_usage_workflow_mocked
-    label: workflow invokes df filesystem usage
+  - id: df_filesystem_usage_runbook_mocked
+    label: runbook invokes df filesystem usage
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: df
       operation: filesystem_usage
     input:
@@ -1595,11 +1595,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: Filesystem
-  - id: ps_list_processes_workflow_mocked
-    label: workflow invokes ps list processes
+  - id: ps_list_processes_runbook_mocked
+    label: runbook invokes ps list processes
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: ps
       operation: list_processes
     mocks:
@@ -1612,11 +1612,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: PID
-  - id: netstat_listening_ports_workflow_mocked
-    label: workflow invokes netstat listening ports
+  - id: netstat_listening_ports_runbook_mocked
+    label: runbook invokes netstat listening ports
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: netstat
       operation: listening_ports
     mocks:
@@ -1629,11 +1629,11 @@ validations:
     assertions:
       - type: stdout-contains
         contains: LISTEN
-  - id: kubectl_version_client_workflow_mocked
-    label: workflow invokes kubectl client version
+  - id: kubectl_version_client_runbook_mocked
+    label: runbook invokes kubectl client version
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: kubectl
       operation: version_client
     mocks:

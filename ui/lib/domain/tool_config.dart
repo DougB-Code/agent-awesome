@@ -72,20 +72,20 @@ const List<String> graphBackedMcpReadOnlyToolNames = <String>[
   'traverse_task_relations',
 ];
 
-/// Workflow MCP tools exposed by the workflow service.
-const List<String> workflowMcpToolNames = <String>[
-  'workflow_list',
-  'workflow_describe',
-  'workflow_start',
-  'workflow_status',
-  'workflow_signal',
-  'workflow_cancel',
-  'workflow_history',
-  'workflow_action_types',
-  'workflow_draft_create',
-  'workflow_draft_update',
-  'workflow_draft_validate',
-  'workflow_draft_publish',
+/// Runbook MCP tools exposed by the runbook service.
+const List<String> runbookMcpToolNames = <String>[
+  'runbook_list',
+  'runbook_describe',
+  'runbook_start',
+  'runbook_status',
+  'runbook_signal',
+  'runbook_cancel',
+  'runbook_history',
+  'runbook_action_types',
+  'runbook_draft_create',
+  'runbook_draft_update',
+  'runbook_draft_validate',
+  'runbook_draft_publish',
 ];
 
 /// Source-control MCP tools exposed by the sourcecontrol service.
@@ -117,10 +117,10 @@ class ToolConfigDocument {
   /// MCP toolset settings.
   final McpToolConfig mcp;
 
-  /// Installed workflow node presets backed by generic tool boundaries.
+  /// Installed runbook node presets backed by generic tool boundaries.
   final List<NodePresetConfig> nodePresets;
 
-  /// Portable tool-package validations for agent and workflow behavior.
+  /// Portable tool-package validations for agent and runbook behavior.
   final List<ToolValidationConfig> validations;
 
   /// Top-level fields preserved outside the known schema.
@@ -316,7 +316,7 @@ class LocalExecCommandConfig {
   /// Model-facing documentation for supported subcommands and flags.
   final LocalExecCommandSurfaceConfig surface;
 
-  /// Deterministic workflow-callable operations for this executable.
+  /// Deterministic runbook-callable operations for this executable.
   final List<LocalExecOperationConfig> operations;
 
   /// Fields preserved outside the known schema.
@@ -490,7 +490,7 @@ class LocalExecInstallationConfig {
   }
 }
 
-/// LocalExecOperationConfig describes one workflow-callable CLI operation.
+/// LocalExecOperationConfig describes one runbook-callable CLI operation.
 class LocalExecOperationConfig {
   /// Creates a deterministic local CLI operation.
   const LocalExecOperationConfig({
@@ -505,7 +505,7 @@ class LocalExecOperationConfig {
     this.extra = const <String, dynamic>{},
   });
 
-  /// Operation name combined with the command name for workflow template ids.
+  /// Operation name combined with the command name for runbook template ids.
   final String name;
 
   /// Human-readable operation purpose.
@@ -1102,7 +1102,7 @@ class McpToolFilterConfig {
   }
 }
 
-/// NodePresetConfig describes one reusable workflow node palette preset.
+/// NodePresetConfig describes one reusable runbook node palette preset.
 class NodePresetConfig {
   /// Creates node preset metadata.
   const NodePresetConfig({
@@ -1116,7 +1116,7 @@ class NodePresetConfig {
     this.extra = const <String, dynamic>{},
   });
 
-  /// Stable preset id used by workflow authoring palettes.
+  /// Stable preset id used by runbook authoring palettes.
   final String id;
 
   /// Human-readable preset label.
@@ -1125,7 +1125,7 @@ class NodePresetConfig {
   /// Owning workbench surface, such as command or mcp.
   final String surface;
 
-  /// Generic workflow action this preset compiles to.
+  /// Generic runbook action this preset compiles to.
   final String action;
 
   /// Short explanation shown beside the preset.
@@ -1329,10 +1329,10 @@ class ToolValidationTargetConfig {
     this.extra = const <String, dynamic>{},
   });
 
-  /// Target type: command-operation, workflow-node, mcp-tool, or agent-tool-call.
+  /// Target type: command-operation, runbook-node, mcp-tool, or agent-tool-call.
   final String type;
 
-  /// Workflow node preset id under test.
+  /// Runbook node preset id under test.
   final String presetId;
 
   /// Local command name under test.
@@ -1569,7 +1569,7 @@ McpServerToolConfig newHttpMcpServerToolConfig({
 ToolConfigDocument graphBackedMemoryToolConfigForDomains({
   required List<McpServerRuntime> memoryDomains,
   required AgentMemoryRuntime agentMemory,
-  WorkflowRuntime? workflow,
+  RunbookRuntime? runbook,
   List<McpServerRuntime> mcpServers = const <McpServerRuntime>[],
   required LocalExecToolConfig localExec,
   Map<String, dynamic> extra = const <String, dynamic>{},
@@ -1600,12 +1600,12 @@ ToolConfigDocument graphBackedMemoryToolConfigForDomains({
                 : graphBackedMcpReadOnlyToolNames,
           ),
         ),
-        if (workflow != null && workflow.enabled)
+        if (runbook != null && runbook.enabled)
           newHttpMcpServerToolConfig(
-            name: 'workflow',
-            endpoint: _workflowMcpUrl(workflow),
+            name: 'runbook',
+            endpoint: _runbookMcpUrl(runbook),
           ).copyWith(
-            tools: const McpToolFilterConfig(allow: workflowMcpToolNames),
+            tools: const McpToolFilterConfig(allow: runbookMcpToolNames),
           ),
         for (final server in mcpServers)
           if (server.enabled)
@@ -1654,9 +1654,9 @@ String _serviceMcpToolServerName(McpServerRuntime server) {
   return source.replaceAll('-', '_');
 }
 
-/// Returns the workflow MCP endpoint beside the workflow REST API.
-String _workflowMcpUrl(WorkflowRuntime workflow) {
-  final uri = Uri.parse(workflow.apiBaseUrl);
+/// Returns the runbook MCP endpoint beside the runbook REST API.
+String _runbookMcpUrl(RunbookRuntime runbook) {
+  final uri = Uri.parse(runbook.apiBaseUrl);
   return uri.replace(path: '/mcp', query: null).toString();
 }
 
@@ -2000,7 +2000,7 @@ String _toolMetadataValidationError(ToolConfigDocument document) {
   return '';
 }
 
-/// Returns a validation error for one reusable workflow node preset.
+/// Returns a validation error for one reusable runbook node preset.
 String _nodePresetArgumentsValidationError(
   String id,
   NodePresetConfig preset,
@@ -2046,7 +2046,7 @@ String _toolValidationTargetError(
 ) {
   final target = validation.target;
   switch (target.type.trim()) {
-    case 'workflow-node':
+    case 'runbook-node':
       final preset = target.presetId.trim();
       final command = target.command.trim();
       final operation = target.operation.trim();
@@ -2061,18 +2061,18 @@ String _toolValidationTargetError(
         hasMcp,
       ].where((value) => value).length;
       if (selected > 1) {
-        return 'validation "$id" workflow-node target must choose preset-id, command-operation, or mcp-tool';
+        return 'validation "$id" runbook-node target must choose preset-id, command-operation, or mcp-tool';
       }
       if (hasCommand) {
         return _commandOperationTargetError(
           id,
           target,
           operations,
-          'workflow-node',
+          'runbook-node',
         );
       }
       if (hasMcp) {
-        return _mcpToolTargetError(id, target, mcpTools, 'workflow-node');
+        return _mcpToolTargetError(id, target, mcpTools, 'runbook-node');
       }
       if (!presetIds.contains(preset)) {
         return 'validation "$id" references unknown preset "$preset"';
@@ -2094,7 +2094,7 @@ String _toolValidationTargetError(
     case '':
       return 'validation "$id" target type must not be empty';
     default:
-      return 'validation "$id" target type must be workflow-node, command-operation, mcp-tool, or agent-tool-call';
+      return 'validation "$id" target type must be runbook-node, command-operation, mcp-tool, or agent-tool-call';
   }
   return '';
 }

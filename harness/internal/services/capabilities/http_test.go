@@ -16,7 +16,7 @@ func TestHTTPServerListsAndReturnsCapabilities(t *testing.T) {
 	server := httptest.NewServer(NewHTTPServer(registry).Routes())
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/api/capabilities?kind=command&usable_in_workflows=true")
+	resp, err := http.Get(server.URL + "/api/capabilities?kind=command&usable_in_runbooks=true")
 	if err != nil {
 		t.Fatalf("GET capabilities error = %v", err)
 	}

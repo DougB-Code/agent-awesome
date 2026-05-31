@@ -290,7 +290,7 @@ providers:
       modelConfigPath: '${root.path}/model.yaml',
     );
     final initialProfile = baseProfile.copyWith(
-      workflow: _hostedWorkflow(root.path),
+      runbook: _hostedRunbook(root.path),
       harness: baseProfile.harness.copyWith(
         commandAllowedWorkdirs: const <String>['/work/old'],
       ),
@@ -853,17 +853,17 @@ McpServerRuntime _memoryServer(String root) {
   );
 }
 
-WorkflowRuntime _hostedWorkflow(String root) {
-  return WorkflowRuntime(
-    id: 'workflow',
-    label: 'Workflow',
-    apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
+RunbookRuntime _hostedRunbook(String root) {
+  return RunbookRuntime(
+    id: 'runbook',
+    label: 'Runbook',
+    apiBaseUrl: 'http://127.0.0.1:8092/api/runbooks',
     healthUrl: 'http://127.0.0.1:8092/healthz',
     hostedByHarness: true,
     workingDirectory: '',
     executablePath: '',
-    definitionsDir: '$root/workflows',
-    dbPath: '$root/workflow.db',
+    definitionsDir: '$root/runbooks',
+    dbPath: '$root/runbook.db',
     port: 8092,
     autoStart: false,
     enabled: true,

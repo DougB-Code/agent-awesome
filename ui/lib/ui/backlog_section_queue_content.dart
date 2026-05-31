@@ -14,12 +14,12 @@ class _BacklogQueueContent extends StatelessWidget {
       return _matchesTask(task, query);
     }).toList();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+      padding: PanelFormMetrics.panelPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           _TaskQueueFilterStrip(controller: controller),
-          const SizedBox(height: 14),
+          const SizedBox(height: PanelFormMetrics.compactGap),
           if (tasks.isEmpty)
             const Expanded(
               child: PanelEmptyBlock(
@@ -34,16 +34,13 @@ class _BacklogQueueContent extends StatelessWidget {
                 itemCount: tasks.length,
                 itemBuilder: (context, index) {
                   final task = tasks[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: _TaskQueueTile(
-                      controller: controller,
-                      task: task,
-                      selected: controller.selectedTask?.id == task.id,
-                      focused: controller.focusedBacklogTaskId == task.id,
-                      changes: controller.screenChangesForTask(task.id),
-                      onTap: () => controller.inspectBacklogTask(task.id),
-                    ),
+                  return _TaskQueueTile(
+                    controller: controller,
+                    task: task,
+                    selected: controller.selectedTask?.id == task.id,
+                    focused: controller.focusedBacklogTaskId == task.id,
+                    changes: controller.screenChangesForTask(task.id),
+                    onTap: () => controller.inspectBacklogTask(task.id),
                   );
                 },
               ),

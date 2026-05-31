@@ -2,7 +2,7 @@
 :description: Repository orientation and first-build checklist for Agent Awesome contributors.
 
 This page is the note to future-us for joining the project, finding the right code, and proving a workstation can build Agent Awesome.
-It is operational documentation because it covers repository access, build tooling, generated artifacts, and contributor workflow.
+It is operational documentation because it covers repository access, build tooling, generated artifacts, and contributor runbook.
 
 For pinned Go and Node.js versions, start with xref:development:setup.adoc[].
 
@@ -81,10 +81,10 @@ Root-adjacent directories wire complete systems together; deeper `internal` pack
 |Path |Use
 
 |`docs`
-|Antora playbook content root, shared documentation pages, user/development/operations modules, and the local UI bundle.
+|Antora playbook content root, shared documentation pages, user/development/launchpad modules, and the local UI bundle.
 
 |`harness`
-|The local agent runtime and `agent-awesome` CLI. This is the entry point that composes models, tools, memory, and workflows.
+|The local agent runtime and `agent-awesome` CLI. This is the entry point that composes models, tools, memory, and runbooks.
 
 |`memory`
 |Local memory service and MCP-facing memory primitives.
@@ -138,7 +138,7 @@ Generated docs are written to:
 build/site
 ----
 
-View the operations docs locally:
+View the launchpad docs locally:
 
 [source,sh]
 ----
@@ -149,10 +149,10 @@ Then open:
 
 [source,text]
 ----
-http://127.0.0.1:4183/agent-awesome/0.1/operations/index.html
+http://127.0.0.1:4183/agent-awesome/0.1/launchpad/index.html
 ----
 
-The current combined docs build includes user, development, and operations pages.
+The current combined docs build includes user, development, and launchpad pages.
 Because the Lunr index contains every indexed page in the build, do not publish this combined output as public user documentation while internal content is sensitive.
 
 == Test Go Modules

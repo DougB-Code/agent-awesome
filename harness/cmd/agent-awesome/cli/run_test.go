@@ -27,9 +27,9 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 		"--context-api-addr", "127.0.0.1:8081",
 		"--context-api-token", "context-secret",
 		"--session-db", "/tmp/agent-sessions.db",
-		"--workflow-api-addr", "127.0.0.1:8092",
-		"--workflow-definitions", "/tmp/workflows",
-		"--workflow-db", "/tmp/workflow.db",
+		"--runbook-api-addr", "127.0.0.1:8092",
+		"--runbook-definitions", "/tmp/runbooks",
+		"--runbook-db", "/tmp/runbook.db",
 		"--runtime-targets-db", "/tmp/runtime-targets.db",
 		"--command-data-dir", "/tmp/command-data",
 		"--command-allow-workdir", "/work/a",
@@ -77,14 +77,14 @@ func TestRunCommandParsesAgentAwesomeFlags(t *testing.T) {
 	if got, want := captured.SessionDatabase, "/tmp/agent-sessions.db"; got != want {
 		t.Fatalf("SessionDatabase = %q, want %q", got, want)
 	}
-	if got, want := captured.WorkflowAPIAddr, "127.0.0.1:8092"; got != want {
-		t.Fatalf("WorkflowAPIAddr = %q, want %q", got, want)
+	if got, want := captured.RunbookAPIAddr, "127.0.0.1:8092"; got != want {
+		t.Fatalf("RunbookAPIAddr = %q, want %q", got, want)
 	}
-	if got, want := captured.WorkflowDefinitionsDir, "/tmp/workflows"; got != want {
-		t.Fatalf("WorkflowDefinitionsDir = %q, want %q", got, want)
+	if got, want := captured.RunbookDefinitionsDir, "/tmp/runbooks"; got != want {
+		t.Fatalf("RunbookDefinitionsDir = %q, want %q", got, want)
 	}
-	if got, want := captured.WorkflowDatabasePath, "/tmp/workflow.db"; got != want {
-		t.Fatalf("WorkflowDatabasePath = %q, want %q", got, want)
+	if got, want := captured.RunbookDatabasePath, "/tmp/runbook.db"; got != want {
+		t.Fatalf("RunbookDatabasePath = %q, want %q", got, want)
 	}
 	if got, want := captured.RuntimeTargetsDatabasePath, "/tmp/runtime-targets.db"; got != want {
 		t.Fatalf("RuntimeTargetsDatabasePath = %q, want %q", got, want)

@@ -1,4 +1,4 @@
-/// Tests validation command construction for app-controller workflows.
+/// Tests validation command construction for app-controller runbooks.
 library;
 
 import 'package:agentawesome_ui/app/app_controller.dart';

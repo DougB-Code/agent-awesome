@@ -178,7 +178,7 @@ func newLibraryValidateCommand(
 	cmd.Flags().BoolVar(&opts.RequireAgentValidations, "require-agent-validations", opts.RequireAgentValidations, "fail when an agent package has no behavior validations")
 	cmd.Flags().BoolVar(&opts.RequireAgentAssertions, "require-agent-assertions", opts.RequireAgentAssertions, "fail when an agent behavior validation has no real assertions")
 	cmd.Flags().BoolVar(&opts.RequireAgentToolCalls, "require-agent-tool-calls", opts.RequireAgentToolCalls, "fail when an agent package has no validation proving or capturing tool selection")
-	cmd.Flags().BoolVar(&opts.RequireToolCoverage, "require-tool-coverage", opts.RequireToolCoverage, "fail when tool package operations, agent calls, workflow nodes, or MCP tools lack validations")
+	cmd.Flags().BoolVar(&opts.RequireToolCoverage, "require-tool-coverage", opts.RequireToolCoverage, "fail when tool package operations, agent calls, runbook nodes, or MCP tools lack validations")
 	cmd.Flags().BoolVar(&opts.RequireToolInputSchemas, "require-tool-input-schemas", opts.RequireToolInputSchemas, "fail when packaged command operations lack input schemas")
 	cmd.Flags().BoolVar(&opts.RequireToolAssertions, "require-tool-assertions", opts.RequireToolAssertions, "fail when tool validations have no real assertions")
 	cmd.Flags().BoolVar(&opts.RequireAgentToolContracts, "require-agent-tool-contracts", opts.RequireAgentToolContracts, "fail when agent validations reference tool calls not declared by packaged tools")

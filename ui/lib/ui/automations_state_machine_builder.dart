@@ -1050,7 +1050,7 @@ class _StateMachineBuilderDetail extends StatefulWidget {
 /// _StateMachineBuilderDetailState connects shell intents to the canvas.
 class _StateMachineBuilderDetailState
     extends State<_StateMachineBuilderDetail> {
-  _WorkflowActionIntentController? _actionIntents;
+  _RunbookActionIntentController? _actionIntents;
   int _lastActionIntentRevision = 0;
 
   /// Loads editable process-state data from the selected workflow draft.
@@ -1078,7 +1078,7 @@ class _StateMachineBuilderDetailState
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final nextIntents = _WorkflowActionIntentScope.maybeOf(context);
+    final nextIntents = _RunbookActionIntentScope.maybeOf(context);
     if (nextIntents == _actionIntents) {
       return;
     }

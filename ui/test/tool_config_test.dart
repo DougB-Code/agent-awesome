@@ -69,7 +69,7 @@ validations:
     label: Go build success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: go_build_all
     expected:
       status: succeeded
@@ -187,7 +187,7 @@ validations:
     );
     expect(
       document.validations.where(
-        (validation) => validation.target.type == 'workflow-node',
+        (validation) => validation.target.type == 'runbook-node',
       ),
       hasLength(16),
     );
@@ -379,7 +379,7 @@ validations:
     );
   });
 
-  test('adds workflow MCP server when workflow runtime is enabled', () {
+  test('adds runbook MCP server when runbook runtime is enabled', () {
     final document = graphBackedMemoryToolConfigForDomains(
       memoryDomains: const <McpServerRuntime>[
         McpServerRuntime(
@@ -404,15 +404,15 @@ validations:
         defaultWriteDomain: 'memory',
         allowedSensitivities: <String>['public'],
       ),
-      workflow: const WorkflowRuntime(
-        id: 'workflow',
-        label: 'Workflow',
-        apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
+      runbook: const RunbookRuntime(
+        id: 'runbook',
+        label: 'Runbook',
+        apiBaseUrl: 'http://127.0.0.1:8092/api/runbooks',
         healthUrl: 'http://127.0.0.1:8092/healthz',
-        workingDirectory: '/tmp/workflow',
-        executablePath: '/tmp/bin/workflow-service',
-        definitionsDir: '/tmp/workflows',
-        dbPath: '/tmp/workflow.db',
+        workingDirectory: '/tmp/runbook',
+        executablePath: '/tmp/bin/runbook-service',
+        definitionsDir: '/tmp/runbooks',
+        dbPath: '/tmp/runbook.db',
         port: 8092,
         autoStart: false,
         enabled: true,
@@ -420,11 +420,11 @@ validations:
       localExec: emptyToolConfigDocument().localExec,
     );
 
-    final workflowServer = document.mcp.servers.firstWhere(
-      (server) => server.name == 'workflow',
+    final runbookServer = document.mcp.servers.firstWhere(
+      (server) => server.name == 'runbook',
     );
-    expect(workflowServer.endpoint, 'http://127.0.0.1:8092/mcp');
-    expect(workflowServer.tools.allow, workflowMcpToolNames);
+    expect(runbookServer.endpoint, 'http://127.0.0.1:8092/mcp');
+    expect(runbookServer.tools.allow, runbookMcpToolNames);
   });
 
   test(
@@ -592,7 +592,7 @@ validations:
     expect(toolConfigValidationError(document), isEmpty);
   });
 
-  test('validates workflow node command targets', () {
+  test('validates runbook node command targets', () {
     final document = ToolConfigDocument.parse('''
 local-exec:
   enabled: true
@@ -607,10 +607,10 @@ local-exec:
             - "{{pattern}}"
             - "{{path}}"
 validations:
-  - id: workflow_uses_rg
+  - id: runbook_uses_rg
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: rg
       operation: search_text
     mocks:
@@ -621,7 +621,7 @@ validations:
     expect(toolConfigValidationError(document), isEmpty);
   });
 
-  test('validates workflow node mcp targets', () {
+  test('validates runbook node mcp targets', () {
     final document = ToolConfigDocument.parse('''
 mcp:
   enabled: false
@@ -633,10 +633,10 @@ mcp:
         allow:
           - search_memory
 validations:
-  - id: workflow_uses_memory
+  - id: runbook_uses_memory
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: search_memory
     mocks:
@@ -647,7 +647,7 @@ validations:
     expect(toolConfigValidationError(document), isEmpty);
   });
 
-  test('rejects mixed workflow node targets', () {
+  test('rejects mixed runbook node targets', () {
     final document = ToolConfigDocument.parse('''
 local-exec:
   enabled: true
@@ -668,10 +668,10 @@ node-presets:
     arguments:
       template_id: rg.search_text
 validations:
-  - id: mixed_workflow_target
+  - id: mixed_runbook_target
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: rg_search
       command: rg
       operation: search_text
@@ -682,7 +682,7 @@ validations:
 
     expect(
       toolConfigValidationError(document),
-      'validation "mixed_workflow_target" workflow-node target must choose preset-id, command-operation, or mcp-tool',
+      'validation "mixed_runbook_target" runbook-node target must choose preset-id, command-operation, or mcp-tool',
     );
   });
 

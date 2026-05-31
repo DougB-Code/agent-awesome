@@ -25,9 +25,9 @@ func defaultAppOptions() app.Options {
 		ModelConfigPath:            config.DefaultModelPath(),
 		ToolPath:                   config.DefaultToolPath(),
 		ContextAPIToken:            os.Getenv("AGENTAWESOME_CONTEXT_API_TOKEN"),
-		WorkflowAPIAddr:            os.Getenv("AGENTAWESOME_WORKFLOW_ADDR"),
-		WorkflowDefinitionsDir:     os.Getenv("AGENTAWESOME_WORKFLOW_DEFINITIONS_DIR"),
-		WorkflowDatabasePath:       os.Getenv("AGENTAWESOME_WORKFLOW_DB"),
+		RunbookAPIAddr:             os.Getenv("AGENTAWESOME_RUNBOOK_ADDR"),
+		RunbookDefinitionsDir:      os.Getenv("AGENTAWESOME_RUNBOOK_DEFINITIONS_DIR"),
+		RunbookDatabasePath:        os.Getenv("AGENTAWESOME_RUNBOOK_DB"),
 		RuntimeTargetsDatabasePath: os.Getenv("AGENTAWESOME_RUNTIME_TARGETS_DB"),
 		CommandDataDir:             envString("AGENTAWESOME_COMMAND_DATA_DIR", config.DefaultCommandDataDir()),
 		CommandAllowedWorkdirs:     envList("AGENTAWESOME_COMMAND_ALLOWED_WORKDIRS", []string{"."}),
@@ -75,9 +75,9 @@ AA runtime syntax:
 	cmd.Flags().StringVar(&opts.ContextAPIAddr, "context-api-addr", opts.ContextAPIAddr, "optional harness-owned context API listen address")
 	cmd.Flags().StringVar(&opts.ContextAPIToken, "context-api-token", opts.ContextAPIToken, "optional bearer token for direct context API requests")
 	cmd.Flags().StringVar(&opts.SessionDatabase, "session-db", opts.SessionDatabase, "assistant session SQLite database path; defaults to the memory database")
-	cmd.Flags().StringVar(&opts.WorkflowAPIAddr, "workflow-api-addr", opts.WorkflowAPIAddr, "optional embedded workflow API listen address")
-	cmd.Flags().StringVar(&opts.WorkflowDefinitionsDir, "workflow-definitions", opts.WorkflowDefinitionsDir, "embedded workflow definition directory")
-	cmd.Flags().StringVar(&opts.WorkflowDatabasePath, "workflow-db", opts.WorkflowDatabasePath, "embedded workflow SQLite database path")
+	cmd.Flags().StringVar(&opts.RunbookAPIAddr, "runbook-api-addr", opts.RunbookAPIAddr, "optional embedded runbook API listen address")
+	cmd.Flags().StringVar(&opts.RunbookDefinitionsDir, "runbook-definitions", opts.RunbookDefinitionsDir, "embedded runbook definition directory")
+	cmd.Flags().StringVar(&opts.RunbookDatabasePath, "runbook-db", opts.RunbookDatabasePath, "embedded runbook SQLite database path")
 	cmd.Flags().StringVar(&opts.RuntimeTargetsDatabasePath, "runtime-targets-db", opts.RuntimeTargetsDatabasePath, "runtime target SQLite database path")
 	cmd.Flags().StringVar(&opts.CommandDataDir, "command-data-dir", opts.CommandDataDir, "command service data directory")
 	cmd.Flags().StringArrayVar(&opts.CommandAllowedWorkdirs, "command-allow-workdir", opts.CommandAllowedWorkdirs, "allowed command working directory root")

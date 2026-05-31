@@ -20,7 +20,7 @@ func TestRegisterLocalTargetPersistsCapabilityInventory(t *testing.T) {
 
 	target, err := service.RegisterLocalTarget(ctx, LocalRegistration{
 		Version:      "test-version",
-		Capabilities: []string{"command:go_test_all", "workflow_action:data.assert", "command:go_test_all"},
+		Capabilities: []string{"command:go_test_all", "runbook_action:data.assert", "command:go_test_all"},
 	})
 	if err != nil {
 		t.Fatalf("RegisterLocalTarget() error = %v", err)
@@ -31,7 +31,7 @@ func TestRegisterLocalTargetPersistsCapabilityInventory(t *testing.T) {
 	if target.Status != TargetStatusHealthy {
 		t.Fatalf("target status = %q, want healthy", target.Status)
 	}
-	if got, want := target.Capabilities, []string{"command:go_test_all", "workflow_action:data.assert"}; !equalStrings(got, want) {
+	if got, want := target.Capabilities, []string{"command:go_test_all", "runbook_action:data.assert"}; !equalStrings(got, want) {
 		t.Fatalf("capabilities = %#v, want %#v", got, want)
 	}
 

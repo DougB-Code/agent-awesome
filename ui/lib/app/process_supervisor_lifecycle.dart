@@ -1,4 +1,4 @@
-/// Launch, run, shutdown, and signaling workflows for ProcessSupervisor.
+/// Launch, run, shutdown, and signaling runbooks for ProcessSupervisor.
 part of 'process_supervisor.dart';
 
 extension ProcessSupervisorLifecycle on ProcessSupervisor {

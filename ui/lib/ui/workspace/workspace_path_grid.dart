@@ -33,9 +33,9 @@ class _PathGrid extends StatelessWidget {
       ),
       _PathCardData(
         title: 'Automation Studio',
-        detail: 'Run, observe, and build durable AI workflows.',
+        detail: 'Run, observe, and build durable AI runbooks.',
         icon: Icons.route_outlined,
-        section: AppSections.automationOperations,
+        section: AppSections.automationLaunchpad,
       ),
       _PathCardData(
         title: 'Memory Map',

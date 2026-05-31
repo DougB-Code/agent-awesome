@@ -463,7 +463,7 @@ class _SettingsToolConfigFileTile extends StatelessWidget {
   /// Builds one selectable tool config file row.
   @override
   Widget build(BuildContext context) {
-    return _SettingsSelectorTile(
+    return PanelSelectorTile(
       label: entry.label,
       icon: icon,
       detail: entry.path,

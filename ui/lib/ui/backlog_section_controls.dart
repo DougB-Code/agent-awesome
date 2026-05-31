@@ -94,7 +94,7 @@ class _TaskDropdown extends PanelDropdownFormField<String> {
     required super.values,
     required super.tooltip,
     required super.onChanged,
-  }) : super(label: tooltip ?? '', showLabel: false, labelFor: _taskLabel);
+  }) : super(label: tooltip ?? '', labelFor: _taskLabel);
 }
 
 class _TaskTextField extends PanelTextFormField {
@@ -126,43 +126,45 @@ class _TaskDatePickerFieldState extends State<_TaskDatePickerField> {
   /// Builds a button-like date field backed by a date picker dialog.
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: widget.controller,
-      builder: (context, _) {
-        final colors = context.agentAwesomeColors;
-        final value = widget.controller.text.trim();
-        final hasValue = value.isNotEmpty;
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: _pickDate,
-            child: InputDecorator(
-              isEmpty: !hasValue,
-              decoration: PanelFormDecoration.field(
-                context,
-                label: widget.label,
-                floatingLabelBehavior: FloatingLabelBehavior.always,
-                suffixIcon: IconButton(
-                  tooltip: hasValue
-                      ? 'Clear ${widget.label}'
-                      : 'Pick ${widget.label}',
-                  onPressed: hasValue ? _clearDate : _pickDate,
-                  icon: Icon(
-                    hasValue ? Icons.close : Icons.calendar_today_outlined,
-                    size: 18,
+    return PanelLabeledFormControl(
+      label: widget.label,
+      child: AnimatedBuilder(
+        animation: widget.controller,
+        builder: (context, _) {
+          final colors = context.agentAwesomeColors;
+          final value = widget.controller.text.trim();
+          final hasValue = value.isNotEmpty;
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: _pickDate,
+              child: InputDecorator(
+                isEmpty: !hasValue,
+                decoration: PanelFormDecoration.field(
+                  context,
+                  label: widget.label,
+                  suffixIcon: IconButton(
+                    tooltip: hasValue
+                        ? 'Clear ${widget.label}'
+                        : 'Pick ${widget.label}',
+                    onPressed: hasValue ? _clearDate : _pickDate,
+                    icon: Icon(
+                      hasValue ? Icons.close : Icons.calendar_today_outlined,
+                      size: 18,
+                    ),
                   ),
                 ),
-              ),
-              child: Text(
-                hasValue ? _datePickerFieldLabel(value) : 'Select date',
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: hasValue ? colors.ink : colors.muted),
+                child: Text(
+                  hasValue ? _datePickerFieldLabel(value) : 'Select date',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: hasValue ? colors.ink : colors.muted),
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

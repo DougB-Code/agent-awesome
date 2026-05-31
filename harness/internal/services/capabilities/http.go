@@ -36,8 +36,8 @@ func (s *HTTPServer) capabilitiesHandler(w http.ResponseWriter, r *http.Request)
 	if value, ok := boolQuery(r, "usable_in_chat"); ok {
 		query.UsableInChat = &value
 	}
-	if value, ok := boolQuery(r, "usable_in_workflows"); ok {
-		query.UsableInWorkflows = &value
+	if value, ok := boolQuery(r, "usable_in_runbooks"); ok {
+		query.UsableInRunbooks = &value
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"capabilities": s.registry.List(query)})
 }

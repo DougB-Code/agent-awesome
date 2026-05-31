@@ -13,9 +13,9 @@ const (
 	KindMCPTool CapabilityKind = "mcp_tool"
 	// KindAgentProfile identifies one configured agent identity.
 	KindAgentProfile CapabilityKind = "agent_profile"
-	// KindWorkflowAction identifies one built-in workflow action.
-	KindWorkflowAction CapabilityKind = "workflow_action"
-	// KindNodePreset identifies one workflow node preset.
+	// KindRunbookAction identifies one built-in runbook action.
+	KindRunbookAction CapabilityKind = "runbook_action"
+	// KindNodePreset identifies one runbook node preset.
 	KindNodePreset CapabilityKind = "node_preset"
 	// KindToolValidation identifies one portable tool-package validation.
 	KindToolValidation CapabilityKind = "tool_validation"
@@ -35,25 +35,25 @@ const (
 
 // Capability stores one normalized registry entry.
 type Capability struct {
-	ID                string                 `json:"id"`
-	Kind              CapabilityKind         `json:"kind"`
-	Name              string                 `json:"name"`
-	Label             string                 `json:"label"`
-	Description       string                 `json:"description,omitempty"`
-	UsableInChat      bool                   `json:"usable_in_chat"`
-	UsableInWorkflows bool                   `json:"usable_in_workflows"`
-	Invocation        CapabilityInvocation   `json:"invocation"`
-	Contract          CapabilityContract     `json:"contract"`
-	Risk              CapabilityRisk         `json:"risk"`
-	Availability      CapabilityAvailability `json:"availability"`
-	TestResults       []CapabilityTestResult `json:"test_results,omitempty"`
-	Metadata          map[string]any         `json:"metadata,omitempty"`
+	ID               string                 `json:"id"`
+	Kind             CapabilityKind         `json:"kind"`
+	Name             string                 `json:"name"`
+	Label            string                 `json:"label"`
+	Description      string                 `json:"description,omitempty"`
+	UsableInChat     bool                   `json:"usable_in_chat"`
+	UsableInRunbooks bool                   `json:"usable_in_runbooks"`
+	Invocation       CapabilityInvocation   `json:"invocation"`
+	Contract         CapabilityContract     `json:"contract"`
+	Risk             CapabilityRisk         `json:"risk"`
+	Availability     CapabilityAvailability `json:"availability"`
+	TestResults      []CapabilityTestResult `json:"test_results,omitempty"`
+	Metadata         map[string]any         `json:"metadata,omitempty"`
 }
 
-// CapabilityInvocation stores direct-call and workflow-node invocation details.
+// CapabilityInvocation stores direct-call and runbook-node invocation details.
 type CapabilityInvocation struct {
 	DirectToolName   string         `json:"direct_tool_name,omitempty"`
-	WorkflowAction   string         `json:"workflow_action,omitempty"`
+	RunbookAction    string         `json:"runbook_action,omitempty"`
 	MCPServer        string         `json:"mcp_server,omitempty"`
 	MCPTool          string         `json:"mcp_tool,omitempty"`
 	CommandTemplate  string         `json:"command_template,omitempty"`
@@ -106,12 +106,12 @@ const (
 
 // Query selects capability records for listing.
 type Query struct {
-	Kind              string
-	UsableInChat      *bool
-	UsableInWorkflows *bool
+	Kind             string
+	UsableInChat     *bool
+	UsableInRunbooks *bool
 }
 
-// Diagnostic reports one unavailable capability required by a workflow.
+// Diagnostic reports one unavailable capability required by a runbook.
 type Diagnostic struct {
 	Severity     string `json:"severity"`
 	Path         string `json:"path"`

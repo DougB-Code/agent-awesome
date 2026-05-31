@@ -255,7 +255,7 @@ func toolDefinitions() []map[string]any {
 		tool("task_graph_projection", "Read a graph-backed task node and edge projection.", taskGraphProjectionSchema(), []string{}),
 		tool("project_executive_summary", "Read the canonical Today executive summary projection.", executiveSummarySchema(), []string{}),
 		tool("explain_executive_summary_item", "Explain why one Today projection item was surfaced.", explainExecutiveSummaryItemSchema(), []string{"item_id"}),
-		tool("upsert_codebase", "Create or update a durable codebase catalog entry for workflow operations.", map[string]any{
+		tool("upsert_codebase", "Create or update a durable codebase catalog entry for runbook operations.", map[string]any{
 			"actor":    stringSchema("Calling agent or user."),
 			"codebase": codebaseSchema(),
 		}, []string{"codebase"}),

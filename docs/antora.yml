@@ -7,4 +7,4 @@ nav:
   - modules/ROOT/nav.adoc
   - modules/user/nav.adoc
   - modules/development/nav.adoc
-  - modules/operations/nav.adoc
+  - modules/launchpad/nav.adoc

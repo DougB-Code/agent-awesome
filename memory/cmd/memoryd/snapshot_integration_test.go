@@ -23,7 +23,7 @@ import (
 
 const snapshotIntegrationToken = "snapshot-integration-token"
 
-// TestMemoryDSnapshotSaveRestoreDrill verifies the beta daemon-level snapshot workflow.
+// TestMemoryDSnapshotSaveRestoreDrill verifies the beta daemon-level snapshot runbook.
 func TestMemoryDSnapshotSaveRestoreDrill(t *testing.T) {
 	binary := buildMemoryDBinary(t)
 	snapshots := newSnapshotEndpoint()

@@ -1,4 +1,4 @@
-/// Chat session, streaming, and chat-history workflows for AgentAwesomeAppController.
+/// Chat session, streaming, and chat-history runbooks for AgentAwesomeAppController.
 part of 'app_controller.dart';
 
 extension AgentAwesomeAppControllerChat on AgentAwesomeAppController {

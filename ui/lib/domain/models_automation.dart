@@ -1,7 +1,7 @@
-/// Defines workflow authoring and runtime models for the Automations UI.
+/// Defines runbook authoring and runtime models for the Automations UI.
 library;
 
-/// AutomationActionType describes one workflow action the builder can place.
+/// AutomationActionType describes one runbook action the builder can place.
 class AutomationActionType {
   /// Creates an immutable automation action type.
   const AutomationActionType({
@@ -16,7 +16,7 @@ class AutomationActionType {
     this.outputContracts = const <String>[],
   });
 
-  /// Registered workflow action name.
+  /// Registered runbook action name.
   final String name;
 
   /// User-facing action label.
@@ -44,9 +44,9 @@ class AutomationActionType {
   final List<String> outputContracts;
 }
 
-/// AutomationDefinition stores one installed workflow definition snapshot.
+/// AutomationDefinition stores one installed runbook definition snapshot.
 class AutomationDefinition {
-  /// Creates an immutable installed workflow definition.
+  /// Creates an immutable installed runbook definition.
   const AutomationDefinition({
     required this.id,
     required this.kind,
@@ -59,7 +59,7 @@ class AutomationDefinition {
   /// Definition id.
   final String id;
 
-  /// Workflow kind.
+  /// Runbook kind.
   final String kind;
 
   /// User-facing definition name.
@@ -75,7 +75,7 @@ class AutomationDefinition {
   final String updatedAt;
 }
 
-/// AutomationDraft stores one editable workflow draft.
+/// AutomationDraft stores one editable runbook draft.
 class AutomationDraft {
   /// Creates an immutable automation draft.
   const AutomationDraft({
@@ -93,7 +93,7 @@ class AutomationDraft {
   /// Draft id.
   final String id;
 
-  /// Draft workflow kind.
+  /// Draft runbook kind.
   final String kind;
 
   /// User-facing draft name.
@@ -105,7 +105,7 @@ class AutomationDraft {
   /// Draft lifecycle status.
   final String status;
 
-  /// Editable canonical workflow body.
+  /// Editable canonical runbook body.
   final Map<String, dynamic> body;
 
   /// Last validation result.
@@ -118,9 +118,9 @@ class AutomationDraft {
   final String updatedAt;
 }
 
-/// AutomationRun stores one workflow run state.
+/// AutomationRun stores one runbook run state.
 class AutomationRun {
-  /// Creates an immutable workflow run state.
+  /// Creates an immutable runbook run state.
   const AutomationRun({
     required this.id,
     required this.definitionId,
@@ -139,7 +139,7 @@ class AutomationRun {
   /// Installed definition id.
   final String definitionId;
 
-  /// Workflow kind.
+  /// Runbook kind.
   final String kind;
 
   /// Runtime status.
@@ -161,9 +161,9 @@ class AutomationRun {
   final String updatedAt;
 }
 
-/// AutomationRunSetup stores one saved Operation.
+/// AutomationRunSetup stores one saved Launch.
 class AutomationRunSetup {
-  /// Creates an immutable saved Operation.
+  /// Creates an immutable saved Launch.
   const AutomationRunSetup({
     required this.id,
     required this.definitionId,
@@ -179,16 +179,16 @@ class AutomationRunSetup {
     this.updatedAt = '',
   });
 
-  /// Operation id.
+  /// Launch id.
   final String id;
 
-  /// Workflow definition this Operation starts.
+  /// Runbook definition this Launch starts.
   final String definitionId;
 
-  /// User-facing Operation name.
+  /// User-facing Launch name.
   final String name;
 
-  /// Optional Operation description.
+  /// Optional Launch description.
   final String description;
 
   /// Bound codebase catalog id.
@@ -200,13 +200,13 @@ class AutomationRunSetup {
   /// Bound agent profile id.
   final String agentProfileId;
 
-  /// Saved Operation default input values.
+  /// Saved Launch default input values.
   final Map<String, dynamic> input;
 
-  /// Saved Operation safety policy.
+  /// Saved Launch safety policy.
   final Map<String, dynamic> policy;
 
-  /// Saved Operation schedule.
+  /// Saved Launch schedule.
   final Map<String, dynamic> schedule;
 
   /// Creation timestamp.
@@ -247,11 +247,11 @@ class AutomationRunSetup {
   }
 }
 
-/// AutomationOperationPreview stores display-safe Operation dry-run output.
-class AutomationOperationPreview {
-  /// Creates an immutable Operation preview.
-  const AutomationOperationPreview({
-    required this.operation,
+/// AutomationLaunchPreview stores display-safe Launch dry-run output.
+class AutomationLaunchPreview {
+  /// Creates an immutable Launch preview.
+  const AutomationLaunchPreview({
+    required this.launch,
     required this.status,
     required this.policyDecision,
     this.resolvedInput = const <String, dynamic>{},
@@ -259,13 +259,13 @@ class AutomationOperationPreview {
     this.missingSetup = const <String>[],
   });
 
-  /// Operation being previewed.
-  final AutomationRunSetup operation;
+  /// Launch being previewed.
+  final AutomationRunSetup launch;
 
   /// Preview status such as ready, needs_input, or blocked.
   final String status;
 
-  /// Display-safe resolved workflow input.
+  /// Display-safe resolved runbook input.
   final Map<String, dynamic> resolvedInput;
 
   /// Resolver provenance and diagnostics.
@@ -275,18 +275,18 @@ class AutomationOperationPreview {
   final List<String> missingSetup;
 
   /// Policy decision for this run.
-  final AutomationOperationPolicyDecision policyDecision;
+  final AutomationLaunchPolicyDecision policyDecision;
 }
 
-/// AutomationOperationRunSnapshot stores immutable Operation run audit data.
-class AutomationOperationRunSnapshot {
-  /// Creates immutable Operation run audit metadata.
-  const AutomationOperationRunSnapshot({
+/// AutomationLaunchRunSnapshot stores immutable Launch run audit data.
+class AutomationLaunchRunSnapshot {
+  /// Creates immutable Launch run audit metadata.
+  const AutomationLaunchRunSnapshot({
     required this.runId,
-    required this.operationId,
-    this.operationVersion = 0,
-    this.workflowId = '',
-    this.workflowVersion = '',
+    required this.launchId,
+    this.launchVersion = 0,
+    this.runbookId = '',
+    this.runbookVersion = '',
     this.resolvedInput = const <String, dynamic>{},
     this.resolution = const <String, dynamic>{},
     this.target = const <String, dynamic>{},
@@ -295,22 +295,22 @@ class AutomationOperationRunSnapshot {
     this.createdAt = '',
   });
 
-  /// Workflow run id.
+  /// Runbook run id.
   final String runId;
 
-  /// Saved Operation id.
-  final String operationId;
+  /// Saved Launch id.
+  final String launchId;
 
-  /// Operation version captured at start.
-  final int operationVersion;
+  /// Launch version captured at start.
+  final int launchVersion;
 
-  /// Workflow definition id.
-  final String workflowId;
+  /// Runbook definition id.
+  final String runbookId;
 
-  /// Workflow version captured at start.
-  final String workflowVersion;
+  /// Runbook version captured at start.
+  final String runbookVersion;
 
-  /// Resolved workflow input.
+  /// Resolved runbook input.
   final Map<String, dynamic> resolvedInput;
 
   /// Input provenance and diagnostics.
@@ -329,10 +329,10 @@ class AutomationOperationRunSnapshot {
   final String createdAt;
 }
 
-/// AutomationOperationPolicyDecision stores preview safety status.
-class AutomationOperationPolicyDecision {
-  /// Creates an immutable Operation policy decision.
-  const AutomationOperationPolicyDecision({
+/// AutomationLaunchPolicyDecision stores preview safety status.
+class AutomationLaunchPolicyDecision {
+  /// Creates an immutable Launch policy decision.
+  const AutomationLaunchPolicyDecision({
     required this.status,
     this.reasons = const <String>[],
   });
@@ -456,7 +456,7 @@ class AutomationCapability {
     required this.label,
     this.description = '',
     this.usableInChat = false,
-    this.usableInWorkflows = false,
+    this.usableInRunbooks = false,
     this.invocation = const <String, dynamic>{},
     this.contract = const <String, dynamic>{},
     this.risk = const <String, dynamic>{},
@@ -483,10 +483,10 @@ class AutomationCapability {
   /// Whether the capability can be used from chat.
   final bool usableInChat;
 
-  /// Whether the capability can be used in workflows.
-  final bool usableInWorkflows;
+  /// Whether the capability can be used in runbooks.
+  final bool usableInRunbooks;
 
-  /// Invocation metadata for direct and workflow calls.
+  /// Invocation metadata for direct and runbook calls.
   final Map<String, dynamic> invocation;
 
   /// Schema and confirmation metadata.
@@ -689,7 +689,7 @@ class AutomationTargetSecretMetadata {
 
 /// AutomationEvent stores one durable run event.
 class AutomationEvent {
-  /// Creates an immutable workflow event.
+  /// Creates an immutable runbook event.
   const AutomationEvent({
     required this.id,
     required this.runId,
@@ -718,9 +718,9 @@ class AutomationEvent {
   final String createdAt;
 }
 
-/// AutomationPendingItem stores one user-visible workflow inbox item.
+/// AutomationPendingItem stores one user-visible runbook inbox item.
 class AutomationPendingItem {
-  /// Creates an immutable pending workflow item.
+  /// Creates an immutable pending runbook item.
   const AutomationPendingItem({
     required this.id,
     required this.runId,
@@ -891,15 +891,15 @@ AutomationRun parseAutomationRun(dynamic value) {
   );
 }
 
-/// Parses one saved Operation from JSON.
+/// Parses one saved Launch from JSON.
 AutomationRunSetup parseAutomationRunSetup(dynamic value) {
   final map = _map(value);
-  final workflowId = _string(map['workflow_id']);
+  final runbookId = _string(map['runbook_id']);
   final defaults = _map(map['defaults']);
   return AutomationRunSetup(
     id: _string(map['id']),
-    definitionId: workflowId.isNotEmpty
-        ? workflowId
+    definitionId: runbookId.isNotEmpty
+        ? runbookId
         : _string(map['definition_id']),
     name: _string(map['name']),
     description: _string(map['description']),
@@ -914,32 +914,32 @@ AutomationRunSetup parseAutomationRunSetup(dynamic value) {
   );
 }
 
-/// Parses one Operation dry-run preview from JSON.
-AutomationOperationPreview parseAutomationOperationPreview(dynamic value) {
+/// Parses one Launch dry-run preview from JSON.
+AutomationLaunchPreview parseAutomationLaunchPreview(dynamic value) {
   final map = _map(value);
-  return AutomationOperationPreview(
-    operation: parseAutomationRunSetup(map['operation']),
+  return AutomationLaunchPreview(
+    launch: parseAutomationRunSetup(map['launch']),
     status: _string(map['status']),
     resolvedInput: _map(map['resolved_input']),
     resolution: _map(map['resolution']),
     missingSetup: _stringList(map['missing_setup']),
-    policyDecision: parseAutomationOperationPolicyDecision(
+    policyDecision: parseAutomationLaunchPolicyDecision(
       map['policy_decision'],
     ),
   );
 }
 
-/// Parses one immutable Operation run snapshot from JSON.
-AutomationOperationRunSnapshot parseAutomationOperationRunSnapshot(
+/// Parses one immutable Launch run snapshot from JSON.
+AutomationLaunchRunSnapshot parseAutomationLaunchRunSnapshot(
   dynamic value,
 ) {
   final map = _map(value);
-  return AutomationOperationRunSnapshot(
+  return AutomationLaunchRunSnapshot(
     runId: _string(map['run_id']),
-    operationId: _string(map['operation_id']),
-    operationVersion: _int(map['operation_version']),
-    workflowId: _string(map['workflow_id']),
-    workflowVersion: _string(map['workflow_version']),
+    launchId: _string(map['launch_id']),
+    launchVersion: _int(map['launch_version']),
+    runbookId: _string(map['runbook_id']),
+    runbookVersion: _string(map['runbook_version']),
     resolvedInput: _map(map['resolved_input']),
     resolution: _map(map['resolution']),
     target: _map(map['target']),
@@ -951,12 +951,12 @@ AutomationOperationRunSnapshot parseAutomationOperationRunSnapshot(
   );
 }
 
-/// Parses one Operation policy decision from JSON.
-AutomationOperationPolicyDecision parseAutomationOperationPolicyDecision(
+/// Parses one Launch policy decision from JSON.
+AutomationLaunchPolicyDecision parseAutomationLaunchPolicyDecision(
   dynamic value,
 ) {
   final map = _map(value);
-  return AutomationOperationPolicyDecision(
+  return AutomationLaunchPolicyDecision(
     status: _string(map['status']),
     reasons: _stringList(map['reasons']),
   );
@@ -1000,7 +1000,7 @@ AutomationCapability parseAutomationCapability(dynamic value) {
     label: _string(map['label']),
     description: _string(map['description']),
     usableInChat: map['usable_in_chat'] == true,
-    usableInWorkflows: map['usable_in_workflows'] == true,
+    usableInRunbooks: map['usable_in_runbooks'] == true,
     invocation: _map(map['invocation']),
     contract: _map(map['contract']),
     risk: _map(map['risk']),

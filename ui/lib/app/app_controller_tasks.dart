@@ -1,4 +1,4 @@
-/// Graph-backed task queue and projection workflows for AgentAwesomeAppController.
+/// Graph-backed task queue and projection runbooks for AgentAwesomeAppController.
 part of 'app_controller.dart';
 
 extension AgentAwesomeAppControllerTasks on AgentAwesomeAppController {

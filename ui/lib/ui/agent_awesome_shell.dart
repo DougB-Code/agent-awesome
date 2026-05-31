@@ -166,19 +166,19 @@ class _AgentAwesomeShellState extends State<AgentAwesomeShell> {
           backlogPanel,
           legacyOpen: widget.controller.backlogChatPanelOpen,
         );
-      case AppSections.automationOperations:
+      case AppSections.automationLaunchpad:
         return _withAssistantChat(
-          AutomationOperationsCommandPanel(
+          AutomationLaunchpadCommandPanel(
             controller: widget.controller,
-            onAreaChanged: _rememberArea(AppSections.automationOperations),
+            onAreaChanged: _rememberArea(AppSections.automationLaunchpad),
           ),
           legacyOpen: widget.controller.automationsChatPanelOpen,
         );
-      case AppSections.automationWorkflows:
+      case AppSections.automationRunbooks:
         return _withAssistantChat(
-          AutomationWorkflowsCommandPanel(
+          AutomationRunbooksCommandPanel(
             controller: widget.controller,
-            onAreaChanged: _rememberArea(AppSections.automationWorkflows),
+            onAreaChanged: _rememberArea(AppSections.automationRunbooks),
           ),
           legacyOpen: widget.controller.automationsChatPanelOpen,
         );

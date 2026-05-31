@@ -11,10 +11,10 @@ class RuntimeProfile {
     required this.label,
     required this.harness,
     required this.gateway,
-    this.workflow = const WorkflowRuntime(
-      id: 'workflow',
-      label: 'Workflow',
-      apiBaseUrl: 'http://127.0.0.1:8092/api/workflows',
+    this.runbook = const RunbookRuntime(
+      id: 'runbook',
+      label: 'Runbook',
+      apiBaseUrl: 'http://127.0.0.1:8092/api/runbooks',
       healthUrl: 'http://127.0.0.1:8092/healthz',
       hostedByHarness: false,
       workingDirectory: '',
@@ -42,8 +42,8 @@ class RuntimeProfile {
   /// Gateway process and API configuration used by every channel client.
   final GatewayRuntime gateway;
 
-  /// Workflow process and API configuration used for durable orchestration.
-  final WorkflowRuntime workflow;
+  /// Runbook process and API configuration used for durable orchestration.
+  final RunbookRuntime runbook;
 
   /// Configured memory domains available to this agent runtime topology.
   final List<McpServerRuntime> memoryDomains;
@@ -72,7 +72,7 @@ class RuntimeProfile {
     String? label,
     HarnessRuntime? harness,
     GatewayRuntime? gateway,
-    WorkflowRuntime? workflow,
+    RunbookRuntime? runbook,
     List<McpServerRuntime>? memoryDomains,
     List<McpServerRuntime>? serviceMcpServers,
     AgentMemoryRuntime? agentMemory,
@@ -82,7 +82,7 @@ class RuntimeProfile {
       label: label ?? this.label,
       harness: harness ?? this.harness,
       gateway: gateway ?? this.gateway,
-      workflow: workflow ?? this.workflow,
+      runbook: runbook ?? this.runbook,
       memoryDomains: memoryDomains ?? this.memoryDomains,
       serviceMcpServers: serviceMcpServers ?? this.serviceMcpServers,
       agentMemory: agentMemory ?? this.agentMemory,
@@ -96,7 +96,7 @@ class RuntimeProfile {
       'label': label,
       'harness': harness.toJson(),
       'gateway': gateway.toJson(),
-      'workflow': workflow.toJson(),
+      'runbook': runbook.toJson(),
       'memory_domains': memoryDomains.map((domain) => domain.toJson()).toList(),
       if (serviceMcpServers.isNotEmpty)
         'mcp_servers': serviceMcpServers
@@ -120,14 +120,14 @@ class RuntimeProfile {
       _requiredMap(json, 'agent_memory'),
     );
     _validateAgentMemory(agentMemory, domains);
-    final workflow = WorkflowRuntime.fromJson(_requiredMap(json, 'workflow'));
-    _validateWorkflowRuntime(workflow);
+    final runbook = RunbookRuntime.fromJson(_requiredMap(json, 'runbook'));
+    _validateRunbookRuntime(runbook);
     return RuntimeProfile(
       id: _requiredString(json, 'id'),
       label: _requiredString(json, 'label'),
       harness: HarnessRuntime.fromJson(_requiredMap(json, 'harness')),
       gateway: _requiredGateway(_requiredMap(json, 'gateway')),
-      workflow: workflow,
+      runbook: runbook,
       memoryDomains: domains,
       serviceMcpServers: serviceMcpServers,
       agentMemory: agentMemory,
@@ -403,10 +403,10 @@ class GatewayRuntime {
   }
 }
 
-/// WorkflowRuntime describes the workflow orchestration service process.
-class WorkflowRuntime {
-  /// Creates an immutable workflow runtime definition.
-  const WorkflowRuntime({
+/// RunbookRuntime describes the runbook orchestration service process.
+class RunbookRuntime {
+  /// Creates an immutable runbook runtime definition.
+  const RunbookRuntime({
     required this.id,
     required this.label,
     required this.apiBaseUrl,
@@ -421,44 +421,44 @@ class WorkflowRuntime {
     required this.enabled,
   });
 
-  /// Stable workflow service id.
+  /// Stable runbook service id.
   final String id;
 
-  /// Human-readable workflow service label.
+  /// Human-readable runbook service label.
   final String label;
 
-  /// Workflow REST API base URL.
+  /// Runbook REST API base URL.
   final String apiBaseUrl;
 
-  /// Workflow health URL used before and after launching.
+  /// Runbook health URL used before and after launching.
   final String healthUrl;
 
-  /// Whether the harness process owns this workflow listener.
+  /// Whether the harness process owns this runbook listener.
   final bool hostedByHarness;
 
-  /// Working directory for an externally launched workflow service.
+  /// Working directory for an externally launched runbook service.
   final String workingDirectory;
 
-  /// Workflow executable or start-script path.
+  /// Runbook executable or start-script path.
   final String executablePath;
 
-  /// Directory containing user-authored workflow YAML files.
+  /// Directory containing user-authored runbook YAML files.
   final String definitionsDir;
 
-  /// SQLite database path for durable workflow state.
+  /// SQLite database path for durable runbook state.
   final String dbPath;
 
-  /// Workflow service listen port.
+  /// Runbook service listen port.
   final int port;
 
-  /// Whether the UI should start an external workflow service process.
+  /// Whether the UI should start an external runbook service process.
   final bool autoStart;
 
-  /// Whether this profile exposes workflow orchestration.
+  /// Whether this profile exposes runbook orchestration.
   final bool enabled;
 
-  /// Creates a workflow runtime with selected fields replaced.
-  WorkflowRuntime copyWith({
+  /// Creates a runbook runtime with selected fields replaced.
+  RunbookRuntime copyWith({
     String? id,
     String? label,
     String? apiBaseUrl,
@@ -472,7 +472,7 @@ class WorkflowRuntime {
     bool? autoStart,
     bool? enabled,
   }) {
-    return WorkflowRuntime(
+    return RunbookRuntime(
       id: id ?? this.id,
       label: label ?? this.label,
       apiBaseUrl: apiBaseUrl ?? this.apiBaseUrl,
@@ -488,7 +488,7 @@ class WorkflowRuntime {
     );
   }
 
-  /// Encodes this workflow runtime to explicit JSON values.
+  /// Encodes this runbook runtime to explicit JSON values.
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'id': id,
@@ -506,9 +506,9 @@ class WorkflowRuntime {
     };
   }
 
-  /// Parses workflow runtime JSON from explicit profile values.
-  factory WorkflowRuntime.fromJson(Map<String, dynamic> json) {
-    return WorkflowRuntime(
+  /// Parses runbook runtime JSON from explicit profile values.
+  factory RunbookRuntime.fromJson(Map<String, dynamic> json) {
+    return RunbookRuntime(
       id: _requiredString(json, 'id'),
       label: _requiredString(json, 'label'),
       apiBaseUrl: _requiredString(json, 'api_base_url'),
@@ -578,7 +578,7 @@ class HarnessRuntime {
   /// Tool config path passed to the harness.
   final String toolConfigPath;
 
-  /// Command working-directory roots allowed for workflow command actions.
+  /// Command working-directory roots allowed for runbook command actions.
   final List<String> commandAllowedWorkdirs;
 
   /// Web API listen port.
@@ -935,32 +935,32 @@ void _validateServiceMcpServers(
   }
 }
 
-/// Validates workflow service settings as profile-owned orchestration data.
-void _validateWorkflowRuntime(WorkflowRuntime workflow) {
-  _validateSafeId(workflow.id, 'workflow id');
-  if (!workflow.enabled) {
+/// Validates runbook service settings as profile-owned orchestration data.
+void _validateRunbookRuntime(RunbookRuntime runbook) {
+  _validateSafeId(runbook.id, 'runbook id');
+  if (!runbook.enabled) {
     return;
   }
-  if (workflow.apiBaseUrl.trim().isEmpty || workflow.healthUrl.trim().isEmpty) {
+  if (runbook.apiBaseUrl.trim().isEmpty || runbook.healthUrl.trim().isEmpty) {
     throw const FormatException(
-      'Enabled workflow runtime requires api_base_url and health_url',
+      'Enabled runbook runtime requires api_base_url and health_url',
     );
   }
-  if (workflow.hostedByHarness &&
-      (workflow.definitionsDir.trim().isEmpty ||
-          workflow.dbPath.trim().isEmpty)) {
+  if (runbook.hostedByHarness &&
+      (runbook.definitionsDir.trim().isEmpty ||
+          runbook.dbPath.trim().isEmpty)) {
     throw const FormatException(
-      'Harness-hosted workflow runtime requires definitions_dir and db_path',
+      'Harness-hosted runbook runtime requires definitions_dir and db_path',
     );
   }
-  if (!workflow.hostedByHarness &&
-      workflow.autoStart &&
-      (workflow.workingDirectory.trim().isEmpty ||
-          workflow.executablePath.trim().isEmpty ||
-          workflow.definitionsDir.trim().isEmpty ||
-          workflow.dbPath.trim().isEmpty)) {
+  if (!runbook.hostedByHarness &&
+      runbook.autoStart &&
+      (runbook.workingDirectory.trim().isEmpty ||
+          runbook.executablePath.trim().isEmpty ||
+          runbook.definitionsDir.trim().isEmpty ||
+          runbook.dbPath.trim().isEmpty)) {
     throw const FormatException(
-      'Managed workflow runtime requires working_directory, executable_path, definitions_dir, and db_path',
+      'Managed runbook runtime requires working_directory, executable_path, definitions_dir, and db_path',
     );
   }
 }

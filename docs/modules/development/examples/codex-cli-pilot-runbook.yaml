@@ -1,0 +1,137 @@
+id: codex_cli_pilot
+name: Codex CLI Pilot
+description: Plan, implement, test, review, clean up, commit, push, and open a PR through generic state-machine actions.
+category: source_control
+tags:
+  - codex
+  - command
+  - sourcecontrol
+  - runbook
+parameters:
+  - id: sourcecontrol_mcp_endpoint
+    label: Source-control MCP endpoint
+    type: string
+requirements:
+  actions:
+    - mcp.call
+    - command.execute
+    - data.assert
+  input:
+    - repository_path
+    - worktree_path
+    - branch
+    - base_ref
+    - remote
+    - commit_message
+body:
+  apiVersion: aa.runbook/v1
+  kind: state_machine
+  id: codex_cli_pilot
+  name: Codex CLI Pilot
+  description: Generic Codex CLI pilot runbook.
+  initial: assert_request
+  states:
+    - id: assert_request
+      on_entry:
+        - id: assert_request
+          type: assert
+          with:
+            checks:
+              - path: runbook_input.repository_path
+                mode: exists
+              - path: runbook_input.worktree_path
+                mode: exists
+              - path: runbook_input.branch
+                mode: exists
+              - path: runbook_input.base_ref
+                mode: exists
+              - path: runbook_input.commit_message
+                mode: exists
+      transitions:
+        - trigger: succeeded
+          to: prepare
+    - id: prepare
+      on_entry:
+        - id: prepare
+          type: mcp
+          tool: sourcecontrol.prepare_worktree
+          with:
+            endpoint: "{{sourcecontrol_mcp_endpoint}}"
+            arguments:
+              repository_path: "${runbook_input.repository_path}"
+              worktree_path: "${runbook_input.worktree_path}"
+              branch: "${runbook_input.branch}"
+              base_ref: "${runbook_input.base_ref}"
+      transitions:
+        - trigger: succeeded
+          to: plan
+    - id: plan
+      on_entry:
+        - id: plan
+          type: command
+          tool: codex_plan
+          with:
+            cwd: "${runbook_input.worktree_path}"
+      transitions:
+        - trigger: succeeded
+          to: assert_plan
+    - id: assert_plan
+      on_entry:
+        - id: assert_plan
+          type: assert
+          with:
+            checks:
+              - path: plan.output.plan.compliant
+                mode: equals
+                value: true
+              - path: plan.output.plan.project_conventions
+                mode: equals
+                value: true
+              - path: plan.output.plan.solid
+                mode: equals
+                value: true
+              - path: plan.output.plan.agents
+                mode: equals
+                value: true
+              - path: plan.output.plan.relevant_skills
+                mode: equals
+                value: true
+              - path: plan.output.plan.no_unnecessary_backwards_compatibility
+                mode: equals
+                value: true
+              - path: plan.output.plan.no_duplicate_implementations
+                mode: equals
+                value: true
+              - path: plan.output.plan.no_hardcoded_values
+                mode: equals
+                value: true
+      transitions:
+        - trigger: succeeded
+          to: implement
+    - id: implement
+      on_entry:
+        - id: implement
+          type: command
+          tool: codex_implement
+          with:
+            cwd: "${runbook_input.worktree_path}"
+      transitions:
+        - trigger: succeeded
+          to: test
+    - id: test
+      on_entry:
+        - id: test
+          type: command
+          tool: test
+          with:
+            cwd: "${runbook_input.worktree_path}"
+      transitions:
+        - trigger: succeeded
+          to: review
+    - id: review
+      on_entry:
+        - id: review
+          type: command
+          tool: codex_review
+          with:
+            cwd: "${runbook_input.worktree_path}"

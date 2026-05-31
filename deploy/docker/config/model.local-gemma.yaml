@@ -1,0 +1,11 @@
+# This model config routes the remote container to an OpenAI-compatible Gemma server.
+default: local-gemma:gemma
+providers:
+  local-gemma:
+    adapter: openai
+    auth: optional
+    default: gemma
+    url: ${AA_LOCAL_MODEL_CHAT_URL}
+    models:
+      - id: gemma
+        model: ${AA_LOCAL_MODEL_NAME}

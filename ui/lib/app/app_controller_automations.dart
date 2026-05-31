@@ -1,4 +1,4 @@
-/// Automations workflow loading and UI actions for AgentAwesomeAppController.
+/// Automations runbook loading and UI actions for AgentAwesomeAppController.
 part of 'app_controller.dart';
 
 extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
@@ -22,7 +22,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationRuns.isEmpty ? null : automationRuns.first;
   }
 
-  /// Returns the currently selected saved Operation.
+  /// Returns the currently selected saved Launch.
   AutomationRunSetup? get selectedAutomationRunSetup {
     for (final setup in automationRunSetups) {
       if (setup.id == selectedAutomationRunSetupId) {
@@ -84,7 +84,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return automationDefinitions.isEmpty ? null : automationDefinitions.first;
   }
 
-  /// Returns the editable draft that backs one workflow definition.
+  /// Returns the editable draft that backs one runbook definition.
   AutomationDraft? automationDraftForDefinition(
     AutomationDefinition definition,
   ) {
@@ -97,7 +97,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     return null;
   }
 
-  /// Starts quiet polling for user-deployable workflow files.
+  /// Starts quiet polling for user-deployable runbook files.
   void startAutomationFileRefreshFromUi() {
     if (_automationFileRefreshTimer != null || _isClosing) {
       return;
@@ -109,7 +109,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     );
   }
 
-  /// Refreshes workflow authoring files without requiring runnable services.
+  /// Refreshes runbook authoring files without requiring runnable services.
   Future<void> refreshAutomationAuthoringFromUi() async {
     if (automationsBusy) {
       return;
@@ -123,7 +123,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('workflow authoring refresh failed: $error');
+      await _log('runbook authoring refresh failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
@@ -193,7 +193,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
   /// Selects one automation run and loads its timeline.
   Future<void> selectAutomationRun(String runId) async {
     selectedAutomationRunId = runId;
-    selectedAutomationOperationRunSnapshot = null;
+    selectedAutomationLaunchRunSnapshot = null;
     _notifyControllerListeners();
     await Future.wait(<Future<void>>[
       loadSelectedAutomationRunHistory(notify: false),
@@ -202,10 +202,10 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
-  /// Selects one saved Operation.
+  /// Selects one saved Launch.
   void selectAutomationRunSetup(String setupId) {
     selectedAutomationRunSetupId = setupId;
-    selectedAutomationOperationPreview = null;
+    selectedAutomationLaunchPreview = null;
     _notifyControllerListeners();
   }
 
@@ -264,22 +264,22 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Loads the selected Operation run audit snapshot when one exists.
+  /// Loads the selected Launch run audit snapshot when one exists.
   Future<void> loadSelectedAutomationRunSnapshot({bool notify = true}) async {
     final run = selectedAutomationRun;
     if (run == null) {
-      selectedAutomationOperationRunSnapshot = null;
+      selectedAutomationLaunchRunSnapshot = null;
       if (notify) {
         _notifyControllerListeners();
       }
       return;
     }
     try {
-      selectedAutomationOperationRunSnapshot = await automationsClient
-          .operationRunSnapshot(run.id);
+      selectedAutomationLaunchRunSnapshot = await automationsClient
+          .launchRunSnapshot(run.id);
     } catch (error) {
-      selectedAutomationOperationRunSnapshot = null;
-      await _log('operation run snapshot unavailable for ${run.id}: $error');
+      selectedAutomationLaunchRunSnapshot = null;
+      await _log('launch run snapshot unavailable for ${run.id}: $error');
     }
     if (notify) {
       _notifyControllerListeners();
@@ -320,7 +320,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Creates a new workflow draft from a builder screen.
+  /// Creates a new runbook draft from a builder screen.
   Future<void> createAutomationDraftFromUi({
     required String kind,
     required String name,
@@ -424,20 +424,19 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Duplicates one editable workflow draft into a new authoring file.
+  /// Duplicates one editable runbook draft into a new authoring file.
   Future<void> duplicateAutomationDraftFromUi(AutomationDraft draft) async {
     automationsBusy = true;
     automationsMessage = 'Duplicating ${draft.name}';
     _notifyControllerListeners();
     try {
-      final name =
-          '${draft.name.trim().isEmpty ? 'Workflow' : draft.name} Copy';
+      final name = '${draft.name.trim().isEmpty ? 'Runbook' : draft.name} Copy';
       final created = await _createAutomationDraft(
         kind: draft.kind,
         name: name,
       );
       final definitionId = _definitionIdFromDraftId(created.id);
-      final body = _normalizedWorkflowBody(
+      final body = _normalizedRunbookBody(
         <String, dynamic>{...draft.body, 'id': definitionId, 'name': name},
         fallbackId: definitionId,
         fallbackName: name,
@@ -464,7 +463,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Deletes one editable workflow draft from the authoring file list.
+  /// Deletes one editable runbook draft from the authoring file list.
   Future<void> deleteAutomationDraftFromUi(AutomationDraft draft) async {
     automationsBusy = true;
     automationsMessage = 'Deleting ${draft.name}';
@@ -494,7 +493,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Saves metadata for an operation-selectable workflow file.
+  /// Saves metadata for an launch-selectable runbook file.
   Future<void> saveAutomationDefinitionMetadataFromUi(
     AutomationDefinition definition, {
     required String name,
@@ -502,7 +501,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
   }) async {
     final draft = automationDraftForDefinition(definition);
     if (draft == null) {
-      automationsMessage = 'Workflow file is not editable';
+      automationsMessage = 'Runbook file is not editable';
       _notifyControllerListeners();
       return;
     }
@@ -513,13 +512,13 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     _notifyControllerListeners();
   }
 
-  /// Deletes the editable workflow file represented by one definition.
+  /// Deletes the editable runbook file represented by one definition.
   Future<void> deleteAutomationDefinitionFromUi(
     AutomationDefinition definition,
   ) async {
     final draft = automationDraftForDefinition(definition);
     if (draft == null) {
-      automationsMessage = 'Workflow file is not editable';
+      automationsMessage = 'Runbook file is not editable';
       _notifyControllerListeners();
       return;
     }
@@ -539,7 +538,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     ];
   }
 
-  /// Adds one state entry action to the selected workflow draft.
+  /// Adds one state entry action to the selected runbook draft.
   Future<void> addAutomationActionToSelectedDraftFromUi(
     String actionName,
   ) async {
@@ -591,7 +590,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Creates one saved Operation for an installed workflow file.
+  /// Creates one saved Launch for an installed runbook file.
   Future<void> createAutomationRunSetupFromUi({
     required AutomationDefinition definition,
     required String name,
@@ -604,7 +603,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     Map<String, dynamic> schedule = const <String, dynamic>{},
   }) async {
     automationsBusy = true;
-    automationsMessage = 'Creating operation';
+    automationsMessage = 'Creating launch';
     _notifyControllerListeners();
     try {
       if (!await _ensureAutomationRuntimeReady()) {
@@ -626,17 +625,17 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('automation operation create failed: $error');
+      await _log('automation launch create failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
     }
   }
 
-  /// Updates one saved Operation from typed UI fields.
+  /// Updates one saved Launch from typed UI fields.
   Future<void> updateAutomationRunSetupFromUi(AutomationRunSetup setup) async {
     automationsBusy = true;
-    automationsMessage = 'Updating operation';
+    automationsMessage = 'Updating launch';
     _notifyControllerListeners();
     try {
       if (!await _ensureAutomationRuntimeReady()) {
@@ -648,14 +647,14 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('automation operation update failed: $error');
+      await _log('automation launch update failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
     }
   }
 
-  /// Deletes one saved Operation from the Operations catalog.
+  /// Deletes one saved Launch from the Launchpad catalog.
   Future<void> deleteAutomationRunSetupFromUi(AutomationRunSetup setup) async {
     automationsBusy = true;
     automationsMessage = 'Deleting ${setup.name}';
@@ -678,7 +677,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('automation operation delete failed: $error');
+      await _log('automation launch delete failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
@@ -709,7 +708,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Starts one saved Operation.
+  /// Starts one saved Launch.
   Future<void> startAutomationRunSetupFromUi(
     AutomationRunSetup setup, {
     Map<String, dynamic> input = const <String, dynamic>{},
@@ -729,41 +728,43 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('automation operation start failed: $error');
+      await _log('automation launch start failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
     }
   }
 
-  /// Previews one saved Operation without starting it.
+  /// Previews one saved Launch without starting it.
   Future<void> previewAutomationRunSetupFromUi(
     AutomationRunSetup setup, {
     Map<String, dynamic> input = const <String, dynamic>{},
   }) async {
     automationsBusy = true;
-    automationsMessage = 'Testing operation';
+    automationsMessage = 'Testing launch';
     _notifyControllerListeners();
     try {
       if (!await _ensureAutomationRuntimeReady()) {
         return;
       }
       selectedAutomationRunSetupId = setup.id;
-      selectedAutomationOperationPreview = await automationsClient
-          .previewRunSetup(setup.id, input: input);
-      automationsMessage = selectedAutomationOperationPreview?.status == 'ready'
+      selectedAutomationLaunchPreview = await automationsClient.previewRunSetup(
+        setup.id,
+        input: input,
+      );
+      automationsMessage = selectedAutomationLaunchPreview?.status == 'ready'
           ? ''
-          : 'Operation needs setup';
+          : 'Launch needs setup';
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('automation operation preview failed: $error');
+      await _log('automation launch preview failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
     }
   }
 
-  /// Previews the selected saved Operation without starting it.
+  /// Previews the selected saved Launch without starting it.
   Future<void> previewSelectedAutomationRunSetupFromUi() async {
     final setup = selectedAutomationRunSetup;
     if (setup == null) {
@@ -865,7 +866,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Loads editable workflow drafts.
+  /// Loads editable runbook drafts.
   Future<void> _loadAutomationDrafts() async {
     try {
       automationDrafts = await _listAutomationDrafts();
@@ -879,7 +880,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Mirrors local workflow files into the Operations workflow selector.
+  /// Mirrors local runbook files into the Launchpad runbook selector.
   void _syncAutomationDefinitionsFromDrafts() {
     final localDefinitions = _automationDefinitionsFromDrafts(automationDrafts);
     final localIds = <String>{
@@ -899,7 +900,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     _selectAvailableAutomationDefinition();
   }
 
-  /// Selects the first available workflow file when the previous one is gone.
+  /// Selects the first available runbook file when the previous one is gone.
   void _selectAvailableAutomationDefinition() {
     if (automationDefinitions.isEmpty) {
       selectedAutomationDefinitionId = '';
@@ -913,7 +914,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Loads saved Operations.
+  /// Loads saved Launchpad.
   Future<void> _loadAutomationRunSetups() async {
     try {
       automationRunSetups = await automationsClient.listRunSetups();
@@ -923,11 +924,11 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       }
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('automation operations load failed: $error');
+      await _log('automation launchpad load failed: $error');
     }
   }
 
-  /// Loads typed codebases for Operations.
+  /// Loads typed codebases for Launchpad.
   Future<void> _loadAutomationCodebases() async {
     try {
       automationCodebases = await memoryClient.listCodebases();
@@ -940,7 +941,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Loads Computer or Server targets for Operations.
+  /// Loads Computer or Server targets for Launchpad.
   Future<void> _loadAutomationRuntimeTargets() async {
     try {
       automationRuntimeTargets = await automationsClient.listRuntimeTargets();
@@ -959,7 +960,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Loads workflow runs and pending user items.
+  /// Loads runbook runs and pending user items.
   Future<void> _loadAutomationRunsAndInbox() async {
     try {
       automationRuns = await automationsClient.listRuns();
@@ -978,7 +979,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     }
   }
 
-  /// Inserts a just-started run immediately so Operations does not look idle.
+  /// Inserts a just-started run immediately so Launchpad does not look idle.
   void _recordStartedAutomationRun(AutomationRun run) {
     selectedAutomationRunId = run.id;
     automationRuns = <AutomationRun>[
@@ -1065,7 +1066,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
     Map<String, dynamic> payload,
   ) async {
     automationsBusy = true;
-    automationsMessage = 'Sending workflow signal';
+    automationsMessage = 'Sending runbook signal';
     _notifyControllerListeners();
     try {
       if (!await _ensureAutomationRuntimeReady()) {
@@ -1076,7 +1077,7 @@ extension AgentAwesomeAppControllerAutomations on AgentAwesomeAppController {
       automationsMessage = '';
     } catch (error) {
       automationsMessage = error.toString();
-      await _log('workflow signal failed: $error');
+      await _log('runbook signal failed: $error');
     } finally {
       automationsBusy = false;
       _notifyControllerListeners();
@@ -1102,77 +1103,98 @@ Current automation context:
 - open approvals: ${automationInbox.length}
 - recent runs: ${automationRuns.length}
 
-Use workflow authoring MCP tools to create or update drafts. Do not publish until the user explicitly approves the draft.
+Use runbook authoring MCP tools to create or update drafts. Do not publish until the user explicitly approves the draft.
 ''';
   }
 
-  /// Lists editable workflow files without requiring runnable workflow services.
+  /// Lists editable runbook files without requiring runnable runbook services.
   Future<List<AutomationDraft>> _listAutomationDrafts() async {
-    if (_automationsClientInjected) {
+    if (_useAutomationDraftApi()) {
       return automationsClient.listDrafts();
     }
     return _listLocalAutomationDrafts();
   }
 
-  /// Creates one workflow authoring file through the local file boundary.
+  /// Creates one runbook authoring file through the local file boundary.
   Future<AutomationDraft> _createAutomationDraft({
     required String kind,
     required String name,
   }) async {
-    if (_automationsClientInjected) {
+    if (_useAutomationDraftApi()) {
       return automationsClient.createDraft(kind: kind, name: name);
     }
     return _createLocalAutomationDraft(kind: kind, name: name);
   }
 
-  /// Saves one workflow authoring file through the local file boundary.
+  /// Saves one runbook authoring file through the local file boundary.
   Future<AutomationDraft> _saveAutomationDraft(AutomationDraft draft) async {
-    if (_automationsClientInjected) {
+    if (_useAutomationDraftApi()) {
       return automationsClient.updateDraft(draft);
     }
     return _saveLocalAutomationDraft(draft);
   }
 
-  /// Validates a workflow draft without starting runnable services.
+  /// Validates a runbook draft without starting runnable services.
   Future<AutomationValidationResult> _validateAutomationDraft(
     AutomationDraft draft,
   ) async {
-    if (_automationsClientInjected) {
+    if (_useAutomationDraftApi()) {
       return automationsClient.validateDraft(draft.id);
     }
     return _validateLocalAutomationDraft(draft);
   }
 
-  /// Publishes a workflow draft without starting runnable services.
+  /// Publishes a runbook draft without starting runnable services.
   Future<void> _publishAutomationDraft(AutomationDraft draft) async {
-    if (_automationsClientInjected) {
+    if (_useAutomationDraftApi()) {
       await automationsClient.publishDraft(draft.id);
       return;
     }
     await _saveLocalAutomationDraft(draft);
   }
 
-  /// Deletes one workflow authoring file through the local file boundary.
+  /// Deletes one runbook authoring file through the local file boundary.
   Future<void> _deleteAutomationDraft(AutomationDraft draft) async {
-    if (_automationsClientInjected) {
+    if (_useAutomationDraftApi()) {
       await automationsClient.deleteDraft(draft.id);
       return;
     }
     await _deleteLocalAutomationDraft(draft);
   }
 
-  /// Lists YAML workflow files from the selected agent's authoring folder.
+  /// Reports whether draft authoring should use the runbook API boundary.
+  bool _useAutomationDraftApi() {
+    if (_automationsClientInjected) {
+      return true;
+    }
+    final profile = runtimeProfile;
+    if (profile == null || !profile.runbook.enabled) {
+      return false;
+    }
+    return !_hasLocalRunbookAuthoringSurface(profile);
+  }
+
+  /// Reports whether this profile owns local runbook authoring files.
+  bool _hasLocalRunbookAuthoringSurface(RuntimeProfile profile) {
+    final runbook = profile.runbook;
+    return runbook.definitionsDir.trim().isNotEmpty ||
+        runbook.workingDirectory.trim().isNotEmpty ||
+        runbook.executablePath.trim().isNotEmpty ||
+        runbook.autoStart;
+  }
+
+  /// Lists YAML runbook files from the selected agent's authoring folder.
   Future<List<AutomationDraft>> _listLocalAutomationDrafts() async {
-    final directory = await _workflowAuthoringDirectory();
+    final directory = await _runbookAuthoringDirectory();
     if (!await directory.exists()) {
       return const <AutomationDraft>[];
     }
     final drafts = <AutomationDraft>[];
     await for (final entity in directory.list(followLinks: false)) {
-      if (entity is! File || !_isWorkflowYamlPath(entity.path)) {
+      if (entity is! File || !_isRunbookYamlPath(entity.path)) {
         continue;
       }
-      final draft = await _draftFromLocalWorkflowFile(entity);
+      final draft = await _draftFromLocalRunbookFile(entity);
       if (draft != null) {
         drafts.add(draft);
       }
@@ -1181,64 +1203,64 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
     return drafts;
   }
 
-  /// Creates a blank state-machine workflow YAML file in the authoring folder.
+  /// Creates a blank state-machine runbook YAML file in the authoring folder.
   Future<AutomationDraft> _createLocalAutomationDraft({
     required String kind,
     required String name,
   }) async {
-    if (kind.trim() != automationWorkflowKind) {
-      throw StateError('Workflow authoring only supports workflow files');
+    if (kind.trim() != automationRunbookKind) {
+      throw StateError('Runbook authoring only supports runbook files');
     }
-    final directory = await _workflowAuthoringDirectory();
+    final directory = await _runbookAuthoringDirectory();
     await directory.create(recursive: true);
-    final baseId = _safeWorkflowDefinitionId(name);
-    final definitionId = await _uniqueWorkflowDefinitionId(directory, baseId);
-    final body = _blankWorkflowBody(definitionId, name);
+    final baseId = _safeRunbookDefinitionId(name);
+    final definitionId = await _uniqueRunbookDefinitionId(directory, baseId);
+    final body = _blankRunbookBody(definitionId, name);
     final file = File(
-      await _uniqueWorkflowPath(
+      await _uniqueRunbookPath(
         directory.path,
-        '${_safeWorkflowFileStem(name)}.yaml',
+        '${_safeRunbookFileStem(name)}.yaml',
       ),
     );
     await file.writeAsString(encodeYamlMap(body));
-    final draft = await _draftFromLocalWorkflowFile(file);
+    final draft = await _draftFromLocalRunbookFile(file);
     if (draft == null) {
-      throw StateError('Created workflow file could not be loaded');
+      throw StateError('Created runbook file could not be loaded');
     }
     return draft;
   }
 
-  /// Saves a state-machine workflow draft as readable local YAML.
+  /// Saves a state-machine runbook draft as readable local YAML.
   Future<AutomationDraft> _saveLocalAutomationDraft(
     AutomationDraft draft,
   ) async {
-    final file = await _localWorkflowFileForDraft(draft);
+    final file = await _localRunbookFileForDraft(draft);
     await file.parent.create(recursive: true);
-    final body = _normalizedWorkflowBody(
+    final body = _normalizedRunbookBody(
       draft.body,
       fallbackId: _definitionIdFromDraftId(draft.id),
       fallbackName: draft.name,
     );
     await file.writeAsString(encodeYamlMap(body));
-    final saved = await _draftFromLocalWorkflowFile(file);
+    final saved = await _draftFromLocalRunbookFile(file);
     if (saved == null) {
-      throw StateError('Saved workflow file could not be loaded');
+      throw StateError('Saved runbook file could not be loaded');
     }
     return saved;
   }
 
-  /// Deletes the local YAML file backing an editable workflow draft.
+  /// Deletes the local YAML file backing an editable runbook draft.
   Future<void> _deleteLocalAutomationDraft(AutomationDraft draft) async {
-    final file = await _localWorkflowFileForDraft(draft, mustExist: true);
+    final file = await _localRunbookFileForDraft(draft, mustExist: true);
     await file.delete();
   }
 
-  /// Performs local structural validation for a state-machine workflow file.
+  /// Performs local structural validation for a state-machine runbook file.
   AutomationValidationResult _validateLocalAutomationDraft(
     AutomationDraft draft,
   ) {
     final diagnostics = <AutomationValidationDiagnostic>[];
-    final body = _normalizedWorkflowBody(
+    final body = _normalizedRunbookBody(
       draft.body,
       fallbackId: _definitionIdFromDraftId(draft.id),
       fallbackName: draft.name,
@@ -1253,7 +1275,7 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
         ),
       );
     }
-    final initial = _stringFromWorkflowBody(body, 'initial');
+    final initial = _stringFromRunbookBody(body, 'initial');
     if (initial.isNotEmpty && states is List && states.isNotEmpty) {
       final hasInitial = states.any((state) {
         return state is Map && '${state['id'] ?? ''}'.trim() == initial;
@@ -1279,14 +1301,14 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
     );
   }
 
-  /// Resolves the active workflow authoring directory without starting services.
-  Future<Directory> _workflowAuthoringDirectory() async {
-    final profile = await _workflowAuthoringProfile();
-    return Directory(workflowDefinitionsDirectoryPathForProfile(profile));
+  /// Resolves the active runbook authoring directory without starting services.
+  Future<Directory> _runbookAuthoringDirectory() async {
+    final profile = await _runbookAuthoringProfile();
+    return Directory(runbookDefinitionsDirectoryPathForProfile(profile));
   }
 
   /// Loads enough topology for authoring paths without booting the harness.
-  Future<RuntimeProfile> _workflowAuthoringProfile() async {
+  Future<RuntimeProfile> _runbookAuthoringProfile() async {
     final loaded = runtimeProfile;
     if (loaded != null) {
       return loaded;
@@ -1299,16 +1321,16 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
     return profile;
   }
 
-  /// Loads one local workflow YAML file as an editable draft row.
-  Future<AutomationDraft?> _draftFromLocalWorkflowFile(File file) async {
+  /// Loads one local runbook YAML file as an editable draft row.
+  Future<AutomationDraft?> _draftFromLocalRunbookFile(File file) async {
     try {
-      final body = _workflowBodyFromYaml(await file.readAsString());
+      final body = _runbookBodyFromYaml(await file.readAsString());
       if (body == null) {
         return null;
       }
-      final definitionId = _workflowBodyId(body, file.path);
-      final name = _workflowBodyName(body, definitionId);
-      final normalized = _normalizedWorkflowBody(
+      final definitionId = _runbookBodyId(body, file.path);
+      final name = _runbookBodyName(body, definitionId);
+      final normalized = _normalizedRunbookBody(
         body,
         fallbackId: definitionId,
         fallbackName: name,
@@ -1317,48 +1339,47 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
       final updatedAt = stat.modified.toUtc().toIso8601String();
       return AutomationDraft(
         id: _draftIdFromDefinitionId(definitionId),
-        kind: automationWorkflowKind,
+        kind: automationRunbookKind,
         name: name,
-        description: _stringFromWorkflowBody(normalized, 'description'),
+        description: _stringFromRunbookBody(normalized, 'description'),
         status: 'draft',
         body: normalized,
         updatedAt: updatedAt,
       );
     } catch (error) {
-      await _log('workflow file load skipped ${file.path}: $error');
+      await _log('runbook file load skipped ${file.path}: $error');
       return null;
     }
   }
 
-  /// Resolves the YAML file backing a local workflow draft.
-  Future<File> _localWorkflowFileForDraft(
+  /// Resolves the YAML file backing a local runbook draft.
+  Future<File> _localRunbookFileForDraft(
     AutomationDraft draft, {
     bool mustExist = false,
   }) async {
-    final directory = await _workflowAuthoringDirectory();
+    final directory = await _runbookAuthoringDirectory();
     final definitionId = _automationDraftDefinitionId(draft).isEmpty
         ? _definitionIdFromDraftId(draft.id)
         : _automationDraftDefinitionId(draft);
     if (await directory.exists()) {
       await for (final entity in directory.list(followLinks: false)) {
-        if (entity is! File || !_isWorkflowYamlPath(entity.path)) {
+        if (entity is! File || !_isRunbookYamlPath(entity.path)) {
           continue;
         }
-        final body = _workflowBodyFromYaml(await entity.readAsString());
-        if (body != null &&
-            _workflowBodyId(body, entity.path) == definitionId) {
+        final body = _runbookBodyFromYaml(await entity.readAsString());
+        if (body != null && _runbookBodyId(body, entity.path) == definitionId) {
           return entity;
         }
       }
     }
     if (mustExist) {
-      throw FileSystemException('Workflow file not found', definitionId);
+      throw FileSystemException('Runbook file not found', definitionId);
     }
-    final filename = '${_safeWorkflowFileStem(draft.name)}.yaml';
-    return File(await _uniqueWorkflowPath(directory.path, filename));
+    final filename = '${_safeRunbookFileStem(draft.name)}.yaml';
+    return File(await _uniqueRunbookPath(directory.path, filename));
   }
 
-  /// Ensures the gateway-routed workflow API is reachable before UI actions.
+  /// Ensures the gateway-routed runbook API is reachable before UI actions.
   Future<bool> _ensureAutomationRuntimeReady() async {
     await _ensureInitialized();
     if (_isClosing) {
@@ -1376,7 +1397,7 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
       _throwIfClosing();
       localProcessStatuses = await _startRequiredRuntimeServices(
         profile,
-        includeHarness: profile.workflow.hostedByHarness,
+        includeHarness: profile.runbook.hostedByHarness,
         includeMcpServers: false,
       );
       final failures = localProcessStatuses
@@ -1405,10 +1426,10 @@ Use workflow authoring MCP tools to create or update drafts. Do not publish unti
   }
 }
 
-/// Builds the gateway workflow API URL from a gateway API base URL.
-String _workflowBaseUrl(String gatewayBaseUrl) {
+/// Builds the gateway runbook API URL from a gateway API base URL.
+String _runbookBaseUrl(String gatewayBaseUrl) {
   final uri = Uri.parse(gatewayBaseUrl);
-  return uri.replace(path: '/api/workflows', query: null).toString();
+  return uri.replace(path: '/api/runbooks', query: null).toString();
 }
 
 /// Returns a draft copy with updated validation metadata.
@@ -1446,7 +1467,7 @@ Map<String, dynamic> _validationResultMap(AutomationValidationResult result) {
   };
 }
 
-/// Converts editable workflow drafts into operation-selectable definitions.
+/// Converts editable runbook drafts into launch-selectable definitions.
 List<AutomationDefinition> _automationDefinitionsFromDrafts(
   List<AutomationDraft> drafts,
 ) {
@@ -1462,34 +1483,34 @@ List<AutomationDefinition> _automationDefinitionsFromDrafts(
   return definitions;
 }
 
-/// Converts one local workflow draft into a runnable definition snapshot.
+/// Converts one local runbook draft into a runnable definition snapshot.
 AutomationDefinition? _automationDefinitionFromDraft(AutomationDraft draft) {
-  if (!_isWorkflowDefinitionDraft(draft)) {
+  if (!_isRunbookDefinitionDraft(draft)) {
     return null;
   }
   final fallbackId = _automationDefinitionIdFromDraft(draft);
   if (fallbackId.isEmpty) {
     return null;
   }
-  final body = _normalizedWorkflowBody(
+  final body = _normalizedRunbookBody(
     draft.body,
     fallbackId: fallbackId,
     fallbackName: draft.name,
   );
-  final definitionId = _workflowBodyId(body, '$fallbackId.yaml');
+  final definitionId = _runbookBodyId(body, '$fallbackId.yaml');
   return AutomationDefinition(
     id: definitionId,
-    kind: _stringFromWorkflowBody(body, 'kind').isEmpty
-        ? automationWorkflowKind
-        : _stringFromWorkflowBody(body, 'kind'),
-    name: _workflowBodyName(body, definitionId),
+    kind: _stringFromRunbookBody(body, 'kind').isEmpty
+        ? automationRunbookKind
+        : _stringFromRunbookBody(body, 'kind'),
+    name: _runbookBodyName(body, definitionId),
     hash: _localAutomationDefinitionHash(draft),
     body: body,
     updatedAt: draft.updatedAt,
   );
 }
 
-/// Returns a workflow definition id for the selected draft id.
+/// Returns a runbook definition id for the selected draft id.
 String _definitionIdForDraftId(List<AutomationDraft> drafts, String draftId) {
   for (final draft in drafts) {
     if (draft.id == draftId) {
@@ -1499,16 +1520,16 @@ String _definitionIdForDraftId(List<AutomationDraft> drafts, String draftId) {
   return '';
 }
 
-/// Returns the workflow definition id represented by one draft.
+/// Returns the runbook definition id represented by one draft.
 String _automationDefinitionIdFromDraft(AutomationDraft draft) {
   final bodyId = _automationDraftDefinitionId(draft);
   return bodyId.isEmpty ? _definitionIdFromDraftId(draft.id) : bodyId;
 }
 
-/// Reports whether a draft can appear as a workflow file in Operations.
-bool _isWorkflowDefinitionDraft(AutomationDraft draft) {
+/// Reports whether a draft can appear as a runbook file in Launchpad.
+bool _isRunbookDefinitionDraft(AutomationDraft draft) {
   final kind = draft.kind.trim();
-  return kind == automationWorkflowKind || kind == 'state_machine';
+  return kind == automationRunbookKind || kind == 'state_machine';
 }
 
 /// Returns a stable local hash placeholder for a file-backed definition.
@@ -1517,14 +1538,14 @@ String _localAutomationDefinitionHash(AutomationDraft draft) {
   return updatedAt.isEmpty ? 'local:${draft.id}' : 'local:$updatedAt';
 }
 
-/// Returns a draft copy with user-editable workflow metadata changed.
+/// Returns a draft copy with user-editable runbook metadata changed.
 AutomationDraft _automationDraftWithMetadata(
   AutomationDraft draft, {
   required String name,
   required String description,
 }) {
   final trimmedName = name.trim();
-  final body = _normalizedWorkflowBody(
+  final body = _normalizedRunbookBody(
     <String, dynamic>{...draft.body},
     fallbackId: _automationDefinitionIdFromDraft(draft),
     fallbackName: draft.name,
@@ -1546,8 +1567,8 @@ AutomationDraft _automationDraftWithMetadata(
   );
 }
 
-/// Decodes one workflow YAML document into a mutable map.
-Map<String, dynamic>? _workflowBodyFromYaml(String content) {
+/// Decodes one runbook YAML document into a mutable map.
+Map<String, dynamic>? _runbookBodyFromYaml(String content) {
   final decoded = plainYamlValue(loadYaml(content));
   if (decoded is! Map) {
     return null;
@@ -1555,11 +1576,11 @@ Map<String, dynamic>? _workflowBodyFromYaml(String content) {
   return _stringKeyedMap(decoded);
 }
 
-/// Creates a minimal state-machine workflow definition.
-Map<String, dynamic> _blankWorkflowBody(String definitionId, String name) {
+/// Creates a minimal state-machine runbook definition.
+Map<String, dynamic> _blankRunbookBody(String definitionId, String name) {
   final displayName = name.trim().isEmpty ? definitionId : name.trim();
   return <String, dynamic>{
-    'apiVersion': automationWorkflowApiVersion,
+    'apiVersion': automationRunbookApiVersion,
     'kind': 'state_machine',
     'id': definitionId,
     'name': displayName,
@@ -1571,26 +1592,26 @@ Map<String, dynamic> _blankWorkflowBody(String definitionId, String name) {
   };
 }
 
-/// Returns a workflow body with required state-machine fields populated.
-Map<String, dynamic> _normalizedWorkflowBody(
+/// Returns a runbook body with required state-machine fields populated.
+Map<String, dynamic> _normalizedRunbookBody(
   Map<String, dynamic> body, {
   required String fallbackId,
   required String fallbackName,
 }) {
   final normalized = _jsonCompatibleMap(body);
-  final definitionId = _stringFromWorkflowBody(normalized, 'id').isEmpty
+  final definitionId = _stringFromRunbookBody(normalized, 'id').isEmpty
       ? fallbackId
-      : _stringFromWorkflowBody(normalized, 'id');
-  final name = _stringFromWorkflowBody(normalized, 'name').isEmpty
+      : _stringFromRunbookBody(normalized, 'id');
+  final name = _stringFromRunbookBody(normalized, 'name').isEmpty
       ? fallbackName
-      : _stringFromWorkflowBody(normalized, 'name');
+      : _stringFromRunbookBody(normalized, 'name');
   normalized['apiVersion'] =
-      _stringFromWorkflowBody(normalized, 'apiVersion').isEmpty
-      ? automationWorkflowApiVersion
+      _stringFromRunbookBody(normalized, 'apiVersion').isEmpty
+      ? automationRunbookApiVersion
       : normalized['apiVersion'];
   normalized['kind'] = 'state_machine';
   normalized['id'] = definitionId.trim().isEmpty
-      ? _safeWorkflowDefinitionId(name)
+      ? _safeRunbookDefinitionId(name)
       : definitionId;
   normalized['name'] = name.trim().isEmpty ? normalized['id'] : name;
   normalized.putIfAbsent('description', () => '');
@@ -1600,7 +1621,7 @@ Map<String, dynamic> _normalizedWorkflowBody(
     normalized['states'] = <Map<String, dynamic>>[
       <String, dynamic>{'id': 'start'},
     ];
-  } else if (_stringFromWorkflowBody(normalized, 'initial').isEmpty) {
+  } else if (_stringFromRunbookBody(normalized, 'initial').isEmpty) {
     final first = states.first;
     if (first is Map) {
       normalized['initial'] = '${first['id'] ?? 'start'}'.trim();
@@ -1638,21 +1659,21 @@ Map<String, dynamic> _stringKeyedMap(Map<dynamic, dynamic> values) {
   };
 }
 
-/// Returns the workflow definition id from body or filename fallback.
-String _workflowBodyId(Map<String, dynamic> body, String path) {
-  final id = _stringFromWorkflowBody(body, 'id');
+/// Returns the runbook definition id from body or filename fallback.
+String _runbookBodyId(Map<String, dynamic> body, String path) {
+  final id = _stringFromRunbookBody(body, 'id');
   if (id.isNotEmpty) {
     return id;
   }
   final filename = path.replaceAll('\\', '/').split('/').last;
   final dot = filename.lastIndexOf('.');
   final stem = dot <= 0 ? filename : filename.substring(0, dot);
-  return _safeWorkflowDefinitionId(stem);
+  return _safeRunbookDefinitionId(stem);
 }
 
-/// Returns the workflow display name from body or id fallback.
-String _workflowBodyName(Map<String, dynamic> body, String definitionId) {
-  final name = _stringFromWorkflowBody(body, 'name');
+/// Returns the runbook display name from body or id fallback.
+String _runbookBodyName(Map<String, dynamic> body, String definitionId) {
+  final name = _stringFromRunbookBody(body, 'name');
   if (name.isNotEmpty) {
     return name;
   }
@@ -1664,15 +1685,15 @@ String _workflowBodyName(Map<String, dynamic> body, String definitionId) {
       .join(' ');
 }
 
-/// Reads a trimmed string from a workflow body map.
-String _stringFromWorkflowBody(Map<String, dynamic> body, String key) {
+/// Reads a trimmed string from a runbook body map.
+String _stringFromRunbookBody(Map<String, dynamic> body, String key) {
   final value = body[key];
   return value == null ? '' : '$value'.trim();
 }
 
-/// Creates a stable draft id for one local workflow definition id.
+/// Creates a stable draft id for one local runbook definition id.
 String _draftIdFromDefinitionId(String definitionId) {
-  return 'draft_${_safeWorkflowDefinitionId(definitionId)}';
+  return 'draft_${_safeRunbookDefinitionId(definitionId)}';
 }
 
 /// Returns a definition id from a draft id fallback.
@@ -1681,65 +1702,65 @@ String _definitionIdFromDraftId(String draftId) {
   if (trimmed.startsWith('draft_') && trimmed.length > 'draft_'.length) {
     return trimmed.substring('draft_'.length);
   }
-  return _safeWorkflowDefinitionId(trimmed);
+  return _safeRunbookDefinitionId(trimmed);
 }
 
-/// Reports whether a filesystem path is a workflow YAML file.
-bool _isWorkflowYamlPath(String path) {
+/// Reports whether a filesystem path is a runbook YAML file.
+bool _isRunbookYamlPath(String path) {
   final lower = path.toLowerCase();
   return lower.endsWith('.yaml') || lower.endsWith('.yml');
 }
 
-/// Returns a filesystem-safe workflow filename stem.
-String _safeWorkflowFileStem(String name) {
+/// Returns a filesystem-safe runbook filename stem.
+String _safeRunbookFileStem(String name) {
   final safe = name
       .trim()
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9._-]+'), '-')
       .replaceAll(RegExp(r'-+'), '-')
       .replaceAll(RegExp(r'^[-.]+|[-.]+$'), '');
-  return safe.isEmpty ? 'workflow' : safe;
+  return safe.isEmpty ? 'runbook' : safe;
 }
 
-/// Returns a workflow definition id made of stable lowercase tokens.
-String _safeWorkflowDefinitionId(String value) {
+/// Returns a runbook definition id made of stable lowercase tokens.
+String _safeRunbookDefinitionId(String value) {
   final safe = value
       .trim()
       .toLowerCase()
       .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
       .replaceAll(RegExp(r'_+'), '_')
       .replaceAll(RegExp(r'^_+|_+$'), '');
-  return safe.isEmpty ? 'workflow' : safe;
+  return safe.isEmpty ? 'runbook' : safe;
 }
 
-/// Returns a non-conflicting workflow definition id in one directory.
-Future<String> _uniqueWorkflowDefinitionId(
+/// Returns a non-conflicting runbook definition id in one directory.
+Future<String> _uniqueRunbookDefinitionId(
   Directory directory,
   String baseId,
 ) async {
   final existing = <String>{};
   if (await directory.exists()) {
     await for (final entity in directory.list(followLinks: false)) {
-      if (entity is! File || !_isWorkflowYamlPath(entity.path)) {
+      if (entity is! File || !_isRunbookYamlPath(entity.path)) {
         continue;
       }
-      final body = _workflowBodyFromYaml(await entity.readAsString());
+      final body = _runbookBodyFromYaml(await entity.readAsString());
       if (body != null) {
-        existing.add(_workflowBodyId(body, entity.path));
+        existing.add(_runbookBodyId(body, entity.path));
       }
     }
   }
-  var candidate = _safeWorkflowDefinitionId(baseId);
+  var candidate = _safeRunbookDefinitionId(baseId);
   var suffix = 2;
   while (existing.contains(candidate)) {
-    candidate = '${_safeWorkflowDefinitionId(baseId)}_$suffix';
+    candidate = '${_safeRunbookDefinitionId(baseId)}_$suffix';
     suffix++;
   }
   return candidate;
 }
 
-/// Returns a non-conflicting path in one workflow authoring directory.
-Future<String> _uniqueWorkflowPath(String directory, String filename) async {
+/// Returns a non-conflicting path in one runbook authoring directory.
+Future<String> _uniqueRunbookPath(String directory, String filename) async {
   final dot = filename.lastIndexOf('.');
   final base = dot <= 0 ? filename : filename.substring(0, dot);
   final extension = dot <= 0 ? '.yaml' : filename.substring(dot);
@@ -1828,11 +1849,11 @@ Map<String, dynamic> _defaultAutomationActionArgs(String actionName) {
       'cwd': '',
       'parameters': <String, dynamic>{},
     },
-    'workflow.run' => <String, dynamic>{
-      'workflow': '',
+    'runbook.run' => <String, dynamic>{
+      'runbook': '',
       'input': <String, dynamic>{},
     },
-    'workflow.signal' => <String, dynamic>{
+    'runbook.signal' => <String, dynamic>{
       'signal': 'continue',
       'payload': <String, dynamic>{},
     },

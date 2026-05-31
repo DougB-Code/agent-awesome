@@ -1,4 +1,4 @@
-// This file implements runtime target service operations.
+// This file implements runtime target service launchpad.
 package targets
 
 import (

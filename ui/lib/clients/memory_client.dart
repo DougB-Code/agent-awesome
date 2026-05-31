@@ -15,7 +15,7 @@ class MemoryClient {
     return _rpc.listToolNames();
   }
 
-  /// Lists typed codebase catalog records used by Operations.
+  /// Lists typed codebase catalog records used by Launchpad.
   Future<List<AutomationCodebase>> listCodebases({
     String actor = 'agent_awesome_ui',
     String text = '',

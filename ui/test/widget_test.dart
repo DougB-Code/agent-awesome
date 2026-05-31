@@ -299,10 +299,10 @@ void main() {
           available: true,
         ),
         AutomationActionType(
-          name: 'workflow.run',
-          label: 'Run Workflow',
-          description: 'Start a nested workflow.',
-          risk: 'workflow',
+          name: 'runbook.run',
+          label: 'Run Runbook',
+          description: 'Start a nested runbook.',
+          risk: 'runbook',
           available: true,
         ),
       ]
@@ -310,7 +310,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'daily_email',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Daily Email',
           hash: 'abc',
         ),
@@ -318,7 +318,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_review',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Review Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -350,7 +350,7 @@ void main() {
         AutomationRun(
           id: 'run_1',
           definitionId: 'daily_email',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           status: 'waiting',
           state: 'running',
         ),
@@ -414,10 +414,10 @@ void main() {
           label: 'Go test all',
           description: 'Run Go tests.',
           usableInChat: true,
-          usableInWorkflows: true,
+          usableInRunbooks: true,
           invocation: <String, Object>{
             'direct_tool_name': 'command_execute',
-            'workflow_action': 'command.execute',
+            'runbook_action': 'command.execute',
             'command_template': 'go_test_all',
           },
           risk: <String, Object>{'level': 'tool'},
@@ -441,15 +441,15 @@ void main() {
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
     expect(find.text('AUTOMATIONS'), findsOneWidget);
-    expect(find.text('Operations'), findsWidgets);
-    expect(find.text('Workflows'), findsOneWidget);
+    expect(find.text('Launchpad'), findsWidgets);
+    expect(find.text('Runbooks'), findsOneWidget);
     expect(find.text('Tasks'), findsNothing);
     expect(find.text('Agents'), findsOneWidget);
     expect(find.text('MCP Servers'), findsOneWidget);
     expect(find.text('Tools'), findsOneWidget);
     expect(find.text('›'), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -467,27 +467,28 @@ void main() {
     );
     expect(find.text('OPERATIONS'), findsWidgets);
     expect(find.byTooltip('Inbox'), findsOneWidget);
-    expect(find.byTooltip('Operations'), findsWidgets);
+    expect(find.byTooltip('Launchpad'), findsWidgets);
     expect(find.byTooltip('Files'), findsNothing);
     expect(find.byTooltip('Computers'), findsOneWidget);
     expect(find.byTooltip('Refresh automations'), findsNothing);
     expect(find.text('Daily Email'), findsWidgets);
     expect(find.byTooltip('Codebases'), findsNothing);
+    expect(find.byTooltip('Overview'), findsOneWidget);
     expect(find.byTooltip('Schedules'), findsOneWidget);
     expect(find.byTooltip('Artifacts'), findsOneWidget);
     expect(find.byTooltip('Runs'), findsWidgets);
     expect(find.byTooltip('Safety'), findsNothing);
-    await tester.tap(find.byTooltip('Operations').last);
+    await tester.tap(find.byTooltip('Overview'));
     await tester.pumpAndSettle();
     expect(find.text('Daily Email Setup'), findsWidgets);
     await tester.tap(find.byTooltip('Inbox'));
     await tester.pumpAndSettle();
     expect(find.text('Approve archive?'), findsOneWidget);
-    await tester.tap(find.byTooltip('Operations').first);
+    await tester.tap(find.byTooltip('Launchpad').first);
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Schedules'));
     await tester.pumpAndSettle();
-    expect(find.text('No scheduled operations'), findsOneWidget);
+    expect(find.text('No scheduled launchpad'), findsOneWidget);
     await tester.tap(find.byTooltip('Artifacts'));
     await tester.pumpAndSettle();
     expect(find.text('No artifacts'), findsOneWidget);
@@ -519,12 +520,12 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey<String>('sidebar-Workflows')),
+      find.byKey(const ValueKey<String>('sidebar-Runbooks')),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
 
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     expect(find.text('ACTIONS'), findsNothing);
@@ -543,11 +544,11 @@ void main() {
     );
     expect(find.byKey(const ValueKey<String>('sidebar-Tasks')), findsNothing);
 
-    await tester.tap(find.byTooltip('Workflows'));
+    await tester.tap(find.byTooltip('Runbooks'));
     await tester.pumpAndSettle();
 
-    expect(find.text('WORKFLOWS'), findsWidgets);
-    expect(find.text('Filter workflows...'), findsOneWidget);
+    expect(find.text('RUNBOOKS'), findsWidgets);
+    expect(find.text('Filter runbooks...'), findsOneWidget);
     expect(find.text('Review Flow'), findsWidgets);
 
     await tester.tap(find.byTooltip('Actions'));
@@ -577,7 +578,7 @@ void main() {
     expect(find.text('No tool files configured'), findsWidgets);
   });
 
-  testWidgets('renders Operations detail empty state with shared guidance', (
+  testWidgets('renders Launchpad detail empty state with shared guidance', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 900);
@@ -589,7 +590,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
 
     void expectLeftEmptyCentered(String label) {
@@ -602,17 +603,17 @@ void main() {
       expect((paneRect.center.dy - textRect.center.dy).abs(), lessThan(120));
     }
 
-    expectLeftEmptyCentered('No operations');
+    expectLeftEmptyCentered('No launchpad');
     await tester.tap(find.byTooltip('Inbox'));
     await tester.pumpAndSettle();
     expectLeftEmptyCentered('No pending automation items');
     await tester.tap(find.byTooltip('Computers'));
     await tester.pumpAndSettle();
     expectLeftEmptyCentered('No computers');
-    await tester.tap(find.byTooltip('Operations').first);
+    await tester.tap(find.byTooltip('Launchpad').first);
     await tester.pumpAndSettle();
 
-    final emptyText = find.text('No operation selected');
+    final emptyText = find.text('No launch selected');
     expect(emptyText, findsOneWidget);
     expect(
       find.text('Select or create an item in the left panel to continue.'),
@@ -643,7 +644,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'ready',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Ready',
           hash: 'sha256:ready',
         ),
@@ -652,14 +653,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
 
     expect(find.text('Status'), findsNothing);
     expect(find.text('Automations refreshed'), findsNothing);
   });
 
-  testWidgets('shows saved Operations in Operations', (tester) async {
+  testWidgets('shows saved Launchpad in Launchpad', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -672,7 +673,7 @@ void main() {
     harness.client.seedRunSetups(const <AutomationRunSetup>[
       AutomationRunSetup(
         id: 'setup_1',
-        definitionId: 'source_change_workflow',
+        definitionId: 'source_change_runbook',
         name: 'Agent Awesome Repo',
         description: 'Run source changes for the app repo.',
       ),
@@ -684,19 +685,19 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Operations').first);
+    await tester.tap(find.byTooltip('Launchpad').first);
     await tester.pumpAndSettle();
 
     expect(find.text('Agent Awesome Repo'), findsWidgets);
-    expect(find.text('Source Change Workflow'), findsWidgets);
+    expect(find.text('Source Change Runbook'), findsWidgets);
     await tester.tap(find.text('Agent Awesome Repo').first);
     await tester.pump();
     expect(controller.selectedAutomationRunSetupId, 'setup_1');
   });
 
-  testWidgets('opens Operations workflow run input dialog', (tester) async {
+  testWidgets('opens Launchpad runbook run input dialog', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -704,13 +705,13 @@ void main() {
     final harness = _readyCapturingController();
     final controller = harness.controller;
     harness.client.seedDefinitions(<AutomationDefinition>[
-      _sourceChangeDefinitionForRunTest(),
+      _yamlOkDefinitionForRunTest(),
     ]);
     harness.client.seedRunSetups(const <AutomationRunSetup>[
       AutomationRunSetup(
         id: 'setup_1',
-        definitionId: 'source_change_workflow',
-        name: 'Source Change Workflow',
+        definitionId: 'yaml_ok_branch',
+        name: 'YAML OK Branch Test',
       ),
     ]);
     controller.automationDefinitions = harness.client.definitions;
@@ -740,15 +741,15 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Operations').first);
+    await tester.tap(find.byTooltip('Launchpad').first);
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey<String>('automation-start-run-setup-button')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Run Source Change Workflow'), findsOneWidget);
+    expect(find.text('Run YAML OK Branch Test'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('automation-run-input-json')),
       findsNothing,
@@ -761,6 +762,10 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey<String>('automation-run-input-change_request')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-input-workdir')),
       findsOneWidget,
     );
     expect(
@@ -769,7 +774,7 @@ void main() {
     );
   });
 
-  testWidgets('creates reusable Operations from typed fields', (tester) async {
+  testWidgets('creates reusable Launchpad from typed fields', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -777,17 +782,17 @@ void main() {
     final harness = _readyCapturingController();
     final controller = harness.controller;
     harness.client.seedDefinitions(<AutomationDefinition>[
-      _sourceChangeDefinitionForRunTest(),
+      _yamlOkDefinitionForRunTest(),
     ]);
     controller.automationDefinitions = harness.client.definitions;
-    controller.selectedAutomationDefinitionId = 'source_change_workflow';
+    controller.selectedAutomationDefinitionId = 'yaml_ok_branch';
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Operations').first);
+    await tester.tap(find.byTooltip('Launchpad').first);
     await tester.pumpAndSettle();
     controller.automationCodebases = const <AutomationCodebase>[
       AutomationCodebase(
@@ -814,14 +819,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Create Operation'), findsOneWidget);
+    expect(find.text('Create Launch'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('automation-run-setup-name')),
       findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey<String>('automation-run-setup-codebase')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey<String>('automation-run-setup-target')),
@@ -829,12 +834,10 @@ void main() {
     );
     expect(
       find.byKey(const ValueKey<String>('automation-run-setup-safety')),
-      findsOneWidget,
+      findsNothing,
     );
     expect(
-      find.byKey(
-        const ValueKey<String>('automation-run-input-repository_path'),
-      ),
+      find.byKey(const ValueKey<String>('automation-run-input-workdir')),
       findsNothing,
     );
     expect(
@@ -845,7 +848,7 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Create'), findsOneWidget);
   });
 
-  testWidgets('shows enabled right-aligned workflow create action', (
+  testWidgets('shows enabled right-aligned runbook create action', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 900);
@@ -854,16 +857,16 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     final harness = _readyCapturingController();
     final controller = harness.controller;
-    harness.client.seedDrafts(<AutomationDraft>[_workflowGraphDraft()]);
+    harness.client.seedDrafts(<AutomationDraft>[_runbookGraphDraft()]);
     controller.automationDrafts = harness.client.drafts;
     controller.selectedAutomationDraftId = harness.client.drafts.first.id;
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Workflows'));
+    await tester.tap(find.byTooltip('Runbooks'));
     await tester.pumpAndSettle();
     for (
       var attempt = 0;
@@ -875,10 +878,10 @@ void main() {
     expect(controller.automationsBusy, isFalse);
 
     final createButton = find.byKey(
-      const ValueKey<String>('automation-new-workflow-draft-button'),
+      const ValueKey<String>('automation-new-runbook-draft-button'),
     );
     final deleteButton = find.byKey(
-      const ValueKey<String>('automation-delete-workflow-button'),
+      const ValueKey<String>('automation-delete-runbook-button'),
     );
     expect(createButton, findsOneWidget);
     expect(deleteButton, findsOneWidget);
@@ -900,22 +903,22 @@ void main() {
         .dx;
     final buttonRight = tester.getTopRight(deleteTapTarget).dx;
     expect(paneRight - buttonRight, lessThanOrEqualTo(28));
-    expect(find.text('Workflow name'), findsNothing);
+    expect(find.text('Runbook name'), findsNothing);
 
     await tester.tap(createTapTarget);
     await tester.pumpAndSettle();
-    expect(find.text('WORKFLOWS'), findsWidgets);
-    expect(find.text('Filter workflows...'), findsOneWidget);
-    expect(find.text('New Workflow'), findsWidgets);
+    expect(find.text('RUNBOOKS'), findsWidgets);
+    expect(find.text('Filter runbooks...'), findsOneWidget);
+    expect(find.text('New Runbook'), findsWidgets);
     expect(controller.selectedAutomationDraftId, 'draft_2');
     await tester.tap(createTapTarget);
     await tester.pumpAndSettle();
-    expect(find.text('New Workflow 2'), findsWidgets);
+    expect(find.text('New Runbook 2'), findsWidgets);
     expect(controller.selectedAutomationDraftId, 'draft_3');
-    expect(find.text('draft_workflow_graph'), findsNothing);
+    expect(find.text('draft_runbook_graph'), findsNothing);
   });
 
-  testWidgets('renames workflow drafts from Details metadata', (tester) async {
+  testWidgets('renames runbook drafts from Details metadata', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -924,15 +927,15 @@ void main() {
     final controller = harness.controller;
     harness.client.seedDrafts(<AutomationDraft>[
       const AutomationDraft(
-        id: 'draft_workflow_graph',
-        kind: automationWorkflowKind,
-        name: 'Workflow Graph',
+        id: 'draft_runbook_graph',
+        kind: automationRunbookKind,
+        name: 'Runbook Graph',
         status: 'draft',
         updatedAt: '2026-05-28T21:27:28.926Z',
         body: <String, dynamic>{
-          'apiVersion': automationWorkflowApiVersion,
-          'kind': automationWorkflowKind,
-          'id': 'workflow_graph',
+          'apiVersion': automationRunbookApiVersion,
+          'kind': automationRunbookKind,
+          'id': 'runbook_graph',
           'nodes': <Object>[],
         },
       ),
@@ -943,44 +946,44 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Workflows'));
+    await tester.tap(find.byTooltip('Runbooks'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Workflow Graph').first);
+    await tester.tap(find.text('Runbook Graph').first);
     await tester.pump();
-    expect(find.byTooltip('Rename workflow file'), findsNothing);
+    expect(find.byTooltip('Rename runbook file'), findsNothing);
 
     await tester.tap(find.byTooltip('Details'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Updated 2026-05-28'), findsNothing);
     expect(find.textContaining('2026-05-28T21:27:28.926Z'), findsNothing);
     await tester.enterText(
-      find.byKey(const ValueKey<String>('workflow-metadata-name')),
-      'Renamed Workflow',
+      find.byKey(const ValueKey<String>('runbook-metadata-name')),
+      'Renamed Runbook',
     );
     await tester.pump(const Duration(milliseconds: 800));
 
-    expect(harness.client.savedDraft?.name, 'Renamed Workflow');
-    expect(find.text('draft_workflow_graph'), findsNothing);
+    expect(harness.client.savedDraft?.name, 'Renamed Runbook');
+    expect(find.text('draft_runbook_graph'), findsNothing);
   });
 
-  testWidgets('shows workflow graph fields in Details mode', (tester) async {
+  testWidgets('shows runbook graph fields in Details mode', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final harness = _readyCapturingController();
     final controller = harness.controller;
-    harness.client.seedDrafts(<AutomationDraft>[_workflowGraphDraft()]);
+    harness.client.seedDrafts(<AutomationDraft>[_runbookGraphDraft()]);
     controller.automationDrafts = harness.client.drafts;
     controller.selectedAutomationDraftId = harness.client.drafts.first.id;
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     expect(
@@ -990,15 +993,15 @@ void main() {
     expect(find.text('ACTIONS'), findsNothing);
 
     expect(find.text('DETAILS'), findsOneWidget);
-    expect(find.text('WORKFLOWS'), findsWidgets);
-    expect(find.text('Workflow Graph'), findsWidgets);
+    expect(find.text('RUNBOOKS'), findsWidgets);
+    expect(find.text('Runbook Graph'), findsWidgets);
     expect(
       find.byKey(const ValueKey<String>('state-machine-canvas')),
       findsNothing,
     );
   });
 
-  testWidgets('shows state-machine definitions as workflow files', (
+  testWidgets('shows state-machine definitions as runbook files', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 900);
@@ -1009,13 +1012,13 @@ void main() {
     final controller = harness.controller;
     harness.client.seedDrafts(const <AutomationDraft>[
       AutomationDraft(
-        id: 'draft_source_change_workflow',
+        id: 'draft_source_change_runbook',
         kind: 'state_machine',
-        name: 'Source Change Workflow',
+        name: 'Source Change Runbook',
         status: 'published',
         body: <String, dynamic>{
           'kind': 'state_machine',
-          'id': 'source_change_workflow',
+          'id': 'source_change_runbook',
           'initial': 'intake',
           'states': <Object>[
             <String, Object>{'id': 'intake'},
@@ -1025,47 +1028,47 @@ void main() {
       ),
     ]);
     controller.automationDrafts = harness.client.drafts;
-    controller.selectedAutomationDraftId = 'draft_source_change_workflow';
+    controller.selectedAutomationDraftId = 'draft_source_change_runbook';
 
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     expect(
       find.byKey(const ValueKey<String>('state-machine-node-intake')),
       findsOneWidget,
     );
-    await tester.tap(find.byTooltip('Workflows'));
+    await tester.tap(find.byTooltip('Runbooks'));
     await tester.pumpAndSettle();
-    expect(find.text('Source Change Workflow'), findsWidgets);
-    expect(find.text('workflow'), findsWidgets);
+    expect(find.text('Source Change Runbook'), findsWidgets);
+    expect(find.text('runbook'), findsWidgets);
   });
 
-  test('creates workflow drafts with the workflow API kind', () async {
+  test('creates runbook drafts with the runbook API kind', () async {
     final harness = _readyCapturingController();
     harness.client.seedDrafts(const <AutomationDraft>[]);
 
     await harness.controller.createAutomationDraftFromUi(
-      kind: automationWorkflowKind,
-      name: 'New Workflow',
+      kind: automationRunbookKind,
+      name: 'New Runbook',
     );
 
     expect(
       harness.client.createdKind,
-      automationWorkflowKind,
+      automationRunbookKind,
       reason: harness.controller.automationsMessage,
     );
     expect(harness.controller.selectedAutomationDraftId, 'draft_1');
   });
 
-  test('starts workflow definitions with input payloads', () async {
+  test('starts runbook definitions with input payloads', () async {
     final harness = _readyCapturingController();
     const definition = AutomationDefinition(
-      id: 'source_change_workflow',
-      kind: automationWorkflowKind,
-      name: 'Source Change Workflow',
+      id: 'source_change_runbook',
+      kind: automationRunbookKind,
+      name: 'Source Change Runbook',
       hash: 'sha256:professional',
     );
 
@@ -1077,18 +1080,18 @@ void main() {
       },
     );
 
-    expect(harness.client.startedDefinitionId, 'source_change_workflow');
+    expect(harness.client.startedDefinitionId, 'source_change_runbook');
     expect(harness.client.startedInput['repository_path'], '/repo');
     expect(harness.client.startedInput['change_request'], 'Fix it');
     expect(harness.controller.selectedAutomationRunId, 'run_1');
   });
 
-  test('creates and starts reusable Operations', () async {
+  test('creates and starts reusable Launchpad', () async {
     final harness = _readyCapturingController();
     const definition = AutomationDefinition(
-      id: 'source_change_workflow',
-      kind: automationWorkflowKind,
-      name: 'Source Change Workflow',
+      id: 'source_change_runbook',
+      kind: automationRunbookKind,
+      name: 'Source Change Runbook',
       hash: 'sha256:professional',
     );
 
@@ -1117,12 +1120,12 @@ void main() {
     expect(harness.controller.selectedAutomationRunId, 'run_1');
   });
 
-  test('previews reusable Operations without starting runs', () async {
+  test('previews reusable Launchpad without starting runs', () async {
     final harness = _readyCapturingController();
     const definition = AutomationDefinition(
-      id: 'source_change_workflow',
-      kind: automationWorkflowKind,
-      name: 'Source Change Workflow',
+      id: 'source_change_runbook',
+      kind: automationRunbookKind,
+      name: 'Source Change Runbook',
       hash: 'sha256:professional',
     );
 
@@ -1139,17 +1142,17 @@ void main() {
 
     expect(harness.client.previewedRunSetupId, setup.id);
     expect(
-      harness.controller.selectedAutomationOperationPreview?.missingSetup,
+      harness.controller.selectedAutomationLaunchPreview?.missingSetup,
       <String>['change_request'],
     );
     expect(harness.controller.selectedAutomationRunId, isEmpty);
   });
 
-  test('updates reusable Operations from typed setup fields', () async {
+  test('updates reusable Launchpad from typed setup fields', () async {
     final harness = _readyCapturingController();
     const setup = AutomationRunSetup(
       id: 'setup_1',
-      definitionId: 'source_change_workflow',
+      definitionId: 'source_change_runbook',
       name: 'Agent Awesome Repo',
       codebaseId: 'agent_awesome',
       runtimeTargetId: 'local',
@@ -1174,22 +1177,22 @@ void main() {
     expect(harness.controller.selectedAutomationRunSetupId, setup.id);
   });
 
-  test('loads Operation run snapshots for selected runs', () async {
+  test('loads Launch run snapshots for selected runs', () async {
     final harness = _readyCapturingController();
     const run = AutomationRun(
       id: 'run_1',
-      definitionId: 'source_change_workflow',
-      kind: automationWorkflowKind,
+      definitionId: 'source_change_runbook',
+      kind: automationRunbookKind,
       status: 'completed',
       state: 'done',
     );
     harness.controller.automationRuns = const <AutomationRun>[run];
     harness.client.runs = const <AutomationRun>[run];
     harness.client.snapshotsByRunId =
-        const <String, AutomationOperationRunSnapshot>{
-          'run_1': AutomationOperationRunSnapshot(
+        const <String, AutomationLaunchRunSnapshot>{
+          'run_1': AutomationLaunchRunSnapshot(
             runId: 'run_1',
-            operationId: 'setup_1',
+            launchId: 'setup_1',
             resolvedInput: <String, dynamic>{'change_request': 'Fix it'},
           ),
         };
@@ -1197,105 +1200,35 @@ void main() {
     await harness.controller.selectAutomationRun('run_1');
 
     expect(
-      harness.controller.selectedAutomationOperationRunSnapshot?.operationId,
+      harness.controller.selectedAutomationLaunchRunSnapshot?.launchId,
       'setup_1',
     );
     expect(
       harness
           .controller
-          .selectedAutomationOperationRunSnapshot
+          .selectedAutomationLaunchRunSnapshot
           ?.resolvedInput['change_request'],
       'Fix it',
     );
   });
 
-  testWidgets('shows Operation preview details in Test mode', (tester) async {
-    tester.view.physicalSize = const Size(1600, 900);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final setup = const AutomationRunSetup(
-      id: 'setup_1',
-      definitionId: 'source_change_workflow',
-      name: 'Agent Awesome Repo',
-      codebaseId: 'agent_awesome',
-      input: <String, dynamic>{'repository_path': '/repo/agent'},
-    );
-    final controller = _readyController()
-      ..automationRunSetups = <AutomationRunSetup>[setup]
-      ..selectedAutomationRunSetupId = setup.id
-      ..selectedAutomationOperationPreview = AutomationOperationPreview(
-        operation: setup,
-        status: 'needs_input',
-        resolvedInput: const <String, dynamic>{
-          'repository_path': '/repo/agent',
-          'remote': 'origin',
-        },
-        missingSetup: const <String>['change_request'],
-        policyDecision: const AutomationOperationPolicyDecision(
-          status: 'allowed',
-        ),
-      );
-
-    await tester.pumpWidget(
-      MaterialApp(home: AgentAwesomeShell(controller: controller)),
-    );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Operations').first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Operations').last);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Test'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Test'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('TEST RUN'), findsOneWidget);
-    expect(find.text('Status: Needs Setup'), findsOneWidget);
-    expect(find.text('Needs Setup: Change Request'), findsOneWidget);
-    expect(find.text('Repository Path: /repo/agent'), findsOneWidget);
-    expect(find.text('Remote: origin'), findsOneWidget);
-  });
-
-  testWidgets('shows distinct saved Operation detail modes', (tester) async {
+  testWidgets('shows distinct saved Launch detail modes', (tester) async {
     tester.view.physicalSize = const Size(1600, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     const setup = AutomationRunSetup(
       id: 'setup_1',
-      definitionId: 'source_change_workflow',
-      name: 'Agent Awesome Repo',
-      codebaseId: 'agent_awesome',
+      definitionId: 'yaml_ok_branch',
+      name: 'YAML OK Branch Test',
       runtimeTargetId: 'local',
-      input: <String, dynamic>{'repository_path': '/repo/agent'},
-      policy: <String, dynamic>{
-        'source_control': 'open_pr_only',
-        'destructive_action': 'deny',
-        'allowed_codebases': <String>['agent_awesome'],
-        'allowed_targets': <String>['local'],
-      },
-      schedule: <String, dynamic>{'enabled': true, 'cron': '0 9 * * *'},
     );
     final controller = _readyController()
-      ..automationDefinitions = const <AutomationDefinition>[
-        AutomationDefinition(
-          id: 'source_change_workflow',
-          kind: automationWorkflowKind,
-          name: 'Source Change Workflow',
-          hash: 'sha256:professional',
-        ),
+      ..automationDefinitions = <AutomationDefinition>[
+        _yamlOkDefinitionForRunTest(),
       ]
       ..automationRunSetups = const <AutomationRunSetup>[setup]
       ..selectedAutomationRunSetupId = setup.id
-      ..automationCodebases = const <AutomationCodebase>[
-        AutomationCodebase(
-          id: 'agent_awesome',
-          name: 'Agent Awesome',
-          repositoryPath: '/repo/agent',
-        ),
-      ]
       ..automationRuntimeTargets = const <AutomationRuntimeTarget>[
         AutomationRuntimeTarget(
           id: 'local',
@@ -1307,48 +1240,40 @@ void main() {
       ..automationRuns = const <AutomationRun>[
         AutomationRun(
           id: 'run_1',
-          definitionId: 'source_change_workflow',
-          kind: automationWorkflowKind,
+          definitionId: 'yaml_ok_branch',
+          kind: automationRunbookKind,
           status: 'completed',
           state: 'done',
-          input: <String, dynamic>{'repository_path': '/repo/agent'},
+          input: <String, dynamic>{'workdir': '/tmp/yaml-ok'},
           output: <String, dynamic>{
-            'pull_request_url': 'https://github.com/acme/agent/pull/7',
+            'files': <String>['/tmp/yaml-ok/result.txt'],
           },
           createdAt: '2026-05-28T10:00:00Z',
           updatedAt: '2026-05-28T10:03:05Z',
         ),
       ]
       ..selectedAutomationRunId = 'run_1'
-      ..selectedAutomationOperationRunSnapshot =
-          const AutomationOperationRunSnapshot(
-            runId: 'run_1',
-            operationId: 'setup_1',
-            operationVersion: 3,
-            workflowId: 'source_change_workflow',
-            resolvedInput: <String, dynamic>{'repository_path': '/repo/agent'},
-            target: <String, dynamic>{'runtime_target_id': 'local'},
-            policy: <String, dynamic>{'source_control': 'open_pr_only'},
-            secretRefs: <Map<String, dynamic>>[
-              <String, dynamic>{
-                'name': 'github_token',
-                'ref': 'secret://github',
-              },
-            ],
-          )
+      ..selectedAutomationLaunchRunSnapshot = const AutomationLaunchRunSnapshot(
+        runId: 'run_1',
+        launchId: 'setup_1',
+        launchVersion: 3,
+        runbookId: 'yaml_ok_branch',
+        resolvedInput: <String, dynamic>{'workdir': '/tmp/yaml-ok'},
+        target: <String, dynamic>{'runtime_target_id': 'local'},
+      )
       ..selectedAutomationEvents = const <AutomationEvent>[
         AutomationEvent(
           id: 1,
           runId: 'run_1',
           type: 'step_started',
-          message: 'workflow state action started',
+          message: 'runbook state action started',
           createdAt: '2026-05-28T10:00:01Z',
         ),
         AutomationEvent(
           id: 2,
           runId: 'run_1',
           type: 'step_succeeded',
-          message: 'workflow state action succeeded',
+          message: 'runbook state action succeeded',
           createdAt: '2026-05-28T10:00:02Z',
         ),
       ];
@@ -1356,33 +1281,28 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Operations').first);
+    await tester.tap(find.byTooltip('Launchpad').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Operations').last);
+    await tester.tap(find.byTooltip('Overview'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Setup'));
+    expect(find.text('Setup'), findsNothing);
+    expect(find.text('Inputs'), findsNothing);
+    expect(find.text('Test'), findsNothing);
+
+    await tester.tap(find.byTooltip('Details').last);
     await tester.pumpAndSettle();
     expect(find.text('Run on'), findsOneWidget);
     expect(find.text('This computer'), findsWidgets);
-
-    await tester.tap(find.text('Inputs'));
-    await tester.pumpAndSettle();
-    expect(find.text('Repository Path: /repo/agent'), findsOneWidget);
-
-    await tester.tap(find.text('Targets'));
-    await tester.pumpAndSettle();
-    expect(find.text('Allowed targets: This computer'), findsOneWidget);
-
-    await tester.tap(find.text('Schedule'));
-    await tester.pumpAndSettle();
-    expect(find.text('Schedule: Daily at 09:00'), findsOneWidget);
-
-    await tester.tap(find.text('Safety'));
-    await tester.pumpAndSettle();
-    expect(find.text('Source control: Open PR only'), findsOneWidget);
+    expect(find.text('Codebase'), findsNothing);
+    expect(find.text('Safety'), findsNothing);
+    expect(find.text('Run Defaults'), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('automation-run-input-workdir')),
+      findsNothing,
+    );
 
     await tester.ensureVisible(find.byTooltip('Runs'));
     await tester.pumpAndSettle();
@@ -1391,7 +1311,7 @@ void main() {
     expect(find.text('Run'), findsOneWidget);
     expect(find.text('Ran'), findsOneWidget);
     expect(find.text('Status'), findsWidgets);
-    final runTitle = find.text('Source Change Workflow');
+    final runTitle = find.text('YAML OK Branch');
     expect(runTitle, findsWidgets);
     expect(
       find.text(
@@ -1409,10 +1329,7 @@ void main() {
     expect(find.textContaining('Input fields: 1'), findsOneWidget);
     expect(find.textContaining('Output fields: 1'), findsOneWidget);
     expect(find.textContaining('Artifacts: 1'), findsOneWidget);
-    expect(
-      find.textContaining('Operation: Agent Awesome Repo'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Launch: YAML OK Branch Test'), findsOneWidget);
     expect(find.textContaining('Resolved inputs: 1'), findsOneWidget);
     expect(find.byTooltip('Copy events'), findsOneWidget);
     expect(find.textContaining('step_started'), findsOneWidget);
@@ -1420,18 +1337,18 @@ void main() {
 
     await tester.tap(find.byTooltip('Artifacts'));
     await tester.pumpAndSettle();
-    expect(find.text('Pull request'), findsOneWidget);
-    expect(find.text('https://github.com/acme/agent/pull/7'), findsOneWidget);
+    expect(find.text('File'), findsOneWidget);
+    expect(find.text('/tmp/yaml-ok/result.txt'), findsOneWidget);
   });
 
-  testWidgets('shows process-state workflow lifecycle in Builder', (
+  testWidgets('shows process-state runbook lifecycle in Builder', (
     tester,
   ) async {
     final controller = _readyController()
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_lifecycle',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Lifecycle Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -1467,7 +1384,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Builder'), findsOneWidget);
@@ -1514,7 +1431,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_lifecycle',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Lifecycle Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -1565,7 +1482,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     final failedBadge = find.byKey(
@@ -1613,7 +1530,7 @@ void main() {
     expect(find.text('Rejected -> Blocked'), findsWidgets);
   });
 
-  testWidgets('lays out workflow nodes in compact semantic ranks and lanes', (
+  testWidgets('lays out runbook nodes in compact semantic ranks and lanes', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(2200, 1200);
@@ -1637,7 +1554,7 @@ void main() {
       ..automationDrafts = <AutomationDraft>[
         AutomationDraft(
           id: 'draft_semantic_layout',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Semantic Layout',
           status: 'draft',
           body: <String, dynamic>{
@@ -1708,7 +1625,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     Rect node(String id) =>
@@ -1733,7 +1650,7 @@ void main() {
     expect(abandoned.top, greaterThan(operator.bottom));
   });
 
-  testWidgets('collapses and expands composite workflow phases in Builder', (
+  testWidgets('collapses and expands composite runbook phases in Builder', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 1000);
@@ -1744,7 +1661,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_hierarchy',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Hierarchical Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -1778,7 +1695,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     expect(
@@ -1800,7 +1717,7 @@ void main() {
     );
   });
 
-  testWidgets('drops workflow states into expanded composite phases', (
+  testWidgets('drops runbook states into expanded composite phases', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 1000);
@@ -1811,7 +1728,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_hierarchy',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Hierarchical Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -1835,7 +1752,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     final paletteItem = find.byKey(
@@ -1872,7 +1789,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'collect');
@@ -1915,7 +1832,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'collect');
@@ -1955,7 +1872,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'review');
@@ -2001,14 +1918,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'intake');
     await tester.tap(find.byTooltip('Focus phase'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Workflow'), findsOneWidget);
+    expect(find.text('Runbook'), findsOneWidget);
     expect(find.text('Intake'), findsWidgets);
     expect(
       find.byKey(const ValueKey<String>('state-machine-node-collect')),
@@ -2026,9 +1943,9 @@ void main() {
       find.byKey(const ValueKey<String>('state-machine-node-done')),
       findsNothing,
     );
-    expect(find.byTooltip('Back to workflow'), findsOneWidget);
+    expect(find.byTooltip('Back to runbook'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Back to workflow'));
+    await tester.tap(find.byTooltip('Back to runbook'));
     await tester.pumpAndSettle();
 
     expect(
@@ -2087,7 +2004,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'intake');
@@ -2120,7 +2037,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'intake');
@@ -2168,7 +2085,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'quality');
@@ -2213,7 +2130,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'quality');
@@ -2267,7 +2184,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'intake');
@@ -2297,7 +2214,7 @@ void main() {
     );
   });
 
-  testWidgets('inspector auto-maps action inputs from workflow contracts', (
+  testWidgets('inspector auto-maps action inputs from runbook contracts', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1600, 1000);
@@ -2308,7 +2225,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_structured_action',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Structured Action',
           status: 'draft',
           body: <String, dynamic>{
@@ -2325,7 +2242,7 @@ void main() {
                     'with': <String, Object>{
                       'checks': <Object>[
                         <String, Object>{
-                          'path': 'workflow_input.base_ref',
+                          'path': 'runbook_input.base_ref',
                           'mode': 'exists',
                         },
                       ],
@@ -2362,7 +2279,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'prepare');
@@ -2375,8 +2292,8 @@ void main() {
     expect(find.text('Tool'), findsWidgets);
     expect(find.text('Arguments'), findsOneWidget);
     expect(find.text('base_ref'), findsOneWidget);
-    expect(find.text('Workflow input / base_ref'), findsOneWidget);
-    expect(find.text(r'${workflow_input.base_ref}'), findsNothing);
+    expect(find.text('Runbook input / base_ref'), findsOneWidget);
+    expect(find.text(r'${runbook_input.base_ref}'), findsNothing);
     expect(find.text('Advanced definition'), findsOneWidget);
   });
 
@@ -2391,7 +2308,7 @@ void main() {
         ..automationDrafts = const <AutomationDraft>[
           AutomationDraft(
             id: 'draft_incoming_sources',
-            kind: automationWorkflowKind,
+            kind: automationRunbookKind,
             name: 'Incoming Sources',
             status: 'draft',
             body: <String, dynamic>{
@@ -2452,7 +2369,7 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(home: AgentAwesomeShell(controller: controller)),
       );
-      await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+      await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
       await tester.pumpAndSettle();
 
       await _tapStateMachineNode(tester, 'target');
@@ -2483,7 +2400,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_list_input',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'List Input',
           status: 'draft',
           body: <String, dynamic>{
@@ -2500,7 +2417,7 @@ void main() {
                     'with': <String, Object>{
                       'checks': <Object>[
                         <String, Object>{
-                          'path': 'workflow_input.base_ref',
+                          'path': 'runbook_input.base_ref',
                           'mode': 'exists',
                         },
                       ],
@@ -2516,7 +2433,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     await _tapStateMachineNode(tester, 'assert_input');
@@ -2525,7 +2442,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Checks'), findsOneWidget);
-    expect(find.textContaining('workflow_input.base_ref'), findsOneWidget);
+    expect(find.textContaining('runbook_input.base_ref'), findsOneWidget);
   });
 
   testWidgets('aggregates repeated phase failure exits into one badge', (
@@ -2539,7 +2456,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_quality',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Quality Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -2577,7 +2494,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     expect(
@@ -2597,7 +2514,7 @@ void main() {
     );
   });
 
-  testWidgets('edits process-state workflow nodes in Builder', (tester) async {
+  testWidgets('edits process-state runbook nodes in Builder', (tester) async {
     tester.view.physicalSize = const Size(1800, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -2606,7 +2523,7 @@ void main() {
       ..automationDrafts = const <AutomationDraft>[
         AutomationDraft(
           id: 'draft_lifecycle',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Lifecycle Flow',
           status: 'draft',
           body: <String, dynamic>{
@@ -2632,7 +2549,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Workflows')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Runbooks')));
     await tester.pumpAndSettle();
 
     final nodeFinder = find.byKey(
@@ -2779,7 +2696,7 @@ void main() {
       ..automationDefinitions = const <AutomationDefinition>[
         AutomationDefinition(
           id: 'daily_email',
-          kind: automationWorkflowKind,
+          kind: automationRunbookKind,
           name: 'Daily Email',
           hash: 'abc',
         ),
@@ -2797,7 +2714,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: AgentAwesomeShell(controller: controller)),
     );
-    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Operations')));
+    await tester.tap(find.byKey(const ValueKey<String>('sidebar-Launchpad')));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('AI chat'));
     await tester.pumpAndSettle();
@@ -3172,7 +3089,7 @@ void main() {
     expect(find.text('DETAILS'), findsWidgets);
     expect(find.byTooltip('Details'), findsOneWidget);
     expect(find.byTooltip('Commands'), findsOneWidget);
-    expect(find.byTooltip('Operations'), findsOneWidget);
+    expect(find.byTooltip('Launchpad'), findsOneWidget);
     expect(find.byTooltip('Validations'), findsOneWidget);
     expect(find.byTooltip('Source'), findsNothing);
     expect(find.text('Assigned'), findsNothing);
@@ -3658,8 +3575,8 @@ local-exec:
     final validation = saved.validations
         .where((validation) => validation.target.type == 'command-operation')
         .single;
-    final workflowValidation = saved.validations
-        .where((validation) => validation.target.type == 'workflow-node')
+    final runbookValidation = saved.validations
+        .where((validation) => validation.target.type == 'runbook-node')
         .single;
     expect(validation.target.type, 'command-operation');
     expect(validation.target.command, 'rg');
@@ -3675,12 +3592,12 @@ local-exec:
           .equals,
       '',
     );
-    expect(workflowValidation.target.command, 'rg');
-    expect(workflowValidation.target.operation, 'search_text');
-    expect(workflowValidation.mode, 'mocked');
+    expect(runbookValidation.target.command, 'rg');
+    expect(runbookValidation.target.operation, 'search_text');
+    expect(runbookValidation.mode, 'mocked');
   });
 
-  testWidgets('adds command and workflow envelope validations from one form', (
+  testWidgets('adds command and runbook envelope validations from one form', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1200, 900);
@@ -3783,7 +3700,7 @@ local-exec:
         .where((validation) => validation.target.type == 'command-operation')
         .single;
     final validation = saved.validations
-        .where((validation) => validation.target.type == 'workflow-node')
+        .where((validation) => validation.target.type == 'runbook-node')
         .single;
     expect(commandValidation.target.command, 'grep');
     expect(commandValidation.target.operation, 'recursive_search');
@@ -3801,7 +3718,7 @@ local-exec:
           .equals,
       '',
     );
-    expect(validation.target.type, 'workflow-node');
+    expect(validation.target.type, 'runbook-node');
     expect(validation.target.command, 'grep');
     expect(validation.target.operation, 'recursive_search');
     expect(validation.mode, 'mocked');
@@ -3886,8 +3803,8 @@ mcp:
     final validation = saved.validations
         .where((validation) => validation.target.type == 'mcp-tool')
         .single;
-    final workflowValidation = saved.validations
-        .where((validation) => validation.target.type == 'workflow-node')
+    final runbookValidation = saved.validations
+        .where((validation) => validation.target.type == 'runbook-node')
         .single;
     expect(validation.target.type, 'mcp-tool');
     expect(validation.target.mcpServer, 'memory_memory');
@@ -3895,8 +3812,8 @@ mcp:
     expect(validation.mode, 'mocked');
     expect(validation.assertions.first.type, 'status');
     expect(validation.assertions.first.equals, 'succeeded');
-    expect(workflowValidation.target.mcpServer, 'memory_memory');
-    expect(workflowValidation.target.mcpTool, 'remember');
+    expect(runbookValidation.target.mcpServer, 'memory_memory');
+    expect(runbookValidation.target.mcpTool, 'remember');
   });
 
   testWidgets('groups tool validations by operation tabs', (tester) async {
@@ -4322,13 +4239,13 @@ validations:
           body: SettingsToolValidationEvidenceView(
             targetLabel: 'rg TODO src',
             result: ToolValidationRunResult(
-              id: 'rg_search_text_workflow',
-              label: 'Workflow search',
-              description: 'Runs rg through the workflow boundary.',
+              id: 'rg_search_text_runbook',
+              label: 'Runbook search',
+              description: 'Runs rg through the runbook boundary.',
               mode: 'mocked',
               status: 'passed',
               target: ToolValidationTargetResult(
-                type: 'workflow-node',
+                type: 'runbook-node',
                 presetId: '',
                 command: 'rg',
                 operation: 'search_text',
@@ -4386,7 +4303,7 @@ validations:
 
     expect(find.text('Target'), findsOneWidget);
     expect(find.textContaining('rg TODO src'), findsOneWidget);
-    expect(find.textContaining('Workflow node: rg.search_text'), findsNothing);
+    expect(find.textContaining('Runbook node: rg.search_text'), findsNothing);
     expect(find.text('Command'), findsOneWidget);
     expect(find.textContaining('status succeeded'), findsOneWidget);
     expect(find.text('Stdout'), findsOneWidget);
@@ -5561,12 +5478,12 @@ AgentAwesomeAppController _readyController({AgentFileImporter? fileImporter}) {
   return controller;
 }
 
-/// Returns a workflow definition with schema-backed run inputs for UI tests.
+/// Returns a runbook definition with schema-backed run inputs for UI tests.
 AutomationDefinition _sourceChangeDefinitionForRunTest() {
   return const AutomationDefinition(
-    id: 'source_change_workflow',
-    kind: automationWorkflowKind,
-    name: 'Source Change Workflow',
+    id: 'source_change_runbook',
+    kind: automationRunbookKind,
+    name: 'Source Change Runbook',
     hash: 'sha256:professional',
     body: <String, dynamic>{
       'authoring': <String, Object>{
@@ -5590,10 +5507,10 @@ AutomationDefinition _sourceChangeDefinitionForRunTest() {
               'id': 'normalized_input',
               'uses': 'data.defaults',
               'with': <String, Object>{
-                'input': r'${workflow_input}',
+                'input': r'${runbook_input}',
                 'defaults': <String, Object>{
                   'remote': 'origin',
-                  'branch_summary': r'${workflow_input.change_request}',
+                  'branch_summary': r'${runbook_input.change_request}',
                   'pull_request_draft': false,
                 },
               },
@@ -5623,6 +5540,25 @@ AutomationDefinition _sourceChangeDefinitionForRunTest() {
           ],
         },
       ],
+    },
+  );
+}
+
+/// Returns the YAML branch runbook used by generic Launch UI tests.
+AutomationDefinition _yamlOkDefinitionForRunTest() {
+  return const AutomationDefinition(
+    id: 'yaml_ok_branch',
+    kind: automationRunbookKind,
+    name: 'YAML OK Branch',
+    hash: 'sha256:yaml-ok',
+    body: <String, dynamic>{
+      'input_schema': <String, Object>{
+        'type': 'object',
+        'required': <Object>['workdir'],
+        'properties': <String, Object>{
+          'workdir': <String, Object>{'type': 'string'},
+        },
+      },
     },
   );
 }
@@ -5768,9 +5704,9 @@ class _EmptyToolRpcClient implements ToolRpcClient {
   void close() {}
 }
 
-/// _CapturingAutomationsClient stores workflow drafts in memory for UI tests.
+/// _CapturingAutomationsClient stores runbook drafts in memory for UI tests.
 class _CapturingAutomationsClient extends AutomationsClient {
-  /// Creates a fake workflow client.
+  /// Creates a fake runbook client.
   _CapturingAutomationsClient() : super(baseUrl: 'http://127.0.0.1:1');
 
   /// Editable draft list returned by [listDrafts].
@@ -5782,7 +5718,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
   /// Run list returned by [listRuns].
   List<AutomationRun> runs = const <AutomationRun>[];
 
-  /// Saved Operation list returned by [listRunSetups].
+  /// Saved Launch list returned by [listRunSetups].
   List<AutomationRunSetup> runSetups = const <AutomationRunSetup>[];
 
   /// Capability list returned by [listCapabilities].
@@ -5828,9 +5764,9 @@ class _CapturingAutomationsClient extends AutomationsClient {
   /// Last reusable setup id passed to [previewRunSetup].
   String previewedRunSetupId = '';
 
-  /// Operation run snapshots keyed by run id.
-  Map<String, AutomationOperationRunSnapshot> snapshotsByRunId =
-      const <String, AutomationOperationRunSnapshot>{};
+  /// Launch run snapshots keyed by run id.
+  Map<String, AutomationLaunchRunSnapshot> snapshotsByRunId =
+      const <String, AutomationLaunchRunSnapshot>{};
 
   /// Replaces the in-memory draft list.
   void seedDrafts(List<AutomationDraft> value) {
@@ -5846,7 +5782,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
     startedInput = const <String, dynamic>{};
   }
 
-  /// Replaces the in-memory Operation list.
+  /// Replaces the in-memory Launch list.
   void seedRunSetups(List<AutomationRunSetup> value) {
     runSetups = List<AutomationRunSetup>.of(value);
     createdRunSetup = null;
@@ -5879,7 +5815,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
   Future<List<AutomationCapability>> listCapabilities({
     String kind = '',
     bool? usableInChat,
-    bool? usableInWorkflows,
+    bool? usableInRunbooks,
   }) async {
     return capabilities.where((capability) {
       if (kind.trim().isNotEmpty && capability.kind != kind.trim()) {
@@ -5888,8 +5824,8 @@ class _CapturingAutomationsClient extends AutomationsClient {
       if (usableInChat != null && capability.usableInChat != usableInChat) {
         return false;
       }
-      if (usableInWorkflows != null &&
-          capability.usableInWorkflows != usableInWorkflows) {
+      if (usableInRunbooks != null &&
+          capability.usableInRunbooks != usableInRunbooks) {
         return false;
       }
       return true;
@@ -5989,9 +5925,9 @@ class _CapturingAutomationsClient extends AutomationsClient {
       status: 'draft',
       body: body.isEmpty
           ? <String, dynamic>{
-              'apiVersion': automationWorkflowApiVersion,
+              'apiVersion': automationRunbookApiVersion,
               'kind': 'state_machine',
-              'id': 'workflow_${drafts.length + 1}',
+              'id': 'runbook_${drafts.length + 1}',
               'initial': 'start',
               'states': const <Object>[
                 <String, Object>{'id': 'start'},
@@ -6025,7 +5961,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
     final run = AutomationRun(
       id: 'run_${runs.length + 1}',
       definitionId: definitionId,
-      kind: automationWorkflowKind,
+      kind: automationRunbookKind,
       status: 'running',
       state: 'running',
     );
@@ -6076,7 +6012,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
   }
 
   @override
-  Future<AutomationOperationPreview> previewRunSetup(
+  Future<AutomationLaunchPreview> previewRunSetup(
     String setupId, {
     Map<String, dynamic> input = const <String, dynamic>{},
   }) async {
@@ -6094,14 +6030,12 @@ class _CapturingAutomationsClient extends AutomationsClient {
       if ('${resolved['change_request'] ?? ''}'.trim().isEmpty)
         'change_request',
     ];
-    return AutomationOperationPreview(
-      operation: setup,
+    return AutomationLaunchPreview(
+      launch: setup,
       status: missing.isEmpty ? 'ready' : 'needs_input',
       resolvedInput: resolved,
       missingSetup: missing,
-      policyDecision: const AutomationOperationPolicyDecision(
-        status: 'allowed',
-      ),
+      policyDecision: const AutomationLaunchPolicyDecision(status: 'allowed'),
     );
   }
 
@@ -6123,7 +6057,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
     final run = AutomationRun(
       id: 'run_${runs.length + 1}',
       definitionId: setup.definitionId,
-      kind: automationWorkflowKind,
+      kind: automationRunbookKind,
       status: 'running',
       state: 'running',
     );
@@ -6132,9 +6066,7 @@ class _CapturingAutomationsClient extends AutomationsClient {
   }
 
   @override
-  Future<AutomationOperationRunSnapshot> operationRunSnapshot(
-    String runId,
-  ) async {
+  Future<AutomationLaunchRunSnapshot> launchRunSnapshot(String runId) async {
     final snapshot = snapshotsByRunId[runId];
     if (snapshot == null) {
       throw StateError('snapshot not found');
@@ -6143,17 +6075,17 @@ class _CapturingAutomationsClient extends AutomationsClient {
   }
 }
 
-/// Creates a workflow graph draft for Builder shell tests.
-AutomationDraft _workflowGraphDraft() {
+/// Creates a runbook graph draft for Builder shell tests.
+AutomationDraft _runbookGraphDraft() {
   return const AutomationDraft(
-    id: 'draft_workflow_graph',
-    kind: automationWorkflowKind,
-    name: 'Workflow Graph',
+    id: 'draft_runbook_graph',
+    kind: automationRunbookKind,
+    name: 'Runbook Graph',
     status: 'draft',
     body: <String, dynamic>{
-      'apiVersion': automationWorkflowApiVersion,
-      'kind': automationWorkflowKind,
-      'id': 'workflow_graph',
+      'apiVersion': automationRunbookApiVersion,
+      'kind': automationRunbookKind,
+      'id': 'runbook_graph',
       'nodes': <Object>[],
     },
   );
@@ -6163,7 +6095,7 @@ AutomationDraft _workflowGraphDraft() {
 AutomationDraft _hierarchyEditDraft() {
   return const AutomationDraft(
     id: 'draft_hierarchy_edit',
-    kind: automationWorkflowKind,
+    kind: automationRunbookKind,
     name: 'Hierarchy Edit',
     status: 'draft',
     body: <String, dynamic>{
@@ -6199,7 +6131,7 @@ AutomationDraft _hierarchyEditDraft() {
 AutomationDraft _nestedPhaseFocusDraft() {
   return const AutomationDraft(
     id: 'draft_nested_focus',
-    kind: automationWorkflowKind,
+    kind: automationRunbookKind,
     name: 'Nested Focus',
     status: 'draft',
     body: <String, dynamic>{
@@ -6242,7 +6174,7 @@ AutomationDraft _nestedPhaseFocusDraft() {
 AutomationDraft _focusedExitDraft() {
   return const AutomationDraft(
     id: 'draft_focused_exit',
-    kind: automationWorkflowKind,
+    kind: automationRunbookKind,
     name: 'Focused Exit',
     status: 'draft',
     body: <String, dynamic>{

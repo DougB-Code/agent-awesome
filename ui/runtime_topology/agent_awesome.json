@@ -35,17 +35,17 @@
     "auto_start": ${AUTO_START_LOCAL_SERVICES},
     "enabled": true
   },
-  "workflow": {
-    "id": "agent-awesome-workflow",
-    "label": "Agent Awesome Workflow",
-    "api_base_url": "${WORKFLOW_API_BASE_URL}",
-    "health_url": "${WORKFLOW_HEALTH_URL}",
+  "runbook": {
+    "id": "agent-awesome-runbook",
+    "label": "Agent Awesome Runbook",
+    "api_base_url": "${RUNBOOK_API_BASE_URL}",
+    "health_url": "${RUNBOOK_HEALTH_URL}",
     "hosted_by_harness": false,
     "working_directory": "${AGENTAWESOME_WORKSPACE_ROOT}/harness",
-    "executable_path": "${AGENTAWESOME_WORKSPACE_ROOT}/harness/build/bin/workflow-service",
-    "definitions_dir": "${WORKFLOW_DEFINITIONS_DIR}",
-    "db_path": "${WORKFLOW_DB_PATH}",
-    "port": ${WORKFLOW_API_PORT},
+    "executable_path": "${AGENTAWESOME_WORKSPACE_ROOT}/harness/build/bin/runbook-service",
+    "definitions_dir": "${RUNBOOK_DEFINITIONS_DIR}",
+    "db_path": "${RUNBOOK_DB_PATH}",
+    "port": ${RUNBOOK_API_PORT},
     "auto_start": ${AUTO_START_LOCAL_SERVICES},
     "enabled": true
   },

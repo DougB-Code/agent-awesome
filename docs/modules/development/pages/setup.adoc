@@ -55,4 +55,4 @@ Run the documentation check from the repository root:
 npm test
 ----
 
-The GitHub `CI Verification` workflow runs the full source gate for Go modules, the desktop UI, Codex pilot E2E, and docs.
+The GitHub `CI Verification` runbook runs the full source gate for Go modules, the desktop UI, Codex pilot E2E, and docs.

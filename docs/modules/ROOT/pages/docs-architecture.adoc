@@ -11,7 +11,7 @@ The component is distributed across several nearby content roots so documentatio
 |Path |Owns
 
 |`docs`
-|Site metadata, navigation, user docs, internal development docs, internal operations docs, and cross-system overview pages.
+|Site metadata, navigation, user docs, internal development docs, internal launchpad docs, and cross-system overview pages.
 
 |`harness/docs`
 |Harness module pages beside the harness Go module.
@@ -45,9 +45,9 @@ Antora cache data is written to `build/antora-cache`.
 == Writing Rules
 
 Place code-specific documentation in the nearest subsystem docs root.
-Place end-user workflows in `docs/modules/user`.
-Place internal development workflows in `docs/modules/development`.
-Place local support and repair procedures in `docs/modules/operations`.
+Place end-user runbooks in `docs/modules/user`.
+Place internal development runbooks in `docs/modules/development`.
+Place local support and repair procedures in `docs/modules/launchpad`.
 
-Do not duplicate user, development, and operations instructions in one page.
-When a page must mention both audiences, link to the other page instead of embedding both workflows.
+Do not duplicate user, development, and launchpad instructions in one page.
+When a page must mention both audiences, link to the other page instead of embedding both runbooks.

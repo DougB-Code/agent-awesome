@@ -129,13 +129,13 @@ class LocalServiceSupervisor {
         statuses.add(status);
       }
     }
-    if (profile.workflow.enabled && !profile.workflow.hostedByHarness) {
-      final workflowStatus = await _ensureWorkflowStatus(
+    if (profile.runbook.enabled && !profile.runbook.hostedByHarness) {
+      final runbookStatus = await _ensureRunbookStatus(
         profile,
         restartAutoStarted: restartAutoStarted,
       );
-      await _writeStatusLog(workflowStatus);
-      statuses.add(workflowStatus);
+      await _writeStatusLog(runbookStatus);
+      statuses.add(runbookStatus);
     }
     if (includeHarness) {
       final harnessStatus = await _ensureHarnessStatus(
@@ -146,14 +146,14 @@ class LocalServiceSupervisor {
       statuses.add(harnessStatus);
     }
     if (includeHarness &&
-        profile.workflow.enabled &&
-        profile.workflow.hostedByHarness) {
-      final workflowStatus = await _ensureWorkflowStatus(
+        profile.runbook.enabled &&
+        profile.runbook.hostedByHarness) {
+      final runbookStatus = await _ensureRunbookStatus(
         profile,
         restartAutoStarted: restartAutoStarted,
       );
-      await _writeStatusLog(workflowStatus);
-      statuses.add(workflowStatus);
+      await _writeStatusLog(runbookStatus);
+      statuses.add(runbookStatus);
     }
     final gatewayStatus = await _ensureGatewayStatus(
       profile,
@@ -448,23 +448,23 @@ class LocalServiceSupervisor {
     }
   }
 
-  /// Ensures workflow and converts launch failures into a status.
-  Future<ServiceProcessStatus> _ensureWorkflowStatus(
+  /// Ensures runbook and converts launch failures into a status.
+  Future<ServiceProcessStatus> _ensureRunbookStatus(
     RuntimeProfile profile, {
     required bool restartAutoStarted,
   }) async {
     try {
-      return await _ensureWorkflow(
+      return await _ensureRunbook(
         profile,
         restartAutoStarted: restartAutoStarted,
       );
     } catch (error) {
-      final workflow = profile.workflow;
+      final runbook = profile.runbook;
       return _status(
-        workflow.label,
-        workflow.healthUrl,
+        runbook.label,
+        runbook.healthUrl,
         ConnectionStateKind.disconnected,
-        await _startupFailureMessage(workflow.label, error),
+        await _startupFailureMessage(runbook.label, error),
       );
     }
   }
@@ -551,80 +551,80 @@ class LocalServiceSupervisor {
     return status;
   }
 
-  /// Ensures workflow is reachable, starting it when the profile manages it.
-  Future<ServiceProcessStatus> _ensureWorkflow(
+  /// Ensures runbook is reachable, starting it when the profile manages it.
+  Future<ServiceProcessStatus> _ensureRunbook(
     RuntimeProfile profile, {
     required bool restartAutoStarted,
   }) async {
-    final workflow = profile.workflow;
-    final serviceId = agentRuntimeServiceId(profile, workflow.id);
-    final health = Uri.parse(workflow.healthUrl);
-    final arguments = workflowArgumentsForProfile(profile);
-    if (workflow.hostedByHarness) {
+    final runbook = profile.runbook;
+    final serviceId = agentRuntimeServiceId(profile, runbook.id);
+    final health = Uri.parse(runbook.healthUrl);
+    final arguments = runbookArgumentsForProfile(profile);
+    if (runbook.hostedByHarness) {
       if (await _isHealthy(health)) {
         return _status(
-          workflow.label,
-          workflow.healthUrl,
+          runbook.label,
+          runbook.healthUrl,
           ConnectionStateKind.connected,
           'Hosted by harness',
         );
       }
       return _status(
-        workflow.label,
-        workflow.healthUrl,
+        runbook.label,
+        runbook.healthUrl,
         ConnectionStateKind.disconnected,
-        'Harness-owned workflow service is not reachable',
+        'Harness-owned runbook service is not reachable',
       );
     }
     _rememberServiceEndpoint(
       id: serviceId,
-      name: workflow.label,
+      name: runbook.label,
       health: health,
       arguments: arguments,
     );
-    if (restartAutoStarted && workflow.autoStart) {
+    if (restartAutoStarted && runbook.autoStart) {
       await _restartAutoStartedEndpoint(
         id: serviceId,
-        name: workflow.label,
+        name: runbook.label,
         health: health,
       );
     }
     if (await _isHealthy(health)) {
       await _emitObservedServiceLog(
-        id: workflow.id,
-        name: workflow.label,
+        id: runbook.id,
+        name: runbook.label,
         health: health,
         arguments: arguments,
       );
       return _status(
-        workflow.label,
-        workflow.healthUrl,
+        runbook.label,
+        runbook.healthUrl,
         ConnectionStateKind.connected,
         'Already running',
       );
     }
-    if (!workflow.autoStart) {
+    if (!runbook.autoStart) {
       return _status(
-        workflow.label,
-        workflow.healthUrl,
+        runbook.label,
+        runbook.healthUrl,
         ConnectionStateKind.disconnected,
-        'External workflow service is not reachable',
+        'External runbook service is not reachable',
       );
     }
     await _createArgumentDirectories(arguments);
-    final logPath = _agentServiceLogPath(profile, 'workflow.log');
+    final logPath = _agentServiceLogPath(profile, 'runbook.log');
     final process = await _startProcess(
       id: serviceId,
-      name: workflow.label,
+      name: runbook.label,
       health: health,
-      workingDirectory: workflow.workingDirectory,
-      executablePath: workflow.executablePath,
+      workingDirectory: runbook.workingDirectory,
+      executablePath: runbook.executablePath,
       arguments: arguments,
       outputLogPath: logPath,
     );
     _started[serviceId] = process;
     final status = await _waitForProcessHealth(
-      workflow.label,
+      runbook.label,
       health,
       process,
       logPath: logPath,
@@ -994,11 +994,11 @@ class LocalServiceSupervisor {
       if (flag == '--definitions') {
         await Directory(value).create(recursive: true);
       }
-      if (flag == '--workflow-db') {
+      if (flag == '--runbook-db') {
         final parent = File(value).parent;
         await parent.create(recursive: true);
       }
-      if (flag == '--workflow-definitions' ||
+      if (flag == '--runbook-definitions' ||
           flag == '--command-data-dir' ||
           flag == '--command-parser-dir' ||
           flag == '--command-allow-workdir') {
@@ -1161,8 +1161,8 @@ String servicePortsDescription({
       ports.add('api=${_listenDescription(value)}');
     } else if (flag == '--context-api-addr') {
       ports.add('context=${_listenDescription(value)}');
-    } else if (flag == '--workflow-api-addr') {
-      ports.add('workflow=${_listenDescription(value)}');
+    } else if (flag == '--runbook-api-addr') {
+      ports.add('runbook=${_listenDescription(value)}');
     }
   }
   return ports.isEmpty ? 'unknown' : ports.join(', ');
@@ -1183,7 +1183,7 @@ Set<int> serviceLocalPorts({
     if (flag == '--addr' ||
         flag == '--port' ||
         flag == '--context-api-addr' ||
-        flag == '--workflow-api-addr') {
+        flag == '--runbook-api-addr') {
       final port = _listenPort(value);
       if (port != null) {
         ports.add(port);

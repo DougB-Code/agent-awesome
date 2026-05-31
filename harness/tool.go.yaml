@@ -1,4 +1,4 @@
-# This file configures reusable Go command node presets for coding workflows.
+# This file configures reusable Go command node presets for coding runbooks.
 local-exec:
   enabled: true
   default-timeout: 10m
@@ -74,7 +74,7 @@ validations:
     label: Go build success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: go_build_all
     description: Command boundary returns a successful Go build result.
     input:
@@ -89,7 +89,7 @@ validations:
     label: Go test failure
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: go_test_all
     description: Command boundary returns a failed Go test result.
     input:
@@ -104,7 +104,7 @@ validations:
     label: Go binary build success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: go_build_binary
     description: Command boundary returns a successful binary build result.
     input:
@@ -120,7 +120,7 @@ validations:
     label: Binary invoke success
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: binary_execute_two_args
     description: Command boundary returns a successful binary invocation result.
     input:

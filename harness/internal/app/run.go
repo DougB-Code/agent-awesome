@@ -19,9 +19,9 @@ import (
 	"agentawesome/internal/runtime"
 	"agentawesome/internal/services/capabilities"
 	commandservice "agentawesome/internal/services/command/command"
-	workflowactions "agentawesome/internal/services/workflow/actions"
-	workflowembedded "agentawesome/internal/services/workflow/embedded"
-	workflowruntime "agentawesome/internal/services/workflow/runtime"
+	runbookactions "agentawesome/internal/services/runbook/actions"
+	runbookembedded "agentawesome/internal/services/runbook/embedded"
+	runbookruntime "agentawesome/internal/services/runbook/runtime"
 	"agentawesome/internal/sessionstore"
 	"agentawesome/internal/tools/commandtools"
 	"agentawesome/internal/tools/toolsets"
@@ -42,10 +42,10 @@ type Options struct {
 	ContextAPIAddr             string
 	ContextAPIToken            string
 	SessionDatabase            string
-	WorkflowAPIAddr            string
-	WorkflowDefinitionsDir     string
-	WorkflowDatabasePath       string
-	OperationsDatabasePath     string
+	RunbookAPIAddr             string
+	RunbookDefinitionsDir      string
+	RunbookDatabasePath        string
+	LaunchpadDatabasePath      string
 	RuntimeTargetsDatabasePath string
 	CommandDataDir             string
 	CommandAllowedWorkdirs     []string
@@ -89,13 +89,13 @@ func Run(ctx context.Context, opts Options) error {
 		defer commandService.Close()
 	}
 	capabilityRegistry := capabilities.NewRegistry(toolsCfg, agent)
-	if workflowServer, err := startEmbeddedWorkflow(ctx, opts, toolsCfg, agent, capabilityRegistry, contextServer, commandService); err != nil {
+	if runbookServer, err := startEmbeddedRunbook(ctx, opts, toolsCfg, agent, capabilityRegistry, contextServer, commandService); err != nil {
 		return err
-	} else if workflowServer != nil {
+	} else if runbookServer != nil {
 		defer func() {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_ = workflowServer.Close(shutdownCtx)
+			_ = runbookServer.Close(shutdownCtx)
 		}()
 	}
 
@@ -107,32 +107,36 @@ func Run(ctx context.Context, opts Options) error {
 	return runtime.Execute(ctx, runtimeConfig, opts.Args)
 }
 
-// startEmbeddedWorkflow serves workflow routes from the harness process when enabled.
-func startEmbeddedWorkflow(ctx context.Context, opts Options, toolsCfg *schema.Tools, agent schema.Agent, capabilityRegistry *capabilities.Registry, contextServer *contextapi.Server, commandService *commandservice.Service) (*workflowembedded.Server, error) {
-	if strings.TrimSpace(opts.WorkflowAPIAddr) == "" {
+// startEmbeddedRunbook serves runbook routes from the harness process when enabled.
+func startEmbeddedRunbook(ctx context.Context, opts Options, toolsCfg *schema.Tools, agent schema.Agent, capabilityRegistry *capabilities.Registry, contextServer *contextapi.Server, commandService *commandservice.Service) (*runbookembedded.Server, error) {
+	if strings.TrimSpace(opts.RunbookAPIAddr) == "" {
 		return nil, nil
 	}
 	if capabilityRegistry == nil {
 		capabilityRegistry = capabilities.NewRegistry(toolsCfg, agent)
 	}
-	return workflowembedded.Start(ctx, workflowembedded.Config{
-		ListenAddress:              opts.WorkflowAPIAddr,
-		DefinitionsDir:             defaulted(opts.WorkflowDefinitionsDir, config.DefaultWorkflowDefinitionsDir()),
-		DatabasePath:               defaulted(opts.WorkflowDatabasePath, config.DefaultWorkflowDatabasePath()),
-		OperationsDatabasePath:     defaulted(opts.OperationsDatabasePath, config.DefaultOperationsDatabasePath()),
+	var commandClient runbookruntime.CommandClient
+	if commandService != nil {
+		commandClient = commandService
+	}
+	return runbookembedded.Start(ctx, runbookembedded.Config{
+		ListenAddress:              opts.RunbookAPIAddr,
+		DefinitionsDir:             defaulted(opts.RunbookDefinitionsDir, config.DefaultRunbookDefinitionsDir()),
+		DatabasePath:               defaulted(opts.RunbookDatabasePath, config.DefaultRunbookDatabasePath()),
+		LaunchpadDatabasePath:      defaulted(opts.LaunchpadDatabasePath, config.DefaultLaunchpadDatabasePath()),
 		RuntimeTargetsDatabasePath: defaulted(opts.RuntimeTargetsDatabasePath, config.DefaultRuntimeTargetsDatabasePath()),
 		RequestTimeout:             10 * time.Minute,
-		ToolClient:                 embeddedWorkflowToolClient(contextServer),
-		CommandClient:              commandService,
+		ToolClient:                 embeddedRunbookToolClient(contextServer),
+		CommandClient:              commandClient,
 		Capabilities:               capabilityRegistry,
-		MCPServerEndpoints: workflowMCPServerEndpoints(
+		MCPServerEndpoints: runbookMCPServerEndpoints(
 			toolsCfg,
 		),
 	})
 }
 
-// workflowMCPServerEndpoints indexes configured MCP endpoints for workflow actions.
-func workflowMCPServerEndpoints(toolsCfg *schema.Tools) map[string]string {
+// runbookMCPServerEndpoints indexes configured MCP endpoints for runbook actions.
+func runbookMCPServerEndpoints(toolsCfg *schema.Tools) map[string]string {
 	endpoints := map[string]string{}
 	if toolsCfg == nil {
 		return endpoints
@@ -150,26 +154,26 @@ func workflowMCPServerEndpoints(toolsCfg *schema.Tools) map[string]string {
 	return endpoints
 }
 
-// embeddedWorkflowToolClient returns a direct tool client when workflow shares this process.
-func embeddedWorkflowToolClient(contextServer *contextapi.Server) workflowruntime.ContextToolClient {
+// embeddedRunbookToolClient returns a direct tool client when runbook shares this process.
+func embeddedRunbookToolClient(contextServer *contextapi.Server) runbookruntime.ContextToolClient {
 	if contextServer == nil {
 		return nil
 	}
-	return workflowContextToolClient{contextServer: contextServer}
+	return runbookContextToolClient{contextServer: contextServer}
 }
 
-// workflowContextToolClient adapts the context API service to workflow tool.call actions.
-type workflowContextToolClient struct {
+// runbookContextToolClient adapts the context API service to runbook tool.call actions.
+type runbookContextToolClient struct {
 	contextServer *contextapi.Server
 }
 
 // List returns harness context tool names without an HTTP loopback.
-func (c workflowContextToolClient) List(ctx context.Context) ([]string, error) {
+func (c runbookContextToolClient) List(ctx context.Context) ([]string, error) {
 	return c.contextServer.List(ctx)
 }
 
 // Call invokes a harness context tool without an HTTP loopback.
-func (c workflowContextToolClient) Call(ctx context.Context, req workflowactions.ToolRequest) (map[string]any, error) {
+func (c runbookContextToolClient) Call(ctx context.Context, req runbookactions.ToolRequest) (map[string]any, error) {
 	result, err := c.contextServer.Call(ctx, req.Name, req.DomainID, req.Arguments)
 	if err != nil {
 		return nil, err
@@ -223,7 +227,7 @@ func commandRuntimeEnabled(opts Options, toolsCfg *schema.Tools) bool {
 	return localExecRuntimeEnabled(toolsCfg) || strings.TrimSpace(opts.CommandTemplatesJSON) != ""
 }
 
-// openCommandService creates the shared command service for ADK and workflow calls.
+// openCommandService creates the shared command service for ADK and runbook calls.
 func openCommandService(opts Options, toolsCfg *schema.Tools) (*commandservice.Service, error) {
 	if !commandRuntimeEnabled(opts, toolsCfg) {
 		return nil, nil
@@ -358,7 +362,7 @@ func localExecOperationTemplates(localExec schema.LocalExec, item schema.LocalEx
 	return templates, nil
 }
 
-// localExecOperationTemplateID returns the workflow-callable operation id.
+// localExecOperationTemplateID returns the runbook-callable operation id.
 func localExecOperationTemplateID(command schema.LocalExecCommand, operation schema.CommandOperation) string {
 	return strings.TrimSpace(command.Name) + "." + strings.TrimSpace(operation.Name)
 }
@@ -382,7 +386,7 @@ func localExecOperationParameterSchema(operation schema.CommandOperation) map[st
 	return inferTemplateParameterSchema(operation.Args)
 }
 
-// localExecCommandParameterSchema returns the workflow parameter contract.
+// localExecCommandParameterSchema returns the runbook parameter contract.
 func localExecCommandParameterSchema(command schema.LocalExecCommand) map[string]any {
 	if len(command.Args) > 0 || !hasCommandSurface(command.Surface) {
 		return nil

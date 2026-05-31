@@ -107,13 +107,13 @@ class _AppSidebar extends StatelessWidget {
       title: 'AUTOMATIONS',
       items: <_SidebarItem>[
         _SidebarItem(
-          label: AppSections.automationOperations,
-          section: AppSections.automationOperations,
+          label: AppSections.automationLaunchpad,
+          section: AppSections.automationLaunchpad,
           icon: Icons.monitor_heart_outlined,
         ),
         _SidebarItem(
-          label: AppSections.automationWorkflows,
-          section: AppSections.automationWorkflows,
+          label: AppSections.automationRunbooks,
+          section: AppSections.automationRunbooks,
           icon: Icons.route_outlined,
         ),
         _SidebarItem(

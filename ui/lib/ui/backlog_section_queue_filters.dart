@@ -166,18 +166,15 @@ class _TaskQueueFilterStrip extends StatelessWidget {
   /// Builds a one-row dropdown filter surface for the backlog queue.
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: <Widget>[
-          _TaskStatusFilterMenu(controller: controller),
-          _TaskPriorityFilterMenu(controller: controller),
-          _TaskTopicFilterMenu(controller: controller),
-        ],
-      ),
+    return Wrap(
+      spacing: PanelFormMetrics.compactGap,
+      runSpacing: PanelFormMetrics.compactGap,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        _TaskStatusFilterMenu(controller: controller),
+        _TaskPriorityFilterMenu(controller: controller),
+        _TaskTopicFilterMenu(controller: controller),
+      ],
     );
   }
 }
@@ -375,22 +372,25 @@ class _TaskFilterMenuButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
     final foreground = enabled ? colors.ink : colors.subtle;
+    final border = selected ? colors.searchBorder : colors.border;
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 220),
+      constraints: const BoxConstraints(maxWidth: 260, minWidth: 180),
       child: Container(
-        height: 36,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: colors.panel,
-          gradient: context.agentAwesomeControlGradient,
-          border: Border.all(color: colors.border),
+          color: colors.field,
+          border: Border.all(
+            color: enabled ? border : colors.border,
+            width: AgentAwesomeStrokeTokens.borderWidth,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: 17, color: foreground),
-            const SizedBox(width: 7),
+            Icon(icon, size: 18, color: foreground),
+            const SizedBox(width: 10),
             Flexible(
               child: Text(
                 label,
@@ -398,12 +398,14 @@ class _TaskFilterMenuButton extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: foreground,
-                  fontWeight: FontWeight.w800,
+                  fontSize: PanelFormMetrics.fieldFontSize,
+                  fontWeight: FontWeight.w600,
+                  height: PanelFormMetrics.fieldLineHeight,
                 ),
               ),
             ),
-            const SizedBox(width: 4),
-            Icon(Icons.expand_more, size: 17, color: foreground),
+            const SizedBox(width: 8),
+            Icon(Icons.expand_more, size: 18, color: foreground),
           ],
         ),
       ),

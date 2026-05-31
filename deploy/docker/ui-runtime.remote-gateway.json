@@ -1,0 +1,77 @@
+{
+  "id": "agent-awesome-remote",
+  "label": "Agent Awesome Remote",
+  "harness": {
+    "id": "agent-awesome-remote-harness",
+    "label": "Remote Harness",
+    "api_base_url": "${AGENT_GATEWAY_BASE_URL}",
+    "context_api_base_url": "${AGENT_GATEWAY_CONTEXT_BASE_URL}",
+    "app_name": "${AGENT_APP_NAME}",
+    "user_id": "${AGENT_USER_ID}",
+    "working_directory": "/opt/agent-awesome",
+    "executable_path": "/usr/local/bin/agent-awesome",
+    "model_config": "${AGENTAWESOME_CONFIG_DIR}/models/model.yaml",
+    "agent_config": "${AGENTAWESOME_CONFIG_DIR}/agents/agent.yaml",
+    "tool_config": "${AGENTAWESOME_CONFIG_DIR}/tools/agent-awesome/tool.yaml",
+    "port": ${AGENT_GATEWAY_PORT},
+    "auto_start": false
+  },
+  "gateway": {
+    "id": "agent-awesome-remote-gateway",
+    "label": "Remote Gateway",
+    "api_base_url": "${AGENT_GATEWAY_BASE_URL}",
+    "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
+    "status_url": "${AGENT_GATEWAY_STATUS_URL}",
+    "working_directory": "/opt/agent-awesome",
+    "executable_path": "/usr/local/bin/agent-gateway",
+    "harness_base_url": "${AGENT_GATEWAY_BASE_URL}",
+    "context_base_url": "${AGENT_GATEWAY_CONTEXT_BASE_URL}",
+    "memory_mcp_url": "${AGENT_GATEWAY_MCP_URL}",
+    "app_name": "${AGENT_APP_NAME}",
+    "user_id": "${AGENT_USER_ID}",
+    "profile_id": "agent-awesome",
+    "auth_credential": "AGENTAWESOME_GATEWAY_TOKEN",
+    "model_provider_id": "local-gemma",
+    "model_id": "gemma",
+    "port": ${AGENT_GATEWAY_PORT},
+    "auto_start": false,
+    "enabled": true
+  },
+  "runbook": {
+    "id": "agent-awesome-remote-runbook",
+    "label": "Remote Runbook",
+    "api_base_url": "${AGENT_GATEWAY_BASE_URL}/runbooks",
+    "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
+    "hosted_by_harness": false,
+    "working_directory": "",
+    "executable_path": "",
+    "definitions_dir": "",
+    "db_path": "",
+    "port": ${AGENT_GATEWAY_PORT},
+    "auto_start": false,
+    "enabled": true
+  },
+  "memory_domains": [
+    {
+      "id": "memory",
+      "label": "Remote Memory",
+      "kind": "memory",
+      "endpoint": "${AGENT_GATEWAY_MCP_URL}/memory",
+      "health_url": "${AGENT_GATEWAY_HEALTH_URL}",
+      "working_directory": "",
+      "executable_path": "",
+      "db_path": "",
+      "data_dir": "",
+      "arguments": [],
+      "auto_start": false,
+      "enabled": true
+    }
+  ],
+  "agent_memory": {
+    "actor": "agent:agent-awesome",
+    "read_domains": ["memory"],
+    "write_domains": ["memory"],
+    "default_write_domain": "memory",
+    "allowed_sensitivities": ["public", "internal", "private"]
+  }
+}

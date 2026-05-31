@@ -12,7 +12,7 @@ import (
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/services/agentvalidation"
 	"agentawesome/internal/services/command/command"
-	"agentawesome/internal/services/workflow/actions"
+	"agentawesome/internal/services/runbook/actions"
 )
 
 // TestRunAllPassesLinuxToolMockedValidations verifies shipped utility checks are runnable.
@@ -27,7 +27,7 @@ func TestRunAllPassesLinuxToolMockedValidations(t *testing.T) {
 		t.Fatalf("RunAll() = %#v, want fifty-one passing mocked validations", result)
 	}
 	if result.Coverage.Required != 34 || result.Coverage.Covered != 34 || len(result.Coverage.Missing) != 0 {
-		t.Fatalf("Coverage = %#v, want full command-operation and workflow envelope coverage", result.Coverage)
+		t.Fatalf("Coverage = %#v, want full command-operation and runbook envelope coverage", result.Coverage)
 	}
 	if result.InputSchemaCoverage.Required != 17 || result.InputSchemaCoverage.Covered != 17 || len(result.InputSchemaCoverage.Missing) != 0 {
 		t.Fatalf("InputSchemaCoverage = %#v, want schemas for all command operations", result.InputSchemaCoverage)
@@ -65,10 +65,10 @@ func TestCoverageForReportsMissingTargets(t *testing.T) {
 	if !missingCoverage(coverage.Missing, "command-operation", "rg.search_text") {
 		t.Fatalf("Missing = %#v, want rg.search_text command coverage", coverage.Missing)
 	}
-	if !missingCoverage(coverage.Missing, "workflow-node", "command:rg.search_text") {
-		t.Fatalf("Missing = %#v, want rg.search_text workflow-node coverage", coverage.Missing)
+	if !missingCoverage(coverage.Missing, "runbook-node", "command:rg.search_text") {
+		t.Fatalf("Missing = %#v, want rg.search_text runbook-node coverage", coverage.Missing)
 	}
-	if !missingCoverage(coverage.Missing, "workflow-node", "rg_search") {
+	if !missingCoverage(coverage.Missing, "runbook-node", "rg_search") {
 		t.Fatalf("Missing = %#v, want rg_search preset", coverage.Missing)
 	}
 }
@@ -98,8 +98,8 @@ func TestInputSchemaCoverageForReportsMissingSchemas(t *testing.T) {
 	}
 }
 
-// TestCoverageForCountsWorkflowEnvelopeTargets verifies workflow envelopes are required.
-func TestCoverageForCountsWorkflowEnvelopeTargets(t *testing.T) {
+// TestCoverageForCountsRunbookEnvelopeTargets verifies runbook envelopes are required.
+func TestCoverageForCountsRunbookEnvelopeTargets(t *testing.T) {
 	tools := schema.Tools{
 		LocalExec: schema.LocalExec{Commands: []schema.LocalExecCommand{{
 			Name: "rg",
@@ -121,12 +121,12 @@ func TestCoverageForCountsWorkflowEnvelopeTargets(t *testing.T) {
 				},
 			},
 			{
-				ID: "rg_search_text_workflow_mocked",
+				ID: "rg_search_text_runbook_mocked",
 				Expected: map[string]any{
 					"status": "succeeded",
 				},
 				Target: schema.ToolValidationTarget{
-					Type:      "workflow-node",
+					Type:      "runbook-node",
 					Command:   "rg",
 					Operation: "search_text",
 				},
@@ -136,7 +136,7 @@ func TestCoverageForCountsWorkflowEnvelopeTargets(t *testing.T) {
 
 	coverage := CoverageFor(tools)
 	if coverage.Required != 2 || coverage.Covered != 2 || len(coverage.Missing) != 0 {
-		t.Fatalf("CoverageFor() = %#v, want command and workflow envelope coverage", coverage)
+		t.Fatalf("CoverageFor() = %#v, want command and runbook envelope coverage", coverage)
 	}
 }
 
@@ -188,8 +188,8 @@ func TestAgentToolContractsForReportsInputSchemas(t *testing.T) {
 	}
 }
 
-// TestCoverageForCountsMCPWorkflowTargets verifies MCP tools require envelope coverage.
-func TestCoverageForCountsMCPWorkflowTargets(t *testing.T) {
+// TestCoverageForCountsMCPRunbookTargets verifies MCP tools require envelope coverage.
+func TestCoverageForCountsMCPRunbookTargets(t *testing.T) {
 	tools := schema.Tools{
 		MCP: schema.MCP{Servers: []schema.MCPServer{{
 			Name: "memory",
@@ -210,12 +210,12 @@ func TestCoverageForCountsMCPWorkflowTargets(t *testing.T) {
 				},
 			},
 			{
-				ID: "memory_search_workflow_mocked",
+				ID: "memory_search_runbook_mocked",
 				Expected: map[string]any{
 					"status": "succeeded",
 				},
 				Target: schema.ToolValidationTarget{
-					Type:      "workflow-node",
+					Type:      "runbook-node",
 					MCPServer: "memory",
 					MCPTool:   "search_memory",
 				},
@@ -225,7 +225,7 @@ func TestCoverageForCountsMCPWorkflowTargets(t *testing.T) {
 
 	coverage := CoverageFor(tools)
 	if coverage.Required != 2 || coverage.Covered != 2 || len(coverage.Missing) != 0 {
-		t.Fatalf("CoverageFor() = %#v, want mcp and workflow envelope coverage", coverage)
+		t.Fatalf("CoverageFor() = %#v, want mcp and runbook envelope coverage", coverage)
 	}
 }
 
@@ -423,8 +423,8 @@ func TestRunLiveCommandOperationMaterializesFixtures(t *testing.T) {
 	}
 }
 
-// TestRunLiveWorkflowNodeUsesCommandAction verifies presets execute through workflow actions.
-func TestRunLiveWorkflowNodeUsesCommandAction(t *testing.T) {
+// TestRunLiveRunbookNodeUsesCommandAction verifies presets execute through runbook actions.
+func TestRunLiveRunbookNodeUsesCommandAction(t *testing.T) {
 	executor := &fixtureCommandExecutor{}
 	tools := schema.Tools{
 		NodePresets: []schema.NodePreset{{
@@ -439,21 +439,21 @@ func TestRunLiveWorkflowNodeUsesCommandAction(t *testing.T) {
 		}},
 	}
 	validation := schema.ToolValidation{
-		ID:   "cat_workflow_node_live",
+		ID:   "cat_runbook_node_live",
 		Mode: "live",
 		Target: schema.ToolValidationTarget{
-			Type:     "workflow-node",
+			Type:     "runbook-node",
 			PresetID: "cat_read",
 		},
 		Input: map[string]any{"path": "input.txt"},
 		Fixtures: map[string]any{
 			"files": []any{
-				map[string]any{"path": "input.txt", "content": "workflow fixture"},
+				map[string]any{"path": "input.txt", "content": "runbook fixture"},
 			},
 		},
 		Assertions: []schema.ValidationAssertion{{
 			Type:     "stdout-contains",
-			Contains: "workflow fixture",
+			Contains: "runbook fixture",
 		}},
 	}
 
@@ -466,8 +466,8 @@ func TestRunLiveWorkflowNodeUsesCommandAction(t *testing.T) {
 	}
 }
 
-// TestRunMockedWorkflowPresetValidatesResolvedInputSchema verifies presets.
-func TestRunMockedWorkflowPresetValidatesResolvedInputSchema(t *testing.T) {
+// TestRunMockedRunbookPresetValidatesResolvedInputSchema verifies presets.
+func TestRunMockedRunbookPresetValidatesResolvedInputSchema(t *testing.T) {
 	tools := schema.Tools{
 		LocalExec: schema.LocalExec{Commands: []schema.LocalExecCommand{{
 			Name: "cat",
@@ -496,7 +496,7 @@ func TestRunMockedWorkflowPresetValidatesResolvedInputSchema(t *testing.T) {
 		ID:   "cat_bad_path_type",
 		Mode: "mocked",
 		Target: schema.ToolValidationTarget{
-			Type:     "workflow-node",
+			Type:     "runbook-node",
 			PresetID: "cat_read",
 		},
 		Input: map[string]any{"path": 1},
@@ -519,26 +519,26 @@ func TestRunMockedWorkflowPresetValidatesResolvedInputSchema(t *testing.T) {
 	}
 }
 
-// TestRunLiveWorkflowNodeUsesCommandOperation verifies operations work without presets.
-func TestRunLiveWorkflowNodeUsesCommandOperation(t *testing.T) {
+// TestRunLiveRunbookNodeUsesCommandOperation verifies operations work without presets.
+func TestRunLiveRunbookNodeUsesCommandOperation(t *testing.T) {
 	executor := &fixtureCommandExecutor{}
 	validation := schema.ToolValidation{
-		ID:   "cat_workflow_operation_live",
+		ID:   "cat_runbook_operation_live",
 		Mode: "live",
 		Target: schema.ToolValidationTarget{
-			Type:      "workflow-node",
+			Type:      "runbook-node",
 			Command:   "cat",
 			Operation: "read",
 		},
 		Input: map[string]any{"path": "input.txt"},
 		Fixtures: map[string]any{
 			"files": []any{
-				map[string]any{"path": "input.txt", "content": "workflow operation fixture"},
+				map[string]any{"path": "input.txt", "content": "runbook operation fixture"},
 			},
 		},
 		Assertions: []schema.ValidationAssertion{{
 			Type:     "stdout-contains",
-			Contains: "workflow operation fixture",
+			Contains: "runbook operation fixture",
 		}},
 	}
 
@@ -554,13 +554,13 @@ func TestRunLiveWorkflowNodeUsesCommandOperation(t *testing.T) {
 	}
 }
 
-// TestRunMockedWorkflowNodeUsesMCPBoundary verifies MCP workflow checks are portable.
-func TestRunMockedWorkflowNodeUsesMCPBoundary(t *testing.T) {
+// TestRunMockedRunbookNodeUsesMCPBoundary verifies MCP runbook checks are portable.
+func TestRunMockedRunbookNodeUsesMCPBoundary(t *testing.T) {
 	validation := schema.ToolValidation{
-		ID:   "memory_search_workflow_mocked",
+		ID:   "memory_search_runbook_mocked",
 		Mode: "mocked",
 		Target: schema.ToolValidationTarget{
-			Type:      "workflow-node",
+			Type:      "runbook-node",
 			MCPServer: "memory",
 			MCPTool:   "search_memory",
 		},
@@ -586,13 +586,13 @@ func TestRunMockedWorkflowNodeUsesMCPBoundary(t *testing.T) {
 	}
 }
 
-// TestRunMockedWorkflowNodeRecordsCommandEnvelope verifies node request wiring.
-func TestRunMockedWorkflowNodeRecordsCommandEnvelope(t *testing.T) {
+// TestRunMockedRunbookNodeRecordsCommandEnvelope verifies node request wiring.
+func TestRunMockedRunbookNodeRecordsCommandEnvelope(t *testing.T) {
 	validation := schema.ToolValidation{
-		ID:   "grep_workflow_envelope",
+		ID:   "grep_runbook_envelope",
 		Mode: "mocked",
 		Target: schema.ToolValidationTarget{
-			Type:      "workflow-node",
+			Type:      "runbook-node",
 			Command:   "grep",
 			Operation: "recursive_search",
 		},
@@ -650,10 +650,10 @@ func TestRunLiveMCPToolUsesMCPExecutor(t *testing.T) {
 	}
 }
 
-// TestRunLiveWorkflowNodeUsesMCPAction verifies MCP workflow validations use mcp.call.
-func TestRunLiveWorkflowNodeUsesMCPAction(t *testing.T) {
+// TestRunLiveRunbookNodeUsesMCPAction verifies MCP runbook validations use mcp.call.
+func TestRunLiveRunbookNodeUsesMCPAction(t *testing.T) {
 	executor := &recordingMCPExecutor{
-		output: map[string]any{"tool": "remember", "content": "workflow saved"},
+		output: map[string]any{"tool": "remember", "content": "runbook saved"},
 	}
 	tools := schema.Tools{
 		NodePresets: []schema.NodePreset{{
@@ -669,17 +669,17 @@ func TestRunLiveWorkflowNodeUsesMCPAction(t *testing.T) {
 		}},
 	}
 	validation := schema.ToolValidation{
-		ID:   "memory_remember_workflow_live",
+		ID:   "memory_remember_runbook_live",
 		Mode: "live",
 		Target: schema.ToolValidationTarget{
-			Type:     "workflow-node",
+			Type:     "runbook-node",
 			PresetID: "memory_remember",
 		},
-		Input: map[string]any{"content": "workflow saved"},
+		Input: map[string]any{"content": "runbook saved"},
 		Assertions: []schema.ValidationAssertion{{
 			Type:   "json-path",
 			Path:   "output.content",
-			Equals: "workflow saved",
+			Equals: "runbook saved",
 		}},
 	}
 
@@ -690,7 +690,7 @@ func TestRunLiveWorkflowNodeUsesMCPAction(t *testing.T) {
 	if executor.request.ServerID != "memory" || executor.request.Tool != "remember" {
 		t.Fatalf("request = %#v, want mcp.call memory remember", executor.request)
 	}
-	if executor.request.Arguments["content"] != "workflow saved" {
+	if executor.request.Arguments["content"] != "runbook saved" {
 		t.Fatalf("arguments = %#v, want resolved validation input", executor.request.Arguments)
 	}
 }

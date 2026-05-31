@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"agentawesome/internal/config/schema"
-	"agentawesome/internal/services/workflow/actions"
-	"agentawesome/internal/services/workflow/definition"
+	"agentawesome/internal/services/runbook/actions"
+	"agentawesome/internal/services/runbook/definition"
 )
 
 // Registry stores normalized capabilities by stable id.
@@ -20,7 +20,7 @@ type Registry struct {
 // NewRegistry builds a normalized registry from harness configuration.
 func NewRegistry(tools *schema.Tools, agentCfg schema.Agent) *Registry {
 	builder := &registryBuilder{byID: map[string]Capability{}}
-	builder.addWorkflowActions()
+	builder.addRunbookActions()
 	builder.addAgent(agentCfg)
 	builder.addTools(tools)
 	return builder.registry()
@@ -40,7 +40,7 @@ func (r *Registry) List(query Query) []Capability {
 		if query.UsableInChat != nil && record.UsableInChat != *query.UsableInChat {
 			continue
 		}
-		if query.UsableInWorkflows != nil && record.UsableInWorkflows != *query.UsableInWorkflows {
+		if query.UsableInRunbooks != nil && record.UsableInRunbooks != *query.UsableInRunbooks {
 			continue
 		}
 		out = append(out, record)
@@ -57,7 +57,7 @@ func (r *Registry) Get(id string) (Capability, bool) {
 	return record, ok
 }
 
-// ValidateDefinition reports unavailable capabilities required by a workflow.
+// ValidateDefinition reports unavailable capabilities required by a runbook.
 func (r *Registry) ValidateDefinition(def definition.Definition) []Diagnostic {
 	if r == nil {
 		return nil
@@ -71,9 +71,9 @@ func (r *Registry) ValidateDefinition(def definition.Definition) []Diagnostic {
 		}
 		path := ref.Path
 		diagnostics = append(diagnostics, r.validateRequiredCapability(
-			workflowActionID(action),
+			runbookActionID(action),
 			path,
-			"workflow action "+action,
+			"runbook action "+action,
 		)...)
 		args := nodeArguments(node)
 		switch action {
@@ -94,8 +94,8 @@ type registryBuilder struct {
 	byID    map[string]Capability
 }
 
-// addWorkflowActions records built-in workflow action capabilities.
-func (b *registryBuilder) addWorkflowActions() {
+// addRunbookActions records built-in runbook action capabilities.
+func (b *registryBuilder) addRunbookActions() {
 	registry := actions.NewRegistry()
 	for _, name := range registry.Names() {
 		meta := actions.MetadataFor(name)
@@ -103,16 +103,16 @@ func (b *registryBuilder) addWorkflowActions() {
 		reasons := []string{}
 		if !meta.Available {
 			status = AvailabilityUnavailable
-			reasons = append(reasons, "workflow action is not publishable yet")
+			reasons = append(reasons, "runbook action is not publishable yet")
 		}
 		b.add(Capability{
-			ID:                workflowActionID(name),
-			Kind:              KindWorkflowAction,
-			Name:              name,
-			Label:             meta.Label,
-			Description:       meta.Description,
-			UsableInWorkflows: meta.Available,
-			Invocation:        CapabilityInvocation{WorkflowAction: name},
+			ID:               runbookActionID(name),
+			Kind:             KindRunbookAction,
+			Name:             name,
+			Label:            meta.Label,
+			Description:      meta.Description,
+			UsableInRunbooks: meta.Available,
+			Invocation:       CapabilityInvocation{RunbookAction: name},
 			Contract: CapabilityContract{
 				InputSchema:  cloneMap(meta.InputSchema),
 				OutputSchema: cloneMap(meta.OutputSchema),
@@ -136,16 +136,16 @@ func (b *registryBuilder) addAgent(agentCfg schema.Agent) {
 		reasons = append(reasons, "agent instructions are empty")
 	}
 	b.add(Capability{
-		ID:                "agent_profile:default",
-		Kind:              KindAgentProfile,
-		Name:              "default",
-		Label:             name,
-		Description:       strings.TrimSpace(agentCfg.Description),
-		UsableInChat:      true,
-		UsableInWorkflows: true,
-		Invocation:        CapabilityInvocation{AgentProfileID: "default"},
-		Risk:              CapabilityRisk{Level: "agent"},
-		Availability:      CapabilityAvailability{Status: status, Reasons: reasons},
+		ID:               "agent_profile:default",
+		Kind:             KindAgentProfile,
+		Name:             "default",
+		Label:            name,
+		Description:      strings.TrimSpace(agentCfg.Description),
+		UsableInChat:     true,
+		UsableInRunbooks: true,
+		Invocation:       CapabilityInvocation{AgentProfileID: "default"},
+		Risk:             CapabilityRisk{Level: "agent"},
+		Availability:     CapabilityAvailability{Status: status, Reasons: reasons},
 	})
 }
 
@@ -185,16 +185,16 @@ func (b *registryBuilder) addCommands(local schema.LocalExec) {
 		}
 		usable := status == AvailabilityAvailable
 		b.add(Capability{
-			ID:                commandID(name),
-			Kind:              KindCommand,
-			Name:              name,
-			Label:             name,
-			Description:       strings.TrimSpace(command.Description),
-			UsableInChat:      usable,
-			UsableInWorkflows: usable,
+			ID:               commandID(name),
+			Kind:             KindCommand,
+			Name:             name,
+			Label:            name,
+			Description:      strings.TrimSpace(command.Description),
+			UsableInChat:     usable,
+			UsableInRunbooks: usable,
 			Invocation: CapabilityInvocation{
 				DirectToolName:  "command_execute",
-				WorkflowAction:  "command.execute",
+				RunbookAction:   "command.execute",
 				CommandTemplate: name,
 			},
 			Contract: CapabilityContract{ConfirmationRequired: true},
@@ -207,7 +207,7 @@ func (b *registryBuilder) addCommands(local schema.LocalExec) {
 	}
 }
 
-// addCommandOperation records one deterministic workflow-callable CLI operation.
+// addCommandOperation records one deterministic runbook-callable CLI operation.
 func (b *registryBuilder) addCommandOperation(command schema.LocalExecCommand, operation schema.CommandOperation, status AvailabilityStatus, reasons []string) {
 	commandName := strings.TrimSpace(command.Name)
 	operationName := strings.TrimSpace(operation.Name)
@@ -217,16 +217,16 @@ func (b *registryBuilder) addCommandOperation(command schema.LocalExecCommand, o
 	templateID := commandName + "." + operationName
 	usable := status == AvailabilityAvailable
 	b.add(Capability{
-		ID:                commandID(templateID),
-		Kind:              KindCommand,
-		Name:              templateID,
-		Label:             templateID,
-		Description:       strings.TrimSpace(operation.Description),
-		UsableInChat:      usable,
-		UsableInWorkflows: usable,
+		ID:               commandID(templateID),
+		Kind:             KindCommand,
+		Name:             templateID,
+		Label:            templateID,
+		Description:      strings.TrimSpace(operation.Description),
+		UsableInChat:     usable,
+		UsableInRunbooks: usable,
 		Invocation: CapabilityInvocation{
 			DirectToolName:  "command_execute",
-			WorkflowAction:  "command.execute",
+			RunbookAction:   "command.execute",
 			CommandTemplate: templateID,
 		},
 		Contract: CapabilityContract{
@@ -269,14 +269,14 @@ func (b *registryBuilder) addMCP(mcp schema.MCP) {
 		usable := status == AvailabilityAvailable
 		serverRequiresConfirmation := server.RequireConfirmation || len(server.RequireConfirmationTools) > 0
 		b.add(Capability{
-			ID:                mcpServerID(name),
-			Kind:              KindMCPServer,
-			Name:              name,
-			Label:             name,
-			UsableInChat:      usable,
-			UsableInWorkflows: usable,
-			Invocation:        CapabilityInvocation{MCPServer: name},
-			Contract:          CapabilityContract{ConfirmationRequired: serverRequiresConfirmation},
+			ID:               mcpServerID(name),
+			Kind:             KindMCPServer,
+			Name:             name,
+			Label:            name,
+			UsableInChat:     usable,
+			UsableInRunbooks: usable,
+			Invocation:       CapabilityInvocation{MCPServer: name},
+			Contract:         CapabilityContract{ConfirmationRequired: serverRequiresConfirmation},
 			Risk: CapabilityRisk{
 				Level:                "tool",
 				RequiresConfirmation: serverRequiresConfirmation,
@@ -292,15 +292,15 @@ func (b *registryBuilder) addMCP(mcp schema.MCP) {
 			toolReasons := append([]string(nil), reasons...)
 			requiresConfirmation := server.RequireConfirmation || contains(server.RequireConfirmationTools, toolName)
 			b.add(Capability{
-				ID:                mcpToolID(name, toolName),
-				Kind:              KindMCPTool,
-				Name:              toolName,
-				Label:             toolName,
-				UsableInChat:      usable,
-				UsableInWorkflows: usable,
+				ID:               mcpToolID(name, toolName),
+				Kind:             KindMCPTool,
+				Name:             toolName,
+				Label:            toolName,
+				UsableInChat:     usable,
+				UsableInRunbooks: usable,
 				Invocation: CapabilityInvocation{
 					DirectToolName: toolName,
-					WorkflowAction: "mcp.call",
+					RunbookAction:  "mcp.call",
 					MCPServer:      name,
 					MCPTool:        toolName,
 				},
@@ -315,7 +315,7 @@ func (b *registryBuilder) addMCP(mcp schema.MCP) {
 	}
 }
 
-// addPresets records workflow node preset capabilities.
+// addPresets records runbook node preset capabilities.
 func (b *registryBuilder) addPresets(presets []schema.NodePreset) {
 	for _, preset := range presets {
 		id := strings.TrimSpace(preset.ID)
@@ -323,19 +323,19 @@ func (b *registryBuilder) addPresets(presets []schema.NodePreset) {
 			continue
 		}
 		b.add(Capability{
-			ID:                nodePresetID(id),
-			Kind:              KindNodePreset,
-			Name:              id,
-			Label:             firstNonEmpty(preset.Label, id),
-			Description:       strings.TrimSpace(preset.Description),
-			UsableInWorkflows: true,
+			ID:               nodePresetID(id),
+			Kind:             KindNodePreset,
+			Name:             id,
+			Label:            firstNonEmpty(preset.Label, id),
+			Description:      strings.TrimSpace(preset.Description),
+			UsableInRunbooks: true,
 			Invocation: CapabilityInvocation{
-				WorkflowAction:   strings.TrimSpace(preset.Action),
+				RunbookAction:    strings.TrimSpace(preset.Action),
 				NodePresetID:     id,
 				DefaultArguments: cloneMap(preset.Arguments),
 			},
 			Contract:     CapabilityContract{InputSchema: cloneMap(preset.InputSchema)},
-			Risk:         CapabilityRisk{Level: "workflow"},
+			Risk:         CapabilityRisk{Level: "runbook"},
 			Availability: CapabilityAvailability{Status: AvailabilityAvailable},
 		})
 	}
@@ -355,12 +355,12 @@ func (b *registryBuilder) addValidations(validations []schema.ToolValidation) {
 			reasons = append(reasons, "live validation needs an explicit lab run")
 		}
 		b.add(Capability{
-			ID:                toolValidationID(id),
-			Kind:              KindToolValidation,
-			Name:              id,
-			Label:             firstNonEmpty(validation.Label, id),
-			Description:       strings.TrimSpace(validation.Description),
-			UsableInWorkflows: false,
+			ID:               toolValidationID(id),
+			Kind:             KindToolValidation,
+			Name:             id,
+			Label:            firstNonEmpty(validation.Label, id),
+			Description:      strings.TrimSpace(validation.Description),
+			UsableInRunbooks: false,
 			Invocation: CapabilityInvocation{
 				NodePresetID:     strings.TrimSpace(validation.Target.PresetID),
 				ToolValidationID: id,
@@ -474,7 +474,7 @@ func (r *Registry) validateToolNode(args map[string]any, path string) []Diagnost
 	return r.validateUniqueMCPTool(toolName, path+".name")
 }
 
-// validateRequiredCapability checks that one exact capability is workflow-usable.
+// validateRequiredCapability checks that one exact capability is runbook-usable.
 func (r *Registry) validateRequiredCapability(id string, path string, label string) []Diagnostic {
 	record, ok := r.Get(id)
 	if !ok {
@@ -485,7 +485,7 @@ func (r *Registry) validateRequiredCapability(id string, path string, label stri
 			CapabilityID: id,
 		}}
 	}
-	if record.UsableInWorkflows && record.Availability.Status == AvailabilityAvailable {
+	if record.UsableInRunbooks && record.Availability.Status == AvailabilityAvailable {
 		return nil
 	}
 	return []Diagnostic{unavailableDiagnostic(record, path)}
@@ -509,7 +509,7 @@ func (r *Registry) validateUniqueMCPTool(toolName string, path string) []Diagnos
 		}}
 	}
 	record := matches[0]
-	if record.UsableInWorkflows && record.Availability.Status == AvailabilityAvailable {
+	if record.UsableInRunbooks && record.Availability.Status == AvailabilityAvailable {
 		return nil
 	}
 	return []Diagnostic{unavailableDiagnostic(record, path)}
@@ -579,9 +579,9 @@ func dedupeDiagnostics(values []Diagnostic) []Diagnostic {
 	return out
 }
 
-// workflowActionID returns the stable workflow action capability id.
-func workflowActionID(name string) string {
-	return "workflow_action:" + strings.TrimSpace(name)
+// runbookActionID returns the stable runbook action capability id.
+func runbookActionID(name string) string {
+	return "runbook_action:" + strings.TrimSpace(name)
 }
 
 // commandID returns the stable command capability id.

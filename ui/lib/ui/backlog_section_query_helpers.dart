@@ -40,18 +40,6 @@ DateTime _todayDate() {
   return DateTime(now.year, now.month, now.day);
 }
 
-/// Returns the task card accent color from the displayed score band.
-Color _taskQueueAccentColor(BuildContext context, WorkspaceTask task) {
-  final colors = context.agentAwesomeColors;
-  if (task.status == 'blocked' || task.priority == 'urgent') {
-    return colors.coral;
-  }
-  if (task.overdue || task.priority == 'high') {
-    return context.agentAwesomeWarningAccent;
-  }
-  return context.agentAwesomeLowAccent;
-}
-
 /// Returns a compact task description for queue cards.
 String _taskQueueDescription(WorkspaceTask task) {
   if (task.description.trim().isNotEmpty) {

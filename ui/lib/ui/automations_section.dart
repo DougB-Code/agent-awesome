@@ -1,4 +1,4 @@
-/// Renders root-level Automations operations and builder surfaces.
+/// Renders root-level Automations launchpad and builder surfaces.
 library;
 
 import 'dart:async';
@@ -21,59 +21,45 @@ import 'theme.dart';
 
 part 'automations_state_machine_builder.dart';
 
-const String _automationPanelOperations = 'operations';
-const String _automationPanelWorkflows = 'workflows';
-const String _automationOperationsAreaInbox = 'operations_inbox';
-const String _automationOperationsAreaPublished = 'operations_published';
-const String _automationOperationsAreaSetups = 'operations_saved';
-const String _automationOperationsAreaRuns = 'operations_runs';
-const String _automationOperationsAreaTargets = 'operations_targets';
-const String _automationOperationsAreaSchedules = 'operations_schedules';
-const String _automationOperationsAreaArtifacts = 'operations_artifacts';
-const String _automationWorkflowAreaDrafts = 'workflow_drafts';
-const String _automationWorkflowAreaActions = 'workflow_actions';
+const String _automationPanelLaunchpad = 'launchpad';
+const String _automationPanelRunbooks = 'runbooks';
+const String _automationLaunchpadAreaInbox = 'launchpad_inbox';
+const String _automationLaunchpadAreaPublished = 'launchpad_published';
+const String _automationLaunchpadAreaSetups = 'launchpad_saved';
+const String _automationLaunchpadAreaRuns = 'launchpad_runs';
+const String _automationLaunchpadAreaTargets = 'launchpad_targets';
+const String _automationLaunchpadAreaSchedules = 'launchpad_schedules';
+const String _automationLaunchpadAreaArtifacts = 'launchpad_artifacts';
+const String _automationRunbookAreaDrafts = 'runbook_drafts';
+const String _automationRunbookAreaActions = 'runbook_actions';
 const String _automationAgentsAreaFiles = 'agent_files';
 
 const String _automationDetailDetails = 'details';
-const String _automationDetailSetup = 'setup';
-const String _automationDetailInputs = 'inputs';
-const String _automationDetailTargets = 'targets';
-const String _automationDetailSchedule = 'schedule';
-const String _automationDetailOperations = 'operation_setups';
+const String _automationDetailLaunchpad = 'launch_setups';
 const String _automationDetailSchedules = 'schedules';
 const String _automationDetailArtifacts = 'artifacts';
 const String _automationDetailBuilder = 'builder';
 const String _automationDetailInspect = 'inspect';
 const String _automationDetailHistory = 'history';
-const String _automationDetailSafety = 'safety';
 const String _automationDetailTest = 'test';
-const String _automationDetailTabOverview = 'overview';
 const String _automationTargetDetailOverview = 'target_overview';
 const String _automationTargetDetailCapabilities = 'target_capabilities';
 const String _automationTargetDetailSecrets = 'target_secrets';
-const String _automationTargetDetailOperations = 'target_operations';
+const String _automationTargetDetailLaunchpad = 'target_launchpad';
 const String _automationTargetDetailLogs = 'target_logs';
 const String _automationTargetDetailSettings = 'target_settings';
 const String _automationTargetDetailUpdates = 'target_updates';
 const String _stateMachineBodyKind = 'state_machine';
-const String _operationSafetyOpenPROnly = 'open_pr_only';
+const String _launchSafetyOpenPROnly = 'open_pr_only';
 
-const List<String> _operationSourceControlTools = <String>[
-  'sourcecontrol.prepare_worktree',
-  'sourcecontrol.status',
-  'sourcecontrol.commit',
-  'sourcecontrol.push',
-  'sourcecontrol.open_pull_request',
-];
-
-const Map<String, String> _operationSafetyLabels = <String, String>{
-  _operationSafetyOpenPROnly: 'Open PR only',
+const Map<String, String> _launchSafetyLabels = <String, String>{
+  _launchSafetyOpenPROnly: 'Open PR only',
 };
 
-/// AutomationOperationsCommandPanel runs and observes published workflows.
-class AutomationOperationsCommandPanel extends StatelessWidget {
-  /// Creates an operations panel bound to app state.
-  const AutomationOperationsCommandPanel({
+/// AutomationLaunchpadCommandPanel runs and observes published runbooks.
+class AutomationLaunchpadCommandPanel extends StatelessWidget {
+  /// Creates an launchpad panel bound to app state.
+  const AutomationLaunchpadCommandPanel({
     super.key,
     required this.controller,
     this.onAreaChanged,
@@ -85,27 +71,27 @@ class AutomationOperationsCommandPanel extends StatelessWidget {
   /// Reports active area changes to the root shell command context.
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
-  /// Builds the operations command panel.
+  /// Builds the launchpad command panel.
   @override
   Widget build(BuildContext context) {
     return _AutomationFocusedCommandPanel(
       controller: controller,
-      panelId: _automationPanelOperations,
-      title: 'Operations',
-      detailTitle: 'Operations',
+      panelId: _automationPanelLaunchpad,
+      title: 'Launchpad',
+      detailTitle: 'Launchpad',
       icon: Icons.monitor_heart_outlined,
-      filterHint: 'Filter operations and runs...',
-      detailModes: _detailModesForPanel(_automationPanelOperations),
+      filterHint: 'Filter launchpad and runs...',
+      detailModes: _detailModesForPanel(_automationPanelLaunchpad),
       split: const PanelSplit(left: 0.30, min: 0.22, max: 0.56),
       onAreaChanged: onAreaChanged,
     );
   }
 }
 
-/// AutomationWorkflowsCommandPanel authors long-lived state-machine workflows.
-class AutomationWorkflowsCommandPanel extends StatelessWidget {
-  /// Creates a workflow authoring panel bound to app state.
-  const AutomationWorkflowsCommandPanel({
+/// AutomationRunbooksCommandPanel authors long-lived state-machine runbooks.
+class AutomationRunbooksCommandPanel extends StatelessWidget {
+  /// Creates a runbook authoring panel bound to app state.
+  const AutomationRunbooksCommandPanel({
     super.key,
     required this.controller,
     this.onAreaChanged,
@@ -117,17 +103,17 @@ class AutomationWorkflowsCommandPanel extends StatelessWidget {
   /// Reports active area changes to the root shell command context.
   final ValueChanged<SwitcherPanelArea>? onAreaChanged;
 
-  /// Builds the workflow authoring command panel.
+  /// Builds the runbook authoring command panel.
   @override
   Widget build(BuildContext context) {
     return _AutomationFocusedCommandPanel(
       controller: controller,
-      panelId: _automationPanelWorkflows,
-      title: 'Workflows',
-      detailTitle: 'Workflow',
+      panelId: _automationPanelRunbooks,
+      title: 'Runbooks',
+      detailTitle: 'Runbook',
       icon: Icons.route_outlined,
-      filterHint: 'Filter workflows...',
-      detailModes: _detailModesForPanel(_automationPanelWorkflows),
+      filterHint: 'Filter runbooks...',
+      detailModes: _detailModesForPanel(_automationPanelRunbooks),
       onAreaChanged: onAreaChanged,
     );
   }
@@ -542,7 +528,7 @@ class _AutomationFocusedCommandPanel extends StatefulWidget {
 
 class _AutomationFocusedCommandPanelState
     extends State<_AutomationFocusedCommandPanel> {
-  late final _WorkflowActionIntentController _workflowActionIntents;
+  late final _RunbookActionIntentController _runbookActionIntents;
   late final _StateMachineDraftEditController _stateMachineEditor;
   String _detailModeId = _automationDetailDetails;
   String _requestedAreaId = '';
@@ -551,13 +537,13 @@ class _AutomationFocusedCommandPanelState
   @override
   void initState() {
     super.initState();
-    _workflowActionIntents = _WorkflowActionIntentController();
+    _runbookActionIntents = _RunbookActionIntentController();
     _stateMachineEditor = _StateMachineDraftEditController(
       controller: widget.controller,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && !_hasPanelData() && !widget.controller.automationsBusy) {
-        final refresh = widget.panelId == _automationPanelWorkflows
+        final refresh = widget.panelId == _automationPanelRunbooks
             ? widget.controller.refreshAutomationAuthoringFromUi
             : widget.controller.refreshAutomationsFromUi;
         unawaited(refresh());
@@ -568,7 +554,7 @@ class _AutomationFocusedCommandPanelState
   /// Releases command-panel intent controllers.
   @override
   void dispose() {
-    _workflowActionIntents.dispose();
+    _runbookActionIntents.dispose();
     _stateMachineEditor.dispose();
     super.dispose();
   }
@@ -576,16 +562,16 @@ class _AutomationFocusedCommandPanelState
   /// Reports whether the current panel already has its local collection data.
   bool _hasPanelData() {
     return switch (widget.panelId) {
-      _automationPanelOperations =>
+      _automationPanelLaunchpad =>
         widget.controller.automationDefinitions.isNotEmpty ||
             widget.controller.automationRunSetups.isNotEmpty ||
             widget.controller.automationRuns.isNotEmpty ||
             widget.controller.automationCodebases.isNotEmpty ||
             widget.controller.automationRuntimeTargets.isNotEmpty ||
             widget.controller.automationInbox.isNotEmpty,
-      _automationPanelWorkflows =>
+      _automationPanelRunbooks =>
         widget.controller.automationDrafts.any(
-              (draft) => _isWorkflowFileKind(draft.kind),
+              (draft) => _isRunbookFileKind(draft.kind),
             ) ||
             widget.controller.automationCapabilities.isNotEmpty,
       _ => true,
@@ -619,26 +605,24 @@ class _AutomationFocusedCommandPanelState
         modeId: modeId,
         onDetailModeRequested: _selectDetailMode,
       ),
-      areaTabbedDetailBuilder: (area, modeId, tabId) =>
-          _AutomationDetailContent(
-            controller: widget.controller,
-            stateMachineEditor: _stateMachineEditor,
-            areaId: area.id,
-            modeId: modeId,
-            tabId: tabId,
-            onDetailModeRequested: _selectDetailMode,
-          ),
+      areaTabbedDetailBuilder: (area, modeId, _) => _AutomationDetailContent(
+        controller: widget.controller,
+        stateMachineEditor: _stateMachineEditor,
+        areaId: area.id,
+        modeId: modeId,
+        onDetailModeRequested: _selectDetailMode,
+      ),
       onAreaChanged: _handleAreaChanged,
       areaActionsBuilder: (context, area) {
-        if (widget.panelId != _automationPanelWorkflows &&
-            widget.panelId != _automationPanelOperations) {
+        if (widget.panelId != _automationPanelRunbooks &&
+            widget.panelId != _automationPanelLaunchpad) {
           return null;
         }
         return _AutomationPanelActions(
           controller: widget.controller,
           panelId: widget.panelId,
           areaId: area.id,
-          onCreateWorkflow: _createWorkflowDraft,
+          onCreateRunbook: _createRunbookDraft,
         );
       },
       detailModesBuilder: _detailModesForArea,
@@ -656,26 +640,26 @@ class _AutomationFocusedCommandPanelState
       selectedAreaId: _requestedAreaId,
       split: _splitForArea(areas),
     );
-    if (widget.panelId != _automationPanelWorkflows) {
+    if (widget.panelId != _automationPanelRunbooks) {
       return shell;
     }
-    return _WorkflowActionIntentScope(
-      notifier: _workflowActionIntents,
+    return _RunbookActionIntentScope(
+      notifier: _runbookActionIntents,
       child: shell,
     );
   }
 
-  /// Creates a workflow draft and reveals it in the Workflows collection.
-  Future<void> _createWorkflowDraft() async {
-    setState(() => _requestedAreaId = _automationWorkflowAreaDrafts);
+  /// Creates a runbook draft and reveals it in the Runbooks collection.
+  Future<void> _createRunbookDraft() async {
+    setState(() => _requestedAreaId = _automationRunbookAreaDrafts);
     await widget.controller.createAutomationDraftFromUi(
-      kind: automationWorkflowKind,
-      name: _nextWorkflowDraftName(widget.controller.automationDrafts),
+      kind: automationRunbookKind,
+      name: _nextRunbookDraftName(widget.controller.automationDrafts),
     );
     if (!mounted) {
       return;
     }
-    setState(() => _requestedAreaId = _automationWorkflowAreaDrafts);
+    setState(() => _requestedAreaId = _automationRunbookAreaDrafts);
   }
 
   /// Reports area changes and clears one-shot area requests after manual moves.
@@ -683,7 +667,7 @@ class _AutomationFocusedCommandPanelState
     if (_requestedAreaId.isNotEmpty && area.id != _requestedAreaId) {
       setState(() => _requestedAreaId = '');
     }
-    if (widget.panelId == _automationPanelOperations &&
+    if (widget.panelId == _automationPanelLaunchpad &&
         _detailModeId != _automationDetailDetails) {
       setState(() => _detailModeId = _automationDetailDetails);
     }
@@ -714,19 +698,19 @@ class _AutomationFocusedCommandPanelState
 
   /// Builds quick-access command areas for the current Automations screen.
   List<SwitcherPanelArea> _commandAreas() {
-    if (widget.panelId == _automationPanelOperations) {
+    if (widget.panelId == _automationPanelLaunchpad) {
       return <SwitcherPanelArea>[
         SwitcherPanelArea(
-          id: _automationOperationsAreaPublished,
-          title: 'Operations',
+          id: _automationLaunchpadAreaPublished,
+          title: 'Launchpad',
           icon: Icons.monitor_heart_outlined,
-          builder: (query) => _AutomationOperationsContent(
+          builder: (query) => _AutomationLaunchpadContent(
             controller: widget.controller,
             query: query,
           ),
         ),
         SwitcherPanelArea(
-          id: _automationOperationsAreaInbox,
+          id: _automationLaunchpadAreaInbox,
           title: 'Inbox',
           icon: Icons.inbox_outlined,
           builder: (query) => _AutomationInboxContent(
@@ -735,7 +719,7 @@ class _AutomationFocusedCommandPanelState
           ),
         ),
         SwitcherPanelArea(
-          id: _automationOperationsAreaTargets,
+          id: _automationLaunchpadAreaTargets,
           title: 'Computers',
           icon: Icons.devices_other_outlined,
           builder: (query) => _AutomationRuntimeTargetsContent(
@@ -745,24 +729,24 @@ class _AutomationFocusedCommandPanelState
         ),
       ];
     }
-    if (widget.panelId == _automationPanelWorkflows) {
+    if (widget.panelId == _automationPanelRunbooks) {
       return <SwitcherPanelArea>[
         SwitcherPanelArea(
-          id: _automationWorkflowAreaDrafts,
-          title: 'Workflows',
+          id: _automationRunbookAreaDrafts,
+          title: 'Runbooks',
           icon: Icons.route_outlined,
           builder: (query) => _AutomationDraftsContent(
             controller: widget.controller,
             query: query,
-            kind: automationWorkflowKind,
-            emptyLabel: 'No workflow files',
+            kind: automationRunbookKind,
+            emptyLabel: 'No runbook files',
           ),
         ),
         SwitcherPanelArea(
-          id: _automationWorkflowAreaActions,
+          id: _automationRunbookAreaActions,
           title: 'Actions',
           icon: Icons.extension_outlined,
-          builder: (query) => _AutomationWorkflowStatePaletteContent(
+          builder: (query) => _AutomationRunbookStatePaletteContent(
             controller: widget.controller,
             query: query,
           ),
@@ -781,16 +765,16 @@ class _AutomationFocusedCommandPanelState
 
   /// Returns area-specific right work modes where supporting areas need less UI.
   List<CommandPanelDetailMode> _detailModesForArea(SwitcherPanelArea area) {
-    if (widget.panelId == _automationPanelOperations) {
+    if (widget.panelId == _automationPanelLaunchpad) {
       return switch (area.id) {
-        _automationOperationsAreaInbox => const <CommandPanelDetailMode>[
+        _automationLaunchpadAreaInbox => const <CommandPanelDetailMode>[
           CommandPanelDetailMode(
             id: _automationDetailDetails,
             label: 'Details',
             icon: Icons.info_outline,
           ),
         ],
-        _automationOperationsAreaTargets => const <CommandPanelDetailMode>[
+        _automationLaunchpadAreaTargets => const <CommandPanelDetailMode>[
           CommandPanelDetailMode(
             id: _automationDetailDetails,
             label: 'Details',
@@ -812,8 +796,8 @@ class _AutomationFocusedCommandPanelState
             icon: Icons.key_outlined,
           ),
           CommandPanelDetailMode(
-            id: _automationTargetDetailOperations,
-            label: 'Operations',
+            id: _automationTargetDetailLaunchpad,
+            label: 'Launchpad',
             icon: Icons.playlist_play_outlined,
           ),
           CommandPanelDetailMode(
@@ -841,11 +825,11 @@ class _AutomationFocusedCommandPanelState
   /// Returns area-specific filter copy for the active command catalog.
   String _filterHintForArea(SwitcherPanelArea area) {
     return switch (area.id) {
-      _automationOperationsAreaInbox => 'Filter inbox...',
-      _automationOperationsAreaPublished => 'Filter operations...',
-      _automationWorkflowAreaDrafts => 'Filter workflows...',
-      _automationWorkflowAreaActions => 'Filter actions...',
-      _automationOperationsAreaTargets => 'Filter computers...',
+      _automationLaunchpadAreaInbox => 'Filter inbox...',
+      _automationLaunchpadAreaPublished => 'Filter launchpad...',
+      _automationRunbookAreaDrafts => 'Filter runbooks...',
+      _automationRunbookAreaActions => 'Filter actions...',
+      _automationLaunchpadAreaTargets => 'Filter computers...',
       _ => widget.filterHint,
     };
   }
@@ -856,21 +840,21 @@ class _AutomationFocusedCommandPanelState
       return '';
     }
     return switch (widget.panelId) {
-      _automationPanelWorkflows => _automationWorkflowAreaActions,
+      _automationPanelRunbooks => _automationRunbookAreaActions,
       _ => '',
     };
   }
 
   /// Returns an area-aware split so builder palettes do not crowd the canvas.
   PanelSplit _splitForArea(List<SwitcherPanelArea> areas) {
-    if (widget.panelId == _automationPanelWorkflows) {
+    if (widget.panelId == _automationPanelRunbooks) {
       return const PanelSplit(left: 0.30, min: 0.16, max: 0.42);
     }
     return widget.split;
   }
 }
 
-class _WorkflowActionIntentController extends ChangeNotifier {
+class _RunbookActionIntentController extends ChangeNotifier {
   String _actionName = '';
   int _revision = 0;
 
@@ -889,17 +873,17 @@ class _WorkflowActionIntentController extends ChangeNotifier {
   }
 }
 
-class _WorkflowActionIntentScope
-    extends InheritedNotifier<_WorkflowActionIntentController> {
-  const _WorkflowActionIntentScope({
+class _RunbookActionIntentScope
+    extends InheritedNotifier<_RunbookActionIntentController> {
+  const _RunbookActionIntentScope({
     required super.notifier,
     required super.child,
   });
 
   /// Finds the current action intent publisher for state-machine screens.
-  static _WorkflowActionIntentController? maybeOf(BuildContext context) {
+  static _RunbookActionIntentController? maybeOf(BuildContext context) {
     return context
-        .dependOnInheritedWidgetOfExactType<_WorkflowActionIntentScope>()
+        .dependOnInheritedWidgetOfExactType<_RunbookActionIntentScope>()
         ?.notifier;
   }
 }
@@ -909,47 +893,47 @@ class _AutomationPanelActions extends StatelessWidget {
     required this.controller,
     required this.panelId,
     required this.areaId,
-    required this.onCreateWorkflow,
+    required this.onCreateRunbook,
   });
 
   final AgentAwesomeAppController controller;
   final String panelId;
   final String areaId;
-  final Future<void> Function() onCreateWorkflow;
+  final Future<void> Function() onCreateRunbook;
 
   /// Builds common and section-specific Automations header actions.
   @override
   Widget build(BuildContext context) {
-    if (areaId == _automationWorkflowAreaActions) {
+    if (areaId == _automationRunbookAreaActions) {
       return const SizedBox.shrink();
     }
-    if (panelId == _automationPanelOperations &&
-        areaId == _automationOperationsAreaPublished) {
+    if (panelId == _automationPanelLaunchpad &&
+        areaId == _automationLaunchpadAreaPublished) {
       final definition = controller.selectedAutomationDefinition;
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           PanelCreateButton(
             key: const ValueKey<String>('automation-create-run-setup-button'),
-            tooltip: 'New Operation',
+            tooltip: 'New Launch',
             onPressed: controller.automationsBusy || definition == null
                 ? null
-                : () => unawaited(_createOperation(context, definition)),
+                : () => unawaited(_createLaunch(context, definition)),
           ),
         ],
       );
     }
-    if (panelId == _automationPanelWorkflows ||
-        areaId == _automationWorkflowAreaDrafts) {
+    if (panelId == _automationPanelRunbooks ||
+        areaId == _automationRunbookAreaDrafts) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           PanelCreateButton(
-            key: const ValueKey<String>('automation-new-workflow-draft-button'),
-            tooltip: 'New workflow draft',
+            key: const ValueKey<String>('automation-new-runbook-draft-button'),
+            tooltip: 'New runbook draft',
             onPressed: controller.automationsBusy
                 ? null
-                : () => unawaited(_createWorkflow(context)),
+                : () => unawaited(_createRunbook(context)),
           ),
         ],
       );
@@ -957,17 +941,17 @@ class _AutomationPanelActions extends StatelessWidget {
     return const SizedBox.shrink();
   }
 
-  /// Runs workflow creation and surfaces failures from the async API call.
-  Future<void> _createWorkflow(BuildContext context) async {
-    await onCreateWorkflow();
+  /// Runs runbook creation and surfaces failures from the async API call.
+  Future<void> _createRunbook(BuildContext context) async {
+    await onCreateRunbook();
     if (!context.mounted) {
       return;
     }
     _showAutomationErrorSnack(context, controller);
   }
 
-  /// Runs Operation creation for the selected workflow definition.
-  Future<void> _createOperation(
+  /// Runs Launch creation for the selected runbook definition.
+  Future<void> _createLaunch(
     BuildContext context,
     AutomationDefinition definition,
   ) async {
@@ -995,16 +979,16 @@ class _AutomationDetailActions extends StatelessWidget {
   /// Builds selected-object controls for the Automations detail panel.
   @override
   Widget build(BuildContext context) {
-    if (panelId == _automationPanelOperations) {
-      return _OperationsSelectedActions(
+    if (panelId == _automationPanelLaunchpad) {
+      return _LaunchpadSelectedActions(
         controller: controller,
         areaId: areaId,
         modeId: modeId,
       );
     }
     final kind = _automationDraftKindForArea(areaId);
-    if (kind != null || panelId == _automationPanelWorkflows) {
-      final effectiveKind = kind ?? automationWorkflowKind;
+    if (kind != null || panelId == _automationPanelRunbooks) {
+      final effectiveKind = kind ?? automationRunbookKind;
       final draft = _selectedAutomationDraftForKind(controller, effectiveKind);
       if (draft == null) {
         return const SizedBox.shrink();
@@ -1033,7 +1017,7 @@ class _AutomationDetailActions extends StatelessWidget {
           const SizedBox(width: 8),
           PanelIconButton(
             icon: Icons.content_copy,
-            tooltip: 'Duplicate workflow file',
+            tooltip: 'Duplicate runbook file',
             onPressed: controller.automationsBusy
                 ? null
                 : () => unawaited(
@@ -1042,9 +1026,9 @@ class _AutomationDetailActions extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           PanelIconButton(
-            key: const ValueKey<String>('automation-delete-workflow-button'),
+            key: const ValueKey<String>('automation-delete-runbook-button'),
             icon: Icons.delete_outline,
-            tooltip: 'Delete workflow file',
+            tooltip: 'Delete runbook file',
             onPressed: controller.automationsBusy
                 ? null
                 : () => unawaited(
@@ -1062,8 +1046,8 @@ class _AutomationDetailActions extends StatelessWidget {
   }
 }
 
-class _OperationsSelectedActions extends StatelessWidget {
-  const _OperationsSelectedActions({
+class _LaunchpadSelectedActions extends StatelessWidget {
+  const _LaunchpadSelectedActions({
     required this.controller,
     required this.areaId,
     required this.modeId,
@@ -1073,10 +1057,10 @@ class _OperationsSelectedActions extends StatelessWidget {
   final String areaId;
   final String modeId;
 
-  /// Builds selected-object actions for the active Operations collection.
+  /// Builds selected-object actions for the active Launchpad collection.
   @override
   Widget build(BuildContext context) {
-    if (areaId == _automationOperationsAreaInbox &&
+    if (areaId == _automationLaunchpadAreaInbox &&
         modeId == _automationDetailDetails) {
       final item = controller.selectedAutomationPendingItem;
       return Row(
@@ -1104,12 +1088,12 @@ class _OperationsSelectedActions extends StatelessWidget {
         ],
       );
     }
-    if (areaId == _automationOperationsAreaPublished &&
+    if (areaId == _automationLaunchpadAreaPublished &&
         modeId == _automationDetailDetails) {
       final setup = controller.selectedAutomationRunSetup;
-      return _OperationSetupHeaderActions(controller: controller, setup: setup);
+      return _LaunchSetupHeaderActions(controller: controller, setup: setup);
     }
-    if (areaId == _automationOperationsAreaTargets &&
+    if (areaId == _automationLaunchpadAreaTargets &&
         modeId == _automationTargetDetailOverview) {
       final target = controller.selectedAutomationRuntimeTarget;
       return Row(
@@ -1133,28 +1117,28 @@ class _OperationsSelectedActions extends StatelessWidget {
         ],
       );
     }
-    if (areaId == _automationOperationsAreaPublished &&
+    if (areaId == _automationLaunchpadAreaPublished &&
         modeId == _automationDetailHistory) {
       final setup = controller.selectedAutomationRunSetup;
-      return _OperationSetupHeaderActions(controller: controller, setup: setup);
+      return _LaunchSetupHeaderActions(controller: controller, setup: setup);
     }
-    if (areaId == _automationOperationsAreaPublished &&
-        modeId == _automationDetailOperations) {
-      final setup = _selectedOperationSetupFrom(
-        _operationSetupsForDefinition(
+    if (areaId == _automationLaunchpadAreaPublished &&
+        modeId == _automationDetailLaunchpad) {
+      final setup = _selectedLaunchSetupFrom(
+        _launchSetupsForDefinition(
           controller.automationRunSetups,
           controller.selectedAutomationDefinition,
         ),
         controller.selectedAutomationRunSetup,
       );
-      return _OperationSetupHeaderActions(controller: controller, setup: setup);
+      return _LaunchSetupHeaderActions(controller: controller, setup: setup);
     }
     return const SizedBox.shrink();
   }
 }
 
-class _OperationSetupHeaderActions extends StatelessWidget {
-  const _OperationSetupHeaderActions({
+class _LaunchSetupHeaderActions extends StatelessWidget {
+  const _LaunchSetupHeaderActions({
     required this.controller,
     required this.setup,
   });
@@ -1162,7 +1146,7 @@ class _OperationSetupHeaderActions extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final AutomationRunSetup? setup;
 
-  /// Builds selected Operation actions with copy/delete as the final pair.
+  /// Builds selected Launch actions with copy/delete as the final pair.
   @override
   Widget build(BuildContext context) {
     final selected = setup;
@@ -1170,20 +1154,9 @@ class _OperationSetupHeaderActions extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: <Widget>[
         PanelIconButton(
-          key: const ValueKey<String>('automation-preview-run-setup-button'),
-          icon: Icons.science_outlined,
-          tooltip: 'Test Run',
-          onPressed: controller.automationsBusy || selected == null
-              ? null
-              : () => unawaited(
-                  controller.previewAutomationRunSetupFromUi(selected),
-                ),
-        ),
-        const SizedBox(width: 8),
-        PanelIconButton(
           key: const ValueKey<String>('automation-start-run-setup-button'),
           icon: Icons.play_arrow,
-          tooltip: 'Run selected Operation',
+          tooltip: 'Run selected Launch',
           onPressed: controller.automationsBusy || selected == null
               ? null
               : () => unawaited(
@@ -1197,7 +1170,7 @@ class _OperationSetupHeaderActions extends StatelessWidget {
         const SizedBox(width: 8),
         PanelIconButton(
           icon: Icons.content_copy,
-          tooltip: 'Copy Operation id',
+          tooltip: 'Copy Launch id',
           onPressed: selected == null
               ? null
               : () => unawaited(
@@ -1207,7 +1180,7 @@ class _OperationSetupHeaderActions extends StatelessWidget {
         const SizedBox(width: 8),
         PanelIconButton(
           icon: Icons.delete_outline,
-          tooltip: 'Delete Operation',
+          tooltip: 'Delete Launch',
           onPressed: controller.automationsBusy || selected == null
               ? null
               : () => unawaited(
@@ -1223,7 +1196,7 @@ class _OperationSetupHeaderActions extends StatelessWidget {
   }
 }
 
-/// _showDeleteAutomationDraftDialog confirms destructive workflow deletion.
+/// _showDeleteAutomationDraftDialog confirms destructive runbook deletion.
 Future<void> _showDeleteAutomationDraftDialog(
   BuildContext context,
   AgentAwesomeAppController controller,
@@ -1233,7 +1206,7 @@ Future<void> _showDeleteAutomationDraftDialog(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
-        title: const Text('Delete workflow file'),
+        title: const Text('Delete runbook file'),
         content: Text('Delete "${draft.name}"? This cannot be undone.'),
         actions: <Widget>[
           TextButton(
@@ -1254,7 +1227,7 @@ Future<void> _showDeleteAutomationDraftDialog(
   await controller.deleteAutomationDraftFromUi(draft);
 }
 
-/// _showDeleteAutomationRunSetupDialog confirms Operation deletion.
+/// _showDeleteAutomationRunSetupDialog confirms Launch deletion.
 Future<void> _showDeleteAutomationRunSetupDialog(
   BuildContext context,
   AgentAwesomeAppController controller,
@@ -1264,7 +1237,7 @@ Future<void> _showDeleteAutomationRunSetupDialog(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
-        title: const Text('Delete Operation'),
+        title: const Text('Delete Launch'),
         content: Text('Delete "${setup.name}"? This cannot be undone.'),
         actions: <Widget>[
           TextButton(
@@ -1285,7 +1258,7 @@ Future<void> _showDeleteAutomationRunSetupDialog(
   await controller.deleteAutomationRunSetupFromUi(setup);
 }
 
-/// _showStartAutomationRunSetupDialog collects run-specific Operation input.
+/// _showStartAutomationRunSetupDialog collects run-specific Launch input.
 Future<void> _showStartAutomationRunSetupDialog(
   BuildContext context,
   AgentAwesomeAppController controller,
@@ -1299,10 +1272,10 @@ Future<void> _showStartAutomationRunSetupDialog(
     return;
   }
   final seedInput = <String, dynamic>{
-    ..._workflowRunAuthoringDefaults(controller, definition),
+    ..._runbookRunAuthoringDefaults(controller, definition),
     ...setup.input,
   };
-  final runFields = _workflowRunSetupRunFields(definition.body);
+  final runFields = _runbookRunSetupRunFields(definition.body);
   final input = await showDialog<Map<String, dynamic>>(
     context: context,
     builder: (context) => _StartAutomationRunDialog(
@@ -1338,7 +1311,7 @@ void _showAutomationErrorSnack(
   );
 }
 
-/// _showCreateRunSetupDialog stores a saved Operation for later runs.
+/// _showCreateRunSetupDialog stores a saved Launch for later runs.
 Future<void> _showCreateRunSetupDialog(
   BuildContext context,
   AgentAwesomeAppController controller,
@@ -1348,10 +1321,8 @@ Future<void> _showCreateRunSetupDialog(
     context: context,
     builder: (context) => _CreateRunSetupDialog(
       definition: definition,
-      seedInput: _workflowRunAuthoringDefaults(controller, definition),
-      codebases: controller.automationCodebases,
+      seedInput: _runbookRunAuthoringDefaults(controller, definition),
       targets: controller.automationRuntimeTargets,
-      selectedCodebaseId: controller.selectedAutomationCodebase?.id ?? '',
       selectedTargetId: controller.selectedAutomationRuntimeTarget?.id ?? '',
     ),
   );
@@ -1362,14 +1333,12 @@ Future<void> _showCreateRunSetupDialog(
     definition: definition,
     name: result.name,
     description: result.description,
-    codebaseId: result.codebaseId,
     runtimeTargetId: result.runtimeTargetId,
     input: result.input,
-    policy: _operationPolicyFromDialogResult(result),
   );
 }
 
-/// _StartAutomationRunDialog renders generated workflow-run input controls.
+/// _StartAutomationRunDialog renders generated runbook-run input controls.
 class _StartAutomationRunDialog extends StatefulWidget {
   const _StartAutomationRunDialog({
     required this.title,
@@ -1392,9 +1361,9 @@ class _StartAutomationRunDialog extends StatefulWidget {
       _StartAutomationRunDialogState();
 }
 
-/// _StartAutomationRunDialogState owns generated workflow-run field state.
+/// _StartAutomationRunDialogState owns generated runbook-run field state.
 class _StartAutomationRunDialogState extends State<_StartAutomationRunDialog> {
-  late final List<_WorkflowRunInputField> _fields;
+  late final List<_RunbookRunInputField> _fields;
   final Map<String, TextEditingController> _textControllers =
       <String, TextEditingController>{};
   final Map<String, bool> _booleanValues = <String, bool>{};
@@ -1403,7 +1372,7 @@ class _StartAutomationRunDialogState extends State<_StartAutomationRunDialog> {
   @override
   void initState() {
     super.initState();
-    _fields = _workflowRunInputFields(
+    _fields = _runbookRunInputFields(
       widget.definition,
       seedInput: widget.seedInput,
       onlyMissingRequired: widget.onlyMissingRequired,
@@ -1443,7 +1412,7 @@ class _StartAutomationRunDialogState extends State<_StartAutomationRunDialog> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 for (final field in _fields) ...<Widget>[
-                  _WorkflowRunInputFieldControl(
+                  _RunbookRunInputFieldControl(
                     field: field,
                     textController: _textControllers[field.name],
                     booleanValue: _booleanValues[field.name] ?? false,
@@ -1479,12 +1448,12 @@ class _StartAutomationRunDialogState extends State<_StartAutomationRunDialog> {
     );
   }
 
-  /// Validates typed fields and returns a workflow input object to the caller.
+  /// Validates typed fields and returns a runbook input object to the caller.
   void _submit() {
     final input = widget.includeSeedInput
-        ? _workflowRunSeedInput(widget.seedInput)
+        ? _runbookRunSeedInput(widget.seedInput)
         : <String, dynamic>{};
-    final error = _populateWorkflowInputFromFields(
+    final error = _populateRunbookInputFromFields(
       fields: _fields,
       textControllers: _textControllers,
       booleanValues: _booleanValues,
@@ -1498,84 +1467,65 @@ class _StartAutomationRunDialogState extends State<_StartAutomationRunDialog> {
   }
 }
 
-/// _RunSetupDialogResult carries one saved Operation created from the UI.
+/// _RunSetupDialogResult carries one saved Launch created from the UI.
 class _RunSetupDialogResult {
   const _RunSetupDialogResult({
     required this.name,
     required this.description,
-    required this.codebaseId,
     required this.runtimeTargetId,
-    required this.sourceControlPolicy,
     required this.input,
   });
 
   final String name;
   final String description;
-  final String codebaseId;
   final String runtimeTargetId;
-  final String sourceControlPolicy;
   final Map<String, dynamic> input;
 }
 
-/// _CreateRunSetupDialog renders a typed Operation form for one workflow file.
+/// _CreateRunSetupDialog renders a typed Launch form for one runbook file.
 class _CreateRunSetupDialog extends StatefulWidget {
   const _CreateRunSetupDialog({
     required this.definition,
     required this.seedInput,
-    required this.codebases,
     required this.targets,
-    required this.selectedCodebaseId,
     required this.selectedTargetId,
   });
 
   final AutomationDefinition definition;
   final Map<String, dynamic> seedInput;
-  final List<AutomationCodebase> codebases;
   final List<AutomationRuntimeTarget> targets;
-  final String selectedCodebaseId;
   final String selectedTargetId;
 
   @override
   State<_CreateRunSetupDialog> createState() => _CreateRunSetupDialogState();
 }
 
-/// _CreateRunSetupDialogState owns Operation field controllers.
+/// _CreateRunSetupDialogState owns Launch field controllers.
 class _CreateRunSetupDialogState extends State<_CreateRunSetupDialog> {
   late final TextEditingController _nameController;
-  late final List<_WorkflowRunInputField> _fields;
+  late final List<_RunbookRunInputField> _fields;
   final Map<String, TextEditingController> _textControllers =
       <String, TextEditingController>{};
   final Map<String, bool> _booleanValues = <String, bool>{};
-  String _codebaseId = '';
   String _targetId = '';
-  String _sourceControlPolicy = _operationSafetyOpenPROnly;
   String _error = '';
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(
-      text: '${widget.definition.name} Operation',
+      text: '${widget.definition.name} Launch',
     );
-    _codebaseId = _initialCodebaseId(
-      widget.codebases,
-      widget.selectedCodebaseId,
-    );
-    _targetId = _initialTargetId(
-      codebases: widget.codebases,
-      targets: widget.targets,
-      codebaseId: _codebaseId,
-      selectedTargetId: widget.selectedTargetId,
-    );
-    final setupFields = _workflowRunSetupSetupFields(
-      widget.definition.body,
-    ).where((name) => !_isCodebaseBackedInputName(name)).toSet();
-    _fields = _workflowRunInputFields(
-      widget.definition,
-      seedInput: widget.seedInput,
-      includedNames: setupFields,
-      excludedNames: _workflowRunSetupRunFields(widget.definition.body),
-    );
+    _targetId = _initialTargetId(widget.targets, widget.selectedTargetId);
+    final setupFields = _runbookRunSetupSetupFields(widget.definition.body);
+    _fields = setupFields.isEmpty
+        ? const <_RunbookRunInputField>[]
+        : _runbookRunInputFields(
+            widget.definition,
+            seedInput: widget.seedInput,
+            includedNames: setupFields,
+            excludedNames: _runbookRunSetupRunFields(widget.definition.body),
+          );
     for (final field in _fields) {
       if (field.type == 'boolean') {
         _booleanValues[field.name] = _initialBooleanValue(field.defaultValue);
@@ -1596,16 +1546,12 @@ class _CreateRunSetupDialogState extends State<_CreateRunSetupDialog> {
     super.dispose();
   }
 
-  /// Builds the saved Operation creation dialog.
+  /// Builds the saved Launch creation dialog.
   @override
   Widget build(BuildContext context) {
     final colors = context.agentAwesomeColors;
-    final targetOptions = _targetOptionsForCodebase(
-      widget.targets,
-      _codebaseId,
-    );
     return AlertDialog(
-      title: Text('Create Operation'),
+      title: Text('Create Launch'),
       content: SizedBox(
         width: 560,
         child: ConstrainedBox(
@@ -1617,56 +1563,24 @@ class _CreateRunSetupDialogState extends State<_CreateRunSetupDialog> {
                 _AutomationTextField(
                   key: const ValueKey<String>('automation-run-setup-name'),
                   controller: _nameController,
-                  label: 'Operation Name *',
-                ),
-                const SizedBox(height: 12),
-                _AutomationDropdown(
-                  key: const ValueKey<String>('automation-run-setup-codebase'),
-                  label: 'Codebase *',
-                  value: _codebaseId,
-                  values: <String>[
-                    for (final codebase in widget.codebases) codebase.id,
-                  ],
-                  labels: <String, String>{
-                    for (final codebase in widget.codebases)
-                      codebase.id: codebase.name,
-                  },
-                  onChanged: (value) => setState(() {
-                    _codebaseId = value;
-                    _targetId = _initialTargetId(
-                      codebases: widget.codebases,
-                      targets: widget.targets,
-                      codebaseId: _codebaseId,
-                      selectedTargetId: _targetId,
-                    );
-                  }),
+                  label: 'Launch Name *',
                 ),
                 const SizedBox(height: 12),
                 _AutomationDropdown(
                   key: const ValueKey<String>('automation-run-setup-target'),
-                  label: 'Run on *',
+                  label: 'Run on',
                   value: _targetId,
                   values: <String>[
-                    for (final target in targetOptions) target.id,
+                    for (final target in widget.targets) target.id,
                   ],
                   labels: <String, String>{
-                    for (final target in targetOptions) target.id: target.name,
+                    for (final target in widget.targets) target.id: target.name,
                   },
                   onChanged: (value) => setState(() => _targetId = value),
                 ),
                 const SizedBox(height: 12),
-                _AutomationDropdown(
-                  key: const ValueKey<String>('automation-run-setup-safety'),
-                  label: 'Safety',
-                  value: _sourceControlPolicy,
-                  values: const <String>[_operationSafetyOpenPROnly],
-                  labels: _operationSafetyLabels,
-                  onChanged: (value) =>
-                      setState(() => _sourceControlPolicy = value),
-                ),
-                const SizedBox(height: 12),
                 for (final field in _fields) ...<Widget>[
-                  _WorkflowRunInputFieldControl(
+                  _RunbookRunInputFieldControl(
                     field: field,
                     textController: _textControllers[field.name],
                     booleanValue: _booleanValues[field.name] ?? false,
@@ -1702,23 +1616,15 @@ class _CreateRunSetupDialogState extends State<_CreateRunSetupDialog> {
     );
   }
 
-  /// Validates and returns the saved Operation payload.
+  /// Validates and returns the saved Launch payload.
   void _submit() {
     final name = _nameController.text.trim();
     if (name.isEmpty) {
-      setState(() => _error = 'Operation Name is required.');
-      return;
-    }
-    if (_operationNeedsCodebase(widget.definition) && _codebaseId.isEmpty) {
-      setState(() => _error = 'Codebase is required.');
-      return;
-    }
-    if (_operationNeedsTarget(widget.definition) && _targetId.isEmpty) {
-      setState(() => _error = 'Run on is required.');
+      setState(() => _error = 'Launch Name is required.');
       return;
     }
     final input = <String, dynamic>{};
-    final error = _populateWorkflowInputFromFields(
+    final error = _populateRunbookInputFromFields(
       fields: _fields,
       textControllers: _textControllers,
       booleanValues: _booleanValues,
@@ -1732,30 +1638,30 @@ class _CreateRunSetupDialogState extends State<_CreateRunSetupDialog> {
       _RunSetupDialogResult(
         name: name,
         description: widget.definition.name,
-        codebaseId: _codebaseId,
         runtimeTargetId: _targetId,
-        sourceControlPolicy: _sourceControlPolicy,
         input: input,
       ),
     );
   }
 }
 
-/// _WorkflowRunInputFieldControl renders one workflow-run form field.
-class _WorkflowRunInputFieldControl extends StatelessWidget {
-  const _WorkflowRunInputFieldControl({
+/// _RunbookRunInputFieldControl renders one runbook-run form field.
+class _RunbookRunInputFieldControl extends StatelessWidget {
+  const _RunbookRunInputFieldControl({
     required this.field,
     required this.textController,
     required this.booleanValue,
     required this.onBooleanChanged,
+    this.onChanged,
   });
 
-  final _WorkflowRunInputField field;
+  final _RunbookRunInputField field;
   final TextEditingController? textController;
   final bool booleanValue;
   final ValueChanged<bool> onBooleanChanged;
+  final VoidCallback? onChanged;
 
-  /// Builds one typed workflow-run input control.
+  /// Builds one typed runbook-run input control.
   @override
   Widget build(BuildContext context) {
     if (field.type == 'boolean') {
@@ -1763,7 +1669,10 @@ class _WorkflowRunInputFieldControl extends StatelessWidget {
       return CheckboxListTile(
         key: ValueKey<String>('automation-run-input-${field.name}'),
         value: booleanValue,
-        onChanged: (value) => onBooleanChanged(value ?? false),
+        onChanged: (value) {
+          onBooleanChanged(value ?? false);
+          onChanged?.call();
+        },
         controlAffinity: ListTileControlAffinity.leading,
         contentPadding: EdgeInsets.zero,
         title: Text(field.label, style: TextStyle(color: colors.ink)),
@@ -1779,14 +1688,15 @@ class _WorkflowRunInputFieldControl extends StatelessWidget {
       label: field.requiredFromUser ? '${field.label} *' : field.label,
       minLines: field.maxLines > 1 ? 2 : null,
       maxLines: field.maxLines,
-      keyboardType: _keyboardTypeForWorkflowRunField(field),
+      keyboardType: _keyboardTypeForRunbookRunField(field),
+      onChanged: (_) => onChanged?.call(),
     );
   }
 }
 
-/// _WorkflowRunInputField describes one typed workflow-run input.
-class _WorkflowRunInputField {
-  const _WorkflowRunInputField({
+/// _RunbookRunInputField describes one typed runbook-run input.
+class _RunbookRunInputField {
+  const _RunbookRunInputField({
     required this.name,
     required this.label,
     required this.type,
@@ -1813,20 +1723,20 @@ class _WorkflowRunInputField {
   }
 }
 
-/// Returns workflow run fields declared by the definition body.
-List<_WorkflowRunInputField> _workflowRunInputFields(
+/// Returns runbook run fields declared by the definition body.
+List<_RunbookRunInputField> _runbookRunInputFields(
   AutomationDefinition definition, {
   Map<String, dynamic> seedInput = const <String, dynamic>{},
   bool onlyMissingRequired = false,
   Set<String>? includedNames,
   Set<String> excludedNames = const <String>{},
 }) {
-  final schema = _workflowRunInputSchema(definition.body);
+  final schema = _runbookRunInputSchema(definition.body);
   final properties = _map(schema['properties']);
   if (properties.isEmpty) {
-    return const <_WorkflowRunInputField>[];
+    return const <_RunbookRunInputField>[];
   }
-  final defaults = _workflowRunDefaults(definition.body);
+  final defaults = _runbookRunDefaults(definition.body);
   final required = _list(schema['required']).map((item) => '$item').toSet();
   final orderedNames = <String>[
     for (final name in _list(schema['required']).map((item) => '$item'))
@@ -1834,9 +1744,9 @@ List<_WorkflowRunInputField> _workflowRunInputFields(
     for (final name in properties.keys)
       if (!required.contains(name)) name,
   ];
-  return <_WorkflowRunInputField>[
+  return <_RunbookRunInputField>[
     for (final name in orderedNames)
-      if (_includeWorkflowRunField(
+      if (_includeRunbookRunField(
         name,
         defaults: defaults,
         seedInput: seedInput,
@@ -1845,11 +1755,11 @@ List<_WorkflowRunInputField> _workflowRunInputFields(
         includedNames: includedNames,
         excludedNames: excludedNames,
       ))
-        _WorkflowRunInputField(
+        _RunbookRunInputField(
           name: name,
           label: _stateMachineDisplayName(name),
-          type: _workflowRunInputType(_map(properties[name])),
-          requiredFromUser: _workflowRunFieldRequiredFromUser(
+          type: _runbookRunInputType(_map(properties[name])),
+          requiredFromUser: _runbookRunFieldRequiredFromUser(
             name,
             defaults: defaults,
             seedInput: seedInput,
@@ -1862,8 +1772,62 @@ List<_WorkflowRunInputField> _workflowRunInputFields(
   ];
 }
 
+/// Returns schema-backed Launch default fields with saved extras preserved.
+List<_RunbookRunInputField> _launchInputFieldsForSetup(
+  AutomationDefinition? definition,
+  AutomationRunSetup setup,
+) {
+  final setupFields = definition == null
+      ? const <String>{}
+      : _runbookRunSetupSetupFields(definition.body);
+  final runFields = definition == null
+      ? const <String>{}
+      : _runbookRunSetupRunFields(definition.body);
+  final fields = definition == null || setupFields.isEmpty
+      ? <_RunbookRunInputField>[]
+      : _runbookRunInputFields(
+          definition,
+          seedInput: setup.input,
+          includedNames: setupFields,
+          excludedNames: runFields,
+        );
+  final seen = fields.map((field) => field.name).toSet();
+  final extraNames =
+      setup.input.keys
+          .where((name) => !seen.contains(name))
+          .map((name) => name.trim())
+          .where((name) => name.isNotEmpty)
+          .toList()
+        ..sort();
+  return <_RunbookRunInputField>[
+    ...fields,
+    for (final name in extraNames)
+      _RunbookRunInputField(
+        name: name,
+        label: _stateMachineDisplayName(name),
+        type: _runbookRunValueType(setup.input[name]),
+        requiredFromUser: false,
+        defaultValue: setup.input[name],
+      ),
+  ];
+}
+
+/// Infers a conservative field type for saved input without schema metadata.
+String _runbookRunValueType(Object? value) {
+  if (value is bool) {
+    return 'boolean';
+  }
+  if (value is int) {
+    return 'integer';
+  }
+  if (value is num) {
+    return 'number';
+  }
+  return 'string';
+}
+
 /// Reports whether one input field belongs in the generated run form.
-bool _includeWorkflowRunField(
+bool _includeRunbookRunField(
   String name, {
   required Map<String, dynamic> defaults,
   required Map<String, dynamic> seedInput,
@@ -1881,7 +1845,7 @@ bool _includeWorkflowRunField(
   if (!onlyMissingRequired) {
     return true;
   }
-  return _workflowRunFieldRequiredFromUser(
+  return _runbookRunFieldRequiredFromUser(
     name,
     defaults: defaults,
     seedInput: seedInput,
@@ -1889,8 +1853,8 @@ bool _includeWorkflowRunField(
   );
 }
 
-/// Reports whether one workflow input field needs a user-provided value.
-bool _workflowRunFieldRequiredFromUser(
+/// Reports whether one runbook input field needs a user-provided value.
+bool _runbookRunFieldRequiredFromUser(
   String name, {
   required Map<String, dynamic> defaults,
   required Map<String, dynamic> seedInput,
@@ -1903,14 +1867,14 @@ bool _workflowRunFieldRequiredFromUser(
     return false;
   }
   if (seedInput.containsKey(name) &&
-      _isProvidedWorkflowRunValue(seedInput[name])) {
+      _isProvidedRunbookRunValue(seedInput[name])) {
     return false;
   }
   return true;
 }
 
-/// Finds the first object schema intended to validate workflow input.
-Map<String, dynamic> _workflowRunInputSchema(Map<String, dynamic> body) {
+/// Finds the first object schema intended to validate runbook input.
+Map<String, dynamic> _runbookRunInputSchema(Map<String, dynamic> body) {
   final direct = _map(body['input_schema']);
   if (direct.isNotEmpty) {
     return direct;
@@ -1920,7 +1884,7 @@ Map<String, dynamic> _workflowRunInputSchema(Map<String, dynamic> body) {
   if (authoringSchema.isNotEmpty) {
     return authoringSchema;
   }
-  for (final action in _workflowStateActions(_list(body['states']))) {
+  for (final action in _runbookStateActions(_list(body['states']))) {
     final actionMap = _map(action);
     if ('${actionMap['uses'] ?? ''}' != 'data.assert') {
       continue;
@@ -1937,15 +1901,15 @@ Map<String, dynamic> _workflowRunInputSchema(Map<String, dynamic> body) {
   return const <String, dynamic>{};
 }
 
-/// Finds declarative input defaults used before workflow input validation.
-Map<String, dynamic> _workflowRunDefaults(Map<String, dynamic> body) {
-  for (final action in _workflowStateActions(_list(body['states']))) {
+/// Finds declarative input defaults used before runbook input validation.
+Map<String, dynamic> _runbookRunDefaults(Map<String, dynamic> body) {
+  for (final action in _runbookStateActions(_list(body['states']))) {
     final actionMap = _map(action);
     if ('${actionMap['uses'] ?? ''}' != 'data.defaults') {
       continue;
     }
     final args = _map(actionMap['with']);
-    if (!'${args['input'] ?? ''}'.contains('workflow_input')) {
+    if (!'${args['input'] ?? ''}'.contains('runbook_input')) {
       continue;
     }
     return _map(args['defaults']);
@@ -1953,8 +1917,8 @@ Map<String, dynamic> _workflowRunDefaults(Map<String, dynamic> body) {
   return const <String, dynamic>{};
 }
 
-/// Returns UI-resolved workflow defaults that come from authoring metadata.
-Map<String, dynamic> _workflowRunAuthoringDefaults(
+/// Returns UI-resolved runbook defaults that come from authoring metadata.
+Map<String, dynamic> _runbookRunAuthoringDefaults(
   AgentAwesomeAppController controller,
   AutomationDefinition definition,
 ) {
@@ -1962,12 +1926,12 @@ Map<String, dynamic> _workflowRunAuthoringDefaults(
   final defaults = _map(authoring['input_defaults']);
   return <String, dynamic>{
     for (final entry in defaults.entries)
-      entry.key: _resolveWorkflowRunAuthoringDefault(controller, entry.value),
+      entry.key: _resolveRunbookRunAuthoringDefault(controller, entry.value),
   };
 }
 
-/// Resolves app-context tokens allowed in workflow authoring defaults.
-Object _resolveWorkflowRunAuthoringDefault(
+/// Resolves app-context tokens allowed in runbook authoring defaults.
+Object _resolveRunbookRunAuthoringDefault(
   AgentAwesomeAppController controller,
   Object? value,
 ) {
@@ -1978,30 +1942,30 @@ Object _resolveWorkflowRunAuthoringDefault(
   };
 }
 
-/// Returns setup fields intended to be configured once for a workflow.
-Set<String> _workflowRunSetupSetupFields(Map<String, dynamic> body) {
+/// Returns setup fields intended to be configured once for a runbook.
+Set<String> _runbookRunSetupSetupFields(Map<String, dynamic> body) {
   final runSetup = _map(_map(body['authoring'])['run_setup']);
   return _list(runSetup['setup_fields']).map((item) => '$item').toSet();
 }
 
 /// Returns fields intended to be supplied each time a setup runs.
-Set<String> _workflowRunSetupRunFields(Map<String, dynamic> body) {
+Set<String> _runbookRunSetupRunFields(Map<String, dynamic> body) {
   final runSetup = _map(_map(body['authoring'])['run_setup']);
   return _list(runSetup['run_fields']).map((item) => '$item').toSet();
 }
 
 /// Returns state entry actions from nested state-machine definitions.
-List<dynamic> _workflowStateActions(List<dynamic> states) {
+List<dynamic> _runbookStateActions(List<dynamic> states) {
   final actions = <dynamic>[];
   for (final state in states.map(_map)) {
     actions.addAll(_list(state['on_entry']));
-    actions.addAll(_workflowStateActions(_list(state['states'])));
+    actions.addAll(_runbookStateActions(_list(state['states'])));
   }
   return actions;
 }
 
 /// Converts a JSON-schema type into the supported form-control type.
-String _workflowRunInputType(Map<String, dynamic> property) {
+String _runbookRunInputType(Map<String, dynamic> property) {
   final type = '${property['type'] ?? 'string'}'.trim().toLowerCase();
   return switch (type) {
     'boolean' => 'boolean',
@@ -2012,7 +1976,7 @@ String _workflowRunInputType(Map<String, dynamic> property) {
 }
 
 /// Converts a user-entered field value to the payload type expected by runtime.
-Object? _parsedWorkflowRunValue(_WorkflowRunInputField field, String raw) {
+Object? _parsedRunbookRunValue(_RunbookRunInputField field, String raw) {
   return switch (field.type) {
     'integer' => int.tryParse(raw),
     'number' => double.tryParse(raw),
@@ -2020,9 +1984,9 @@ Object? _parsedWorkflowRunValue(_WorkflowRunInputField field, String raw) {
   };
 }
 
-/// Adds form-provided field values to a workflow input object.
-String? _populateWorkflowInputFromFields({
-  required List<_WorkflowRunInputField> fields,
+/// Adds form-provided field values to a runbook input object.
+String? _populateRunbookInputFromFields({
+  required List<_RunbookRunInputField> fields,
   required Map<String, TextEditingController> textControllers,
   required Map<String, bool> booleanValues,
   required Map<String, dynamic> input,
@@ -2039,7 +2003,7 @@ String? _populateWorkflowInputFromFields({
       }
       continue;
     }
-    final parsed = _parsedWorkflowRunValue(field, raw);
+    final parsed = _parsedRunbookRunValue(field, raw);
     if (parsed == null) {
       return '${field.label} must be ${field.type}.';
     }
@@ -2048,16 +2012,16 @@ String? _populateWorkflowInputFromFields({
   return null;
 }
 
-/// Returns seed input that can safely be sent with a workflow run request.
-Map<String, dynamic> _workflowRunSeedInput(Map<String, dynamic> seedInput) {
+/// Returns seed input that can safely be sent with a runbook run request.
+Map<String, dynamic> _runbookRunSeedInput(Map<String, dynamic> seedInput) {
   return <String, dynamic>{
     for (final entry in seedInput.entries)
-      if (_isProvidedWorkflowRunValue(entry.value)) entry.key: entry.value,
+      if (_isProvidedRunbookRunValue(entry.value)) entry.key: entry.value,
   };
 }
 
 /// Reports whether a value is meaningful form input rather than a blank token.
-bool _isProvidedWorkflowRunValue(Object? value) {
+bool _isProvidedRunbookRunValue(Object? value) {
   if (value == null) {
     return false;
   }
@@ -2071,8 +2035,8 @@ bool _isProvidedWorkflowRunValue(Object? value) {
   return !(text.startsWith(r'${') && text.endsWith('}'));
 }
 
-/// Returns a keyboard suited to one workflow field type.
-TextInputType _keyboardTypeForWorkflowRunField(_WorkflowRunInputField field) {
+/// Returns a keyboard suited to one runbook field type.
+TextInputType _keyboardTypeForRunbookRunField(_RunbookRunInputField field) {
   return switch (field.type) {
     'integer' => TextInputType.number,
     'number' => const TextInputType.numberWithOptions(decimal: true),
@@ -2092,7 +2056,13 @@ String _initialFieldText(Object? value) {
   return text;
 }
 
-/// Returns a boolean default value for workflow run fields.
+/// Returns a stable enough signature for JSON-like Launch payloads.
+String _jsonSignature(Map<String, dynamic> value) {
+  final keys = value.keys.toList()..sort();
+  return jsonEncode(<String, dynamic>{for (final key in keys) key: value[key]});
+}
+
+/// Returns a boolean default value for runbook run fields.
 bool _initialBooleanValue(Object? value) {
   if (value is bool) {
     return value;
@@ -2102,7 +2072,7 @@ bool _initialBooleanValue(Object? value) {
 
 List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
   switch (panelId) {
-    case _automationPanelOperations:
+    case _automationPanelLaunchpad:
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
           id: _automationDetailDetails,
@@ -2110,9 +2080,9 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
           icon: Icons.info_outline,
         ),
         CommandPanelDetailMode(
-          id: _automationDetailOperations,
-          label: 'Operations',
-          icon: Icons.playlist_play_outlined,
+          id: _automationDetailLaunchpad,
+          label: 'Overview',
+          icon: Icons.dashboard_outlined,
         ),
         CommandPanelDetailMode(
           id: _automationDetailSchedules,
@@ -2130,7 +2100,7 @@ List<CommandPanelDetailMode> _detailModesForPanel(String panelId) {
           icon: Icons.history,
         ),
       ];
-    case _automationPanelWorkflows:
+    case _automationPanelRunbooks:
       return const <CommandPanelDetailMode>[
         CommandPanelDetailMode(
           id: _automationDetailDetails,
@@ -2159,53 +2129,11 @@ List<ShellTab> _detailTabsForMode(
   String areaId,
   String modeId,
 ) {
-  if (panelId == _automationPanelOperations &&
-      areaId == _automationOperationsAreaPublished &&
-      modeId == _automationDetailOperations) {
-    return const <ShellTab>[
-      ShellTab(
-        id: _automationDetailTabOverview,
-        label: 'Overview',
-        icon: Icons.info_outline,
-      ),
-      ShellTab(
-        id: _automationDetailSetup,
-        label: 'Setup',
-        icon: Icons.tune_outlined,
-      ),
-      ShellTab(id: _automationDetailInputs, label: 'Inputs', icon: Icons.input),
-      ShellTab(
-        id: _automationDetailTargets,
-        label: 'Targets',
-        icon: Icons.devices_other_outlined,
-      ),
-      ShellTab(
-        id: _automationDetailSchedule,
-        label: 'Schedule',
-        icon: Icons.event_outlined,
-      ),
-      ShellTab(
-        id: _automationDetailSafety,
-        label: 'Safety',
-        icon: Icons.verified_user_outlined,
-      ),
-      ShellTab(
-        id: _automationDetailHistory,
-        label: 'Runs',
-        icon: Icons.history,
-      ),
-      ShellTab(
-        id: _automationDetailTest,
-        label: 'Test',
-        icon: Icons.play_circle_outline,
-      ),
-    ];
-  }
   return const <ShellTab>[];
 }
 
 /// Converts a Computer right-side mode into the target detail content id.
-String _targetDetailModeForOperationsMode(String modeId) {
+String _targetDetailModeForLaunchpadMode(String modeId) {
   return modeId == _automationDetailDetails
       ? _automationTargetDetailSettings
       : modeId;
@@ -2237,8 +2165,8 @@ class _AutomationInboxContent extends StatelessWidget {
   }
 }
 
-class _AutomationOperationsContent extends StatelessWidget {
-  const _AutomationOperationsContent({
+class _AutomationLaunchpadContent extends StatelessWidget {
+  const _AutomationLaunchpadContent({
     required this.controller,
     required this.query,
   });
@@ -2246,12 +2174,12 @@ class _AutomationOperationsContent extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
-  /// Builds saved Operations as the Operations artifact catalog.
+  /// Builds saved Launchpad as the Launchpad artifact catalog.
   @override
   Widget build(BuildContext context) {
     final setups = _filterRunSetups(controller.automationRunSetups, query);
     if (setups.isEmpty) {
-      return const PanelEmptyBody(label: 'No operations');
+      return const PanelEmptyBody(label: 'No launchpad');
     }
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
@@ -2272,7 +2200,7 @@ class _AutomationRuntimeTargetsContent extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
-  /// Builds selectable Computer or Server targets for Operations.
+  /// Builds selectable Computer or Server targets for Launchpad.
   @override
   Widget build(BuildContext context) {
     final targets = _filterRuntimeTargets(
@@ -2338,8 +2266,8 @@ class _AutomationDraftsContent extends StatelessWidget {
   }
 }
 
-class _AutomationWorkflowStatePaletteContent extends StatelessWidget {
-  const _AutomationWorkflowStatePaletteContent({
+class _AutomationRunbookStatePaletteContent extends StatelessWidget {
+  const _AutomationRunbookStatePaletteContent({
     required this.controller,
     required this.query,
   });
@@ -2347,14 +2275,14 @@ class _AutomationWorkflowStatePaletteContent extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final String query;
 
-  /// Builds the shell-owned workflow builder node palette.
+  /// Builds the shell-owned runbook builder node palette.
   @override
   Widget build(BuildContext context) {
     final selectedDraft = _selectedAutomationDraftForKind(
       controller,
-      automationWorkflowKind,
+      automationRunbookKind,
     );
-    final actionIntents = _WorkflowActionIntentScope.maybeOf(context);
+    final actionIntents = _RunbookActionIntentScope.maybeOf(context);
     return _StateMachinePalette(
       actionTypes: _resolvedAutomationActionTypes(controller),
       query: query,
@@ -2378,31 +2306,24 @@ class _AutomationDetailContent extends StatelessWidget {
     required this.areaId,
     required this.modeId,
     required this.onDetailModeRequested,
-    this.tabId = '',
   });
 
   final AgentAwesomeAppController controller;
   final _StateMachineDraftEditController stateMachineEditor;
   final String areaId;
   final String modeId;
-  final String tabId;
   final ValueChanged<String> onDetailModeRequested;
 
   @override
   Widget build(BuildContext context) {
-    if (areaId == _automationPanelOperations) {
-      return _OperationsDetail(
-        controller: controller,
-        modeId: modeId,
-        tabId: tabId,
-      );
+    if (areaId == _automationPanelLaunchpad) {
+      return _LaunchpadDetail(controller: controller, modeId: modeId);
     }
-    if (_automationOperationsAreaIds.contains(areaId)) {
-      return _OperationsDetail(
+    if (_automationLaunchpadAreaIds.contains(areaId)) {
+      return _LaunchpadDetail(
         controller: controller,
         areaId: areaId,
         modeId: modeId,
-        tabId: tabId,
       );
     }
     final draftKind = _automationDraftKindForArea(areaId);
@@ -2415,59 +2336,53 @@ class _AutomationDetailContent extends StatelessWidget {
         onDetailModeRequested: onDetailModeRequested,
       );
     }
-    if (areaId == _automationPanelWorkflows) {
+    if (areaId == _automationPanelRunbooks) {
       return _DraftDetail(
         controller: controller,
         stateMachineEditor: stateMachineEditor,
         modeId: modeId,
         draft: _selectedAutomationDraftForKind(
           controller,
-          automationWorkflowKind,
+          automationRunbookKind,
         ),
         onDetailModeRequested: onDetailModeRequested,
       );
     }
-    return _OperationsDetail(
-      controller: controller,
-      modeId: modeId,
-      tabId: tabId,
-    );
+    return _LaunchpadDetail(controller: controller, modeId: modeId);
   }
 }
 
-class _OperationsDetail extends StatelessWidget {
-  const _OperationsDetail({
+class _LaunchpadDetail extends StatelessWidget {
+  const _LaunchpadDetail({
     required this.controller,
     required this.modeId,
-    this.areaId = _automationOperationsAreaRuns,
-    this.tabId = '',
+    this.areaId = _automationLaunchpadAreaRuns,
   });
 
   final AgentAwesomeAppController controller;
   final String areaId;
   final String modeId;
-  final String tabId;
 
   @override
   Widget build(BuildContext context) {
-    if (areaId == _automationOperationsAreaTargets) {
-      final targetMode = _targetDetailModeForOperationsMode(modeId);
-      return _OperationsRuntimeTargetDetail(
+    if (areaId == _automationLaunchpadAreaTargets) {
+      final targetMode = _targetDetailModeForLaunchpadMode(modeId);
+      return _LaunchpadRuntimeTargetDetail(
         target: controller.selectedAutomationRuntimeTarget,
         health: controller.selectedAutomationTargetHealth,
         logs: controller.selectedAutomationTargetLogs,
         secrets: controller.selectedAutomationTargetSecrets,
         codebases: controller.automationCodebases,
         capabilities: controller.automationCapabilities,
-        operations: controller.automationRunSetups,
+        launchpad: controller.automationRunSetups,
         modeId: targetMode,
       );
     }
-    final selectedSetup = _selectedOperationSetupFrom(
+    final selectedSetup = _selectedLaunchSetupFrom(
       controller.automationRunSetups,
       controller.selectedAutomationRunSetup,
     );
-    final selectedDefinition = areaId == _automationOperationsAreaPublished
+    final selectedDefinition = areaId == _automationLaunchpadAreaPublished
         ? (selectedSetup == null
               ? null
               : _definitionForId(
@@ -2475,13 +2390,13 @@ class _OperationsDetail extends StatelessWidget {
                   selectedSetup.definitionId,
                 ))
         : controller.selectedAutomationDefinition;
-    final fileSetups = areaId == _automationOperationsAreaPublished
+    final fileSetups = areaId == _automationLaunchpadAreaPublished
         ? controller.automationRunSetups
-        : _operationSetupsForDefinition(
+        : _launchSetupsForDefinition(
             controller.automationRunSetups,
             selectedDefinition,
           );
-    final fileRuns = _operationRunsForDefinition(
+    final fileRuns = _launchRunsForDefinition(
       controller.automationRuns,
       selectedDefinition,
     );
@@ -2489,50 +2404,35 @@ class _OperationsDetail extends StatelessWidget {
       fileRuns,
       controller.selectedAutomationRun,
     );
-    if (areaId == _automationOperationsAreaPublished &&
+    if (areaId == _automationLaunchpadAreaPublished &&
         modeId == _automationDetailDetails) {
-      return _OperationsRunSetupDetail(
+      return _LaunchpadRunSetupDetail(
         definitions: controller.automationDefinitions,
+        definition: selectedDefinition,
         codebases: controller.automationCodebases,
         targets: controller.automationRuntimeTargets,
         runs: fileRuns,
         setups: fileSetups,
         selectedSetup: selectedSetup,
-        preview: controller.selectedAutomationOperationPreview,
-        modeId: _automationDetailSetup,
+        modeId: _automationDetailDetails,
         onChanged: (setup) =>
             unawaited(controller.updateAutomationRunSetupFromUi(setup)),
       );
     }
-    if (modeId == _automationDetailOperations ||
-        areaId == _automationOperationsAreaSetups) {
-      final operationTab = tabId.isEmpty ? _automationDetailTabOverview : tabId;
-      if (operationTab == _automationDetailTabOverview) {
-        return _OperationsRunSetupsWorkspace(
-          controller: controller,
-          definitions: controller.automationDefinitions,
-          codebases: controller.automationCodebases,
-          targets: controller.automationRuntimeTargets,
-          setups: fileSetups,
-          selectedSetup: selectedSetup,
-        );
-      }
-      return _OperationsRunSetupDetail(
+    if (modeId == _automationDetailLaunchpad ||
+        areaId == _automationLaunchpadAreaSetups) {
+      return _LaunchpadRunSetupsWorkspace(
+        controller: controller,
         definitions: controller.automationDefinitions,
         codebases: controller.automationCodebases,
         targets: controller.automationRuntimeTargets,
-        runs: fileRuns,
         setups: fileSetups,
         selectedSetup: selectedSetup,
-        preview: controller.selectedAutomationOperationPreview,
-        modeId: operationTab,
-        onChanged: (setup) =>
-            unawaited(controller.updateAutomationRunSetupFromUi(setup)),
       );
     }
     if (modeId == _automationDetailSchedules ||
-        areaId == _automationOperationsAreaSchedules) {
-      return _OperationsSchedulesWorkspace(
+        areaId == _automationLaunchpadAreaSchedules) {
+      return _LaunchpadSchedulesWorkspace(
         controller: controller,
         definitions: controller.automationDefinitions,
         setups: fileSetups,
@@ -2540,81 +2440,81 @@ class _OperationsDetail extends StatelessWidget {
       );
     }
     if (modeId == _automationDetailArtifacts ||
-        areaId == _automationOperationsAreaArtifacts) {
-      final artifacts = _operationArtifactsForRuns(
+        areaId == _automationLaunchpadAreaArtifacts) {
+      final artifacts = _launchArtifactsForRuns(
         fileRuns,
         definitions: controller.automationDefinitions,
       );
-      return _OperationsArtifactsWorkspace(
+      return _LaunchpadArtifactsWorkspace(
         controller: controller,
         artifacts: artifacts,
         selectedRun: selectedRun,
       );
     }
     if (modeId == _automationDetailHistory ||
-        areaId == _automationOperationsAreaRuns) {
-      return _OperationsRunsWorkspace(
+        areaId == _automationLaunchpadAreaRuns) {
+      return _LaunchpadRunsWorkspace(
         controller: controller,
         definitions: controller.automationDefinitions,
-        operations: fileSetups,
+        launchpad: fileSetups,
         targets: controller.automationRuntimeTargets,
         runs: fileRuns,
         selectedRun: selectedRun,
-        snapshot: controller.selectedAutomationOperationRunSnapshot,
+        snapshot: controller.selectedAutomationLaunchRunSnapshot,
         events: controller.selectedAutomationEvents,
       );
     }
     return switch (areaId) {
-      _automationOperationsAreaInbox => _OperationsInboxOverview(
+      _automationLaunchpadAreaInbox => _LaunchpadInboxOverview(
         items: controller.automationInbox,
         selectedItem: controller.selectedAutomationPendingItem,
       ),
-      _automationOperationsAreaPublished => _OperationsPublishedOverview(
+      _automationLaunchpadAreaPublished => _LaunchpadPublishedOverview(
         setups: controller.automationRunSetups,
         selectedSetup: selectedSetup,
         definitions: controller.automationDefinitions,
         codebases: controller.automationCodebases,
         targets: controller.automationRuntimeTargets,
       ),
-      _automationOperationsAreaSetups => _OperationsRunSetupsOverview(
+      _automationLaunchpadAreaSetups => _LaunchpadRunSetupsOverview(
         definitions: controller.automationDefinitions,
         codebases: controller.automationCodebases,
         targets: controller.automationRuntimeTargets,
         setups: controller.automationRunSetups,
         selectedSetup: controller.selectedAutomationRunSetup,
       ),
-      _automationOperationsAreaSchedules => _OperationsSchedulesOverview(
+      _automationLaunchpadAreaSchedules => _LaunchpadSchedulesOverview(
         definitions: controller.automationDefinitions,
         setups: controller.automationRunSetups,
         selectedSetup: controller.selectedAutomationRunSetup,
       ),
-      _automationOperationsAreaArtifacts => _OperationsArtifactsOverview(
-        artifacts: _operationArtifactsForRuns(
+      _automationLaunchpadAreaArtifacts => _LaunchpadArtifactsOverview(
+        artifacts: _launchArtifactsForRuns(
           controller.automationRuns,
           definitions: controller.automationDefinitions,
         ),
         selectedRun: controller.selectedAutomationRun,
       ),
-      _ => _OperationsRunOverview(
+      _ => _LaunchpadRunOverview(
         definitions: controller.automationDefinitions,
-        operations: controller.automationRunSetups,
+        launchpad: controller.automationRunSetups,
         targets: controller.automationRuntimeTargets,
         run: controller.selectedAutomationRun,
-        snapshot: controller.selectedAutomationOperationRunSnapshot,
+        snapshot: controller.selectedAutomationLaunchRunSnapshot,
         runCount: controller.automationRuns.length,
       ),
     };
   }
 }
 
-const Set<String> _automationOperationsAreaIds = <String>{
-  _automationOperationsAreaInbox,
-  _automationOperationsAreaPublished,
-  _automationOperationsAreaSetups,
-  _automationOperationsAreaTargets,
-  _automationOperationsAreaSchedules,
-  _automationOperationsAreaArtifacts,
-  _automationOperationsAreaRuns,
+const Set<String> _automationLaunchpadAreaIds = <String>{
+  _automationLaunchpadAreaInbox,
+  _automationLaunchpadAreaPublished,
+  _automationLaunchpadAreaSetups,
+  _automationLaunchpadAreaTargets,
+  _automationLaunchpadAreaSchedules,
+  _automationLaunchpadAreaArtifacts,
+  _automationLaunchpadAreaRuns,
 };
 
 class _DraftDetail extends StatelessWidget {
@@ -2649,14 +2549,14 @@ class _DraftDetail extends StatelessWidget {
         onDetailModeRequested: onDetailModeRequested,
       );
     }
-    return _WorkflowMetadataEditor(
+    return _RunbookMetadataEditor(
       identity: selectedDraft.id,
       name: selectedDraft.name,
-      description: _workflowDraftDescription(selectedDraft),
+      description: _runbookDraftDescription(selectedDraft),
       status: _draftStatusLabel(selectedDraft.status),
       editable: !controller.automationsBusy,
       onSave: (name, description) => controller.saveAutomationDraftFromUi(
-        _workflowDraftWithMetadata(
+        _runbookDraftWithMetadata(
           selectedDraft,
           name: name,
           description: description,
@@ -2666,7 +2566,7 @@ class _DraftDetail extends StatelessWidget {
   }
 }
 
-/// Returns available workflow action types with built-in labels while loading.
+/// Returns available runbook action types with built-in labels while loading.
 List<AutomationActionType> _resolvedAutomationActionTypes(
   AgentAwesomeAppController controller,
 ) {
@@ -2676,7 +2576,7 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
   };
   final capabilityByAction = <String, AutomationCapability>{
     for (final capability in controller.automationCapabilities)
-      if (capability.kind == 'workflow_action' && capability.name.isNotEmpty)
+      if (capability.kind == 'runbook_action' && capability.name.isNotEmpty)
         capability.name: capability,
   };
   final names = known.keys.isEmpty
@@ -2688,8 +2588,8 @@ List<AutomationActionType> _resolvedAutomationActionTypes(
           'data.defaults',
           'human.request',
           'delay.until',
-          'workflow.run',
-          'workflow.signal',
+          'runbook.run',
+          'runbook.signal',
         ]
       : known.keys.toList();
   return <AutomationActionType>[
@@ -2710,7 +2610,7 @@ AutomationActionType _resolvedActionType(
         name: name,
         label: _fallbackActionLabel(name),
         description: _fallbackActionDescription(name),
-        risk: 'workflow',
+        risk: 'runbook',
         available: true,
       );
   final capability = capabilityByAction[name];
@@ -2724,7 +2624,7 @@ AutomationActionType _resolvedActionType(
     risk: base.risk,
     available:
         base.available &&
-        capability.usableInWorkflows &&
+        capability.usableInRunbooks &&
         capability.availability.status == 'available',
     inputSchema: base.inputSchema,
     outputSchema: base.outputSchema,
@@ -2790,9 +2690,9 @@ class _AutomationDropdown extends StatelessWidget {
   }
 }
 
-class _WorkflowMetadataEditor extends StatefulWidget {
-  /// Creates a debounced metadata editor for one workflow file.
-  const _WorkflowMetadataEditor({
+class _RunbookMetadataEditor extends StatefulWidget {
+  /// Creates a debounced metadata editor for one runbook file.
+  const _RunbookMetadataEditor({
     required this.identity,
     required this.name,
     required this.description,
@@ -2801,30 +2701,30 @@ class _WorkflowMetadataEditor extends StatefulWidget {
     required this.onSave,
   });
 
-  /// Stable workflow or draft identity used for rehydration.
+  /// Stable runbook or draft identity used for rehydration.
   final String identity;
 
-  /// Current workflow display name.
+  /// Current runbook display name.
   final String name;
 
-  /// Current workflow description.
+  /// Current runbook description.
   final String description;
 
-  /// User-facing workflow status.
+  /// User-facing runbook status.
   final String status;
 
-  /// Whether the selected workflow has an editable backing draft.
+  /// Whether the selected runbook has an editable backing draft.
   final bool editable;
 
-  /// Persists changed workflow metadata.
+  /// Persists changed runbook metadata.
   final Future<void> Function(String name, String description) onSave;
 
   @override
-  State<_WorkflowMetadataEditor> createState() =>
-      _WorkflowMetadataEditorState();
+  State<_RunbookMetadataEditor> createState() =>
+      _RunbookMetadataEditorState();
 }
 
-class _WorkflowMetadataEditorState extends State<_WorkflowMetadataEditor> {
+class _RunbookMetadataEditorState extends State<_RunbookMetadataEditor> {
   static const Duration _saveDelay = Duration(milliseconds: 650);
 
   final TextEditingController _name = TextEditingController();
@@ -2844,9 +2744,9 @@ class _WorkflowMetadataEditorState extends State<_WorkflowMetadataEditor> {
     _description.addListener(_scheduleSave);
   }
 
-  /// Rehydrates when the selected workflow changes.
+  /// Rehydrates when the selected runbook changes.
   @override
-  void didUpdateWidget(covariant _WorkflowMetadataEditor oldWidget) {
+  void didUpdateWidget(covariant _RunbookMetadataEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.identity != widget.identity ||
         oldWidget.name != widget.name ||
@@ -2866,23 +2766,23 @@ class _WorkflowMetadataEditorState extends State<_WorkflowMetadataEditor> {
     super.dispose();
   }
 
-  /// Builds editable workflow metadata fields.
+  /// Builds editable runbook metadata fields.
   @override
   Widget build(BuildContext context) {
     return PanelFormView(
       children: <Widget>[
         PanelFormSection(
-          title: 'Workflow',
+          title: 'Runbook',
           children: <Widget>[
             PanelSaveFeedback(
               controller: _feedback,
               child: Column(
                 children: <Widget>[
-                  _WorkflowMetadataSummary(status: widget.status),
+                  _RunbookMetadataSummary(status: widget.status),
                   const SizedBox(height: 12),
                   PanelTextFormField(
-                    key: const ValueKey<String>('workflow-metadata-name'),
-                    label: 'Workflow Name',
+                    key: const ValueKey<String>('runbook-metadata-name'),
+                    label: 'Runbook Name',
                     controller: _name,
                     enabled: widget.editable,
                     onChanged: (_) => _scheduleSave(),
@@ -2890,7 +2790,7 @@ class _WorkflowMetadataEditorState extends State<_WorkflowMetadataEditor> {
                   const SizedBox(height: 12),
                   PanelTextFormField(
                     key: const ValueKey<String>(
-                      'workflow-metadata-description',
+                      'runbook-metadata-description',
                     ),
                     label: 'Description',
                     controller: _description,
@@ -2946,14 +2846,14 @@ class _WorkflowMetadataEditorState extends State<_WorkflowMetadataEditor> {
   }
 }
 
-class _WorkflowMetadataSummary extends StatelessWidget {
-  /// Creates compact non-editable workflow metadata text.
-  const _WorkflowMetadataSummary({required this.status});
+class _RunbookMetadataSummary extends StatelessWidget {
+  /// Creates compact non-editable runbook metadata text.
+  const _RunbookMetadataSummary({required this.status});
 
-  /// Current workflow status.
+  /// Current runbook status.
   final String status;
 
-  /// Builds compact status text inside the workflow section.
+  /// Builds compact status text inside the runbook section.
   @override
   Widget build(BuildContext context) {
     return Wrap(
@@ -2967,8 +2867,8 @@ class _WorkflowMetadataSummary extends StatelessWidget {
   }
 }
 
-class _OperationsInboxOverview extends StatelessWidget {
-  const _OperationsInboxOverview({
+class _LaunchpadInboxOverview extends StatelessWidget {
+  const _LaunchpadInboxOverview({
     required this.items,
     required this.selectedItem,
   });
@@ -2995,8 +2895,8 @@ class _OperationsInboxOverview extends StatelessWidget {
   }
 }
 
-class _OperationsPublishedOverview extends StatelessWidget {
-  const _OperationsPublishedOverview({
+class _LaunchpadPublishedOverview extends StatelessWidget {
+  const _LaunchpadPublishedOverview({
     required this.setups,
     required this.selectedSetup,
     required this.definitions,
@@ -3010,21 +2910,25 @@ class _OperationsPublishedOverview extends StatelessWidget {
   final List<AutomationCodebase> codebases;
   final List<AutomationRuntimeTarget> targets;
 
-  /// Builds detail context for saved Operations.
+  /// Builds detail context for saved Launchpad.
   @override
   Widget build(BuildContext context) {
     final setup = selectedSetup;
     return _DetailList(
-      title: 'Operations',
+      title: 'Launchpad',
       rows: <String>[
-        'Operations: ${setups.length}',
+        'Launchpad: ${setups.length}',
         if (setup != null) 'Selected: ${setup.name}',
         if (setup != null)
-          'Workflow: ${_definitionLabel(definitions, setup.definitionId)}',
-        if (setup != null && setup.codebaseId.isNotEmpty)
-          'Codebase: ${_codebaseLabel(codebases, setup.codebaseId)}',
+          'Runbook: ${_definitionLabel(definitions, setup.definitionId)}',
         if (setup != null && setup.runtimeTargetId.isNotEmpty)
           'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
+        if (setup != null)
+          ..._launchSafetyRows(
+            setup,
+            codebases: codebases,
+            targets: targets,
+          ),
         if (setup != null && setup.updatedAt.isNotEmpty)
           'Updated: ${setup.updatedAt}',
       ],
@@ -3032,76 +2936,49 @@ class _OperationsPublishedOverview extends StatelessWidget {
   }
 }
 
-class _OperationsRunSetupDetail extends StatelessWidget {
-  const _OperationsRunSetupDetail({
+class _LaunchpadRunSetupDetail extends StatelessWidget {
+  const _LaunchpadRunSetupDetail({
     required this.definitions,
+    required this.definition,
     required this.codebases,
     required this.targets,
     required this.runs,
     required this.setups,
     required this.selectedSetup,
-    required this.preview,
     required this.modeId,
     required this.onChanged,
   });
 
   final List<AutomationDefinition> definitions;
+  final AutomationDefinition? definition;
   final List<AutomationCodebase> codebases;
   final List<AutomationRuntimeTarget> targets;
   final List<AutomationRun> runs;
   final List<AutomationRunSetup> setups;
   final AutomationRunSetup? selectedSetup;
-  final AutomationOperationPreview? preview;
   final String modeId;
   final ValueChanged<AutomationRunSetup> onChanged;
 
-  /// Builds one saved Operation detail mode.
+  /// Builds one saved Launch detail mode.
   @override
   Widget build(BuildContext context) {
     final setup = selectedSetup;
-    if (modeId == _automationDetailTest) {
-      return _OperationsRunSetupPreview(setup: setup, preview: preview);
-    }
     if (setup == null) {
-      return const _CompactDetailEmptyBlock(label: 'No operation selected');
+      return const _CompactDetailEmptyBlock(label: 'No launch selected');
     }
     return switch (modeId) {
-      _automationDetailSetup => _OperationsRunSetupEditor(
+      _automationDetailHistory => _DetailList(
+        title: 'Runs',
+        rows: _launchRunRows(setup, runs, definitions: definitions),
+      ),
+      _automationDetailDetails => _LaunchpadRunSetupEditor(
         setup: setup,
+        definition: definition,
         definitions: definitions,
-        codebases: codebases,
         targets: targets,
         onChanged: onChanged,
       ),
-      _automationDetailInputs => _DetailList(
-        title: 'Inputs',
-        rows: _operationInputRows(setup),
-      ),
-      _automationDetailTargets => _DetailList(
-        title: 'Targets',
-        rows: _operationTargetRows(
-          setup,
-          codebases: codebases,
-          targets: targets,
-        ),
-      ),
-      _automationDetailSchedule => _DetailList(
-        title: 'Schedule',
-        rows: _operationScheduleRows(setup),
-      ),
-      _automationDetailSafety => _DetailList(
-        title: 'Safety',
-        rows: _operationSafetyRows(
-          setup,
-          codebases: codebases,
-          targets: targets,
-        ),
-      ),
-      _automationDetailHistory => _DetailList(
-        title: 'Runs',
-        rows: _operationRunRows(setup, runs, definitions: definitions),
-      ),
-      _ => _OperationsRunSetupsOverview(
+      _ => _LaunchpadRunSetupsOverview(
         definitions: definitions,
         codebases: codebases,
         targets: targets,
@@ -3112,35 +2989,38 @@ class _OperationsRunSetupDetail extends StatelessWidget {
   }
 }
 
-class _OperationsRunSetupEditor extends StatefulWidget {
-  const _OperationsRunSetupEditor({
+class _LaunchpadRunSetupEditor extends StatefulWidget {
+  const _LaunchpadRunSetupEditor({
     required this.setup,
+    required this.definition,
     required this.definitions,
-    required this.codebases,
     required this.targets,
     required this.onChanged,
   });
 
   final AutomationRunSetup setup;
+  final AutomationDefinition? definition;
   final List<AutomationDefinition> definitions;
-  final List<AutomationCodebase> codebases;
   final List<AutomationRuntimeTarget> targets;
   final ValueChanged<AutomationRunSetup> onChanged;
 
   @override
-  State<_OperationsRunSetupEditor> createState() =>
-      _OperationsRunSetupEditorState();
+  State<_LaunchpadRunSetupEditor> createState() =>
+      _LaunchpadRunSetupEditorState();
 }
 
-class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
+class _LaunchpadRunSetupEditorState extends State<_LaunchpadRunSetupEditor> {
   final TextEditingController _name = TextEditingController();
   final TextEditingController _description = TextEditingController();
+  final Map<String, TextEditingController> _inputTextControllers =
+      <String, TextEditingController>{};
+  final Map<String, bool> _inputBooleanValues = <String, bool>{};
+  List<_RunbookRunInputField> _inputFields = const <_RunbookRunInputField>[];
   Timer? _debounce;
   String _activeId = '';
   String _definitionId = '';
-  String _codebaseId = '';
   String _targetId = '';
-  String _sourceControlPolicy = _operationSafetyOpenPROnly;
+  String _inputError = '';
   bool _hydrating = false;
 
   @override
@@ -3152,9 +3032,15 @@ class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
   }
 
   @override
-  void didUpdateWidget(covariant _OperationsRunSetupEditor oldWidget) {
+  void didUpdateWidget(covariant _LaunchpadRunSetupEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.setup.id != widget.setup.id) {
+    if (oldWidget.setup.id != widget.setup.id ||
+        oldWidget.definition?.id != widget.definition?.id ||
+        oldWidget.setup.name != widget.setup.name ||
+        oldWidget.setup.description != widget.setup.description ||
+        oldWidget.setup.runtimeTargetId != widget.setup.runtimeTargetId ||
+        _jsonSignature(oldWidget.setup.input) !=
+            _jsonSignature(widget.setup.input)) {
       _hydrate(widget.setup);
     }
   }
@@ -3164,32 +3050,32 @@ class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
     _debounce?.cancel();
     _name.dispose();
     _description.dispose();
+    for (final controller in _inputTextControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
-  /// Builds the selected Operation typed setup editor.
+  /// Builds the selected Launch typed setup editor.
   @override
   Widget build(BuildContext context) {
-    final targetOptions = _targetOptionsForCodebase(
-      widget.targets,
-      _codebaseId,
-    );
+    final colors = context.agentAwesomeColors;
     return PanelFormView(
       children: <Widget>[
         PanelFormSection(
-          title: 'Operation',
+          title: 'Launch',
           children: <Widget>[
             _AutomationTextField(
-              key: const ValueKey<String>('automation-operation-edit-name'),
+              key: const ValueKey<String>('automation-launch-edit-name'),
               controller: _name,
-              label: 'Operation Name',
+              label: 'Launch Name',
               onChanged: (_) => _scheduleSave(),
               onSubmitted: (_) => _flushSave(),
             ),
             const SizedBox(height: 12),
             _AutomationTextField(
               key: const ValueKey<String>(
-                'automation-operation-edit-description',
+                'automation-launch-edit-description',
               ),
               controller: _description,
               label: 'Description',
@@ -3199,8 +3085,8 @@ class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
             ),
             const SizedBox(height: 12),
             _AutomationDropdown(
-              key: const ValueKey<String>('automation-operation-edit-workflow'),
-              label: 'Workflow',
+              key: const ValueKey<String>('automation-launch-edit-runbook'),
+              label: 'Runbook',
               value: _definitionId,
               values: <String>[
                 for (final definition in widget.definitions) definition.id,
@@ -3220,60 +3106,52 @@ class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
           title: 'Runtime',
           children: <Widget>[
             _AutomationDropdown(
-              key: const ValueKey<String>('automation-operation-edit-codebase'),
-              label: 'Codebase',
-              value: _codebaseId,
-              values: <String>[
-                for (final codebase in widget.codebases) codebase.id,
-              ],
-              labels: <String, String>{
-                for (final codebase in widget.codebases)
-                  codebase.id: codebase.name,
-              },
-              onChanged: (value) => setState(() {
-                _codebaseId = value;
-                _targetId = _initialTargetId(
-                  codebases: widget.codebases,
-                  targets: widget.targets,
-                  codebaseId: _codebaseId,
-                  selectedTargetId: _targetId,
-                );
-                _scheduleSave();
-              }),
-            ),
-            const SizedBox(height: 12),
-            _AutomationDropdown(
-              key: const ValueKey<String>('automation-operation-edit-target'),
+              key: const ValueKey<String>('automation-launch-edit-target'),
               label: 'Run on',
               value: _targetId,
-              values: <String>[for (final target in targetOptions) target.id],
+              values: <String>[for (final target in widget.targets) target.id],
               labels: <String, String>{
-                for (final target in targetOptions) target.id: target.name,
+                for (final target in widget.targets) target.id: target.name,
               },
               onChanged: (value) => setState(() {
                 _targetId = value;
                 _scheduleSave();
               }),
             ),
-            const SizedBox(height: 12),
-            _AutomationDropdown(
-              key: const ValueKey<String>('automation-operation-edit-safety'),
-              label: 'Safety',
-              value: _sourceControlPolicy,
-              values: const <String>[_operationSafetyOpenPROnly],
-              labels: _operationSafetyLabels,
-              onChanged: (value) => setState(() {
-                _sourceControlPolicy = value;
-                _scheduleSave();
-              }),
-            ),
           ],
         ),
+        if (_inputFields.isNotEmpty)
+          PanelFormSection(
+            title: 'Run Defaults',
+            children: <Widget>[
+              for (final field in _inputFields) ...<Widget>[
+                _RunbookRunInputFieldControl(
+                  field: field,
+                  textController: _inputTextControllers[field.name],
+                  booleanValue: _inputBooleanValues[field.name] ?? false,
+                  onBooleanChanged: (value) => setState(() {
+                    _inputBooleanValues[field.name] = value;
+                    _scheduleSave();
+                  }),
+                  onChanged: _scheduleSave,
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (_inputError.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _inputError,
+                    style: TextStyle(color: colors.coral, fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
       ],
     );
   }
 
-  /// Replaces editor state when the selected Operation changes.
+  /// Replaces editor state when the selected Launch changes.
   void _hydrate(AutomationRunSetup setup) {
     _debounce?.cancel();
     _hydrating = true;
@@ -3281,12 +3159,27 @@ class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
     _definitionId = setup.definitionId;
     _name.text = setup.name;
     _description.text = setup.description;
-    _codebaseId = setup.codebaseId;
     _targetId = setup.runtimeTargetId;
-    _sourceControlPolicy =
-        _stringFromMap(setup.policy, 'source_control').isEmpty
-        ? _operationSafetyOpenPROnly
-        : _stringFromMap(setup.policy, 'source_control');
+    _inputError = '';
+    for (final controller in _inputTextControllers.values) {
+      controller.dispose();
+    }
+    _inputTextControllers.clear();
+    _inputBooleanValues.clear();
+    _inputFields = _launchInputFieldsForSetup(widget.definition, setup);
+    for (final field in _inputFields) {
+      if (field.type == 'boolean') {
+        _inputBooleanValues[field.name] = _initialBooleanValue(
+          field.defaultValue,
+        );
+      } else {
+        final controller = TextEditingController(
+          text: _initialFieldText(field.defaultValue),
+        );
+        controller.addListener(_scheduleSave);
+        _inputTextControllers[field.name] = controller;
+      }
+    }
     _hydrating = false;
   }
 
@@ -3299,7 +3192,7 @@ class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
     _debounce = Timer(const Duration(milliseconds: 650), _flushSave);
   }
 
-  /// Persists the current Operation form values when the name is valid.
+  /// Persists the current Launch form values when the name is valid.
   void _flushSave() {
     if (_hydrating || _activeId.isEmpty) {
       return;
@@ -3309,42 +3202,49 @@ class _OperationsRunSetupEditorState extends State<_OperationsRunSetupEditor> {
     if (name.isEmpty) {
       return;
     }
-    if (_operationFormUnchanged(name)) {
+    final input = Map<String, dynamic>.from(widget.setup.input);
+    if (_inputFields.isNotEmpty) {
+      input.clear();
+      final error = _populateRunbookInputFromFields(
+        fields: _inputFields,
+        textControllers: _inputTextControllers,
+        booleanValues: _inputBooleanValues,
+        input: input,
+      );
+      if (error != null) {
+        setState(() => _inputError = error);
+        return;
+      }
+    }
+    if (_launchFormUnchanged(name, input)) {
       return;
+    }
+    if (_inputError.isNotEmpty) {
+      setState(() => _inputError = '');
     }
     widget.onChanged(
       widget.setup.copyWith(
         definitionId: _definitionId,
         name: name,
         description: _description.text.trim(),
-        codebaseId: _codebaseId,
         runtimeTargetId: _targetId,
-        policy: _operationPolicyFromSelections(
-          codebaseId: _codebaseId,
-          runtimeTargetId: _targetId,
-          sourceControlPolicy: _sourceControlPolicy,
-        ),
+        input: input,
       ),
     );
   }
 
-  /// Reports whether the current form fields still match the selected Operation.
-  bool _operationFormUnchanged(String name) {
-    final sourceControl = _stringFromMap(widget.setup.policy, 'source_control');
-    final normalizedSourceControl = sourceControl.isEmpty
-        ? _operationSafetyOpenPROnly
-        : sourceControl;
+  /// Reports whether the current form fields still match the selected Launch.
+  bool _launchFormUnchanged(String name, Map<String, dynamic> input) {
     return _definitionId == widget.setup.definitionId &&
         name == widget.setup.name.trim() &&
         _description.text.trim() == widget.setup.description.trim() &&
-        _codebaseId == widget.setup.codebaseId &&
         _targetId == widget.setup.runtimeTargetId &&
-        _sourceControlPolicy == normalizedSourceControl;
+        _jsonSignature(input) == _jsonSignature(widget.setup.input);
   }
 }
 
-class _OperationsRunSetupsOverview extends StatelessWidget {
-  const _OperationsRunSetupsOverview({
+class _LaunchpadRunSetupsOverview extends StatelessWidget {
+  const _LaunchpadRunSetupsOverview({
     required this.definitions,
     required this.codebases,
     required this.targets,
@@ -3358,23 +3258,25 @@ class _OperationsRunSetupsOverview extends StatelessWidget {
   final List<AutomationRunSetup> setups;
   final AutomationRunSetup? selectedSetup;
 
-  /// Builds detail context for saved Operations.
+  /// Builds detail context for saved Launchpad.
   @override
   Widget build(BuildContext context) {
     final setup = selectedSetup;
     return _DetailList(
-      title: 'Operations',
+      title: 'Launchpad',
       rows: <String>[
-        'Operations: ${setups.length}',
+        'Launchpad: ${setups.length}',
         if (setup != null) 'Selected: ${setup.name}',
         if (setup != null)
-          'Workflow file: ${_definitionLabel(definitions, setup.definitionId)}',
-        if (setup != null && setup.codebaseId.isNotEmpty)
-          'Codebase: ${_codebaseLabel(codebases, setup.codebaseId)}',
+          'Runbook file: ${_definitionLabel(definitions, setup.definitionId)}',
         if (setup != null && setup.runtimeTargetId.isNotEmpty)
           'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
-        if (setup != null && setup.policy['source_control'] != null)
-          'Safety: ${_operationSourceControlPolicyLabel('${setup.policy['source_control']}')}',
+        if (setup != null)
+          ..._launchSafetyRows(
+            setup,
+            codebases: codebases,
+            targets: targets,
+          ),
         if (setup != null && setup.updatedAt.isNotEmpty)
           'Updated: ${setup.updatedAt}',
       ],
@@ -3382,58 +3284,8 @@ class _OperationsRunSetupsOverview extends StatelessWidget {
   }
 }
 
-class _OperationsRunSetupPreview extends StatelessWidget {
-  const _OperationsRunSetupPreview({
-    required this.setup,
-    required this.preview,
-  });
-
-  final AutomationRunSetup? setup;
-  final AutomationOperationPreview? preview;
-
-  /// Builds dry-run resolution details for a saved Operation.
-  @override
-  Widget build(BuildContext context) {
-    final selected = setup;
-    if (selected == null) {
-      return const _CompactDetailEmptyBlock(label: 'No operation selected');
-    }
-    final current = preview;
-    if (current == null || current.operation.id != selected.id) {
-      return _DetailList(
-        title: 'Test Run',
-        rows: <String>['Operation: ${selected.name}', 'Test Run: not started'],
-      );
-    }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-      children: <Widget>[
-        PanelSectionBlock(
-          title: 'Test Run',
-          child: _DetailRows(
-            rows: <String>[
-              'Operation: ${current.operation.name}',
-              'Status: ${_operationPreviewStatusLabel(current.status)}',
-              'Policy: ${_operationPolicyStatusLabel(current.policyDecision.status)}',
-              for (final reason in current.policyDecision.reasons)
-                'Policy reason: $reason',
-              for (final field in current.missingSetup)
-                'Needs Setup: ${_stateMachineDisplayName(field)}',
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        PanelSectionBlock(
-          title: 'Resolved Input',
-          child: _DetailRows(rows: _operationPreviewInputRows(current)),
-        ),
-      ],
-    );
-  }
-}
-
-class _OperationsRunSetupsWorkspace extends StatelessWidget {
-  const _OperationsRunSetupsWorkspace({
+class _LaunchpadRunSetupsWorkspace extends StatelessWidget {
+  const _LaunchpadRunSetupsWorkspace({
     required this.controller,
     required this.definitions,
     required this.codebases,
@@ -3449,12 +3301,12 @@ class _OperationsRunSetupsWorkspace extends StatelessWidget {
   final List<AutomationRunSetup> setups;
   final AutomationRunSetup? selectedSetup;
 
-  /// Builds saved Operations as a right-side collection workspace.
+  /// Builds saved Launchpad as a right-side collection workspace.
   @override
   Widget build(BuildContext context) {
     final setup = selectedSetup;
     if (setups.isEmpty) {
-      return const PanelEmptyBody(label: 'No operations');
+      return const PanelEmptyBody(label: 'No launchpad');
     }
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
@@ -3464,9 +3316,9 @@ class _OperationsRunSetupsWorkspace extends StatelessWidget {
         if (setup != null) ...<Widget>[
           const SizedBox(height: 12),
           PanelSectionBlock(
-            title: 'Selected Operation',
+            title: 'Selected Launch',
             child: _DetailRows(
-              rows: _operationSetupRows(
+              rows: _launchSetupRows(
                 setup,
                 definitions: definitions,
                 codebases: codebases,
@@ -3480,8 +3332,8 @@ class _OperationsRunSetupsWorkspace extends StatelessWidget {
   }
 }
 
-class _OperationsSchedulesWorkspace extends StatelessWidget {
-  const _OperationsSchedulesWorkspace({
+class _LaunchpadSchedulesWorkspace extends StatelessWidget {
+  const _LaunchpadSchedulesWorkspace({
     required this.controller,
     required this.definitions,
     required this.setups,
@@ -3493,18 +3345,18 @@ class _OperationsSchedulesWorkspace extends StatelessWidget {
   final List<AutomationRunSetup> setups;
   final AutomationRunSetup? selectedSetup;
 
-  /// Builds scheduled Operations as a right-side collection.
+  /// Builds scheduled Launchpad as a right-side collection.
   @override
   Widget build(BuildContext context) {
-    final scheduled = setups.where(_operationHasSchedule).toList();
+    final scheduled = setups.where(_launchHasSchedule).toList();
     final selected =
-        selectedSetup != null && _operationHasSchedule(selectedSetup!)
+        selectedSetup != null && _launchHasSchedule(selectedSetup!)
         ? selectedSetup
         : scheduled.isEmpty
         ? null
         : scheduled.first;
     if (scheduled.isEmpty) {
-      return const PanelEmptyBody(label: 'No scheduled operations');
+      return const PanelEmptyBody(label: 'No scheduled launchpad');
     }
     return ListView(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
@@ -3517,10 +3369,10 @@ class _OperationsSchedulesWorkspace extends StatelessWidget {
             title: 'Selected Schedule',
             child: _DetailRows(
               rows: <String>[
-                'Operation: ${selected.name}',
-                'Workflow file: ${_definitionLabel(definitions, selected.definitionId)}',
-                'Schedule: ${_operationScheduleLabel(selected.schedule)}',
-                ..._operationScheduleRows(selected).skip(1),
+                'Launch: ${selected.name}',
+                'Runbook file: ${_definitionLabel(definitions, selected.definitionId)}',
+                'Schedule: ${_launchScheduleLabel(selected.schedule)}',
+                ..._launchScheduleRows(selected).skip(1),
               ],
             ),
           ),
@@ -3530,15 +3382,15 @@ class _OperationsSchedulesWorkspace extends StatelessWidget {
   }
 }
 
-class _OperationsArtifactsWorkspace extends StatelessWidget {
-  const _OperationsArtifactsWorkspace({
+class _LaunchpadArtifactsWorkspace extends StatelessWidget {
+  const _LaunchpadArtifactsWorkspace({
     required this.controller,
     required this.artifacts,
     required this.selectedRun,
   });
 
   final AgentAwesomeAppController controller;
-  final List<_OperationArtifactItem> artifacts;
+  final List<_LaunchArtifactItem> artifacts;
   final AutomationRun? selectedRun;
 
   /// Builds run artifacts as a right-side collection.
@@ -3563,11 +3415,11 @@ class _OperationsArtifactsWorkspace extends StatelessWidget {
   }
 }
 
-class _OperationsRunsWorkspace extends StatelessWidget {
-  const _OperationsRunsWorkspace({
+class _LaunchpadRunsWorkspace extends StatelessWidget {
+  const _LaunchpadRunsWorkspace({
     required this.controller,
     required this.definitions,
-    required this.operations,
+    required this.launchpad,
     required this.targets,
     required this.runs,
     required this.selectedRun,
@@ -3577,11 +3429,11 @@ class _OperationsRunsWorkspace extends StatelessWidget {
 
   final AgentAwesomeAppController controller;
   final List<AutomationDefinition> definitions;
-  final List<AutomationRunSetup> operations;
+  final List<AutomationRunSetup> launchpad;
   final List<AutomationRuntimeTarget> targets;
   final List<AutomationRun> runs;
   final AutomationRun? selectedRun;
-  final AutomationOperationRunSnapshot? snapshot;
+  final AutomationLaunchRunSnapshot? snapshot;
   final List<AutomationEvent> events;
 
   /// Builds automation run history as a right-side collection.
@@ -3599,7 +3451,7 @@ class _OperationsRunsWorkspace extends StatelessWidget {
               _runValidationScenario(
                 run: run,
                 definitions: definitions,
-                operations: operations,
+                launchpad: launchpad,
                 targets: targets,
                 snapshot: snapshot?.runId == run.id ? snapshot : null,
                 events: selectedRun?.id == run.id
@@ -3638,7 +3490,7 @@ class _AutomationRunMetricsDetail extends StatelessWidget {
   const _AutomationRunMetricsDetail({
     required this.run,
     required this.definitions,
-    required this.operations,
+    required this.launchpad,
     required this.targets,
     required this.snapshot,
     required this.events,
@@ -3646,18 +3498,18 @@ class _AutomationRunMetricsDetail extends StatelessWidget {
 
   final AutomationRun run;
   final List<AutomationDefinition> definitions;
-  final List<AutomationRunSetup> operations;
+  final List<AutomationRunSetup> launchpad;
   final List<AutomationRuntimeTarget> targets;
-  final AutomationOperationRunSnapshot? snapshot;
+  final AutomationLaunchRunSnapshot? snapshot;
   final List<AutomationEvent> events;
 
-  /// Builds expanded run metrics for an Operations run row.
+  /// Builds expanded run metrics for an Launchpad run row.
   @override
   Widget build(BuildContext context) {
     final metricRows = _automationRunMetricRows(
       run: run,
       definitions: definitions,
-      operations: operations,
+      launchpad: launchpad,
       targets: targets,
       snapshot: snapshot,
     );
@@ -3698,8 +3550,8 @@ class _AutomationRunMetricsDetail extends StatelessWidget {
   }
 }
 
-class _OperationsSchedulesOverview extends StatelessWidget {
-  const _OperationsSchedulesOverview({
+class _LaunchpadSchedulesOverview extends StatelessWidget {
+  const _LaunchpadSchedulesOverview({
     required this.definitions,
     required this.setups,
     required this.selectedSetup,
@@ -3709,12 +3561,12 @@ class _OperationsSchedulesOverview extends StatelessWidget {
   final List<AutomationRunSetup> setups;
   final AutomationRunSetup? selectedSetup;
 
-  /// Builds detail context for scheduled Operations.
+  /// Builds detail context for scheduled Launchpad.
   @override
   Widget build(BuildContext context) {
-    final scheduled = setups.where(_operationHasSchedule).toList();
+    final scheduled = setups.where(_launchHasSchedule).toList();
     final selected =
-        selectedSetup != null && _operationHasSchedule(selectedSetup!)
+        selectedSetup != null && _launchHasSchedule(selectedSetup!)
         ? selectedSetup
         : scheduled.isEmpty
         ? null
@@ -3722,28 +3574,28 @@ class _OperationsSchedulesOverview extends StatelessWidget {
     return _DetailList(
       title: 'Schedules',
       rows: <String>[
-        'Scheduled operations: ${scheduled.length}',
-        if (selected != null) 'Operation: ${selected.name}',
+        'Scheduled launchpad: ${scheduled.length}',
+        if (selected != null) 'Launch: ${selected.name}',
         if (selected != null)
-          'Workflow file: ${_definitionLabel(definitions, selected.definitionId)}',
+          'Runbook file: ${_definitionLabel(definitions, selected.definitionId)}',
         if (selected != null)
-          'Schedule: ${_operationScheduleLabel(selected.schedule)}',
-        if (selected != null) ..._operationScheduleRows(selected).skip(1),
+          'Schedule: ${_launchScheduleLabel(selected.schedule)}',
+        if (selected != null) ..._launchScheduleRows(selected).skip(1),
       ],
     );
   }
 }
 
-class _OperationsArtifactsOverview extends StatelessWidget {
-  const _OperationsArtifactsOverview({
+class _LaunchpadArtifactsOverview extends StatelessWidget {
+  const _LaunchpadArtifactsOverview({
     required this.artifacts,
     required this.selectedRun,
   });
 
-  final List<_OperationArtifactItem> artifacts;
+  final List<_LaunchArtifactItem> artifacts;
   final AutomationRun? selectedRun;
 
-  /// Builds detail context for Operation run artifacts.
+  /// Builds detail context for Launch run artifacts.
   @override
   Widget build(BuildContext context) {
     final selectedArtifacts = selectedRun == null
@@ -3763,15 +3615,15 @@ class _OperationsArtifactsOverview extends StatelessWidget {
   }
 }
 
-class _OperationsRuntimeTargetDetail extends StatelessWidget {
-  const _OperationsRuntimeTargetDetail({
+class _LaunchpadRuntimeTargetDetail extends StatelessWidget {
+  const _LaunchpadRuntimeTargetDetail({
     required this.target,
     required this.health,
     required this.logs,
     required this.secrets,
     required this.codebases,
     required this.capabilities,
-    required this.operations,
+    required this.launchpad,
     required this.modeId,
   });
 
@@ -3781,7 +3633,7 @@ class _OperationsRuntimeTargetDetail extends StatelessWidget {
   final AutomationTargetSecretMetadata? secrets;
   final List<AutomationCodebase> codebases;
   final List<AutomationCapability> capabilities;
-  final List<AutomationRunSetup> operations;
+  final List<AutomationRunSetup> launchpad;
   final String modeId;
 
   /// Builds the selected Computer or Server inspector.
@@ -3800,9 +3652,9 @@ class _OperationsRuntimeTargetDetail extends StatelessWidget {
         title: 'Secrets',
         rows: _targetSecretRows(selected, secrets),
       ),
-      _automationTargetDetailOperations => _targetDetailList(
-        title: 'Operations',
-        rows: _targetOperationRows(selected, operations),
+      _automationTargetDetailLaunchpad => _targetDetailList(
+        title: 'Launchpad',
+        rows: _targetLaunchRows(selected, launchpad),
       ),
       _automationTargetDetailLogs => _TargetLogList(logs: logs),
       _automationTargetDetailSettings => _targetDetailList(
@@ -3866,10 +3718,10 @@ class _TargetLogList extends StatelessWidget {
   }
 }
 
-class _OperationsRunOverview extends StatelessWidget {
-  const _OperationsRunOverview({
+class _LaunchpadRunOverview extends StatelessWidget {
+  const _LaunchpadRunOverview({
     required this.definitions,
-    required this.operations,
+    required this.launchpad,
     required this.targets,
     required this.run,
     required this.snapshot,
@@ -3877,10 +3729,10 @@ class _OperationsRunOverview extends StatelessWidget {
   });
 
   final List<AutomationDefinition> definitions;
-  final List<AutomationRunSetup> operations;
+  final List<AutomationRunSetup> launchpad;
   final List<AutomationRuntimeTarget> targets;
   final AutomationRun? run;
-  final AutomationOperationRunSnapshot? snapshot;
+  final AutomationLaunchRunSnapshot? snapshot;
   final int runCount;
 
   /// Builds detail context for selected automation runs.
@@ -3892,9 +3744,9 @@ class _OperationsRunOverview extends StatelessWidget {
         : null;
     return _DetailList(
       title: 'Runs',
-      rows: _operationRunOverviewRows(
+      rows: _launchRunOverviewRows(
         definitions: definitions,
-        operations: operations,
+        launchpad: launchpad,
         targets: targets,
         run: selectedRun,
         snapshot: selectedSnapshot,
@@ -3904,30 +3756,32 @@ class _OperationsRunOverview extends StatelessWidget {
   }
 }
 
-/// Builds detail rows for one selected workflow run.
-List<String> _operationRunOverviewRows({
+/// Builds detail rows for one selected runbook run.
+List<String> _launchRunOverviewRows({
   required List<AutomationDefinition> definitions,
-  required List<AutomationRunSetup> operations,
+  required List<AutomationRunSetup> launchpad,
   required List<AutomationRuntimeTarget> targets,
   required AutomationRun? run,
-  required AutomationOperationRunSnapshot? snapshot,
+  required AutomationLaunchRunSnapshot? snapshot,
   required int runCount,
 }) {
   return <String>[
     'Recent runs: $runCount',
-    if (run != null) 'Workflow: ${_runDefinitionLabel(definitions, run)}',
+    if (run != null) 'Runbook: ${_runDefinitionLabel(definitions, run)}',
     if (run != null) 'Status: ${_draftStatusLabel(run.status)}',
     if (run != null) 'State: ${run.state}',
     if (run != null && run.updatedAt.isNotEmpty)
       'Updated: ${formatStoredTimestampLocal(run.updatedAt)}',
     if (snapshot != null)
-      'Operation: ${_operationLabel(operations, snapshot.operationId)}',
-    if (snapshot != null)
+      'Launch: ${_launchLabel(launchpad, snapshot.launchId)}',
+    if (snapshot != null &&
+        _stringFromMap(snapshot.target, 'runtime_target_id').isNotEmpty)
       'Run on: ${_targetLabel(targets, _stringFromMap(snapshot.target, 'runtime_target_id'))}',
-    if (snapshot != null && snapshot.operationVersion > 0)
-      'Operation version: ${snapshot.operationVersion}',
-    if (snapshot != null)
-      'Policy: ${_operationSourceControlPolicyLabel(_stringFromMap(snapshot.policy, 'source_control'))}',
+    if (snapshot != null && snapshot.launchVersion > 0)
+      'Launch version: ${snapshot.launchVersion}',
+    if (snapshot != null &&
+        _stringFromMap(snapshot.policy, 'source_control').isNotEmpty)
+      'Policy: ${_launchSourceControlPolicyLabel(_stringFromMap(snapshot.policy, 'source_control'))}',
     if (snapshot != null) 'Resolved inputs: ${snapshot.resolvedInput.length}',
     if (snapshot != null) 'Secret references: ${snapshot.secretRefs.length}',
   ];
@@ -3937,9 +3791,9 @@ List<String> _operationRunOverviewRows({
 SettingsValidationScenario _runValidationScenario({
   required AutomationRun run,
   required List<AutomationDefinition> definitions,
-  required List<AutomationRunSetup> operations,
+  required List<AutomationRunSetup> launchpad,
   required List<AutomationRuntimeTarget> targets,
-  required AutomationOperationRunSnapshot? snapshot,
+  required AutomationLaunchRunSnapshot? snapshot,
   required List<AutomationEvent> events,
 }) {
   return SettingsValidationScenario(
@@ -3951,7 +3805,7 @@ SettingsValidationScenario _runValidationScenario({
     details: _AutomationRunMetricsDetail(
       run: run,
       definitions: definitions,
-      operations: operations,
+      launchpad: launchpad,
       targets: targets,
       snapshot: snapshot,
       events: events,
@@ -3975,7 +3829,7 @@ String _runWhenLabel(AutomationRun run) {
   return 'Run ${run.id}';
 }
 
-/// Maps workflow run status to table status semantics.
+/// Maps runbook run status to table status semantics.
 String _runOutcomeStatus(AutomationRun run) {
   final status = run.status.trim().toLowerCase().replaceAll('-', '_');
   final state = run.state.trim().toLowerCase().replaceAll('-', '_');
@@ -4010,22 +3864,22 @@ String _runOutcomeStatus(AutomationRun run) {
   return run.status.trim().isEmpty ? 'not run' : run.status.trim();
 }
 
-/// Builds available metric rows for one workflow run.
+/// Builds available metric rows for one runbook run.
 List<String> _automationRunMetricRows({
   required AutomationRun run,
   required List<AutomationDefinition> definitions,
-  required List<AutomationRunSetup> operations,
+  required List<AutomationRunSetup> launchpad,
   required List<AutomationRuntimeTarget> targets,
-  required AutomationOperationRunSnapshot? snapshot,
+  required AutomationLaunchRunSnapshot? snapshot,
 }) {
-  final artifacts = _operationArtifactsForRun(
+  final artifacts = _launchArtifactsForRun(
     run,
-    workflowLabel: _runDefinitionLabel(definitions, run),
+    runbookLabel: _runDefinitionLabel(definitions, run),
   );
   final duration = _runDurationLabel(run);
   return <String>[
     'Run: ${run.id}',
-    'Workflow: ${_runDefinitionLabel(definitions, run)}',
+    'Runbook: ${_runDefinitionLabel(definitions, run)}',
     'Status: ${_draftStatusLabel(run.status)}',
     if (run.state.trim().isNotEmpty) 'State: ${run.state}',
     if (run.createdAt.trim().isNotEmpty)
@@ -4039,15 +3893,17 @@ List<String> _automationRunMetricRows({
       'Output keys: ${_automationRunOutputKeys(run.output).join(', ')}',
     'Artifacts: ${artifacts.length}',
     if (snapshot != null)
-      'Operation: ${_operationLabel(operations, snapshot.operationId)}',
-    if (snapshot != null && snapshot.operationVersion > 0)
-      'Operation version: ${snapshot.operationVersion}',
-    if (snapshot != null)
+      'Launch: ${_launchLabel(launchpad, snapshot.launchId)}',
+    if (snapshot != null && snapshot.launchVersion > 0)
+      'Launch version: ${snapshot.launchVersion}',
+    if (snapshot != null &&
+        _stringFromMap(snapshot.target, 'runtime_target_id').isNotEmpty)
       'Run on: ${_targetLabel(targets, _stringFromMap(snapshot.target, 'runtime_target_id'))}',
     if (snapshot != null) 'Resolved inputs: ${snapshot.resolvedInput.length}',
     if (snapshot != null) 'Secret references: ${snapshot.secretRefs.length}',
-    if (snapshot != null)
-      'Policy: ${_operationSourceControlPolicyLabel(_stringFromMap(snapshot.policy, 'source_control'))}',
+    if (snapshot != null &&
+        _stringFromMap(snapshot.policy, 'source_control').isNotEmpty)
+      'Policy: ${_launchSourceControlPolicyLabel(_stringFromMap(snapshot.policy, 'source_control'))}',
   ];
 }
 
@@ -4204,15 +4060,15 @@ Color _runDetailSelectionColor(BuildContext context) {
   return context.agentAwesomeColors.coral.withValues(alpha: 0.28);
 }
 
-class _OperationArtifactItem {
-  const _OperationArtifactItem({
+class _LaunchArtifactItem {
+  const _LaunchArtifactItem({
     required this.run,
     required this.title,
     required this.subtitle,
-    required this.workflowLabel,
+    required this.runbookLabel,
   });
 
-  /// Workflow run that produced the artifact.
+  /// Runbook run that produced the artifact.
   final AutomationRun run;
 
   /// User-facing artifact title.
@@ -4221,8 +4077,8 @@ class _OperationArtifactItem {
   /// Display-safe artifact summary.
   final String subtitle;
 
-  /// Workflow label used as compact metadata.
-  final String workflowLabel;
+  /// Runbook label used as compact metadata.
+  final String runbookLabel;
 }
 
 class _PendingItemTile extends StatelessWidget {
@@ -4253,15 +4109,13 @@ class _RunSetupTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return _AutomationTile(
       title: setup.name,
-      subtitle: setup.codebaseId.isEmpty
-          ? _definitionLabel(
-              controller.automationDefinitions,
-              setup.definitionId,
-            )
-          : _codebaseLabel(controller.automationCodebases, setup.codebaseId),
+      subtitle: _definitionLabel(
+        controller.automationDefinitions,
+        setup.definitionId,
+      ),
       selected: controller.selectedAutomationRunSetup?.id == setup.id,
       badges: <String>[
-        'operation',
+        'launch',
         if (setup.runtimeTargetId.isNotEmpty)
           _targetLabel(
             controller.automationRuntimeTargets,
@@ -4279,15 +4133,15 @@ class _ScheduleTile extends StatelessWidget {
   final AgentAwesomeAppController controller;
   final AutomationRunSetup setup;
 
-  /// Builds one selectable Operation schedule row.
+  /// Builds one selectable Launch schedule row.
   @override
   Widget build(BuildContext context) {
     return _AutomationTile(
       title: setup.name,
-      subtitle: _operationScheduleLabel(setup.schedule),
+      subtitle: _launchScheduleLabel(setup.schedule),
       selected: controller.selectedAutomationRunSetup?.id == setup.id,
       badges: <String>[
-        if (_operationScheduleEnabled(setup.schedule)) 'enabled' else 'paused',
+        if (_launchScheduleEnabled(setup.schedule)) 'enabled' else 'paused',
       ],
       onTap: () => controller.selectAutomationRunSetup(setup.id),
     );
@@ -4298,7 +4152,7 @@ class _ArtifactTile extends StatelessWidget {
   const _ArtifactTile({required this.controller, required this.artifact});
 
   final AgentAwesomeAppController controller;
-  final _OperationArtifactItem artifact;
+  final _LaunchArtifactItem artifact;
 
   /// Builds one selectable run artifact row.
   @override
@@ -4307,7 +4161,7 @@ class _ArtifactTile extends StatelessWidget {
       title: artifact.title,
       subtitle: artifact.subtitle,
       selected: controller.selectedAutomationRun?.id == artifact.run.id,
-      badges: <String>[artifact.workflowLabel],
+      badges: <String>[artifact.runbookLabel],
       onTap: () => unawaited(controller.selectAutomationRun(artifact.run.id)),
     );
   }
@@ -4386,12 +4240,12 @@ class _DraftTile extends StatelessWidget {
       actions: <Widget>[
         PanelInlineIconButton(
           icon: Icons.content_copy,
-          tooltip: 'Duplicate workflow file',
+          tooltip: 'Duplicate runbook file',
           onPressed: controller.automationsBusy ? null : onDuplicate,
         ),
         PanelInlineIconButton(
           icon: Icons.delete_outline,
-          tooltip: 'Delete workflow file',
+          tooltip: 'Delete runbook file',
           onPressed: controller.automationsBusy ? null : onDelete,
         ),
       ],
@@ -4400,7 +4254,7 @@ class _DraftTile extends StatelessWidget {
   }
 }
 
-/// Returns product-facing supporting text for a workflow draft card.
+/// Returns product-facing supporting text for a runbook draft card.
 String _draftTileSubtitle(AutomationDraft draft) {
   final description = draft.description.trim();
   if (description.isNotEmpty) {
@@ -4414,8 +4268,8 @@ String _draftTileSubtitle(AutomationDraft draft) {
   return '${_draftStatusLabel(draft.status)} ${_draftKindLabel(draft.kind)}';
 }
 
-/// Returns the best editable description for one workflow draft.
-String _workflowDraftDescription(AutomationDraft draft) {
+/// Returns the best editable description for one runbook draft.
+String _runbookDraftDescription(AutomationDraft draft) {
   final description = draft.description.trim();
   if (description.isNotEmpty) {
     return description;
@@ -4423,8 +4277,8 @@ String _workflowDraftDescription(AutomationDraft draft) {
   return _stringFromMap(_map(draft.body), 'description');
 }
 
-/// Returns a draft copy with workflow metadata written into the body.
-AutomationDraft _workflowDraftWithMetadata(
+/// Returns a draft copy with runbook metadata written into the body.
+AutomationDraft _runbookDraftWithMetadata(
   AutomationDraft draft, {
   required String name,
   required String description,
@@ -4433,7 +4287,7 @@ AutomationDraft _workflowDraftWithMetadata(
   final trimmedName = name.trim();
   final trimmedDescription = description.trim();
   if (trimmedName.isNotEmpty &&
-      (_isWorkflowFileKind(draft.kind) || body.containsKey('name'))) {
+      (_isRunbookFileKind(draft.kind) || body.containsKey('name'))) {
     body['name'] = trimmedName;
   }
   body['description'] = trimmedDescription;
@@ -4453,8 +4307,8 @@ AutomationDraft _workflowDraftWithMetadata(
 /// Returns the user-facing label for one automation draft kind.
 String _draftKindLabel(String kind) {
   return switch (kind) {
-    automationWorkflowKind => 'workflow',
-    _stateMachineBodyKind => 'workflow',
+    automationRunbookKind => 'runbook',
+    _stateMachineBodyKind => 'runbook',
     _ => kind.trim().replaceAll('_', ' '),
   };
 }
@@ -4465,7 +4319,7 @@ String _draftStatusLabel(String status) {
   return normalized.isEmpty ? 'draft' : normalized;
 }
 
-/// Returns the workflow name associated with one run when it is available.
+/// Returns the runbook name associated with one run when it is available.
 String _runDefinitionLabel(
   List<AutomationDefinition> definitions,
   AutomationRun run,
@@ -4473,15 +4327,15 @@ String _runDefinitionLabel(
   return _definitionLabel(
     definitions,
     run.definitionId,
-    fallback: 'Workflow run',
+    fallback: 'Runbook run',
   );
 }
 
-/// Returns the workflow file name for one definition id.
+/// Returns the runbook file name for one definition id.
 String _definitionLabel(
   List<AutomationDefinition> definitions,
   String definitionId, {
-  String fallback = 'Workflow file',
+  String fallback = 'Runbook file',
 }) {
   final definition = _definitionForId(definitions, definitionId);
   return definition?.name ?? fallback;
@@ -4501,15 +4355,15 @@ String _codebaseLabel(
   return fallback;
 }
 
-/// Returns the Operation name for one Operation id.
-String _operationLabel(
-  List<AutomationRunSetup> operations,
-  String operationId, {
-  String fallback = 'Operation',
+/// Returns the Launch name for one Launch id.
+String _launchLabel(
+  List<AutomationRunSetup> launchpad,
+  String launchId, {
+  String fallback = 'Launch',
 }) {
-  for (final operation in operations) {
-    if (operation.id == operationId) {
-      return operation.name;
+  for (final launch in launchpad) {
+    if (launch.id == launchId) {
+      return launch.name;
     }
   }
   return fallback;
@@ -4529,131 +4383,26 @@ String _targetLabel(
   return fallback;
 }
 
-/// Returns the first usable codebase id for an Operation dialog.
-String _initialCodebaseId(
-  List<AutomationCodebase> codebases,
-  String selectedCodebaseId,
+/// Returns the first usable target id for an Launch dialog.
+String _initialTargetId(
+  List<AutomationRuntimeTarget> targets,
+  String selectedTargetId,
 ) {
-  for (final codebase in codebases) {
-    if (codebase.id == selectedCodebaseId) {
-      return codebase.id;
-    }
-  }
-  return codebases.isEmpty ? '' : codebases.first.id;
-}
-
-/// Returns the first usable target id for an Operation dialog.
-String _initialTargetId({
-  required List<AutomationCodebase> codebases,
-  required List<AutomationRuntimeTarget> targets,
-  required String codebaseId,
-  required String selectedTargetId,
-}) {
-  final options = _targetOptionsForCodebase(targets, codebaseId);
-  final codebase = _codebaseForId(codebases, codebaseId);
-  if (codebase != null &&
-      options.any((target) => target.id == codebase.runtimeTargetId)) {
-    return codebase.runtimeTargetId;
-  }
-  if (options.any((target) => target.id == selectedTargetId)) {
+  if (targets.any((target) => target.id == selectedTargetId)) {
     return selectedTargetId;
   }
-  return options.isEmpty ? '' : options.first.id;
-}
-
-/// Returns targets eligible for the selected codebase.
-List<AutomationRuntimeTarget> _targetOptionsForCodebase(
-  List<AutomationRuntimeTarget> targets,
-  String codebaseId,
-) {
-  if (codebaseId.trim().isEmpty) {
-    return targets;
-  }
-  return <AutomationRuntimeTarget>[
-    for (final target in targets)
-      if (target.allowedCodebaseIds.isEmpty ||
-          target.allowedCodebaseIds.contains(codebaseId))
-        target,
-  ];
-}
-
-/// Finds one codebase by catalog id.
-AutomationCodebase? _codebaseForId(
-  List<AutomationCodebase> codebases,
-  String codebaseId,
-) {
-  for (final codebase in codebases) {
-    if (codebase.id == codebaseId) {
-      return codebase;
-    }
-  }
-  return null;
-}
-
-/// Builds the source-control safety policy chosen in the Operation dialog.
-Map<String, dynamic> _operationPolicyFromDialogResult(
-  _RunSetupDialogResult result,
-) {
-  return _operationPolicyFromSelections(
-    codebaseId: result.codebaseId,
-    runtimeTargetId: result.runtimeTargetId,
-    sourceControlPolicy: result.sourceControlPolicy,
-  );
-}
-
-/// Builds a structured Operation safety policy from typed selections.
-Map<String, dynamic> _operationPolicyFromSelections({
-  required String codebaseId,
-  required String runtimeTargetId,
-  required String sourceControlPolicy,
-}) {
-  if (sourceControlPolicy != _operationSafetyOpenPROnly) {
-    return const <String, dynamic>{};
-  }
-  return <String, dynamic>{
-    'source_control': _operationSafetyOpenPROnly,
-    'destructive_action': 'deny',
-    'allowed_tools': _operationSourceControlTools,
-    'allowed_mcp_servers': const <String>['sourcecontrol'],
-    if (codebaseId.isNotEmpty) 'allowed_codebases': <String>[codebaseId],
-    if (runtimeTargetId.isNotEmpty)
-      'allowed_targets': <String>[runtimeTargetId],
-  };
-}
-
-/// Reports whether one Operation should bind a codebase.
-bool _operationNeedsCodebase(AutomationDefinition definition) {
-  final setupFields = _workflowRunSetupSetupFields(definition.body);
-  return setupFields.any(_isCodebaseBackedInputName);
-}
-
-/// Reports whether one Operation should bind a Computer or Server.
-bool _operationNeedsTarget(AutomationDefinition definition) {
-  return _operationNeedsCodebase(definition);
-}
-
-/// Reports whether a workflow input should come from a codebase record.
-bool _isCodebaseBackedInputName(String name) {
-  return const <String>{
-    'repository_path',
-    'repo_path',
-    'default_remote',
-    'remote',
-    'default_branch',
-    'base_branch',
-    'provider_repository',
-  }.contains(name.trim());
+  return targets.isEmpty ? '' : targets.first.id;
 }
 
 /// Returns the user-facing source-control policy label.
-String _operationSourceControlPolicyLabel(String policy) {
-  return _operationSafetyLabels[policy.trim()] ??
+String _launchSourceControlPolicyLabel(String policy) {
+  return _launchSafetyLabels[policy.trim()] ??
       (policy.trim().isEmpty
-          ? 'Open PR only'
+          ? 'not configured'
           : _stateMachineDisplayName(policy));
 }
 
-/// Finds one workflow file by id.
+/// Finds one runbook file by id.
 AutomationDefinition? _definitionForId(
   List<AutomationDefinition> definitions,
   String definitionId,
@@ -4691,39 +4440,8 @@ String _targetStatusLabel(String status) {
   };
 }
 
-/// Returns the user-facing label for one Operation preview status.
-String _operationPreviewStatusLabel(String status) {
-  return switch (status.trim()) {
-    'ready' => 'ready',
-    'needs_input' => 'Needs Setup',
-    'blocked' => 'blocked',
-    _ => status.trim().isEmpty ? 'unknown' : _stateMachineDisplayName(status),
-  };
-}
-
-/// Returns the user-facing label for one Operation policy status.
-String _operationPolicyStatusLabel(String status) {
-  return switch (status.trim()) {
-    'allowed' => 'allowed',
-    'blocked' => 'blocked',
-    _ => status.trim().isEmpty ? 'unknown' : _stateMachineDisplayName(status),
-  };
-}
-
-/// Builds display-safe resolved input rows for an Operation preview.
-List<String> _operationPreviewInputRows(AutomationOperationPreview preview) {
-  final keys = preview.resolvedInput.keys.toList()..sort();
-  if (keys.isEmpty) {
-    return const <String>['No resolved inputs'];
-  }
-  return <String>[
-    for (final key in keys)
-      '${_stateMachineDisplayName(key)}: ${_displayPreviewValue(preview.resolvedInput[key])}',
-  ];
-}
-
-/// Converts preview values to compact display-safe text.
-String _displayPreviewValue(Object? value) {
+/// Converts dynamic values to compact display-safe text.
+String _displayDynamicValue(Object? value) {
   if (value == null) {
     return '';
   }
@@ -4736,64 +4454,32 @@ String _displayPreviewValue(Object? value) {
   return jsonEncode(value);
 }
 
-/// Builds setup rows for one saved Operation.
-List<String> _operationSetupRows(
+/// Builds setup rows for one saved Launch.
+List<String> _launchSetupRows(
   AutomationRunSetup setup, {
   required List<AutomationDefinition> definitions,
   required List<AutomationCodebase> codebases,
   required List<AutomationRuntimeTarget> targets,
 }) {
   return <String>[
-    'Operation: ${setup.name}',
-    'Workflow file: ${_definitionLabel(definitions, setup.definitionId)}',
-    if (setup.codebaseId.isNotEmpty)
-      'Codebase: ${_codebaseLabel(codebases, setup.codebaseId)}',
+    'Launch: ${setup.name}',
+    'Runbook file: ${_definitionLabel(definitions, setup.definitionId)}',
     if (setup.runtimeTargetId.isNotEmpty)
       'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
-    if (setup.policy['source_control'] != null)
-      'Safety: ${_operationSourceControlPolicyLabel('${setup.policy['source_control']}')}',
+    ..._launchSafetyRows(setup, codebases: codebases, targets: targets),
     if (setup.updatedAt.isNotEmpty) 'Updated: ${setup.updatedAt}',
   ];
 }
 
-/// Builds saved input rows for one Operation.
-List<String> _operationInputRows(AutomationRunSetup setup) {
-  final keys = setup.input.keys.toList()..sort();
-  if (keys.isEmpty) {
-    return const <String>['No saved default inputs'];
-  }
-  return <String>[
-    for (final key in keys)
-      '${_stateMachineDisplayName(key)}: ${_displayPreviewValue(setup.input[key])}',
-  ];
-}
-
-/// Builds target binding rows for one Operation.
-List<String> _operationTargetRows(
-  AutomationRunSetup setup, {
-  required List<AutomationCodebase> codebases,
-  required List<AutomationRuntimeTarget> targets,
-}) {
-  return <String>[
-    if (setup.runtimeTargetId.isEmpty) 'Run on: not selected',
-    if (setup.runtimeTargetId.isNotEmpty)
-      'Run on: ${_targetLabel(targets, setup.runtimeTargetId)}',
-    if (setup.codebaseId.isNotEmpty)
-      'Allowed codebase: ${_codebaseLabel(codebases, setup.codebaseId)}',
-    if (_stringListFromMap(setup.policy, 'allowed_targets').isNotEmpty)
-      'Allowed targets: ${_stringListFromMap(setup.policy, 'allowed_targets').map((targetId) => _targetLabel(targets, targetId)).join(', ')}',
-  ];
-}
-
-/// Builds schedule rows for one Operation.
-List<String> _operationScheduleRows(AutomationRunSetup setup) {
+/// Builds schedule rows for one Launch.
+List<String> _launchScheduleRows(AutomationRunSetup setup) {
   final schedule = setup.schedule;
-  if (!_operationHasSchedule(setup)) {
+  if (!_launchHasSchedule(setup)) {
     return const <String>['Schedule: manual only'];
   }
   return <String>[
-    'Schedule: ${_operationScheduleLabel(schedule)}',
-    'Status: ${_operationScheduleEnabled(schedule) ? 'enabled' : 'paused'}',
+    'Schedule: ${_launchScheduleLabel(schedule)}',
+    'Status: ${_launchScheduleEnabled(schedule) ? 'enabled' : 'paused'}',
     if (_stringFromMap(schedule, 'quiet_hours_start').isNotEmpty ||
         _stringFromMap(schedule, 'quiet_hours_end').isNotEmpty)
       'Quiet hours: ${_stringFromMap(schedule, 'quiet_hours_start')} - ${_stringFromMap(schedule, 'quiet_hours_end')}',
@@ -4804,21 +4490,21 @@ List<String> _operationScheduleRows(AutomationRunSetup setup) {
   ];
 }
 
-/// Builds policy rows for one Operation.
-List<String> _operationSafetyRows(
+/// Builds policy rows for one Launch.
+List<String> _launchSafetyRows(
   AutomationRunSetup setup, {
   required List<AutomationCodebase> codebases,
   required List<AutomationRuntimeTarget> targets,
 }) {
   final policy = setup.policy;
   if (policy.isEmpty) {
-    return const <String>['Safety: default Operation policy'];
+    return const <String>[];
   }
   return <String>[
     if (_stringFromMap(policy, 'source_control').isNotEmpty)
-      'Source control: ${_operationSourceControlPolicyLabel(_stringFromMap(policy, 'source_control'))}',
+      'Source control: ${_launchSourceControlPolicyLabel(_stringFromMap(policy, 'source_control'))}',
     if (_stringFromMap(policy, 'destructive_action').isNotEmpty)
-      'Destructive actions: ${_operationDestructiveActionLabel(_stringFromMap(policy, 'destructive_action'))}',
+      'Destructive actions: ${_launchDestructiveActionLabel(_stringFromMap(policy, 'destructive_action'))}',
     if (_stringListFromMap(policy, 'allowed_codebases').isNotEmpty)
       'Allowed codebases: ${_stringListFromMap(policy, 'allowed_codebases').map((codebaseId) => _codebaseLabel(codebases, codebaseId)).join(', ')}',
     if (_stringListFromMap(policy, 'allowed_targets').isNotEmpty)
@@ -4830,8 +4516,8 @@ List<String> _operationSafetyRows(
   ];
 }
 
-/// Builds run rows for one Operation.
-List<String> _operationRunRows(
+/// Builds run rows for one Launch.
+List<String> _launchRunRows(
   AutomationRunSetup setup,
   List<AutomationRun> runs, {
   required List<AutomationDefinition> definitions,
@@ -4840,7 +4526,7 @@ List<String> _operationRunRows(
       .where((run) => run.definitionId == setup.definitionId)
       .toList();
   if (matching.isEmpty) {
-    return const <String>['No runs for this Operation'];
+    return const <String>['No runs for this Launch'];
   }
   return <String>[
     'Runs: ${matching.length}',
@@ -4849,28 +4535,28 @@ List<String> _operationRunRows(
   ];
 }
 
-/// Reports whether one Operation has a saved schedule.
-bool _operationHasSchedule(AutomationRunSetup setup) {
+/// Reports whether one Launch has a saved schedule.
+bool _launchHasSchedule(AutomationRunSetup setup) {
   final schedule = setup.schedule;
   if (schedule.isEmpty) {
     return false;
   }
-  return _operationScheduleEnabled(schedule) ||
+  return _launchScheduleEnabled(schedule) ||
       _stringFromMap(schedule, 'cron').isNotEmpty ||
       _stringFromMap(schedule, 'stop_at').isNotEmpty;
 }
 
 /// Reports whether one saved schedule is enabled.
-bool _operationScheduleEnabled(Map<String, dynamic> schedule) {
+bool _launchScheduleEnabled(Map<String, dynamic> schedule) {
   return schedule['enabled'] == true ||
       '${schedule['enabled'] ?? ''}'.trim().toLowerCase() == 'true';
 }
 
 /// Returns a product-facing schedule label.
-String _operationScheduleLabel(Map<String, dynamic> schedule) {
+String _launchScheduleLabel(Map<String, dynamic> schedule) {
   final cron = _stringFromMap(schedule, 'cron');
   if (cron.isEmpty) {
-    return _operationScheduleEnabled(schedule) ? 'Enabled' : 'Manual only';
+    return _launchScheduleEnabled(schedule) ? 'Enabled' : 'Manual only';
   }
   final parts = cron.split(RegExp(r'\s+'));
   if (parts.length == 5) {
@@ -4891,7 +4577,7 @@ String _operationScheduleLabel(Map<String, dynamic> schedule) {
 }
 
 /// Returns a product-facing destructive-action policy label.
-String _operationDestructiveActionLabel(String value) {
+String _launchDestructiveActionLabel(String value) {
   return switch (value.trim()) {
     'deny' => 'denied',
     'review' => 'Needs Review',
@@ -4969,13 +4655,13 @@ List<String> _targetSecretRows(
   ];
 }
 
-/// Builds operation routing rows for one Computer or Server target.
-List<String> _targetOperationRows(
+/// Builds launch routing rows for one Computer or Server target.
+List<String> _targetLaunchRows(
   AutomationRuntimeTarget target,
-  List<AutomationRunSetup> operations,
+  List<AutomationRunSetup> launchpad,
 ) {
   return <String>[
-    'Saved Operations: ${operations.length}',
+    'Saved Launchpad: ${launchpad.length}',
     'Active runs: ${target.currentRunCount}',
     if (target.allowedCodebaseIds.isNotEmpty)
       'Allowed codebases: ${target.allowedCodebaseIds.length}',
@@ -5121,7 +4807,7 @@ class _AutomationTile extends StatelessWidget {
   }
 }
 
-/// Returns saved Operations matching the left-pane text filter.
+/// Returns saved Launchpad matching the left-pane text filter.
 List<AutomationRunSetup> _filterRunSetups(
   List<AutomationRunSetup> setups,
   String query,
@@ -5139,8 +4825,8 @@ List<AutomationRunSetup> _filterRunSetups(
   }).toList();
 }
 
-/// Returns Operations scoped to the selected workflow file when one exists.
-List<AutomationRunSetup> _operationSetupsForDefinition(
+/// Returns Launchpad scoped to the selected runbook file when one exists.
+List<AutomationRunSetup> _launchSetupsForDefinition(
   List<AutomationRunSetup> setups,
   AutomationDefinition? definition,
 ) {
@@ -5150,8 +4836,8 @@ List<AutomationRunSetup> _operationSetupsForDefinition(
   return setups.where((setup) => setup.definitionId == definition.id).toList();
 }
 
-/// Returns runs scoped to the selected workflow file when one exists.
-List<AutomationRun> _operationRunsForDefinition(
+/// Returns runs scoped to the selected runbook file when one exists.
+List<AutomationRun> _launchRunsForDefinition(
   List<AutomationRun> runs,
   AutomationDefinition? definition,
 ) {
@@ -5161,8 +4847,8 @@ List<AutomationRun> _operationRunsForDefinition(
   return runs.where((run) => run.definitionId == definition.id).toList();
 }
 
-/// Returns the selected Operation when it is in a visible scoped list.
-AutomationRunSetup? _selectedOperationSetupFrom(
+/// Returns the selected Launch when it is in a visible scoped list.
+AutomationRunSetup? _selectedLaunchSetupFrom(
   List<AutomationRunSetup> setups,
   AutomationRunSetup? selectedSetup,
 ) {
@@ -5217,9 +4903,9 @@ List<AutomationDraft> _draftsWithSelected(
   return <AutomationDraft>[selected, ...drafts];
 }
 
-/// Returns a non-colliding display name for a new workflow draft.
-String _nextWorkflowDraftName(List<AutomationDraft> drafts) {
-  const base = 'New Workflow';
+/// Returns a non-colliding display name for a new runbook draft.
+String _nextRunbookDraftName(List<AutomationDraft> drafts) {
+  const base = 'New Runbook';
   final names = drafts.map((draft) => draft.name.trim()).toSet();
   if (!names.contains(base)) {
     return base;
@@ -5279,39 +4965,39 @@ int _intFromMap(Map<String, dynamic> values, String key) {
   return int.tryParse('$value'.trim()) ?? 0;
 }
 
-/// Builds artifact rows from workflow run output.
-List<_OperationArtifactItem> _operationArtifactsForRuns(
+/// Builds artifact rows from runbook run output.
+List<_LaunchArtifactItem> _launchArtifactsForRuns(
   List<AutomationRun> runs, {
   required List<AutomationDefinition> definitions,
 }) {
-  final artifacts = <_OperationArtifactItem>[];
+  final artifacts = <_LaunchArtifactItem>[];
   for (final run in runs) {
-    final workflowLabel = _runDefinitionLabel(definitions, run);
+    final runbookLabel = _runDefinitionLabel(definitions, run);
     artifacts.addAll(
-      _operationArtifactsForRun(run, workflowLabel: workflowLabel),
+      _launchArtifactsForRun(run, runbookLabel: runbookLabel),
     );
   }
   return artifacts;
 }
 
-/// Builds artifact rows from one workflow run output.
-List<_OperationArtifactItem> _operationArtifactsForRun(
+/// Builds artifact rows from one runbook run output.
+List<_LaunchArtifactItem> _launchArtifactsForRun(
   AutomationRun run, {
-  required String workflowLabel,
+  required String runbookLabel,
 }) {
   final output = run.output;
-  final artifacts = <_OperationArtifactItem>[];
+  final artifacts = <_LaunchArtifactItem>[];
   void addArtifact(String title, Object? value) {
-    final text = _displayPreviewValue(value).trim();
+    final text = _displayDynamicValue(value).trim();
     if (text.isEmpty) {
       return;
     }
     artifacts.add(
-      _OperationArtifactItem(
+      _LaunchArtifactItem(
         run: run,
         title: title,
         subtitle: text,
-        workflowLabel: workflowLabel,
+        runbookLabel: runbookLabel,
       ),
     );
   }
@@ -5358,25 +5044,25 @@ List<AutomationPendingItem> _filterPendingItems(
 
 /// Returns the automation draft kind edited by a left command area.
 String? _automationDraftKindForArea(String areaId) {
-  if (areaId == _automationWorkflowAreaDrafts ||
-      areaId == _automationWorkflowAreaActions) {
-    return automationWorkflowKind;
+  if (areaId == _automationRunbookAreaDrafts ||
+      areaId == _automationRunbookAreaActions) {
+    return automationRunbookKind;
   }
   return null;
 }
 
 /// Reports whether a draft belongs in the requested authoring section.
 bool _draftMatchesSectionKind(AutomationDraft draft, String kind) {
-  if (kind == automationWorkflowKind) {
-    return _isWorkflowFileKind(draft.kind);
+  if (kind == automationRunbookKind) {
+    return _isRunbookFileKind(draft.kind);
   }
   return draft.kind == kind;
 }
 
-/// Reports whether a draft kind is a workflow file in the Automations UI.
-bool _isWorkflowFileKind(String kind) {
+/// Reports whether a draft kind is a runbook file in the Automations UI.
+bool _isRunbookFileKind(String kind) {
   final normalized = kind.trim();
-  return normalized == automationWorkflowKind ||
+  return normalized == automationRunbookKind ||
       normalized == _stateMachineBodyKind;
 }
 
@@ -5409,8 +5095,8 @@ IconData _actionIcon(String actionName) {
     'data.defaults' => Icons.tune_outlined,
     'human.request' => Icons.how_to_reg_outlined,
     'delay.until' => Icons.schedule_outlined,
-    'workflow.run' => Icons.account_tree_outlined,
-    'workflow.signal' => Icons.flag_outlined,
+    'runbook.run' => Icons.account_tree_outlined,
+    'runbook.signal' => Icons.flag_outlined,
     _ => Icons.bolt_outlined,
   };
 }
@@ -5425,8 +5111,8 @@ String _fallbackActionLabel(String actionName) {
     'data.defaults' => 'Apply Defaults',
     'human.request' => 'Prompt',
     'delay.until' => 'Delay',
-    'workflow.run' => 'Run Workflow',
-    'workflow.signal' => 'Signal',
+    'runbook.run' => 'Run Runbook',
+    'runbook.signal' => 'Signal',
     _ => actionName,
   };
 }
@@ -5441,13 +5127,13 @@ String _fallbackActionDescription(String actionName) {
     'data.defaults' => 'Declarative input defaults',
     'human.request' => 'Human approval or input',
     'delay.until' => 'Timed wait',
-    'workflow.run' => 'Nested workflow run',
-    'workflow.signal' => 'Workflow signal',
-    _ => 'Workflow action',
+    'runbook.run' => 'Nested runbook run',
+    'runbook.signal' => 'Runbook signal',
+    _ => 'Runbook action',
   };
 }
 
-/// Returns the visual accent color for one workflow action type.
+/// Returns the visual accent color for one runbook action type.
 Color _actionColor(BuildContext context, String actionName) {
   final colors = context.agentAwesomeColors;
   return switch (actionName) {
@@ -5458,8 +5144,8 @@ Color _actionColor(BuildContext context, String actionName) {
     'data.defaults' => colors.green,
     'human.request' => colors.green,
     'delay.until' => colors.muted,
-    'workflow.run' => colors.orbit,
-    'workflow.signal' => colors.warningText,
+    'runbook.run' => colors.orbit,
+    'runbook.signal' => colors.warningText,
     _ => colors.green,
   };
 }

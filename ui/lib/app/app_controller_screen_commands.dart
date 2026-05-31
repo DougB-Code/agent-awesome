@@ -1,4 +1,4 @@
-/// Backlog screen-command workflows for AgentAwesomeAppController.
+/// Backlog screen-command runbooks for AgentAwesomeAppController.
 part of 'app_controller.dart';
 
 extension AgentAwesomeAppControllerScreenCommands on AgentAwesomeAppController {

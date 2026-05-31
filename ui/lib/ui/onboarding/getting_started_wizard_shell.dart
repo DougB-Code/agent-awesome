@@ -14,7 +14,7 @@ enum _SetupStep {
   }
 }
 
-/// GettingStartedWizard owns the interactive first-run setup workflow.
+/// GettingStartedWizard owns the interactive first-run setup runbook.
 class GettingStartedWizard extends StatefulWidget {
   /// Creates the first-run setup flow.
   const GettingStartedWizard({

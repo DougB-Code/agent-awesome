@@ -119,7 +119,7 @@ func yamlTimeToStringHook(from reflect.Type, to reflect.Type, data any) (any, er
 }
 
 // expandKnownEnvironment expands configured environment references without
-// destroying workflow-style references that intentionally remain unresolved.
+// destroying runbook-style references that intentionally remain unresolved.
 func expandKnownEnvironment(data []byte) []byte {
 	text := string(data)
 	var out strings.Builder
@@ -261,20 +261,27 @@ func mergeMCPConfig(cfg *schema.Tools, mcp schema.MCP) {
 	cfg.MCP.Servers = append(cfg.MCP.Servers, mcp.Servers...)
 }
 
-// mcpConfigDirForToolPath resolves the sibling MCP package directory for a tool config.
+// mcpConfigDirForToolPath resolves the MCP package directory paired with a tool config.
 func mcpConfigDirForToolPath(path string) string {
 	clean := filepath.Clean(path)
+	if clean == filepath.Clean(DefaultToolPath()) {
+		return DefaultMCPConfigDir()
+	}
 	for dir := filepath.Dir(clean); dir != "." && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		parent := filepath.Dir(dir)
+		if filepath.Base(parent) == schema.DefaultToolConfigDirName {
+			return filepath.Join(
+				filepath.Dir(parent),
+				schema.DefaultMCPConfigDirName,
+				filepath.Base(dir),
+			)
+		}
 		if filepath.Base(dir) == schema.DefaultToolConfigDirName {
 			return filepath.Join(filepath.Dir(dir), schema.DefaultMCPConfigDirName)
 		}
-		parent := filepath.Dir(dir)
 		if parent == dir {
 			break
 		}
-	}
-	if clean == filepath.Clean(DefaultToolPath()) {
-		return DefaultMCPConfigDir()
 	}
 	return ""
 }

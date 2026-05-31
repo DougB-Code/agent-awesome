@@ -20,8 +20,8 @@ const (
 	DefaultHarnessServiceName = "harness"
 	// DefaultMemoryServiceName is the supervisor name for memoryd.
 	DefaultMemoryServiceName = "memory"
-	// DefaultWorkflowServiceName is the supervisor name for the workflow service.
-	DefaultWorkflowServiceName = "workflow"
+	// DefaultRunbookServiceName is the supervisor name for the runbook service.
+	DefaultRunbookServiceName = "runbook"
 )
 
 // Config stores all runtime settings for one personal gateway process.
@@ -30,7 +30,7 @@ type Config struct {
 	GatewayBaseURL                   string
 	HarnessBaseURL                   string
 	ContextBaseURL                   string
-	WorkflowBaseURL                  string
+	RunbookBaseURL                   string
 	ContextAPIToken                  string
 	MemoryMCPURL                     string
 	MemoryDomains                    []MemoryDomain
@@ -54,7 +54,7 @@ type Config struct {
 	ServiceStartTimeout              time.Duration
 	HarnessService                   ServiceConfig
 	MemoryService                    ServiceConfig
-	WorkflowService                  ServiceConfig
+	RunbookService                   ServiceConfig
 	Slack                            SlackConfig
 }
 
@@ -150,7 +150,7 @@ func FromFlags(args []string) (Config, error) {
 		GatewayBaseURL:                   envString("AGENTAWESOME_GATEWAY_API_BASE_URL", ""),
 		HarnessBaseURL:                   envString("AGENTAWESOME_HARNESS_API_BASE_URL", "http://127.0.0.1:8080/api"),
 		ContextBaseURL:                   envString("AGENTAWESOME_CONTEXT_API_BASE_URL", "http://127.0.0.1:8081/api/context"),
-		WorkflowBaseURL:                  envString("AGENTAWESOME_WORKFLOW_BASE_URL", "http://127.0.0.1:8092/api/workflows"),
+		RunbookBaseURL:                   envString("AGENTAWESOME_RUNBOOK_BASE_URL", "http://127.0.0.1:8092/api/runbooks"),
 		ContextAPIToken:                  envString("AGENTAWESOME_CONTEXT_API_TOKEN", ""),
 		MemoryMCPURL:                     envString("AGENTAWESOME_MEMORY_MCP_URL", "http://127.0.0.1:8090/mcp"),
 		AppName:                          envString("AGENTAWESOME_APP_NAME", "agent_awesome"),
@@ -194,23 +194,23 @@ func FromFlags(args []string) (Config, error) {
 		"AGENTAWESOME_MEMORY_WORKDIR",
 		"AGENTAWESOME_MEMORY_AUTO_START",
 	)
-	cfg.WorkflowService = envServiceConfig(
-		DefaultWorkflowServiceName,
-		"AGENTAWESOME_WORKFLOW_HEALTH_URL",
-		"AGENTAWESOME_WORKFLOW_COMMAND",
-		"AGENTAWESOME_WORKFLOW_ARGS",
-		"AGENTAWESOME_WORKFLOW_WORKDIR",
-		"AGENTAWESOME_WORKFLOW_AUTO_START",
+	cfg.RunbookService = envServiceConfig(
+		DefaultRunbookServiceName,
+		"AGENTAWESOME_RUNBOOK_HEALTH_URL",
+		"AGENTAWESOME_RUNBOOK_COMMAND",
+		"AGENTAWESOME_RUNBOOK_ARGS",
+		"AGENTAWESOME_RUNBOOK_WORKDIR",
+		"AGENTAWESOME_RUNBOOK_AUTO_START",
 	)
 	harnessArgs := repeatedStrings(cfg.HarnessService.Arguments)
 	memoryArgs := repeatedStrings(cfg.MemoryService.Arguments)
-	workflowArgs := repeatedStrings(cfg.WorkflowService.Arguments)
+	runbookArgs := repeatedStrings(cfg.RunbookService.Arguments)
 	fs := flag.NewFlagSet("agent-gateway", flag.ContinueOnError)
 	fs.StringVar(&cfg.ListenAddress, "addr", cfg.ListenAddress, "gateway listen address")
 	fs.StringVar(&cfg.GatewayBaseURL, "gateway-base-url", cfg.GatewayBaseURL, "gateway API base URL used by channel adapters")
 	fs.StringVar(&cfg.HarnessBaseURL, "harness-base-url", cfg.HarnessBaseURL, "upstream harness API base URL")
 	fs.StringVar(&cfg.ContextBaseURL, "context-base-url", cfg.ContextBaseURL, "upstream harness context API base URL")
-	fs.StringVar(&cfg.WorkflowBaseURL, "workflow-base-url", cfg.WorkflowBaseURL, "upstream workflow API base URL")
+	fs.StringVar(&cfg.RunbookBaseURL, "runbook-base-url", cfg.RunbookBaseURL, "upstream runbook API base URL")
 	fs.StringVar(&cfg.ContextAPIToken, "context-api-token", cfg.ContextAPIToken, "optional bearer token for upstream context API requests")
 	fs.StringVar(&cfg.MemoryMCPURL, "memory-mcp-url", cfg.MemoryMCPURL, "memory MCP endpoint exposed in gateway status")
 	fs.StringVar(&memoryDomainsJSON, "memory-domains-json", memoryDomainsJSON, "JSON memory domain list for gateway routing")
@@ -229,7 +229,7 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.ModelID, "model-id", cfg.ModelID, "current non-secret model identifier for beta status")
 	fs.StringVar(&cfg.LogFile, "log-file", cfg.LogFile, "optional gateway log file path")
 	fs.BoolVar(&cfg.CheckConfig, "check-config", cfg.CheckConfig, "validate configuration and exit without starting the gateway")
-	fs.BoolVar(&cfg.HarnessEmbeddedServices, "harness-embedded-services", cfg.HarnessEmbeddedServices, "start workflow services inside the harness process")
+	fs.BoolVar(&cfg.HarnessEmbeddedServices, "harness-embedded-services", cfg.HarnessEmbeddedServices, "start runbook services inside the harness process")
 	fs.DurationVar(&cfg.RequestTimeout, "request-timeout", cfg.RequestTimeout, "maximum upstream request duration")
 	fs.DurationVar(&cfg.ServiceStartTimeout, "service-start-timeout", cfg.ServiceStartTimeout, "maximum local service readiness wait")
 	fs.BoolVar(&cfg.Slack.Enabled, "slack-enabled", cfg.Slack.Enabled, "enable Slack channel adapter")
@@ -242,14 +242,14 @@ func FromFlags(args []string) (Config, error) {
 	fs.StringVar(&cfg.Slack.AllowedChannelID, "slack-allowed-channel-id", cfg.Slack.AllowedChannelID, "required Slack channel id allow-list when Slack is enabled")
 	bindServiceFlags(fs, &cfg.HarnessService, &harnessArgs, DefaultHarnessServiceName)
 	bindServiceFlags(fs, &cfg.MemoryService, &memoryArgs, DefaultMemoryServiceName)
-	bindServiceFlags(fs, &cfg.WorkflowService, &workflowArgs, DefaultWorkflowServiceName)
+	bindServiceFlags(fs, &cfg.RunbookService, &runbookArgs, DefaultRunbookServiceName)
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
 
 	cfg.HarnessService.Arguments = harnessArgs
 	cfg.MemoryService.Arguments = memoryArgs
-	cfg.WorkflowService.Arguments = workflowArgs
+	cfg.RunbookService.Arguments = runbookArgs
 	if err := cfg.applyMemoryTopology(memoryDomainsJSON, memoryPolicyJSON); err != nil {
 		return Config{}, err
 	}
@@ -265,8 +265,8 @@ func FromFlags(args []string) (Config, error) {
 	if cfg.MemoryService.HealthURL == "" {
 		cfg.MemoryService.HealthURL = defaultMemoryServiceHealthURL(cfg.MemoryDomains, cfg.MemoryMCPURL)
 	}
-	if cfg.WorkflowService.HealthURL == "" {
-		cfg.WorkflowService.HealthURL = workflowHealthURL(cfg.WorkflowBaseURL)
+	if cfg.RunbookService.HealthURL == "" {
+		cfg.RunbookService.HealthURL = runbookHealthURL(cfg.RunbookBaseURL)
 	}
 	if err := cfg.applyHarnessEmbeddedServices(); err != nil {
 		return Config{}, err
@@ -308,7 +308,7 @@ func (c Config) Validate() error {
 	if err := validateRequestURL("context base URL", c.ContextBaseURL); err != nil {
 		return err
 	}
-	if err := validateRequestURL("workflow base URL", c.WorkflowBaseURL); err != nil {
+	if err := validateRequestURL("runbook base URL", c.RunbookBaseURL); err != nil {
 		return err
 	}
 	if err := validateRequestURL("memory MCP URL", c.MemoryMCPURL); err != nil {
@@ -335,8 +335,8 @@ func (c Config) Validate() error {
 	if err := c.MemoryService.Validate(); err != nil {
 		return fmt.Errorf("memory service: %w", err)
 	}
-	if err := c.WorkflowService.Validate(); err != nil {
-		return fmt.Errorf("workflow service: %w", err)
+	if err := c.RunbookService.Validate(); err != nil {
+		return fmt.Errorf("runbook service: %w", err)
 	}
 	if err := c.validateMemoryServices(); err != nil {
 		return err
@@ -400,7 +400,7 @@ func (c Config) StatusView() map[string]any {
 		"gateway_base_url":                    c.GatewayBaseURL,
 		"harness_base_url":                    c.HarnessBaseURL,
 		"context_base_url":                    c.ContextBaseURL,
-		"workflow_base_url":                   c.WorkflowBaseURL,
+		"runbook_base_url":                    c.RunbookBaseURL,
 		"has_context_api_token":               strings.TrimSpace(c.ContextAPIToken) != "",
 		"memory_mcp_url":                      c.MemoryMCPURL,
 		"memory_domains":                      statusViews(c.MemoryDomains),
@@ -425,7 +425,7 @@ func (c Config) StatusView() map[string]any {
 		"harness_embedded_services": c.HarnessEmbeddedServices,
 		"harness_service":           c.HarnessService.StatusView(),
 		"memory_service":            c.MemoryService.StatusView(),
-		"workflow_service":          c.WorkflowService.StatusView(),
+		"runbook_service":           c.RunbookService.StatusView(),
 		"slack":                     c.Slack.StatusView(),
 	}
 }
@@ -943,8 +943,8 @@ func (c *Config) applyHarnessEmbeddedServices() error {
 	if !c.HarnessEmbeddedServices {
 		return nil
 	}
-	if serviceProcessConfigured(c.WorkflowService) {
-		return fmt.Errorf("workflow service process flags cannot be used with harness-embedded-services")
+	if serviceProcessConfigured(c.RunbookService) {
+		return fmt.Errorf("runbook service process flags cannot be used with harness-embedded-services")
 	}
 	if !c.HarnessService.AutoStart {
 		return nil
@@ -954,12 +954,12 @@ func (c *Config) applyHarnessEmbeddedServices() error {
 	if err != nil {
 		return fmt.Errorf("context base URL for harness embedded services: %w", err)
 	}
-	workflowAddr, err := listenAddressFromRequestURL(c.WorkflowBaseURL)
+	runbookAddr, err := listenAddressFromRequestURL(c.RunbookBaseURL)
 	if err != nil {
-		return fmt.Errorf("workflow base URL for harness embedded services: %w", err)
+		return fmt.Errorf("runbook base URL for harness embedded services: %w", err)
 	}
 	args = insertHarnessFlagValue(args, "--context-api-addr", contextAddr)
-	args = insertHarnessFlagValue(args, "--workflow-api-addr", workflowAddr)
+	args = insertHarnessFlagValue(args, "--runbook-api-addr", runbookAddr)
 	c.HarnessService.Arguments = args
 	return nil
 }
@@ -1260,8 +1260,8 @@ func memoryHealthURL(mcpURL string) string {
 	return parsed.String()
 }
 
-// workflowHealthURL derives the workflow process health endpoint from its API URL.
-func workflowHealthURL(apiBaseURL string) string {
+// runbookHealthURL derives the runbook process health endpoint from its API URL.
+func runbookHealthURL(apiBaseURL string) string {
 	parsed, err := url.Parse(apiBaseURL)
 	if err != nil {
 		return ""

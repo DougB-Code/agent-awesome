@@ -693,10 +693,10 @@ void main() {
         'label': 'Go test all',
         'description': 'Run Go tests.',
         'usable_in_chat': true,
-        'usable_in_workflows': true,
+        'usable_in_runbooks': true,
         'invocation': <String, dynamic>{
           'direct_tool_name': 'command_execute',
-          'workflow_action': 'command.execute',
+          'runbook_action': 'command.execute',
           'command_template': 'go_test_all',
         },
         'contract': <String, dynamic>{'confirmation_required': true},
@@ -714,17 +714,17 @@ void main() {
       });
 
       expect(capability.id, 'command:go_test_all');
-      expect(capability.usableInWorkflows, isTrue);
-      expect(capability.invocation['workflow_action'], 'command.execute');
+      expect(capability.usableInRunbooks, isTrue);
+      expect(capability.invocation['runbook_action'], 'command.execute');
       expect(capability.availability.status, 'available');
       expect(capability.testResults.single.type, 'schema');
     });
 
-    test('parses Operation preview records', () {
-      final preview = parseAutomationOperationPreview(<String, dynamic>{
-        'operation': <String, dynamic>{
+    test('parses Launch preview records', () {
+      final preview = parseAutomationLaunchPreview(<String, dynamic>{
+        'launch': <String, dynamic>{
           'id': 'source_change',
-          'workflow_id': 'source_change_workflow',
+          'runbook_id': 'source_change_runbook',
           'name': 'Source Change',
           'codebase_id': 'agent_awesome',
           'runtime_target_id': 'local',
@@ -751,22 +751,22 @@ void main() {
         },
       });
 
-      expect(preview.operation.id, 'source_change');
-      expect(preview.operation.runtimeTargetId, 'local');
-      expect(preview.operation.input['binary_package'], '.');
-      expect(preview.operation.policy['source_control'], 'open_pr_only');
+      expect(preview.launch.id, 'source_change');
+      expect(preview.launch.runtimeTargetId, 'local');
+      expect(preview.launch.input['binary_package'], '.');
+      expect(preview.launch.policy['source_control'], 'open_pr_only');
       expect(preview.status, 'needs_input');
       expect(preview.resolvedInput['repository_path'], '/repo/agent');
       expect(preview.missingSetup, <String>['change_request']);
       expect(preview.policyDecision.status, 'allowed');
     });
 
-    test('parses Operation run snapshots', () {
-      final snapshot = parseAutomationOperationRunSnapshot(<String, dynamic>{
+    test('parses Launch run snapshots', () {
+      final snapshot = parseAutomationLaunchRunSnapshot(<String, dynamic>{
         'run_id': 'run_1',
-        'operation_id': 'setup_1',
-        'operation_version': 2,
-        'workflow_id': 'source_change_workflow',
+        'launch_id': 'setup_1',
+        'launch_version': 2,
+        'runbook_id': 'source_change_runbook',
         'resolved_input': <String, dynamic>{'repository_path': '/repo/agent'},
         'target': <String, dynamic>{'runtime_target_id': 'local'},
         'policy': <String, dynamic>{'source_control': 'open_pr_only'},
@@ -776,8 +776,8 @@ void main() {
       });
 
       expect(snapshot.runId, 'run_1');
-      expect(snapshot.operationId, 'setup_1');
-      expect(snapshot.operationVersion, 2);
+      expect(snapshot.launchId, 'setup_1');
+      expect(snapshot.launchVersion, 2);
       expect(snapshot.target['runtime_target_id'], 'local');
       expect(snapshot.secretRefs.single['name'], 'github_token');
     });

@@ -43,16 +43,16 @@ extension HarnessRuntimeLaunch on HarnessRuntime {
 /// Builds harness launch arguments for the complete active agent runtime topology.
 List<String> harnessArgumentsForProfile(RuntimeProfile profile) {
   final arguments = _harnessBaseArguments(profile.harness);
-  if (!profile.workflow.enabled || !profile.workflow.hostedByHarness) {
+  if (!profile.runbook.enabled || !profile.runbook.hostedByHarness) {
     return arguments;
   }
   return _insertBeforeRuntimeArgs(arguments, <String>[
-    '--workflow-api-addr',
-    _listenAddress(profile.workflow.apiBaseUrl, profile.workflow.port),
-    '--workflow-definitions',
-    workflowDefinitionsDirectoryPathForProfile(profile),
-    '--workflow-db',
-    workflowDatabasePathForProfile(profile),
+    '--runbook-api-addr',
+    _listenAddress(profile.runbook.apiBaseUrl, profile.runbook.port),
+    '--runbook-definitions',
+    runbookDefinitionsDirectoryPathForProfile(profile),
+    '--runbook-db',
+    runbookDatabasePathForProfile(profile),
     '--command-data-dir',
     commandDataDirectoryPathForProfile(profile),
     '--command-parser-dir',
@@ -89,32 +89,32 @@ extension GatewayRuntimeLaunch on GatewayRuntime {
   }
 }
 
-/// WorkflowRuntimeLaunch derives workflow launch and MCP endpoint details.
-extension WorkflowRuntimeLaunch on WorkflowRuntime {
-  /// Workflow MCP endpoint exposed directly to the harness.
+/// RunbookRuntimeLaunch derives runbook launch and MCP endpoint details.
+extension RunbookRuntimeLaunch on RunbookRuntime {
+  /// Runbook MCP endpoint exposed directly to the harness.
   String get mcpUrl {
     final uri = Uri.parse(apiBaseUrl);
     return uri.replace(path: '/mcp', query: null).toString();
   }
 }
 
-/// Builds standalone workflow launch arguments for the active agent runtime topology.
-List<String> workflowArgumentsForProfile(RuntimeProfile profile) {
-  final workflow = profile.workflow;
-  if (workflow.hostedByHarness) {
+/// Builds standalone runbook launch arguments for the active agent runtime topology.
+List<String> runbookArgumentsForProfile(RuntimeProfile profile) {
+  final runbook = profile.runbook;
+  if (runbook.hostedByHarness) {
     return <String>[];
   }
   return <String>[
     '--addr',
-    _listenAddress(workflow.apiBaseUrl, workflow.port),
+    _listenAddress(runbook.apiBaseUrl, runbook.port),
     '--definitions',
-    workflowDefinitionsDirectoryPathForProfile(profile),
+    runbookDefinitionsDirectoryPathForProfile(profile),
     '--db',
-    workflowDatabasePathForProfile(profile),
-    '--operations-db',
-    workflowOperationsDatabasePathForProfile(profile),
+    runbookDatabasePathForProfile(profile),
+    '--launchpad-db',
+    runbookLaunchpadDatabasePathForProfile(profile),
     '--runtime-targets-db',
-    workflowRuntimeTargetsDatabasePathForProfile(profile),
+    runbookRuntimeTargetsDatabasePathForProfile(profile),
     '--harness-context-base-url',
     profile.gateway.contextBaseUrl,
     '--tool',
@@ -134,11 +134,11 @@ List<String> workflowArgumentsForProfile(RuntimeProfile profile) {
 List<String> gatewayArgumentsForProfile(RuntimeProfile profile) {
   return <String>[
     ..._gatewayBaseArguments(profile.gateway),
-    if (profile.workflow.enabled) ...<String>[
-      '--workflow-base-url',
-      profile.workflow.apiBaseUrl,
+    if (profile.runbook.enabled) ...<String>[
+      '--runbook-base-url',
+      profile.runbook.apiBaseUrl,
     ],
-    if (profile.workflow.enabled && profile.workflow.hostedByHarness)
+    if (profile.runbook.enabled && profile.runbook.hostedByHarness)
       '--harness-embedded-services',
     '--memory-domains-json',
     jsonEncode(_gatewayMemoryDomainJson(profile.memoryServers)),
@@ -194,7 +194,7 @@ List<String> _insertBeforeRuntimeArgs(
   ];
 }
 
-/// Returns command roots configured for harness-hosted workflow execution.
+/// Returns command roots configured for harness-hosted runbook execution.
 List<String> commandAllowedWorkdirsForHarness(HarnessRuntime harness) {
   final explicit = harness.commandAllowedWorkdirs
       .map((root) => root.trim())
@@ -226,7 +226,7 @@ String defaultCommandAllowedWorkdirForProfile(RuntimeProfile profile) {
   return agentCommandWorkdirDirectoryPath(profile.id);
 }
 
-/// Returns the configured workspace root for workflow command execution.
+/// Returns the configured workspace root for runbook command execution.
 String defaultWorkspaceCommandAllowedWorkdirForProfile(RuntimeProfile profile) {
   final workspaceRoot = _localWorkspaceRootForHarness(profile.harness);
   if (workspaceRoot.isEmpty) {
@@ -420,13 +420,13 @@ class RuntimeProfileLoader {
       'AGENT_API_PORT': _portString(agentApi, 8080),
       'AGENT_CONTEXT_API_BASE_URL': config.agentContextApiBaseUrl,
       'AGENT_CONTEXT_API_PORT': _portString(contextApi, 8081),
-      'WORKFLOW_API_BASE_URL': _workflowApiBaseUrl(),
-      'WORKFLOW_API_PORT': '8092',
-      'WORKFLOW_HEALTH_URL': _healthUrl(_workflowApiBaseUrl()),
-      'WORKFLOW_DEFINITIONS_DIR': agentWorkflowDefinitionsDirectoryPath(
+      'RUNBOOK_API_BASE_URL': _runbookApiBaseUrl(),
+      'RUNBOOK_API_PORT': '8092',
+      'RUNBOOK_HEALTH_URL': _healthUrl(_runbookApiBaseUrl()),
+      'RUNBOOK_DEFINITIONS_DIR': agentRunbookDefinitionsDirectoryPath(
         'agent-awesome',
       ),
-      'WORKFLOW_DB_PATH': agentWorkflowDatabasePath('agent-awesome'),
+      'RUNBOOK_DB_PATH': agentRunbookDatabasePath('agent-awesome'),
       'AGENT_GATEWAY_BASE_URL': config.agentGatewayBaseUrl,
       'AGENT_GATEWAY_CONTEXT_BASE_URL': config.agentGatewayContextBaseUrl,
       'AGENT_GATEWAY_MCP_URL': config.agentGatewayMcpUrl,
@@ -540,14 +540,14 @@ String defaultMemoryDataDirectoryPath() {
   return '${agentAwesomeDataDirectoryPath()}/memory/files';
 }
 
-/// Returns the directory where user-authored workflow YAML files live.
-String defaultWorkflowDefinitionsDirectoryPath() {
-  return '${agentAwesomeConfigDirectoryPath()}/workflows';
+/// Returns the directory where user-authored runbook YAML files live.
+String defaultRunbookDefinitionsDirectoryPath() {
+  return '${agentAwesomeConfigDirectoryPath()}/runbooks';
 }
 
-/// Returns the default SQLite database path for local workflow state.
-String defaultWorkflowDatabasePath() {
-  return '${agentAwesomeDataDirectoryPath()}/workflow/workflow.db';
+/// Returns the default SQLite database path for local runbook state.
+String defaultRunbookDatabasePath() {
+  return '${agentAwesomeDataDirectoryPath()}/runbook/runbook.db';
 }
 
 /// Returns the default data directory for the harness-hosted command service.
@@ -575,24 +575,24 @@ String agentRuntimeDataDirectoryPath(String profileId) {
   return '${agentRuntimeDataRootDirectoryPath()}/${_safePackageId(profileId)}';
 }
 
-/// Returns the workflow definition directory for one local agent bundle.
-String agentWorkflowDefinitionsDirectoryPath(String profileId) {
-  return '${agentRuntimeConfigDirectoryPath(profileId)}/workflows';
+/// Returns the runbook definition directory for one local agent bundle.
+String agentRunbookDefinitionsDirectoryPath(String profileId) {
+  return '${agentRuntimeConfigDirectoryPath(profileId)}/runbooks';
 }
 
-/// Returns the workflow database path for one local agent runtime bundle.
-String agentWorkflowDatabasePath(String profileId) {
-  return '${agentRuntimeDataDirectoryPath(profileId)}/workflow/workflow.db';
+/// Returns the runbook database path for one local agent runtime bundle.
+String agentRunbookDatabasePath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/runbook/runbook.db';
 }
 
-/// Returns the operations database path for one local agent runtime bundle.
-String agentWorkflowOperationsDatabasePath(String profileId) {
-  return '${agentRuntimeDataDirectoryPath(profileId)}/workflow/operations.db';
+/// Returns the launchpad database path for one local agent runtime bundle.
+String agentRunbookLaunchpadDatabasePath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/runbook/launchpad.db';
 }
 
 /// Returns the runtime target database path for one local agent runtime bundle.
-String agentWorkflowRuntimeTargetsDatabasePath(String profileId) {
-  return '${agentRuntimeDataDirectoryPath(profileId)}/workflow/runtime-targets.db';
+String agentRunbookRuntimeTargetsDatabasePath(String profileId) {
+  return '${agentRuntimeDataDirectoryPath(profileId)}/runbook/runtime-targets.db';
 }
 
 /// Returns the command data path for one local agent runtime bundle.
@@ -605,36 +605,41 @@ String agentCommandWorkdirDirectoryPath(String profileId) {
   return '${agentRuntimeDataDirectoryPath(profileId)}/workdir';
 }
 
-/// Returns the effective workflow definition directory for an agent runtime topology.
-String workflowDefinitionsDirectoryPathForProfile(RuntimeProfile profile) {
-  final configured = profile.workflow.definitionsDir.trim();
+/// Returns the build-output directory for one remote Docker runtime bundle.
+String remoteDockerBundleDirectoryPath(String profileId) {
+  return 'build/remote-runtime/${_safePackageId(profileId)}';
+}
+
+/// Returns the effective runbook definition directory for an agent runtime topology.
+String runbookDefinitionsDirectoryPathForProfile(RuntimeProfile profile) {
+  final configured = profile.runbook.definitionsDir.trim();
   if (configured.isEmpty ||
-      configured == defaultWorkflowDefinitionsDirectoryPath() ||
-      _isAgentWorkflowDefinitionsPath(configured)) {
-    return agentWorkflowDefinitionsDirectoryPath(profile.id);
+      configured == defaultRunbookDefinitionsDirectoryPath() ||
+      _isAgentRunbookDefinitionsPath(configured)) {
+    return agentRunbookDefinitionsDirectoryPath(profile.id);
   }
   return configured;
 }
 
-/// Returns the effective workflow database path for an agent runtime topology.
-String workflowDatabasePathForProfile(RuntimeProfile profile) {
-  final configured = profile.workflow.dbPath.trim();
+/// Returns the effective runbook database path for an agent runtime topology.
+String runbookDatabasePathForProfile(RuntimeProfile profile) {
+  final configured = profile.runbook.dbPath.trim();
   if (configured.isEmpty ||
-      configured == defaultWorkflowDatabasePath() ||
-      _isAgentWorkflowDatabasePath(configured)) {
-    return agentWorkflowDatabasePath(profile.id);
+      configured == defaultRunbookDatabasePath() ||
+      _isAgentRunbookDatabasePath(configured)) {
+    return agentRunbookDatabasePath(profile.id);
   }
   return configured;
 }
 
-/// Returns the effective operations database path for an agent runtime topology.
-String workflowOperationsDatabasePathForProfile(RuntimeProfile profile) {
-  return agentWorkflowOperationsDatabasePath(profile.id);
+/// Returns the effective launchpad database path for an agent runtime topology.
+String runbookLaunchpadDatabasePathForProfile(RuntimeProfile profile) {
+  return agentRunbookLaunchpadDatabasePath(profile.id);
 }
 
 /// Returns the effective runtime target database path for an agent runtime topology.
-String workflowRuntimeTargetsDatabasePathForProfile(RuntimeProfile profile) {
-  return agentWorkflowRuntimeTargetsDatabasePath(profile.id);
+String runbookRuntimeTargetsDatabasePathForProfile(RuntimeProfile profile) {
+  return agentRunbookRuntimeTargetsDatabasePath(profile.id);
 }
 
 /// Returns the effective command data directory for an agent runtime topology.
@@ -673,20 +678,20 @@ String _safePackageId(String value) {
   return safe.isEmpty ? 'default' : safe;
 }
 
-/// Reports whether a path belongs to a local agent workflow bundle.
-bool _isAgentWorkflowDefinitionsPath(String path) {
+/// Reports whether a path belongs to a local agent runbook bundle.
+bool _isAgentRunbookDefinitionsPath(String path) {
   final normalized = _normalizedConfigPath(path);
   final root =
       '${_normalizedConfigPath(agentRuntimeConfigRootDirectoryPath())}/';
-  return normalized.startsWith(root) && normalized.endsWith('/workflows');
+  return normalized.startsWith(root) && normalized.endsWith('/runbooks');
 }
 
-/// Reports whether a path belongs to a local agent workflow database bundle.
-bool _isAgentWorkflowDatabasePath(String path) {
+/// Reports whether a path belongs to a local agent runbook database bundle.
+bool _isAgentRunbookDatabasePath(String path) {
   final normalized = _normalizedConfigPath(path);
   final root = '${_normalizedConfigPath(agentRuntimeDataRootDirectoryPath())}/';
   return normalized.startsWith(root) &&
-      normalized.endsWith('/workflow/workflow.db');
+      normalized.endsWith('/runbook/runbook.db');
 }
 
 /// Returns the workspace root implied by the configured harness directory.
@@ -744,9 +749,9 @@ String _healthUrl(String endpoint) {
   return uri.replace(path: '/healthz', query: '').toString();
 }
 
-/// Returns the default local workflow API base URL.
-String _workflowApiBaseUrl() {
-  return 'http://127.0.0.1:8092/api/workflows';
+/// Returns the default local runbook API base URL.
+String _runbookApiBaseUrl() {
+  return 'http://127.0.0.1:8092/api/runbooks';
 }
 
 /// Returns the beta status URL for a gateway base endpoint.

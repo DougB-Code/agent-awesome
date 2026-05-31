@@ -12,11 +12,11 @@ abstract final class AppSections {
   /// Backlog workspace section backed by graph task data.
   static const String backlog = 'Backlog';
 
-  /// Workflow run and approval operations section.
-  static const String automationOperations = 'Operations';
+  /// Runbook run and approval launchpad section.
+  static const String automationLaunchpad = 'Launchpad';
 
-  /// State-machine workflow authoring section.
-  static const String automationWorkflows = 'Workflows';
+  /// State-machine runbook authoring section.
+  static const String automationRunbooks = 'Runbooks';
 
   /// Reusable agent prompt package section.
   static const String automationAgents = 'Agents';

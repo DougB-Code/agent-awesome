@@ -27,6 +27,7 @@ import '../domain/model_config.dart';
 import '../domain/models.dart';
 import '../domain/models_automation.dart';
 import '../domain/onboarding_model_setup.dart';
+import '../domain/remote_runtime_bundle.dart';
 import '../domain/screen_command.dart';
 import '../domain/system_capabilities.dart';
 import '../domain/task_insight_index.dart';
@@ -68,10 +69,10 @@ const Set<String> _managedLocalModelProviderIds = <String>{
   'llama-cpp',
 };
 
-/// Interval for quietly refreshing user-deployable workflow files.
+/// Interval for quietly refreshing user-deployable runbook files.
 const Duration _automationFileRefreshInterval = Duration(seconds: 5);
 
-/// Interval for following active workflow runs after a user starts one.
+/// Interval for following active runbook runs after a user starts one.
 const Duration _automationRunRefreshInterval = Duration(seconds: 2);
 
 /// Reports whether a provider id belongs to an app-managed local runtime.
@@ -172,7 +173,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
       automationsClient:
           automationsClient ??
           AutomationsClient(
-            baseUrl: _workflowBaseUrl(config.agentGatewayBaseUrl),
+            baseUrl: _runbookBaseUrl(config.agentGatewayBaseUrl),
             headers: config.gatewayAuthHeaders,
             logger: effectiveLogger,
           ),
@@ -275,7 +276,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Client for the canonical Today projection tools.
   ExecutiveSummaryClient executiveSummaryClient;
 
-  /// Gateway-routed client for workflow automation APIs.
+  /// Gateway-routed client for runbook automation APIs.
   AutomationsClient automationsClient;
 
   /// Local process supervisor for the managed service stack.
@@ -427,10 +428,10 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Current graph backlog selection kind.
   String taskSelectionKind = 'task';
 
-  /// Whether a backlog operation is currently running.
+  /// Whether a backlog launch is currently running.
   bool tasksBusy = false;
 
-  /// Last backlog-specific operation message.
+  /// Last backlog-specific launch message.
   String tasksMessage = 'Backlog is ready';
 
   /// Whether a structured Backlog screen command is currently planning.
@@ -454,44 +455,44 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Whether the current workspace is showing the auxiliary AI chat pane.
   bool assistantChatPanelOpen = false;
 
-  /// Whether an Automations operation is currently running.
+  /// Whether an Automations launch is currently running.
   bool automationsBusy = false;
 
   /// Last actionable Automations error or runtime message.
   String automationsMessage = '';
 
-  /// Workflow action types loaded for authoring.
+  /// Runbook action types loaded for authoring.
   List<AutomationActionType> automationActionTypes =
       const <AutomationActionType>[];
 
-  /// Installed workflow definitions.
+  /// Installed runbook definitions.
   List<AutomationDefinition> automationDefinitions =
       const <AutomationDefinition>[];
 
-  /// Definition ids currently backed by local workflow authoring files.
+  /// Definition ids currently backed by local runbook authoring files.
   Set<String> _localAutomationDefinitionIds = const <String>{};
 
-  /// Editable workflow drafts.
+  /// Editable runbook drafts.
   List<AutomationDraft> automationDrafts = const <AutomationDraft>[];
 
-  /// Recent workflow runs.
+  /// Recent runbook runs.
   List<AutomationRun> automationRuns = const <AutomationRun>[];
 
-  /// Saved Operations.
+  /// Saved Launchpad.
   List<AutomationRunSetup> automationRunSetups = const <AutomationRunSetup>[];
 
-  /// Codebase catalog records available to Operations.
+  /// Codebase catalog records available to Launchpad.
   List<AutomationCodebase> automationCodebases = const <AutomationCodebase>[];
 
   /// Harness capabilities available to Capability Lab.
   List<AutomationCapability> automationCapabilities =
       const <AutomationCapability>[];
 
-  /// Computer or Server targets available to Operations.
+  /// Computer or Server targets available to Launchpad.
   List<AutomationRuntimeTarget> automationRuntimeTargets =
       const <AutomationRuntimeTarget>[];
 
-  /// Pending workflow inbox items.
+  /// Pending runbook inbox items.
   List<AutomationPendingItem> automationInbox = const <AutomationPendingItem>[];
 
   /// Installed automation packages.
@@ -500,11 +501,11 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Events for the selected automation run.
   List<AutomationEvent> selectedAutomationEvents = const <AutomationEvent>[];
 
-  /// Latest preview for the selected saved Operation.
-  AutomationOperationPreview? selectedAutomationOperationPreview;
+  /// Latest preview for the selected saved Launch.
+  AutomationLaunchPreview? selectedAutomationLaunchPreview;
 
-  /// Immutable audit snapshot for the selected Operation run.
-  AutomationOperationRunSnapshot? selectedAutomationOperationRunSnapshot;
+  /// Immutable audit snapshot for the selected Launch run.
+  AutomationLaunchRunSnapshot? selectedAutomationLaunchRunSnapshot;
 
   /// Health metadata for the selected Computer or Server target.
   AutomationTargetHealth? selectedAutomationTargetHealth;
@@ -522,7 +523,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Selected automation run id.
   String selectedAutomationRunId = '';
 
-  /// Selected Operation id.
+  /// Selected Launch id.
   String selectedAutomationRunSetupId = '';
 
   /// Selected codebase catalog id.
@@ -555,10 +556,10 @@ class AgentAwesomeAppController extends ChangeNotifier {
   /// Last loaded compiled entity page or timeline.
   CompiledMemoryPage? selectedMemoryPage;
 
-  /// Whether a memory operation is currently running.
+  /// Whether a memory launch is currently running.
   bool memoryBusy = false;
 
-  /// Last memory-specific operation message.
+  /// Last memory-specific launch message.
   String memoryMessage = 'Memory is ready for review';
 
   /// Recent memory domain safety decisions.
@@ -1141,7 +1142,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     ).label;
   }
 
-  /// Returns the memory domain selected for automatic memory operations.
+  /// Returns the memory domain selected for automatic memory launchpad.
   String get selectedMemoryDomainId {
     final configured = appSettings.selectedMemoryDomainId.trim();
     final profile = runtimeProfile;
@@ -1700,7 +1701,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
   }
 
-  /// Notifies listeners for controller part-file workflows.
+  /// Notifies listeners for controller part-file runbooks.
   void _notifyControllerListeners() {
     notifyListeners();
   }
@@ -1788,7 +1789,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Selects the workflow workspace without fabricating local data.
+  /// Selects the runbook workspace without fabricating local data.
   void openWorkspace() {
     notifyListeners();
   }
@@ -1881,7 +1882,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
   }
 
-  /// Runs one memory operation and closes transient control-plane clients.
+  /// Runs one memory launch and closes transient control-plane clients.
   Future<T> _withMemoryClientForServer<T>(
     McpServerRuntime server,
     Future<T> Function(MemoryClient client) action,
@@ -1896,7 +1897,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     }
   }
 
-  /// Runs one harness-enforced memory policy operation.
+  /// Runs one harness-enforced memory policy launch.
   Future<T> _withMemoryControlClient<T>(
     Future<T> Function(MemoryClient client) action,
   ) async {
@@ -2012,7 +2013,7 @@ class AgentAwesomeAppController extends ChangeNotifier {
     );
   }
 
-  /// Runs one Today projection operation and closes transient clients.
+  /// Runs one Today projection launch and closes transient clients.
   Future<T> _withExecutiveSummaryClientForServer<T>(
     McpServerRuntime server,
     Future<T> Function(ExecutiveSummaryClient client) action,

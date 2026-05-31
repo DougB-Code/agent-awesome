@@ -33,15 +33,15 @@ func TestDefaultConfigPathsUseOSConfigDir(t *testing.T) {
 	}
 }
 
-func TestExpandKnownEnvironmentPreservesWorkflowReferences(t *testing.T) {
+func TestExpandKnownEnvironmentPreservesRunbookReferences(t *testing.T) {
 	t.Setenv("AA_TEST_ENDPOINT", "http://127.0.0.1:8095/mcp")
 
-	got := string(expandKnownEnvironment([]byte("endpoint: ${AA_TEST_ENDPOINT}\npath: ${workflow_input.path}\nshort: $AA_TEST_ENDPOINT\nmissing: $AA_UNKNOWN\n")))
+	got := string(expandKnownEnvironment([]byte("endpoint: ${AA_TEST_ENDPOINT}\npath: ${runbook_input.path}\nshort: $AA_TEST_ENDPOINT\nmissing: $AA_UNKNOWN\n")))
 	if !strings.Contains(got, "endpoint: http://127.0.0.1:8095/mcp") {
 		t.Fatalf("expanded = %q, want known braced environment expanded", got)
 	}
-	if !strings.Contains(got, "path: ${workflow_input.path}") {
-		t.Fatalf("expanded = %q, want workflow reference preserved", got)
+	if !strings.Contains(got, "path: ${runbook_input.path}") {
+		t.Fatalf("expanded = %q, want runbook reference preserved", got)
 	}
 	if !strings.Contains(got, "short: http://127.0.0.1:8095/mcp") {
 		t.Fatalf("expanded = %q, want known short environment expanded", got)
@@ -170,6 +170,40 @@ providers:
 	}
 	if !selection.Model.Capabilities.Streaming {
 		t.Fatalf("selection.Model.Capabilities.Streaming = false, want true")
+	}
+}
+
+// TestLoadModelConfigAcceptsModelValidations verifies UI-authored validation metadata is loadable.
+func TestLoadModelConfigAcceptsModelValidations(t *testing.T) {
+	path := writeTempFile(t, "model.yaml", `
+default: local:example
+providers:
+  local:
+    adapter: openai
+    auth: optional
+    url: http://127.0.0.1:11434/v1/chat/completions
+    models:
+      - id: example
+        model: local/model
+validations:
+  - id: asks_for_context
+    label: Asks for context
+    mode: mocked
+    prompt: Help me with the thing.
+    assertions:
+      - type: response-contains
+        contains: context
+`)
+
+	cfg, err := LoadModel(path)
+	if err != nil {
+		t.Fatalf("LoadModel() error = %v", err)
+	}
+	if got, want := len(cfg.Validations), 1; got != want {
+		t.Fatalf("len(Validations) = %d, want %d", got, want)
+	}
+	if got, want := cfg.Validations[0].ID, "asks_for_context"; got != want {
+		t.Fatalf("Validations[0].ID = %q, want %q", got, want)
 	}
 }
 
@@ -455,12 +489,16 @@ local-exec:
 func TestLoadToolsMergesMCPPackageConfigs(t *testing.T) {
 	root := t.TempDir()
 	toolPath := filepath.Join(root, "tools", "agent-awesome", "tool.yaml")
-	mcpPath := filepath.Join(root, "mcp", "memory", "mcp.yaml")
+	mcpPath := filepath.Join(root, "mcp", "agent-awesome", "mcp.yaml")
+	otherMCPPath := filepath.Join(root, "mcp", "personal-memory", "mcp.yaml")
 	if err := os.MkdirAll(filepath.Dir(toolPath), 0o700); err != nil {
 		t.Fatalf("MkdirAll(tool package) error = %v", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(mcpPath), 0o700); err != nil {
 		t.Fatalf("MkdirAll(mcp package) error = %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(otherMCPPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll(other MCP package) error = %v", err)
 	}
 	writeFile(t, toolPath, `
 local-exec:
@@ -473,6 +511,14 @@ mcp:
     - name: memory
       transport: streamable-http
       endpoint: http://127.0.0.1:8090/mcp
+`)
+	writeFile(t, otherMCPPath, `
+mcp:
+  enabled: true
+  servers:
+    - name: memory
+      transport: streamable-http
+      endpoint: http://127.0.0.1:8091/mcp
 `)
 
 	cfg, err := LoadTools(toolPath, true)
@@ -751,7 +797,7 @@ func TestStaticGraphBackedMemoryToolConfigsMatchConfirmationPolicy(t *testing.T)
 }
 
 // TestStaticLinuxToolsExposeOperations verifies the shipped Linux tool package
-// uses deterministic workflow-callable operations.
+// uses deterministic runbook-callable launchpad.
 func TestStaticLinuxToolsExposeOperations(t *testing.T) {
 	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.yaml"), true)
 	if err != nil {
@@ -773,7 +819,7 @@ func TestStaticLinuxToolsExposeOperations(t *testing.T) {
 	}
 	for _, validation := range cfg.Validations {
 		switch validation.Target.Type {
-		case "command-operation", "agent-tool-call", "workflow-node":
+		case "command-operation", "agent-tool-call", "runbook-node":
 			if validation.Target.Command == "" || validation.Target.Operation == "" {
 				t.Fatalf("validation target = %#v, want command operation target", validation.Target)
 			}
@@ -850,41 +896,41 @@ func TestBrowserPilotToolConfigConstrainsAgentBrowser(t *testing.T) {
 	}
 }
 
-// TestWorkflowToolConfigExposesWorkflowMCP verifies the workflow MCP server is opt-in.
-func TestWorkflowToolConfigExposesWorkflowMCP(t *testing.T) {
-	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.workflow.yaml"), true)
+// TestRunbookToolConfigExposesRunbookMCP verifies the runbook MCP server is opt-in.
+func TestRunbookToolConfigExposesRunbookMCP(t *testing.T) {
+	cfg, err := LoadTools(filepath.Join(repoRoot(t), "harness", "tool.runbook.yaml"), true)
 	if err != nil {
 		t.Fatalf("LoadTools() error = %v", err)
 	}
-	server, ok := mcpServerByName(cfg.MCP.Servers, "workflow")
+	server, ok := mcpServerByName(cfg.MCP.Servers, "runbook")
 	if !ok {
-		t.Fatalf("workflow MCP server not configured")
+		t.Fatalf("runbook MCP server not configured")
 	}
 	if server.Endpoint != "http://127.0.0.1:8092/mcp" {
-		t.Fatalf("workflow endpoint = %q, want local workflow MCP", server.Endpoint)
+		t.Fatalf("runbook endpoint = %q, want local runbook MCP", server.Endpoint)
 	}
 	expectedTools := []string{
-		"workflow_list",
-		"workflow_describe",
-		"workflow_start",
-		"workflow_status",
-		"workflow_signal",
-		"workflow_cancel",
-		"workflow_history",
-		"workflow_action_types",
-		"workflow_draft_create",
-		"workflow_draft_update",
-		"workflow_draft_validate",
-		"workflow_draft_publish",
+		"runbook_list",
+		"runbook_describe",
+		"runbook_start",
+		"runbook_status",
+		"runbook_signal",
+		"runbook_cancel",
+		"runbook_history",
+		"runbook_action_types",
+		"runbook_draft_create",
+		"runbook_draft_update",
+		"runbook_draft_validate",
+		"runbook_draft_publish",
 	}
 	if !reflect.DeepEqual(server.Tools.Allow, expectedTools) {
-		t.Fatalf("workflow Tools.Allow = %#v, want %#v", server.Tools.Allow, expectedTools)
+		t.Fatalf("runbook Tools.Allow = %#v, want %#v", server.Tools.Allow, expectedTools)
 	}
 	if cfg.LocalExec.Enabled {
-		t.Fatalf("LocalExec.Enabled = true, want workflow control through MCP only")
+		t.Fatalf("LocalExec.Enabled = true, want runbook control through MCP only")
 	}
 	if len(cfg.LocalExec.Commands) != 0 {
-		t.Fatalf("LocalExec.Commands = %#v, want workflow profile to expose no direct commands", cfg.LocalExec.Commands)
+		t.Fatalf("LocalExec.Commands = %#v, want runbook profile to expose no direct commands", cfg.LocalExec.Commands)
 	}
 }
 
@@ -1195,7 +1241,7 @@ validations:
 	}
 }
 
-func TestLoadToolsValidatesWorkflowNodeCommandTarget(t *testing.T) {
+func TestLoadToolsValidatesRunbookNodeCommandTarget(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:
   enabled: true
@@ -1210,10 +1256,10 @@ local-exec:
             - "{{pattern}}"
             - "{{path}}"
 validations:
-  - id: workflow_uses_rg
+  - id: runbook_uses_rg
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       command: rg
       operation: search_text
     mocks:
@@ -1226,7 +1272,7 @@ validations:
 	}
 }
 
-func TestLoadToolsValidatesWorkflowNodeMCPTarget(t *testing.T) {
+func TestLoadToolsValidatesRunbookNodeMCPTarget(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 mcp:
   enabled: false
@@ -1238,10 +1284,10 @@ mcp:
         allow:
           - search_memory
 validations:
-  - id: workflow_uses_memory
+  - id: runbook_uses_memory
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       mcp-server: memory
       mcp-tool: search_memory
     mocks:
@@ -1254,7 +1300,7 @@ validations:
 	}
 }
 
-func TestLoadToolsRejectsMixedWorkflowNodeTargets(t *testing.T) {
+func TestLoadToolsRejectsMixedRunbookNodeTargets(t *testing.T) {
 	path := writeTempFile(t, "tool.yaml", `
 local-exec:
   enabled: true
@@ -1275,10 +1321,10 @@ node-presets:
     arguments:
       template_id: rg.search_text
 validations:
-  - id: mixed_workflow_target
+  - id: mixed_runbook_target
     mode: mocked
     target:
-      type: workflow-node
+      type: runbook-node
       preset-id: rg_search
       command: rg
       operation: search_text
@@ -1288,7 +1334,7 @@ validations:
 `)
 
 	if _, err := LoadTools(path, true); err == nil || !strings.Contains(err.Error(), "must choose preset-id, command-operation, or mcp-tool") {
-		t.Fatalf("LoadTools() error = %v, want mixed workflow target error", err)
+		t.Fatalf("LoadTools() error = %v, want mixed runbook target error", err)
 	}
 }
 

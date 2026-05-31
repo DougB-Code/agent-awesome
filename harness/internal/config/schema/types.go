@@ -36,8 +36,12 @@ const (
 
 // ModelConfig describes provider and model selection configuration.
 type ModelConfig struct {
-	Default   string              `koanf:"default"`
-	Providers map[string]Provider `koanf:"providers"`
+	Default string `koanf:"default"`
+	// Validations stores UI-authored model compatibility checks. Runtime model
+	// selection ignores them, but accepting the metadata keeps model packages
+	// loadable when the validation editor has authored cases.
+	Validations []AgentValidation   `koanf:"validations"`
+	Providers   map[string]Provider `koanf:"providers"`
 }
 
 // Agent describes the configured agent identity and instructions.
@@ -175,7 +179,7 @@ type CommandSubcommand struct {
 	Subcommands []CommandSubcommand `koanf:"subcommands"`
 }
 
-// CommandOperation describes one deterministic workflow-callable CLI call.
+// CommandOperation describes one deterministic runbook-callable CLI call.
 type CommandOperation struct {
 	Name             string            `koanf:"name"`
 	Description      string            `koanf:"description"`
@@ -200,7 +204,7 @@ type CommandOutput struct {
 	Source string `koanf:"source"`
 }
 
-// NodePreset describes reusable workflow-node metadata for authoring tools.
+// NodePreset describes reusable runbook-node metadata for authoring tools.
 type NodePreset struct {
 	ID          string         `koanf:"id"`
 	Label       string         `koanf:"label"`

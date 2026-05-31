@@ -217,7 +217,7 @@ func TestLibraryValidateRequireToolCoverageFails(t *testing.T) {
 				Coverage: toolvalidation.Coverage{
 					Required: 1,
 					Missing: []toolvalidation.CoverageItem{{
-						Type: "workflow-node",
+						Type: "runbook-node",
 						ID:   "rg.search_text",
 					}},
 				},

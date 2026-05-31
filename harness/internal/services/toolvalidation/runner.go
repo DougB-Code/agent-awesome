@@ -14,8 +14,8 @@ import (
 	"agentawesome/internal/config/schema"
 	"agentawesome/internal/services/agentvalidation"
 	"agentawesome/internal/services/command/command"
-	"agentawesome/internal/services/workflow/actions"
-	"agentawesome/internal/services/workflow/jsondata"
+	"agentawesome/internal/services/runbook/actions"
+	"agentawesome/internal/services/runbook/jsondata"
 )
 
 const (
@@ -386,9 +386,9 @@ func validationCoverageTargets(tools schema.Tools) []CoverageItem {
 				Label: firstNonEmpty(operation.Description, id),
 			})
 			items = append(items, CoverageItem{
-				Type:  "workflow-node",
+				Type:  "runbook-node",
 				ID:    "command:" + id,
-				Label: "Workflow envelope for " + id,
+				Label: "Runbook envelope for " + id,
 			})
 		}
 	}
@@ -398,7 +398,7 @@ func validationCoverageTargets(tools schema.Tools) []CoverageItem {
 			continue
 		}
 		items = append(items, CoverageItem{
-			Type:  "workflow-node",
+			Type:  "runbook-node",
 			ID:    id,
 			Label: firstNonEmpty(preset.Label, preset.Description, id),
 		})
@@ -413,9 +413,9 @@ func validationCoverageTargets(tools schema.Tools) []CoverageItem {
 			id := serverName + "." + toolName
 			items = append(items, CoverageItem{Type: "mcp-tool", ID: id, Label: id})
 			items = append(items, CoverageItem{
-				Type:  "workflow-node",
+				Type:  "runbook-node",
 				ID:    "mcp:" + id,
-				Label: "Workflow envelope for " + id,
+				Label: "Runbook envelope for " + id,
 			})
 		}
 	}
@@ -437,21 +437,21 @@ func validationCoveredTargets(validations []schema.ToolValidation) map[string]bo
 			if command != "" && operation != "" {
 				covered[coverageKey("command-operation", command+"."+operation)] = true
 			}
-		case "workflow-node":
+		case "runbook-node":
 			command := strings.TrimSpace(target.Command)
 			operation := strings.TrimSpace(target.Operation)
 			if command != "" && operation != "" {
-				covered[coverageKey("workflow-node", "command:"+command+"."+operation)] = true
+				covered[coverageKey("runbook-node", "command:"+command+"."+operation)] = true
 				continue
 			}
 			server := strings.TrimSpace(target.MCPServer)
 			tool := strings.TrimSpace(target.MCPTool)
 			if server != "" && tool != "" {
-				covered[coverageKey("workflow-node", "mcp:"+server+"."+tool)] = true
+				covered[coverageKey("runbook-node", "mcp:"+server+"."+tool)] = true
 				continue
 			}
 			if id := strings.TrimSpace(target.PresetID); id != "" {
-				covered[coverageKey("workflow-node", id)] = true
+				covered[coverageKey("runbook-node", id)] = true
 			}
 		case "mcp-tool":
 			server := strings.TrimSpace(target.MCPServer)
@@ -544,8 +544,8 @@ func (r *Runner) Run(ctx context.Context, tools schema.Tools, validation schema.
 	switch result.Target.Type {
 	case "command-operation":
 		return r.runCommandOperation(ctx, validation, result)
-	case "workflow-node":
-		return r.runWorkflowNode(ctx, tools, validation, result)
+	case "runbook-node":
+		return r.runRunbookNode(ctx, tools, validation, result)
 	case "mcp-tool":
 		if mode == "mocked" {
 			return runMockedBoundary(validation, result)
@@ -580,7 +580,7 @@ func addResult(result *SuiteResult, item Result) {
 	}
 }
 
-// validationActionHost exposes command execution to live workflow validations.
+// validationActionHost exposes command execution to live runbook validations.
 type validationActionHost struct {
 	commands CommandExecutor
 	mcp      MCPExecutor
@@ -625,14 +625,14 @@ func (h validationActionHost) GenerateLLM(context.Context, actions.LLMRequest) (
 	return nil, fmt.Errorf("llm.generate is not supported in tool validations")
 }
 
-// SignalWorkflow rejects nested workflow signals in portable tool validations.
-func (h validationActionHost) SignalWorkflow(context.Context, actions.WorkflowSignal) error {
-	return fmt.Errorf("workflow.signal is not supported in tool validations")
+// SignalRunbook rejects nested runbook signals in portable tool validations.
+func (h validationActionHost) SignalRunbook(context.Context, actions.RunbookSignal) error {
+	return fmt.Errorf("runbook.signal is not supported in tool validations")
 }
 
-// StartNestedWorkflow rejects nested workflow starts in portable tool validations.
-func (h validationActionHost) StartNestedWorkflow(context.Context, actions.NestedWorkflowRequest) (map[string]any, error) {
-	return nil, fmt.Errorf("workflow.run is not supported in tool validations")
+// StartNestedRunbook rejects nested runbook starts in portable tool validations.
+func (h validationActionHost) StartNestedRunbook(context.Context, actions.NestedRunbookRequest) (map[string]any, error) {
+	return nil, fmt.Errorf("runbook.run is not supported in tool validations")
 }
 
 // runCommandOperation executes or mocks one deterministic command operation.
@@ -752,16 +752,16 @@ Use the available tool when the user request calls for it. Prefer a tool call ov
 	}
 }
 
-// runWorkflowNode executes one live workflow node preset through action metadata.
-func (r *Runner) runWorkflowNode(ctx context.Context, tools schema.Tools, validation schema.ToolValidation, result Result) Result {
+// runRunbookNode executes one live runbook node preset through action metadata.
+func (r *Runner) runRunbookNode(ctx context.Context, tools schema.Tools, validation schema.ToolValidation, result Result) Result {
 	if result.Mode == "mocked" {
-		return runMockedWorkflowNodeEnvelope(tools, validation, result)
+		return runMockedRunbookNodeEnvelope(tools, validation, result)
 	}
 	if result.Target.Command != "" || result.Target.Operation != "" {
-		return r.runWorkflowCommandOperation(ctx, validation, result)
+		return r.runRunbookCommandOperation(ctx, validation, result)
 	}
 	if result.Target.MCPServer != "" || result.Target.MCPTool != "" {
-		return r.runWorkflowMCPTool(ctx, validation, result, map[string]any{
+		return r.runRunbookMCPTool(ctx, validation, result, map[string]any{
 			"server_id": result.Target.MCPServer,
 			"tool":      result.Target.MCPTool,
 			"arguments": cloneMap(validation.Input),
@@ -771,20 +771,20 @@ func (r *Runner) runWorkflowNode(ctx context.Context, tools schema.Tools, valida
 	if !ok {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: "error",
-			Message:  fmt.Sprintf("workflow node preset %q was not found", result.Target.PresetID),
+			Message:  fmt.Sprintf("runbook node preset %q was not found", result.Target.PresetID),
 		})
 		result.Status = StatusFailed
 		return result
 	}
 	if strings.TrimSpace(preset.Action) == "mcp.call" {
 		arguments := cloneMap(preset.Arguments)
-		return r.runWorkflowMCPTool(ctx, validation, result, arguments)
+		return r.runRunbookMCPTool(ctx, validation, result, arguments)
 	}
 	if strings.TrimSpace(preset.Action) != "command.execute" {
 		result.Status = StatusUnsupported
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: "warning",
-			Message:  fmt.Sprintf("live workflow-node validations for %s are not supported yet", preset.Action),
+			Message:  fmt.Sprintf("live runbook-node validations for %s are not supported yet", preset.Action),
 		})
 		return result
 	}
@@ -792,7 +792,7 @@ func (r *Runner) runWorkflowNode(ctx context.Context, tools schema.Tools, valida
 		result.Status = StatusUnsupported
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: "error",
-			Message:  "live workflow-node validation needs a command executor",
+			Message:  "live runbook-node validation needs a command executor",
 		})
 		return result
 	}
@@ -825,9 +825,9 @@ func (r *Runner) runWorkflowNode(ctx context.Context, tools schema.Tools, valida
 	return result
 }
 
-// runMockedWorkflowNodeEnvelope verifies workflow request and output envelopes.
-func runMockedWorkflowNodeEnvelope(tools schema.Tools, validation schema.ToolValidation, result Result) Result {
-	envelope, err := workflowNodeRequestEnvelope(tools, validation, result)
+// runMockedRunbookNodeEnvelope verifies runbook request and output envelopes.
+func runMockedRunbookNodeEnvelope(tools schema.Tools, validation schema.ToolValidation, result Result) Result {
+	envelope, err := runbookNodeRequestEnvelope(tools, validation, result)
 	if err != nil {
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{Severity: "error", Message: err.Error()})
 		result.Status = StatusFailed
@@ -860,8 +860,8 @@ func runMockedWorkflowNodeEnvelope(tools schema.Tools, validation schema.ToolVal
 	return result
 }
 
-// workflowNodeRequestEnvelope builds the action arguments a workflow node emits.
-func workflowNodeRequestEnvelope(tools schema.Tools, validation schema.ToolValidation, result Result) (map[string]any, error) {
+// runbookNodeRequestEnvelope builds the action arguments a runbook node emits.
+func runbookNodeRequestEnvelope(tools schema.Tools, validation schema.ToolValidation, result Result) (map[string]any, error) {
 	if result.Target.Command != "" || result.Target.Operation != "" {
 		envelope := map[string]any{
 			"template_id": result.Target.TemplateID,
@@ -881,23 +881,23 @@ func workflowNodeRequestEnvelope(tools schema.Tools, validation schema.ToolValid
 	}
 	preset, ok := findNodePreset(tools.NodePresets, result.Target.PresetID)
 	if !ok {
-		return nil, fmt.Errorf("workflow node preset %q was not found", result.Target.PresetID)
+		return nil, fmt.Errorf("runbook node preset %q was not found", result.Target.PresetID)
 	}
 	resolved := resolveValidationInputRefs(cloneMap(preset.Arguments), validation.Input)
 	envelope, ok := normalizeValue(resolved).(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("workflow node preset %q arguments must resolve to an object", result.Target.PresetID)
+		return nil, fmt.Errorf("runbook node preset %q arguments must resolve to an object", result.Target.PresetID)
 	}
 	return envelope, nil
 }
 
-// runWorkflowCommandOperation executes a command operation through workflow actions.
-func (r *Runner) runWorkflowCommandOperation(ctx context.Context, validation schema.ToolValidation, result Result) Result {
+// runRunbookCommandOperation executes a command operation through runbook actions.
+func (r *Runner) runRunbookCommandOperation(ctx context.Context, validation schema.ToolValidation, result Result) Result {
 	if r.commands == nil {
 		result.Status = StatusUnsupported
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: "error",
-			Message:  "live workflow-node validation needs a command executor",
+			Message:  "live runbook-node validation needs a command executor",
 		})
 		return result
 	}
@@ -936,8 +936,8 @@ func (r *Runner) runWorkflowCommandOperation(ctx context.Context, validation sch
 	return result
 }
 
-// runWorkflowMCPTool executes an MCP-backed workflow node through mcp.call.
-func (r *Runner) runWorkflowMCPTool(
+// runRunbookMCPTool executes an MCP-backed runbook node through mcp.call.
+func (r *Runner) runRunbookMCPTool(
 	ctx context.Context,
 	validation schema.ToolValidation,
 	result Result,
@@ -947,7 +947,7 @@ func (r *Runner) runWorkflowMCPTool(
 		result.Status = StatusUnsupported
 		result.Diagnostics = append(result.Diagnostics, Diagnostic{
 			Severity: "error",
-			Message:  "live workflow-node validation needs an MCP executor",
+			Message:  "live runbook-node validation needs an MCP executor",
 		})
 		return result
 	}
@@ -1114,7 +1114,7 @@ func validationInputContract(
 	switch target.Type {
 	case "command-operation":
 		return cloneMap(validation.Input), inputSchemaForOperation(tools, target.TemplateID), true
-	case "workflow-node":
+	case "runbook-node":
 		if target.TemplateID != "" {
 			return cloneMap(validation.Input), inputSchemaForOperation(tools, target.TemplateID), true
 		}
@@ -1150,7 +1150,7 @@ func resolvedValidationMapArg(args map[string]any, key string, fallback map[stri
 	return fallback
 }
 
-// resolveValidationInputRefs applies workflow-style ${path} input references.
+// resolveValidationInputRefs applies runbook-style ${path} input references.
 func resolveValidationInputRefs(value any, input map[string]any) any {
 	switch typed := normalizeValue(value).(type) {
 	case string:
@@ -1220,14 +1220,14 @@ func targetResult(tools schema.Tools, target schema.ToolValidationTarget) Target
 	if result.Type == "agent-tool-call" {
 		result.Boundary = "agent.tool_call"
 	}
-	if result.Type == "workflow-node" {
+	if result.Type == "runbook-node" {
 		if result.Command != "" && result.Operation != "" {
 			result.TemplateID = result.Command + "." + result.Operation
 			result.Boundary = "command.execute"
 		} else if result.MCPServer != "" && result.MCPTool != "" {
 			result.Boundary = "mcp.call"
 		} else {
-			result.Boundary = workflowNodeBoundary(tools.NodePresets, result.PresetID)
+			result.Boundary = runbookNodeBoundary(tools.NodePresets, result.PresetID)
 		}
 	}
 	return result
@@ -1243,15 +1243,15 @@ func findNodePreset(presets []schema.NodePreset, presetID string) (schema.NodePr
 	return schema.NodePreset{}, false
 }
 
-// workflowNodeBoundary returns the generic action behind one node preset.
-func workflowNodeBoundary(presets []schema.NodePreset, presetID string) string {
+// runbookNodeBoundary returns the generic action behind one node preset.
+func runbookNodeBoundary(presets []schema.NodePreset, presetID string) string {
 	if preset, ok := findNodePreset(presets, presetID); ok {
 		return strings.TrimSpace(preset.Action)
 	}
-	return "workflow.node"
+	return "runbook.node"
 }
 
-// commandStatusMap converts command status to generic workflow action output.
+// commandStatusMap converts command status to generic runbook action output.
 func commandStatusMap(status command.StatusResult) map[string]any {
 	encoded, err := json.Marshal(status)
 	if err != nil {
@@ -1264,7 +1264,7 @@ func commandStatusMap(status command.StatusResult) map[string]any {
 	return out
 }
 
-// commandStatusFromMap converts workflow action output back to command status.
+// commandStatusFromMap converts runbook action output back to command status.
 func commandStatusFromMap(value map[string]any) command.StatusResult {
 	encoded, err := json.Marshal(value)
 	if err != nil {

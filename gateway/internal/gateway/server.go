@@ -32,8 +32,8 @@ type Server struct {
 	manager         *supervisor.Manager
 	apiProxy        *proxy.Proxy
 	contextProxy    *proxy.Proxy
-	workflowProxy   *proxy.Proxy
-	operationsProxy *proxy.Proxy
+	runbookProxy    *proxy.Proxy
+	launchpadProxy  *proxy.Proxy
 	capabilityProxy *proxy.Proxy
 	targetsProxy    *proxy.Proxy
 	apiProxies      map[string]*proxy.Proxy
@@ -107,13 +107,13 @@ type memoryHealthView struct {
 	Snapshot memorySnapshotHealthView `json:"snapshot"`
 }
 
-// memorySnapshotHealthView stores memoryd snapshot operation timestamps.
+// memorySnapshotHealthView stores memoryd snapshot launch timestamps.
 type memorySnapshotHealthView struct {
 	Restore memorySnapshotOperationView `json:"restore"`
 	Save    memorySnapshotOperationView `json:"save"`
 }
 
-// memorySnapshotOperationView stores one memoryd snapshot operation state.
+// memorySnapshotOperationView stores one memoryd snapshot launch state.
 type memorySnapshotOperationView struct {
 	State       string `json:"state"`
 	CompletedAt string `json:"completed_at"`
@@ -127,7 +127,7 @@ const actorHeader = "X-Agent-Awesome-Actor"
 
 var errGatewayBodyTooLarge = errors.New("gateway request body too large")
 
-// memoryAccessKind describes the grant required for one memory operation.
+// memoryAccessKind describes the grant required for one memory launch.
 type memoryAccessKind int
 
 const (
@@ -245,19 +245,19 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 	if err != nil {
 		return nil, err
 	}
-	workflowProxy, err := proxy.New(cfg.WorkflowBaseURL, "/api/workflows", cfg.RequestTimeout, proxy.WithRouteGroup("workflow"))
+	runbookProxy, err := proxy.New(cfg.RunbookBaseURL, "/api/runbooks", cfg.RequestTimeout, proxy.WithRouteGroup("runbook"))
 	if err != nil {
 		return nil, err
 	}
-	operationsProxy, err := proxy.New(operationsBaseURL(cfg.WorkflowBaseURL), "/api/operations", cfg.RequestTimeout, proxy.WithRouteGroup("operations"))
+	launchpadProxy, err := proxy.New(launchpadBaseURL(cfg.RunbookBaseURL), "/api/launchpad", cfg.RequestTimeout, proxy.WithRouteGroup("launchpad"))
 	if err != nil {
 		return nil, err
 	}
-	capabilityProxy, err := proxy.New(capabilitiesBaseURL(cfg.WorkflowBaseURL), "/api/capabilities", cfg.RequestTimeout, proxy.WithRouteGroup("capabilities"))
+	capabilityProxy, err := proxy.New(capabilitiesBaseURL(cfg.RunbookBaseURL), "/api/capabilities", cfg.RequestTimeout, proxy.WithRouteGroup("capabilities"))
 	if err != nil {
 		return nil, err
 	}
-	targetsProxy, err := proxy.New(runtimeTargetsBaseURL(cfg.WorkflowBaseURL), "/api/runtime-targets", cfg.RequestTimeout, proxy.WithRouteGroup("runtime-targets"))
+	targetsProxy, err := proxy.New(runtimeTargetsBaseURL(cfg.RunbookBaseURL), "/api/runtime-targets", cfg.RequestTimeout, proxy.WithRouteGroup("runtime-targets"))
 	if err != nil {
 		return nil, err
 	}
@@ -266,8 +266,8 @@ func NewServer(cfg config.Config, manager *supervisor.Manager) (*Server, error) 
 		manager:         manager,
 		apiProxy:        apiProxy,
 		contextProxy:    contextProxy,
-		workflowProxy:   workflowProxy,
-		operationsProxy: operationsProxy,
+		runbookProxy:    runbookProxy,
+		launchpadProxy:  launchpadProxy,
 		capabilityProxy: capabilityProxy,
 		targetsProxy:    targetsProxy,
 		apiProxies:      apiProxies,
@@ -379,14 +379,14 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("/mcp", s.authenticated(s.memoryMCPHandler))
 	mux.HandleFunc("/mcp/", s.authenticated(s.memoryMCPHandler))
 	mux.HandleFunc("/api/context/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.contextAPIHandler)))
-	mux.HandleFunc("/api/workflows", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.workflowHandler)))
-	mux.HandleFunc("/api/workflows/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.workflowHandler)))
-	mux.HandleFunc("/api/operations", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.operationsHandler)))
-	mux.HandleFunc("/api/operations/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.operationsHandler)))
-	mux.HandleFunc("/api/capabilities", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.capabilitiesHandler)))
-	mux.HandleFunc("/api/capabilities/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.capabilitiesHandler)))
-	mux.HandleFunc("/api/runtime-targets", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.runtimeTargetsHandler)))
-	mux.HandleFunc("/api/runtime-targets/", s.authenticated(s.requireServiceReady(s.config.WorkflowService.Name, s.runtimeTargetsHandler)))
+	mux.HandleFunc("/api/runbooks", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.runbookHandler)))
+	mux.HandleFunc("/api/runbooks/", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.runbookHandler)))
+	mux.HandleFunc("/api/launchpad", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.launchpadHandler)))
+	mux.HandleFunc("/api/launchpad/", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.launchpadHandler)))
+	mux.HandleFunc("/api/capabilities", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.capabilitiesHandler)))
+	mux.HandleFunc("/api/capabilities/", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.capabilitiesHandler)))
+	mux.HandleFunc("/api/runtime-targets", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.runtimeTargetsHandler)))
+	mux.HandleFunc("/api/runtime-targets/", s.authenticated(s.requireServiceReady(s.config.RunbookService.Name, s.runtimeTargetsHandler)))
 	mux.HandleFunc("/api/", s.authenticated(s.requireServiceReady(s.config.HarnessService.Name, s.apiHandler)))
 	return s.cors(mux)
 }
@@ -535,48 +535,48 @@ func (s *Server) memoryMCPHandler(w http.ResponseWriter, r *http.Request) {
 	memoryProxy.ServeHTTP(w, requestWithBody(r, "/mcp", body))
 }
 
-// workflowHandler proxies user-channel workflow requests to the configured workflow service.
-func (s *Server) workflowHandler(w http.ResponseWriter, r *http.Request) {
-	s.workflowProxy.ServeHTTP(w, r)
+// runbookHandler proxies user-channel runbook requests to the configured runbook service.
+func (s *Server) runbookHandler(w http.ResponseWriter, r *http.Request) {
+	s.runbookProxy.ServeHTTP(w, r)
 }
 
-// operationsHandler proxies user-channel operation requests to the workflow service.
-func (s *Server) operationsHandler(w http.ResponseWriter, r *http.Request) {
-	s.operationsProxy.ServeHTTP(w, r)
+// launchpadHandler proxies user-channel launch requests to the runbook service.
+func (s *Server) launchpadHandler(w http.ResponseWriter, r *http.Request) {
+	s.launchpadProxy.ServeHTTP(w, r)
 }
 
-// capabilitiesHandler proxies user-channel capability requests to the workflow host.
+// capabilitiesHandler proxies user-channel capability requests to the runbook host.
 func (s *Server) capabilitiesHandler(w http.ResponseWriter, r *http.Request) {
 	s.capabilityProxy.ServeHTTP(w, r)
 }
 
-// runtimeTargetsHandler proxies user-channel target requests to the workflow host.
+// runtimeTargetsHandler proxies user-channel target requests to the runbook host.
 func (s *Server) runtimeTargetsHandler(w http.ResponseWriter, r *http.Request) {
 	s.targetsProxy.ServeHTTP(w, r)
 }
 
-// operationsBaseURL derives the sibling Operations API base from workflow base.
-func operationsBaseURL(workflowBaseURL string) string {
-	return siblingWorkflowAPIBaseURL(workflowBaseURL, "/api/operations")
+// launchpadBaseURL derives the sibling Launchpad API base from runbook base.
+func launchpadBaseURL(runbookBaseURL string) string {
+	return siblingRunbookAPIBaseURL(runbookBaseURL, "/api/launchpad")
 }
 
-// capabilitiesBaseURL derives the sibling Capability Registry API base from workflow base.
-func capabilitiesBaseURL(workflowBaseURL string) string {
-	return siblingWorkflowAPIBaseURL(workflowBaseURL, "/api/capabilities")
+// capabilitiesBaseURL derives the sibling Capability Registry API base from runbook base.
+func capabilitiesBaseURL(runbookBaseURL string) string {
+	return siblingRunbookAPIBaseURL(runbookBaseURL, "/api/capabilities")
 }
 
-// runtimeTargetsBaseURL derives the sibling Runtime Targets API base from workflow base.
-func runtimeTargetsBaseURL(workflowBaseURL string) string {
-	return siblingWorkflowAPIBaseURL(workflowBaseURL, "/api/runtime-targets")
+// runtimeTargetsBaseURL derives the sibling Runtime Targets API base from runbook base.
+func runtimeTargetsBaseURL(runbookBaseURL string) string {
+	return siblingRunbookAPIBaseURL(runbookBaseURL, "/api/runtime-targets")
 }
 
-// siblingWorkflowAPIBaseURL replaces the workflow route with a sibling API route.
-func siblingWorkflowAPIBaseURL(workflowBaseURL string, siblingPath string) string {
-	parsed, err := url.Parse(workflowBaseURL)
+// siblingRunbookAPIBaseURL replaces the runbook route with a sibling API route.
+func siblingRunbookAPIBaseURL(runbookBaseURL string, siblingPath string) string {
+	parsed, err := url.Parse(runbookBaseURL)
 	if err != nil {
-		return workflowBaseURL
+		return runbookBaseURL
 	}
-	parsed.Path = strings.TrimSuffix(parsed.Path, "/api/workflows") + siblingPath
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/api/runbooks") + siblingPath
 	return parsed.String()
 }
 
